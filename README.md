@@ -76,6 +76,7 @@ Neurokore: Requiem is a hack-and-slash ARPG in the tradition of Diablo 2 — dee
 - 2 classes at launch: **Human** and **Cyborg** (name subject to change).
 - Each class has a fully viable **base form** plus **3 specializations** unlocked through specific quests — similar to WoW Legion artifact weapon quests. The unlock quest should feel thematic and personal to the spec.
 - Deep build diversity per class, with itemization designed to create build desire — finding an item should make you want to try a new build.
+- **Character creation:** players choose male or female at the start. Both are fully supported for all classes and specs. This effectively doubles the required player character sprites — a scope consideration for production and a factor in tech stack decisions around animation systems.
 
 ---
 
