@@ -163,7 +163,9 @@ Certain enemies have spec-specific variants — different forms of the same base
 | Human | Gentleman / Lady | Heathen | Ideological — chaos against order |
 | Human | Enculted | Unbeliever | Ideological/spiritual — actively suppresses occult power |
 
-*Open question: do spec variants replace the standard enemy entirely in that encounter, or appear alongside them as an additional threat?*
+Spec variants **stack** with the standard enemy — both types appear in the same encounter. The base encounter is always the foundation; your spec adds a personal layer of threat on top.
+
+**Multiplayer implication (multiplayer TBD):** in a mixed party, all active spec variants spawn simultaneously. A party of Survivalist + Automaton + Enculted would face irradiated spiders, software bugs, and unbelievers in the same fight. Party composition becomes a tactical decision beyond skill synergies — each member brings their own threat layer into every encounter.
 
 ---
 
