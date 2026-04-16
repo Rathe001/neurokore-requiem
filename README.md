@@ -73,7 +73,45 @@ Neurokore: Requiem is a hack-and-slash ARPG in the tradition of Diablo 2 — dee
 
 - **Class identity is the core design pillar.** Each class plays differently enough that it could feel like a different game mode.
 - Class-specific core mechanics — not all classes share the same resource systems, survival mechanics, or win conditions. For example, not all classes will have a health bar.
-- Details TBD as classes are designed individually.
+- 2 classes at launch: **Human** and **Cyborg** (name subject to change).
+- Each class has a fully viable **base form** plus **3 specializations** unlocked through specific quests — similar to WoW Legion artifact weapon quests. The unlock quest should feel thematic and personal to the spec.
+- Deep build diversity per class, with itemization designed to create build desire — finding an item should make you want to try a new build.
+
+---
+
+### Cyborg
+
+A human who has traded flesh for machine. The further down the path, the less human they become.
+
+**Base resource:** System Load — a unified meter hinting at all three specialization systems. Replaced by a spec-specific resource upon specialization.
+
+#### Specializations
+
+**Forged** *(melee)*
+- Fantasy: sell nearly all remaining humanity for raw mechanical power. Extra limbs, chassis upgrades, heavy attachments.
+- Resource: **Power Grid** — a power *budget*, not a pool. Each augmentation has a draw cost. You manage what's active simultaneously.
+- **Overclock:** push past grid capacity for burst power at the risk of brownout or shutdown.
+- Items that increase grid capacity or reduce draw costs are major build-enablers.
+
+**Automaton** *(mid-range)*
+- Fantasy: command the machine through AI scripting. Set conditions, automate responses, build a system that fights alongside you.
+- Resource: **Bandwidth** — caps how many scripts can run simultaneously.
+- Scripts are **loot items** — each defines a condition/response pair (e.g. `IF surrounded by 3+ enemies → shockwave`). Finding a new script reshapes your build.
+- **Script decay:** scripts degrade under stress and require active patching mid-combat. Not fully passive — maintenance is the skill expression.
+- **Overflow/crash:** running too many scripts risks cascade failure. High risk, high reward ceiling.
+
+**Polymath** *(ranged)*
+- Fantasy: augment the mind beyond human limits. The body is just a platform for expanded cognition.
+- Resources: **Memory** and **CPU** — two distinct axes.
+  - **Memory:** how many abilities are loaded at once. Swapping loadouts is the strategic layer.
+  - **CPU:** determines cast speed, cooldown, and the complexity of spells you can execute. Higher CPU unlocks higher-tier abilities.
+- **Fragmentation:** memory degrades mid-combat over time, making abilities unreliable until a defrag is performed. Fits the body-horror tone.
+
+---
+
+### Human
+
+*TBD — design in progress.*
 
 ---
 
