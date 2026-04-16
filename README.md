@@ -76,6 +76,7 @@ Neurokore: Requiem is a hack-and-slash ARPG in the tradition of Diablo 2 — dee
 - 2 classes at launch: **Human** and **Cyborg** (name subject to change).
 - Each class has a fully viable **base form** plus **3 specializations** unlocked through specific quests — similar to WoW Legion artifact weapon quests. The unlock quest should feel thematic and personal to the spec.
 - Deep build diversity per class, with itemization designed to create build desire — finding an item should make you want to try a new build.
+- **Base class resource system:** the base (unspecced) form of each class runs all 3 resource meters simultaneously. The early skill tree includes one skill tied to each resource, naturally introducing the player to each spec's mechanics through play. When a spec is chosen, the player commits to that resource exclusively — the other two meters disappear from the UI. This makes specialization feel like a meaningful threshold, not just a menu choice. The base class remains viable through breadth: access to all three resource types and their associated skills, without the depth a specialized build achieves.
 - **Character creation:** players choose male or female at the start. Both are fully supported for all classes and specs. This effectively doubles the required player character sprites — a scope consideration for production and a factor in tech stack decisions around animation systems.
 
 ---
@@ -84,7 +85,7 @@ Neurokore: Requiem is a hack-and-slash ARPG in the tradition of Diablo 2 — dee
 
 A human who has traded flesh for machine. The further down the path, the less human they become.
 
-**Base resource:** System Load — a unified meter hinting at all three specialization systems. Replaced by a spec-specific resource upon specialization.
+**Base resources:** Power Grid + Bandwidth + Memory/CPU — all three run simultaneously. One early skill is tied to each, introducing the player to each spec's flavour. Specialization locks in one resource and drops the other two.
 
 #### Specializations
 
@@ -127,7 +128,23 @@ A human who has traded flesh for machine. The further down the path, the less hu
 
 ### Human
 
-*TBD — design in progress.*
+Unaugmented. In a world that sells upgrades on every corner, the Human refused — or never had the choice. Their power comes from what the Cyborg cut away.
+
+**Base resources:** Adrenaline + Composure + Sanity — all three run simultaneously. One early skill tied to each. Specialization locks in one and drops the other two.
+
+#### Specializations
+
+**Survivalist**
+- Fantasy: adaptability and improvisation. Thrives in chaos, uses scavenged gear and jury-rigged weapons. Gets stronger as conditions get worse.
+- Resource: **Adrenaline** — builds under pressure, decays when safe. Rewards aggressive, risky play.
+
+**Gentleman / Lady** *(title reflects character gender)*
+- Fantasy: discipline, composure, old-world refinement. Refused augmentation on principle and became dangerous through mastery instead. Precise, methodical — dueling, marksmanship, controlled aggression.
+- Resource: **Composure** — maintained through deliberate, controlled play. Breaks under panic, chaos, or sustained damage. High skill ceiling for staying calm under fire.
+
+**Enculted**
+- Fantasy: tapped into something ancient living in the network. The augmentations that make the Cyborg powerful are blocking signals the unmodified mind can receive. Unstable, dangerous power with a horror edge.
+- Resource: **Sanity** — depletes as occult abilities are used. Push too far and the character becomes dangerous to everything, including themselves.
 
 ---
 
