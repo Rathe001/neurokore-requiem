@@ -42,6 +42,7 @@ nav:
     - Dialog & UI: design/dialog-ui.md
     - Starting Zones: design/starting-zones.md
     - Zones: design/zones.md
+    - Platform & Performance: design/platform.md
   - Classes:
     - Overview: classes/overview.md
     - Cyborg: classes/cyborg.md

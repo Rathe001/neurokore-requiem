@@ -45,6 +45,18 @@ Full class details:
 
 - [`docs/design/starting-zones.md`](docs/design/starting-zones.md) — Earth Facility #723, rep system, spec choice boss battle, base class path, morality system
 
+## Platform & Performance
+
+**Always keep these in mind when making architecture or design decisions:**
+
+- **Initial release:** Steam, single player only
+- **Future targets:** Android/iOS port, multiplayer — do not design against these
+- **Performance bar:** average spec PC (integrated graphics, 8GB RAM). Mobile-aware.
+- **Horde density** (end-game Vampire Survivors scale) must be solved at the architecture level — entity management, spatial partitioning, object pooling
+- **Multiplayer:** design for it from the start, implement it later
+
+Full details: [`docs/design/platform.md`](docs/design/platform.md)
+
 ## Project Status
 
 - [`docs/status.md`](docs/status.md)
