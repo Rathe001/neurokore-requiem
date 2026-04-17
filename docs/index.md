@@ -1,5 +1,7 @@
 # Neurokore: Requiem
 
+![Neurokore: Requiem](reference/mockups/logo.png)
+
 A Diablo 2-style ARPG set in a campy 80s sci-fi / Neuromancer cyberpunk hybrid world.
 
 ---
