@@ -49,6 +49,65 @@ The saves are not subtle. They are designed to be memorable.
 
 ---
 
+## Skill Introduction System
+
+### Phase 1: Helpless (Pre-Level 1 rep encounter)
+
+The player begins with no combat ability whatsoever. The opening section is pure exploration — learning movement, reading the environment, understanding controls. No HUD resource bars are visible.
+
+At some point, an enemy finds the player. There is no option to fight. The only option is to run.
+
+The enemy is faster, or the corridors are too tight, or there is nowhere left to go. The player gets caught. This is scripted and unavoidable.
+
+The Level 1 rep saves them. This is the save moment referenced above — designed to be memorable.
+
+After the save, the rep teaches the player their first basic skill. The corresponding resource bar appears on the HUD for the first time.
+
+### Phase 2: One Skill Per Level (Levels 1–3)
+
+Each subsequent rep encounter follows the same structure: save moment → skill taught → resource bar revealed. By the end of Level 3, the player has:
+
+- 3 basic skills, one per spec
+- 3 resource bars, one per spec
+
+The goal is to give the player a practical feel for what each spec's resource system demands before they make a permanent choice.
+
+### Phase 3: The Proving Ground (Level 4)
+
+Level 4 is cleared using all three skills. No new abilities are introduced. This level exists to let the player internalize the three skill styles together before the Confrontation forces a permanent choice.
+
+### After Spec Selection
+
+When the player chooses a spec at the Confrontation:
+
+- The two unchosen skills are **permanently removed**
+- Their resource bars disappear from the HUD
+- The chosen spec's skill and resource bar remain as the foundation for further progression
+
+**Base class exception:** Players who refuse all three reps and take the base class path retain all three skills and all three resource bars. This is the mechanical reward for the hardest path — breadth over depth.
+
+### The Six Starting Skills
+
+Each skill is taught immediately after the rep's save moment — the ability the player receives is a direct reflection of what they just witnessed.
+
+**Cyborg**
+
+| Spec | Skill | Description | Resource |
+|---|---|---|---|
+| Forged | **Buzzsaw** | Melee arc attack. Deals slicing damage and applies a bleed DoT. | Power Grid |
+| Automaton | **Autoturret** | Toggle. A turret forms on the player's shoulder and auto-attacks nearby enemies for small/medium piercing damage. Consumes 90% of Bandwidth while active — the drain is intentional, so the player immediately understands what the resource does. | Bandwidth |
+| Polymath | **DDoS** | Large single-target damage. Deals bonus damage vs. mechanical enemies. | Memory + CPU |
+
+**Human**
+
+| Spec | Skill | Description | Resource |
+|---|---|---|---|
+| Survivalist | **IED** | Scavenge nearby corpses or destructibles to craft an improvised grenade dealing medium AoE damage. Damage type is determined by what was scavenged. | Adrenaline |
+| Gentleman / Lady | **Malice** | Attack with the equipped weapon for bonus damage. Each consecutive hit deals additional damage on top of the last. | Composure |
+| Enculted | **Blaspheme** | Curse a target. Flesh-based enemies take increased damage and deal reduced damage for the curse's duration. | Sanity |
+
+---
+
 ## Cyborg Path: The Augmentation Wing
 
 The Cyborg player wakes up mid-procedure on an operating table. The corp abandoned them during an augmentation operation. Their last procedure is half-finished. The wing has been deteriorating ever since — failed experiments roam the halls, black market operators occupy the lower levels, and something is still running in the experimental labs at the core.
