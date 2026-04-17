@@ -1,5 +1,7 @@
 # Art Style
 
+> **Note:** The reference image below is a Midjourney-generated concept placeholder. It is directional only and will be replaced with commissioned artist work when the project is further along.
+
 ![World environment mockup](../reference/mockups/world1.png)
 
 - **Style:** Isometric pixel art — modern fidelity, not chunky retro. Slightly more pixelated than the reference mockup above.

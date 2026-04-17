@@ -1,5 +1,7 @@
 # Cyborg
 
+> **Note:** All images in this file are Midjourney-generated concept placeholders. They are directional only and will be replaced with commissioned artist work when the project is further along.
+
 | Portrait | Model |
 |:---:|:---:|
 | ![Cyborg portrait](../reference/mockups/classes/cyborg/portrait.png){ width=240 } | ![Cyborg model](../reference/mockups/classes/cyborg/model.png){ width=240 } |
