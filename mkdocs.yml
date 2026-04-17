@@ -39,6 +39,7 @@ nav:
   - Design:
     - Combat & Scale: design/combat.md
     - Dialog & UI: design/dialog-ui.md
+    - Starting Zones: design/starting-zones.md
   - Classes:
     - Overview: classes/overview.md
     - Cyborg: classes/cyborg.md

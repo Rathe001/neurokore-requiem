@@ -41,6 +41,10 @@ Full class details:
 - [`docs/world/art-style.md`](docs/world/art-style.md)
 - [`docs/world/level-design.md`](docs/world/level-design.md)
 
+## Starting Zones & Key Systems
+
+- [`docs/design/starting-zones.md`](docs/design/starting-zones.md) — Earth Facility #723, rep system, spec choice boss battle, base class path, morality system
+
 ## Project Status
 
 - [`docs/status.md`](docs/status.md)
