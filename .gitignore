@@ -1,2 +1,8 @@
 # Neurokore: Requiem .gitignore
 # Add engine/language-specific rules here once tech stack is decided
+
+# MkDocs build output
+site/
+
+# macOS
+.DS_Store

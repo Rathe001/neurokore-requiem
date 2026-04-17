@@ -1,0 +1,47 @@
+site_name: "Neurokore: Requiem"
+site_description: Game Design Document
+repo_url: https://github.com/Rathe001/neurokore-requiem
+repo_name: Rathe001/neurokore-requiem
+
+theme:
+  name: material
+  palette:
+    scheme: slate
+    primary: teal
+    accent: pink
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - search.highlight
+    - search.suggest
+    - content.tooltips
+  icon:
+    repo: fontawesome/brands/github
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - World:
+    - Tone & Setting: world/tone.md
+    - Art Style: world/art-style.md
+    - Level Design: world/level-design.md
+  - Design:
+    - Combat & Scale: design/combat.md
+    - Dialog & UI: design/dialog-ui.md
+  - Classes:
+    - Overview: classes/overview.md
+    - Cyborg: classes/cyborg.md
+    - Human: classes/human.md
+    - Spec Monster Variants: classes/spec-monsters.md
+  - Status: status.md

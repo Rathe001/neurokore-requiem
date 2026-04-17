@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "read -r input; fp=$(echo \"$input\" | jq -r '.tool_input.file_path // .tool_response.filePath'); if echo \"$fp\" | grep -q '/docs/'; then echo \"{\\\"hookSpecificOutput\\\":{\\\"hookEventName\\\":\\\"PostToolUse\\\",\\\"additionalContext\\\":\\\"SYNC REMINDER: A docs file was updated ($fp) — check if CLAUDE.md needs to be updated to reflect this change.\\\"}}\"; fi",
+            "statusMessage": "Checking docs sync..."
+          }
+        ]
+      }
+    ]
+  }
+}
