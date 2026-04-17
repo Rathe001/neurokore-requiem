@@ -209,18 +209,26 @@ Respec *within* a chosen spec's skill tree may be permitted (pending skill tree 
 
 The spec choice is the single largest push toward a rep's quadrant. It cannot be undone, but subsequent decisions continue to move the dot — the spec choice creates a starting position, not a ceiling.
 
+### Starting Position
+
+When a spec is chosen, the player's dot **snaps to that rep's fixed position** on the morality plane. Playing naturally within the spec's fantasy will keep the dot there. Deviation requires conscious choices against the spec's identity — the rep reacts to that drift, not to the starting position.
+
+The base class path (mystery rep) places the dot at Selfless + Human — the only path that begins there.
+
 ### Representative Alignments
 
 Each rep has a fixed position on the morality plane. They react when the player's dot drifts noticeably from their quadrant — not with judgment menus or system notifications, but through ambient dialogue, tone shifts, and occasional direct confrontation.
 
-| Representative | Quadrant | Notes |
+| Representative | Quadrant | Character Notes |
 |---|---|---|
 | **Mystery Rep** | Selfless + Human | The only rep in this quadrant. Reacts most strongly to any drift toward Corrupted or Selfish. |
-| **Survivalist** | Selfish + Human | Self-preservation above everything. Uncomfortable if the player becomes too selfless or too corrupted. |
-| **Gentleman / Lady** | Selfish + Human | Principled refusal of augmentation is still a self-serving identity. Reacts to any loss of composure or creeping corruption. |
-| **Enculted** | Selfless + Corrupted | Consumed by something greater than themselves — not for personal gain. Reacts if the player becomes too self-serving or tries to stay "clean." |
-| **Automaton** | Selfish + Corrupted | Cold systemic efficiency. Reacts to emotional or selfless decisions as inefficiencies. |
-| **Forged** | Selfish + Corrupted | Power through total self-erasure. Reacts to any attempt to preserve humanity. |
-| **Polymath** | Selfless + Corrupted | The outlier among Cyborg specs — sought knowledge beyond human limits in service of understanding, not personal gain. Corrupted through curiosity rather than ambition. Reacts to selfish or intellectually incurious decisions. |
+| **Gentleman / Lady** | Selfish + Human | Extreme arrogance and a superiority complex — "I didn't need a machine to make me dangerous." Their refusal of augmentation is not humility; it's contempt. Reacts to any loss of composure or signs of desperation. |
+| **Survivalist** | Selfless + Corrupted | Corrupted by trauma — watched everyone they knew get augmented, broken, or killed. Helps others because they've seen what happens when nobody does, but the cost has hollowed them out. Reacts to cold, self-serving decisions that mirror the people who destroyed everything they cared about. |
+| **Enculted** | Selfless + Corrupted | Consumed by something ancient and greater than themselves — not for personal gain. Reacts if the player becomes too self-serving or tries to remain untouched by what they're invoking. |
+| **Polymath** | Selfless + Corrupted | Corrupted through curiosity rather than ambition — sought knowledge beyond human limits in service of understanding, not power. Reacts to selfish or intellectually incurious decisions. |
+| **Automaton** | Selfish + Corrupted | Cold systemic efficiency. Reacts to emotional or selfless decisions as inefficiencies to be eliminated. |
+| **Forged** | Selfish + Corrupted | Power through total self-erasure. Reacts to any decision that suggests the player still values their humanity. |
 
-**Example:** A Human player who chose the Survivalist rep but begins acquiring augmentations and making power-driven decisions will hear the Survivalist comment on it — quietly at first, then less quietly. The rep isn't a conscience system. They're a person with a worldview, and your choices are telling them who you really are.
+**Example:** A Human player who chose the Survivalist rep but begins making cold, self-serving decisions — taking resources from those who need them, letting others die for personal gain — will hear the Survivalist comment on it. Quietly at first, then less quietly. They've seen this before. They know where it ends.
+
+The rep isn't a conscience system. They're a person with a worldview, and your choices are telling them who you really are.
