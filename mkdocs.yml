@@ -36,10 +36,12 @@ nav:
     - Tone & Setting: world/tone.md
     - Art Style: world/art-style.md
     - Level Design: world/level-design.md
+    - Lighting: world/lighting.md
   - Design:
     - Combat & Scale: design/combat.md
     - Dialog & UI: design/dialog-ui.md
     - Starting Zones: design/starting-zones.md
+    - Zones: design/zones.md
   - Classes:
     - Overview: classes/overview.md
     - Cyborg: classes/cyborg.md

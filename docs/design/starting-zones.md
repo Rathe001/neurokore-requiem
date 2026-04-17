@@ -127,17 +127,35 @@ In solitary. Has been here longer than the records show. When the player reaches
 
 ## The Confrontation
 
-All three representatives converge at the exit point — the threshold between the starting zone and the lower maintenance corridors leading out of the facility.
+All three representatives converge at the exit point — the threshold between the starting zone and Sub-Level Zero below.
 
-Each makes their case. The player may ask questions or observe. Then:
+### The Dialog
+
+The reps do not present themselves calmly. They argue with each other first — each convinced their path is the obvious correct choice, each dismissive of the others. The player watches three people who just saved their life disagree about everything except one thing.
+
+Eventually they turn to the player. The player may ask about each spec before deciding — this is the primary opportunity to understand what each path entails before committing. Questions can be directed at any rep; the others will react to the answers.
+
+When the player has heard enough, they make their choice. If they cannot decide, the reps make the decision for them:
+
+> *"You've seen what we can do. You know what's out there. Pick one of us, or we leave you here."*
+
+The ultimatum is not a bluff. The violence that follows is not a punishment — it is the logical conclusion of three people who each believe, genuinely, that their way is the only way worth surviving.
+
+### The Fight
 
 **Choose a representative → ally with them, fight the other two.**
 
-The fight is a true boss encounter. The allied rep fights alongside the player; the other two fight as a pair. The encounter is designed to showcase what the unchosen specs can do — players experience the roads not taken as threats rather than demonstrations.
+The fight is the first true boss encounter. The allied rep fights alongside the player; the other two fight together. The encounter is designed to showcase what the unchosen specs can do — players experience the roads not taken as threats rather than demonstrations.
 
-After the fight, the two defeated representatives are dead. Permanently. The world will reflect their absence.
+The two defeated representatives are dead. Permanently. The world will reflect their absence.
 
-The chosen rep accompanies the player out of the facility and into the common zone. They become the player's **representative companion** going forward.
+### After
+
+The chosen rep accompanies the player into Sub-Level Zero and through the exit. They become the player's **representative companion** going forward:
+
+- They appear at designated level-up points throughout the game — leveling is not done on the fly
+- They join certain boss encounters where it makes thematic sense
+- Their dialogue reacts to the player's evolving morality position (see [Morality System](#the-morality-system))
 
 ---
 
