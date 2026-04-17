@@ -43,6 +43,7 @@ nav:
     - Starting Zones: design/starting-zones.md
     - Zones: design/zones.md
     - Platform & Performance: design/platform.md
+    - Inspirations & References: design/inspirations.md
   - Classes:
     - Overview: classes/overview.md
     - Cyborg: classes/cyborg.md

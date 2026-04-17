@@ -13,3 +13,20 @@
 - **Projection:** Fixed isometric.
 - **Occlusion:** Any geometry that would obscure the player character (walls, roofs, structures) becomes transparent. The player is always visible.
 - **No rotation or zoom** (fixed camera).
+
+## Class & Spec Color Language
+
+Each class and spec has a consistent color identity used across sprites, UI, ability effects, and enemy design. Established through concept art — treat as a visual consistency guide.
+
+| Class / Spec | Color Identity |
+|---|---|
+| Cyborg (base) | Teal/cyan + muted pink |
+| Forged | Red/orange heat |
+| Automaton | Teal/green data |
+| Polymath | Magenta/violet |
+| Human (base) | Warm white/amber |
+| Survivalist | Dirty yellow, rust orange |
+| Gentleman / Lady | Crisp white, cold blue |
+| Enculted | Sickly green, deep purple |
+
+This color language should carry through to ability particle effects, resource meter colors, portrait rim lighting, and spec-specific UI elements.
