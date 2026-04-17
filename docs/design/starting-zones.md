@@ -193,17 +193,34 @@ The dot begins near the center and drifts based on accumulated decisions. Its co
 
 ### What It Affects
 
-The morality position is never announced but is always present:
+The morality system is **a story mechanic only** — it never affects player power, stats, or combat effectiveness. Players should never be able to optimize it, because the moment they can, they will. Its effects are entirely narrative:
 
 - NPC dialogue and reactions shift without explanation
 - Certain quests and paths become available or unavailable
 - Boss encounters change — some bosses react to who you are, not just what you do
-- The mystery rep's relationship with the player evolves based on position
+- Rep companion dialogue reacts to drift from their alignment (see below)
 - Endings are shaped by final position at the point of resolution
 
-The spec choice at the end of the starting zone is the single largest push toward Corrupted/Selfish. It is recoverable — but it takes work.
+### Permanence
 
-!!! question "Open Questions"
-    - Does the morality plane have any visible labels, or are the axes left entirely to player interpretation?
-    - Can the dot move back toward Human/Selfless after the spec choice, or does the spec choice create a floor?
-    - Does the mystery rep's dialogue ever acknowledge the morality position directly?
+**The spec choice is permanent.** Once made, there is no respec between specs — a new playthrough requires a new character. This makes the starting zone boss battle carry its full weight.
+
+Respec *within* a chosen spec's skill tree may be permitted (pending skill tree design decisions). Switching specs is not.
+
+The spec choice is the single largest push toward a rep's quadrant. It cannot be undone, but subsequent decisions continue to move the dot — the spec choice creates a starting position, not a ceiling.
+
+### Representative Alignments
+
+Each rep has a fixed position on the morality plane. They react when the player's dot drifts noticeably from their quadrant — not with judgment menus or system notifications, but through ambient dialogue, tone shifts, and occasional direct confrontation.
+
+| Representative | Quadrant | Notes |
+|---|---|---|
+| **Mystery Rep** | Selfless + Human | The only rep in this quadrant. Reacts most strongly to any drift toward Corrupted or Selfish. |
+| **Survivalist** | Selfish + Human | Self-preservation above everything. Uncomfortable if the player becomes too selfless or too corrupted. |
+| **Gentleman / Lady** | Selfish + Human | Principled refusal of augmentation is still a self-serving identity. Reacts to any loss of composure or creeping corruption. |
+| **Enculted** | Selfless + Corrupted | Consumed by something greater than themselves — not for personal gain. Reacts if the player becomes too self-serving or tries to stay "clean." |
+| **Automaton** | Selfish + Corrupted | Cold systemic efficiency. Reacts to emotional or selfless decisions as inefficiencies. |
+| **Forged** | Selfish + Corrupted | Power through total self-erasure. Reacts to any attempt to preserve humanity. |
+| **Polymath** | Selfless + Corrupted | The outlier among Cyborg specs — sought knowledge beyond human limits in service of understanding, not personal gain. Corrupted through curiosity rather than ambition. Reacts to selfish or intellectually incurious decisions. |
+
+**Example:** A Human player who chose the Survivalist rep but begins acquiring augmentations and making power-driven decisions will hear the Survivalist comment on it — quietly at first, then less quietly. The rep isn't a conscience system. They're a person with a worldview, and your choices are telling them who you really are.
