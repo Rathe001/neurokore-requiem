@@ -692,6 +692,56 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Portraits">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#style" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Style
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#animation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Animation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#spec-class-effects" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Spec &amp; Class Effects
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ui-philosophy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UI Philosophy
+      
+    </span>
+  </a>
+  
 </li>
       
     </ul>
@@ -774,6 +824,34 @@
     
   
     Platform & Performance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../inspirations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inspirations & References
   
 
     
@@ -1027,6 +1105,56 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Portraits">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#style" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Style
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#animation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Animation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#spec-class-effects" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Spec &amp; Class Effects
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ui-philosophy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UI Philosophy
+      
+    </span>
+  </a>
+  
 </li>
       
     </ul>
@@ -1051,7 +1179,96 @@
 
 <h1 id="dialog-ui">Dialog &amp; UI<a class="headerlink" href="#dialog-ui" title="Permanent link">&para;</a></h1>
 <h2 id="portraits">Portraits<a class="headerlink" href="#portraits" title="Permanent link">&para;</a></h2>
-<p>Animated pixel art portrait busts for NPCs, enemies, and quest-givers — in the style of Bard's Tale 1. Simple animation loops (blinking, mouth movement, class/corruption-specific effects).</p>
+<p>Animated pixel art portrait busts for NPCs, enemies, and quest-givers — in the style of Bard's Tale 1. Portraits appear during dialog exchanges, quest interactions, and certain boss encounters.</p>
+<h3 id="style">Style<a class="headerlink" href="#style" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Small bust format showing head and upper chest</li>
+<li>Front-facing or slight 3/4 angle</li>
+<li>Detailed pixel art with expressive faces</li>
+<li>Dark background with character-appropriate rim lighting</li>
+<li>Distinct from the in-game sprite scale — portraits are a separate art context</li>
+</ul>
+<h3 id="animation">Animation<a class="headerlink" href="#animation" title="Permanent link">&para;</a></h3>
+<p>Each portrait has a base idle loop with additional states triggered by dialog tone or combat state:</p>
+<table>
+<thead>
+<tr>
+<th>Animation</th>
+<th>Trigger</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Idle blink</td>
+<td>Default</td>
+</tr>
+<tr>
+<td>Mouth movement</td>
+<td>Speaking</td>
+</tr>
+<tr>
+<td>Damage reaction</td>
+<td>Hit during encounter</td>
+</tr>
+<tr>
+<td>Corrupted flicker</td>
+<td>Spec-specific (see below)</td>
+</tr>
+<tr>
+<td>Death state</td>
+<td>Defeated</td>
+</tr>
+</tbody>
+</table>
+<h3 id="spec-class-effects">Spec &amp; Class Effects<a class="headerlink" href="#spec-class-effects" title="Permanent link">&para;</a></h3>
+<p>Portraits for player characters and allied reps reflect their spec identity through subtle persistent effects layered on top of the base animation:</p>
+<table>
+<thead>
+<tr>
+<th>Spec</th>
+<th>Portrait Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Forged</td>
+<td>Heat shimmer, occasional sparks at frame edge</td>
+</tr>
+<tr>
+<td>Automaton</td>
+<td>Scanline overlay, data readout ticking in background</td>
+</tr>
+<tr>
+<td>Polymath</td>
+<td>Violet neural glow, faint data fragments drifting</td>
+</tr>
+<tr>
+<td>Survivalist</td>
+<td>Grit and sweat, unstable lighting (matches their light source)</td>
+</tr>
+<tr>
+<td>Gentleman / Lady</td>
+<td>Crisp, controlled — no distortion, sharp contrast</td>
+</tr>
+<tr>
+<td>Enculted</td>
+<td>Sickly green edge glow, occasional frame of something wrong that disappears immediately</td>
+</tr>
+<tr>
+<td>Base Class</td>
+<td>Clean, no overlay — the absence of effect is the effect</td>
+</tr>
+</tbody>
+</table>
+<p>Enemy portraits follow the same format but use corruption, grotesquery, and faction-specific visual language. A failed augmentation experiment looks different from a corporate security enforcer looks different from something that came out of Sub-Level Zero.</p>
+<hr />
+<h2 id="ui-philosophy">UI Philosophy<a class="headerlink" href="#ui-philosophy" title="Permanent link">&para;</a></h2>
+<p><em>To be expanded as UI design progresses.</em></p>
+<ul>
+<li>The morality system is never shown as a number or labeled meter — only the dot on the character screen coordinate plane</li>
+<li>Resource meters are class-specific and visually distinct from each other</li>
+<li>Light source status should be visible without occupying prime screen real estate</li>
+</ul>
 
 
 
