@@ -6,6 +6,9 @@
 |:---:|:---:|
 | ![Human portrait](../reference/mockups/classes/human/profile.png){ width=240 } | ![Human model](../reference/mockups/classes/human/model.png){ width=240 } |
 
+**Resource UI concept**
+![Human base resource UI concept](../reference/mockups/classes/human/ui.png){ width=480 }
+
 Unaugmented. In a world that sells upgrades on every corner, the Human refused â€” or never had the choice. Their power comes from what the Cyborg cut away.
 
 **Base resources:** Adrenaline + Composure + Sanity â€” all three run simultaneously. One early skill tied to each. Specialization locks in one and drops the other two.
@@ -18,6 +21,9 @@ Unaugmented. In a world that sells upgrades on every corner, the Human refused â
 |:---:|:---:|
 | ![Survivalist portrait](../reference/mockups/classes/human/survivalist/profile.png){ width=240 } | ![Survivalist model](../reference/mockups/classes/human/survivalist/model.png){ width=240 } |
 
+**Resource UI concept**
+![Survivalist resource UI concept](../reference/mockups/classes/human/survivalist/ui.png){ width=480 }
+
 **Fantasy:** adaptability and improvisation. Thrives in chaos, uses scavenged gear and jury-rigged weapons. Gets stronger as conditions get worse.
 
 **Resource: Adrenaline** â€” builds under pressure, decays when safe. Rewards aggressive, risky play.
@@ -29,6 +35,9 @@ Unaugmented. In a world that sells upgrades on every corner, the Human refused â
 | Portrait | Model |
 |:---:|:---:|
 | ![Gentleman portrait](../reference/mockups/classes/human/gentleman/portrait.png){ width=240 } | ![Gentleman model](../reference/mockups/classes/human/gentleman/model.png){ width=240 } |
+
+**Resource UI concept**
+![Gentleman resource UI concept](../reference/mockups/classes/human/gentleman/ui.png){ width=480 }
 
 **Fantasy:** discipline, composure, old-world refinement. Refused augmentation on principle and became dangerous through mastery instead. Precise, methodical â€” dueling, marksmanship, controlled aggression.
 
@@ -44,6 +53,9 @@ Unaugmented. In a world that sells upgrades on every corner, the Human refused â
 | Portrait | Model |
 |:---:|:---:|
 | ![Enculted portrait](../reference/mockups/classes/human/enculted/portrait.png){ width=240 } | ![Enculted model](../reference/mockups/classes/human/enculted/model.png){ width=240 } |
+
+**Resource UI concept**
+![Enculted resource UI concept](../reference/mockups/classes/human/enculted/ui.png){ width=480 }
 
 **Fantasy:** tapped into something ancient living in the network. The augmentations that make the Cyborg powerful are blocking signals the unmodified mind can receive. Unstable, dangerous power with a horror edge.
 

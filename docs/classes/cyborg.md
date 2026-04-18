@@ -6,6 +6,9 @@
 |:---:|:---:|
 | ![Cyborg portrait](../reference/mockups/classes/cyborg/portrait.png){ width=240 } | ![Cyborg model](../reference/mockups/classes/cyborg/model.png){ width=240 } |
 
+**Resource UI concept**
+![Cyborg base resource UI concept](../reference/mockups/classes/cyborg/ui.png){ width=480 }
+
 A human who has traded flesh for machine. The further down the path, the less human they become.
 
 **Base resources:** Power Grid + Bandwidth + Memory/CPU — all three run simultaneously. One early skill is tied to each, introducing the player to each spec's flavour. Specialization locks in one resource and drops the other two.
@@ -17,6 +20,9 @@ A human who has traded flesh for machine. The further down the path, the less hu
 | Portrait | Model |
 |:---:|:---:|
 | ![Forged portrait](../reference/mockups/classes/cyborg/forged/portrait.png){ width=240 } | ![Forged model](../reference/mockups/classes/cyborg/forged/model.png){ width=240 } |
+
+**Resource UI concept**
+![Forged resource UI concept](../reference/mockups/classes/cyborg/forged/ui.png){ width=480 }
 
 **Fantasy:** sell nearly all remaining humanity for raw mechanical power. Extra limbs, chassis upgrades, heavy attachments.
 
@@ -32,6 +38,9 @@ A human who has traded flesh for machine. The further down the path, the less hu
 | Portrait | Model |
 |:---:|:---:|
 | ![Automaton portrait](../reference/mockups/classes/cyborg/automaton/portrait.png){ width=240 } | ![Automaton model](../reference/mockups/classes/cyborg/automaton/model.png){ width=240 } |
+
+**Resource UI concept**
+![Automaton resource UI concept](../reference/mockups/classes/cyborg/automaton/ui.png){ width=480 }
 
 **Fantasy:** command the machine through AI scripting and a fleet of drones. Set conditions, automate responses, build a system that fights alongside you.
 
@@ -66,6 +75,9 @@ A human who has traded flesh for machine. The further down the path, the less hu
 | Portrait | Model |
 |:---:|:---:|
 | ![Polymath portrait](../reference/mockups/classes/cyborg/polymath/portrait.png){ width=240 } | ![Polymath model](../reference/mockups/classes/cyborg/polymath/model.png){ width=240 } |
+
+**Resource UI concept**
+![Polymath resource UI concept](../reference/mockups/classes/cyborg/polymath/ui.png){ width=480 }
 
 **Fantasy:** augment the mind beyond human limits. The body is just a platform for expanded cognition.
 
