@@ -110,6 +110,10 @@ Each skill is taught immediately after the rep's save moment — the ability the
 
 ## Cyborg Path: The Augmentation Wing
 
+![Augmentation Wing concept](../reference/mockups/environments/zone2.png)
+
+> *Concept art — Midjourney placeholder, directional only.*
+
 The Cyborg player wakes up mid-procedure on an operating table. The corp abandoned them during an augmentation operation. Their last procedure is half-finished. The wing has been deteriorating ever since — failed experiments roam the halls, black market operators occupy the lower levels, and something is still running in the experimental labs at the core.
 
 ### Level 1 — The Ward
@@ -145,6 +149,10 @@ A volunteer research subject for cognitive augmentation beyond approved limits. 
 ---
 
 ## Human Path: The Detention Wing
+
+![Detention Wing concept](../reference/mockups/environments/zone1.png)
+
+> *Concept art — Midjourney placeholder, directional only.*
 
 The Human player is an inmate in the facility's high-security detention block. The prison holds people who couldn't afford augmentation, refused it, or were flagged as threats to the corp's augmentation agenda. Many were destined for experimental procedures without consent.
 

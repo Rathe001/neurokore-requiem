@@ -10,6 +10,10 @@ Dark zones are the default. See [Lighting](../world/lighting.md) for the full li
 
 ## Sub-Level Zero
 
+![Sub-Level Zero concept](../reference/mockups/environments/zone3.png)
+
+> *Concept art — Midjourney placeholder, directional only.*
+
 **Type:** Common zone (first zone after both starting paths)
 **Lighting tier:** Blackout
 **Introduced:** Immediately after the starting zone boss battle
@@ -64,3 +68,43 @@ The door leads out of Earth Facility #723 and into the world above.
 | Earth Facility #723 — Augmentation Wing | Cyborg starting zone | Failing | Documented in [Starting Zones](starting-zones.md) |
 | Earth Facility #723 — Detention Wing | Human starting zone | Failing | Documented in [Starting Zones](starting-zones.md) |
 | Sub-Level Zero | First common zone | Blackout | Above |
+| Abandoned City | Common zone | Dim | Concept only |
+| High-Tech Facility | Common zone | Lit | Concept only |
+| Organic Zone | Common zone | TBD | Concept only |
+| Tech Cave | Common zone | Dim | Concept only |
+
+---
+
+## Concept Art
+
+*Placeholder concepts for undocumented zones. Names and details TBD.*
+
+### Abandoned City
+
+![Abandoned City concept](../reference/mockups/environments/zone4.png)
+
+> *Concept art — Midjourney placeholder, directional only.*
+
+---
+
+### High-Tech Facility
+
+![High-Tech Facility concept](../reference/mockups/environments/zone5.png)
+
+> *Concept art — Midjourney placeholder, directional only.*
+
+---
+
+### Organic Zone
+
+![Organic Zone concept](../reference/mockups/environments/zone6.png)
+
+> *Concept art — Midjourney placeholder, directional only.*
+
+---
+
+### Tech Cave
+
+![Tech Cave concept](../reference/mockups/environments/zone7.png)
+
+> *Concept art — Midjourney placeholder, directional only.*
