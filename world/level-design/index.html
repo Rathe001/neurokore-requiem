@@ -490,6 +490,24 @@
         
       
       
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Level Design
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <a href="./" class="md-nav__link md-nav__link--active">
         
   
@@ -506,6 +524,75 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#surveillance-atmosphere" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Surveillance Atmosphere
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Surveillance Atmosphere">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#elements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Elements
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zone-variation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Zone Variation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#performance-constraints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Performance Constraints
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
       
     </li>
   
@@ -1308,6 +1395,64 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#surveillance-atmosphere" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Surveillance Atmosphere
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Surveillance Atmosphere">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#elements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Elements
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zone-variation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Zone Variation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#performance-constraints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Performance Constraints
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -1331,6 +1476,26 @@
 <li><strong>Construction:</strong> Tile-based, procedurally generated. Tiles and layouts simulate a hand-crafted look.</li>
 <li><strong>Hand-crafted rooms:</strong> Specific events, boss arenas, story moments, and landmark rooms are hand-crafted but designed to slot seamlessly into procedurally generated levels.</li>
 <li><strong>Progression:</strong> Early areas are tighter and less dense. End-game environments support Vampire Survivors-scale hordes.</li>
+</ul>
+<hr />
+<h2 id="surveillance-atmosphere">Surveillance Atmosphere<a class="headerlink" href="#surveillance-atmosphere" title="Permanent link">&para;</a></h2>
+<p>The world is watched. Surveillance infrastructure is ambient and total — not threatening, just present. No one is on the other end. The system is still running because no one turned it off.</p>
+<p>This is a tone mechanic, not a gameplay mechanic. Surveillance elements never punish the player, cannot be meaningfully disabled, and do not affect combat or stealth. Their purpose is to make the player feel observed and irrelevant simultaneously.</p>
+<h3 id="elements">Elements<a class="headerlink" href="#elements" title="Permanent link">&para;</a></h3>
+<p><strong>Surveillance cameras</strong> — mounted on walls and ceilings, rotate to physically follow the player as they move through a zone. The acknowledgement without reaction is the point.</p>
+<p><strong>Dead monitors</strong> — screens displaying a grainy feed of the player's current position. The log goes nowhere. The feed has no audience.</p>
+<p><strong>Automated scan beams</strong> — sweep patterns the player passes through with no consequence. The scanner registers them, records them, does nothing with the data.</p>
+<p><strong>Tracking drones</strong> — hover units that maintain observation distance without engaging. Not guards. Observers. May drift away after a period without reacting.</p>
+<h3 id="zone-variation">Zone Variation<a class="headerlink" href="#zone-variation" title="Permanent link">&para;</a></h3>
+<p>In active corporate zones, surveillance feels dense and functional — everything works, everything watches. In abandoned zones, cameras still rotate but some are stuck mid-pan, some face walls, some flicker. The decay makes it more unsettling: the infrastructure outlasted the people who built it and still doesn't care that you're there.</p>
+<h3 id="performance-constraints">Performance Constraints<a class="headerlink" href="#performance-constraints" title="Permanent link">&para;</a></h3>
+<p>Surveillance elements must not add meaningful overhead in horde-density zones:</p>
+<ul>
+<li><strong>Frustum culling</strong> — off-screen cameras do not update. Only visible cameras rotate.</li>
+<li><strong>Stepped rotation</strong> — cameras snap to a new angle every few frames rather than updating continuously. Cheaper, and more authentically CCTV-like.</li>
+<li><strong>Fixed observation radius</strong> — cameras only track the player within a set distance; idle outside it. Limits active cameras to a small subset at any time.</li>
+<li><strong>Static monitor textures</strong> — dead monitors use a render texture baked on room entry, not a live feed. Same visual effect, near-zero runtime cost.</li>
+<li><strong>Drone reuse</strong> — tracking drones share movement logic with existing enemy AI (maintain distance, no combat state). No separate system required.</li>
 </ul>
 
 
