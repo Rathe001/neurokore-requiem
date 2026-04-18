@@ -51,17 +51,17 @@ The saves are not subtle. They are designed to be memorable.
 
 ## Skill Introduction System
 
-### Phase 1: Helpless (Pre-Level 1 rep encounter)
+### Phase 1: Basic Attacks Only (Pre-Level 1 rep encounter)
 
-The player begins with no combat ability whatsoever. The opening section is pure exploration — learning movement, reading the environment, understanding controls. No HUD resource bars are visible.
+The player begins with no spec skills and no visible skill tree. The opening section introduces movement and controls. No HUD resource indicators are visible.
 
-At some point, an enemy finds the player. There is no option to fight. The only option is to run.
+The player has access to basic attacks from the start — left click for single target, right click for AoE — both weapon-dependent and resource-free. See [Skill Tree](skill-tree.md) for full details.
 
-The enemy is faster, or the corridors are too tight, or there is nowhere left to go. The player gets caught. This is scripted and unavoidable.
+At some point, an enemy finds the player. They can attempt to fight. The fight is designed to be unwinnable — the enemy is too strong for basic attacks alone — but the player having the option makes the eventual loss feel earned rather than scripted.
 
-The Level 1 rep saves them. This is the save moment referenced above — designed to be memorable.
+The player is overwhelmed. The Level 1 rep saves them. This is the save moment referenced above — designed to be memorable.
 
-After the save, the rep teaches the player their first basic skill. The corresponding resource bar appears on the HUD for the first time.
+After the save, the rep teaches the player their first spec skill. The skill tree opens automatically, the skill flashes into place, and is assigned to the **1** hotkey. The corresponding resource indicator appears on the HUD for the first time.
 
 ### Phase 2: One Skill Per Level (Levels 1–3)
 

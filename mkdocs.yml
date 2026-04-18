@@ -39,6 +39,7 @@ nav:
     - Lighting: world/lighting.md
   - Design:
     - Combat & Scale: design/combat.md
+    - Skill Tree: design/skill-tree.md
     - Dialog & UI: design/dialog-ui.md
     - Starting Zones: design/starting-zones.md
     - Zones: design/zones.md
