@@ -2,7 +2,7 @@ extends CharacterBody2D
 class_name Enemy
 
 const AGGRO_RANGE := 250.0
-const CONTACT_RANGE := 30.0
+const CONTACT_RANGE := 40.0
 const CONTACT_DAMAGE := 10
 const ATTACK_COOLDOWN := 1.0
 
@@ -13,10 +13,12 @@ var current_health: int
 var _attack_cd := 0.0
 
 @onready var visual: Polygon2D = $Visual
+@onready var health_bar: HealthBar = $HealthBar
 
 func _ready() -> void:
 	current_health = max_health
 	add_to_group(&"enemies")
+	health_bar.set_health(current_health, max_health)
 
 func _physics_process(delta: float) -> void:
 	_attack_cd = maxf(0.0, _attack_cd - delta)
@@ -45,6 +47,7 @@ func _physics_process(delta: float) -> void:
 func take_damage(amount: int) -> void:
 	current_health -= amount
 	_flash()
+	health_bar.set_health(current_health, max_health)
 	if current_health <= 0:
 		queue_free()
 

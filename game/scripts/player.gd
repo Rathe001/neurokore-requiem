@@ -20,10 +20,12 @@ var _aoe_cd := 0.0
 var _alive := true
 
 @onready var visual: Polygon2D = $Visual
+@onready var health_bar: HealthBar = $HealthBar
 
 func _ready() -> void:
 	current_health = MAX_HEALTH
 	add_to_group(&"player")
+	health_bar.set_health(current_health, MAX_HEALTH)
 
 func _physics_process(delta: float) -> void:
 	if not _alive:
@@ -46,7 +48,7 @@ func take_damage(amount: int) -> void:
 		return
 	current_health -= amount
 	_flash()
-	print("Player HP: ", current_health, "/", MAX_HEALTH)
+	health_bar.set_health(current_health, MAX_HEALTH)
 	if current_health <= 0:
 		_die()
 
