@@ -4,6 +4,7 @@
 [ext_resource type="PackedScene" path="res://scenes/enemy.tscn" id="2_enemy_scene"]
 
 [node name="Level" type="Node2D"]
+y_sort_enabled = true
 script = ExtResource("1_level_script")
 
 [node name="Enemy1" parent="." instance=ExtResource("2_enemy_scene")]

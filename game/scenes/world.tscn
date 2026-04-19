@@ -14,18 +14,21 @@ radius = 16.0
 [node name="Ground" type="Node2D" parent="."]
 script = ExtResource("2_ground_script")
 
-[node name="Level" parent="." instance=ExtResource("3_level")]
+[node name="Entities" type="Node2D" parent="."]
+y_sort_enabled = true
 
-[node name="Player" type="CharacterBody2D" parent="."]
+[node name="Level" parent="Entities" instance=ExtResource("3_level")]
+
+[node name="Player" type="CharacterBody2D" parent="Entities"]
 script = ExtResource("1_player_script")
 
-[node name="Visual" type="Sprite2D" parent="Player"]
+[node name="Visual" type="Sprite2D" parent="Entities/Player"]
 texture = ExtResource("5_player_sprite")
 offset = Vector2(0, -30)
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Player"]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Entities/Player"]
 shape = SubResource("CircleShape2D_player")
 
-[node name="Camera2D" type="Camera2D" parent="Player"]
+[node name="Camera2D" type="Camera2D" parent="Entities/Player"]
 
 [node name="HUD" parent="." instance=ExtResource("4_hud")]
