@@ -1,5 +1,7 @@
 # Spec-Specific Monster Variants
 
+*This page documents enemy variants as they relate to class and spec identity. For zone-level enemy design and encounter rules, see [Zones](../design/zones.md). For combat feel and density philosophy, see [Combat & Scale](../design/combat.md).*
+
 Certain enemies have spec-specific variants — different forms of the same base threat that are tuned to the player's class and spec. The world shapes itself around what threatens *you* specifically. These variants may interact directly with the spec's resource system (e.g. a Software Bug corrupting Automaton scripts, Nanobytes draining the Forged's Power Grid, an Unbeliever suppressing the Enculted's Sanity abilities).
 
 | Class | Spec | Monster Variant | Threat Type |

@@ -47,64 +47,7 @@ This creates two things:
 
 The saves are not subtle. They are designed to be memorable.
 
----
-
-## Skill Introduction System
-
-### Phase 1: Basic Attacks Only (Pre-Level 1 rep encounter)
-
-The player begins with no spec skills and no visible skill tree. The opening section introduces movement and controls. No HUD resource indicators are visible.
-
-The player has access to basic attacks from the start — left click for single target, right click for AoE — both weapon-dependent and resource-free. See [Skill Tree](skill-tree.md) for full details.
-
-At some point, an enemy finds the player. They can attempt to fight. The fight is designed to be unwinnable — the enemy is too strong for basic attacks alone — but the player having the option makes the eventual loss feel earned rather than scripted.
-
-The player is overwhelmed. The Level 1 rep saves them. This is the save moment referenced above — designed to be memorable.
-
-After the save, the rep teaches the player their first spec skill. The skill tree opens automatically, the skill flashes into place, and is assigned to the **1** hotkey. The corresponding resource indicator appears on the HUD for the first time.
-
-### Phase 2: One Skill Per Level (Levels 1–3)
-
-Each subsequent rep encounter follows the same structure: save moment → skill taught → resource bar revealed. By the end of Level 3, the player has:
-
-- 3 basic skills, one per spec
-- 3 resource bars, one per spec
-
-The goal is to give the player a practical feel for what each spec's resource system demands before they make a permanent choice.
-
-### Phase 3: The Proving Ground (Level 4)
-
-Level 4 is cleared using all three skills. No new abilities are introduced. This level exists to let the player internalize the three skill styles together before the Confrontation forces a permanent choice.
-
-### After Spec Selection
-
-When the player chooses a spec at the Confrontation:
-
-- The two unchosen skills are **permanently removed**
-- Their resource bars disappear from the HUD
-- The chosen spec's skill and resource bar remain as the foundation for further progression
-
-**Base class exception:** Players who refuse all three reps and take the base class path retain all three skills and all three resource bars. This is the mechanical reward for the hardest path — breadth over depth.
-
-### The Six Starting Skills
-
-Each skill is taught immediately after the rep's save moment — the ability the player receives is a direct reflection of what they just witnessed.
-
-**Cyborg**
-
-| Spec | Skill | Description | Resource |
-|---|---|---|---|
-| Forged | **Buzzsaw** | Melee arc attack. Deals slicing damage and applies a bleed DoT. | Power Grid |
-| Automaton | **Autoturret** | Toggle. A turret forms on the player's shoulder and auto-attacks nearby enemies for small/medium piercing damage. Consumes 90% of Bandwidth while active — the drain is intentional, so the player immediately understands what the resource does. | Bandwidth |
-| Polymath | **DDoS** | Large single-target damage. Deals bonus damage vs. mechanical enemies. | Memory + CPU |
-
-**Human**
-
-| Spec | Skill | Description | Resource |
-|---|---|---|---|
-| Survivalist | **IED** | Scavenge nearby corpses or destructibles to craft an improvised grenade dealing medium AoE damage. Damage type is determined by what was scavenged. | Adrenaline |
-| Gentleman / Lady | **Malice** | Attack with the equipped weapon for bonus damage. Each consecutive hit deals additional damage on top of the last. | Composure |
-| Enculted | **Blaspheme** | Curse a target. Flesh-based enemies take increased damage and deal reduced damage for the curse's duration. | Sanity |
+Each save moment is also when the rep teaches the player their spec skill and the skill tree opens for the first time. See [Skill Tree](skill-tree.md) for the full tutorial progression and starting skill details.
 
 ---
 
@@ -222,7 +165,7 @@ The chosen rep accompanies the player into Sub-Level Zero and through the exit. 
 
 - They appear at designated level-up points throughout the game — leveling is not done on the fly
 - They join certain boss encounters where it makes thematic sense
-- Their dialogue reacts to the player's evolving morality position (see [Morality System](#the-morality-system))
+- Their dialogue reacts to the player's evolving morality position (see [Morality System](morality-system.md))
 
 ---
 
@@ -244,7 +187,7 @@ After the battle, they introduce themselves. They are the representative of thos
 
 The difference: the player didn't choose this. They failed to choose anything, and were given something anyway. The mystery rep knows this. They don't mention it — but they know.
 
-**The mystery rep is the morally "good" path.** All six specs represent a compromise. The base class, under this companion, does not. This distinction is tracked by the morality system.
+**The mystery rep is the morally "good" path.** All six specs represent a compromise. The base class, under this companion, does not. This distinction is tracked by the [Morality System](morality-system.md).
 
 ---
 
@@ -253,67 +196,3 @@ The difference: the player didn't choose this. They failed to choose anything, a
 After the boss battle, both Cyborg and Human players escape through the same lower maintenance corridors. This is where the two starting zones physically meet — the first point where both classes share the same space.
 
 The convergence zone leads out of Earth Facility #723 into the common game world.
-
----
-
-## The Morality System
-
-Player decisions, dialogue choices, and actions are tracked silently throughout the game. The player never sees a number or a progress bar. Instead, the **character screen displays a 2D coordinate plane** with a single colored dot representing the player's current moral position.
-
-### The Plane
-
-Two axes, unlabeled in-game:
-
-- **Horizontal axis:** Selfless ↔ Selfish
-- **Vertical axis:** Human ↔ Corrupted
-
-The dot begins near the center and drifts based on accumulated decisions. Its color shifts with position — soft white near the Human/Selfless origin, deepening toward dark crimson at the Corrupted/Selfish extreme.
-
-### The Four Quadrants
-
-| | **Selfless** | **Selfish** |
-|---|---|---|
-| **Human** | Mystery rep's territory. Power used in service of others, humanity preserved. | Cold mastery. Principled and dangerous but ultimately self-serving. |
-| **Corrupted** | Consumed by forces greater than yourself in service of something else. Tragic. | Pure power at any cost. The darkest path. |
-
-### What It Affects
-
-The morality system is **a story mechanic only** — it never affects player power, stats, or combat effectiveness. Players should never be able to optimize it, because the moment they can, they will. Its effects are entirely narrative:
-
-- NPC dialogue and reactions shift without explanation
-- Certain quests and paths become available or unavailable
-- Boss encounters change — some bosses react to who you are, not just what you do
-- Rep companion dialogue reacts to drift from their alignment (see below)
-- Endings are shaped by final position at the point of resolution
-
-### Permanence
-
-**The spec choice is permanent.** Once made, there is no respec between specs — a new playthrough requires a new character. This makes the starting zone boss battle carry its full weight.
-
-Respec *within* a chosen spec's skill tree may be permitted (pending skill tree design decisions). Switching specs is not.
-
-The spec choice is the single largest push toward a rep's quadrant. It cannot be undone, but subsequent decisions continue to move the dot — the spec choice creates a starting position, not a ceiling.
-
-### Starting Position
-
-When a spec is chosen, the player's dot **snaps to that rep's fixed position** on the morality plane. Playing naturally within the spec's fantasy will keep the dot there. Deviation requires conscious choices against the spec's identity — the rep reacts to that drift, not to the starting position.
-
-The base class path (mystery rep) places the dot at Selfless + Human — the only path that begins there.
-
-### Representative Alignments
-
-Each rep has a fixed position on the morality plane. They react when the player's dot drifts noticeably from their quadrant — not with judgment menus or system notifications, but through ambient dialogue, tone shifts, and occasional direct confrontation.
-
-| Representative | Quadrant | Character Notes |
-|---|---|---|
-| **Mystery Rep** | Selfless + Human | The only rep in this quadrant. Reacts most strongly to any drift toward Corrupted or Selfish. |
-| **Gentleman / Lady** | Selfish + Human | Extreme arrogance and a superiority complex — "I didn't need a machine to make me dangerous." Their refusal of augmentation is not humility; it's contempt. Reacts to any loss of composure or signs of desperation. |
-| **Survivalist** | Selfless + Corrupted | Corrupted by trauma — watched everyone they knew get augmented, broken, or killed. Helps others because they've seen what happens when nobody does, but the cost has hollowed them out. Reacts to cold, self-serving decisions that mirror the people who destroyed everything they cared about. |
-| **Automaton** | Selfless + Corrupted | Binary logic has no room for selfishness — selfishness requires a self making a preference. The Automaton has dissolved their moral agency into scripts and systems. Not corrupted through malice, but through the removal of the self from the equation entirely. Reacts to emotional or personally motivated decisions as noise in the system. |
-| **Enculted** | Selfish + Corrupted | Sold their soul for power. The constant battle to prevent complete insanity is the price of that bargain — a cost they accepted knowingly. Reacts to selfless decisions as a waste of what they sacrificed everything to obtain. |
-| **Polymath** | Selfish + Corrupted | Made a conscious, deliberate decision to augment their intelligence for personal power. The "curiosity" framing is how they justify it. Corrupted through ambition dressed as scholarship. Reacts to decisions that suggest the player values others over their own advancement. |
-| **Forged** | Selfish + Corrupted | Power through total self-erasure. Reacts to any decision that suggests the player still values their humanity. |
-
-**Example:** A Human player who chose the Survivalist rep but begins making cold, self-serving decisions — taking resources from those who need them, letting others die for personal gain — will hear the Survivalist comment on it. Quietly at first, then less quietly. They've seen this before. They know where it ends.
-
-The rep isn't a conscience system. They're a person with a worldview, and your choices are telling them who you really are.

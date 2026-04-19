@@ -44,8 +44,9 @@ Enemy portraits follow the same format but use corruption, grotesquery, and fact
 
 ## UI Philosophy
 
-*To be expanded as UI design progresses.*
+- **Morality system** — never shown as a number or labeled meter. The character screen displays only the dot on a 2D coordinate plane. See [Morality System](morality-system.md) for full details.
+- **Resource indicators** — class-specific and visually distinct from each other. Each spec has its own UI concept; see the individual spec pages under [Cyborg](../classes/cyborg.md) and [Human](../classes/human.md).
+- **Light source status** — visible without occupying prime screen real estate. See [Lighting](../world/lighting.md) for the full lighting system and equippable light source design.
+- **Skill tree** — locked and invisible until the first rep encounter. See [Skill Tree](skill-tree.md) for unlock behavior and hotkey layout.
 
-- The morality system is never shown as a number or labeled meter — only the dot on the character screen coordinate plane
-- Resource meters are class-specific and visually distinct from each other
-- Light source status should be visible without occupying prime screen real estate
+*UI layout, HUD composition, and inventory design are TBD — to be expanded as implementation begins.*

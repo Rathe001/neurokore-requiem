@@ -5,6 +5,7 @@
 The skill tree is locked and invisible until the player learns their first skill from the Level 1 rep encounter.
 
 At that moment:
+
 1. The skill tree opens automatically
 2. The learned skill flashes into its position in the tree
 3. The skill is assigned to the **1** hotkey
@@ -38,6 +39,61 @@ Basic attacks can be modified through skill tree nodes. Examples of the kinds of
 - AoE applies a status effect based on spec identity
 
 These nodes allow basic attacks to remain relevant at all stages of the game rather than becoming obsolete once spec skills are unlocked.
+
+---
+
+## Tutorial Progression
+
+The starting zone teaches the skill system through play across four phases. See [Starting Zones](starting-zones.md) for the full narrative context of each rep encounter.
+
+### Phase 1: Basic Attacks Only (Pre-Level 1 rep encounter)
+
+The player begins with no spec skills and no visible skill tree. Basic attacks are available but insufficient against the first enemy encounter. The player is overwhelmed — the Level 1 rep saves them, then teaches the first spec skill. The skill tree opens for the first time.
+
+### Phase 2: One Skill Per Level (Levels 1–3)
+
+Each subsequent rep encounter follows the same structure: save moment → skill taught → resource indicator revealed. By the end of Level 3, the player has:
+
+- 3 spec skills, one per spec
+- 3 resource indicators, one per spec
+
+The goal is to give the player a practical feel for what each spec's resource system demands before they make a permanent choice.
+
+### Phase 3: The Proving Ground (Level 4)
+
+Level 4 is cleared using all three skills. No new abilities are introduced. This level exists to let the player internalize the three skill styles together before the Confrontation forces a permanent choice.
+
+### Phase 4: After Spec Selection
+
+When the player chooses a spec at the [Confrontation](starting-zones.md#the-confrontation):
+
+- The two unchosen skills are **permanently removed**
+- Their resource indicators disappear from the HUD
+- The chosen spec's skill and resource indicator remain as the foundation for further progression
+
+**Base class exception:** Players who take the base class path retain all three skills and all three resource indicators. This is the mechanical reward for the hardest path — breadth over depth.
+
+---
+
+## The Six Starting Skills
+
+Each skill is taught immediately after the rep's save moment — the ability the player receives is a direct reflection of what they just witnessed.
+
+**Cyborg**
+
+| Spec | Skill | Description | Resource |
+|---|---|---|---|
+| Forged | **Buzzsaw** | Melee arc attack. Deals slicing damage and applies a bleed DoT. | Power Grid |
+| Automaton | **Autoturret** | Toggle. A turret forms on the player's shoulder and auto-attacks nearby enemies for small/medium piercing damage. Consumes 90% of Bandwidth while active — the drain is intentional, so the player immediately understands what the resource does. | Bandwidth |
+| Polymath | **DDoS** | Large single-target damage. Deals bonus damage vs. mechanical enemies. | Memory + CPU |
+
+**Human**
+
+| Spec | Skill | Description | Resource |
+|---|---|---|---|
+| Survivalist | **IED** | Scavenge nearby corpses or destructibles to craft an improvised grenade dealing medium AoE damage. Damage type is determined by what was scavenged. | Adrenaline |
+| Gentleman / Lady | **Malice** | Attack with the equipped weapon for bonus damage. Each consecutive hit deals additional damage on top of the last. | Composure |
+| Enculted | **Blaspheme** | Curse a target. Flesh-based enemies take increased damage and deal reduced damage for the curse's duration. | Sanity |
 
 ---
 

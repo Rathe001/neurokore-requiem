@@ -40,6 +40,7 @@ nav:
   - Design:
     - Combat & Scale: design/combat.md
     - Skill Tree: design/skill-tree.md
+    - Morality System: design/morality-system.md
     - Dialog & UI: design/dialog-ui.md
     - Starting Zones: design/starting-zones.md
     - Zones: design/zones.md
