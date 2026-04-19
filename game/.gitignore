@@ -19,3 +19,7 @@ Thumbs.db
 # Export presets (commit) but ignore the binaries they produce
 /exports/
 /builds/
+
+# Per-developer debug overrides — copy debug_defaults.tres to debug_local.tres
+# and edit there. Only the defaults are committed.
+/resources/debug/debug_local.tres

@@ -6,10 +6,11 @@
 script = ExtResource("1_skill_script")
 display_name = "AoE Burst"
 damage = 15
-range = 120.0
-cooldown = 0.5
+range = 5.0
+cooldown = 1.0
+wind_up = 0.25
 resource_cost = 30
 targeting_mode = 1
 cone_deg = 360.0
-knockback = 400.0
-indicator_color = Color(1.0, 0.6, 0.3, 0.35)
+knockback = 8.0
+icon_color = Color(1.0, 0.6, 0.3, 1.0)

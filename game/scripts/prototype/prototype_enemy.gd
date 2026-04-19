@@ -4,6 +4,11 @@ signal died
 
 const KNOCKBACK_DURATION := 0.15
 const DEATH_HOLD := 1.6
+const DEATH_FALLBACK_DURATION := 0.6
+
+const CREDIT_DROP_MIN := 1
+const CREDIT_DROP_MAX := 5
+const CREDIT_PICKUP_SCENE: PackedScene = preload("res://scenes/prototype/prototype_credit_pickup.tscn")
 
 const CHASE_SPEED := 3.2
 const AGGRO_RANGE := 10.0
@@ -13,17 +18,24 @@ const ATTACK_COOLDOWN := 1.6
 const ATTACK_WINDUP := 0.4
 const ATTACK_CONE_DEG := 80.0
 const ATTACK_KNOCKBACK := 5.0
-const ATTACK_COLOR := Color(1.0, 0.3, 0.18, 1.0)
 
 const ANIM_IDLE: Array[StringName] = [&"Idle_Normal", &"Idle", &"IDLE_NORMAL"]
 const ANIM_RUN: Array[StringName] = [&"Jog_Fwd", &"Walk_Normal", &"JOG_FWD", &"WALK_NORMAL"]
 const ANIM_ATTACK: Array[StringName] = [&"Sword_Attack", &"Punch_Cross", &"SWORD_ATTACK", &"PUNCH_CROSS"]
-const ANIM_DEATH: Array[StringName] = [&"Death_1", &"DEATH_1", &"Death"]
+const ANIM_DEATH: Array[StringName] = [
+	&"Death_1", &"Death_2", &"Death_A", &"Death_B", &"Death",
+	&"Dying_A", &"Dying_B", &"Die",
+	&"DEATH_1", &"DEATH_2", &"DEATH",
+]
 
 @export var max_health: int = 40
+@export_range(0.0, 1.0, 0.05) var credit_drop_chance: float = 0.6
 
 @onready var visual: Node3D = $Visual
 @onready var anim_player: AnimationPlayer = $Visual/Character/AnimationPlayer
+@onready var health_bar: MeshInstance3D = $HealthBar
+@onready var collision: CollisionShape3D = $Collision
+@onready var floor_ring: MeshInstance3D = $FloorRing
 
 var _health: int
 var _alive: bool = true
@@ -31,16 +43,24 @@ var _knockback_vel: Vector3 = Vector3.ZERO
 var _knockback_remain: float = 0.0
 var _attack_cd: float = 0.0
 var _casting: bool = false
+var _want_dir: Vector3 = Vector3.ZERO
 
 func _ready() -> void:
 	add_to_group(&"enemies")
 	_health = max_health
+	_ensure_loop(ANIM_IDLE)
+	_ensure_loop(ANIM_RUN)
 	_play_anim(ANIM_IDLE)
+	if health_bar != null:
+		health_bar.visible = false
 
 func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_strength: float = 0.0) -> void:
 	if not _alive:
 		return
+	if DebugState.config != null and DebugState.config.one_shot_enemies:
+		amount = max(amount, max_health)
 	_health -= amount
+	_update_health_bar()
 	if knockback_strength > 0.0:
 		var dir := global_position - knockback_from
 		dir.y = 0.0
@@ -49,6 +69,13 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 			_knockback_remain = KNOCKBACK_DURATION
 	if _health <= 0:
 		_die()
+
+func _update_health_bar() -> void:
+	if health_bar == null:
+		return
+	var ratio := clampf(float(_health) / float(max_health), 0.0, 1.0)
+	health_bar.visible = _alive and ratio < 1.0
+	health_bar.set_instance_shader_parameter(&"fill_ratio", ratio)
 
 func _physics_process(delta: float) -> void:
 	if not _alive:
@@ -59,6 +86,7 @@ func _physics_process(delta: float) -> void:
 		velocity.x = _knockback_vel.x
 		velocity.z = _knockback_vel.z
 		_knockback_remain -= delta
+		_want_dir = Vector3.ZERO
 	elif _casting:
 		velocity.x = 0.0
 		velocity.z = 0.0
@@ -67,15 +95,15 @@ func _physics_process(delta: float) -> void:
 	velocity.y = 0.0
 	move_and_slide()
 
-	if _alive and not _casting:
-		var speed2 := velocity.x * velocity.x + velocity.z * velocity.z
-		if speed2 > 0.25:
+	if _alive and not _casting and _knockback_remain <= 0.0:
+		if _want_dir.length_squared() > 0.01:
 			_play_anim(ANIM_RUN)
-			_face_velocity()
+			_face_direction(_want_dir)
 		else:
 			_play_anim(ANIM_IDLE)
 
 func _chase_tick() -> void:
+	_want_dir = Vector3.ZERO
 	var player := get_tree().get_first_node_in_group(&"player") as Node3D
 	if player == null:
 		velocity.x = 0.0
@@ -92,6 +120,7 @@ func _chase_tick() -> void:
 		_cast_attack(player, to_player / dist)
 		return
 	var dir := to_player / dist
+	_want_dir = dir
 	velocity.x = dir.x * CHASE_SPEED
 	velocity.z = dir.z * CHASE_SPEED
 
@@ -102,7 +131,7 @@ func _cast_attack(player: Node3D, aim: Vector3) -> void:
 	velocity.z = 0.0
 	_face_direction(aim)
 	_play_anim(ANIM_ATTACK, 1.2)
-	PrototypeAttackIndicator.spawn_cone(self, aim, ATTACK_RANGE, ATTACK_CONE_DEG, ATTACK_COLOR, ATTACK_WINDUP)
+	PrototypeAttackIndicator.spawn_cone(self, aim, ATTACK_RANGE, ATTACK_CONE_DEG, ATTACK_WINDUP)
 	await get_tree().create_timer(ATTACK_WINDUP).timeout
 	_casting = false
 	if not _alive or not is_instance_valid(player):
@@ -122,29 +151,67 @@ func _die() -> void:
 	_alive = false
 	died.emit()
 	set_physics_process(false)
-	_play_anim(ANIM_DEATH, 1.0)
+	if health_bar != null:
+		health_bar.visible = false
+	_drop_credits()
+	var played := _play_anim(ANIM_DEATH, 1.0)
+	if not played:
+		if anim_player != null:
+			anim_player.pause()
+		if visual != null:
+			var tween := create_tween()
+			tween.tween_property(visual, "rotation:x", deg_to_rad(-75.0), DEATH_FALLBACK_DURATION)
 	await get_tree().create_timer(DEATH_HOLD).timeout
-	queue_free()
+	_become_corpse()
 
-func _face_velocity() -> void:
-	var d := Vector3(velocity.x, 0.0, velocity.z)
-	if d.length_squared() > 0.01:
-		_face_direction(d.normalized())
+func _drop_credits() -> void:
+	if randf() >= credit_drop_chance:
+		return
+	var parent := get_parent()
+	if parent == null:
+		return
+	var pickup := CREDIT_PICKUP_SCENE.instantiate()
+	pickup.amount = randi_range(CREDIT_DROP_MIN, CREDIT_DROP_MAX)
+	parent.add_child(pickup)
+	pickup.global_position = global_position + Vector3(0.0, 1.0, 0.0)
+
+func _become_corpse() -> void:
+	remove_from_group(&"enemies")
+	add_to_group(&"corpses")
+	if collision != null:
+		collision.disabled = true
+	if floor_ring != null:
+		floor_ring.visible = false
+	collision_layer = 0
+	collision_mask = 0
+	get_tree().call_group(&"corpse_manager", &"register_corpse", self)
 
 func _face_direction(dir: Vector3) -> void:
 	if visual == null or dir.length_squared() < 0.0001:
 		return
 	visual.look_at(visual.global_position + dir, Vector3.UP)
 
-func _play_anim(candidates: Array[StringName], speed: float = 1.0) -> void:
+func _play_anim(candidates: Array[StringName], speed: float = 1.0) -> bool:
 	if anim_player == null:
-		return
+		return false
 	for name in candidates:
 		if not anim_player.has_animation(name):
 			continue
 		var name_str := String(name)
 		if anim_player.current_animation == name_str and anim_player.is_playing():
-			return
+			return true
 		anim_player.speed_scale = speed
 		anim_player.play(name_str)
+		return true
+	return false
+
+func _ensure_loop(candidates: Array[StringName]) -> void:
+	if anim_player == null:
+		return
+	for name in candidates:
+		if not anim_player.has_animation(name):
+			continue
+		var anim := anim_player.get_animation(name)
+		if anim != null:
+			anim.loop_mode = Animation.LOOP_LINEAR
 		return

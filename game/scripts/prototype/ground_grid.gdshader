@@ -13,7 +13,7 @@ void fragment() {
 	vec2 coord = UV * plane_size;
 	vec2 grid = abs(fract(coord) - 0.5);
 	vec2 d = fwidth(coord) * 1.5;
-	vec2 line_mask = smoothstep(0.5 - d, 0.5, grid);
+	vec2 line_mask = smoothstep(vec2(0.5) - d, vec2(0.5), grid);
 	float line = max(line_mask.x, line_mask.y);
 
 	float dist = length(UV - vec2(0.5));

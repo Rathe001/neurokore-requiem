@@ -6,10 +6,11 @@
 script = ExtResource("1_skill_script")
 display_name = "Basic Attack"
 damage = 25
-range = 80.0
+range = 3.5
 cooldown = 0.3
+wind_up = 0.12
 resource_cost = 0
 targeting_mode = 0
 cone_deg = 60.0
-knockback = 200.0
-indicator_color = Color(0.7, 0.9, 1.0, 0.35)
+knockback = 6.0
+icon_color = Color(0.7, 0.9, 1.0, 1.0)

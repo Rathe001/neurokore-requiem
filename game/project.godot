@@ -20,8 +20,9 @@ config/features=PackedStringArray("4.6", "Forward Plus")
 
 [autoload]
 
+DebugState="*res://scripts/systems/debug_state.gd"
+AccessibilityState="*res://scripts/systems/accessibility_state.gd"
 InputSetup="*res://scripts/systems/input_setup.gd"
-GameState="*res://scripts/systems/game_state.gd"
 
 [display]
 

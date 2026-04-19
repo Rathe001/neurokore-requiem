@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="DebugConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/systems/debug_config.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+override_start_position = false
+start_position = Vector3(0, 0, 0)
+starting_credits = 0
+god_mode = false
+infinite_resource = false
+one_shot_enemies = false
+disable_enemies = false
+show_attack_telegraphs = true

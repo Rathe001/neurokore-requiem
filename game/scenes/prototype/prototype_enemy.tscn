@@ -1,7 +1,8 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://scripts/prototype/prototype_enemy.gd" id="script_enemy"]
 [ext_resource type="PackedScene" path="res://art/3d/characters/quaternius/UAL1_Standard.glb" id="char_model"]
+[ext_resource type="Shader" path="res://scripts/prototype/health_bar.gdshader" id="shader_health_bar"]
 
 [sub_resource type="CapsuleShape3D" id="shape_enemy"]
 radius = 0.4
@@ -20,6 +21,18 @@ material = SubResource("mat_ring_enemy")
 inner_radius = 0.5
 outer_radius = 0.62
 
+[sub_resource type="ShaderMaterial" id="mat_health_bar"]
+render_priority = 10
+shader = ExtResource("shader_health_bar")
+shader_parameter/back_color = Color(0.12, 0.14, 0.18, 0.95)
+shader_parameter/fill_color = Color(1.0, 0.28, 0.32, 1.0)
+shader_parameter/border_color = Color(0.02, 0.03, 0.05, 1.0)
+shader_parameter/border_thickness = 0.12
+
+[sub_resource type="QuadMesh" id="mesh_health_bar"]
+material = SubResource("mat_health_bar")
+size = Vector2(1.0, 0.16)
+
 [node name="PrototypeEnemy" type="CharacterBody3D"]
 script = ExtResource("script_enemy")
 
@@ -35,3 +48,8 @@ mesh = SubResource("mesh_ring_enemy")
 [node name="Collision" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
 shape = SubResource("shape_enemy")
+
+[node name="HealthBar" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.2, 0)
+visible = false
+mesh = SubResource("mesh_health_bar")

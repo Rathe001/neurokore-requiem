@@ -18,6 +18,10 @@ func _ready() -> void:
 	_register_key(&"skill_4", KEY_4)
 	_register_key(&"skill_q", KEY_Q)
 	_register_key(&"skill_e", KEY_E)
+	_register_key(&"toggle_inventory", KEY_I)
+	_register_key(&"toggle_debug_panel", KEY_F3)
+	_register_key(&"debug_horde_spawn", KEY_F1)
+	_register_key(&"debug_horde_clear", KEY_F2)
 
 func _register_key(action: StringName, key: Key) -> void:
 	if InputMap.has_action(action):
