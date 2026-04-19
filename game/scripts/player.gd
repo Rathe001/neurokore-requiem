@@ -22,7 +22,7 @@ var _single_cd := 0.0
 var _aoe_cd := 0.0
 var _alive := true
 
-@onready var visual: Polygon2D = $Visual
+@onready var visual: Sprite2D = $Visual
 
 func _ready() -> void:
 	current_health = MAX_HEALTH
@@ -84,7 +84,7 @@ func _die() -> void:
 	_alive = false
 	velocity = Vector2.ZERO
 	if visual:
-		visual.color = Color(0.3, 0.3, 0.3, 0.5)
+		visual.modulate = Color(0.3, 0.3, 0.3, 0.5)
 	died.emit()
 	await get_tree().create_timer(RESPAWN_DELAY).timeout
 	get_tree().reload_current_scene()
@@ -92,8 +92,7 @@ func _die() -> void:
 func _flash() -> void:
 	if visual == null:
 		return
-	var original_color := visual.color
-	visual.color = Color.WHITE
+	visual.modulate = Color(1.0, 0.4, 0.4, 1.0)
 	await get_tree().create_timer(0.08).timeout
-	if is_instance_valid(visual):
-		visual.color = original_color
+	if is_instance_valid(visual) and _alive:
+		visual.modulate = Color.WHITE

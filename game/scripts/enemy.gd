@@ -13,6 +13,7 @@ const ATTACK_COOLDOWN := 1.0
 
 var current_health: int
 var _attack_cd := 0.0
+var _visual_base_color: Color
 
 @onready var visual: Polygon2D = $Visual
 @onready var health_bar: HealthBar = $HealthBar
@@ -20,6 +21,7 @@ var _attack_cd := 0.0
 func _ready() -> void:
 	current_health = max_health
 	add_to_group(&"enemies")
+	_visual_base_color = visual.color
 	health_bar.set_health(current_health, max_health)
 
 func _physics_process(delta: float) -> void:
@@ -61,8 +63,7 @@ func _find_player() -> Node2D:
 func _flash() -> void:
 	if visual == null:
 		return
-	var original_color := visual.color
 	visual.color = Color.WHITE
 	await get_tree().create_timer(0.08).timeout
 	if is_instance_valid(visual):
-		visual.color = original_color
+		visual.color = _visual_base_color
