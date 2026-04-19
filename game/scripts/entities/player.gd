@@ -55,7 +55,7 @@ func _cast_skill(skill: Skill) -> void:
 		return
 	_cooldowns[skill] = skill.cooldown
 	var aim := _aim_direction()
-	_spawn_indicator(skill, aim)
+	AttackIndicator.spawn(self, skill, aim)
 	match skill.targeting_mode:
 		Skill.TargetingMode.SINGLE_CONE:
 			var target := _find_enemy_in_cone(aim, skill.range, skill.cone_deg)
@@ -65,15 +65,6 @@ func _cast_skill(skill: Skill) -> void:
 			for enemy in get_tree().get_nodes_in_group(&"enemies"):
 				if global_position.distance_to(enemy.global_position) <= skill.range:
 					enemy.take_damage(skill.damage)
-
-func _spawn_indicator(skill: Skill, aim: Vector2) -> void:
-	var indicator := AttackIndicator.new()
-	add_child(indicator)
-	match skill.targeting_mode:
-		Skill.TargetingMode.SINGLE_CONE:
-			indicator.show_cone(aim, skill.range, skill.cone_deg, skill.indicator_color)
-		Skill.TargetingMode.AOE_RADIAL:
-			indicator.show_radial(skill.range, skill.indicator_color)
 
 func _tick_cooldowns(delta: float) -> void:
 	for skill in _cooldowns.keys():

@@ -4,12 +4,10 @@ class_name Enemy
 signal died
 
 const AGGRO_RANGE := 250.0
-const CONTACT_RANGE := 40.0
-const CONTACT_DAMAGE := 10
-const ATTACK_COOLDOWN := 1.0
 
 @export var speed: float = 140.0
 @export var max_health: int = 100
+@export var attack: Skill
 
 var current_health: int
 var _attack_cd := 0.0
@@ -28,7 +26,7 @@ func _physics_process(delta: float) -> void:
 	_attack_cd = maxf(0.0, _attack_cd - delta)
 
 	var player := _find_player()
-	if player == null:
+	if player == null or attack == null:
 		velocity = Vector2.ZERO
 		move_and_slide()
 		return
@@ -36,17 +34,21 @@ func _physics_process(delta: float) -> void:
 	var to_player := player.global_position - global_position
 	var dist := to_player.length()
 
-	if dist <= CONTACT_RANGE:
+	if dist <= attack.range:
 		velocity = Vector2.ZERO
 		if _attack_cd <= 0.0 and player.has_method(&"take_damage"):
-			_attack_cd = ATTACK_COOLDOWN
-			player.take_damage(CONTACT_DAMAGE)
+			_cast_attack(to_player.normalized(), player)
 	elif dist <= AGGRO_RANGE:
 		velocity = to_player.normalized() * speed
 	else:
 		velocity = Vector2.ZERO
 
 	move_and_slide()
+
+func _cast_attack(aim: Vector2, player: Node) -> void:
+	_attack_cd = attack.cooldown
+	AttackIndicator.spawn(self, attack, aim)
+	player.take_damage(attack.damage)
 
 func take_damage(amount: int) -> void:
 	current_health -= amount

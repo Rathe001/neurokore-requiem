@@ -12,6 +12,16 @@ var _cone_deg: float = 60.0
 var _aim_angle: float = 0.0
 var _color: Color = Color.WHITE
 
+static func spawn(parent: Node, skill: Skill, aim: Vector2) -> AttackIndicator:
+	var indicator := AttackIndicator.new()
+	parent.add_child(indicator)
+	match skill.targeting_mode:
+		Skill.TargetingMode.SINGLE_CONE:
+			indicator.show_cone(aim, skill.range, skill.cone_deg, skill.indicator_color)
+		Skill.TargetingMode.AOE_RADIAL:
+			indicator.show_radial(skill.range, skill.indicator_color)
+	return indicator
+
 func show_cone(aim: Vector2, radius: float, cone_deg: float, color: Color) -> void:
 	_shape = Shape.CONE
 	_aim_angle = aim.angle()
