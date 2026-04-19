@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="ResourcePool" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/skills/resource_pool.gd" id="1_pool_script"]
+
+[resource]
+script = ExtResource("1_pool_script")
+display_name = "Energy"
+max_value = 100
+start_value = 100
+regen_per_sec = 12.0
+color = Color(0.4, 0.7, 1.0, 1.0)

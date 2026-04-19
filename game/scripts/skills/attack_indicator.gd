@@ -17,29 +17,32 @@ static func spawn(parent: Node, skill: Skill, aim: Vector2) -> AttackIndicator:
 	parent.add_child(indicator)
 	match skill.targeting_mode:
 		Skill.TargetingMode.SINGLE_CONE:
-			indicator.show_cone(aim, skill.range, skill.cone_deg, skill.indicator_color)
+			indicator.show_cone(aim, skill.range, skill.cone_deg, skill.indicator_color, skill.wind_up)
 		Skill.TargetingMode.AOE_RADIAL:
-			indicator.show_radial(skill.range, skill.indicator_color)
+			indicator.show_radial(skill.range, skill.indicator_color, skill.wind_up)
 	return indicator
 
-func show_cone(aim: Vector2, radius: float, cone_deg: float, color: Color) -> void:
+func show_cone(aim: Vector2, radius: float, cone_deg: float, color: Color, wind_up: float = 0.0) -> void:
 	_shape = Shape.CONE
 	_aim_angle = aim.angle()
 	_radius = radius
 	_cone_deg = cone_deg
 	_color = color
 	queue_redraw()
-	_fade_and_free()
+	_play(wind_up)
 
-func show_radial(radius: float, color: Color) -> void:
+func show_radial(radius: float, color: Color, wind_up: float = 0.0) -> void:
 	_shape = Shape.RADIAL
 	_radius = radius
 	_color = color
 	queue_redraw()
-	_fade_and_free()
+	_play(wind_up)
 
-func _fade_and_free() -> void:
+func _play(wind_up: float) -> void:
 	var tween := create_tween()
+	if wind_up > 0.0:
+		modulate.a = 0.35
+		tween.tween_property(self, "modulate:a", 1.0, wind_up)
 	tween.tween_property(self, "modulate:a", 0.0, FADE_DURATION)
 	tween.tween_callback(queue_free)
 

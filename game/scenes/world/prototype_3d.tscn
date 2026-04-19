@@ -1,0 +1,187 @@
+[gd_scene load_steps=26 format=3]
+
+[ext_resource type="Script" path="res://scripts/prototype/prototype_root.gd" id="script_root"]
+[ext_resource type="Script" path="res://scripts/prototype/prototype_camera.gd" id="script_camera"]
+[ext_resource type="Script" path="res://scripts/prototype/prototype_player.gd" id="script_player"]
+[ext_resource type="PackedScene" path="res://scenes/prototype/prototype_enemy.tscn" id="scene_enemy"]
+[ext_resource type="PackedScene" path="res://scenes/prototype/prototype_hud.tscn" id="scene_hud"]
+[ext_resource type="Shader" path="res://scripts/prototype/ground_grid.gdshader" id="shader_ground_grid"]
+[ext_resource type="PackedScene" path="res://art/3d/characters/quaternius/UAL1_Standard.glb" id="char_model_player"]
+
+[sub_resource type="Environment" id="env_prototype"]
+background_mode = 1
+background_color = Color(0.015, 0.018, 0.028, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.12, 0.14, 0.22, 1)
+ambient_light_energy = 0.35
+tonemap_mode = 2
+tonemap_exposure = 1.0
+fog_enabled = true
+fog_light_color = Color(0.18, 0.24, 0.38, 1)
+fog_light_energy = 0.4
+fog_density = 0.006
+fog_height = 3.0
+fog_height_density = 0.8
+
+[sub_resource type="ShaderMaterial" id="mat_ground"]
+shader = ExtResource("shader_ground_grid")
+shader_parameter/albedo_color = Color(0.025, 0.03, 0.04, 1)
+shader_parameter/grid_color = Color(0.1, 0.55, 0.75, 1)
+shader_parameter/grid_emission = 2.0
+shader_parameter/metallic = 0.65
+shader_parameter/roughness = 0.12
+shader_parameter/plane_size = 60.0
+shader_parameter/fade_start = 0.15
+shader_parameter/fade_end = 0.5
+
+[sub_resource type="PlaneMesh" id="mesh_ground"]
+material = SubResource("mat_ground")
+size = Vector2(60, 60)
+
+[sub_resource type="StandardMaterial3D" id="mat_ring_player"]
+albedo_color = Color(0, 0, 0, 0)
+emission_enabled = true
+emission = Color(0.2, 0.85, 1.0, 1)
+emission_energy_multiplier = 3.0
+shading_mode = 0
+transparency = 1
+
+[sub_resource type="TorusMesh" id="mesh_ring_player"]
+material = SubResource("mat_ring_player")
+inner_radius = 0.5
+outer_radius = 0.62
+
+[sub_resource type="CapsuleShape3D" id="shape_player"]
+radius = 0.4
+height = 1.6
+
+[sub_resource type="StandardMaterial3D" id="mat_dark_block"]
+albedo_color = Color(0.04, 0.045, 0.06, 1)
+metallic = 0.25
+roughness = 0.5
+
+[sub_resource type="BoxMesh" id="mesh_crate"]
+material = SubResource("mat_dark_block")
+size = Vector3(1.2, 1.2, 1.2)
+
+[sub_resource type="BoxMesh" id="mesh_pillar"]
+material = SubResource("mat_dark_block")
+size = Vector3(1.0, 5.0, 1.0)
+
+[sub_resource type="StandardMaterial3D" id="mat_neon_pink"]
+albedo_color = Color(0.9, 0.15, 0.45, 1)
+emission_enabled = true
+emission = Color(1.0, 0.2, 0.5, 1)
+emission_energy_multiplier = 9.0
+roughness = 0.2
+
+[sub_resource type="BoxMesh" id="mesh_neon_pink"]
+material = SubResource("mat_neon_pink")
+size = Vector3(3.0, 0.18, 0.08)
+
+[sub_resource type="StandardMaterial3D" id="mat_neon_cyan"]
+albedo_color = Color(0.15, 0.85, 1.0, 1)
+emission_enabled = true
+emission = Color(0.2, 0.9, 1.0, 1)
+emission_energy_multiplier = 8.0
+roughness = 0.2
+
+[sub_resource type="BoxMesh" id="mesh_neon_cyan"]
+material = SubResource("mat_neon_cyan")
+size = Vector3(0.1, 2.2, 0.08)
+
+[node name="Prototype3D" type="Node3D"]
+script = ExtResource("script_root")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("env_prototype")
+
+[node name="Ground" type="MeshInstance3D" parent="."]
+mesh = SubResource("mesh_ground")
+
+[node name="Player" type="CharacterBody3D" parent="."]
+script = ExtResource("script_player")
+
+[node name="Visual" type="Node3D" parent="Player"]
+
+[node name="Character" parent="Player/Visual" instance=ExtResource("char_model_player")]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0)
+
+[node name="FloorRing" type="MeshInstance3D" parent="Player"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.03, 0)
+mesh = SubResource("mesh_ring_player")
+
+[node name="Collision" type="CollisionShape3D" parent="Player"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+shape = SubResource("shape_player")
+
+[node name="Crate1" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3, 0.6, -2)
+mesh = SubResource("mesh_crate")
+
+[node name="Crate2" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.5, 0.6, 1)
+mesh = SubResource("mesh_crate")
+
+[node name="Crate3" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.5, 0.6, 2)
+mesh = SubResource("mesh_crate")
+
+[node name="PillarLeft" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 2.5, -3)
+mesh = SubResource("mesh_pillar")
+
+[node name="PillarRight" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.5, 2.5, -3.5)
+mesh = SubResource("mesh_pillar")
+
+[node name="NeonPinkBar" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 3.5, -2.4)
+mesh = SubResource("mesh_neon_pink")
+
+[node name="NeonCyanBar" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.5, 2.8, -2.9)
+mesh = SubResource("mesh_neon_cyan")
+
+[node name="Enemy1" parent="." instance=ExtResource("scene_enemy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 0, -11)
+
+[node name="Enemy2" parent="." instance=ExtResource("scene_enemy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 0, 8)
+
+[node name="Enemy3" parent="." instance=ExtResource("scene_enemy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 0, 6)
+
+[node name="HUD" parent="." instance=ExtResource("scene_hud")]
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866025, 0.383022, -0.321394, 0, 0.642788, 0.766044, 0.5, -0.663414, 0.556670, 0, 8, 0)
+light_color = Color(0.55, 0.65, 0.88, 1)
+light_energy = 0.45
+shadow_enabled = true
+
+[node name="NeonPinkLight" type="OmniLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 3.5, -2.2)
+light_color = Color(1.0, 0.2, 0.5, 1)
+light_energy = 4.0
+omni_range = 9.0
+omni_attenuation = 1.2
+shadow_enabled = true
+
+[node name="NeonCyanLight" type="OmniLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.5, 2.8, -2.7)
+light_color = Color(0.2, 0.85, 1.0, 1)
+light_energy = 3.5
+omni_range = 8.0
+omni_attenuation = 1.2
+shadow_enabled = true
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 14, 10)
+current = true
+projection = 1
+size = 9.0
+near = 0.1
+far = 100.0
+script = ExtResource("script_camera")
+target_path = NodePath("../Player")

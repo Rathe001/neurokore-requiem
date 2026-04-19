@@ -12,6 +12,12 @@ func _ready() -> void:
 	_register_key(&"move_right", KEY_D)
 	_register_mouse(&"attack_single", MOUSE_BUTTON_LEFT)
 	_register_mouse(&"attack_aoe", MOUSE_BUTTON_RIGHT)
+	_register_key(&"skill_1", KEY_1)
+	_register_key(&"skill_2", KEY_2)
+	_register_key(&"skill_3", KEY_3)
+	_register_key(&"skill_4", KEY_4)
+	_register_key(&"skill_q", KEY_Q)
+	_register_key(&"skill_e", KEY_E)
 
 func _register_key(action: StringName, key: Key) -> void:
 	if InputMap.has_action(action):

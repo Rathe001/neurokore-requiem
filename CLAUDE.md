@@ -10,7 +10,7 @@ This file is committed to the repo so context is available on any machine. It is
 
 ## What This Is
 
-**Neurokore: Requiem** is a Diablo 2-style isometric pixel art ARPG set in a cyberpunk world with a layered tone: gritty neon-noir baseline, campy 80s sci-fi surface, 80s body horror edge.
+**Neurokore: Requiem** is a Diablo 2-style fixed-camera low-poly 3D ARPG set in a cyberpunk world with a layered tone: gritty neon-noir baseline, campy 80s sci-fi surface, 80s body horror edge. Low-poly meshes + high-res PBR textures + realistic dynamic lighting — stylized, not photo-real.
 
 Full world and tone detail: [`docs/world/tone.md`](docs/world/tone.md)
 
@@ -65,9 +65,10 @@ Full details: [`docs/design/platform.md`](docs/design/platform.md)
 
 ## Tech Stack
 
-- **Engine:** Godot 4
+- **Engine:** Godot 4 (Forward+ renderer on PC; mobile renderer path for the eventual mobile port)
 - **Language:** GDScript (with C# / GDExtension as a performance escape hatch for hot paths)
-- **Pixel art:** Aseprite
+- **3D modeling & animation:** Blender
+- **2D tooling:** Aseprite (UI icons, decals, emissive texture work)
 
 Full details: [`docs/design/tech-stack.md`](docs/design/tech-stack.md)
 

@@ -10,6 +10,9 @@ enum TargetingMode {
 @export var damage: int = 10
 @export var range: float = 100.0
 @export var cooldown: float = 0.5
+@export var wind_up: float = 0.0
+@export var resource_cost: int = 0
 @export var targeting_mode: TargetingMode = TargetingMode.SINGLE_CONE
 @export var cone_deg: float = 60.0
+@export var knockback: float = 0.0
 @export var indicator_color: Color = Color(0.7, 0.9, 1.0, 0.35)

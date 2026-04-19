@@ -5,7 +5,12 @@
       "Bash(git -C /c/Users/josh/Projects/neurokore-requiem diff)",
       "Bash(git -C /c/Users/josh/Projects/neurokore-requiem add docs/design/starting-zones.md)",
       "Bash(git -C /c/Users/josh/Projects/neurokore-requiem commit -m ' *)",
-      "Bash(git *)"
+      "Bash(git *)",
+      "Bash(where godot *)",
+      "Bash(where godot.exe)",
+      "Read(//c/Program Files/**)",
+      "Read(//c/Program Files \\(x86\\)/**)",
+      "Read(//c/Users/josh/scoop/apps/**)"
     ]
   }
 }

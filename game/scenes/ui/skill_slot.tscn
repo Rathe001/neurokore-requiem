@@ -1,0 +1,59 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/skill_slot.gd" id="1_slot_script"]
+
+[node name="SkillSlot" type="Control"]
+custom_minimum_size = Vector2(56, 56)
+offset_right = 56.0
+offset_bottom = 56.0
+mouse_filter = 2
+script = ExtResource("1_slot_script")
+
+[node name="Background" type="ColorRect" parent="."]
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.08, 0.08, 0.1, 0.9)
+
+[node name="Border" type="ColorRect" parent="."]
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.35, 0.4, 0.5, 1)
+
+[node name="Inner" type="ColorRect" parent="."]
+offset_left = 2.0
+offset_top = 2.0
+offset_right = -2.0
+offset_bottom = -2.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.08, 0.08, 0.1, 1)
+
+[node name="Icon" type="ColorRect" parent="."]
+offset_left = 8.0
+offset_top = 8.0
+offset_right = -8.0
+offset_bottom = -8.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.7, 0.9, 1, 1)
+
+[node name="CooldownOverlay" type="ColorRect" parent="."]
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_bottom = 0.0
+color = Color(0, 0, 0, 0.55)
+mouse_filter = 2
+
+[node name="KeyLabel" type="Label" parent="."]
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -20.0
+offset_top = -18.0
+offset_right = -2.0
+offset_bottom = -2.0
+theme_override_font_sizes/font_size = 12
+text = "LMB"
+horizontal_alignment = 2
+vertical_alignment = 2
