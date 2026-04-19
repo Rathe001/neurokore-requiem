@@ -11,7 +11,7 @@
 
 A human who has traded flesh for machine. The further down the path, the less human they become.
 
-**Base resources:** Power Grid + Bandwidth + Memory/CPU — all three run simultaneously. One early skill is tied to each, introducing the player to each spec's flavour. Specialization locks in one resource and drops the other two.
+**Base resources:** Power Grid + Bandwidth + Memory/CPU — all three systems run simultaneously. One early skill is tied to each, introducing the player to each spec's flavour. Specialization locks in one resource system and drops the other two (Polymath's system has two axes, Memory and CPU; Forged and Automaton have one each).
 
 ## Specializations
 

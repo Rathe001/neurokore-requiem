@@ -52,10 +52,10 @@ The player begins with no spec skills and no visible skill tree. Basic attacks a
 
 ### Phase 2: One Skill Per Level (Levels 1–3)
 
-Each subsequent rep encounter follows the same structure: save moment → skill taught → resource indicator revealed. By the end of Level 3, the player has:
+Each subsequent rep encounter follows the same structure: save moment → skill taught → resource indicator revealed. The player only encounters the three reps of their starting class. By the end of Level 3, the player has:
 
-- 3 spec skills, one per spec
-- 3 resource indicators, one per spec
+- 3 spec skills, one for each spec of their class
+- 3 resource indicators, one for each spec of their class
 
 The goal is to give the player a practical feel for what each spec's resource system demands before they make a permanent choice.
 

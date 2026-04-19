@@ -11,7 +11,7 @@
 
 Unaugmented. In a world that sells upgrades on every corner, the Human refused — or never had the choice. Their power comes from what the Cyborg cut away.
 
-**Base resources:** Adrenaline + Composure + Sanity — all three run simultaneously. One early skill tied to each. Specialization locks in one and drops the other two.
+**Base resources:** Adrenaline + Composure + Sanity — all three systems run simultaneously. One early skill tied to each. Specialization locks in one resource system and drops the other two.
 
 ## Specializations
 

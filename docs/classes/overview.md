@@ -13,7 +13,7 @@
 
 The base (unspecced) form of each class runs all 3 resource meters simultaneously. The early skill tree includes one skill tied to each resource, naturally introducing the player to each spec's mechanics through play.
 
-When a spec is chosen, the player commits to that resource exclusively — the other two meters disappear from the UI. This makes specialization feel like a meaningful threshold, not just a menu choice.
+When a spec is chosen, the player commits to that resource system exclusively — the other two systems disappear from the UI. This makes specialization feel like a meaningful threshold, not just a menu choice.
 
 The base class remains viable through breadth: access to all three resource types and their associated skills, without the depth a specialized build achieves.
 

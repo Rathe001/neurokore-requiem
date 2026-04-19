@@ -43,7 +43,12 @@ Full class details:
 
 ## Starting Zones & Key Systems
 
-- [`docs/design/starting-zones.md`](docs/design/starting-zones.md) — Earth Facility #723, rep system, spec choice boss battle, base class path, morality system
+- [`docs/design/starting-zones.md`](docs/design/starting-zones.md) — Earth Facility #723, rep system, spec choice boss battle, base class path
+- [`docs/design/morality-system.md`](docs/design/morality-system.md) — 2D morality plane, rep alignments, what it affects
+- [`docs/design/skill-tree.md`](docs/design/skill-tree.md) — basic attacks, tutorial progression, starting skills, hotkeys
+- [`docs/design/zones.md`](docs/design/zones.md) — zone design philosophy, Sub-Level Zero, zone registry
+- [`docs/design/dialog-ui.md`](docs/design/dialog-ui.md) — animated portraits, spec effects, UI philosophy
+- [`docs/world/lighting.md`](docs/world/lighting.md) — darkness as default, equippable light sources, zone lighting tiers
 
 ## Platform & Performance
 

@@ -30,13 +30,4 @@ Reference specifically for the spec unlock system. Legion artifact weapon quests
 
 ## Tonal & Visual References
 
-See [Tone & Setting](../world/tone.md) for the full breakdown. Short version:
-
-| Reference | What It Contributes |
-|---|---|
-| *Neuromancer* (Gibson) | Setting DNA — corporate dystopia, neural augmentation, cyberspace |
-| *The Thing* (Carpenter) | Body horror template |
-| *Videodrome* (Cronenberg) | Technology-flesh horror |
-| *Return of the Living Dead* | Campy horror done right |
-| Flash Gordon | Sincere 80s sci-fi visual energy |
-| Bard's Tale 1 | Animated portrait bust style for dialog |
+For tonal and visual influences, see [Tone & Setting](../world/tone.md). For the Bard's Tale 1 portrait reference specifically, see [Dialog & UI](dialog-ui.md).
