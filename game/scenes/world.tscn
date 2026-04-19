@@ -21,6 +21,7 @@ script = ExtResource("1_player_script")
 
 [node name="Visual" type="Sprite2D" parent="Player"]
 texture = ExtResource("5_player_sprite")
+offset = Vector2(0, -30)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Player"]
 shape = SubResource("CircleShape2D_player")
