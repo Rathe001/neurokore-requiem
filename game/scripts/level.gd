@@ -11,8 +11,9 @@ var _remaining := 0
 var _is_cleared := false
 
 func _ready() -> void:
+	add_to_group(&"level")
 	for enemy in _collect_enemies(self):
-		enemy.tree_exited.connect(_on_enemy_exited)
+		enemy.died.connect(_on_enemy_died)
 		_remaining += 1
 	if _remaining == 0:
 		_mark_cleared()
@@ -25,12 +26,11 @@ func _collect_enemies(node: Node) -> Array:
 		result.append_array(_collect_enemies(child))
 	return result
 
-func _on_enemy_exited() -> void:
+func _on_enemy_died() -> void:
 	_remaining -= 1
 	if _remaining <= 0 and not _is_cleared:
 		_mark_cleared()
 
 func _mark_cleared() -> void:
 	_is_cleared = true
-	print("Level cleared.")
 	cleared.emit()

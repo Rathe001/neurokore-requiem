@@ -1,6 +1,9 @@
 extends CharacterBody2D
 class_name Player
 
+signal health_changed(current: int, max_value: int)
+signal died
+
 const SPEED := 240.0
 const MAX_HEALTH := 100
 
@@ -20,12 +23,11 @@ var _aoe_cd := 0.0
 var _alive := true
 
 @onready var visual: Polygon2D = $Visual
-@onready var health_bar: HealthBar = $HealthBar
 
 func _ready() -> void:
 	current_health = MAX_HEALTH
 	add_to_group(&"player")
-	health_bar.set_health(current_health, MAX_HEALTH)
+	health_changed.emit(current_health, MAX_HEALTH)
 
 func _physics_process(delta: float) -> void:
 	if not _alive:
@@ -48,7 +50,7 @@ func take_damage(amount: int) -> void:
 		return
 	current_health -= amount
 	_flash()
-	health_bar.set_health(current_health, MAX_HEALTH)
+	health_changed.emit(current_health, MAX_HEALTH)
 	if current_health <= 0:
 		_die()
 
@@ -83,7 +85,7 @@ func _die() -> void:
 	velocity = Vector2.ZERO
 	if visual:
 		visual.color = Color(0.3, 0.3, 0.3, 0.5)
-	print("You died. Restarting in ", RESPAWN_DELAY, "s...")
+	died.emit()
 	await get_tree().create_timer(RESPAWN_DELAY).timeout
 	get_tree().reload_current_scene()
 

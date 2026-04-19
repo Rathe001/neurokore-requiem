@@ -1,6 +1,8 @@
 extends CharacterBody2D
 class_name Enemy
 
+signal died
+
 const AGGRO_RANGE := 250.0
 const CONTACT_RANGE := 40.0
 const CONTACT_DAMAGE := 10
@@ -49,6 +51,7 @@ func take_damage(amount: int) -> void:
 	_flash()
 	health_bar.set_health(current_health, max_health)
 	if current_health <= 0:
+		died.emit()
 		queue_free()
 
 func _find_player() -> Node2D:
