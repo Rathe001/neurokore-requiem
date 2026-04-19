@@ -87,7 +87,16 @@ func _die() -> void:
 		visual.modulate = Color(0.3, 0.3, 0.3, 0.5)
 	died.emit()
 	await get_tree().create_timer(RESPAWN_DELAY).timeout
-	get_tree().reload_current_scene()
+	if not is_instance_valid(self):
+		return
+	_respawn()
+
+func _respawn() -> void:
+	current_health = MAX_HEALTH
+	_alive = true
+	if visual:
+		visual.modulate = Color.WHITE
+	health_changed.emit(current_health, MAX_HEALTH)
 
 func _flash() -> void:
 	if visual == null:

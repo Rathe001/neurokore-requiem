@@ -1,10 +1,10 @@
 [gd_scene load_steps=6 format=3]
 
-[ext_resource type="Script" path="res://scripts/level.gd" id="1_level_script"]
-[ext_resource type="PackedScene" path="res://scenes/enemy.tscn" id="2_enemy_scene"]
-[ext_resource type="PackedScene" path="res://scenes/zone_exit.tscn" id="3_zone_exit"]
-[ext_resource type="Script" path="res://scripts/spawn_point.gd" id="4_spawn_script"]
-[ext_resource type="PackedScene" path="res://scenes/switch.tscn" id="5_switch"]
+[ext_resource type="Script" path="res://scripts/world/level.gd" id="1_level_script"]
+[ext_resource type="PackedScene" path="res://scenes/entities/enemy.tscn" id="2_enemy_scene"]
+[ext_resource type="PackedScene" path="res://scenes/world/zone_exit.tscn" id="3_zone_exit"]
+[ext_resource type="Script" path="res://scripts/world/spawn_point.gd" id="4_spawn_script"]
+[ext_resource type="PackedScene" path="res://scenes/world/switch.tscn" id="5_switch"]
 
 [node name="Level" type="Node2D"]
 y_sort_enabled = true

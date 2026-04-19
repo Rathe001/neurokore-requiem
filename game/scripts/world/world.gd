@@ -28,6 +28,7 @@ func _on_zone_exit_used(target_scene: PackedScene, target_spawn_id: String) -> v
 		return
 	if hud != null:
 		hud.hide_tooltip()
+		await hud.fade_out()
 	var target_path := target_scene.resource_path
 
 	var old_level := _find_level()
@@ -47,6 +48,8 @@ func _on_zone_exit_used(target_scene: PackedScene, target_spawn_id: String) -> v
 	_move_player_to_spawn(new_level, target_spawn_id)
 	await get_tree().process_frame
 	_rebind()
+	if hud != null:
+		await hud.fade_in()
 
 func _move_player_to_spawn(level: Node, spawn_id: String) -> void:
 	var players := get_tree().get_nodes_in_group(&"player")

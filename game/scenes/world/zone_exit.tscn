@@ -1,6 +1,6 @@
 [gd_scene load_steps=3 format=3]
 
-[ext_resource type="Script" path="res://scripts/zone_exit.gd" id="1_exit_script"]
+[ext_resource type="Script" path="res://scripts/world/zone_exit.gd" id="1_exit_script"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_exit"]
 size = Vector2(64, 32)

@@ -13,6 +13,7 @@ const HP_BAR_WIDTH := 200.0
 @onready var banner: Label = $Root/Banner
 @onready var tooltip: PanelContainer = $Root/Tooltip
 @onready var tooltip_text: Label = $Root/Tooltip/Text
+@onready var fade_overlay: ColorRect = $Root/FadeOverlay
 
 func _ready() -> void:
 	add_to_group(&"hud")
@@ -29,6 +30,17 @@ func show_tooltip(text: String) -> void:
 
 func hide_tooltip() -> void:
 	tooltip.visible = false
+
+func fade_out(duration: float = 0.25) -> void:
+	await _tween_fade(1.0, duration)
+
+func fade_in(duration: float = 0.25) -> void:
+	await _tween_fade(0.0, duration)
+
+func _tween_fade(target_alpha: float, duration: float) -> void:
+	var tween := create_tween()
+	tween.tween_property(fade_overlay, "color:a", target_alpha, duration)
+	await tween.finished
 
 func _bind_player() -> void:
 	var players := get_tree().get_nodes_in_group(&"player")
