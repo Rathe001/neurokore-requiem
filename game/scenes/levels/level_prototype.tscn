@@ -1,8 +1,10 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/level.gd" id="1_level_script"]
 [ext_resource type="PackedScene" path="res://scenes/enemy.tscn" id="2_enemy_scene"]
 [ext_resource type="PackedScene" path="res://scenes/zone_exit.tscn" id="3_zone_exit"]
+[ext_resource type="Script" path="res://scripts/spawn_point.gd" id="4_spawn_script"]
+[ext_resource type="PackedScene" path="res://scenes/switch.tscn" id="5_switch"]
 
 [node name="Level" type="Node2D"]
 y_sort_enabled = true
@@ -35,3 +37,14 @@ position = Vector2(-480, 0)
 [node name="ZoneExit" parent="." instance=ExtResource("3_zone_exit")]
 position = Vector2(640, 0)
 target_scene_path = "res://scenes/levels/level_prototype_2.tscn"
+target_spawn_id = "west_entry"
+required_switch_id = "level1_power"
+
+[node name="PowerSwitch" parent="." instance=ExtResource("5_switch")]
+position = Vector2(-320, 320)
+switch_id = "level1_power"
+
+[node name="EastEntry" type="Node2D" parent="."]
+position = Vector2(400, 0)
+script = ExtResource("4_spawn_script")
+spawn_id = "east_entry"

@@ -11,10 +11,24 @@ const HP_BAR_WIDTH := 200.0
 @onready var hp_fill: ColorRect = $Root/HPContainer/HPFill
 @onready var hp_label: Label = $Root/HPContainer/HPLabel
 @onready var banner: Label = $Root/Banner
+@onready var tooltip: PanelContainer = $Root/Tooltip
+@onready var tooltip_text: Label = $Root/Tooltip/Text
 
 func _ready() -> void:
+	add_to_group(&"hud")
 	_bind_player()
 	_bind_level()
+
+func _process(_delta: float) -> void:
+	if tooltip.visible:
+		tooltip.position = get_viewport().get_mouse_position() + Vector2(16, 16)
+
+func show_tooltip(text: String) -> void:
+	tooltip_text.text = text
+	tooltip.visible = true
+
+func hide_tooltip() -> void:
+	tooltip.visible = false
 
 func _bind_player() -> void:
 	var players := get_tree().get_nodes_in_group(&"player")

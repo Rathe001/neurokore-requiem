@@ -10,8 +10,10 @@ signal cleared
 var _remaining := 0
 var _is_cleared := false
 
-func _ready() -> void:
+func _enter_tree() -> void:
 	add_to_group(&"level")
+
+func _ready() -> void:
 	for enemy in _collect_enemies(self):
 		enemy.died.connect(_on_enemy_died)
 		_remaining += 1

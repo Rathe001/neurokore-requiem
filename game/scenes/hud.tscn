@@ -49,3 +49,11 @@ text = ""
 horizontal_alignment = 1
 vertical_alignment = 1
 visible = false
+
+[node name="Tooltip" type="PanelContainer" parent="Root"]
+mouse_filter = 2
+visible = false
+
+[node name="Text" type="Label" parent="Root/Tooltip"]
+theme_override_font_sizes/font_size = 14
+text = ""
