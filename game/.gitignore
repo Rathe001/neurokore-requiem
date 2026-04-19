@@ -1,0 +1,21 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+
+# Imported translations (auto-generated from CSV files)
+*.translation
+
+# Mono / .NET specific ignores (unused now, future-proof)
+.mono/
+data_*/
+mono_crash.*.json
+
+# Editor / OS noise
+.directory
+*~
+.DS_Store
+Thumbs.db
+
+# Export presets (commit) but ignore the binaries they produce
+/exports/
+/builds/

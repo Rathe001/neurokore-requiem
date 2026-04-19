@@ -48,6 +48,7 @@ Full class details:
 - [`docs/design/skill-tree.md`](docs/design/skill-tree.md) — basic attacks, tutorial progression, starting skills, hotkeys
 - [`docs/design/zones.md`](docs/design/zones.md) — zone design philosophy, Sub-Level Zero, zone registry
 - [`docs/design/dialog-ui.md`](docs/design/dialog-ui.md) — animated portraits, spec effects, UI philosophy
+- [`docs/design/controls.md`](docs/design/controls.md) — WASD movement, mouse for attacks, controller as future work
 - [`docs/world/lighting.md`](docs/world/lighting.md) — darkness as default, equippable light sources, zone lighting tiers
 
 ## Platform & Performance
@@ -61,6 +62,14 @@ Full class details:
 - **Multiplayer:** design for it from the start, implement it later
 
 Full details: [`docs/design/platform.md`](docs/design/platform.md)
+
+## Tech Stack
+
+- **Engine:** Godot 4
+- **Language:** GDScript (with C# / GDExtension as a performance escape hatch for hot paths)
+- **Pixel art:** Aseprite
+
+Full details: [`docs/design/tech-stack.md`](docs/design/tech-stack.md)
 
 ## Project Status
 
