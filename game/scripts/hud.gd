@@ -29,8 +29,11 @@ func _bind_level() -> void:
 	var levels := get_tree().get_nodes_in_group(&"level")
 	if levels.is_empty():
 		return
-	var level := levels[0]
-	level.cleared.connect(_on_level_cleared)
+	bind_level(levels[0])
+
+func bind_level(level: Node) -> void:
+	if not level.cleared.is_connected(_on_level_cleared):
+		level.cleared.connect(_on_level_cleared)
 
 func _on_player_health_changed(current: int, max_value: int) -> void:
 	var ratio := 0.0 if max_value <= 0 else clampf(float(current) / float(max_value), 0.0, 1.0)
