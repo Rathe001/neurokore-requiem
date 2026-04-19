@@ -6,7 +6,7 @@ class_name HUD
 # player's current health; the banner shows transient messages
 # (death, level cleared, etc).
 
-const HP_BAR_WIDTH := 200.0
+const HP_BAR_WIDTH := 100.0
 
 @onready var hp_fill: ColorRect = $Root/HPContainer/HPFill
 @onready var hp_label: Label = $Root/HPContainer/HPLabel

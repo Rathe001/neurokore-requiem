@@ -26,6 +26,5 @@ texture = ExtResource("5_player_sprite")
 shape = SubResource("CircleShape2D_player")
 
 [node name="Camera2D" type="Camera2D" parent="Player"]
-zoom = Vector2(3, 3)
 
 [node name="HUD" parent="." instance=ExtResource("4_hud")]
