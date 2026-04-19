@@ -30,5 +30,6 @@ offset = Vector2(0, -30)
 shape = SubResource("CircleShape2D_player")
 
 [node name="Camera2D" type="Camera2D" parent="Entities/Player"]
+zoom = Vector2(0.6, 0.6)
 
 [node name="HUD" parent="." instance=ExtResource("4_hud")]
