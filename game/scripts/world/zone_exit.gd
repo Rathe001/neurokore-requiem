@@ -11,6 +11,7 @@ const INTERACT_RANGE := 100.0
 @export var display_name: String = "Exit"
 
 @onready var visual: Polygon2D = $Visual
+@onready var outline: Line2D = $Outline
 
 var _used := false
 
@@ -29,11 +30,13 @@ func _ready() -> void:
 	_refresh_visual()
 
 func _on_mouse_entered() -> void:
+	outline.visible = true
 	var hud := _get_hud()
 	if hud != null:
 		hud.show_tooltip(_tooltip_text())
 
 func _on_mouse_exited() -> void:
+	outline.visible = false
 	var hud := _get_hud()
 	if hud != null:
 		hud.hide_tooltip()

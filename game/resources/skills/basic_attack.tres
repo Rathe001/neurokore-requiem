@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="Skill" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/skills/skill.gd" id="1_skill_script"]
+
+[resource]
+script = ExtResource("1_skill_script")
+display_name = "Basic Attack"
+damage = 25
+range = 80.0
+cooldown = 0.3
+targeting_mode = 0
+cone_deg = 60.0
+indicator_color = Color(0.7, 0.9, 1.0, 0.35)

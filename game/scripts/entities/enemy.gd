@@ -10,7 +10,6 @@ const ATTACK_COOLDOWN := 1.0
 
 @export var speed: float = 140.0
 @export var max_health: int = 100
-@export var display_name: String = "Enemy"
 
 var current_health: int
 var _attack_cd := 0.0
@@ -24,23 +23,6 @@ func _enter_tree() -> void:
 func _ready() -> void:
 	current_health = max_health
 	health_bar.set_health(current_health, max_health)
-	input_pickable = true
-	mouse_entered.connect(_on_mouse_entered)
-	mouse_exited.connect(_on_mouse_exited)
-
-func _on_mouse_entered() -> void:
-	var hud := _get_hud()
-	if hud != null:
-		hud.show_tooltip(display_name)
-
-func _on_mouse_exited() -> void:
-	var hud := _get_hud()
-	if hud != null:
-		hud.hide_tooltip()
-
-func _get_hud() -> Node:
-	var nodes := get_tree().get_nodes_in_group(&"hud")
-	return nodes[0] if nodes.size() > 0 else null
 
 func _physics_process(delta: float) -> void:
 	_attack_cd = maxf(0.0, _attack_cd - delta)
@@ -71,9 +53,6 @@ func take_damage(amount: int) -> void:
 	_flash()
 	health_bar.set_health(current_health, max_health)
 	if current_health <= 0:
-		var hud := _get_hud()
-		if hud != null:
-			hud.hide_tooltip()
 		died.emit()
 		queue_free()
 

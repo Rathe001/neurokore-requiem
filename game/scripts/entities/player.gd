@@ -6,20 +6,13 @@ signal died
 
 const SPEED := 240.0
 const MAX_HEALTH := 100
-
-const SINGLE_ATTACK_RANGE := 80.0
-const SINGLE_ATTACK_DAMAGE := 25
-const SINGLE_ATTACK_COOLDOWN := 0.3
-
-const AOE_ATTACK_RANGE := 120.0
-const AOE_ATTACK_DAMAGE := 15
-const AOE_ATTACK_COOLDOWN := 0.5
-
 const RESPAWN_DELAY := 2.0
 
+@export var single_skill: Skill
+@export var aoe_skill: Skill
+
 var current_health: int
-var _single_cd := 0.0
-var _aoe_cd := 0.0
+var _cooldowns: Dictionary = {}
 var _alive := true
 
 @onready var visual: Sprite2D = $Visual
@@ -33,17 +26,18 @@ func _physics_process(delta: float) -> void:
 	if not _alive:
 		return
 
-	_single_cd = maxf(0.0, _single_cd - delta)
-	_aoe_cd = maxf(0.0, _aoe_cd - delta)
+	_tick_cooldowns(delta)
 
 	var input_vector := Input.get_vector(&"move_left", &"move_right", &"move_up", &"move_down")
 	velocity = input_vector * SPEED
 	move_and_slide()
 
+	_update_facing(_aim_direction())
+
 	if Input.is_action_pressed(&"attack_single"):
-		_attack_single()
+		_cast_skill(single_skill)
 	elif Input.is_action_pressed(&"attack_aoe"):
-		_attack_aoe()
+		_cast_skill(aoe_skill)
 
 func take_damage(amount: int) -> void:
 	if not _alive:
@@ -54,27 +48,62 @@ func take_damage(amount: int) -> void:
 	if current_health <= 0:
 		_die()
 
-func _attack_single() -> void:
-	if _single_cd > 0.0:
+func _cast_skill(skill: Skill) -> void:
+	if skill == null:
 		return
-	_single_cd = SINGLE_ATTACK_COOLDOWN
-	var target := _find_nearest_enemy(SINGLE_ATTACK_RANGE)
-	if target:
-		target.take_damage(SINGLE_ATTACK_DAMAGE)
-
-func _attack_aoe() -> void:
-	if _aoe_cd > 0.0:
+	if _cooldowns.get(skill, 0.0) > 0.0:
 		return
-	_aoe_cd = AOE_ATTACK_COOLDOWN
-	for enemy in get_tree().get_nodes_in_group(&"enemies"):
-		if global_position.distance_to(enemy.global_position) <= AOE_ATTACK_RANGE:
-			enemy.take_damage(AOE_ATTACK_DAMAGE)
+	_cooldowns[skill] = skill.cooldown
+	var aim := _aim_direction()
+	_spawn_indicator(skill, aim)
+	match skill.targeting_mode:
+		Skill.TargetingMode.SINGLE_CONE:
+			var target := _find_enemy_in_cone(aim, skill.range, skill.cone_deg)
+			if target:
+				target.take_damage(skill.damage)
+		Skill.TargetingMode.AOE_RADIAL:
+			for enemy in get_tree().get_nodes_in_group(&"enemies"):
+				if global_position.distance_to(enemy.global_position) <= skill.range:
+					enemy.take_damage(skill.damage)
 
-func _find_nearest_enemy(max_distance: float) -> Node2D:
+func _spawn_indicator(skill: Skill, aim: Vector2) -> void:
+	var indicator := AttackIndicator.new()
+	add_child(indicator)
+	match skill.targeting_mode:
+		Skill.TargetingMode.SINGLE_CONE:
+			indicator.show_cone(aim, skill.range, skill.cone_deg, skill.indicator_color)
+		Skill.TargetingMode.AOE_RADIAL:
+			indicator.show_radial(skill.range, skill.indicator_color)
+
+func _tick_cooldowns(delta: float) -> void:
+	for skill in _cooldowns.keys():
+		_cooldowns[skill] = maxf(0.0, _cooldowns[skill] - delta)
+
+func _aim_direction() -> Vector2:
+	var to_cursor := get_global_mouse_position() - global_position
+	if to_cursor.length_squared() < 0.0001:
+		return Vector2.RIGHT
+	return to_cursor.normalized()
+
+func _update_facing(aim: Vector2) -> void:
+	if visual == null:
+		return
+	if aim.x > 0.05:
+		visual.flip_h = false
+	elif aim.x < -0.05:
+		visual.flip_h = true
+
+func _find_enemy_in_cone(aim: Vector2, max_distance: float, cone_deg: float) -> Node2D:
+	var half_cone_cos := cos(deg_to_rad(cone_deg * 0.5))
 	var nearest: Node2D = null
 	var nearest_dist := max_distance
 	for enemy in get_tree().get_nodes_in_group(&"enemies"):
-		var dist := global_position.distance_to(enemy.global_position)
+		var to_enemy: Vector2 = enemy.global_position - global_position
+		var dist := to_enemy.length()
+		if dist > max_distance or dist < 0.0001:
+			continue
+		if aim.dot(to_enemy / dist) < half_cone_cos:
+			continue
 		if dist < nearest_dist:
 			nearest = enemy
 			nearest_dist = dist

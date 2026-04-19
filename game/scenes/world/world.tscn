@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://scripts/entities/player.gd" id="1_player_script"]
 [ext_resource type="Script" path="res://scripts/world/ground_grid.gd" id="2_ground_script"]
@@ -6,6 +6,8 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/hud.tscn" id="4_hud"]
 [ext_resource type="Texture2D" path="res://art/sprites/player.png" id="5_player_sprite"]
 [ext_resource type="Script" path="res://scripts/world/world.gd" id="6_world_script"]
+[ext_resource type="Resource" path="res://resources/skills/basic_attack.tres" id="7_basic_skill"]
+[ext_resource type="Resource" path="res://resources/skills/aoe_burst.tres" id="8_aoe_skill"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_player"]
 radius = 16.0
@@ -23,6 +25,8 @@ y_sort_enabled = true
 
 [node name="Player" type="CharacterBody2D" parent="Entities"]
 script = ExtResource("1_player_script")
+single_skill = ExtResource("7_basic_skill")
+aoe_skill = ExtResource("8_aoe_skill")
 
 [node name="Visual" type="Sprite2D" parent="Entities/Player"]
 texture = ExtResource("5_player_sprite")
