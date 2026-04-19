@@ -71,6 +71,8 @@ Full details: [`docs/design/platform.md`](docs/design/platform.md)
 
 Full details: [`docs/design/tech-stack.md`](docs/design/tech-stack.md)
 
+Coding conventions: [`docs/design/coding-conventions.md`](docs/design/coding-conventions.md)
+
 ## Project Status
 
 - [`docs/status.md`](docs/status.md)

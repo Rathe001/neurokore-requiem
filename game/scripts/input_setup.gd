@@ -6,15 +6,25 @@ extends Node
 # alongside the keyboard bindings here.
 
 func _ready() -> void:
-	_register("move_up", KEY_W)
-	_register("move_down", KEY_S)
-	_register("move_left", KEY_A)
-	_register("move_right", KEY_D)
+	_register_key(&"move_up", KEY_W)
+	_register_key(&"move_down", KEY_S)
+	_register_key(&"move_left", KEY_A)
+	_register_key(&"move_right", KEY_D)
+	_register_mouse(&"attack_single", MOUSE_BUTTON_LEFT)
+	_register_mouse(&"attack_aoe", MOUSE_BUTTON_RIGHT)
 
-func _register(action: StringName, key: Key) -> void:
+func _register_key(action: StringName, key: Key) -> void:
 	if InputMap.has_action(action):
 		return
 	InputMap.add_action(action)
 	var event := InputEventKey.new()
 	event.physical_keycode = key
+	InputMap.action_add_event(action, event)
+
+func _register_mouse(action: StringName, button: MouseButton) -> void:
+	if InputMap.has_action(action):
+		return
+	InputMap.add_action(action)
+	var event := InputEventMouseButton.new()
+	event.button_index = button
 	InputMap.action_add_event(action, event)

@@ -1,0 +1,62 @@
+extends CharacterBody2D
+class_name Enemy
+
+const AGGRO_RANGE := 250.0
+const CONTACT_RANGE := 30.0
+const CONTACT_DAMAGE := 10
+const ATTACK_COOLDOWN := 1.0
+
+@export var speed: float = 140.0
+@export var max_health: int = 100
+
+var current_health: int
+var _attack_cd := 0.0
+
+@onready var visual: Polygon2D = $Visual
+
+func _ready() -> void:
+	current_health = max_health
+	add_to_group(&"enemies")
+
+func _physics_process(delta: float) -> void:
+	_attack_cd = maxf(0.0, _attack_cd - delta)
+
+	var player := _find_player()
+	if player == null:
+		velocity = Vector2.ZERO
+		move_and_slide()
+		return
+
+	var to_player := player.global_position - global_position
+	var dist := to_player.length()
+
+	if dist <= CONTACT_RANGE:
+		velocity = Vector2.ZERO
+		if _attack_cd <= 0.0 and player.has_method(&"take_damage"):
+			_attack_cd = ATTACK_COOLDOWN
+			player.take_damage(CONTACT_DAMAGE)
+	elif dist <= AGGRO_RANGE:
+		velocity = to_player.normalized() * speed
+	else:
+		velocity = Vector2.ZERO
+
+	move_and_slide()
+
+func take_damage(amount: int) -> void:
+	current_health -= amount
+	_flash()
+	if current_health <= 0:
+		queue_free()
+
+func _find_player() -> Node2D:
+	var players := get_tree().get_nodes_in_group(&"player")
+	return players[0] if players.size() > 0 else null
+
+func _flash() -> void:
+	if visual == null:
+		return
+	var original_color := visual.color
+	visual.color = Color.WHITE
+	await get_tree().create_timer(0.08).timeout
+	if is_instance_valid(visual):
+		visual.color = original_color
