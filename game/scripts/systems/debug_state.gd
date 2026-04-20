@@ -19,7 +19,6 @@ func _load_config() -> DebugConfig:
 	if ResourceLoader.exists(LOCAL_PATH):
 		var local := load(LOCAL_PATH) as DebugConfig
 		if local != null:
-			print("[DebugState] loaded local override: ", LOCAL_PATH)
 			return local
 	if ResourceLoader.exists(DEFAULTS_PATH):
 		return load(DEFAULTS_PATH) as DebugConfig

@@ -20,3 +20,6 @@ extends Resource
 
 @export_group("Combat Feedback")
 @export var show_attack_telegraphs: bool = true
+
+@export_group("Overlay")
+@export var show_debug_overlay: bool = true

@@ -44,6 +44,7 @@ var _knockback_remain: float = 0.0
 var _attack_cd: float = 0.0
 var _casting: bool = false
 var _want_dir: Vector3 = Vector3.ZERO
+var _player_ref: Node3D
 
 func _ready() -> void:
 	add_to_group(&"enemies")
@@ -104,7 +105,9 @@ func _physics_process(delta: float) -> void:
 
 func _chase_tick() -> void:
 	_want_dir = Vector3.ZERO
-	var player := get_tree().get_first_node_in_group(&"player") as Node3D
+	if _player_ref == null or not is_instance_valid(_player_ref):
+		_player_ref = get_tree().get_first_node_in_group(&"player") as Node3D
+	var player := _player_ref
 	if player == null:
 		velocity.x = 0.0
 		velocity.z = 0.0

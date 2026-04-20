@@ -12,3 +12,4 @@ infinite_resource = false
 one_shot_enemies = false
 disable_enemies = false
 show_attack_telegraphs = true
+show_debug_overlay = true

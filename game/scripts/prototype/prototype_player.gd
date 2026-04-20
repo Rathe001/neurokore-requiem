@@ -38,6 +38,8 @@ const ANIM_DEATH: Array[StringName] = [
 @onready var visual: Node3D = $Visual
 @onready var anim_player: AnimationPlayer = $Visual/Character/AnimationPlayer
 
+var class_id: StringName = &""
+var spec_id: StringName = &""
 var _camera: Camera3D
 var _health: int
 var _alive: bool = true
@@ -54,15 +56,31 @@ var _credits: int = 0
 func _ready() -> void:
 	_camera = get_viewport().get_camera_3d()
 	add_to_group(&"player")
+	class_id = PlayerState.class_id
+	spec_id = PlayerState.spec_id
 	_health = max_health
 	_ensure_loop(ANIM_IDLE)
 	_ensure_loop(ANIM_RUN)
 	_play_anim(ANIM_IDLE)
+	_apply_class_appearance()
 	if resource_pool != null:
 		_resource_current = float(resource_pool.start_value)
 		_resource_last_int = int(_resource_current)
 		resource_changed.emit(_resource_last_int, resource_pool.max_value)
 	_apply_debug_overrides()
+
+func _apply_class_appearance() -> void:
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = UIThemeState.palette.player_color
+	mat.metallic = 0.1
+	mat.roughness = 0.6
+	_tint_meshes(visual, mat)
+
+func _tint_meshes(node: Node, mat: Material) -> void:
+	if node is MeshInstance3D:
+		(node as MeshInstance3D).material_override = mat
+	for child in node.get_children():
+		_tint_meshes(child, mat)
 
 func _apply_debug_overrides() -> void:
 	var cfg: DebugConfig = DebugState.config
@@ -132,19 +150,25 @@ func _physics_process(delta: float) -> void:
 	_handle_skill_input()
 
 func _handle_skill_input() -> void:
-	if _attacking or _is_any_modal_open():
+	if _attacking:
 		return
 	for i in SKILL_INPUTS.size():
-		if Input.is_action_pressed(SKILL_INPUTS[i]):
-			if i < skills.size():
-				_cast_skill(skills[i])
+		if not Input.is_action_pressed(SKILL_INPUTS[i]):
+			continue
+		if _is_any_modal_open() or _is_mouse_over_ui():
 			return
+		if i < skills.size():
+			_cast_skill(skills[i])
+		return
 
 func _is_any_modal_open() -> bool:
 	for modal in get_tree().get_nodes_in_group(&"ui_modal"):
 		if modal is CanvasItem and modal.visible:
 			return true
 	return false
+
+func _is_mouse_over_ui() -> bool:
+	return get_viewport().gui_get_hovered_control() != null
 
 func _cast_skill(skill: Skill) -> void:
 	if skill == null or _attacking:

@@ -8,6 +8,13 @@ const DISK_SEGMENTS := 48
 const PLAYER_COLOR := Color(0.3, 0.7, 1.0)
 const ENEMY_COLOR := Color(1.0, 0.2, 0.15)
 
+# Mesh cache: cone outlines keyed by Vector2(range, cone_deg),
+# disk outlines keyed by float(range). ArrayMesh resources are
+# shareable across MeshInstance3D, so a small set of unique
+# (radius, angle) combinations keeps telegraph spawns allocation-free.
+static var _cone_cache: Dictionary = {}
+static var _disk_cache: Dictionary = {}
+
 static func spawn(host: Node3D, skill: Skill, aim: Vector3) -> void:
 	match skill.targeting_mode:
 		Skill.TargetingMode.SINGLE_CONE:
@@ -19,7 +26,7 @@ static func spawn_cone(host: Node3D, aim: Vector3, attack_range: float, cone_deg
 	if not _telegraphs_enabled():
 		return
 	var node := MeshInstance3D.new()
-	node.mesh = _build_cone_outline(attack_range, cone_deg)
+	node.mesh = _cone_mesh(attack_range, cone_deg)
 	var mat := _build_material(_color_for_host(host))
 	node.material_override = mat
 	host.add_child(node)
@@ -32,7 +39,7 @@ static func spawn_radial(host: Node3D, radius: float, wind_up: float = 0.0) -> v
 	if not _telegraphs_enabled():
 		return
 	var node := MeshInstance3D.new()
-	node.mesh = _build_disk_outline(radius)
+	node.mesh = _disk_mesh(radius)
 	var mat := _build_material(_color_for_host(host))
 	node.material_override = mat
 	host.add_child(node)
@@ -57,7 +64,11 @@ static func _play_fade(node: MeshInstance3D, mat: StandardMaterial3D, wind_up: f
 	tween.tween_property(mat, "albedo_color:a", 0.0, FADE_DURATION)
 	tween.tween_callback(node.queue_free)
 
-static func _build_cone_outline(radius: float, angle_deg: float) -> ArrayMesh:
+static func _cone_mesh(radius: float, angle_deg: float) -> ArrayMesh:
+	var key := Vector2(radius, angle_deg)
+	var cached: ArrayMesh = _cone_cache.get(key)
+	if cached != null:
+		return cached
 	var half := deg_to_rad(angle_deg * 0.5)
 	var verts := PackedVector3Array()
 	verts.append(Vector3.ZERO)
@@ -66,14 +77,21 @@ static func _build_cone_outline(radius: float, angle_deg: float) -> ArrayMesh:
 		var angle: float = lerp(-half, half, t)
 		verts.append(Vector3(sin(angle) * radius, 0.0, -cos(angle) * radius))
 	verts.append(Vector3.ZERO)
-	return _make_line_mesh(verts)
+	var mesh := _make_line_mesh(verts)
+	_cone_cache[key] = mesh
+	return mesh
 
-static func _build_disk_outline(radius: float) -> ArrayMesh:
+static func _disk_mesh(radius: float) -> ArrayMesh:
+	var cached: ArrayMesh = _disk_cache.get(radius)
+	if cached != null:
+		return cached
 	var verts := PackedVector3Array()
 	for i in range(DISK_SEGMENTS + 1):
 		var angle := TAU * float(i) / float(DISK_SEGMENTS)
 		verts.append(Vector3(cos(angle) * radius, 0.0, sin(angle) * radius))
-	return _make_line_mesh(verts)
+	var mesh := _make_line_mesh(verts)
+	_disk_cache[radius] = mesh
+	return mesh
 
 static func _make_line_mesh(verts: PackedVector3Array) -> ArrayMesh:
 	var arrays := []

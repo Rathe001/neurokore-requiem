@@ -12,7 +12,6 @@ func _ready() -> void:
 		_snap_to_target()
 	else:
 		look_at(Vector3.ZERO, Vector3.UP)
-	print("[prototype_camera] ready, target=", _target)
 
 func _process(_delta: float) -> void:
 	if _target == null:

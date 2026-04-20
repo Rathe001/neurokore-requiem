@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="UIThemeConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/systems/ui_theme_config.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+accent = Color(0.65, 0.45, 1.0, 1)
+accent_dim = Color(0.4, 0.28, 0.65, 1)
+panel_bg = Color(0.04, 0.04, 0.09, 0.94)
+panel_border = Color(0.55, 0.4, 0.95, 0.9)
+text = Color(0.9, 0.88, 1.0, 1)
+text_dim = Color(0.62, 0.6, 0.78, 1)
+hp_full = Color(0.4, 0.85, 1.0, 1)
+hp_low = Color(1.0, 0.4, 0.55, 1)
+hp_bar_bg = Color(0.04, 0.04, 0.09, 0.9)
+hp_bar_border = Color(0.55, 0.4, 0.95, 0.7)
+slot_bg = Color(0.06, 0.05, 0.11, 1)
+slot_border = Color(0.45, 0.32, 0.7, 1)
+credits = Color(0.7, 0.95, 1.0, 1)
+player_color = Color(0.7, 0.55, 0.95, 1)
+base_font_size = 13

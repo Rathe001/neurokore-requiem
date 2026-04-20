@@ -15,13 +15,17 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 [application]
 
 config/name="Neurokore: Requiem"
-run/main_scene="res://scenes/world/prototype_3d.tscn"
+run/main_scene="res://scenes/ui/startup_screen.tscn"
 config/features=PackedStringArray("4.6", "Forward Plus")
 
 [autoload]
 
 DebugState="*res://scripts/systems/debug_state.gd"
 AccessibilityState="*res://scripts/systems/accessibility_state.gd"
+PlayerState="*res://scripts/systems/player_state.gd"
+LocaleState="*res://scripts/systems/locale_state.gd"
+DisplayState="*res://scripts/systems/display_state.gd"
+UIThemeState="*res://scripts/systems/ui_theme_state.gd"
 InputSetup="*res://scripts/systems/input_setup.gd"
 
 [display]
