@@ -1,7 +1,8 @@
 extends Camera3D
+class_name PrototypeCamera
 
 @export var target_path: NodePath
-@export var offset: Vector3 = Vector3(10, 14, 10)
+@export var offset: Vector3 = Vector3(4, 14, 4)
 
 var _target: Node3D
 

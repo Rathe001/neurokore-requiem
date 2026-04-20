@@ -102,6 +102,11 @@ Use Godot's group system (`add_to_group(&"enemies")`, `get_tree().get_nodes_in_g
 
 ---
 
+## Infrastructure In Place
+
+- **Spatial partitioning** — `SpatialGrid` autoload provides O(nearby) proximity queries for combat, pickups, and interactables. All entities register/unregister themselves; the grid updates positions each physics frame. Use `SpatialGrid.query_radius()`, `query_cone()`, or `query_nearest()` instead of `get_nodes_in_group()` for proximity-dependent logic.
+- **Object pooling** — `EntityPool` autoload recycles `Node3D` instances. Use `EntityPool.acquire(scene)` / `EntityPool.release(node)` instead of `instantiate()` / `queue_free()` for frequently spawned entities (enemies, projectiles, pickups). Pooled entities must implement a `reset()` method to re-initialize state.
+
 ## What We Defer
 
 These are reasonable patterns we may adopt later. Listed here so we don't forget — not in place now to avoid premature abstraction.

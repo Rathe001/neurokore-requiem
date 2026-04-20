@@ -27,6 +27,8 @@ LocaleState="*res://scripts/systems/locale_state.gd"
 DisplayState="*res://scripts/systems/display_state.gd"
 UIThemeState="*res://scripts/systems/ui_theme_state.gd"
 InputSetup="*res://scripts/systems/input_setup.gd"
+SpatialGrid="*res://scripts/systems/spatial_grid.gd"
+EntityPool="*res://scripts/systems/entity_pool.gd"
 
 [display]
 
@@ -35,7 +37,6 @@ window/size/viewport_height=540
 window/size/window_width_override=1280
 window/size/window_height_override=720
 window/stretch/mode="canvas_items"
-window/stretch/aspect="expand"
 
 [input]
 

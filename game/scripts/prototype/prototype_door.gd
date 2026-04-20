@@ -14,17 +14,17 @@ const TINT_LOCKED := Color(0.85, 0.25, 0.2, 1.0)
 var _open: bool = false
 var _rest_y: float = 0.0
 var _tween: Tween
-var _mat: StandardMaterial3D
+var _mat: ShaderMaterial
+
+const _FADE_SHADER: Shader = preload("res://scripts/prototype/proximity_fade.gdshader")
 
 func _ready() -> void:
 	add_to_group(&"doors")
 	add_to_group(&"interactables")
+	SpatialGrid.register(self, &"interactables")
 	_rest_y = mesh.position.y
-	_mat = StandardMaterial3D.new()
-	_mat.metallic = 0.6
-	_mat.roughness = 0.4
-	_mat.emission_enabled = true
-	_mat.emission_energy_multiplier = 0.6
+	_mat = ShaderMaterial.new()
+	_mat.shader = _FADE_SHADER
 	mesh.material_override = _mat
 	_refresh_tint()
 
@@ -73,5 +73,5 @@ func _animate(target_y: float) -> void:
 
 func _refresh_tint() -> void:
 	var c := TINT_LOCKED if locked else TINT_NEUTRAL
-	_mat.albedo_color = c
-	_mat.emission = c
+	_mat.set_shader_parameter(&"base_color", Color(c.r, c.g, c.b))
+	_mat.set_shader_parameter(&"emission_color", Color(c.r, c.g, c.b))

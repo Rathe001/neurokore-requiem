@@ -10,7 +10,7 @@ Animated pixel art portrait busts for NPCs, enemies, and quest-givers — in the
 - Front-facing or slight 3/4 angle
 - Detailed pixel art with expressive faces
 - Dark background with character-appropriate rim lighting
-- Distinct from the in-game sprite scale — portraits are a separate art context
+- Distinct from the in-game 3D models — portraits are a separate art context
 
 ### Animation
 

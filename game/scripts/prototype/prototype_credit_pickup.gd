@@ -15,9 +15,12 @@ const SPIN_SPEED := 2.5
 
 var _velocity: Vector3 = Vector3.ZERO
 var _popping: bool = true
+var _player_ref: Node3D
 
 func _ready() -> void:
 	add_to_group(&"pickups")
+	SpatialGrid.register(self, &"pickups")
+	_player_ref = get_tree().get_first_node_in_group(&"player") as Node3D
 	var angle := randf() * TAU
 	var speed_factor := randf_range(0.7, 1.1)
 	_velocity = Vector3(
@@ -43,7 +46,9 @@ func _tick_pop(delta: float) -> void:
 		_popping = false
 
 func _tick_settled(delta: float) -> void:
-	var player := get_tree().get_first_node_in_group(&"player") as Node3D
+	if _player_ref == null or not is_instance_valid(_player_ref):
+		_player_ref = get_tree().get_first_node_in_group(&"player") as Node3D
+	var player := _player_ref
 	if player == null:
 		return
 	var target: Vector3 = player.global_position + Vector3(0.0, 0.8, 0.0)
@@ -58,4 +63,5 @@ func _tick_settled(delta: float) -> void:
 func _collect(player: Node) -> void:
 	if player.has_method(&"add_credits"):
 		player.add_credits(amount)
+	SpatialGrid.unregister(self)
 	queue_free()

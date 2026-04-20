@@ -1,39 +1,24 @@
-[gd_scene load_steps=35 format=3]
+[gd_scene load_steps=15 format=3]
 
 [ext_resource type="Script" path="res://scripts/prototype/prototype_root.gd" id="script_root"]
 [ext_resource type="Script" path="res://scripts/prototype/prototype_camera.gd" id="script_camera"]
 [ext_resource type="Script" path="res://scripts/prototype/prototype_player.gd" id="script_player"]
-[ext_resource type="PackedScene" path="res://scenes/prototype/prototype_enemy.tscn" id="scene_enemy"]
+[ext_resource type="Script" path="res://scripts/level/level_builder.gd" id="script_builder"]
 [ext_resource type="PackedScene" path="res://scenes/prototype/prototype_hud.tscn" id="scene_hud"]
-[ext_resource type="PackedScene" path="res://scenes/prototype/prototype_door.tscn" id="scene_door"]
-[ext_resource type="PackedScene" path="res://scenes/prototype/prototype_switch.tscn" id="scene_switch"]
 [ext_resource type="PackedScene" path="res://art/3d/characters/quaternius/UAL1_Standard.glb" id="char_model_player"]
 [ext_resource type="Resource" path="res://resources/skills/basic_attack.tres" id="skill_basic"]
 [ext_resource type="Resource" path="res://resources/skills/aoe_burst.tres" id="skill_aoe"]
 [ext_resource type="Resource" path="res://resources/skills/energy.tres" id="pool_energy"]
-[ext_resource type="Shader" path="res://scripts/prototype/tech_floor.gdshader" id="shader_tech_floor"]
-[ext_resource type="Shader" path="res://scripts/prototype/tech_wall.gdshader" id="shader_tech_wall"]
+[ext_resource type="Resource" path="res://resources/level/layouts/prototype_layout.tres" id="layout"]
 
 [sub_resource type="Environment" id="env_prototype"]
 background_mode = 1
 background_color = Color(0.002, 0.003, 0.006, 1)
-ambient_light_source = 0
-ambient_light_energy = 0.0
 tonemap_mode = 2
 tonemap_exposure = 1.0
-fog_enabled = true
-fog_light_color = Color(0.04, 0.05, 0.08, 1)
-fog_light_energy = 0.1
-fog_density = 0.008
-fog_height = 4.0
-fog_height_density = 0.8
-
-[sub_resource type="ShaderMaterial" id="mat_ground"]
-shader = ExtResource("shader_tech_floor")
-
-[sub_resource type="PlaneMesh" id="mesh_ground"]
-material = SubResource("mat_ground")
-size = Vector2(60, 60)
+ambient_light_source = 0
+ambient_light_energy = 0.0
+volumetric_fog_enabled = true
 
 [sub_resource type="StandardMaterial3D" id="mat_ring_player"]
 albedo_color = Color(0, 0, 0, 0)
@@ -52,75 +37,18 @@ outer_radius = 0.62
 radius = 0.4
 height = 1.6
 
-[sub_resource type="ShaderMaterial" id="mat_wall"]
-shader = ExtResource("shader_tech_wall")
-
-[sub_resource type="BoxMesh" id="mesh_wall_x_6"]
-material = SubResource("mat_wall")
-size = Vector3(6, 4.5, 0.4)
-
-[sub_resource type="BoxShape3D" id="shape_wall_x_6"]
-size = Vector3(6, 4.5, 0.4)
-
-[sub_resource type="BoxMesh" id="mesh_wall_x_4"]
-material = SubResource("mat_wall")
-size = Vector3(4, 4.5, 0.4)
-
-[sub_resource type="BoxShape3D" id="shape_wall_x_4"]
-size = Vector3(4, 4.5, 0.4)
-
-[sub_resource type="BoxMesh" id="mesh_wall_z_8"]
-material = SubResource("mat_wall")
-size = Vector3(0.4, 4.5, 8)
-
-[sub_resource type="BoxShape3D" id="shape_wall_z_8"]
-size = Vector3(0.4, 4.5, 8)
-
-[sub_resource type="BoxMesh" id="mesh_wall_z_6"]
-material = SubResource("mat_wall")
-size = Vector3(0.4, 4.5, 6)
-
-[sub_resource type="BoxShape3D" id="shape_wall_z_6"]
-size = Vector3(0.4, 4.5, 6)
-
-[sub_resource type="BoxMesh" id="mesh_wall_z_1"]
-material = SubResource("mat_wall")
-size = Vector3(0.4, 4.5, 1)
-
-[sub_resource type="BoxShape3D" id="shape_wall_z_1"]
-size = Vector3(0.4, 4.5, 1)
-
-[sub_resource type="StandardMaterial3D" id="mat_sconce_housing"]
-albedo_color = Color(0.08, 0.08, 0.09, 1)
-metallic = 0.6
-roughness = 0.4
-
-[sub_resource type="BoxMesh" id="mesh_sconce_housing"]
-material = SubResource("mat_sconce_housing")
-size = Vector3(0.18, 0.42, 0.22)
-
-[sub_resource type="StandardMaterial3D" id="mat_sconce_bulb"]
-albedo_color = Color(0.95, 0.97, 1.0, 1)
-emission_enabled = true
-emission = Color(0.95, 0.97, 1.0, 1)
-emission_energy_multiplier = 3.0
-shading_mode = 0
-
-[sub_resource type="BoxMesh" id="mesh_sconce_bulb"]
-material = SubResource("mat_sconce_bulb")
-size = Vector3(0.02, 0.32, 0.14)
-
 [node name="Prototype3D" type="Node3D"]
 script = ExtResource("script_root")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("env_prototype")
 
-[node name="Ground" type="MeshInstance3D" parent="."]
-mesh = SubResource("mesh_ground")
+[node name="LevelBuilder" type="Node3D" parent="."]
+script = ExtResource("script_builder")
+layout = ExtResource("layout")
 
 [node name="Player" type="CharacterBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 3)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -4)
 script = ExtResource("script_player")
 skills = Array[Skill]([ExtResource("skill_basic"), ExtResource("skill_aoe"), null, null, null, null, null, null])
 resource_pool = ExtResource("pool_energy")
@@ -138,285 +66,10 @@ mesh = SubResource("mesh_ring_player")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
 shape = SubResource("shape_player")
 
-[node name="WallCorridorE" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 2.25, -4)
-
-[node name="Mesh" type="MeshInstance3D" parent="WallCorridorE"]
-mesh = SubResource("mesh_wall_z_8")
-
-[node name="Collision" type="CollisionShape3D" parent="WallCorridorE"]
-shape = SubResource("shape_wall_z_8")
-
-[node name="WallCorridorW" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 2.25, -4)
-
-[node name="Mesh" type="MeshInstance3D" parent="WallCorridorW"]
-mesh = SubResource("mesh_wall_z_8")
-
-[node name="Collision" type="CollisionShape3D" parent="WallCorridorW"]
-shape = SubResource("shape_wall_z_8")
-
-[node name="WallTSouth" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.25, -12)
-
-[node name="Mesh" type="MeshInstance3D" parent="WallTSouth"]
-mesh = SubResource("mesh_wall_x_4")
-
-[node name="Collision" type="CollisionShape3D" parent="WallTSouth"]
-shape = SubResource("shape_wall_x_4")
-
-[node name="WallBranchEN" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 2.25, -8)
-
-[node name="Mesh" type="MeshInstance3D" parent="WallBranchEN"]
-mesh = SubResource("mesh_wall_x_6")
-
-[node name="Collision" type="CollisionShape3D" parent="WallBranchEN"]
-shape = SubResource("shape_wall_x_6")
-
-[node name="WallBranchES" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 2.25, -12)
-
-[node name="Mesh" type="MeshInstance3D" parent="WallBranchES"]
-mesh = SubResource("mesh_wall_x_6")
-
-[node name="Collision" type="CollisionShape3D" parent="WallBranchES"]
-shape = SubResource("shape_wall_x_6")
-
-[node name="WallBranchWN" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 2.25, -8)
-
-[node name="Mesh" type="MeshInstance3D" parent="WallBranchWN"]
-mesh = SubResource("mesh_wall_x_6")
-
-[node name="Collision" type="CollisionShape3D" parent="WallBranchWN"]
-shape = SubResource("shape_wall_x_6")
-
-[node name="WallBranchWS" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 2.25, -12)
-
-[node name="Mesh" type="MeshInstance3D" parent="WallBranchWS"]
-mesh = SubResource("mesh_wall_x_6")
-
-[node name="Collision" type="CollisionShape3D" parent="WallBranchWS"]
-shape = SubResource("shape_wall_x_6")
-
-[node name="WallRoomAN" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 11, 2.25, -13)
-
-[node name="Mesh" type="MeshInstance3D" parent="WallRoomAN"]
-mesh = SubResource("mesh_wall_x_6")
-
-[node name="Collision" type="CollisionShape3D" parent="WallRoomAN"]
-shape = SubResource("shape_wall_x_6")
-
-[node name="WallRoomAS" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 11, 2.25, -7)
-
-[node name="Mesh" type="MeshInstance3D" parent="WallRoomAS"]
-mesh = SubResource("mesh_wall_x_6")
-
-[node name="Collision" type="CollisionShape3D" parent="WallRoomAS"]
-shape = SubResource("shape_wall_x_6")
-
-[node name="WallRoomAE" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14, 2.25, -10)
-
-[node name="Mesh" type="MeshInstance3D" parent="WallRoomAE"]
-mesh = SubResource("mesh_wall_z_6")
-
-[node name="Collision" type="CollisionShape3D" parent="WallRoomAE"]
-shape = SubResource("shape_wall_z_6")
-
-[node name="WallRoomAJambN" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 2.25, -12.5)
-
-[node name="Mesh" type="MeshInstance3D" parent="WallRoomAJambN"]
-mesh = SubResource("mesh_wall_z_1")
-
-[node name="Collision" type="CollisionShape3D" parent="WallRoomAJambN"]
-shape = SubResource("shape_wall_z_1")
-
-[node name="WallRoomAJambS" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 2.25, -7.5)
-
-[node name="Mesh" type="MeshInstance3D" parent="WallRoomAJambS"]
-mesh = SubResource("mesh_wall_z_1")
-
-[node name="Collision" type="CollisionShape3D" parent="WallRoomAJambS"]
-shape = SubResource("shape_wall_z_1")
-
-[node name="WallRoomBN" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -11, 2.25, -13)
-
-[node name="Mesh" type="MeshInstance3D" parent="WallRoomBN"]
-mesh = SubResource("mesh_wall_x_6")
-
-[node name="Collision" type="CollisionShape3D" parent="WallRoomBN"]
-shape = SubResource("shape_wall_x_6")
-
-[node name="WallRoomBS" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -11, 2.25, -7)
-
-[node name="Mesh" type="MeshInstance3D" parent="WallRoomBS"]
-mesh = SubResource("mesh_wall_x_6")
-
-[node name="Collision" type="CollisionShape3D" parent="WallRoomBS"]
-shape = SubResource("shape_wall_x_6")
-
-[node name="WallRoomBW" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14, 2.25, -10)
-
-[node name="Mesh" type="MeshInstance3D" parent="WallRoomBW"]
-mesh = SubResource("mesh_wall_z_6")
-
-[node name="Collision" type="CollisionShape3D" parent="WallRoomBW"]
-shape = SubResource("shape_wall_z_6")
-
-[node name="WallRoomBJambN" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 2.25, -12.5)
-
-[node name="Mesh" type="MeshInstance3D" parent="WallRoomBJambN"]
-mesh = SubResource("mesh_wall_z_1")
-
-[node name="Collision" type="CollisionShape3D" parent="WallRoomBJambN"]
-shape = SubResource("shape_wall_z_1")
-
-[node name="WallRoomBJambS" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 2.25, -7.5)
-
-[node name="Mesh" type="MeshInstance3D" parent="WallRoomBJambS"]
-mesh = SubResource("mesh_wall_z_1")
-
-[node name="Collision" type="CollisionShape3D" parent="WallRoomBJambS"]
-shape = SubResource("shape_wall_z_1")
-
-[node name="Door1" parent="." instance=ExtResource("scene_door")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 0, -10)
-
-[node name="Door2" parent="." instance=ExtResource("scene_door")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 0, -10)
-locked = true
-
-[node name="Switch1" parent="." instance=ExtResource("scene_switch")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.6, 0.7, -2)
-target_door = NodePath("../Door1")
-action = 0
-
-[node name="Switch2" parent="." instance=ExtResource("scene_switch")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 13.6, 0.7, -10)
-target_door = NodePath("../Door2")
-action = 3
-
-[node name="SconceCorrEHousing" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.71, 3.1, -4)
-mesh = SubResource("mesh_sconce_housing")
-
-[node name="SconceCorrEBulb" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.59, 3.1, -4)
-mesh = SubResource("mesh_sconce_bulb")
-
-[node name="SconceCorrELight" type="OmniLight3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.31, 3.1, -4)
-light_color = Color(0.95, 0.97, 1.0, 1)
-light_energy = 8.0
-shadow_enabled = true
-omni_range = 10.0
-omni_attenuation = 1.3
-
-[node name="SconceCorrWHousing" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.71, 3.1, -4)
-mesh = SubResource("mesh_sconce_housing")
-
-[node name="SconceCorrWBulb" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.59, 3.1, -4)
-mesh = SubResource("mesh_sconce_bulb")
-
-[node name="SconceCorrWLight" type="OmniLight3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.31, 3.1, -4)
-light_color = Color(0.95, 0.97, 1.0, 1)
-light_energy = 8.0
-shadow_enabled = true
-omni_range = 10.0
-omni_attenuation = 1.3
-
-[node name="SconceBranchEHousing" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 3.1, -11.71)
-mesh = SubResource("mesh_sconce_housing")
-
-[node name="SconceBranchEBulb" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 3.1, -11.59)
-mesh = SubResource("mesh_sconce_bulb")
-
-[node name="SconceBranchELight" type="OmniLight3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 3.1, -11.31)
-light_color = Color(0.95, 0.97, 1.0, 1)
-light_energy = 8.0
-shadow_enabled = true
-omni_range = 10.0
-omni_attenuation = 1.3
-
-[node name="SconceBranchWHousing" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 3.1, -11.71)
-mesh = SubResource("mesh_sconce_housing")
-
-[node name="SconceBranchWBulb" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 3.1, -11.59)
-mesh = SubResource("mesh_sconce_bulb")
-
-[node name="SconceBranchWLight" type="OmniLight3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 3.1, -11.31)
-light_color = Color(0.95, 0.97, 1.0, 1)
-light_energy = 8.0
-shadow_enabled = true
-omni_range = 10.0
-omni_attenuation = 1.3
-
-[node name="SconceRoomAHousing" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 13.71, 3.1, -10)
-mesh = SubResource("mesh_sconce_housing")
-
-[node name="SconceRoomABulb" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 13.59, 3.1, -10)
-mesh = SubResource("mesh_sconce_bulb")
-
-[node name="SconceRoomALight" type="OmniLight3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 13.31, 3.1, -10)
-light_color = Color(0.95, 0.97, 1.0, 1)
-light_energy = 8.0
-shadow_enabled = true
-omni_range = 10.0
-omni_attenuation = 1.3
-
-[node name="SconceRoomBHousing" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -13.71, 3.1, -10)
-mesh = SubResource("mesh_sconce_housing")
-
-[node name="SconceRoomBBulb" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -13.59, 3.1, -10)
-mesh = SubResource("mesh_sconce_bulb")
-
-[node name="SconceRoomBLight" type="OmniLight3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -13.31, 3.1, -10)
-light_color = Color(0.95, 0.97, 1.0, 1)
-light_energy = 8.0
-shadow_enabled = true
-omni_range = 10.0
-omni_attenuation = 1.3
-
-[node name="Enemy1" parent="." instance=ExtResource("scene_enemy")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -6)
-
-[node name="Enemy2" parent="." instance=ExtResource("scene_enemy")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 11, 0, -10)
-
-[node name="Enemy3" parent="." instance=ExtResource("scene_enemy")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -11, 0, -10)
-
 [node name="HUD" parent="." instance=ExtResource("scene_hud")]
 
 [node name="Camera3D" type="Camera3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 14, 10)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 14, 4)
 current = true
 projection = 1
 size = 16.0

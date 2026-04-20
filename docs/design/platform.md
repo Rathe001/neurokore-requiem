@@ -23,7 +23,7 @@ The goal is a smooth, responsive experience on modest machines. This game does n
 - **Target hardware:** Average spec consumer PC. Integrated graphics, 8GB RAM, mid-range CPU should be sufficient for a smooth experience.
 - Horde-scale enemy counts (end-game Vampire Survivors density) must perform within this budget.
 - Real-time dynamic lighting must be efficient — the visual goal does not require expensive rendering.
-- Pixel art assets should be kept at appropriate resolutions — high fidelity without being wasteful.
+- 3D assets should be kept at appropriate polygon counts and texture resolutions — high fidelity without being wasteful.
 
 ---
 
@@ -50,8 +50,8 @@ End-game horde density is a known requirement. Entity and AI systems must be des
 
 ### Rendering
 
-- Real-time lighting via an efficient 2D lighting system (e.g. normal-mapped sprites or a lightweight light propagation approach)
-- Tile-based levels enable culling and chunk-based rendering
+- Real-time 3D lighting via the Forward Plus renderer (desktop), with Mobile/Compatibility as the fallback for future mobile targets
+- Modular 3D levels enable frustum culling and chunk-based rendering
 - Occlusion transparency on geometry should be handled at the shader level, not by spawning/despawning geometry
 
 ---

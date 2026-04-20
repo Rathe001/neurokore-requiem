@@ -1,4 +1,5 @@
 extends CharacterBody3D
+class_name PrototypeEnemy
 
 signal died
 
@@ -47,13 +48,37 @@ var _want_dir: Vector3 = Vector3.ZERO
 var _player_ref: Node3D
 
 func _ready() -> void:
+	_init_enemy()
+
+func _init_enemy() -> void:
 	add_to_group(&"enemies")
+	SpatialGrid.register(self, &"enemies")
 	_health = max_health
+	_alive = true
+	_knockback_remain = 0.0
+	_attack_cd = 0.0
+	_casting = false
+	_want_dir = Vector3.ZERO
+	_player_ref = null
+	set_physics_process(true)
+	collision_layer = 1
+	collision_mask = 1
+	if collision != null:
+		collision.disabled = false
+	if floor_ring != null:
+		floor_ring.visible = true
+	if visual != null:
+		visual.rotation = Vector3.ZERO
 	_ensure_loop(ANIM_IDLE)
 	_ensure_loop(ANIM_RUN)
 	_play_anim(ANIM_IDLE)
 	if health_bar != null:
 		health_bar.visible = false
+
+## Re-initialize an enemy returned from the pool.
+func reset() -> void:
+	remove_from_group(&"corpses")
+	_init_enemy()
 
 func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_strength: float = 0.0) -> void:
 	if not _alive:
@@ -179,6 +204,7 @@ func _drop_credits() -> void:
 	pickup.global_position = global_position + Vector3(0.0, 1.0, 0.0)
 
 func _become_corpse() -> void:
+	SpatialGrid.unregister(self)
 	remove_from_group(&"enemies")
 	add_to_group(&"corpses")
 	if collision != null:

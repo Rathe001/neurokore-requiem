@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="LevelTheme" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/level/level_theme.gd" id="1"]
+[ext_resource type="Shader" path="res://scripts/prototype/tech_wall.gdshader" id="wall_shader"]
+[ext_resource type="Shader" path="res://scripts/prototype/tech_floor.gdshader" id="floor_shader"]
+
+[resource]
+script = ExtResource("1")
+wall_height = 4.5
+wall_thickness = 0.4
+wall_shader = ExtResource("wall_shader")
+floor_shader = ExtResource("floor_shader")
+wall_color = Color(0.2, 0.21, 0.24, 1)
+wall_metallic = 0.3
+wall_roughness = 0.6
+floor_color = Color(0.25, 0.26, 0.28, 1)
+floor_metallic = 0.2
+floor_roughness = 0.7
+fluorescent_housing_size = Vector3(1.2, 0.06, 0.2)
+fluorescent_tube_size = Vector3(1.1, 0.02, 0.08)
+fluorescent_housing_color = Color(0.12, 0.12, 0.13, 1)
+fluorescent_housing_metallic = 0.5
+fluorescent_housing_roughness = 0.5
+fluorescent_emission_multiplier = 4.0

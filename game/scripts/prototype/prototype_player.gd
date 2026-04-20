@@ -1,4 +1,5 @@
 extends CharacterBody3D
+class_name PrototypePlayer
 
 signal health_changed(current: int, max_value: int)
 signal resource_changed(current: int, max_value: int)
@@ -54,10 +55,12 @@ var _cooldowns: Dictionary = {}
 var _resource_current: float = 0.0
 var _resource_last_int: int = 0
 var _credits: int = 0
+var _death_tween: Tween
 
 func _ready() -> void:
 	_camera = get_viewport().get_camera_3d()
 	add_to_group(&"player")
+	SpatialGrid.register(self, &"player")
 	class_id = PlayerState.class_id
 	spec_id = PlayerState.spec_id
 	_health = max_health
@@ -76,8 +79,6 @@ func _apply_class_appearance() -> void:
 	mat.albedo_color = UIThemeState.palette.player_color
 	mat.metallic = 0.1
 	mat.roughness = 0.6
-	mat.no_depth_test = true
-	mat.render_priority = 1
 	_tint_meshes(visual, mat)
 
 func _tint_meshes(node: Node, mat: Material) -> void:
@@ -165,16 +166,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		_try_interact()
 
 func _try_interact() -> void:
-	var nearest: Node = null
-	var nearest_d2: float = INF
-	for n in get_tree().get_nodes_in_group(&"interactables"):
-		if not (n is Node3D):
-			continue
-		var n3 := n as Node3D
-		var d2: float = global_position.distance_squared_to(n3.global_position)
-		if d2 <= INTERACT_RANGE_SQ and d2 < nearest_d2:
-			nearest_d2 = d2
-			nearest = n
+	var interact_range := sqrt(INTERACT_RANGE_SQ)
+	var nearest := SpatialGrid.query_nearest(global_position, interact_range, &"interactables")
 	if nearest != null and nearest.has_method(&"interact"):
 		nearest.interact(self)
 
@@ -234,29 +227,12 @@ func _resolve_skill_hit(skill: Skill, aim: Vector3) -> void:
 
 func _resolve_cone(skill: Skill, aim: Vector3) -> void:
 	var half_cos := cos(deg_to_rad(skill.cone_deg * 0.5))
-	for e in get_tree().get_nodes_in_group(&"enemies"):
-		if not (e is Node3D):
-			continue
-		var enode := e as Node3D
-		var to_enemy: Vector3 = enode.global_position - global_position
-		to_enemy.y = 0.0
-		var dist := to_enemy.length()
-		if dist > skill.range or dist < 0.001:
-			continue
-		if aim.dot(to_enemy / dist) < half_cos:
-			continue
+	for enode: Node3D in SpatialGrid.query_cone(global_position, aim, skill.range, half_cos, &"enemies"):
 		if enode.has_method(&"take_damage"):
 			enode.take_damage(skill.damage, global_position, skill.knockback)
 
 func _resolve_aoe(skill: Skill) -> void:
-	for e in get_tree().get_nodes_in_group(&"enemies"):
-		if not (e is Node3D):
-			continue
-		var enode := e as Node3D
-		var to_enemy: Vector3 = enode.global_position - global_position
-		to_enemy.y = 0.0
-		if to_enemy.length() > skill.range:
-			continue
+	for enode: Node3D in SpatialGrid.query_radius(global_position, skill.range, &"enemies"):
 		if enode.has_method(&"take_damage"):
 			enode.take_damage(skill.damage, global_position, skill.knockback)
 
@@ -308,13 +284,16 @@ func _die() -> void:
 	if not played and anim_player != null:
 		anim_player.pause()
 	if visual != null:
-		var tween := create_tween()
-		tween.tween_property(visual, "scale:y", 0.15, 0.5)
+		_death_tween = create_tween()
+		_death_tween.tween_property(visual, "scale:y", 0.15, 0.5)
 	await get_tree().create_timer(DEATH_HOLD).timeout
 	await get_tree().create_timer(RESPAWN_DELAY).timeout
 	_respawn()
 
 func _respawn() -> void:
+	if _death_tween != null and _death_tween.is_valid():
+		_death_tween.kill()
+		_death_tween = null
 	global_position = Vector3.ZERO
 	velocity = Vector3.ZERO
 	_knockback_remain = 0.0

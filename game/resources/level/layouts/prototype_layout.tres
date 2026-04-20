@@ -1,0 +1,229 @@
+[gd_resource type="Resource" script_class="LevelLayout" load_steps=18 format=3]
+
+[ext_resource type="Script" path="res://scripts/level/level_layout.gd" id="script_layout"]
+[ext_resource type="Script" path="res://scripts/level/level_piece.gd" id="script_piece"]
+[ext_resource type="Script" path="res://scripts/level/room_def.gd" id="script_room"]
+[ext_resource type="Script" path="res://scripts/level/corridor_def.gd" id="script_corridor"]
+[ext_resource type="Resource" path="res://resources/level/themes/tech_theme.tres" id="theme"]
+[ext_resource type="Resource" path="res://resources/level/lights/fluorescent_white.tres" id="light_fluoro"]
+
+; ══════════════════════════════════════════════════════════════════════════════
+; AUGMENTATION WING — THE WARD
+;
+; Layout (top-down, -Z is north):
+;
+;                       [Atrium 14x10]
+;                       (0, 0, -42)
+;                            |
+;                     [Dark Corr len=6]
+;                       (0, 0, -34)
+;                            |
+;   [Research Lab 6x6]--[Obs Hub 8x8]
+;    (-13, 0, -27)      (0, 0, -27)
+;                            |
+;                    [Warning Corr len=6]
+;                       (0, 0, -20)
+;                            |
+;  [Patient Ward 8x6]--[Junction 4x4]--[Supply 6x4]
+;   (-10, 0, -15)      (0, 0, -15)     (9, 0, -15)
+;                            |
+;                     [Exit Corr len=6]
+;                       (0, 0, -10)
+;                            |
+;                    [Operating Room 8x6]
+;                       (0, 0, -4)
+;                       (player start)
+; ══════════════════════════════════════════════════════════════════════════════
+
+; ── Room Definitions ─────────────────────────────────────────────────────────
+
+; 1. Operating Theater — player wakes here
+[sub_resource type="Resource" id="room_operating"]
+script = ExtResource("script_room")
+id = &"operating_theater"
+size = Vector2(8, 6)
+openings = [0]
+opening_width = 4.0
+light_color = ExtResource("light_fluoro")
+
+[sub_resource type="Resource" id="piece_operating"]
+script = ExtResource("script_piece")
+position = Vector3(0, 0, -4)
+room = SubResource("room_operating")
+
+; 2. Exit corridor — institutional fluorescent lighting
+[sub_resource type="Resource" id="corr_exit"]
+script = ExtResource("script_corridor")
+width = 4.0
+length = 6.0
+axis = 1
+light_color = ExtResource("light_fluoro")
+light_interval = 6.0
+
+[sub_resource type="Resource" id="piece_corr_exit"]
+script = ExtResource("script_piece")
+position = Vector3(0, 0, -10)
+corridor = SubResource("corr_exit")
+
+; 3. Junction — hub connecting ward, supply, and deeper facility
+[sub_resource type="Resource" id="room_junction"]
+script = ExtResource("script_room")
+id = &"junction"
+size = Vector2(4, 4)
+openings = [0, 1, 2, 3]
+opening_width = 4.0
+light_color = ExtResource("light_fluoro")
+
+[sub_resource type="Resource" id="piece_junction"]
+script = ExtResource("script_piece")
+position = Vector3(0, 0, -15)
+room = SubResource("room_junction")
+
+; 4. West branch — dark connector to patient ward
+[sub_resource type="Resource" id="corr_west"]
+script = ExtResource("script_corridor")
+width = 4.0
+length = 4.0
+axis = 0
+
+[sub_resource type="Resource" id="piece_corr_west"]
+script = ExtResource("script_piece")
+position = Vector3(-4, 0, -15)
+corridor = SubResource("corr_west")
+
+; 5. Patient Ward — flickering fluorescents
+[sub_resource type="Resource" id="room_ward"]
+script = ExtResource("script_room")
+id = &"patient_ward"
+size = Vector2(8, 6)
+openings = [2]
+opening_width = 4.0
+light_color = ExtResource("light_fluoro")
+enemy_count = 3
+
+[sub_resource type="Resource" id="piece_ward"]
+script = ExtResource("script_piece")
+position = Vector3(-10, 0, -15)
+room = SubResource("room_ward")
+
+; 6. East branch — lit connector to supply
+[sub_resource type="Resource" id="corr_east"]
+script = ExtResource("script_corridor")
+width = 4.0
+length = 4.0
+axis = 0
+light_color = ExtResource("light_fluoro")
+light_interval = 4.0
+
+[sub_resource type="Resource" id="piece_corr_east"]
+script = ExtResource("script_piece")
+position = Vector3(4, 0, -15)
+corridor = SubResource("corr_east")
+
+; 7. Supply Room — locked
+[sub_resource type="Resource" id="room_supply"]
+script = ExtResource("script_room")
+id = &"supply_room"
+size = Vector2(6, 4)
+openings = [3]
+opening_width = 4.0
+light_color = ExtResource("light_fluoro")
+door_openings = [3]
+locked_doors = [3]
+
+[sub_resource type="Resource" id="piece_supply"]
+script = ExtResource("script_piece")
+position = Vector3(9, 0, -15)
+room = SubResource("room_supply")
+
+; 8. Warning corridor — fluorescent lit
+[sub_resource type="Resource" id="corr_warning"]
+script = ExtResource("script_corridor")
+width = 4.0
+length = 6.0
+axis = 1
+light_color = ExtResource("light_fluoro")
+light_interval = 4.0
+
+[sub_resource type="Resource" id="piece_corr_warning"]
+script = ExtResource("script_piece")
+position = Vector3(0, 0, -20)
+corridor = SubResource("corr_warning")
+
+; 9. Observation Hub
+[sub_resource type="Resource" id="room_obs"]
+script = ExtResource("script_room")
+id = &"observation_hub"
+size = Vector2(8, 8)
+openings = [0, 1, 3]
+opening_width = 4.0
+light_color = ExtResource("light_fluoro")
+
+[sub_resource type="Resource" id="piece_obs"]
+script = ExtResource("script_piece")
+position = Vector3(0, 0, -27)
+room = SubResource("room_obs")
+enemy_positions = [Vector3(2, 0, 2), Vector3(-2, 0, -2)]
+
+; 10. Lab corridor — blackout, no lights
+[sub_resource type="Resource" id="corr_lab"]
+script = ExtResource("script_corridor")
+width = 4.0
+length = 6.0
+axis = 0
+
+[sub_resource type="Resource" id="piece_corr_lab"]
+script = ExtResource("script_piece")
+position = Vector3(-7, 0, -27)
+corridor = SubResource("corr_lab")
+
+; 11. Research Lab
+[sub_resource type="Resource" id="room_lab"]
+script = ExtResource("script_room")
+id = &"research_lab"
+size = Vector2(6, 6)
+openings = [2]
+opening_width = 4.0
+light_color = ExtResource("light_fluoro")
+enemy_count = 2
+
+[sub_resource type="Resource" id="piece_lab"]
+script = ExtResource("script_piece")
+position = Vector3(-13, 0, -27)
+room = SubResource("room_lab")
+
+; 12. Dark corridor — no lights
+[sub_resource type="Resource" id="corr_dark"]
+script = ExtResource("script_corridor")
+width = 4.0
+length = 6.0
+axis = 1
+
+[sub_resource type="Resource" id="piece_corr_dark"]
+script = ExtResource("script_piece")
+position = Vector3(0, 0, -34)
+corridor = SubResource("corr_dark")
+enemy_positions = [Vector3(0, 0, 2), Vector3(1, 0, -1), Vector3(-1, 0, -2)]
+
+; 13. The Atrium — large open space
+[sub_resource type="Resource" id="room_atrium"]
+script = ExtResource("script_room")
+id = &"atrium"
+size = Vector2(14, 10)
+openings = [1]
+opening_width = 4.0
+light_color = ExtResource("light_fluoro")
+enemy_count = 3
+
+[sub_resource type="Resource" id="piece_atrium"]
+script = ExtResource("script_piece")
+position = Vector3(0, 0, -42)
+room = SubResource("room_atrium")
+
+; ── Layout Resource ──────────────────────────────────────────────────────────
+
+[resource]
+script = ExtResource("script_layout")
+theme = ExtResource("theme")
+ground_size = Vector2(50, 100)
+pieces = [SubResource("piece_operating"), SubResource("piece_corr_exit"), SubResource("piece_junction"), SubResource("piece_corr_west"), SubResource("piece_ward"), SubResource("piece_corr_east"), SubResource("piece_supply"), SubResource("piece_corr_warning"), SubResource("piece_obs"), SubResource("piece_corr_lab"), SubResource("piece_lab"), SubResource("piece_corr_dark"), SubResource("piece_atrium")]

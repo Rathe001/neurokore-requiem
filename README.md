@@ -36,25 +36,25 @@ Neurokore: Requiem is a hack-and-slash ARPG in the tradition of Diablo 2 — dee
 
 ## Art Style
 
-- **Style:** Isometric pixel art — modern fidelity, not chunky retro. Slightly more pixelated than the reference mockup (`reference/mockups/world1.png`).
+- **Style:** Fully 3D — low-poly meshes with high-res PBR textures and realistic dynamic lighting. Stylized, not photo-real. Pixel art is used only for dialog portraits (Aseprite, Bard's Tale 1 style).
 - **Palette:** Dark, desaturated base with neon pops. Teal/cyan dominant, hot pink and red as accent colors. Wet-street reflections on ground surfaces.
-- **Lighting:** Real-time dynamic lighting — sprites receive light rather than baking it into textures. Neon signs, explosions, and spells cast actual light into the environment.
-- **Animation:** ~25fps sprite animation in the Diablo 2 tradition. Weighted, deliberate feel.
-- **Bosses:** Large-scale pixel art enemies — the small player character scale makes oversized bosses highly readable and impactful.
+- **Lighting:** Real-time dynamic 3D lighting. Neon signs, explosions, and spells cast actual light into the environment.
+- **Animation:** 3D keyframe animation. Weighted, deliberate feel in the Diablo 2 tradition.
+- **Bosses:** Large-scale enemies — the small player character scale makes oversized bosses highly readable and impactful.
 
 ---
 
 ## Camera & Perspective
 
-- **Projection:** Fixed isometric.
-- **Occlusion:** Any geometry that would obscure the player character (walls, roofs, structures) becomes transparent. The player is always visible.
+- **Projection:** Fixed 3D camera — locked pitch, yaw, and distance. Same visual feel as classic isometric, but fully 3D under the hood.
+- **Occlusion:** Geometry that would obscure the player (walls, roofs, structures) fades transparent. The player is always visible.
 - **No rotation or zoom** (fixed camera).
 
 ---
 
 ## Level Design
 
-- **Construction:** Tile-based, procedurally generated. Tiles and layouts simulate a hand-crafted look.
+- **Construction:** Modular 3D asset procedural generation. Modular geometry pieces and layouts are assembled procedurally to simulate a hand-crafted look.
 - **Hand-crafted rooms:** Specific events, boss arenas, story moments, and landmark rooms are hand-crafted but designed to slot seamlessly into procedurally generated levels.
 - **Progression:** Early areas are tighter and less dense. End-game environments support Vampire Survivors-scale hordes.
 
@@ -77,7 +77,7 @@ Neurokore: Requiem is a hack-and-slash ARPG in the tradition of Diablo 2 — dee
 - Each class has a fully viable **base form** plus **3 specializations** unlocked through specific quests — similar to WoW Legion artifact weapon quests. The unlock quest should feel thematic and personal to the spec.
 - Deep build diversity per class, with itemization designed to create build desire — finding an item should make you want to try a new build.
 - **Base class resource system:** the base (unspecced) form of each class runs all 3 resource meters simultaneously. The early skill tree includes one skill tied to each resource, naturally introducing the player to each spec's mechanics through play. When a spec is chosen, the player commits to that resource exclusively — the other two meters disappear from the UI. This makes specialization feel like a meaningful threshold, not just a menu choice. The base class remains viable through breadth: access to all three resource types and their associated skills, without the depth a specialized build achieves.
-- **Character creation:** players choose male or female at the start. Both are fully supported for all classes and specs. This effectively doubles the required player character sprites — a scope consideration for production and a factor in tech stack decisions around animation systems.
+- **Character creation:** players choose male or female at the start. Both are fully supported for all classes and specs. This effectively doubles the required player character models — a scope consideration for production and a factor in tech stack decisions around animation systems.
 
 ---
 

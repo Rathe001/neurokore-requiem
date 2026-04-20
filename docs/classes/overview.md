@@ -19,4 +19,4 @@ The base class remains viable through breadth: access to all three resource type
 
 ## Character Creation
 
-Players choose male or female at the start. Both are fully supported for all classes and specs. This effectively doubles the required player character sprites — a scope consideration for production and a factor in tech stack decisions around animation systems.
+Players choose male or female at the start. Both are fully supported for all classes and specs. This effectively doubles the required player character models — a scope consideration for production and a factor in tech stack decisions around animation systems.

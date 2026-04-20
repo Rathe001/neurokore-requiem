@@ -1,4 +1,5 @@
 extends CanvasLayer
+class_name PrototypeHud
 
 const HP_BAR_WIDTH := 136.0
 const RESOURCE_BAR_WIDTH := 136.0
@@ -116,9 +117,9 @@ func _process(delta: float) -> void:
 	debug_label.text = tr("HUD_DEBUG_OVERLAY_FORMAT") % [
 		fps,
 		frame_ms,
-		tree.get_nodes_in_group(&"enemies").size(),
+		SpatialGrid.count(&"enemies"),
 		tree.get_nodes_in_group(&"corpses").size(),
-		tree.get_nodes_in_group(&"pickups").size(),
+		SpatialGrid.count(&"pickups"),
 		tree.get_nodes_in_group(&"structures").size(),
 		tree.get_node_count(),
 	]

@@ -16,6 +16,7 @@ var _mat: StandardMaterial3D
 
 func _ready() -> void:
 	add_to_group(&"interactables")
+	SpatialGrid.register(self, &"interactables")
 	_mat = StandardMaterial3D.new()
 	_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	_mat.emission_enabled = true

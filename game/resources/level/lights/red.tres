@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="LightColor" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/level/light_color.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+color = Color(1.0, 0.15, 0.05, 1)
+energy = 6.0
+range = 8.0
+attenuation = 1.2
+shadows = true
