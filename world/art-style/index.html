@@ -513,17 +513,6 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#style" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Style
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#camera-perspective" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -535,10 +524,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#portraits" class="md-nav__link">
+  <a href="#low-poly-discipline" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Portraits
+        Low-Poly Discipline
       
     </span>
   </a>
@@ -1424,17 +1413,6 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#style" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Style
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#camera-perspective" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1446,10 +1424,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#portraits" class="md-nav__link">
+  <a href="#low-poly-discipline" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Portraits
+        Low-Poly Discipline
       
     </span>
   </a>
@@ -1488,31 +1466,29 @@
 
 
 <h1 id="art-style">Art Style<a class="headerlink" href="#art-style" title="Permanent link">&para;</a></h1>
-<blockquote>
-<p><strong>Note:</strong> Reference images in this file are Midjourney-generated concept placeholders — directional for mood, color, and tone only. They will be replaced with commissioned work as the project matures.</p>
-</blockquote>
-<p><img alt="World environment mockup" src="../../reference/mockups/world1.png" /></p>
-<h2 id="style">Style<a class="headerlink" href="#style" title="Permanent link">&para;</a></h2>
-<p>The game is <strong>fully 3D</strong>. Pixel art is used exclusively for <a href="../../design/dialog-ui/">dialog portraits</a>.</p>
 <ul>
-<li><strong>Palette:</strong> Dark, desaturated base with deliberate color pops. Teal/cyan dominant, hot pink and red as accent colors. Wet-surface reflections on ground geometry.</li>
-<li><strong>Lighting:</strong> Real-time dynamic 3D lighting. Light sources cast actual light into the environment — ability effects, explosions, and environmental sources all contribute. See <a href="../lighting/">Lighting</a> for the full system.</li>
-<li><strong>Tone:</strong> Gritty and lived-in. Not clean sci-fi — corroded, patched, abandoned. The world looks like it has been running without maintenance for years.</li>
-<li><strong>Bosses:</strong> Large-scale enemies. The relatively small player character scale makes oversized bosses readable and impactful at any screen size.</li>
+<li><strong>Style:</strong> Low-poly 3D with high-resolution PBR textures. Clean, readable silhouettes at the locked camera angle; surface detail carried by textures and lighting rather than polygon count. Stylized — not aiming for photo-realism.</li>
+<li><strong>Palette:</strong> Dark, desaturated base with neon pops. Teal/cyan dominant, hot pink and red as accent colors. Wet, reflective ground surfaces wherever the fiction supports it.</li>
+<li><strong>Lighting:</strong> Dynamic real-time lighting is the dominant visual identity. Neon signs, spells, generator rooms, and equipped light sources cast actual light into the world. See <a href="../lighting/"><code>lighting.md</code></a> for the full lighting design — it drives more of the visual feel than any other single system.</li>
+<li><strong>Materials:</strong> PBR — metallic, roughness, emissive, normal maps. Emissive surfaces carry the neon aesthetic.</li>
+<li><strong>Animation:</strong> 3D keyframe animation. Weighted and deliberate — closer to Diablo 2's animation philosophy than to fluid action-game animation. Attacks should feel committed.</li>
+<li><strong>Bosses:</strong> Oversized models relative to the player. The fixed camera and small base-player scale make large bosses highly readable and impactful.</li>
 </ul>
-<hr />
 <h2 id="camera-perspective">Camera &amp; Perspective<a class="headerlink" href="#camera-perspective" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Projection:</strong> Fixed isometric — an orthographic or near-orthographic 3D camera at a fixed angle.</li>
-<li><strong>Occlusion:</strong> Geometry obscuring the player character (walls, ceilings, structures) becomes transparent via shader. The player is always visible.</li>
-<li><strong>No rotation or zoom</strong> — fixed camera. The player never controls the camera.</li>
+<li><strong>Projection:</strong> Fixed camera — locked pitch, yaw, and distance. Same visual feel as the previous isometric plan, but 3D under the hood.</li>
+<li><strong>Occlusion:</strong> Geometry that would obscure the player (walls, roofs, overhead structures) must become transparent or fade. The player is always visible.</li>
+<li><strong>No rotation or zoom.</strong> The camera is part of the game's identity — not a user control.</li>
 </ul>
-<hr />
-<h2 id="portraits">Portraits<a class="headerlink" href="#portraits" title="Permanent link">&para;</a></h2>
-<p>Dialog portraits are the only pixel art in the game. See <a href="../../design/dialog-ui/">Dialog &amp; UI</a> for the full portrait spec — format, animation states, and spec-specific effects.</p>
-<hr />
+<h2 id="low-poly-discipline">Low-Poly Discipline<a class="headerlink" href="#low-poly-discipline" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Spend polygon budget on <strong>silhouette</strong>, not surface detail. Textures and normal maps carry surface detail.</li>
+<li>Consistent poly-density across assets — mixing a highly detailed model with a low-poly one breaks the style.</li>
+<li>UV-efficient authoring — shared texture atlases where appropriate to keep VRAM within the integrated-graphics target.</li>
+<li>Emissive texture channels do a lot of the heavy lifting for the neon aesthetic.</li>
+</ul>
 <h2 id="class-spec-color-language">Class &amp; Spec Color Language<a class="headerlink" href="#class-spec-color-language" title="Permanent link">&para;</a></h2>
-<p>Each class and spec has a consistent color identity applied across 3D materials, ability particle effects, UI, resource meters, and portrait rim lighting.</p>
+<p>Each class and spec has a consistent color identity used across models, materials, UI, ability effects, and enemy design. Established through concept work — treat as a visual consistency guide that carries through into 3D authoring (emissive accents, rim lights, particle effects, UI theming).</p>
 <table>
 <thead>
 <tr>
@@ -1555,6 +1531,7 @@
 </tr>
 </tbody>
 </table>
+<p>This color language should carry through to ability particle effects, resource meter colors, portrait rim lighting, and spec-specific UI elements.</p>
 
 
 

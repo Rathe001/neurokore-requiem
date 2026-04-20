@@ -1288,6 +1288,24 @@
         
       
       
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Status
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <a href="./" class="md-nav__link md-nav__link--active">
         
   
@@ -1304,6 +1322,86 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#tech" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tech
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prototype-scene" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prototype scene
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#enemies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Enemies
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Enemies">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#corpses" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Corpses
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-design-areas" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open design areas
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
       
     </li>
   
@@ -1329,6 +1427,75 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#tech" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tech
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prototype-scene" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prototype scene
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#enemies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Enemies
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Enemies">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#corpses" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Corpses
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-design-areas" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open design areas
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -1348,11 +1515,42 @@
 
 
 <h1 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h1>
-<p>Transitioning from design phase into early prototype.</p>
+<p>Early 3D prototype. Design docs cover most systems; itemization, progression/leveling, economy/crafting, end-game loop, and death/failure are still TBD and will be designed as the prototype reveals what's needed.</p>
+<h2 id="tech">Tech<a class="headerlink" href="#tech" title="Permanent link">&para;</a></h2>
+<p>Godot 4 + GDScript, Forward+ renderer. Fixed-camera low-poly 3D with PBR + realistic lighting (pivoted from the original isometric pixel-art plan). See <a href="../design/tech-stack/">Tech Stack</a>.</p>
+<h2 id="prototype-scene">Prototype scene<a class="headerlink" href="#prototype-scene" title="Permanent link">&para;</a></h2>
+<p><code>game/scenes/world/prototype_3d.tscn</code> — small corridor-and-rooms layout used to exercise core systems.</p>
+<p>Working:</p>
 <ul>
-<li><strong>Tech stack:</strong> chosen — see <a href="../design/tech-stack/">Tech Stack</a>. Godot 4 + GDScript.</li>
-<li><strong>Design coverage:</strong> classes, specs, starting zones, morality, skill tree, lighting, tone, art style, level design are documented. Itemization, progression/leveling, economy/crafting, end-game loop, and death/failure are still TBD and will be designed as the prototype reveals what's needed.</li>
-<li><strong>Prototype goal:</strong> isometric tilemap + click-to-move character + one dummy enemy hit by basic attacks.</li>
+<li>WASD movement, click-to-attack</li>
+<li>Wall collision (per-segment <code>StaticBody3D</code> + <code>BoxShape3D</code>)</li>
+<li>Doors with slide-open animation, lock state, and <code>interact()</code> (F key)</li>
+<li>Switches that target a door via <code>NodePath</code> (toggle / open / close / unlock actions)</li>
+<li>Group-based interactable discovery — player picks the nearest node in <code>interactables</code> group within ~2.5m on F</li>
+<li>Always-visible player (depth test off + render priority)</li>
+<li>Line-of-sight wall fade — walls go transparent only when between camera and player and overlapping the player on screen (view-space projection in <code>tech_wall.gdshader</code>, fed by <code>player_world_pos</code> global shader uniform)</li>
+<li>Persistent corpses with bounded pool — see <a href="#enemies">Enemies</a> below</li>
+<li>Class/spec UI themes wired through <code>UIThemeState</code> (<code>SPEC_THEMES</code> lookup keyed by <code>class/spec</code>)</li>
+</ul>
+<h2 id="enemies">Enemies<a class="headerlink" href="#enemies" title="Permanent link">&para;</a></h2>
+<p>Spawning model is <strong>D2-style</strong>, not horde-streaming: enemies are placed at level load, do not respawn during play, and the level can be fully cleared.</p>
+<ul>
+<li>The current <code>EnemySpawner</code> in <code>game/scenes/world.tscn</code> is a temporary density stress-test, not the target architecture. Don't build features on top of it that assume continuous spawning.</li>
+<li>Future systems should assume placement-at-load, defeated-stays-defeated, level-complete-when-cleared.</li>
+<li>Pooling/spatial-partitioning work for horde density still matters (see <a href="../design/platform/">Platform</a>) — the pool fills from level data, not a streaming source.</li>
+<li>Persistence of cleared state across save/load belongs with this model.</li>
+</ul>
+<h3 id="corpses">Corpses<a class="headerlink" href="#corpses" title="Permanent link">&para;</a></h3>
+<p>Dead enemies play their death animation and are left in whatever pose the animation ends on (no flattening). If the rigged model has no death clip, a one-time fallback rotation tips them on the X axis. On completion they move to the <code>corpses</code> group, collision is disabled, and the floor ring hides. A corpse manager on the prototype root enforces <code>MAX_CORPSES = 100</code> with FIFO pruning.</p>
+<p>The flattening tween was removed deliberately — unaltered model in its death pose reads better and reinforces the gritty/body-horror tone (see <a href="../world/tone/">Tone</a>). Persistent corpses also give visible feedback that a zone has been cleared, reinforcing the no-respawn model.</p>
+<p><strong>Open work:</strong> corpse-pool cap is per-scene right now. When real zones come online, persistence across zone swaps still needs designing — corpses currently die with the scene.</p>
+<h2 id="open-design-areas">Open design areas<a class="headerlink" href="#open-design-areas" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Itemization</li>
+<li>Progression / leveling</li>
+<li>Economy / crafting</li>
+<li>End-game loop</li>
+<li>Death / failure</li>
 </ul>
 
 

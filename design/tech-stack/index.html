@@ -1333,17 +1333,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#renderer-forward-plus" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Renderer: Forward Plus
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#language-gdscript" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1355,13 +1344,63 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#pixel-art-tooling" class="md-nav__link">
+  <a href="#renderer-targets" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Pixel Art Tooling
+        Renderer Targets
       
     </span>
   </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3d-asset-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3D Asset Pipeline
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3D Asset Pipeline">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#modeling-animation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Modeling &amp; Animation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#textures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Textures
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#early-prototype-bridge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Early Prototype Bridge
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1398,15 +1437,14 @@
 
 <h1 id="tech-stack">Tech Stack<a class="headerlink" href="#tech-stack" title="Permanent link">&para;</a></h1>
 <h2 id="engine-godot-4">Engine: Godot 4<a class="headerlink" href="#engine-godot-4" title="Permanent link">&para;</a></h2>
-<p><strong>Version: 4.6</strong> (pinned — matches <code>game/project.godot</code>)</p>
-<p>Chosen for the project's specific shape: isometric 3D ARPG with real-time dynamic lighting, horde-scale entities, Steam-first with future mobile and multiplayer.</p>
+<p>Chosen for the project's specific shape: fixed-camera low-poly 3D ARPG, heavy dynamic lighting, horde-scale entities, Steam-first with future mobile and multiplayer.</p>
 <p><strong>Why Godot:</strong></p>
 <ul>
-<li>Strong 3D pipeline with Forward Plus renderer for desktop targets</li>
-<li>Native mobile export (Android/iOS) via the Mobile or Compatibility renderer when the port phase begins</li>
-<li>Built-in high-level multiplayer API</li>
+<li>Forward+ renderer gives modern PBR, SDFGI (real-time global illumination), volumetric fog, screen-space reflections, and decals — the feature set the neon-noir lighting design depends on</li>
+<li>Mobile renderer path exists in the same engine (for the eventual mobile port — treated as lower fidelity, not a separate art pipeline)</li>
+<li>Native mobile export (Android/iOS) and built-in high-level multiplayer API</li>
 <li>Free, open source, no licensing risk</li>
-<li>Active community and fast-improving editor</li>
+<li>Active community and a fast-improving editor</li>
 </ul>
 <p><strong>What was considered:</strong></p>
 <table>
@@ -1419,49 +1457,74 @@
 <tbody>
 <tr>
 <td>Unity</td>
-<td>Weaker trust post-2023 licensing changes, heavier weight</td>
+<td>Heavier-weight, licensing trust damaged post-2023</td>
+</tr>
+<tr>
+<td>Unreal</td>
+<td>Overkill for stylized low-poly; asset pipeline and engine complexity much higher; harder to ship to mobile at fidelity parity</td>
 </tr>
 <tr>
 <td>Bevy (Rust)</td>
-<td>Best peak performance, but immature tooling and high friction</td>
-</tr>
-<tr>
-<td>MonoGame / FNA</td>
-<td>Too low level — building an engine before building the game</td>
+<td>Immature tooling and high friction without prior Rust experience</td>
 </tr>
 </tbody>
 </table>
 <hr />
-<h2 id="renderer-forward-plus">Renderer: Forward Plus<a class="headerlink" href="#renderer-forward-plus" title="Permanent link">&para;</a></h2>
-<p>The current renderer is <strong>Forward Plus</strong> — Godot's full-featured desktop renderer. Correct for the initial Steam release.</p>
-<p><strong>Mobile note:</strong> Forward Plus does not support mobile export. When the Android/iOS port phase begins, the renderer will need to switch to <strong>Mobile</strong> or <strong>Compatibility</strong>. Architecture decisions should not assume Forward Plus features unavailable on those renderers. When in doubt, prefer approaches that work across all three.</p>
-<hr />
 <h2 id="language-gdscript">Language: GDScript<a class="headerlink" href="#language-gdscript" title="Permanent link">&para;</a></h2>
-<p>GDScript is the default. Python-like syntax, tight editor integration, no compile step, fast iteration.</p>
-<p><strong>Performance escape hatch:</strong> if profiling shows entity simulation can't hit horde-density targets in GDScript, hot paths can move to C# or GDExtension (C++ / Rust). This is a deliberate later optimization, not an upfront architectural choice.</p>
+<p>GDScript is the default. It's Python-like, integrates tightly with the editor, and is approachable for someone coming from JavaScript. No compile step, fast iteration.</p>
+<p><strong>Performance escape hatch:</strong> if profiling shows the entity simulation or rendering can't hit horde-density targets in GDScript, hot paths can be moved to C# or to GDExtension (C++ / Rust). This is a deliberate later optimization, not an upfront architectural choice.</p>
 <hr />
-<h2 id="pixel-art-tooling">Pixel Art Tooling<a class="headerlink" href="#pixel-art-tooling" title="Permanent link">&para;</a></h2>
-<p><a href="https://www.aseprite.org/">Aseprite</a> — used for <strong>dialog portraits only</strong>. The game is fully 3D; pixel art is scoped to the portrait system described in <a href="../dialog-ui/">Dialog &amp; UI</a>.</p>
-<hr />
-<h2 id="versions">Versions<a class="headerlink" href="#versions" title="Permanent link">&para;</a></h2>
+<h2 id="renderer-targets">Renderer Targets<a class="headerlink" href="#renderer-targets" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
-<th>Tool</th>
-<th>Version</th>
+<th>Platform</th>
+<th>Renderer</th>
+<th>Notes</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>Godot</td>
-<td>4.6 (pinned in <code>game/project.godot</code>)</td>
+<td><strong>PC (Steam)</strong></td>
+<td>Forward+</td>
+<td>Full PBR, SDFGI, volumetrics, dynamic shadows. The identity look.</td>
 </tr>
 <tr>
-<td>Aseprite</td>
-<td>Latest</td>
+<td><strong>PC (low-end)</strong></td>
+<td>Forward+ with reduced effects</td>
+<td>SDFGI off, fewer dynamic lights, lower shadow resolution. Still the same visual language.</td>
+</tr>
+<tr>
+<td><strong>Mobile</strong></td>
+<td>Mobile renderer</td>
+<td>Baked lighting where possible, limited dynamic lights, no volumetrics. Same game, lower fidelity.</td>
 </tr>
 </tbody>
 </table>
+<p><strong>Performance pillars to hold:</strong>
+- Disciplined dynamic-light culling from the start — hordes + many dynamic lights is the danger combo
+- Poly-budget per character kept low; surface detail from normal/roughness/emissive textures instead
+- Object pooling for entities and VFX
+- LOD on static world meshes where horde views are wide</p>
+<hr />
+<h2 id="3d-asset-pipeline">3D Asset Pipeline<a class="headerlink" href="#3d-asset-pipeline" title="Permanent link">&para;</a></h2>
+<h3 id="modeling-animation">Modeling &amp; Animation<a class="headerlink" href="#modeling-animation" title="Permanent link">&para;</a></h3>
+<p><a href="https://www.blender.org/">Blender</a> is the long-term tool for modeling, UV work, rigging, and animation. Free and open source, strong Godot interop (glTF export), large learning resources.</p>
+<h3 id="textures">Textures<a class="headerlink" href="#textures" title="Permanent link">&para;</a></h3>
+<ul>
+<li>PBR material authoring: substance-style workflow (base color, metallic, roughness, normal, emissive). Any tool producing glTF-compatible PBR maps is fine.</li>
+<li>2D pixel tooling (<a href="https://www.aseprite.org/">Aseprite</a>) still useful for UI icons, decals, emissive patterns, and hand-painted texture work.</li>
+</ul>
+<h3 id="early-prototype-bridge">Early Prototype Bridge<a class="headerlink" href="#early-prototype-bridge" title="Permanent link">&para;</a></h3>
+<p>Until custom art is ready, curated asset packs (Synty, Kenney, Quaternius, or paid low-poly cyberpunk packs) can fill in placeholder models. These are <strong>temporary</strong> — final art must be style-consistent and should not mix sources without deliberate unification.</p>
+<hr />
+<h2 id="versions">Versions<a class="headerlink" href="#versions" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Godot:</strong> latest stable 4.x</li>
+<li><strong>Blender:</strong> latest LTS</li>
+<li><strong>Aseprite:</strong> latest</li>
+</ul>
+<p>Locked versions and reproducible-build details will be tracked once the project has a stable <code>project.godot</code> and CI pipeline.</p>
 
 
 
