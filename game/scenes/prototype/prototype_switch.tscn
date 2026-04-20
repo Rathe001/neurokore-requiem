@@ -1,0 +1,31 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/prototype/prototype_switch.gd" id="1_script"]
+
+[sub_resource type="StandardMaterial3D" id="mat_switch_housing"]
+albedo_color = Color(0.1, 0.1, 0.12, 1)
+metallic = 0.7
+roughness = 0.35
+
+[sub_resource type="BoxMesh" id="mesh_switch_housing"]
+material = SubResource("mat_switch_housing")
+size = Vector3(0.4, 1.4, 0.6)
+
+[sub_resource type="BoxShape3D" id="shape_switch_housing"]
+size = Vector3(0.4, 1.4, 0.6)
+
+[sub_resource type="BoxMesh" id="mesh_switch_lamp"]
+size = Vector3(0.05, 0.3, 0.4)
+
+[node name="Switch" type="StaticBody3D"]
+script = ExtResource("1_script")
+
+[node name="Mesh" type="MeshInstance3D" parent="."]
+mesh = SubResource("mesh_switch_housing")
+
+[node name="Collision" type="CollisionShape3D" parent="."]
+shape = SubResource("shape_switch_housing")
+
+[node name="Lamp" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.225, 0, 0)
+mesh = SubResource("mesh_switch_lamp")

@@ -18,6 +18,7 @@ func _ready() -> void:
 	_register_keys(&"skill_4", [KEY_4])
 	_register_keys(&"skill_q", [KEY_Q])
 	_register_keys(&"skill_e", [KEY_E])
+	_register_keys(&"interact", [KEY_F])
 	_register_keys(&"toggle_inventory", [KEY_I, KEY_C])
 	_register_keys(&"toggle_fullscreen", [KEY_F11])
 	_register_keys(&"toggle_debug_panel", [KEY_F3])

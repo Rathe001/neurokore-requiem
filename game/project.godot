@@ -64,3 +64,10 @@ move_right={
 
 textures/canvas_textures/default_texture_filter=0
 environment/defaults/default_clear_color=Color(0.05, 0.05, 0.08, 1)
+
+[shader_globals]
+
+player_world_pos={
+"type": "vec3",
+"value": Vector3(0, 0, 0)
+}

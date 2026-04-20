@@ -10,7 +10,12 @@
       "Bash(where godot.exe)",
       "Read(//c/Program Files/**)",
       "Read(//c/Program Files \\(x86\\)/**)",
-      "Read(//c/Users/josh/scoop/apps/**)"
+      "Read(//c/Users/josh/scoop/apps/**)",
+      "Bash(rm -rf scenes/entities scenes/levels scripts/entities scripts/util scripts/world)",
+      "Bash(rm -f scenes/world/world.tscn scenes/world/switch.tscn scenes/world/zone_exit.tscn scenes/ui/hud.tscn scenes/ui/health_bar.tscn scripts/ui/hud.gd scripts/ui/hud.gd.uid scripts/ui/health_bar.gd scripts/ui/health_bar.gd.uid scripts/skills/attack_indicator.gd scripts/skills/attack_indicator.gd.uid scripts/systems/game_state.gd scripts/systems/game_state.gd.uid resources/skills/enemy_melee.tres resources/skills/enemy_melee.tres.uid)",
+      "Bash(python -c 'from PIL import Image; im=Image.open\\('\\\\''__TRACKED_VAR__'\\\\''\\); print\\('\\\\''__TRACKED_VAR__'\\\\'', im.size\\)')",
+      "Bash(python3 -c \"from PIL import Image; im=Image.open\\('C:/Users/josh/Projects/neurokore-requiem/docs/reference/mockups/classes/human/ui.png'\\); print\\(im.size\\)\")",
+      "Bash(python -c \"from PIL import Image; im=Image.open\\('C:/Users/josh/Projects/neurokore-requiem/docs/reference/mockups/classes/human/ui.png'\\); print\\(im.size\\)\")"
     ]
   }
 }

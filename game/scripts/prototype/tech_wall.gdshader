@@ -1,4 +1,7 @@
 shader_type spatial;
+render_mode blend_mix, depth_prepass_alpha;
+
+global uniform vec3 player_world_pos;
 
 uniform vec3 base_color : source_color = vec3(0.17, 0.18, 0.20);
 uniform vec3 seam_color : source_color = vec3(0.03, 0.035, 0.04);
@@ -11,11 +14,19 @@ uniform float panel_variation : hint_range(0.0, 0.1) = 0.025;
 uniform float metallic_val : hint_range(0.0, 1.0) = 0.35;
 uniform float roughness_base : hint_range(0.0, 1.0) = 0.55;
 uniform float roughness_seam : hint_range(0.0, 1.0) = 0.85;
+uniform float fade_inner : hint_range(0.0, 5.0) = 1.0;
+uniform float fade_outer : hint_range(0.0, 10.0) = 2.5;
+
+varying vec3 world_pos;
 
 float hash(vec2 p) {
 	p = fract(p * vec2(123.34, 456.21));
 	p += dot(p, p + 45.32);
 	return fract(p.x * p.y);
+}
+
+void vertex() {
+	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
 
 void fragment() {
@@ -34,7 +45,18 @@ void fragment() {
 
 	vec3 col = mix(panel, seam_color, seam);
 
+	// Camera-space line-of-sight occlusion fade.
+	// Only fade walls that sit between the camera and the player and
+	// overlap the player on screen.
+	vec3 player_view = (VIEW_MATRIX * vec4(player_world_pos, 1.0)).xyz;
+	vec3 frag_view = (VIEW_MATRIX * vec4(world_pos, 1.0)).xyz;
+	float in_front = smoothstep(-0.5, 0.0, frag_view.z - player_view.z);
+	vec2 ss_offset = frag_view.xy - player_view.xy;
+	float ss_dist = length(ss_offset);
+	float fade = mix(1.0, smoothstep(fade_inner, fade_outer, ss_dist), in_front);
+
 	ALBEDO = col;
 	METALLIC = metallic_val;
 	ROUGHNESS = mix(roughness_base, roughness_seam, seam);
+	ALPHA = fade;
 }

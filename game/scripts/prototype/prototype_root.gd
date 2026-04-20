@@ -8,7 +8,7 @@ const SPAWN_MAX_RADIUS := 14.0
 const MAX_CORPSES := 100
 
 const STRUCTURE_NAMES: Array[String] = ["Ground"]
-const STRUCTURE_PREFIXES: Array[String] = ["Wall", "Sconce"]
+const STRUCTURE_PREFIXES: Array[String] = ["Wall", "Sconce", "Door"]
 
 var _corpses: Array[Node3D] = []
 

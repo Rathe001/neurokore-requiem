@@ -8,6 +8,8 @@ signal died
 const KNOCKBACK_DURATION := 0.15
 const DEATH_HOLD := 0.9
 const RESPAWN_DELAY := 1.0
+const INTERACT_RANGE_SQ := 6.25
+const PLAYER_WORLD_POS_PARAM := &"player_world_pos"
 
 const SKILL_INPUTS: Array[StringName] = [
 	&"attack_single",
@@ -74,6 +76,8 @@ func _apply_class_appearance() -> void:
 	mat.albedo_color = UIThemeState.palette.player_color
 	mat.metallic = 0.1
 	mat.roughness = 0.6
+	mat.no_depth_test = true
+	mat.render_priority = 1
 	_tint_meshes(visual, mat)
 
 func _tint_meshes(node: Node, mat: Material) -> void:
@@ -107,6 +111,9 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 			_knockback_remain = KNOCKBACK_DURATION
 	if _health <= 0:
 		_die()
+
+func _process(_delta: float) -> void:
+	RenderingServer.global_shader_parameter_set(PLAYER_WORLD_POS_PARAM, global_position)
 
 func _physics_process(delta: float) -> void:
 	if not _alive:
@@ -148,6 +155,28 @@ func _physics_process(delta: float) -> void:
 			_play_anim(ANIM_IDLE)
 
 	_handle_skill_input()
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not _alive:
+		return
+	if event.is_action_pressed(&"interact"):
+		if _is_any_modal_open() or _is_mouse_over_ui():
+			return
+		_try_interact()
+
+func _try_interact() -> void:
+	var nearest: Node = null
+	var nearest_d2: float = INF
+	for n in get_tree().get_nodes_in_group(&"interactables"):
+		if not (n is Node3D):
+			continue
+		var n3 := n as Node3D
+		var d2: float = global_position.distance_squared_to(n3.global_position)
+		if d2 <= INTERACT_RANGE_SQ and d2 < nearest_d2:
+			nearest_d2 = d2
+			nearest = n
+	if nearest != null and nearest.has_method(&"interact"):
+		nearest.interact(self)
 
 func _handle_skill_input() -> void:
 	if _attacking:
