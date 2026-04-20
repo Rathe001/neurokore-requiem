@@ -513,10 +513,32 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#style" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Style
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#camera-perspective" class="md-nav__link">
     <span class="md-ellipsis">
       
         Camera &amp; Perspective
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#portraits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Portraits
       
     </span>
   </a>
@@ -1402,10 +1424,32 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#style" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Style
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#camera-perspective" class="md-nav__link">
     <span class="md-ellipsis">
       
         Camera &amp; Perspective
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#portraits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Portraits
       
     </span>
   </a>
@@ -1445,24 +1489,30 @@
 
 <h1 id="art-style">Art Style<a class="headerlink" href="#art-style" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Note:</strong> The reference image below is a Midjourney-generated concept placeholder. It is directional only and will be replaced with commissioned artist work when the project is further along.</p>
+<p><strong>Note:</strong> Reference images in this file are Midjourney-generated concept placeholders — directional for mood, color, and tone only. They will be replaced with commissioned work as the project matures.</p>
 </blockquote>
 <p><img alt="World environment mockup" src="../../reference/mockups/world1.png" /></p>
+<h2 id="style">Style<a class="headerlink" href="#style" title="Permanent link">&para;</a></h2>
+<p>The game is <strong>fully 3D</strong>. Pixel art is used exclusively for <a href="../../design/dialog-ui/">dialog portraits</a>.</p>
 <ul>
-<li><strong>Style:</strong> Isometric pixel art — modern fidelity, not chunky retro. Slightly more pixelated than the reference mockup above.</li>
-<li><strong>Palette:</strong> Dark, desaturated base with neon pops. Teal/cyan dominant, hot pink and red as accent colors. Wet-street reflections on ground surfaces.</li>
-<li><strong>Lighting:</strong> Real-time dynamic lighting — sprites receive light rather than baking it into textures. Neon signs, explosions, and spells cast actual light into the environment.</li>
-<li><strong>Animation:</strong> ~25fps sprite animation in the Diablo 2 tradition. Weighted, deliberate feel.</li>
-<li><strong>Bosses:</strong> Large-scale pixel art enemies — the small player character scale makes oversized bosses highly readable and impactful.</li>
+<li><strong>Palette:</strong> Dark, desaturated base with deliberate color pops. Teal/cyan dominant, hot pink and red as accent colors. Wet-surface reflections on ground geometry.</li>
+<li><strong>Lighting:</strong> Real-time dynamic 3D lighting. Light sources cast actual light into the environment — ability effects, explosions, and environmental sources all contribute. See <a href="../lighting/">Lighting</a> for the full system.</li>
+<li><strong>Tone:</strong> Gritty and lived-in. Not clean sci-fi — corroded, patched, abandoned. The world looks like it has been running without maintenance for years.</li>
+<li><strong>Bosses:</strong> Large-scale enemies. The relatively small player character scale makes oversized bosses readable and impactful at any screen size.</li>
 </ul>
+<hr />
 <h2 id="camera-perspective">Camera &amp; Perspective<a class="headerlink" href="#camera-perspective" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Projection:</strong> Fixed isometric.</li>
-<li><strong>Occlusion:</strong> Any geometry that would obscure the player character (walls, roofs, structures) becomes transparent. The player is always visible.</li>
-<li><strong>No rotation or zoom</strong> (fixed camera).</li>
+<li><strong>Projection:</strong> Fixed isometric — an orthographic or near-orthographic 3D camera at a fixed angle.</li>
+<li><strong>Occlusion:</strong> Geometry obscuring the player character (walls, ceilings, structures) becomes transparent via shader. The player is always visible.</li>
+<li><strong>No rotation or zoom</strong> — fixed camera. The player never controls the camera.</li>
 </ul>
+<hr />
+<h2 id="portraits">Portraits<a class="headerlink" href="#portraits" title="Permanent link">&para;</a></h2>
+<p>Dialog portraits are the only pixel art in the game. See <a href="../../design/dialog-ui/">Dialog &amp; UI</a> for the full portrait spec — format, animation states, and spec-specific effects.</p>
+<hr />
 <h2 id="class-spec-color-language">Class &amp; Spec Color Language<a class="headerlink" href="#class-spec-color-language" title="Permanent link">&para;</a></h2>
-<p>Each class and spec has a consistent color identity used across sprites, UI, ability effects, and enemy design. Established through concept art — treat as a visual consistency guide.</p>
+<p>Each class and spec has a consistent color identity applied across 3D materials, ability particle effects, UI, resource meters, and portrait rim lighting.</p>
 <table>
 <thead>
 <tr>
@@ -1505,7 +1555,6 @@
 </tr>
 </tbody>
 </table>
-<p>This color language should carry through to ability particle effects, resource meter colors, portrait rim lighting, and spec-specific UI elements.</p>
 
 
 

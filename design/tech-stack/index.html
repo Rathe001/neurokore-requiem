@@ -1333,6 +1333,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#renderer-forward-plus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Renderer: Forward Plus
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#language-gdscript" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1387,14 +1398,15 @@
 
 <h1 id="tech-stack">Tech Stack<a class="headerlink" href="#tech-stack" title="Permanent link">&para;</a></h1>
 <h2 id="engine-godot-4">Engine: Godot 4<a class="headerlink" href="#engine-godot-4" title="Permanent link">&para;</a></h2>
-<p>Chosen for the project's specific shape: isometric pixel-art ARPG, 2D dynamic lighting with normal maps, horde-scale entities, Steam-first with future mobile and multiplayer.</p>
+<p><strong>Version: 4.6</strong> (pinned — matches <code>game/project.godot</code>)</p>
+<p>Chosen for the project's specific shape: isometric 3D ARPG with real-time dynamic lighting, horde-scale entities, Steam-first with future mobile and multiplayer.</p>
 <p><strong>Why Godot:</strong></p>
 <ul>
-<li>2D pipeline is first-class — not bolted on top of a 3D engine</li>
-<li>Light2D + normal-mapped sprites cover the lighting requirements out of the box</li>
-<li>Native mobile export (Android/iOS) and built-in high-level multiplayer API</li>
+<li>Strong 3D pipeline with Forward Plus renderer for desktop targets</li>
+<li>Native mobile export (Android/iOS) via the Mobile or Compatibility renderer when the port phase begins</li>
+<li>Built-in high-level multiplayer API</li>
 <li>Free, open source, no licensing risk</li>
-<li>Active community and a fast-improving editor</li>
+<li>Active community and fast-improving editor</li>
 </ul>
 <p><strong>What was considered:</strong></p>
 <table>
@@ -1407,32 +1419,49 @@
 <tbody>
 <tr>
 <td>Unity</td>
-<td>Heavier-weight, weaker native 2D story, licensing trust damaged post-2023</td>
+<td>Weaker trust post-2023 licensing changes, heavier weight</td>
 </tr>
 <tr>
 <td>Bevy (Rust)</td>
-<td>Best peak performance, but immature tooling and high friction without prior Rust experience</td>
+<td>Best peak performance, but immature tooling and high friction</td>
 </tr>
 <tr>
 <td>MonoGame / FNA</td>
-<td>Too low level — would mean building an engine before building the game</td>
+<td>Too low level — building an engine before building the game</td>
 </tr>
 </tbody>
 </table>
 <hr />
+<h2 id="renderer-forward-plus">Renderer: Forward Plus<a class="headerlink" href="#renderer-forward-plus" title="Permanent link">&para;</a></h2>
+<p>The current renderer is <strong>Forward Plus</strong> — Godot's full-featured desktop renderer. Correct for the initial Steam release.</p>
+<p><strong>Mobile note:</strong> Forward Plus does not support mobile export. When the Android/iOS port phase begins, the renderer will need to switch to <strong>Mobile</strong> or <strong>Compatibility</strong>. Architecture decisions should not assume Forward Plus features unavailable on those renderers. When in doubt, prefer approaches that work across all three.</p>
+<hr />
 <h2 id="language-gdscript">Language: GDScript<a class="headerlink" href="#language-gdscript" title="Permanent link">&para;</a></h2>
-<p>GDScript is the default. It's Python-like, integrates tightly with the editor, and is approachable for someone coming from JavaScript. No compile step, fast iteration.</p>
-<p><strong>Performance escape hatch:</strong> if profiling shows the entity simulation can't hit horde-density targets in GDScript, hot paths can be moved to C# or to GDExtension (C++ / Rust). This is a deliberate later optimization, not an upfront architectural choice.</p>
+<p>GDScript is the default. Python-like syntax, tight editor integration, no compile step, fast iteration.</p>
+<p><strong>Performance escape hatch:</strong> if profiling shows entity simulation can't hit horde-density targets in GDScript, hot paths can move to C# or GDExtension (C++ / Rust). This is a deliberate later optimization, not an upfront architectural choice.</p>
 <hr />
 <h2 id="pixel-art-tooling">Pixel Art Tooling<a class="headerlink" href="#pixel-art-tooling" title="Permanent link">&para;</a></h2>
-<p><a href="https://www.aseprite.org/">Aseprite</a> — industry standard for pixel art and sprite animation. Used for any in-house sprite work and for editing commissioned art.</p>
+<p><a href="https://www.aseprite.org/">Aseprite</a> — used for <strong>dialog portraits only</strong>. The game is fully 3D; pixel art is scoped to the portrait system described in <a href="../dialog-ui/">Dialog &amp; UI</a>.</p>
 <hr />
 <h2 id="versions">Versions<a class="headerlink" href="#versions" title="Permanent link">&para;</a></h2>
-<ul>
-<li><strong>Godot:</strong> latest stable 4.x</li>
-<li><strong>Aseprite:</strong> latest</li>
-</ul>
-<p>Locked versions and reproducible-build details will be tracked once the project has a <code>project.godot</code> and CI pipeline.</p>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>Version</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Godot</td>
+<td>4.6 (pinned in <code>game/project.godot</code>)</td>
+</tr>
+<tr>
+<td>Aseprite</td>
+<td>Latest</td>
+</tr>
+</tbody>
+</table>
 
 
 
