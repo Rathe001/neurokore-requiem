@@ -1421,6 +1421,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#infrastructure-in-place" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Infrastructure In Place
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#what-we-defer" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1566,6 +1577,11 @@ func _attack_single() -&gt; void: ...
 <li>Each reusable entity (player, enemy type, projectile) should eventually live in its own scene file so it can be instanced. The current world scene has enemies inline as a prototype shortcut — extract to standalone scenes when we have more than one enemy type or need to spawn at runtime.</li>
 </ul>
 <hr />
+<h2 id="infrastructure-in-place">Infrastructure In Place<a class="headerlink" href="#infrastructure-in-place" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Spatial partitioning</strong> — <code>SpatialGrid</code> autoload provides O(nearby) proximity queries for combat, pickups, and interactables. All entities register/unregister themselves; the grid updates positions each physics frame. Use <code>SpatialGrid.query_radius()</code>, <code>query_cone()</code>, or <code>query_nearest()</code> instead of <code>get_nodes_in_group()</code> for proximity-dependent logic.</li>
+<li><strong>Object pooling</strong> — <code>EntityPool</code> autoload recycles <code>Node3D</code> instances. Use <code>EntityPool.acquire(scene)</code> / <code>EntityPool.release(node)</code> instead of <code>instantiate()</code> / <code>queue_free()</code> for frequently spawned entities (enemies, projectiles, pickups). Pooled entities must implement a <code>reset()</code> method to re-initialize state.</li>
+</ul>
 <h2 id="what-we-defer">What We Defer<a class="headerlink" href="#what-we-defer" title="Permanent link">&para;</a></h2>
 <p>These are reasonable patterns we may adopt later. Listed here so we don't forget — not in place now to avoid premature abstraction.</p>
 <ul>
