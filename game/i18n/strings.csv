@@ -92,6 +92,7 @@ DEBUG_START_POS,Start pos:
 DEBUG_START_CR,Start cr:
 HUD_HOTKEY_HINTS,(F1) +25  (F2) Clear  (F3) Debug
 HUD_BANNER_DIED,You died
+HUD_BANNER_NO_LIGHT,I wish I had a light...
 HUD_CREDITS_FORMAT,%d cr
 HUD_DEBUG_OVERLAY_FORMAT,"FPS: %d  (%.1f ms)\nEnemies: %d\nCorpses: %d\nPickups: %d\nStructures: %d\nTotal nodes: %d"
 PICK_LABEL_FORMAT,%s / %s

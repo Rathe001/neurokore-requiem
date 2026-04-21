@@ -10,6 +10,7 @@ var empty_label_text: String = ""
 
 var _empty_label: Label
 var _glyph: Label
+var _is_drag_source: bool = false
 
 func configure_equipment(id: StringName, empty_text: String, accepts: StringName = &"") -> void:
 	role = Role.EQUIPMENT
@@ -102,6 +103,10 @@ func _on_inventory_changed(index: int) -> void:
 func _notification(what: int) -> void:
 	if what != NOTIFICATION_DRAG_END:
 		return
+	var was_source := _is_drag_source
+	_is_drag_source = false
+	if not was_source:
+		return
 	if get_viewport().gui_is_drag_successful():
 		return
 	var mouse := get_viewport().get_mouse_position()
@@ -119,6 +124,7 @@ func _get_drag_data(_pos: Vector2) -> Variant:
 	var item := current_item()
 	if item == null:
 		return null
+	_is_drag_source = true
 	var preview := Label.new()
 	preview.text = item.glyph
 	preview.add_theme_font_size_override(&"font_size", 24)

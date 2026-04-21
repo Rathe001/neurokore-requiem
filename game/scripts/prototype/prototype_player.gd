@@ -5,6 +5,7 @@ signal health_changed(current: int, max_value: int)
 signal resource_changed(current: int, max_value: int)
 signal credits_changed(amount: int)
 signal died
+signal notification_requested(text: String)
 
 const ITEM_PICKUP_SCENE: PackedScene = preload("res://scenes/prototype/prototype_item_pickup.tscn")
 
@@ -27,6 +28,8 @@ const SKILL_INPUTS: Array[StringName] = [
 
 const ANIM_IDLE: Array[StringName] = [&"Idle_Loop", &"Idle_Normal", &"Idle", &"IDLE_NORMAL"]
 const ANIM_RUN: Array[StringName] = [&"Jog_Fwd_Loop", &"Walk_Loop", &"Jog_Fwd", &"Walk_Normal", &"JOG_FWD", &"WALK_NORMAL"]
+const ANIM_CROUCH_IDLE: Array[StringName] = [&"Crouch_Idle_Loop"]
+const ANIM_CROUCH_MOVE: Array[StringName] = [&"Crouch_Fwd_Loop"]
 const ANIM_ATTACK: Array[StringName] = [&"Sword_Attack", &"Punch_Cross", &"SWORD_ATTACK", &"PUNCH_CROSS"]
 const ANIM_DEATH: Array[StringName] = [
 	&"Death01", &"Death_1", &"Death_2", &"Death_A", &"Death_B", &"Death",
@@ -34,14 +37,19 @@ const ANIM_DEATH: Array[StringName] = [
 	&"DEATH_1", &"DEATH_2", &"DEATH",
 ]
 
+const CROUCH_SPEED_FACTOR := 0.45
+const STAND_HEIGHT := 1.6
+const CROUCH_HEIGHT := 0.9
+
 @export var move_speed: float = 6.0
-@export var accel: float = 50.0
+@export var accel: float = 200.0
 @export var max_health: int = 100
 @export var skills: Array[Skill] = []
 @export var resource_pool: ResourcePool
 
 @onready var visual: Node3D = $Visual
 @onready var anim_player: AnimationPlayer = $Visual/Character/AnimationPlayer
+@onready var _collision: CollisionShape3D = $Collision
 
 const FLASHLIGHT_OFFSET := Vector3(0, 1.4, -0.3)
 const FLASHLIGHT_MAX_PITCH_DEG := 82.0
@@ -69,6 +77,8 @@ var _credits: int = 0
 var _death_tween: Tween
 var _flashlight: SpotLight3D
 var _anim_reverse: bool = false
+var _light_on: bool = false
+var _crouching: bool = false
 
 func _ready() -> void:
 	_camera = get_viewport().get_camera_3d()
@@ -80,6 +90,8 @@ func _ready() -> void:
 	_health = max_health
 	_ensure_loop(ANIM_IDLE)
 	_ensure_loop(ANIM_RUN)
+	_ensure_loop(ANIM_CROUCH_IDLE)
+	_ensure_loop(ANIM_CROUCH_MOVE)
 	_play_anim(ANIM_IDLE)
 	_apply_class_appearance()
 	_build_flashlight()
@@ -130,6 +142,7 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 
 func _process(_delta: float) -> void:
 	RenderingServer.global_shader_parameter_set(PLAYER_WORLD_POS_PARAM, global_position)
+	_update_interact_cursor()
 
 func _physics_process(delta: float) -> void:
 	if not _alive:
@@ -157,9 +170,13 @@ func _physics_process(delta: float) -> void:
 			var cam_right := _flatten(_camera.global_transform.basis.x)
 			wish_dir = (cam_right * input_vec.x - cam_forward * input_vec.y).normalized()
 		_want_dir = wish_dir
-		var target: Vector3 = wish_dir * move_speed
-		velocity.x = move_toward(velocity.x, target.x, accel * delta)
-		velocity.z = move_toward(velocity.z, target.z, accel * delta)
+		var speed := move_speed * (CROUCH_SPEED_FACTOR if _crouching else 1.0)
+		var flat := Vector2(velocity.x, velocity.z)
+		var target := Vector2(wish_dir.x, wish_dir.z) * speed
+		var step := accel * (1.0 if wish_dir.length_squared() > 0.0 else 2.5) * delta
+		flat = flat.move_toward(target, step)
+		velocity.x = flat.x
+		velocity.z = flat.z
 	velocity.y = 0.0
 	move_and_slide()
 
@@ -169,11 +186,14 @@ func _physics_process(delta: float) -> void:
 			_face_direction(offset.normalized())
 			_update_flashlight_pitch(offset.length())
 		if _want_dir.length_squared() > 0.01:
-			var facing := -visual.global_transform.basis.z
-			var backing := _want_dir.dot(facing) < -0.3
-			_play_anim(ANIM_RUN, -1.0 if backing else 1.0, 0.15)
+			if _crouching:
+				_play_anim(ANIM_CROUCH_MOVE, 1.0, 0.15)
+			else:
+				var facing := -visual.global_transform.basis.z
+				var backing := _want_dir.dot(facing) < -0.3
+				_play_anim(ANIM_RUN, -1.0 if backing else 1.0, 0.15)
 		else:
-			_play_anim(ANIM_IDLE, 1.0, 0.15)
+			_play_anim(ANIM_CROUCH_IDLE if _crouching else ANIM_IDLE, 1.0, 0.15)
 
 	_handle_skill_input()
 
@@ -184,6 +204,16 @@ func _unhandled_input(event: InputEvent) -> void:
 		if _is_any_modal_open() or _is_mouse_over_ui():
 			return
 		_try_interact()
+	elif event.is_action_pressed(&"toggle_light"):
+		if InventoryState.get_equipped(&"light") != null:
+			_light_on = not _light_on
+			_apply_light_item()
+		else:
+			notification_requested.emit(tr("HUD_BANNER_NO_LIGHT"))
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed(&"crouch"):
+		_set_crouch(not _crouching)
+		get_viewport().set_input_as_handled()
 
 func _try_interact() -> void:
 	var interact_range := sqrt(INTERACT_RANGE_SQ)
@@ -370,8 +400,10 @@ func _build_flashlight() -> void:
 	_apply_light_item()
 
 func _on_equipment_changed(slot: StringName) -> void:
-	if slot == &"light":
-		_apply_light_item()
+	if slot != &"light":
+		return
+	_light_on = InventoryState.get_equipped(&"light") != null
+	_apply_light_item()
 
 func _on_items_overflowed(overflow: Array[Item]) -> void:
 	for displaced_item in overflow:
@@ -394,7 +426,7 @@ func _apply_light_item() -> void:
 		_flashlight.light_color = item.light_color
 		_flashlight.light_energy = item.light_energy
 		_flashlight.spot_range = item.light_range
-	_flashlight.visible = item != null
+	_flashlight.visible = item != null and _light_on
 
 func _update_flashlight_pitch(cursor_distance: float) -> void:
 	if _flashlight == null:
@@ -440,6 +472,22 @@ func _ensure_loop(candidates: Array[StringName]) -> void:
 		if anim != null:
 			anim.loop_mode = Animation.LOOP_LINEAR
 		return
+
+func _update_interact_cursor() -> void:
+	if not _alive or _is_any_modal_open():
+		Input.set_default_cursor_shape(Input.CURSOR_ARROW)
+		return
+	var cursor_world := global_position + _cursor_offset()
+	var nearby := SpatialGrid.query_nearest(cursor_world, 1.5, &"interactables")
+	if nearby != null:
+		Input.set_default_cursor_shape(Input.CURSOR_POINTING_HAND)
+	else:
+		Input.set_default_cursor_shape(Input.CURSOR_ARROW)
+
+func _set_crouch(value: bool) -> void:
+	_crouching = value
+	if _collision != null and _collision.shape is CapsuleShape3D:
+		(_collision.shape as CapsuleShape3D).height = CROUCH_HEIGHT if value else STAND_HEIGHT
 
 func _flatten(v: Vector3) -> Vector3:
 	v.y = 0.0

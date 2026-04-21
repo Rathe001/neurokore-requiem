@@ -46,6 +46,8 @@ func _ready() -> void:
 		player.resource_changed.connect(_on_resource_changed)
 	if player.has_signal(&"died"):
 		player.died.connect(_on_player_died)
+	if player.has_signal(&"notification_requested"):
+		player.notification_requested.connect(_on_notification_requested)
 	_on_health_changed(_max_health, _max_health)
 	_bind_skill_slots(player)
 	_bind_resource_pool(player)
@@ -155,6 +157,9 @@ func _on_resource_changed(current: int, max_value: int) -> void:
 
 func _on_player_died() -> void:
 	_show_banner(tr("HUD_BANNER_DIED"), 2.0)
+
+func _on_notification_requested(text: String) -> void:
+	_show_banner(text, 2.5)
 
 func _show_banner(text: String, duration: float) -> void:
 	_banner_token += 1

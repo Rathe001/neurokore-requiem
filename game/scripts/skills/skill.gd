@@ -7,6 +7,7 @@ enum TargetingMode {
 }
 
 @export var display_name: String = ""
+@export var glyph: String = ""
 @export var damage: int = 10
 @export var range: float = 100.0
 @export var cooldown: float = 0.5

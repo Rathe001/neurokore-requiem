@@ -4,6 +4,7 @@ class_name SkillSlot
 @onready var icon: ColorRect = $Icon
 @onready var cooldown_overlay: ColorRect = $CooldownOverlay
 @onready var key_label: Label = $KeyLabel
+@onready var glyph_label: Label = $GlyphLabel
 @onready var background: ColorRect = $Background
 @onready var border: ColorRect = $Border
 @onready var inner: ColorRect = $Inner
@@ -39,8 +40,14 @@ func bind(player: Node, skill: Skill, keybind_label: String) -> void:
 	_skill = skill
 	if skill != null:
 		icon.color = skill.icon_color
+		var has_glyph := skill.glyph != ""
+		glyph_label.text = skill.glyph
+		glyph_label.visible = has_glyph
+		key_label.visible = not has_glyph
 	else:
 		icon.color = UIThemeState.palette.slot_bg
+		glyph_label.visible = false
+		key_label.visible = true
 	key_label.text = keybind_label
 	cooldown_overlay.position.y = 0.0
 	cooldown_overlay.size.y = 0.0

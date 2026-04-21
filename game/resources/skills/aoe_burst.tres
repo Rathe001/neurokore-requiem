@@ -5,6 +5,7 @@
 [resource]
 script = ExtResource("1_skill_script")
 display_name = "AoE Burst"
+glyph = "AoE"
 damage = 15
 range = 5.0
 cooldown = 1.0

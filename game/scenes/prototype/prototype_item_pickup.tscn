@@ -1,6 +1,9 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/prototype/prototype_item_pickup.gd" id="script_item_pickup"]
+
+[sub_resource type="SphereShape3D" id="shape_pickup"]
+radius = 0.5
 
 [node name="PrototypeItemPickup" type="Node3D"]
 script = ExtResource("script_item_pickup")
@@ -17,3 +20,9 @@ vertical_alignment = 1
 outline_size = 8
 alpha_cut = 1
 double_sided = true
+
+[node name="PickupArea" type="Area3D" parent="."]
+position = Vector3(0, 0.5, 0)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="PickupArea"]
+shape = SubResource("shape_pickup")

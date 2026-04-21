@@ -5,6 +5,7 @@
 [resource]
 script = ExtResource("1_skill_script")
 display_name = "Basic Attack"
+glyph = "X"
 damage = 25
 range = 3.5
 cooldown = 0.3
