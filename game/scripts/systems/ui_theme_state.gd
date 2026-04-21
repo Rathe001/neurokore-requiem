@@ -44,6 +44,9 @@ func _refresh() -> void:
 	theme = _build_theme(p)
 	changed.emit()
 
+func get_palette_for(class_id: StringName, spec_id: StringName) -> UIThemeConfig:
+	return _palette_for(class_id, spec_id)
+
 func _palette_for(class_id: StringName, spec_id: StringName) -> UIThemeConfig:
 	if spec_id != &"":
 		var key := StringName("%s/%s" % [class_id, spec_id])

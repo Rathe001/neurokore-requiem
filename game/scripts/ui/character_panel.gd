@@ -4,7 +4,8 @@ const PANEL_SIZE := Vector2(440.0, 500.0)
 const SHEET_HEIGHT := 290.0
 const STATS_POS := Vector2(16.0, 34.0)
 const STATS_SIZE := Vector2(220.0, 140.0)
-const MORALITY_POS := Vector2(16.0, 170.0)
+const ATTR_POS := Vector2(16.0, 158.0)
+const ATTR_WIDTH := 270.0
 const EQUIP_SLOT_SIZE := Vector2(38.0, 38.0)
 const EQUIP_GAP := 4.0
 const EQUIP_COLS := 3
@@ -13,10 +14,8 @@ const UTIL_SLOTS := 4
 const INV_SLOT_SIZE := Vector2(34.0, 34.0)
 const INV_GAP := 3.0
 const INV_COLS := 8
-const MORALITY_SIZE := Vector2(72.0, 72.0)
 
 const BACKDROP_COLOR := Color(0.0, 0.0, 0.0, 0.55)
-const MORALITY_DOT_COLOR := Color(1.0, 0.85, 0.2, 1.0)
 
 const EQUIP_SLOTS: Array[Dictionary] = [
 	{"row": 0, "col": 0, "label_key": "EQUIP_HEAD", "id": &"head", "accepts": &"head"},
@@ -33,6 +32,7 @@ const EQUIP_SLOTS: Array[Dictionary] = [
 var _hp_label: Label
 var _resource_label: Label
 var _credits_label: Label
+var _attr_value_labels: Dictionary = {}
 var _player: Node = null
 var _utility_row: Control = null
 var _utility_slots: Array[ItemSlot] = []
@@ -49,6 +49,7 @@ func _ready() -> void:
 	_bind_player()
 	UIThemeState.changed.connect(_on_theme_changed)
 	InventoryState.capacity_changed.connect(_on_capacity_changed)
+	AttributeState.stats_changed.connect(_on_stats_changed)
 	_refresh_utility_visibility()
 	_rebuild_inventory_grid()
 
@@ -138,15 +139,7 @@ func _build_character_sheet(parent: Control) -> void:
 	_credits_label.add_theme_color_override(&"font_color", p.credits)
 	stats.add_child(_make_stat_row_with_value("CHARACTER_PANEL_CREDITS", _credits_label))
 
-	var morality := _build_morality_plane()
-	morality.position = MORALITY_POS
-	parent.add_child(morality)
-
-	var morality_caption := _make_label("CHARACTER_PANEL_MORALITY", &"SmallLabel")
-	morality_caption.position = Vector2(MORALITY_POS.x, MORALITY_POS.y + MORALITY_SIZE.y + 2.0)
-	morality_caption.size = Vector2(MORALITY_SIZE.x, 12.0)
-	morality_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	parent.add_child(morality_caption)
+	_build_attribute_section(parent)
 
 	var equip_total_width := float(EQUIP_COLS) * EQUIP_SLOT_SIZE.x + float(EQUIP_COLS - 1) * EQUIP_GAP
 	var equip_total_height := float(EQUIP_ROWS) * EQUIP_SLOT_SIZE.y + float(EQUIP_ROWS - 1) * EQUIP_GAP
@@ -248,49 +241,65 @@ func _on_capacity_changed() -> void:
 	_refresh_utility_visibility()
 	_rebuild_inventory_grid()
 
-func _build_morality_plane() -> Control:
-	var p := UIThemeState.palette
-	var root := Control.new()
-	root.size = MORALITY_SIZE
-	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+func _build_attribute_section(parent: Control) -> void:
+	var header := _make_label("CHARACTER_PANEL_ATTRIBUTES", &"SectionLabel")
+	header.position = Vector2(ATTR_POS.x, ATTR_POS.y)
+	header.size = Vector2(ATTR_WIDTH, 14.0)
+	parent.add_child(header)
 
-	var bg := ColorRect.new()
-	bg.color = p.slot_bg
-	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(bg)
+	var grid := HBoxContainer.new()
+	grid.add_theme_constant_override(&"separation", 8)
+	grid.position = Vector2(ATTR_POS.x, ATTR_POS.y + 17.0)
+	grid.size = Vector2(ATTR_WIDTH, 56.0)
+	grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(grid)
 
-	var border := ReferenceRect.new()
-	border.border_color = p.slot_border
-	border.border_width = 1.0
-	border.editor_only = false
-	border.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	border.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(border)
+	var human_col := VBoxContainer.new()
+	human_col.add_theme_constant_override(&"separation", 2)
+	human_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	human_col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	grid.add_child(human_col)
 
-	var axis_color := Color(p.slot_border.r, p.slot_border.g, p.slot_border.b, 0.5)
-	var v_axis := ColorRect.new()
-	v_axis.color = axis_color
-	v_axis.position = Vector2(MORALITY_SIZE.x * 0.5 - 0.5, 4.0)
-	v_axis.size = Vector2(1.0, MORALITY_SIZE.y - 8.0)
-	v_axis.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(v_axis)
+	var cyborg_col := VBoxContainer.new()
+	cyborg_col.add_theme_constant_override(&"separation", 2)
+	cyborg_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cyborg_col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	grid.add_child(cyborg_col)
 
-	var h_axis := ColorRect.new()
-	h_axis.color = axis_color
-	h_axis.position = Vector2(4.0, MORALITY_SIZE.y * 0.5 - 0.5)
-	h_axis.size = Vector2(MORALITY_SIZE.x - 8.0, 1.0)
-	h_axis.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(h_axis)
+	for stat_id in AttributeState.HUMAN_STATS:
+		human_col.add_child(_make_attr_row(stat_id))
+	for stat_id in AttributeState.CYBORG_STATS:
+		cyborg_col.add_child(_make_attr_row(stat_id))
 
-	var dot := ColorRect.new()
-	dot.color = MORALITY_DOT_COLOR
-	dot.size = Vector2(6.0, 6.0)
-	dot.position = Vector2(MORALITY_SIZE.x * 0.5 - 3.0, MORALITY_SIZE.y * 0.5 - 3.0)
-	dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(dot)
+func _make_attr_row(stat_id: StringName) -> HBoxContainer:
+	var color: Color = AttributeState.STAT_COLORS[stat_id]
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override(&"separation", 4)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	return root
+	var name_lbl := Label.new()
+	name_lbl.text = AttributeState.STAT_I18N[stat_id]
+	name_lbl.theme_type_variation = &"SmallLabel"
+	name_lbl.add_theme_font_size_override(&"font_size", 9)
+	name_lbl.add_theme_color_override(&"font_color", color)
+	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(name_lbl)
+
+	var val_lbl := Label.new()
+	val_lbl.text = str(AttributeState.get_stat(stat_id))
+	val_lbl.theme_type_variation = &"SmallLabel"
+	val_lbl.add_theme_font_size_override(&"font_size", 9)
+	val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	val_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(val_lbl)
+
+	_attr_value_labels[stat_id] = val_lbl
+	return row
+
+func _on_stats_changed() -> void:
+	for stat_id: StringName in _attr_value_labels:
+		_attr_value_labels[stat_id].text = str(AttributeState.get_stat(stat_id))
 
 func _make_stat_row(label_text: String, value_text: String) -> HBoxContainer:
 	var value := _make_stat_value(value_text)

@@ -13,62 +13,14 @@ const CARD_ROW_GAP := 6.0
 const PORTRAIT_SIZE := 64.0
 
 const PICKS: Array[Dictionary] = [
-	{
-		"class_id": &"human", "spec_id": &"",
-		"label_key": "STARTUP_PICK_HUMAN",
-		"glyph": "H", "stat": "STAT_SOUL", "opposes": "STAT_INTERFACE",
-		"accent": Color(0.65, 0.45, 0.25, 1),
-		"backstory": "STARTUP_BACKSTORY_HUMAN",
-	},
-	{
-		"class_id": &"cyborg", "spec_id": &"",
-		"label_key": "STARTUP_PICK_CYBORG",
-		"glyph": "C", "stat": "STAT_INTERFACE", "opposes": "STAT_SOUL",
-		"accent": Color(0.3, 0.85, 1.0, 1),
-		"backstory": "STARTUP_BACKSTORY_CYBORG",
-	},
-	{
-		"class_id": &"human", "spec_id": &"survivalist",
-		"label_key": "STARTUP_PICK_HUMAN_SURVIVALIST",
-		"glyph": "S", "stat": "STAT_INGENUITY", "opposes": "STAT_OPTIMIZATION",
-		"accent": Color(0.7, 0.85, 0.35, 1),
-		"backstory": "STARTUP_BACKSTORY_SURVIVALIST",
-	},
-	{
-		"class_id": &"cyborg", "spec_id": &"forged",
-		"label_key": "STARTUP_PICK_CYBORG_FORGED",
-		"glyph": "F", "stat": "STAT_DEVIATION", "opposes": "STAT_ORTHODOXY",
-		"accent": Color(0.9, 0.25, 0.2, 1),
-		"backstory": "STARTUP_BACKSTORY_FORGED",
-	},
-	{
-		"class_id": &"human", "spec_id": &"gentleman",
-		"label_key": "STARTUP_PICK_HUMAN_GENTLEMAN",
-		"glyph": "G", "stat": "STAT_ORTHODOXY", "opposes": "STAT_DEVIATION",
-		"accent": Color(0.95, 0.92, 0.8, 1),
-		"backstory": "STARTUP_BACKSTORY_GENTLEMAN",
-	},
-	{
-		"class_id": &"cyborg", "spec_id": &"automaton",
-		"label_key": "STARTUP_PICK_CYBORG_AUTOMATON",
-		"glyph": "A", "stat": "STAT_OPTIMIZATION", "opposes": "STAT_INGENUITY",
-		"accent": Color(0.55, 0.78, 0.85, 1),
-		"backstory": "STARTUP_BACKSTORY_AUTOMATON",
-	},
-	{
-		"class_id": &"human", "spec_id": &"enculted",
-		"label_key": "STARTUP_PICK_HUMAN_ENCULTED",
-		"glyph": "E", "stat": "STAT_AMBITION", "opposes": "STAT_CLARITY",
-		"accent": Color(0.78, 0.35, 0.85, 1),
-		"backstory": "STARTUP_BACKSTORY_ENCULTED",
-	},
-	{
-		"class_id": &"cyborg", "spec_id": &"polymath",
-		"label_key": "STARTUP_PICK_CYBORG_POLYMATH",
-		"glyph": "P", "stat": "STAT_CLARITY", "opposes": "STAT_AMBITION",
-		"accent": Color(0.95, 0.9, 0.3, 1),
-		"backstory": "STARTUP_BACKSTORY_POLYMATH",
-	},
+	{"class_id": &"human",  "spec_id": &"",           "label_key": "STARTUP_PICK_HUMAN",              "glyph": "H", "stat": "STAT_SOUL",         "opposes": "STAT_INTERFACE",    "backstory": "STARTUP_BACKSTORY_HUMAN"},
+	{"class_id": &"cyborg", "spec_id": &"",           "label_key": "STARTUP_PICK_CYBORG",             "glyph": "C", "stat": "STAT_INTERFACE",     "opposes": "STAT_SOUL",         "backstory": "STARTUP_BACKSTORY_CYBORG"},
+	{"class_id": &"human",  "spec_id": &"survivalist","label_key": "STARTUP_PICK_HUMAN_SURVIVALIST",  "glyph": "S", "stat": "STAT_INGENUITY",     "opposes": "STAT_OPTIMIZATION", "backstory": "STARTUP_BACKSTORY_SURVIVALIST"},
+	{"class_id": &"cyborg", "spec_id": &"forged",     "label_key": "STARTUP_PICK_CYBORG_FORGED",      "glyph": "F", "stat": "STAT_DEVIATION",     "opposes": "STAT_ORTHODOXY",    "backstory": "STARTUP_BACKSTORY_FORGED"},
+	{"class_id": &"human",  "spec_id": &"gentleman",  "label_key": "STARTUP_PICK_HUMAN_GENTLEMAN",    "glyph": "G", "stat": "STAT_ORTHODOXY",     "opposes": "STAT_DEVIATION",    "backstory": "STARTUP_BACKSTORY_GENTLEMAN"},
+	{"class_id": &"cyborg", "spec_id": &"automaton",  "label_key": "STARTUP_PICK_CYBORG_AUTOMATON",   "glyph": "A", "stat": "STAT_OPTIMIZATION",  "opposes": "STAT_INGENUITY",    "backstory": "STARTUP_BACKSTORY_AUTOMATON"},
+	{"class_id": &"human",  "spec_id": &"enculted",   "label_key": "STARTUP_PICK_HUMAN_ENCULTED",     "glyph": "E", "stat": "STAT_AMBITION",      "opposes": "STAT_CLARITY",      "backstory": "STARTUP_BACKSTORY_ENCULTED"},
+	{"class_id": &"cyborg", "spec_id": &"polymath",   "label_key": "STARTUP_PICK_CYBORG_POLYMATH",    "glyph": "P", "stat": "STAT_CLARITY",       "opposes": "STAT_AMBITION",     "backstory": "STARTUP_BACKSTORY_POLYMATH"},
 ]
 
 var _main_panel: Control
@@ -179,9 +131,9 @@ func _build_class_panel() -> void:
 	_class_panel.add_child(back)
 
 func _make_pick_card(entry: Dictionary) -> Button:
-	var accent: Color = entry["accent"]
 	var class_id: StringName = entry["class_id"]
 	var spec_id: StringName = entry["spec_id"]
+	var accent: Color = UIThemeState.get_palette_for(class_id, spec_id).accent
 
 	var card := Button.new()
 	card.custom_minimum_size = CARD_SIZE
