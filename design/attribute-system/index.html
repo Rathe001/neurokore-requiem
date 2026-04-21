@@ -2099,11 +2099,11 @@
 <tr>
 <td>Clarity</td>
 <td>Polymath</td>
-<td>Corruption</td>
+<td>Ambition</td>
 <td>Yes</td>
 </tr>
 <tr>
-<td>Corruption</td>
+<td>Ambition</td>
 <td>Enculted</td>
 <td>Clarity</td>
 <td>Yes</td>
@@ -2157,7 +2157,7 @@
 <td><code>(0.95, 0.9, 0.3)</code></td>
 </tr>
 <tr>
-<td>Corruption</td>
+<td>Ambition</td>
 <td>Purple</td>
 <td><code>(0.78, 0.35, 0.85)</code></td>
 </tr>
@@ -2167,7 +2167,7 @@
 <h3 id="soul-interface-derived-stats">Soul &amp; Interface — Derived Stats<a class="headerlink" href="#soul-interface-derived-stats" title="Permanent link">&para;</a></h3>
 <p>Soul and Interface do not roll on items. They are calculated from the average of the character's three team stats (the three class stats belonging to the same origin).</p>
 <ul>
-<li><strong>Human → Soul</strong> = average of Orthodoxy, Ingenuity, Corruption</li>
+<li><strong>Human → Soul</strong> = average of Orthodoxy, Ingenuity, Ambition</li>
 <li><strong>Cyborg → Interface</strong> = average of Deviation, Optimization, Clarity</li>
 </ul>
 <p>This means Soul/Interface rise naturally as you gear well for your team. They are never chased directly — they are a byproduct of coherent gearing.</p>
@@ -2199,7 +2199,7 @@
 <td>Feeds Soul (averaged)</td>
 </tr>
 <tr>
-<td>Corruption</td>
+<td>Ambition</td>
 <td>equal</td>
 <td>Feeds Soul (averaged)</td>
 </tr>
@@ -2249,7 +2249,7 @@
 <td>Same origin, non-opposing</td>
 </tr>
 <tr>
-<td>Corruption</td>
+<td>Ambition</td>
 <td>0.25x</td>
 <td>Same origin, non-opposing</td>
 </tr>
@@ -2372,7 +2372,7 @@
 <td>TBD</td>
 </tr>
 <tr>
-<td>Corruption</td>
+<td>Ambition</td>
 <td>Enculted</td>
 <td>Yes</td>
 <td>TBD</td>
@@ -2466,7 +2466,7 @@
 <td>TBD</td>
 </tr>
 <tr>
-<td>Corruption</td>
+<td>Ambition</td>
 <td>Enculted</td>
 <td>Tier 1 curse</td>
 <td>TBD</td>
@@ -2507,7 +2507,7 @@
 </tr>
 </tbody>
 </table>
-<p>This means origin class players who start drifting toward a single stat will lose origin perks but begin gaining the specialized class's tier perks instead. A Human who pushes Corruption past 40% starts unlocking Enculted perks while losing Human balance perks — the tradeoff is explicit and visible.</p>
+<p>This means origin class players who start drifting toward a single stat will lose origin perks but begin gaining the specialized class's tier perks instead. A Human who pushes Ambition past 40% starts unlocking Enculted perks while losing Human balance perks — the tradeoff is explicit and visible.</p>
 <h3 id="cross-class-perk-unlocking">Cross-Class Perk Unlocking<a class="headerlink" href="#cross-class-perk-unlocking" title="Permanent link">&para;</a></h3>
 <p><strong>Any class can unlock any stat's tier perks</strong> if they hit the breakpoint — the system does not care which class was chosen. A Human stacking Optimization past 50% gets an Automaton drone. A Gentleman deep in Deviation starts growing mechanical appendages.</p>
 <p>This is possible but <em>difficult</em> for off-origin stats because of negative scaling. A Human stacking Optimization is fighting averaged negative scaling the entire way — every point of Optimization costs more than it would for a Cyborg. The perk is the reward for paying that cost.</p>
@@ -2515,25 +2515,25 @@
 <h3 id="visual-metamorphosis">Visual Metamorphosis<a class="headerlink" href="#visual-metamorphosis" title="Permanent link">&para;</a></h3>
 <p>Character appearance is <strong>dynamically driven by stat distribution</strong>. Each stat contributes its own visual channel independently:</p>
 <ul>
-<li><strong>Modular mesh parts</strong> — appendages, drones, corruption growths, mechanical plating. Swapped/added at tier thresholds.</li>
+<li><strong>Modular mesh parts</strong> — appendages, drones, ambition growths, mechanical plating. Swapped/added at tier thresholds.</li>
 <li><strong>Shader-driven blending</strong> — skin pallor, vein visibility, metallic creep, emissive glow. Driven continuously by stat percentages for smooth transitions between breakpoints.</li>
-<li><strong>Particle/VFX layers</strong> — corruption wisps, electric arcing, heat distortion. Intensity scales with stat %.</li>
+<li><strong>Particle/VFX layers</strong> — ambition wisps, electric arcing, heat distortion. Intensity scales with stat %.</li>
 </ul>
-<p>Because each stat drives its own visual channel, <strong>combo appearances emerge naturally</strong>. A character at 45% Corruption and 42% Deviation shows mild corruption effects AND early machine-creep simultaneously. Opposing stat combos — Orthodoxy and Deviation stacked together — create a character visually at war with themselves.</p>
+<p>Because each stat drives its own visual channel, <strong>combo appearances emerge naturally</strong>. A character at 45% Ambition and 42% Deviation shows mild ambition effects AND early machine-creep simultaneously. Opposing stat combos — Orthodoxy and Deviation stacked together — create a character visually at war with themselves.</p>
 <p>Origin class players who maintain balance look intentionally neutral — no single visual channel dominates. The moment they start drifting, the character model tells that story.</p>
 <h3 id="threshold-vfx">Threshold VFX<a class="headerlink" href="#threshold-vfx" title="Permanent link">&para;</a></h3>
 <p>When a breakpoint is crossed, a class-specific VFX plays on the character model:</p>
 <ul>
-<li><strong>Perk gained</strong> — unique "gained" effect per class (e.g. corruption tendrils coalescing, mechanical plating locking into place)</li>
+<li><strong>Perk gained</strong> — unique "gained" effect per class (e.g. ambition tendrils coalescing, mechanical plating locking into place)</li>
 <li><strong>Perk lost</strong> — unique "lost" effect per class (e.g. tendrils receding, plating fracturing away)</li>
 </ul>
 <p>If a single gear swap causes both a loss and a gain (e.g. dropping Drones III while gaining Curse I), the effects play in sequence: <strong>lost first, gained second</strong>. This keeps the cause-and-effect readable.</p>
 <h3 id="character-sheet-stat-distribution">Character Sheet — Stat Distribution<a class="headerlink" href="#character-sheet-stat-distribution" title="Permanent link">&para;</a></h3>
 <p>The character sheet displays a <strong>stat distribution visualization</strong> showing each attribute's percentage of total stats. This replaces the morality plane (see <a href="../morality-system/">Morality System</a>) as the primary identity readout.</p>
-<p>The distribution view should make current tier perks and proximity to breakpoints visible at a glance. When a stat combination has a recognized identity (e.g. high Corruption + moderate Deviation), the character sheet can display a <strong>combo description</strong> — a short flavor line describing what the character has become.</p>
+<p>The distribution view should make current tier perks and proximity to breakpoints visible at a glance. When a stat combination has a recognized identity (e.g. high Ambition + moderate Deviation), the character sheet can display a <strong>combo description</strong> — a short flavor line describing what the character has become.</p>
 <h3 id="npc-identity-reactions">NPC Identity Reactions<a class="headerlink" href="#npc-identity-reactions" title="Permanent link">&para;</a></h3>
 <p>Key NPCs — reps, vendors, bosses, and gate encounters — can react to the player's <strong>dominant stat identity</strong> rather than their chosen class. This is not a universal system (8 reaction profiles on every NPC would be an authoring nightmare) but a selective tool used on important characters to dynamically tailor the story to player state.</p>
-<p>An Enculted who stacks Orthodoxy gets treated like a Gentleman by NPCs who care about identity. A Human who has visibly drifted into Corruption territory gets reactions appropriate to what they've become, not what they started as. The rep companion is the most sensitive to this — they react to identity drift as a personal betrayal or validation depending on alignment.</p>
+<p>An Enculted who stacks Orthodoxy gets treated like a Gentleman by NPCs who care about identity. A Human who has visibly drifted into Ambition territory gets reactions appropriate to what they've become, not what they started as. The rep companion is the most sensitive to this — they react to identity drift as a personal betrayal or validation depending on alignment.</p>
 <h2 id="opposing-stat-philosophy">Opposing Stat Philosophy<a class="headerlink" href="#opposing-stat-philosophy" title="Permanent link">&para;</a></h2>
 <p>Opposing stats should feel <strong>wrong and disappointing</strong> on an otherwise great item, but not cripple the character unless deliberately stacked. The negative multiplier (-0.25x to -0.5x) is a tax, not a death sentence.</p>
 <p>Design space exists for <strong>build-around uniques</strong> that require stacking your opposing stat and scale off it — forcing the player into "wrong" gear for a powerful payoff. A Gentleman wearing Deviation-heavy gear is narratively compelling and mechanically novel.</p>
@@ -2544,7 +2544,7 @@
 <li>Exact <strong>team stat scaling multiplier</strong> (0.25x is a starting point, needs playtesting).</li>
 <li>Exact <strong>negative scaling multiplier</strong> (-0.25x to -0.5x range, needs playtesting).</li>
 <li>Exact <strong>tier perk breakpoints</strong> (40/60/80% is the starting design, needs playtesting).</li>
-<li><strong>Class-specific stat functions</strong> for Orthodoxy, Optimization, Ingenuity, Clarity, Corruption.</li>
+<li><strong>Class-specific stat functions</strong> for Orthodoxy, Optimization, Ingenuity, Clarity, Ambition.</li>
 <li><strong>Tier perks</strong> for most classes beyond tier 1 — see tier perk table above.</li>
 <li><strong>Origin class tier perks</strong> — what does balanced Human/Cyborg actually unlock?</li>
 <li><strong>Tooltip design</strong>: show stats the character scales off (positive or negative); hide irrelevant 0x stats to reduce noise.</li>
