@@ -16,56 +16,56 @@ const PICKS: Array[Dictionary] = [
 	{
 		"class_id": &"human", "spec_id": &"",
 		"label_key": "STARTUP_PICK_HUMAN",
-		"glyph": "H", "stat": "SOU", "opposes": "ITF",
+		"glyph": "H", "stat": "Soul", "opposes": "Interface",
 		"accent": Color(0.65, 0.45, 0.25, 1),
 		"backstory": "Unaugmented and proud of it. Survives on wit, adaptability, and the stubborn refusal of flesh to become obsolete.",
 	},
 	{
 		"class_id": &"cyborg", "spec_id": &"",
 		"label_key": "STARTUP_PICK_CYBORG",
-		"glyph": "C", "stat": "ITF", "opposes": "SOU",
+		"glyph": "C", "stat": "Interface", "opposes": "Soul",
 		"accent": Color(0.3, 0.85, 1.0, 1),
 		"backstory": "Half human, half machine — all pragmatism. Whether by choice or necessity, you've crossed the threshold most only dream about.",
 	},
 	{
 		"class_id": &"human", "spec_id": &"survivalist",
 		"label_key": "STARTUP_PICK_HUMAN_SURVIVALIST",
-		"glyph": "S", "stat": "ING", "opposes": "OPT",
+		"glyph": "S", "stat": "Ingenuity", "opposes": "Optimization",
 		"accent": Color(0.7, 0.85, 0.35, 1),
 		"backstory": "The city tried to kill you. It failed. You've made weapons from wreckage and learned that the best tool is the one you have right now.",
 	},
 	{
 		"class_id": &"cyborg", "spec_id": &"forged",
 		"label_key": "STARTUP_PICK_CYBORG_FORGED",
-		"glyph": "F", "stat": "DEV", "opposes": "ORT",
+		"glyph": "F", "stat": "Deviation", "opposes": "Orthodoxy",
 		"accent": Color(0.9, 0.25, 0.2, 1),
 		"backstory": "You didn't stop at practical. Every limb, every organ — an opportunity for something harder. The flesh that remains is just scaffolding.",
 	},
 	{
 		"class_id": &"human", "spec_id": &"gentleman",
 		"label_key": "STARTUP_PICK_HUMAN_GENTLEMAN",
-		"glyph": "G", "stat": "ORT", "opposes": "DEV",
+		"glyph": "G", "stat": "Orthodoxy", "opposes": "Deviation",
 		"accent": Color(0.95, 0.92, 0.8, 1),
 		"backstory": "Composed under pressure. Lethal in formal wear. You've turned restraint into a weapon — your enemies don't see it coming until it's done.",
 	},
 	{
 		"class_id": &"cyborg", "spec_id": &"automaton",
 		"label_key": "STARTUP_PICK_CYBORG_AUTOMATON",
-		"glyph": "A", "stat": "OPT", "opposes": "ING",
+		"glyph": "A", "stat": "Optimization", "opposes": "Ingenuity",
 		"accent": Color(0.55, 0.78, 0.85, 1),
 		"backstory": "Precision. Efficiency. You've outsourced instinct to systems that never panic. Your drone network sees what you don't.",
 	},
 	{
 		"class_id": &"human", "spec_id": &"enculted",
 		"label_key": "STARTUP_PICK_HUMAN_ENCULTED",
-		"glyph": "E", "stat": "AMB", "opposes": "CLA",
+		"glyph": "E", "stat": "Ambition", "opposes": "Clarity",
 		"accent": Color(0.78, 0.35, 0.85, 1),
 		"backstory": "You found something in the dark and it found you back. What others call ambition, you call clarity. What they call madness, you call perspective.",
 	},
 	{
 		"class_id": &"cyborg", "spec_id": &"polymath",
 		"label_key": "STARTUP_PICK_CYBORG_POLYMATH",
-		"glyph": "P", "stat": "CLA", "opposes": "AMB",
+		"glyph": "P", "stat": "Clarity", "opposes": "Ambition",
 		"accent": Color(0.95, 0.9, 0.3, 1),
 		"backstory": "Where others specialize, you synthesize. Arcane theory meets cybernetic precision. Your enemies can't prepare for what they can't categorize.",
 	},
@@ -264,6 +264,13 @@ func _make_pick_card(entry: Dictionary) -> Button:
 	stat_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(stat_row)
 
+	var plus_label := Label.new()
+	plus_label.text = "+"
+	plus_label.add_theme_font_size_override(&"font_size", 9)
+	plus_label.add_theme_color_override(&"font_color", Color(0.3, 0.9, 0.4, 1.0))
+	plus_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	stat_row.add_child(plus_label)
+
 	var stat_label := Label.new()
 	stat_label.text = entry["stat"]
 	stat_label.add_theme_font_size_override(&"font_size", 9)
@@ -271,12 +278,12 @@ func _make_pick_card(entry: Dictionary) -> Button:
 	stat_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	stat_row.add_child(stat_label)
 
-	var vs_label := Label.new()
-	vs_label.text = "vs"
-	vs_label.add_theme_font_size_override(&"font_size", 9)
-	vs_label.add_theme_color_override(&"font_color", Color(0.5, 0.5, 0.5, 0.7))
-	vs_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	stat_row.add_child(vs_label)
+	var minus_label := Label.new()
+	minus_label.text = "−"
+	minus_label.add_theme_font_size_override(&"font_size", 9)
+	minus_label.add_theme_color_override(&"font_color", Color(0.9, 0.3, 0.3, 1.0))
+	minus_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	stat_row.add_child(minus_label)
 
 	var opp_label := Label.new()
 	opp_label.text = entry["opposes"]
