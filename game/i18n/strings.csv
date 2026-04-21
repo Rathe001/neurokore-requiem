@@ -25,6 +25,22 @@ STARTUP_PICK_HUMAN_ENCULTED,Human / Enculted
 STARTUP_PICK_CYBORG_FORGED,Cyborg / Forged
 STARTUP_PICK_CYBORG_AUTOMATON,Cyborg / Automaton
 STARTUP_PICK_CYBORG_POLYMATH,Cyborg / Polymath
+STARTUP_BACKSTORY_HUMAN,Unaugmented and proud of it. Survives on wit and adaptability — flesh that refuses to become obsolete.
+STARTUP_BACKSTORY_CYBORG,Half human, half machine — all pragmatism. Whether by choice or necessity, you've crossed the threshold most only dream about.
+STARTUP_BACKSTORY_SURVIVALIST,The city tried to kill you. It failed. You've made weapons from wreckage and learned the best tool is the one you have right now.
+STARTUP_BACKSTORY_FORGED,You didn't stop at practical. Every limb, every organ — an opportunity for something harder. The flesh that remains is just scaffolding.
+STARTUP_BACKSTORY_GENTLEMAN,Composed under pressure. Lethal in formal wear. You've turned restraint into a weapon — your enemies don't see it coming until it's done.
+STARTUP_BACKSTORY_AUTOMATON,Precision. Efficiency. You've outsourced instinct to systems that never panic. Your drone network sees what you don't.
+STARTUP_BACKSTORY_ENCULTED,You found something in the dark and it found you back. What others call ambition, you call clarity. What they call madness, you call perspective.
+STARTUP_BACKSTORY_POLYMATH,Where others specialize, you synthesize. Arcane theory meets cybernetic precision. Your enemies can't prepare for what they can't categorize.
+STAT_SOUL,Soul
+STAT_INTERFACE,Interface
+STAT_INGENUITY,Ingenuity
+STAT_OPTIMIZATION,Optimization
+STAT_DEVIATION,Deviation
+STAT_ORTHODOXY,Orthodoxy
+STAT_AMBITION,Ambition
+STAT_CLARITY,Clarity
 MENU_TITLE,Menu
 MENU_SETTINGS_TITLE,Settings
 MENU_SETTINGS_ACCESSIBILITY,Accessibility
