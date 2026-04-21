@@ -115,7 +115,7 @@ func _build_layout() -> void:
 
 func _build_character_sheet(parent: Control) -> void:
 	var p := UIThemeState.palette
-	var title := _make_label("CHARACTER_PANEL_TITLE", 14, p.text)
+	var title := _make_label("CHARACTER_PANEL_TITLE", &"SectionLabel", p.text)
 	title.position = Vector2(14.0, 10.0)
 	title.size = Vector2(PANEL_SIZE.x - 28.0, 20.0)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
@@ -142,7 +142,7 @@ func _build_character_sheet(parent: Control) -> void:
 	morality.position = MORALITY_POS
 	parent.add_child(morality)
 
-	var morality_caption := _make_label("CHARACTER_PANEL_MORALITY", 9, p.text_dim)
+	var morality_caption := _make_label("CHARACTER_PANEL_MORALITY", &"SmallLabel")
 	morality_caption.position = Vector2(MORALITY_POS.x, MORALITY_POS.y + MORALITY_SIZE.y + 2.0)
 	morality_caption.size = Vector2(MORALITY_SIZE.x, 12.0)
 	morality_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -206,7 +206,7 @@ func _refresh_utility_visibility() -> void:
 		_utility_slots[i].visible = i < cap
 
 func _build_inventory(parent: Control) -> void:
-	var title := _make_label("CHARACTER_PANEL_INVENTORY", 12, UIThemeState.palette.text)
+	var title := _make_label("CHARACTER_PANEL_INVENTORY", &"SubLabel")
 	title.position = Vector2(14.0, 8.0)
 	title.size = Vector2(PANEL_SIZE.x - 28.0, 16.0)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
@@ -301,7 +301,7 @@ func _make_stat_row_with_value(label_text: String, value: Label) -> HBoxContaine
 	row.add_theme_constant_override(&"separation", 6)
 	var key := Label.new()
 	key.text = label_text
-	key.add_theme_font_size_override(&"font_size", 11)
+	key.theme_type_variation = &"BodyLabel"
 	key.add_theme_color_override(&"font_color", UIThemeState.palette.text_dim)
 	key.custom_minimum_size = Vector2(64.0, 0.0)
 	row.add_child(key)
@@ -311,15 +311,15 @@ func _make_stat_row_with_value(label_text: String, value: Label) -> HBoxContaine
 func _make_stat_value(value_text: String) -> Label:
 	var value := Label.new()
 	value.text = value_text
-	value.add_theme_font_size_override(&"font_size", 11)
-	value.add_theme_color_override(&"font_color", UIThemeState.palette.text)
+	value.theme_type_variation = &"BodyLabel"
 	return value
 
-func _make_label(text: String, size: int, color: Color) -> Label:
+func _make_label(text: String, variation: StringName, color: Color = Color.TRANSPARENT) -> Label:
 	var label := Label.new()
 	label.text = text
-	label.add_theme_font_size_override(&"font_size", size)
-	label.add_theme_color_override(&"font_color", color)
+	label.theme_type_variation = variation
+	if color != Color.TRANSPARENT:
+		label.add_theme_color_override(&"font_color", color)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return label
 

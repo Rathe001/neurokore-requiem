@@ -65,7 +65,7 @@ func _build_visuals() -> void:
 
 	_empty_label = Label.new()
 	_empty_label.text = empty_label_text
-	_empty_label.add_theme_font_size_override(&"font_size", 8)
+	_empty_label.theme_type_variation = &"StatLabel"
 	_empty_label.add_theme_color_override(&"font_color", Color(p.text_dim.r, p.text_dim.g, p.text_dim.b, 0.85))
 	_empty_label.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	_empty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -74,7 +74,7 @@ func _build_visuals() -> void:
 	add_child(_empty_label)
 
 	_glyph = Label.new()
-	_glyph.add_theme_font_size_override(&"font_size", 20)
+	_glyph.theme_type_variation = &"SlotGlyph"
 	_glyph.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	_glyph.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_glyph.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -127,7 +127,7 @@ func _get_drag_data(_pos: Vector2) -> Variant:
 	_is_drag_source = true
 	var preview := Label.new()
 	preview.text = item.glyph
-	preview.add_theme_font_size_override(&"font_size", 24)
+	preview.theme_type_variation = &"DragPreview"
 	preview.modulate = item.glyph_color
 	preview.custom_minimum_size = Vector2(32, 32)
 	preview.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

@@ -33,24 +33,24 @@ func _build_ui() -> void:
 	_bg.add_child(_vbox)
 
 	_text_label = Label.new()
+	_text_label.theme_type_variation = &"BodyLabel"
 	_text_label.mouse_filter = MOUSE_FILTER_IGNORE
-	_text_label.add_theme_font_size_override(&"font_size", 11)
 	_vbox.add_child(_text_label)
 
 	_name_label = Label.new()
+	_name_label.theme_type_variation = &"CardTitle"
 	_name_label.mouse_filter = MOUSE_FILTER_IGNORE
-	_name_label.add_theme_font_size_override(&"font_size", 13)
 	_vbox.add_child(_name_label)
 
 	_desc_label = Label.new()
+	_desc_label.theme_type_variation = &"TooltipLabel"
 	_desc_label.mouse_filter = MOUSE_FILTER_IGNORE
-	_desc_label.add_theme_font_size_override(&"font_size", 10)
 	_desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_vbox.add_child(_desc_label)
 
 	_stats_label = Label.new()
+	_stats_label.theme_type_variation = &"TooltipLabel"
 	_stats_label.mouse_filter = MOUSE_FILTER_IGNORE
-	_stats_label.add_theme_font_size_override(&"font_size", 10)
 	_vbox.add_child(_stats_label)
 
 func _apply_theme() -> void:
@@ -70,7 +70,6 @@ func _apply_theme() -> void:
 	style.content_margin_bottom = PADDING_Y
 	_bg.add_theme_stylebox_override(&"panel", style)
 	_text_label.add_theme_color_override(&"font_color", p.text)
-	_desc_label.add_theme_color_override(&"font_color", p.text_dim)
 	_stats_label.add_theme_color_override(&"font_color", p.text)
 
 func _process(_delta: float) -> void:

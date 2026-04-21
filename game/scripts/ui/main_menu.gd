@@ -88,8 +88,7 @@ func _make_option_row(label_key: String, option: OptionButton) -> HBoxContainer:
 	row.add_theme_constant_override(&"separation", 8)
 	var label := Label.new()
 	label.text = label_key
-	label.add_theme_font_size_override(&"font_size", 12)
-	label.add_theme_color_override(&"font_color", UIThemeState.palette.text)
+	label.theme_type_variation = &"SubLabel"
 	label.custom_minimum_size = Vector2(ROW_LABEL_WIDTH, 0.0)
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	row.add_child(label)
@@ -99,16 +98,16 @@ func _make_option_row(label_key: String, option: OptionButton) -> HBoxContainer:
 
 func _make_window_mode_option() -> OptionButton:
 	var option := OptionButton.new()
-	option.add_theme_font_size_override(&"font_size", 12)
-	option.add_item("WINDOW_MODE_WINDOWED", DisplayConfig.Mode.WINDOWED)
-	option.add_item("WINDOW_MODE_BORDERLESS", DisplayConfig.Mode.BORDERLESS_FULLSCREEN)
-	option.add_item("WINDOW_MODE_EXCLUSIVE", DisplayConfig.Mode.EXCLUSIVE_FULLSCREEN)
+	option.add_theme_font_size_override(&"font_size", UIThemeState.palette.font_size_sublabel)
+	option.add_item(tr("WINDOW_MODE_WINDOWED"), DisplayConfig.Mode.WINDOWED)
+	option.add_item(tr("WINDOW_MODE_BORDERLESS"), DisplayConfig.Mode.BORDERLESS_FULLSCREEN)
+	option.add_item(tr("WINDOW_MODE_EXCLUSIVE"), DisplayConfig.Mode.EXCLUSIVE_FULLSCREEN)
 	option.item_selected.connect(_on_window_mode_selected)
 	return option
 
 func _make_resolution_option() -> OptionButton:
 	var option := OptionButton.new()
-	option.add_theme_font_size_override(&"font_size", 12)
+	option.add_theme_font_size_override(&"font_size", UIThemeState.palette.font_size_sublabel)
 	for res in DisplayState.available_resolutions():
 		option.add_item("%d × %d" % [res.x, res.y])
 	option.item_selected.connect(_on_resolution_selected)
@@ -138,8 +137,7 @@ func _on_resolution_selected(index: int) -> void:
 func _make_section_label(text: String) -> Label:
 	var label := Label.new()
 	label.text = text
-	label.add_theme_font_size_override(&"font_size", 14)
-	label.add_theme_color_override(&"font_color", UIThemeState.palette.accent_dim)
+	label.theme_type_variation = &"SectionLabel"
 	return label
 
 func _make_panel(size: Vector2, title_text: String) -> Panel:
@@ -154,7 +152,7 @@ func _make_panel(size: Vector2, title_text: String) -> Panel:
 
 	var title := Label.new()
 	title.text = title_text
-	title.add_theme_font_size_override(&"font_size", 18)
+	title.theme_type_variation = &"HeadingLabel"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.position = Vector2(0.0, 14.0)
 	title.size = Vector2(size.x, 22.0)
@@ -167,7 +165,6 @@ func _make_button(text: String, callback: Callable, enabled: bool = true) -> But
 	var button := Button.new()
 	button.text = text
 	button.custom_minimum_size = BUTTON_SIZE
-	button.add_theme_font_size_override(&"font_size", 13)
 	button.disabled = not enabled
 	button.pressed.connect(callback)
 	return button

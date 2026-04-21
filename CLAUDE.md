@@ -55,6 +55,7 @@ Full class details:
 - [`docs/design/attribute-system.md`](docs/design/attribute-system.md) — 8 moral attributes, item stat budgets, class scaling, opposing stats, tier perks, visual metamorphosis, NPC identity reactions
 - [`docs/design/controls.md`](docs/design/controls.md) — WASD movement, mouse for attacks, controller as future work
 - [`docs/world/lighting.md`](docs/world/lighting.md) — darkness as default, equippable light sources, zone lighting tiers
+- [`docs/design/ui-style-guide.md`](docs/design/ui-style-guide.md) — type scale, tag components, color groups, all 9 class palettes, i18n and theming conventions
 
 ## Platform & Performance
 

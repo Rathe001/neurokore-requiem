@@ -137,8 +137,7 @@ func _build_class_panel() -> void:
 
 	var title := Label.new()
 	title.text = "STARTUP_TITLE"
-	title.add_theme_font_size_override(&"font_size", 28)
-	title.add_theme_color_override(&"font_color", UIThemeState.palette.text)
+	title.theme_type_variation = &"TitleLabel"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.anchor_left = 0.0
 	title.anchor_right = 1.0
@@ -236,7 +235,7 @@ func _make_pick_card(entry: Dictionary) -> Button:
 
 	var glyph_label := Label.new()
 	glyph_label.text = entry["glyph"]
-	glyph_label.add_theme_font_size_override(&"font_size", 32)
+	glyph_label.theme_type_variation = &"PortraitGlyph"
 	glyph_label.add_theme_color_override(&"font_color", Color(0.0, 0.0, 0.0, 0.75))
 	glyph_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	glyph_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -254,15 +253,14 @@ func _make_pick_card(entry: Dictionary) -> Button:
 
 	var name_label := Label.new()
 	name_label.text = entry["label_key"]
-	name_label.add_theme_font_size_override(&"font_size", 13)
+	name_label.theme_type_variation = &"CardTitle"
 	name_label.add_theme_color_override(&"font_color", accent)
 	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(name_label)
 
 	var desc_label := Label.new()
 	desc_label.text = tr(entry["backstory"])
-	desc_label.add_theme_font_size_override(&"font_size", 9)
-	desc_label.add_theme_color_override(&"font_color", Color(0.78, 0.78, 0.78, 0.85))
+	desc_label.theme_type_variation = &"SmallLabel"
 	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	desc_label.max_lines_visible = 2
 	desc_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -276,33 +274,41 @@ func _make_pick_card(entry: Dictionary) -> Button:
 	card.add_child(stats_overlay)
 
 	var stats_vbox := VBoxContainer.new()
-	stats_vbox.add_theme_constant_override(&"separation", 1)
+	stats_vbox.add_theme_constant_override(&"separation", 2)
 	stats_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	stats_vbox.anchor_left = 1.0
 	stats_vbox.anchor_right = 1.0
 	stats_vbox.anchor_top = 0.0
 	stats_vbox.anchor_bottom = 0.0
 	stats_vbox.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	stats_vbox.offset_left = -96.0
+	stats_vbox.offset_left = -104.0
 	stats_vbox.offset_right = -8.0
 	stats_vbox.offset_top = 7.0
 	stats_overlay.add_child(stats_vbox)
 
+	var pos_tag := PanelContainer.new()
+	pos_tag.theme_type_variation = &"StatPosTag"
+	pos_tag.size_flags_horizontal = Control.SIZE_SHRINK_END
+	pos_tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	stats_vbox.add_child(pos_tag)
 	var plus_stat := Label.new()
 	plus_stat.text = "+" + tr(entry["stat"])
-	plus_stat.add_theme_font_size_override(&"font_size", 8)
+	plus_stat.theme_type_variation = &"StatLabel"
 	plus_stat.add_theme_color_override(&"font_color", Color(0.35, 0.9, 0.45, 1.0))
-	plus_stat.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	plus_stat.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	stats_vbox.add_child(plus_stat)
+	pos_tag.add_child(plus_stat)
 
+	var neg_tag := PanelContainer.new()
+	neg_tag.theme_type_variation = &"StatNegTag"
+	neg_tag.size_flags_horizontal = Control.SIZE_SHRINK_END
+	neg_tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	stats_vbox.add_child(neg_tag)
 	var minus_opp := Label.new()
 	minus_opp.text = "-" + tr(entry["opposes"])
-	minus_opp.add_theme_font_size_override(&"font_size", 8)
+	minus_opp.theme_type_variation = &"StatLabel"
 	minus_opp.add_theme_color_override(&"font_color", Color(0.9, 0.3, 0.3, 0.85))
-	minus_opp.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	minus_opp.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	stats_vbox.add_child(minus_opp)
+	neg_tag.add_child(minus_opp)
 
 	card.pressed.connect(func() -> void: _on_pick_selected(class_id, spec_id))
 	return card
@@ -311,7 +317,6 @@ func _make_button(text: String, callback: Callable, enabled: bool = true) -> But
 	var button := Button.new()
 	button.text = text
 	button.custom_minimum_size = BUTTON_SIZE
-	button.add_theme_font_size_override(&"font_size", 14)
 	button.disabled = not enabled
 	button.pressed.connect(callback)
 	return button

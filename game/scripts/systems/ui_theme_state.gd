@@ -102,4 +102,63 @@ func _build_theme(p: UIThemeConfig) -> Theme:
 	button_disabled.border_color = Color(p.accent_dim.r, p.accent_dim.g, p.accent_dim.b, 0.4)
 	t.set_stylebox(&"disabled", &"Button", button_disabled)
 
+	# Label type variations
+	t.set_type_variation(&"TitleLabel", &"Label")
+	t.set_font_size(&"font_size", &"TitleLabel", p.font_size_title)
+
+	t.set_type_variation(&"HeadingLabel", &"Label")
+	t.set_font_size(&"font_size", &"HeadingLabel", p.font_size_heading)
+
+	t.set_type_variation(&"SectionLabel", &"Label")
+	t.set_font_size(&"font_size", &"SectionLabel", p.font_size_section)
+	t.set_color(&"font_color", &"SectionLabel", p.accent_dim)
+
+	t.set_type_variation(&"CardTitle", &"Label")
+	t.set_font_size(&"font_size", &"CardTitle", p.font_size_card_title)
+
+	t.set_type_variation(&"SubLabel", &"Label")
+	t.set_font_size(&"font_size", &"SubLabel", p.font_size_sublabel)
+
+	t.set_type_variation(&"BodyLabel", &"Label")
+	t.set_font_size(&"font_size", &"BodyLabel", p.font_size_body)
+
+	t.set_type_variation(&"TooltipLabel", &"Label")
+	t.set_font_size(&"font_size", &"TooltipLabel", p.font_size_tooltip)
+	t.set_color(&"font_color", &"TooltipLabel", p.text_dim)
+
+	t.set_type_variation(&"SmallLabel", &"Label")
+	t.set_font_size(&"font_size", &"SmallLabel", p.font_size_small)
+	t.set_color(&"font_color", &"SmallLabel", p.text_dim)
+
+	t.set_type_variation(&"StatLabel", &"Label")
+	t.set_font_size(&"font_size", &"StatLabel", p.font_size_stat)
+	t.set_color(&"font_color", &"StatLabel", p.text_dim)
+
+	t.set_type_variation(&"SlotGlyph", &"Label")
+	t.set_font_size(&"font_size", &"SlotGlyph", p.font_size_slot_glyph)
+
+	t.set_type_variation(&"DragPreview", &"Label")
+	t.set_font_size(&"font_size", &"DragPreview", p.font_size_drag_preview)
+
+	t.set_type_variation(&"PortraitGlyph", &"Label")
+	t.set_font_size(&"font_size", &"PortraitGlyph", p.font_size_portrait)
+
+	# PanelContainer tag variations — stat indicators on class cards
+	t.set_type_variation(&"StatPosTag", &"PanelContainer")
+	var pos_style := StyleBoxFlat.new()
+	pos_style.bg_color = Color(0.0, 0.15, 0.05, 0.9)
+	pos_style.border_color = Color(0.35, 0.9, 0.45, 1.0)
+	pos_style.set_border_width_all(1)
+	pos_style.content_margin_left = 5
+	pos_style.content_margin_right = 5
+	pos_style.content_margin_top = 1
+	pos_style.content_margin_bottom = 1
+	t.set_stylebox(&"panel", &"StatPosTag", pos_style)
+
+	t.set_type_variation(&"StatNegTag", &"PanelContainer")
+	var neg_style := pos_style.duplicate() as StyleBoxFlat
+	neg_style.bg_color = Color(0.15, 0.0, 0.0, 0.9)
+	neg_style.border_color = Color(0.9, 0.3, 0.3, 1.0)
+	t.set_stylebox(&"panel", &"StatNegTag", neg_style)
+
 	return t

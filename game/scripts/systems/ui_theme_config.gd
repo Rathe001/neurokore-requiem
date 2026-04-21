@@ -45,3 +45,17 @@ extends Resource
 
 @export_group("Fonts")
 @export var base_font_size: int = 13
+
+@export_group("Font Sizes")
+@export var font_size_title: int = 28
+@export var font_size_heading: int = 18
+@export var font_size_section: int = 14
+@export var font_size_card_title: int = 13
+@export var font_size_sublabel: int = 12
+@export var font_size_body: int = 11
+@export var font_size_tooltip: int = 10
+@export var font_size_small: int = 9
+@export var font_size_stat: int = 8
+@export var font_size_slot_glyph: int = 20
+@export var font_size_drag_preview: int = 24
+@export var font_size_portrait: int = 32

@@ -3,9 +3,6 @@ extends Control
 const PANEL_POS := Vector2(12.0, 44.0)
 const PANEL_SIZE := Vector2(170.0, 188.0)
 
-const TITLE_FONT := 11
-const BOOL_FONT := 10
-const STAT_FONT := 9
 const STAT_KEY_WIDTH := 70.0
 
 const BOOL_FIELDS: Array[Dictionary] = [
@@ -50,7 +47,7 @@ func _build_layout() -> void:
 
 	var title := Label.new()
 	title.text = "DEBUG_TITLE"
-	title.add_theme_font_size_override(&"font_size", TITLE_FONT)
+	title.theme_type_variation = &"BodyLabel"
 	title.add_theme_color_override(&"font_color", p.text)
 	vbox.add_child(title)
 	vbox.add_child(HSeparator.new())
@@ -72,7 +69,7 @@ func _build_layout() -> void:
 func _add_bool_row(parent: VBoxContainer, label_key: String, key: StringName) -> void:
 	var check := CheckBox.new()
 	check.text = label_key
-	check.add_theme_font_size_override(&"font_size", BOOL_FONT)
+	check.add_theme_font_size_override(&"font_size", UIThemeState.palette.font_size_tooltip)
 	check.button_pressed = _get_bool(key)
 	check.toggled.connect(func(pressed: bool) -> void: _set_bool(key, pressed))
 	parent.add_child(check)
@@ -83,13 +80,12 @@ func _add_readonly_row(parent: VBoxContainer, label_key: String, value_text: Str
 	row.add_theme_constant_override(&"separation", 6)
 	var k := Label.new()
 	k.text = label_key
-	k.add_theme_font_size_override(&"font_size", STAT_FONT)
-	k.add_theme_color_override(&"font_color", p.text_dim)
+	k.theme_type_variation = &"SmallLabel"
 	k.custom_minimum_size = Vector2(STAT_KEY_WIDTH, 0.0)
 	row.add_child(k)
 	var v := Label.new()
 	v.text = value_text
-	v.add_theme_font_size_override(&"font_size", STAT_FONT)
+	v.theme_type_variation = &"SmallLabel"
 	v.add_theme_color_override(&"font_color", p.text)
 	row.add_child(v)
 	parent.add_child(row)
