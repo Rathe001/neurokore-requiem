@@ -259,39 +259,6 @@ func _make_pick_card(entry: Dictionary) -> Button:
 	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(name_label)
 
-	var stat_row := HBoxContainer.new()
-	stat_row.add_theme_constant_override(&"separation", 4)
-	stat_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(stat_row)
-
-	var plus_label := Label.new()
-	plus_label.text = "+"
-	plus_label.add_theme_font_size_override(&"font_size", 9)
-	plus_label.add_theme_color_override(&"font_color", Color(0.3, 0.9, 0.4, 1.0))
-	plus_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	stat_row.add_child(plus_label)
-
-	var stat_label := Label.new()
-	stat_label.text = tr(entry["stat"])
-	stat_label.add_theme_font_size_override(&"font_size", 9)
-	stat_label.add_theme_color_override(&"font_color", Color(accent.r, accent.g, accent.b, 0.9))
-	stat_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	stat_row.add_child(stat_label)
-
-	var minus_label := Label.new()
-	minus_label.text = "−"
-	minus_label.add_theme_font_size_override(&"font_size", 9)
-	minus_label.add_theme_color_override(&"font_color", Color(0.9, 0.3, 0.3, 1.0))
-	minus_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	stat_row.add_child(minus_label)
-
-	var opp_label := Label.new()
-	opp_label.text = tr(entry["opposes"])
-	opp_label.add_theme_font_size_override(&"font_size", 9)
-	opp_label.add_theme_color_override(&"font_color", Color(0.9, 0.3, 0.3, 0.75))
-	opp_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	stat_row.add_child(opp_label)
-
 	var desc_label := Label.new()
 	desc_label.text = tr(entry["backstory"])
 	desc_label.add_theme_font_size_override(&"font_size", 9)
@@ -301,6 +268,41 @@ func _make_pick_card(entry: Dictionary) -> Button:
 	desc_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	desc_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(desc_label)
+
+	# Stats overlay — top-right corner
+	var stats_overlay := Control.new()
+	stats_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	stats_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.add_child(stats_overlay)
+
+	var stats_vbox := VBoxContainer.new()
+	stats_vbox.add_theme_constant_override(&"separation", 1)
+	stats_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	stats_vbox.anchor_left = 1.0
+	stats_vbox.anchor_right = 1.0
+	stats_vbox.anchor_top = 0.0
+	stats_vbox.anchor_bottom = 0.0
+	stats_vbox.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	stats_vbox.offset_left = -96.0
+	stats_vbox.offset_right = -8.0
+	stats_vbox.offset_top = 7.0
+	stats_overlay.add_child(stats_vbox)
+
+	var plus_stat := Label.new()
+	plus_stat.text = "+" + tr(entry["stat"])
+	plus_stat.add_theme_font_size_override(&"font_size", 8)
+	plus_stat.add_theme_color_override(&"font_color", Color(0.35, 0.9, 0.45, 1.0))
+	plus_stat.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	plus_stat.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	stats_vbox.add_child(plus_stat)
+
+	var minus_opp := Label.new()
+	minus_opp.text = "-" + tr(entry["opposes"])
+	minus_opp.add_theme_font_size_override(&"font_size", 8)
+	minus_opp.add_theme_color_override(&"font_color", Color(0.9, 0.3, 0.3, 0.85))
+	minus_opp.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	minus_opp.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	stats_vbox.add_child(minus_opp)
 
 	card.pressed.connect(func() -> void: _on_pick_selected(class_id, spec_id))
 	return card
