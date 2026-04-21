@@ -14,6 +14,7 @@ var _corpse_head: int = 0
 
 func _ready() -> void:
 	add_to_group(&"corpse_manager")
+	get_viewport().physics_object_picking = true
 	_wire_switches()
 	if DebugState.config != null and DebugState.config.disable_enemies:
 		_clear_enemies()

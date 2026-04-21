@@ -5,8 +5,10 @@ const SLIDE_DURATION := 0.4
 const SLIDE_DISTANCE := 4.7
 const TINT_NEUTRAL := Color(0.55, 0.65, 0.75, 1.0)
 const TINT_LOCKED := Color(0.85, 0.25, 0.2, 1.0)
+const OUTLINE_GROW := 0.04
 
 @export var locked: bool = false
+@export var display_name: String = "Door"
 
 @onready var mesh: MeshInstance3D = $Mesh
 @onready var collision: CollisionShape3D = $Collision
@@ -15,6 +17,7 @@ var _open: bool = false
 var _rest_y: float = 0.0
 var _tween: Tween
 var _mat: ShaderMaterial
+var _outline: MeshInstance3D
 
 const _FADE_SHADER: Shader = preload("res://scripts/prototype/proximity_fade.gdshader")
 
@@ -26,7 +29,33 @@ func _ready() -> void:
 	_mat = ShaderMaterial.new()
 	_mat.shader = _FADE_SHADER
 	mesh.material_override = _mat
+	_build_outline()
+	mouse_entered.connect(_on_mouse_entered)
+	mouse_exited.connect(_on_mouse_exited)
 	_refresh_tint()
+
+func _build_outline() -> void:
+	_outline = MeshInstance3D.new()
+	_outline.mesh = mesh.mesh
+	_outline.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.albedo_color = Color.WHITE
+	m.cull_mode = BaseMaterial3D.CULL_FRONT
+	m.grow = true
+	m.grow_amount = OUTLINE_GROW
+	_outline.material_override = m
+	_outline.visible = false
+	mesh.add_child(_outline)
+
+func _on_mouse_entered() -> void:
+	_outline.visible = true
+	var label := "%s (Locked)" % display_name if locked else display_name
+	get_tree().call_group(&"interactable_tooltip", &"show_text", label)
+
+func _on_mouse_exited() -> void:
+	_outline.visible = false
+	get_tree().call_group(&"interactable_tooltip", &"hide_tooltip")
 
 func is_open() -> bool:
 	return _open

@@ -24,12 +24,10 @@ const DEBUG_OVERLAY_INTERVAL := 0.1
 @onready var debug_label: Label = %DebugLabel
 @onready var debug_bg: ColorRect = $Root/DebugPanel/DebugBack
 @onready var hotkey_hints: Label = %HotkeyHints
-@onready var credits_label: Label = %CreditsLabel
 @onready var main_menu: Node = %MainMenu
 
 var _max_health: int = 1
 var _last_hp_current: int = 0
-var _last_credits: int = 0
 var _banner_token: int = 0
 var _debug_overlay_accum: float = 0.0
 
@@ -48,10 +46,7 @@ func _ready() -> void:
 		player.resource_changed.connect(_on_resource_changed)
 	if player.has_signal(&"died"):
 		player.died.connect(_on_player_died)
-	if player.has_signal(&"credits_changed"):
-		player.credits_changed.connect(_on_credits_changed)
 	_on_health_changed(_max_health, _max_health)
-	_on_credits_changed(player.get_credits() if player.has_method(&"get_credits") else 0)
 	_bind_skill_slots(player)
 	_bind_resource_pool(player)
 
@@ -63,7 +58,6 @@ func _apply_theme() -> void:
 	resource_bg.color = p.hp_bar_bg
 	resource_border.border_color = p.hp_bar_border
 	debug_bg.color = Color(p.panel_bg.r, p.panel_bg.g, p.panel_bg.b, 0.75)
-	credits_label.add_theme_color_override(&"font_color", p.credits)
 	_apply_frame(hp_frame, hp_border, p.hp_bar_frame, p.frame_patch_margin)
 	_apply_frame(resource_frame, resource_border, p.resource_bar_frame, p.frame_patch_margin)
 	_repaint_hp()
@@ -158,14 +152,6 @@ func _on_resource_changed(current: int, max_value: int) -> void:
 	var ratio := 0.0 if max_value <= 0 else clampf(float(current) / float(max_value), 0.0, 1.0)
 	resource_fill.size.x = RESOURCE_BAR_WIDTH * ratio
 	resource_label.text = "%d / %d" % [max(current, 0), max_value]
-
-func _on_credits_changed(amount: int) -> void:
-	_last_credits = amount
-	credits_label.text = tr("HUD_CREDITS_FORMAT") % amount
-
-func _notification(what: int) -> void:
-	if what == NOTIFICATION_TRANSLATION_CHANGED and is_node_ready():
-		credits_label.text = tr("HUD_CREDITS_FORMAT") % _last_credits
 
 func _on_player_died() -> void:
 	_show_banner(tr("HUD_BANNER_DIED"), 2.0)

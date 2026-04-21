@@ -1,10 +1,11 @@
-[gd_scene load_steps=15 format=3]
+[gd_scene load_steps=16 format=3]
 
 [ext_resource type="Script" path="res://scripts/prototype/prototype_root.gd" id="script_root"]
 [ext_resource type="Script" path="res://scripts/prototype/prototype_camera.gd" id="script_camera"]
 [ext_resource type="Script" path="res://scripts/prototype/prototype_player.gd" id="script_player"]
 [ext_resource type="Script" path="res://scripts/level/level_builder.gd" id="script_builder"]
 [ext_resource type="PackedScene" path="res://scenes/prototype/prototype_hud.tscn" id="scene_hud"]
+[ext_resource type="PackedScene" path="res://scenes/prototype/prototype_switch.tscn" id="scene_switch"]
 [ext_resource type="PackedScene" path="res://art/3d/characters/quaternius/UAL1_Standard.glb" id="char_model_player"]
 [ext_resource type="Resource" path="res://resources/skills/basic_attack.tres" id="skill_basic"]
 [ext_resource type="Resource" path="res://resources/skills/aoe_burst.tres" id="skill_aoe"]
@@ -18,7 +19,7 @@ tonemap_mode = 2
 tonemap_exposure = 1.0
 ambient_light_source = 0
 ambient_light_energy = 0.0
-volumetric_fog_enabled = true
+volumetric_fog_enabled = false
 
 [sub_resource type="StandardMaterial3D" id="mat_ring_player"]
 albedo_color = Color(0, 0, 0, 0)
@@ -65,6 +66,11 @@ mesh = SubResource("mesh_ring_player")
 [node name="Collision" type="CollisionShape3D" parent="Player"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
 shape = SubResource("shape_player")
+
+[node name="SwitchSupply" parent="." instance=ExtResource("scene_switch")]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -3.6, 0.7, -27)
+action = 3
+display_name = "Supply Door Control"
 
 [node name="HUD" parent="." instance=ExtResource("scene_hud")]
 

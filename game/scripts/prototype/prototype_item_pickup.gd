@@ -1,26 +1,32 @@
 extends Node3D
 
-const POP_UP_SPEED := 4.8
-const POP_HORIZONTAL_SPEED := 2.2
+const POP_UP_SPEED := 4.2
+const POP_HORIZONTAL_SPEED := 1.8
 const GRAVITY := 14.0
 const SETTLED_HEIGHT := 0.35
-const MAGNET_RADIUS := 2.5
+const MAGNET_RADIUS := 2.2
 const COLLECT_RADIUS := 0.6
 const MAGNET_SPEED := 9.0
 const SPIN_SPEED := 2.5
 
-@export var amount: int = 1
+var item: Item = null
 
-@onready var visual: Node3D = $Visual
+@onready var _glyph: Label3D = $Visual/Glyph
 
 var _velocity: Vector3 = Vector3.ZERO
 var _popping: bool = true
 var _player_ref: Node3D
 
+func configure(p_item: Item) -> void:
+	item = p_item
+
 func _ready() -> void:
 	add_to_group(&"pickups")
 	SpatialGrid.register(self, &"pickups")
 	_player_ref = get_tree().get_first_node_in_group(&"player") as Node3D
+	if item != null:
+		_glyph.text = item.glyph
+		_glyph.modulate = item.glyph_color
 	var angle := randf() * TAU
 	var speed_factor := randf_range(0.7, 1.1)
 	_velocity = Vector3(
@@ -30,8 +36,7 @@ func _ready() -> void:
 	)
 
 func _physics_process(delta: float) -> void:
-	if visual != null:
-		visual.rotate_y(SPIN_SPEED * delta)
+	$Visual.rotate_y(SPIN_SPEED * delta)
 	if _popping:
 		_tick_pop(delta)
 	else:
@@ -55,13 +60,14 @@ func _tick_settled(delta: float) -> void:
 	var to_player: Vector3 = target - global_position
 	var dist := to_player.length()
 	if dist < COLLECT_RADIUS:
-		_collect(player)
+		_try_collect()
 		return
 	if dist < MAGNET_RADIUS:
 		global_position += (to_player / dist) * MAGNET_SPEED * delta
 
-func _collect(player: Node) -> void:
-	if player.has_method(&"add_credits"):
-		player.add_credits(amount)
-	SpatialGrid.unregister(self)
-	queue_free()
+func _try_collect() -> void:
+	if item == null:
+		return
+	if InventoryState.add_to_inventory(item):
+		SpatialGrid.unregister(self)
+		queue_free()

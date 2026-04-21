@@ -13,15 +13,15 @@ extends Node3D
 var _base_energy: float
 var _base_emission: float
 var _flicker_timer: float = 0.0
-var _light: OmniLight3D
+var _light: Light3D
 var _tube_mat: StandardMaterial3D
 
 
-func setup(light: OmniLight3D, tube_mat: StandardMaterial3D) -> void:
+func setup(light: Light3D, tube_mat: StandardMaterial3D) -> void:
 	_light = light
 	_tube_mat = tube_mat
 	_base_energy = light.light_energy
-	_base_emission = tube_mat.emission_energy_multiplier
+	_base_emission = 0.0 if tube_mat == null else tube_mat.emission_energy_multiplier
 
 
 func _physics_process(delta: float) -> void:

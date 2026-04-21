@@ -1,21 +1,19 @@
 [gd_scene load_steps=2 format=3]
 
-[ext_resource type="Script" path="res://scripts/prototype/prototype_credit_pickup.gd" id="script_credit_pickup"]
+[ext_resource type="Script" path="res://scripts/prototype/prototype_item_pickup.gd" id="script_item_pickup"]
 
-[node name="PrototypeCreditPickup" type="Node3D"]
-script = ExtResource("script_credit_pickup")
+[node name="PrototypeItemPickup" type="Node3D"]
+script = ExtResource("script_item_pickup")
 
 [node name="Visual" type="Node3D" parent="."]
 
 [node name="Glyph" type="Label3D" parent="Visual"]
 transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 0, 0, 0)
 pixel_size = 0.005
-text = "₢"
+text = "?"
 font_size = 64
 horizontal_alignment = 1
 vertical_alignment = 1
-modulate = Color(2.0, 1.7, 0.5, 1)
-outline_modulate = Color(0.8, 0.5, 0.05, 1)
 outline_size = 8
 alpha_cut = 1
 double_sided = true

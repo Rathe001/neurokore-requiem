@@ -13,6 +13,7 @@ uniform float panel_variation : hint_range(0.0, 0.1) = 0.025;
 uniform float metallic_val : hint_range(0.0, 1.0) = 0.35;
 uniform float roughness_base : hint_range(0.0, 1.0) = 0.55;
 uniform float roughness_seam : hint_range(0.0, 1.0) = 0.85;
+uniform bool fade_enabled = false;
 uniform float fade_inner : hint_range(0.0, 5.0) = 1.0;
 uniform float fade_outer : hint_range(0.0, 10.0) = 3.0;
 uniform float fade_height : hint_range(0.0, 5.0) = 3.5;
@@ -59,21 +60,24 @@ void fragment() {
 	// Camera-space line-of-sight occlusion fade.
 	// Only fade the upper portion of walls that sit between the camera
 	// and the player. The lower wall stays solid so light cannot bleed through.
-	vec3 player_view = (VIEW_MATRIX * vec4(player_world_pos, 1.0)).xyz;
-	vec3 frag_view = (VIEW_MATRIX * vec4(world_pos, 1.0)).xyz;
-	float in_front = smoothstep(-0.5, 0.0, frag_view.z - player_view.z);
-	vec2 ss_offset = frag_view.xy - player_view.xy;
-	float ss_dist = length(ss_offset);
-	float proximity_fade = smoothstep(fade_inner, fade_outer, ss_dist);
-	float height_mask = smoothstep(fade_height - 0.3, fade_height, world_pos.y);
-	float fade = mix(1.0, mix(1.0, proximity_fade, height_mask), in_front);
+	// Disabled by default — the current camera angle rarely occludes the player.
+	if (fade_enabled) {
+		vec3 player_view = (VIEW_MATRIX * vec4(player_world_pos, 1.0)).xyz;
+		vec3 frag_view = (VIEW_MATRIX * vec4(world_pos, 1.0)).xyz;
+		float in_front = smoothstep(-0.5, 0.0, frag_view.z - player_view.z);
+		vec2 ss_offset = frag_view.xy - player_view.xy;
+		float ss_dist = length(ss_offset);
+		float proximity_fade = smoothstep(fade_inner, fade_outer, ss_dist);
+		float height_mask = smoothstep(fade_height - 0.3, fade_height, world_pos.y);
+		float fade = mix(1.0, mix(1.0, proximity_fade, height_mask), in_front);
 
-	// Dithered discard — each pixel is fully opaque or gone.
-	// Prevents double-rendering when overlapping walls both fade.
-	if (fade < 1.0) {
-		float noise = fract(52.9829189 * fract(dot(FRAGCOORD.xy, vec2(0.06711056, 0.00583715))));
-		if (fade < noise) {
-			discard;
+		// Dithered discard — each pixel is fully opaque or gone.
+		// Prevents double-rendering when overlapping walls both fade.
+		if (fade < 1.0) {
+			float noise = fract(52.9829189 * fract(dot(FRAGCOORD.xy, vec2(0.06711056, 0.00583715))));
+			if (fade < noise) {
+				discard;
+			}
 		}
 	}
 

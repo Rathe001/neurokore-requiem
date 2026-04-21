@@ -6,6 +6,8 @@ signal resource_changed(current: int, max_value: int)
 signal credits_changed(amount: int)
 signal died
 
+const ITEM_PICKUP_SCENE: PackedScene = preload("res://scenes/prototype/prototype_item_pickup.tscn")
+
 const KNOCKBACK_DURATION := 0.15
 const DEATH_HOLD := 0.9
 const RESPAWN_DELAY := 1.0
@@ -23,11 +25,11 @@ const SKILL_INPUTS: Array[StringName] = [
 	&"skill_e",
 ]
 
-const ANIM_IDLE: Array[StringName] = [&"Idle_Normal", &"Idle", &"IDLE_NORMAL"]
-const ANIM_RUN: Array[StringName] = [&"Jog_Fwd", &"Walk_Normal", &"JOG_FWD", &"WALK_NORMAL"]
+const ANIM_IDLE: Array[StringName] = [&"Idle_Loop", &"Idle_Normal", &"Idle", &"IDLE_NORMAL"]
+const ANIM_RUN: Array[StringName] = [&"Jog_Fwd_Loop", &"Walk_Loop", &"Jog_Fwd", &"Walk_Normal", &"JOG_FWD", &"WALK_NORMAL"]
 const ANIM_ATTACK: Array[StringName] = [&"Sword_Attack", &"Punch_Cross", &"SWORD_ATTACK", &"PUNCH_CROSS"]
 const ANIM_DEATH: Array[StringName] = [
-	&"Death_1", &"Death_2", &"Death_A", &"Death_B", &"Death",
+	&"Death01", &"Death_1", &"Death_2", &"Death_A", &"Death_B", &"Death",
 	&"Dying_A", &"Dying_B", &"Die",
 	&"DEATH_1", &"DEATH_2", &"DEATH",
 ]
@@ -40,6 +42,15 @@ const ANIM_DEATH: Array[StringName] = [
 
 @onready var visual: Node3D = $Visual
 @onready var anim_player: AnimationPlayer = $Visual/Character/AnimationPlayer
+
+const FLASHLIGHT_OFFSET := Vector3(0, 1.4, -0.3)
+const FLASHLIGHT_MAX_PITCH_DEG := 82.0
+const FLASHLIGHT_MAX_UP_DEG := 10.0
+# Cursor distance at which the beam fully levels off (and begins tilting up).
+const FLASHLIGHT_LEVEL_DISTANCE := 9.0
+# How far above the flashlight the beam targets at max cursor distance. This is
+# what tilts the beam slightly above horizontal at the far end.
+const FLASHLIGHT_OVER_LIFT := 0.8
 
 var class_id: StringName = &""
 var spec_id: StringName = &""
@@ -56,10 +67,13 @@ var _resource_current: float = 0.0
 var _resource_last_int: int = 0
 var _credits: int = 0
 var _death_tween: Tween
+var _flashlight: SpotLight3D
+var _anim_reverse: bool = false
 
 func _ready() -> void:
 	_camera = get_viewport().get_camera_3d()
 	add_to_group(&"player")
+	add_to_group(&"world_item_dropper")
 	SpatialGrid.register(self, &"player")
 	class_id = PlayerState.class_id
 	spec_id = PlayerState.spec_id
@@ -68,6 +82,7 @@ func _ready() -> void:
 	_ensure_loop(ANIM_RUN)
 	_play_anim(ANIM_IDLE)
 	_apply_class_appearance()
+	_build_flashlight()
 	if resource_pool != null:
 		_resource_current = float(resource_pool.start_value)
 		_resource_last_int = int(_resource_current)
@@ -149,11 +164,16 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 
 	if _alive and not _attacking and _knockback_remain <= 0.0:
+		var offset := _cursor_offset()
+		if offset.length_squared() > 0.0001:
+			_face_direction(offset.normalized())
+			_update_flashlight_pitch(offset.length())
 		if _want_dir.length_squared() > 0.01:
-			_play_anim(ANIM_RUN)
-			_face_direction(_want_dir)
+			var facing := -visual.global_transform.basis.z
+			var backing := _want_dir.dot(facing) < -0.3
+			_play_anim(ANIM_RUN, -1.0 if backing else 1.0, 0.15)
 		else:
-			_play_anim(ANIM_IDLE)
+			_play_anim(ANIM_IDLE, 1.0, 0.15)
 
 	_handle_skill_input()
 
@@ -310,7 +330,7 @@ func _respawn() -> void:
 	health_changed.emit(_health, max_health)
 	_play_anim(ANIM_IDLE)
 
-func _aim_direction() -> Vector3:
+func _cursor_offset() -> Vector3:
 	if _camera == null:
 		return Vector3.ZERO
 	var mouse_pos := get_viewport().get_mouse_position()
@@ -321,29 +341,92 @@ func _aim_direction() -> Vector3:
 	var t: float = (global_position.y - from.y) / dir.y
 	if t < 0.0:
 		return Vector3.ZERO
-	var hit := from + dir * t
-	var flat := hit - global_position
+	var flat := (from + dir * t) - global_position
 	flat.y = 0.0
-	if flat.length_squared() < 0.0001:
+	return flat
+
+func _aim_direction() -> Vector3:
+	var offset := _cursor_offset()
+	if offset.length_squared() < 0.0001:
 		return Vector3.ZERO
-	return flat.normalized()
+	return offset.normalized()
+
+func _build_flashlight() -> void:
+	if visual == null:
+		return
+	_flashlight = SpotLight3D.new()
+	_flashlight.spot_angle = 20.0
+	_flashlight.spot_attenuation = 1.4
+	_flashlight.spot_angle_attenuation = 0.8
+	_flashlight.shadow_enabled = true
+	_flashlight.shadow_bias = 0.02
+	_flashlight.shadow_normal_bias = 0.3
+	_flashlight.position = FLASHLIGHT_OFFSET
+	_flashlight.visible = false
+	visual.add_child(_flashlight)
+	_update_flashlight_pitch(0.0)
+	InventoryState.equipment_changed.connect(_on_equipment_changed)
+	InventoryState.items_overflowed.connect(_on_items_overflowed)
+	_apply_light_item()
+
+func _on_equipment_changed(slot: StringName) -> void:
+	if slot == &"light":
+		_apply_light_item()
+
+func _on_items_overflowed(overflow: Array[Item]) -> void:
+	for displaced_item in overflow:
+		drop_item(displaced_item)
+
+func drop_item(item: Item) -> void:
+	var parent := get_parent()
+	if parent == null:
+		return
+	var pickup := ITEM_PICKUP_SCENE.instantiate() as Node3D
+	pickup.configure(item)
+	parent.add_child(pickup)
+	pickup.global_position = global_position + Vector3(randf_range(-0.5, 0.5), 0.0, randf_range(-0.5, 0.5))
+
+func _apply_light_item() -> void:
+	if _flashlight == null:
+		return
+	var item: Item = InventoryState.get_equipped(&"light")
+	if item != null:
+		_flashlight.light_color = item.light_color
+		_flashlight.light_energy = item.light_energy
+		_flashlight.spot_range = item.light_range
+	_flashlight.visible = item != null
+
+func _update_flashlight_pitch(cursor_distance: float) -> void:
+	if _flashlight == null:
+		return
+	var forward_offset := -FLASHLIGHT_OFFSET.z
+	var d := maxf(0.01, cursor_distance - forward_offset)
+	# The aim target lifts off the floor as the cursor moves away, going from
+	# "floor in front of player" through the flashlight's own height (parallel)
+	# and ending slightly above it (a touch of upward tilt at the far end).
+	var lift_t := clampf(cursor_distance / FLASHLIGHT_LEVEL_DISTANCE, 0.0, 1.0)
+	var vertical := FLASHLIGHT_OFFSET.y - lift_t * (FLASHLIGHT_OFFSET.y + FLASHLIGHT_OVER_LIFT)
+	var pitch := atan2(vertical, d)
+	pitch = clampf(pitch, -deg_to_rad(FLASHLIGHT_MAX_UP_DEG), deg_to_rad(FLASHLIGHT_MAX_PITCH_DEG))
+	_flashlight.rotation.x = -pitch
 
 func _face_direction(dir: Vector3) -> void:
 	if visual == null or dir.length_squared() < 0.0001:
 		return
 	visual.look_at(visual.global_position + dir, Vector3.UP)
 
-func _play_anim(candidates: Array[StringName], speed: float = 1.0) -> bool:
+func _play_anim(candidates: Array[StringName], speed: float = 1.0, blend: float = 0.0) -> bool:
 	if anim_player == null:
 		return false
+	var reverse := speed < 0.0
 	for name in candidates:
 		if not anim_player.has_animation(name):
 			continue
 		var name_str := String(name)
-		if anim_player.current_animation == name_str and anim_player.is_playing():
+		if anim_player.current_animation == name_str and anim_player.is_playing() and _anim_reverse == reverse:
 			return true
-		anim_player.speed_scale = speed
-		anim_player.play(name_str)
+		_anim_reverse = reverse
+		anim_player.play(name_str, blend, absf(speed), reverse)
 		return true
 	return false
 

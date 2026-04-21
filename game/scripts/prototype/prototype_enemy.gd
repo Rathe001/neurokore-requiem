@@ -29,8 +29,11 @@ const ANIM_DEATH: Array[StringName] = [
 	&"DEATH_1", &"DEATH_2", &"DEATH",
 ]
 
+const OUTLINE_GROW := 0.04
+
 @export var max_health: int = 40
 @export_range(0.0, 1.0, 0.05) var credit_drop_chance: float = 0.6
+@export var display_name: String = "Enemy"
 
 @onready var visual: Node3D = $Visual
 @onready var anim_player: AnimationPlayer = $Visual/Character/AnimationPlayer
@@ -46,9 +49,13 @@ var _attack_cd: float = 0.0
 var _casting: bool = false
 var _want_dir: Vector3 = Vector3.ZERO
 var _player_ref: Node3D
+var _outline_mat: StandardMaterial3D
+var _outlined_meshes: Array[MeshInstance3D] = []
+var _hover_hooked: bool = false
 
 func _ready() -> void:
 	_init_enemy()
+	_setup_hover()
 
 func _init_enemy() -> void:
 	add_to_group(&"enemies")
@@ -79,6 +86,43 @@ func _init_enemy() -> void:
 func reset() -> void:
 	remove_from_group(&"corpses")
 	_init_enemy()
+
+func _setup_hover() -> void:
+	_outline_mat = StandardMaterial3D.new()
+	_outline_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_outline_mat.albedo_color = Color.WHITE
+	_outline_mat.cull_mode = BaseMaterial3D.CULL_FRONT
+	_outline_mat.grow = true
+	_outline_mat.grow_amount = OUTLINE_GROW
+	_collect_meshes(visual)
+	if not _hover_hooked:
+		mouse_entered.connect(_on_mouse_entered)
+		mouse_exited.connect(_on_mouse_exited)
+		_hover_hooked = true
+
+func _collect_meshes(root: Node) -> void:
+	if root == null:
+		return
+	for child in root.get_children():
+		if child is MeshInstance3D:
+			_outlined_meshes.append(child)
+		_collect_meshes(child)
+
+func _set_outline(on: bool) -> void:
+	var mat: Material = _outline_mat if on else null
+	for mi in _outlined_meshes:
+		if is_instance_valid(mi):
+			mi.material_overlay = mat
+
+func _on_mouse_entered() -> void:
+	if not _alive:
+		return
+	_set_outline(true)
+	get_tree().call_group(&"interactable_tooltip", &"show_text", display_name)
+
+func _on_mouse_exited() -> void:
+	_set_outline(false)
+	get_tree().call_group(&"interactable_tooltip", &"hide_tooltip")
 
 func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_strength: float = 0.0) -> void:
 	if not _alive:
@@ -207,6 +251,8 @@ func _become_corpse() -> void:
 	SpatialGrid.unregister(self)
 	remove_from_group(&"enemies")
 	add_to_group(&"corpses")
+	_set_outline(false)
+	get_tree().call_group(&"interactable_tooltip", &"hide_tooltip")
 	if collision != null:
 		collision.disabled = true
 	if floor_ring != null:

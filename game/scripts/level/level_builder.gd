@@ -10,9 +10,6 @@ const _SEAM := 0.02  # anti-z-fight gap for corridor walls abutting room geometr
 
 var _wall_material: Material
 var _floor_material: Material
-var _fluorescent_housing_mesh: BoxMesh
-var _fluorescent_tube_mesh: BoxMesh
-var _fluorescent_housing_material: StandardMaterial3D
 var _wall_meshes: Dictionary = {}
 var _wall_shapes: Dictionary = {}
 var _doors: Dictionary = {}
@@ -57,17 +54,6 @@ func _init_shared_resources() -> void:
 		mat.metallic = t.floor_metallic
 		mat.roughness = t.floor_roughness
 		_floor_material = mat
-
-	_fluorescent_housing_mesh = BoxMesh.new()
-	_fluorescent_housing_mesh.size = t.fluorescent_housing_size
-	_fluorescent_housing_material = StandardMaterial3D.new()
-	_fluorescent_housing_material.albedo_color = t.fluorescent_housing_color
-	_fluorescent_housing_material.metallic = t.fluorescent_housing_metallic
-	_fluorescent_housing_material.roughness = t.fluorescent_housing_roughness
-	_fluorescent_housing_mesh.material = _fluorescent_housing_material
-
-	_fluorescent_tube_mesh = BoxMesh.new()
-	_fluorescent_tube_mesh.size = t.fluorescent_tube_size
 
 	_fog_material = FogMaterial.new()
 	_fog_material.density = 0.001
@@ -114,6 +100,7 @@ func _create_wall(pos: Vector3, size_x: float, size_z: float) -> StaticBody3D:
 	var t := layout.theme
 	var body := StaticBody3D.new()
 	body.transform.origin = pos + Vector3(0, t.wall_height * 0.5, 0)
+	body.input_ray_pickable = false
 
 	var mesh_inst := MeshInstance3D.new()
 	mesh_inst.name = &"Mesh"
@@ -133,6 +120,7 @@ func _create_wall_body(pos: Vector3, size_x: float, size_z: float) -> void:
 	var t := layout.theme
 	var body := StaticBody3D.new()
 	body.transform.origin = pos + Vector3(0, t.wall_height * 0.5, 0)
+	body.input_ray_pickable = false
 	var col := CollisionShape3D.new()
 	col.name = &"Collision"
 	col.shape = _get_wall_shape(size_x, size_z)
@@ -275,82 +263,76 @@ static func _add_ew_faces(st: SurfaceTool, cz: float, outer_x: float, inner_x: f
 			_vquad(st, Vector3(inner_x, 0, cz + iz), Vector3(inner_x, 0, cz - iz), h)
 		_hquad_top(st, min_x, cz - iz, max_x, cz + iz, h)
 
-# ── Fluorescent Fixtures ──────────────────────────────────────────────────
+# ── Ceiling Lights ────────────────────────────────────────────────────────
+# Invisible omni lights mounted just below the ceiling (ceiling is never seen
+# by the fixed top-down camera, so no fixture mesh is needed).
 
-func _create_fluorescent(pos: Vector3, lc: LightColor, rotate_z: bool = false) -> void:
-	var t := layout.theme
+const CEILING_CLEARANCE := 0.1
+const CEILING_LIGHT_ENERGY_MIN := 4.0
+const CEILING_LIGHT_ENERGY_MAX := 11.0
+const CEILING_LIGHT_RANGE_MIN := 9.0
+const CEILING_LIGHT_RANGE_MAX := 14.0
+const CEILING_LIGHT_ATTENUATION := 1.3
+
+func _create_ceiling_light(pos: Vector3, lc: LightColor) -> void:
 	var fixture := FluorescentFlicker.new()
 	fixture.position = pos
-	if rotate_z:
-		fixture.rotation_degrees.y = 90.0
-
-	var housing := MeshInstance3D.new()
-	housing.mesh = _fluorescent_housing_mesh
-	fixture.add_child(housing)
-
-	var tube := MeshInstance3D.new()
-	tube.mesh = _fluorescent_tube_mesh
-	var tube_mat := StandardMaterial3D.new()
-	tube_mat.albedo_color = lc.color
-	tube_mat.emission_enabled = true
-	tube_mat.emission = lc.color
-	tube_mat.emission_energy_multiplier = t.fluorescent_emission_multiplier
-	tube_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	tube.material_override = tube_mat
-	fixture.add_child(tube)
 
 	var light := OmniLight3D.new()
 	light.light_color = lc.color
-	light.light_energy = lc.energy
-	light.omni_range = lc.range
-	light.omni_attenuation = lc.attenuation
+	light.light_energy = randf_range(CEILING_LIGHT_ENERGY_MIN, CEILING_LIGHT_ENERGY_MAX)
+	light.omni_range = randf_range(CEILING_LIGHT_RANGE_MIN, CEILING_LIGHT_RANGE_MAX)
+	light.omni_attenuation = CEILING_LIGHT_ATTENUATION
 	light.shadow_enabled = lc.shadows
 	light.light_volumetric_fog_energy = 0.0
-	light.position = Vector3(0, -0.1, 0)
 	fixture.add_child(light)
 
-	fixture.setup(light, tube_mat)
+	_randomize_flicker_profile(fixture)
+	fixture.setup(light, null)
 	add_child(fixture)
+
+# Roll a flicker profile per fixture: most lights are steady, some twitch
+# subtly, a few are outright broken with fast / deep flickers.
+func _randomize_flicker_profile(fixture: FluorescentFlicker) -> void:
+	var roll := randf()
+	if roll < 0.6:
+		# Steady — no flicker at all.
+		fixture.flicker_chance = 0.0
+		return
+	if roll < 0.9:
+		# Minor twitch — rare, subtle, fairly quick.
+		fixture.flicker_chance = randf_range(0.003, 0.012)
+		fixture.flicker_depth = randf_range(0.15, 0.35)
+		fixture.flicker_duration = randf_range(0.04, 0.1)
+		return
+	# Broken — frequent, deep, and varied durations.
+	fixture.flicker_chance = randf_range(0.03, 0.08)
+	fixture.flicker_depth = randf_range(0.5, 0.85)
+	fixture.flicker_duration = randf_range(0.06, 0.22)
 
 func _place_room_fluorescents(center: Vector3, rd: RoomDef) -> void:
 	var lc := rd.light_color
 	if lc == null:
 		return
-	var t := layout.theme
-	var y := t.wall_height - 0.2
-	var area := rd.size.x * rd.size.y
-	var count := maxi(1, int(area / 18.0))
-	var along_x := rd.size.x >= rd.size.y
-	var span := rd.size.x if along_x else rd.size.y
-	var spacing := span / float(count + 1)
-
-	for i in count:
-		var offset := -span * 0.5 + spacing * (i + 1)
-		var pos: Vector3
-		if along_x:
-			pos = center + Vector3(offset, y, 0)
-		else:
-			pos = center + Vector3(0, y, offset)
-		_create_fluorescent(pos, lc, not along_x)
+	var y := layout.theme.wall_height - CEILING_CLEARANCE
+	_create_ceiling_light(center + Vector3(0, y, 0), lc)
 
 func _place_corridor_fluorescents(center: Vector3, cd: CorridorDef) -> void:
 	var lc := cd.light_color
 	if lc == null or cd.light_interval <= 0.0:
 		return
-	var t := layout.theme
-	var y := t.wall_height - 0.2
+	var y := layout.theme.wall_height - CEILING_CLEARANCE
 	var hl := cd.length * 0.5
 	var along_z := cd.axis == CorridorDef.Axis.Z
 
-	var start := -hl + cd.light_interval * 0.5
-	var v := start
+	var v := -hl + cd.light_interval * 0.5
 	while v < hl:
 		var pos: Vector3
 		if along_z:
 			pos = Vector3(center.x, y, center.z + v)
 		else:
 			pos = Vector3(center.x + v, y, center.z)
-		_create_fluorescent(pos, lc, along_z)
+		_create_ceiling_light(pos, lc)
 		v += cd.light_interval
 
 # ── Rooms ─────────────────────────────────────────────────────────────────
@@ -482,13 +464,9 @@ func _create_fill_light(center: Vector3, size_x: float, size_z: float) -> void:
 
 # ── Fog Volumes ───────────────────────────────────────────────────────────
 
-func _create_fog_volume(center: Vector3, size_x: float, size_z: float) -> void:
-	var t := layout.theme
-	var fog := FogVolume.new()
-	fog.size = Vector3(size_x, t.wall_height, size_z)
-	fog.material = _fog_material
-	fog.position = center + Vector3(0, t.wall_height * 0.5, 0)
-	add_child(fog)
+func _create_fog_volume(_center: Vector3, _size_x: float, _size_z: float) -> void:
+	# Volumetric fog is disabled at the environment level; skip FogVolume nodes.
+	pass
 
 # ── Door Access ───────────────────────────────────────────────────────────
 

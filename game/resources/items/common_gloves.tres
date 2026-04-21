@@ -1,0 +1,13 @@
+[gd_resource type="Resource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/item.gd" id="1_item"]
+
+[resource]
+script = ExtResource("1_item")
+id = &"common_gloves"
+name_key = "ITEM_GLOVES"
+description_key = "ITEM_GLOVES_DESC"
+kind = &"gloves"
+rarity = &"common"
+glyph = "G"
+glyph_color = Color(0.72, 0.62, 0.48, 1)
