@@ -60,7 +60,7 @@ const PICKS: Array[Dictionary] = [
 		"label_key": "STARTUP_PICK_HUMAN_ENCULTED",
 		"glyph": "E",
 		"accent": Color(0.78, 0.35, 0.85, 1),
-		"backstory": "You found something in the dark and it found you back. What others call corruption, you call clarity. What they call madness, you call perspective.",
+		"backstory": "You found something in the dark and it found you back. What others call ambition, you call clarity. What they call madness, you call perspective.",
 	},
 	{
 		"class_id": &"cyborg", "spec_id": &"polymath",

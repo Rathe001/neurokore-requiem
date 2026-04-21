@@ -11,7 +11,7 @@
 
 **Fantasy:** augment the mind beyond human limits. The body is just a platform for expanded cognition.
 
-**Attribute:** Clarity — mental precision and cognitive reach. Opposes Corruption. See [Attribute System](../../design/attribute-system.md).
+**Attribute:** Clarity — mental precision and cognitive reach. Opposes Ambition. See [Attribute System](../../design/attribute-system.md).
 
 **Tier perks:** TBD. See [Stat Identity](../../design/attribute-system.md#stat-identity--tier-perks--visual-metamorphosis).
 
