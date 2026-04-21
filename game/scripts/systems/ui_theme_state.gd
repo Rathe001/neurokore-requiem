@@ -149,10 +149,10 @@ func _build_theme(p: UIThemeConfig) -> Theme:
 	pos_style.bg_color = Color(0.0, 0.15, 0.05, 0.9)
 	pos_style.border_color = Color(0.35, 0.9, 0.45, 1.0)
 	pos_style.set_border_width_all(1)
-	pos_style.content_margin_left = 5
-	pos_style.content_margin_right = 5
-	pos_style.content_margin_top = 1
-	pos_style.content_margin_bottom = 1
+	pos_style.content_margin_left = 3
+	pos_style.content_margin_right = 3
+	pos_style.content_margin_top = 0
+	pos_style.content_margin_bottom = 0
 	t.set_stylebox(&"panel", &"StatPosTag", pos_style)
 
 	t.set_type_variation(&"StatNegTag", &"PanelContainer")

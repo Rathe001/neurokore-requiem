@@ -34,6 +34,8 @@ Styled `PanelContainer` variations for stat indicators. Assign with `container.t
 | `StatPosTag` | `(0.0, 0.15, 0.05, 0.9)` | `(0.35, 0.9, 0.45, 1.0)` | `(0.35, 0.9, 0.45, 1.0)` | Primary stat (`+Soul`) |
 | `StatNegTag` | `(0.15, 0.0, 0.0, 0.9)` | `(0.9, 0.3, 0.3, 1.0)` | `(0.9, 0.3, 0.3, 0.85)` | Opposing stat (`-Interface`) |
 
+Tag StyleBox content margins: 3px left/right, 0px top/bottom. Labels inside use `StatLabel` variation with a 7px font override and an explicit color override.
+
 Tag colors are **fixed** — they do not shift per class theme. Green = benefit, red = penalty. This is intentional: colorblind-friendly alternatives may be added later.
 
 ## Color Groups

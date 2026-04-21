@@ -261,52 +261,58 @@ func _make_pick_card(entry: Dictionary) -> Button:
 	var desc_label := Label.new()
 	desc_label.text = tr(entry["backstory"])
 	desc_label.theme_type_variation = &"SmallLabel"
+	desc_label.add_theme_font_size_override(&"font_size", 9)
 	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	desc_label.max_lines_visible = 2
 	desc_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	desc_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(desc_label)
 
-	# Stats overlay — top-right corner
+	# Stats overlay — bottom-right corner, single row
 	var stats_overlay := Control.new()
 	stats_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	stats_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	card.add_child(stats_overlay)
 
-	var stats_vbox := VBoxContainer.new()
-	stats_vbox.add_theme_constant_override(&"separation", 2)
-	stats_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	stats_vbox.anchor_left = 1.0
-	stats_vbox.anchor_right = 1.0
-	stats_vbox.anchor_top = 0.0
-	stats_vbox.anchor_bottom = 0.0
-	stats_vbox.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	stats_vbox.offset_left = -104.0
-	stats_vbox.offset_right = -8.0
-	stats_vbox.offset_top = 7.0
-	stats_overlay.add_child(stats_vbox)
+	var tags_row := HBoxContainer.new()
+	tags_row.add_theme_constant_override(&"separation", 4)
+	tags_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tags_row.anchor_left = 0.0
+	tags_row.anchor_right = 1.0
+	tags_row.anchor_top = 1.0
+	tags_row.anchor_bottom = 1.0
+	tags_row.offset_left = 8.0
+	tags_row.offset_right = -8.0
+	tags_row.offset_top = -18.0
+	tags_row.offset_bottom = -5.0
+	stats_overlay.add_child(tags_row)
+
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tags_row.add_child(spacer)
 
 	var pos_tag := PanelContainer.new()
 	pos_tag.theme_type_variation = &"StatPosTag"
-	pos_tag.size_flags_horizontal = Control.SIZE_SHRINK_END
 	pos_tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	stats_vbox.add_child(pos_tag)
+	tags_row.add_child(pos_tag)
 	var plus_stat := Label.new()
 	plus_stat.text = "+" + tr(entry["stat"])
 	plus_stat.theme_type_variation = &"StatLabel"
 	plus_stat.add_theme_color_override(&"font_color", Color(0.35, 0.9, 0.45, 1.0))
+	plus_stat.add_theme_font_size_override(&"font_size", 7)
 	plus_stat.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	pos_tag.add_child(plus_stat)
 
 	var neg_tag := PanelContainer.new()
 	neg_tag.theme_type_variation = &"StatNegTag"
-	neg_tag.size_flags_horizontal = Control.SIZE_SHRINK_END
 	neg_tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	stats_vbox.add_child(neg_tag)
+	tags_row.add_child(neg_tag)
 	var minus_opp := Label.new()
 	minus_opp.text = "-" + tr(entry["opposes"])
 	minus_opp.theme_type_variation = &"StatLabel"
 	minus_opp.add_theme_color_override(&"font_color", Color(0.9, 0.3, 0.3, 0.85))
+	minus_opp.add_theme_font_size_override(&"font_size", 7)
 	minus_opp.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	neg_tag.add_child(minus_opp)
 
