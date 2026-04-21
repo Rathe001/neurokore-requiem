@@ -7,10 +7,10 @@ const BG_COLOR := Color(0.02, 0.02, 0.04, 1.0)
 const LOGO_MAX_WIDTH := 520.0
 const BUTTON_SIZE := Vector2(200.0, 36.0)
 const BUTTON_GAP := 8.0
-const CARD_SIZE := Vector2(400.0, 110.0)
+const CARD_SIZE := Vector2(400.0, 88.0)
 const CARD_COL_GAP := 12.0
-const CARD_ROW_GAP := 8.0
-const PORTRAIT_SIZE := 80.0
+const CARD_ROW_GAP := 6.0
+const PORTRAIT_SIZE := 64.0
 
 const PICKS: Array[Dictionary] = [
 	{
@@ -161,8 +161,8 @@ func _build_class_panel() -> void:
 	grid.anchor_bottom = 0.5
 	grid.offset_left = -total_width * 0.5
 	grid.offset_right = total_width * 0.5
-	grid.offset_top = -total_height * 0.5 + 10.0
-	grid.offset_bottom = total_height * 0.5 + 10.0
+	grid.offset_top = -total_height * 0.5 + 24.0
+	grid.offset_bottom = total_height * 0.5 + 24.0
 	_class_panel.add_child(grid)
 
 	for entry in PICKS:
@@ -264,6 +264,8 @@ func _make_pick_card(entry: Dictionary) -> Button:
 	desc_label.add_theme_font_size_override(&"font_size", 10)
 	desc_label.add_theme_color_override(&"font_color", Color(0.78, 0.78, 0.78, 0.85))
 	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc_label.max_lines_visible = 2
+	desc_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	desc_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(desc_label)
 
