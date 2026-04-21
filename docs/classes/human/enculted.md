@@ -11,4 +11,6 @@
 
 **Fantasy:** tapped into something ancient living in the network. The augmentations that make the Cyborg powerful are blocking signals the unmodified mind can receive. Unstable, dangerous power with a horror edge.
 
-**Resource: Sanity** — depletes as occult abilities are used. Push too far and the character becomes dangerous to everything, including themselves.
+**Attribute:** Corruption — the more corrupt, the more powerful. Opposes Clarity.
+
+**Resource:** TBD — rethinking to align with the corruption-as-power fantasy.

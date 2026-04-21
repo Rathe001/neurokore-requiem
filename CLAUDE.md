@@ -5,7 +5,7 @@ This file is committed to the repo so context is available on any machine. It is
 ## How to Work on This Project
 
 - **Docs are the source of truth.** All game design detail lives in `/docs`. Read the relevant doc before answering questions or making changes.
-- **Keep this file in sync with the docs.** When a docs file changes in a way that affects the high-level summary below (new class, renamed spec, changed mechanic), update this file too. A hook will remind you automatically.
+- **Keep this file in sync with the docs.** When a docs file changes in a way that affects the high-level summary below (new class, changed mechanic), update this file too. A hook will remind you automatically.
 - **CLAUDE.md is a pointer, not a mirror.** Do not duplicate doc content here — just enough to orient and navigate.
 
 ## What This Is
@@ -23,12 +23,16 @@ Full world and tone detail: [`docs/world/tone.md`](docs/world/tone.md)
 
 Full combat design: [`docs/design/combat.md`](docs/design/combat.md)
 
-## Classes (2 at launch)
+## Classes (8 at launch)
 
-| Class | Specs | Resource Systems |
-|---|---|---|
-| **Cyborg** | Forged, Automaton, Polymath | Power Grid / Bandwidth / Memory+CPU |
-| **Human** | Survivalist, Gentleman-Lady, Enculted | Adrenaline / Composure / Sanity |
+Two **origin classes** (generalist) and six **specialized classes** (3 per origin):
+
+| Origin | Specialized Classes |
+|---|---|
+| **Human** | Survivalist, Gentleman/Lady, Enculted |
+| **Cyborg** | Forged, Automaton, Polymath |
+
+Each class has one unique resource. See [`docs/classes/overview.md`](docs/classes/overview.md) for the full resource table.
 
 Full class details:
 - [`docs/classes/overview.md`](docs/classes/overview.md)
@@ -43,12 +47,12 @@ Full class details:
 
 ## Starting Zones & Key Systems
 
-- [`docs/design/starting-zones.md`](docs/design/starting-zones.md) — Earth Facility #723, rep system, spec choice boss battle, base class path
+- [`docs/design/starting-zones.md`](docs/design/starting-zones.md) — Earth Facility #723, rep system, class choice boss battle, origin class path
 - [`docs/design/morality-system.md`](docs/design/morality-system.md) — 2D morality plane, rep alignments, what it affects
 - [`docs/design/skill-tree.md`](docs/design/skill-tree.md) — basic attacks, tutorial progression, starting skills, hotkeys
 - [`docs/design/zones.md`](docs/design/zones.md) — zone design philosophy, Sub-Level Zero, zone registry
-- [`docs/design/dialog-ui.md`](docs/design/dialog-ui.md) — animated portraits, spec effects, UI philosophy
-- [`docs/design/attribute-system.md`](docs/design/attribute-system.md) — 8 moral attributes, item stat budgets, spec scaling, opposing stats
+- [`docs/design/dialog-ui.md`](docs/design/dialog-ui.md) — animated portraits, class effects, UI philosophy
+- [`docs/design/attribute-system.md`](docs/design/attribute-system.md) — 8 moral attributes, item stat budgets, class scaling, opposing stats
 - [`docs/design/controls.md`](docs/design/controls.md) — WASD movement, mouse for attacks, controller as future work
 - [`docs/world/lighting.md`](docs/world/lighting.md) — darkness as default, equippable light sources, zone lighting tiers
 

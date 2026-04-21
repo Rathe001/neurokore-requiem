@@ -1,6 +1,6 @@
 # Morality System
 
-The morality system is first triggered by the Confrontation at the end of the starting zone — the spec choice is the single largest push a player's moral position will ever receive. See [Starting Zones](starting-zones.md) for the narrative context.
+The morality system is first triggered by the Confrontation at the end of the starting zone — the class choice is the single largest push a player's moral position will ever receive. See [Starting Zones](starting-zones.md) for the narrative context.
 
 Player decisions, dialogue choices, and actions are tracked silently throughout the game. The player never sees a number or a progress bar. Instead, the **character screen displays a 2D coordinate plane** with a single colored dot representing the player's current moral position.
 
@@ -40,19 +40,19 @@ The morality system is **a story mechanic only** — it never affects player pow
 
 ## Permanence
 
-**The spec choice is permanent.** Once made, there is no respec between specs — a new playthrough requires a new character. This makes the starting zone boss battle carry its full weight.
+**The class choice is permanent.** Once made, there is no respec between classes — a new playthrough requires a new character. This makes the starting zone boss battle carry its full weight.
 
-Respec *within* a chosen spec's skill tree may be permitted (pending skill tree design decisions). Switching specs is not.
+Respec *within* a chosen class's skill tree may be permitted (pending skill tree design decisions). Switching classes is not.
 
-The spec choice is the single largest push toward a rep's quadrant. It cannot be undone, but subsequent decisions continue to move the dot — the spec choice creates a starting position, not a ceiling.
+The class choice is the single largest push toward a rep's quadrant. It cannot be undone, but subsequent decisions continue to move the dot — the class choice creates a starting position, not a ceiling.
 
 ---
 
 ## Starting Position
 
-When a spec is chosen, the player's dot **snaps to that rep's fixed position** on the morality plane. Playing naturally within the spec's fantasy will keep the dot there. Deviation requires conscious choices against the spec's identity — the rep reacts to that drift, not to the starting position.
+When a class is chosen, the player's dot **snaps to that rep's fixed position** on the morality plane. Playing naturally within the class's fantasy will keep the dot there. Drift requires conscious choices against the class's identity — the rep reacts to that drift, not to the starting position.
 
-The base class path (mystery rep) places the dot at Selfless + Human — the only path that begins there.
+The origin class path (mystery rep) places the dot at Selfless + Human — the only path that begins there.
 
 ---
 

@@ -62,5 +62,5 @@ nav:
       - Survivalist: classes/human/survivalist.md
       - Gentleman / Lady: classes/human/gentleman.md
       - Enculted: classes/human/enculted.md
-    - Spec Monster Variants: classes/spec-monsters.md
+    - Class Monster Variants: classes/spec-monsters.md
   - Status: status.md

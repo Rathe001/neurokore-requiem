@@ -24,7 +24,7 @@ The mod that demonstrated how much further the D2 design space could go. Key les
 Reference for end-game enemy density and screen-filling horde scale. The feeling of being overwhelmed by sheer numbers, and the satisfaction of a build that handles it, is the end-game target for Neurokore: Requiem. The scale — not the auto-fire mechanic — is the reference.
 
 ### World of Warcraft: Legion
-Reference specifically for the spec unlock system. Legion artifact weapon quests were memorable because they were tailored to the class fantasy — the quest felt like the spec choosing you, not a menu option. The Neurokore spec unlock quests should achieve the same effect.
+Reference specifically for the class unlock system. Legion artifact weapon quests were memorable because they were tailored to the class fantasy — the quest felt like the class choosing you, not a menu option. The Neurokore class unlock quests should achieve the same effect.
 
 ---
 

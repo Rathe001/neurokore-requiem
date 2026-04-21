@@ -7,7 +7,7 @@
 | W / A / S / D | Movement |
 | Left mouse button | Basic single-target attack |
 | Right mouse button | Basic AoE attack |
-| 1 | First spec skill |
+| 1 | First class skill |
 | 2 – ? | Subsequent skills (TBD per [Skill Tree](skill-tree.md)) |
 
 **No click-to-move.** Left and right mouse buttons are reserved for the basic attacks defined in [Skill Tree](skill-tree.md). Movement is keyboard only — the modern ARPG / twin-stick convention.

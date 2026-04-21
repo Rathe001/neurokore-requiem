@@ -4,8 +4,8 @@
 
 [resource]
 script = ExtResource("1_script")
-accent = Color(0.92, 0.78, 0.45, 1)
-accent_dim = Color(0.58, 0.45, 0.25, 1)
+accent = Color(0.95, 0.92, 0.8, 1)
+accent_dim = Color(0.62, 0.6, 0.52, 1)
 panel_bg = Color(0.06, 0.04, 0.05, 0.94)
 panel_border = Color(0.78, 0.62, 0.32, 0.9)
 text = Color(0.98, 0.92, 0.82, 1)

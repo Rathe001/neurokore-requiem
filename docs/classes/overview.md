@@ -5,18 +5,31 @@
 ## Core Principles
 
 - Class-specific core mechanics — not all classes share the same resource systems, survival mechanics, or win conditions. For example, not all classes will have a health bar.
-- 2 classes at launch: **[Human](human.md)** and **[Cyborg](cyborg.md)** (name subject to change).
-- Each class has a fully viable **base form** plus **3 specializations** unlocked through specific quests — similar to WoW Legion artifact weapon quests. The unlock quest should feel thematic and personal to the spec.
+- 8 classes at launch: 2 **origin classes** ([Human](human.md) and [Cyborg](cyborg.md)) plus 6 **specialized classes** (3 per origin).
+- Specialized classes are unlocked through specific quests — similar to WoW Legion artifact weapon quests. The unlock quest should feel thematic and personal to the class.
 - Deep build diversity per class, with itemization designed to create build desire — finding an item should make you want to try a new build.
 
-## Base Class Resource System
+## Origin vs. Specialized Classes
 
-The base (unspecced) form of each class runs all 3 resource meters simultaneously. The early skill tree includes one skill tied to each resource, naturally introducing the player to each spec's mechanics through play.
+Origin classes (Human and Cyborg) are generalists — jack of all trades for their respective path. They are the easiest to understand and the most forgiving to gear. All three of their team's attributes contribute equally to a single derived stat (Soul or Interface).
 
-When a spec is chosen, the player commits to that resource system exclusively — the other two systems disappear from the UI. This makes specialization feel like a meaningful threshold, not just a menu choice.
+Specialized classes trade that flexibility for depth. They scale primarily off one attribute, get partial benefit from their two team stats, and are actively hurt by their opposing stat. See [Attribute System](../design/attribute-system.md) for full scaling rules.
 
-The base class remains viable through breadth: access to all three resource types and their associated skills, without the depth a specialized build achieves.
+## Resource System
+
+Each class has **one unique resource** that encapsulates the energy they would expend in the real world. Resources are class-specific and mechanically distinct.
+
+| Class | Resource | Description |
+|---|---|---|
+| Human | TBD | |
+| Cyborg | TBD | |
+| Survivalist | Adrenaline | Builds under pressure, decays when safe |
+| Gentleman | Composure | Maintained through controlled play, breaks under panic |
+| Enculted | TBD | Rethinking — the more corrupt, the more powerful |
+| Forged | Power Grid | Power budget — manage what's active simultaneously |
+| Automaton | Bandwidth | Caps how many drones/scripts run simultaneously |
+| Polymath | TBD | Rethinking — was Memory/CPU dual axis, may simplify to one resource |
 
 ## Character Creation
 
-Players choose male or female at the start. Both are fully supported for all classes and specs. This effectively doubles the required player character models — a scope consideration for production and a factor in tech stack decisions around animation systems.
+Players choose male or female at the start. Both are fully supported for all classes. This effectively doubles the required player character models — a scope consideration for production and a factor in tech stack decisions around animation systems.

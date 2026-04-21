@@ -11,9 +11,11 @@
 
 Unaugmented. In a world that sells upgrades on every corner, the Human refused — or never had the choice. Their power comes from what the Cyborg cut away.
 
-**Base resources:** Adrenaline + Composure + Sanity — all three systems run simultaneously. One early skill tied to each. Specialization locks in one resource system and drops the other two.
+**Attribute:** Soul (derived from Orthodoxy + Ingenuity + Corruption average). See [Attribute System](../design/attribute-system.md).
 
-## Specializations
+**Resource:** TBD — one resource that captures the generalist human experience.
+
+## Specialized Classes
 
 - [Survivalist](human/survivalist.md)
 - [Gentleman / Lady](human/gentleman.md)

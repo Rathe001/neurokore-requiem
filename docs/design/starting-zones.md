@@ -2,7 +2,7 @@
 
 ## Design Philosophy
 
-Each class begins in a different wing of the same enormous facility. The starting zone is 3 levels long — one per spec — and ends in a boss battle that forces a permanent, meaningful choice. The goal is to make specialization feel like a commitment the player earns, not a menu they click through.
+Each origin class begins in a different wing of the same enormous facility. The starting zone is 3 levels long — one per specialized class — and ends in a boss battle that forces a permanent, meaningful choice. The goal is to make class selection feel like a commitment the player earns, not a menu they click through.
 
 ---
 
@@ -38,7 +38,7 @@ The two paths converge in the facility's lower maintenance infrastructure — ut
 
 ## The Representative System
 
-Each of the three levels in a starting zone introduces one spec representative. That representative saves the player once per level — in a moment that reflects their spec's power — before the final confrontation.
+Each of the three levels in a starting zone introduces one class representative. That representative saves the player once per level — in a moment that reflects their class's power — before the final confrontation.
 
 This creates two things:
 
@@ -47,7 +47,7 @@ This creates two things:
 
 The saves are not subtle. They are designed to be memorable.
 
-Each save moment is also when the rep teaches the player their spec skill and the skill tree opens for the first time. See [Skill Tree](skill-tree.md) for the full tutorial progression and starting skill details.
+Each save moment is also when the rep teaches the player their class skill and the skill tree opens for the first time. See [Skill Tree](skill-tree.md) for the full tutorial progression and starting skill details.
 
 ---
 
@@ -143,7 +143,7 @@ All three representatives converge at the exit point — the threshold between t
 
 The reps do not present themselves calmly. They argue with each other first — each convinced their path is the obvious correct choice, each dismissive of the others. The player watches three people who just saved their life disagree about everything except one thing.
 
-Eventually they turn to the player. The player may ask about each spec before deciding — this is the primary opportunity to understand what each path entails before committing. Questions can be directed at any rep; the others will react to the answers.
+Eventually they turn to the player. The player may ask about each class before deciding — this is the primary opportunity to understand what each path entails before committing. Questions can be directed at any rep; the others will react to the answers.
 
 When the player has heard enough, they make their choice. If they cannot decide, the reps make the decision for them:
 
@@ -155,7 +155,7 @@ The ultimatum is not a bluff. The violence that follows is not a punishment — 
 
 **Choose a representative → ally with them, fight the other two.**
 
-The fight is the first true boss encounter. The allied rep fights alongside the player; the other two fight together. The encounter is designed to showcase what the unchosen specs can do — players experience the roads not taken as threats rather than demonstrations.
+The fight is the first true boss encounter. The allied rep fights alongside the player; the other two fight together. The encounter is designed to showcase what the unchosen classes can do — players experience the roads not taken as threats rather than demonstrations.
 
 The two defeated representatives are dead. Permanently. The world will reflect their absence.
 
@@ -169,7 +169,7 @@ The chosen rep accompanies the player into Sub-Level Zero and through the exit. 
 
 ---
 
-## The Base Class Path
+## The Origin Class Path
 
 The player may refuse all three representatives.
 
@@ -183,11 +183,11 @@ Then a fourth figure enters.
 
 **The mystery representative** — a Human for Cyborg players, a Cyborg for Human players. They intervene without explanation, turning a losing fight into a winnable one.
 
-After the battle, they introduce themselves. They are the representative of those who refused to sell their humanity for power — the only path that costs you nothing and gives you nothing except yourself. They will fill the companion role going forward, same as any spec rep.
+After the battle, they introduce themselves. They are the representative of those who refused to sell their humanity for power — the only path that costs you nothing and gives you nothing except yourself. They will fill the companion role going forward, same as any class rep.
 
 The difference: the player didn't choose this. They failed to choose anything, and were given something anyway. The mystery rep knows this. They don't mention it — but they know.
 
-**The mystery rep is the morally "good" path.** All six specs represent a compromise. The base class, under this companion, does not. This distinction is tracked by the [Morality System](morality-system.md).
+**The mystery rep is the morally "good" path.** All six specialized classes represent a compromise. The origin class, under this companion, does not. This distinction is tracked by the [Morality System](morality-system.md).
 
 ---
 

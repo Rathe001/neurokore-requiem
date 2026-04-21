@@ -23,7 +23,7 @@ Darkness is not explained to the player. It simply is. The world looks like this
 
 ## Light Sources
 
-Light sources are equippable gear occupying a dedicated **utility slot** — separate from power gear so they never compete with build choices. Any light source can be equipped by any spec. Starting light sources are thematic defaults, not locked assignments.
+Light sources are equippable gear occupying a dedicated **utility slot** — separate from power gear so they never compete with build choices. Any light source can be equipped by any class. Starting light sources are thematic defaults, not locked assignments.
 
 ### Properties
 
@@ -37,11 +37,11 @@ Each light source has three properties:
 
 None of these properties confer mechanical advantage. They affect how the environment looks and how the playthrough feels.
 
-### Starting Light Sources by Spec
+### Starting Light Sources by Class
 
-Each spec begins with a thematic default that can be replaced through loot, purchase, or crafting.
+Each class begins with a thematic default that can be replaced through loot, purchase, or crafting.
 
-| Spec | Default Light Source | Beam Type | Color | Reliability |
+| Class | Default Light Source | Beam Type | Color | Reliability |
 |---|---|---|---|---|
 | **Forged** | Chest-mounted industrial lamp | Wide forward | Amber / orange | Steady |
 | **Automaton** | Scout drone overhead light | Omnidirectional | Cold blue-white | Steady |
@@ -49,7 +49,7 @@ Each spec begins with a thematic default that can be replaced through loot, purc
 | **Survivalist** | Jury-rigged handheld torch | Directional | Warm yellow | Unstable |
 | **Gentleman / Lady** | Precision monocle lamp | Narrow directional | Crisp white | Steady |
 | **Enculted** | *See below* | Directional | Sickly green | Intermittent |
-| **Base Class** | Standard flashlight | Directional | White | Steady |
+| **Origin Class** | Standard flashlight | Directional | White | Steady |
 
 ### The Enculted Light
 
@@ -57,7 +57,7 @@ The Enculted's default light source behaves like the others with one exception: 
 
 This is not announced. It is not explained. Players who notice it will draw their own conclusions.
 
-The same effect exists as a rare loot item — **Corrupted Light Source** — equippable by any spec. A player running the Forged who finds one and equips it is making a statement about their playthrough.
+The same effect exists as a rare loot item — **Corrupted Light Source** — equippable by any class. A player running the Forged who finds one and equips it is making a statement about their playthrough.
 
 ### Found Light Sources
 

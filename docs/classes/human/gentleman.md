@@ -14,4 +14,4 @@
 **Resource: Composure** — maintained through deliberate, controlled play. Breaks under panic, chaos, or sustained damage. High skill ceiling for staying calm under fire.
 
 !!! note "Lady variant"
-    Reference art for the female version of this spec is not yet created.
+    Reference art for the female version of this class is not yet created.

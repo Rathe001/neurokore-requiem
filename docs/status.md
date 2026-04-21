@@ -20,7 +20,7 @@ Working:
 - Always-visible player (depth test off + render priority)
 - Line-of-sight wall fade — walls go transparent only when between camera and player and overlapping the player on screen (view-space projection in `tech_wall.gdshader`, fed by `player_world_pos` global shader uniform)
 - Persistent corpses with bounded pool — see [Enemies](#enemies) below
-- Class/spec UI themes wired through `UIThemeState` (`SPEC_THEMES` lookup keyed by `class/spec`)
+- Class UI themes wired through `UIThemeState` (`SPEC_THEMES` lookup keyed by class)
 
 ## Enemies
 

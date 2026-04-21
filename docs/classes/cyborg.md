@@ -11,9 +11,11 @@
 
 A human who has traded flesh for machine. The further down the path, the less human they become.
 
-**Base resources:** Power Grid + Bandwidth + Memory/CPU — all three systems run simultaneously. One early skill is tied to each, introducing the player to each spec's flavour. Specialization locks in one resource system and drops the other two (Polymath's system has two axes, Memory and CPU; Forged and Automaton have one each).
+**Attribute:** Interface (derived from Deviation + Optimization + Clarity average). See [Attribute System](../design/attribute-system.md).
 
-## Specializations
+**Resource:** TBD — one resource that captures the generalist cyborg experience.
+
+## Specialized Classes
 
 - [Forged](cyborg/forged.md) *(melee)*
 - [Automaton](cyborg/automaton.md) *(mid-range)*

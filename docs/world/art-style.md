@@ -20,19 +20,19 @@
 - UV-efficient authoring — shared texture atlases where appropriate to keep VRAM within the integrated-graphics target.
 - Emissive texture channels do a lot of the heavy lifting for the neon aesthetic.
 
-## Class & Spec Color Language
+## Class Color Language
 
-Each class and spec has a consistent color identity used across models, materials, UI, ability effects, and enemy design. Established through concept work — treat as a visual consistency guide that carries through into 3D authoring (emissive accents, rim lights, particle effects, UI theming).
+Each class has a consistent color identity used across models, materials, UI, ability effects, and enemy design. Established through concept work — treat as a visual consistency guide that carries through into 3D authoring (emissive accents, rim lights, particle effects, UI theming).
 
-| Class / Spec | Color Identity |
+| Class | Color Identity |
 |---|---|
-| Cyborg (base) | Teal/cyan + muted pink |
-| Forged | Red/orange heat |
+| Cyborg (origin) | Teal/cyan + muted pink |
+| Forged | Red |
 | Automaton | Teal/green data |
-| Polymath | Magenta/violet |
-| Human (base) | Warm white/amber |
+| Polymath | Yellow |
+| Human (origin) | Brown |
 | Survivalist | Dirty yellow, rust orange |
-| Gentleman / Lady | Crisp white, cold blue |
-| Enculted | Sickly green, deep purple |
+| Gentleman / Lady | Ivory |
+| Enculted | Purple |
 
-This color language should carry through to ability particle effects, resource meter colors, portrait rim lighting, and spec-specific UI elements.
+This color language should carry through to ability particle effects, resource meter colors, portrait rim lighting, and class-specific UI elements.
