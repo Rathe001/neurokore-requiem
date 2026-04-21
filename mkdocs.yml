@@ -38,11 +38,15 @@ nav:
     - Level Design: world/level-design.md
     - Lighting: world/lighting.md
   - Design:
+    - Attribute System: design/attribute-system.md
     - Combat & Scale: design/combat.md
-    - Skill Tree: design/skill-tree.md
-    - Morality System: design/morality-system.md
+    - Controls: design/controls.md
+    - Coding Conventions: design/coding-conventions.md
     - Dialog & UI: design/dialog-ui.md
+    - Morality System: design/morality-system.md
+    - Skill Tree: design/skill-tree.md
     - Starting Zones: design/starting-zones.md
+    - Tech Stack: design/tech-stack.md
     - Zones: design/zones.md
     - Platform & Performance: design/platform.md
     - Inspirations & References: design/inspirations.md
