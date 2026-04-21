@@ -12,10 +12,10 @@ Six **spec stats** roll on items. Two **base class stats** are derived, not roll
 |---|---|---|---|
 | Soul | Human (base) | Interface | No (derived) |
 | Interface | Cyborg (base) | Soul | No (derived) |
-| Virtue | Gentleman | Deformity | Yes |
-| Deformity | Forged | Virtue | Yes |
-| Command | Automaton | Resourcefulness | Yes |
-| Resourcefulness | Survivalist | Command | Yes |
+| Orthodoxy | Gentleman | Deviation | Yes |
+| Deviation | Forged | Orthodoxy | Yes |
+| Optimization | Automaton | Ingenuity | Yes |
+| Ingenuity | Survivalist | Optimization | Yes |
 | Sanity | Polymath | Corruption | Yes |
 | Corruption | Enculted | Sanity | Yes |
 
@@ -23,8 +23,8 @@ Six **spec stats** roll on items. Two **base class stats** are derived, not roll
 
 Soul and Interface do not roll on items. They are calculated from the average of the character's three team stats (the three spec stats belonging to the same class).
 
-- **Human → Soul** = average of Virtue, Resourcefulness, Sanity
-- **Cyborg → Interface** = average of Deformity, Command, Corruption
+- **Human → Soul** = average of Orthodoxy, Ingenuity, Sanity
+- **Cyborg → Interface** = average of Deviation, Optimization, Corruption
 
 This means Soul/Interface rise naturally as you gear well for your team. They are never chased directly — they are a byproduct of coherent gearing.
 
@@ -42,12 +42,12 @@ For any given character build:
 
 | Stat | Scaling | Reason |
 |---|---|---|
-| Virtue | 1x | Own spec |
+| Orthodoxy | 1x | Own spec |
 | Sanity | 0.25x | Same class, non-opposing |
-| Resourcefulness | 0.25x | Same class, non-opposing |
-| Soul | derived | Average of Virtue + Sanity + Resourcefulness |
-| Deformity | negative | Opposing spec |
-| Interface, Command, Corruption | 0x | Opposite class |
+| Ingenuity | 0.25x | Same class, non-opposing |
+| Soul | derived | Average of Orthodoxy + Sanity + Ingenuity |
+| Deviation | negative | Opposing spec |
+| Interface, Optimization, Corruption | 0x | Opposite class |
 
 ### Base Class Scaling — Skill Tree Mechanic
 
@@ -83,30 +83,30 @@ Each spec's main stat affects damage, but also has a unique mechanical function 
 
 | Stat | Spec | Damage Scaling | Special Function |
 |---|---|---|---|
-| Virtue | Gentleman | Yes | TBD |
-| Deformity | Forged | Yes | Allows attaching more limbs |
-| Command | Automaton | Yes | TBD |
-| Resourcefulness | Survivalist | Yes | TBD |
+| Orthodoxy | Gentleman | Yes | TBD |
+| Deviation | Forged | Yes | Allows attaching more limbs |
+| Optimization | Automaton | Yes | TBD |
+| Ingenuity | Survivalist | Yes | TBD |
 | Sanity | Polymath | Yes | TBD |
 | Corruption | Enculted | Yes | TBD |
 
-These special functions are what make each stat feel different beyond raw numbers. A Forged stacking Deformity isn't just hitting harder — they're unlocking body modification slots.
+These special functions are what make each stat feel different beyond raw numbers. A Forged stacking Deviation isn't just hitting harder — they're unlocking body modification slots.
 
 ## Opposing Stat Philosophy
 
 Opposing stats should feel **wrong and disappointing** on an otherwise great item, but not cripple the character unless deliberately stacked. The negative multiplier (-0.25x to -0.5x) is a tax, not a death sentence.
 
-Design space exists for **build-around uniques** that require stacking your opposing stat and scale off it — forcing the player into "wrong" gear for a powerful payoff. A Gentleman wearing Deformity-heavy gear is narratively compelling and mechanically novel.
+Design space exists for **build-around uniques** that require stacking your opposing stat and scale off it — forcing the player into "wrong" gear for a powerful payoff. A Gentleman wearing Deviation-heavy gear is narratively compelling and mechanically novel.
 
 ## Design Intent
 
-Items carry moral weight. A Forged player finding Virtue-heavy gear is actively hurt by it — reinforcing character identity at the itemization level. This ties directly into the 2D morality plane and makes item drops feel meaningful beyond raw numbers.
+Items carry moral weight. A Forged player finding Orthodoxy-heavy gear is actively hurt by it — reinforcing character identity at the itemization level. This ties directly into the 2D morality plane and makes item drops feel meaningful beyond raw numbers.
 
 ## Open Questions
 
 - Exact **team stat scaling multiplier** (0.25x is a starting point, needs playtesting).
 - Exact **negative scaling multiplier** (-0.25x to -0.5x range, needs playtesting).
-- **Spec-specific stat functions** for Virtue, Command, Resourcefulness, Sanity, Corruption.
+- **Spec-specific stat functions** for Orthodoxy, Optimization, Ingenuity, Sanity, Corruption.
 - **Tooltip design**: show stats the character scales off (positive or negative); hide irrelevant 0x stats to reduce noise.
 - What does **Soul** govern beyond being a derived stat? Candidates: willpower, resilience, HP, CC resistance.
 - What does **Interface** govern beyond being a derived stat? Candidates: precision, latency, cooldown reduction, cast speed.
