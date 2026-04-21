@@ -1,23 +1,22 @@
 # Morality System
 
-The morality system is first triggered by the Confrontation at the end of the starting zone — the class choice is the single largest push a player's moral position will ever receive. See [Starting Zones](starting-zones.md) for the narrative context.
+!!! warning "On hold"
+    The morality plane is on hold while the [attribute identity system](attribute-system.md#stat-identity--tier-perks--visual-metamorphosis) is developed. Stat identity (what you *become* through gear) now carries the mechanical and visual weight that the morality plane was partially designed to address. The plane may resurface as a hidden narrative system that drives quest availability and endings without ever being shown to the player — which aligns with its original "no numbers, no progress bar" philosophy.
 
-Player decisions, dialogue choices, and actions are tracked silently throughout the game. The player never sees a number or a progress bar. Instead, the **character screen displays a 2D coordinate plane** with a single colored dot representing the player's current moral position.
+The morality system tracks player decisions, dialogue choices, and actions silently throughout the game. It is **a story mechanic only** — it never affects player power, stats, or combat effectiveness. Players should never be able to optimize it, because the moment they can, they will.
 
 ---
 
-## The Plane
+## The Plane (backburnered — not shown to the player)
 
-Two axes, unlabeled in-game:
+Two axes, unlabeled:
 
 - **Horizontal axis:** Selfless ↔ Selfish
 - **Vertical axis:** Human ↔ Corrupted
 
-The dot begins near the center and drifts based on accumulated decisions. Its color shifts with position — soft white near the Human/Selfless origin, deepening toward dark crimson at the Corrupted/Selfish extreme.
+The position drifts based on accumulated decisions. The class choice is the single largest push a player's position will ever receive.
 
----
-
-## The Four Quadrants
+### The Four Quadrants
 
 | | **Selfless** | **Selfish** |
 |---|---|---|
@@ -28,12 +27,12 @@ The dot begins near the center and drifts based on accumulated decisions. Its co
 
 ## What It Affects
 
-The morality system is **a story mechanic only** — it never affects player power, stats, or combat effectiveness. Players should never be able to optimize it, because the moment they can, they will. Its effects are entirely narrative:
+If reintroduced, effects are entirely narrative:
 
 - NPC dialogue and reactions shift without explanation
 - Certain quests and paths become available or unavailable
 - Boss encounters change — some bosses react to who you are, not just what you do
-- Rep companion dialogue reacts to drift from their alignment (see below)
+- Rep companion dialogue reacts to drift from their alignment
 - Endings are shaped by final position at the point of resolution
 
 ---
@@ -44,21 +43,11 @@ The morality system is **a story mechanic only** — it never affects player pow
 
 Respec *within* a chosen class's skill tree may be permitted (pending skill tree design decisions). Switching classes is not.
 
-The class choice is the single largest push toward a rep's quadrant. It cannot be undone, but subsequent decisions continue to move the dot — the class choice creates a starting position, not a ceiling.
-
----
-
-## Starting Position
-
-When a class is chosen, the player's dot **snaps to that rep's fixed position** on the morality plane. Playing naturally within the class's fantasy will keep the dot there. Drift requires conscious choices against the class's identity — the rep reacts to that drift, not to the starting position.
-
-The origin class path (mystery rep) places the dot at Selfless + Human — the only path that begins there.
-
 ---
 
 ## Representative Alignments
 
-Each rep has a fixed position on the morality plane. They react when the player's dot drifts noticeably from their quadrant — not with judgment menus or system notifications, but through ambient dialogue, tone shifts, and occasional direct confrontation.
+Each rep has a worldview shaped by their quadrant. They react when the player drifts from their alignment — not with judgment menus or system notifications, but through ambient dialogue, tone shifts, and occasional direct confrontation.
 
 | Representative | Quadrant | Character Notes |
 |---|---|---|
@@ -73,3 +62,5 @@ Each rep has a fixed position on the morality plane. They react when the player'
 **Example:** A Human player who chose the Survivalist rep but begins making cold, self-serving decisions — taking resources from those who need them, letting others die for personal gain — will hear the Survivalist comment on it. Quietly at first, then less quietly. They've seen this before. They know where it ends.
 
 The rep isn't a conscience system. They're a person with a worldview, and your choices are telling them who you really are.
+
+The rep is also the character most sensitive to **stat identity drift** — see [Attribute System — NPC Identity Reactions](attribute-system.md#npc-identity-reactions). They react in detail to what you're becoming, not just what you chose.

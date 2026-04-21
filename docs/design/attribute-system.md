@@ -127,6 +127,92 @@ Each class's main stat affects damage, but also has a unique mechanical function
 
 These special functions are what make each stat feel different beyond raw numbers. A Forged stacking Deviation isn't just hitting harder — they're unlocking body modification slots.
 
+## Stat Identity — Tier Perks & Visual Metamorphosis
+
+As a character's stat distribution shifts, two things happen: they unlock **tier perks** (mechanical rewards) and their **appearance transforms** to reflect what they're becoming. Both are driven by the same breakpoints and are always in sync.
+
+### Breakpoints
+
+Tier thresholds are based on what percentage of total stats a single attribute represents:
+
+| Threshold | Tier | Effect |
+|---|---|---|
+| < 40% | 0 | No perk, no visual change |
+| 40–59% | 1 | First perk unlocked, subtle visual shift |
+| 60–79% | 2 | Second perk, pronounced visual change |
+| ≥ 80% | 3 | Full perk, dramatic transformation |
+
+Perks are **not permanent** — they are maintained by meeting the threshold. Swapping gear that drops a stat below a breakpoint immediately loses the associated tier perk and visual changes. Gear decisions have real consequences beyond raw damage numbers.
+
+**Gear swap confirmation:** When equipping an item would cross a breakpoint (up or down), a confirmation dialog shows exactly what changes — e.g. *"This change will cause Drones III → Drones II. + Curse I. Are you sure?"* This dialog is behind a **Help Tooltips** toggle in the accessibility menu for players who prefer to manage it themselves.
+
+### Specialized Class Tier Perks
+
+Each class stat has a unique perk that unlocks at each tier. These are the mechanical rewards for going deep into an identity:
+
+| Stat | Class | Tier 1 (40%) | Tier 2 (60%) | Tier 3 (80%) |
+|---|---|---|---|---|
+| Orthodoxy | Gentleman | TBD | TBD | TBD |
+| Deviation | Forged | Extra appendage slot | TBD | TBD |
+| Optimization | Automaton | Additional drone | TBD | TBD |
+| Ingenuity | Survivalist | TBD | TBD | TBD |
+| Clarity | Polymath | TBD | TBD | TBD |
+| Corruption | Enculted | Tier 1 curse | TBD | TBD |
+
+### Origin Class Tier Perks
+
+Human and Cyborg are rewarded for **balance** — not letting any single stat dominate. Their tier perk thresholds are inverted: they maintain perks as long as no single stat exceeds a threshold.
+
+| Threshold | Tier | Condition |
+|---|---|---|
+| No stat ≥ 40% | 3 | Perfectly balanced — full origin perk |
+| No stat ≥ 60% | 2 | Mostly balanced |
+| No stat ≥ 80% | 1 | Slightly lopsided |
+| Any stat ≥ 80% | 0 | Fully consumed — origin perk lost |
+
+This means origin class players who start drifting toward a single stat will lose origin perks but begin gaining the specialized class's tier perks instead. A Human who pushes Corruption past 40% starts unlocking Enculted perks while losing Human balance perks — the tradeoff is explicit and visible.
+
+### Cross-Class Perk Unlocking
+
+**Any class can unlock any stat's tier perks** if they hit the breakpoint — the system does not care which class was chosen. A Human stacking Optimization past 50% gets an Automaton drone. A Gentleman deep in Deviation starts growing mechanical appendages.
+
+This is possible but *difficult* for off-origin stats because of negative scaling. A Human stacking Optimization is fighting averaged negative scaling the entire way — every point of Optimization costs more than it would for a Cyborg. The perk is the reward for paying that cost.
+
+It should be possible but extremely demanding to maintain a high tier perk in one stat while unlocking a perk in another. The fixed stat budget on items means pushing one stat high enough necessarily pulls others down. Multi-perk builds are the ultimate expression of build mastery.
+
+### Visual Metamorphosis
+
+Character appearance is **dynamically driven by stat distribution**. Each stat contributes its own visual channel independently:
+
+- **Modular mesh parts** — appendages, drones, corruption growths, mechanical plating. Swapped/added at tier thresholds.
+- **Shader-driven blending** — skin pallor, vein visibility, metallic creep, emissive glow. Driven continuously by stat percentages for smooth transitions between breakpoints.
+- **Particle/VFX layers** — corruption wisps, electric arcing, heat distortion. Intensity scales with stat %.
+
+Because each stat drives its own visual channel, **combo appearances emerge naturally**. A character at 45% Corruption and 42% Deviation shows mild corruption effects AND early machine-creep simultaneously. Opposing stat combos — Orthodoxy and Deviation stacked together — create a character visually at war with themselves.
+
+Origin class players who maintain balance look intentionally neutral — no single visual channel dominates. The moment they start drifting, the character model tells that story.
+
+### Threshold VFX
+
+When a breakpoint is crossed, a class-specific VFX plays on the character model:
+
+- **Perk gained** — unique "gained" effect per class (e.g. corruption tendrils coalescing, mechanical plating locking into place)
+- **Perk lost** — unique "lost" effect per class (e.g. tendrils receding, plating fracturing away)
+
+If a single gear swap causes both a loss and a gain (e.g. dropping Drones III while gaining Curse I), the effects play in sequence: **lost first, gained second**. This keeps the cause-and-effect readable.
+
+### Character Sheet — Stat Distribution
+
+The character sheet displays a **stat distribution visualization** showing each attribute's percentage of total stats. This replaces the morality plane (see [Morality System](morality-system.md)) as the primary identity readout.
+
+The distribution view should make current tier perks and proximity to breakpoints visible at a glance. When a stat combination has a recognized identity (e.g. high Corruption + moderate Deviation), the character sheet can display a **combo description** — a short flavor line describing what the character has become.
+
+### NPC Identity Reactions
+
+Key NPCs — reps, vendors, bosses, and gate encounters — can react to the player's **dominant stat identity** rather than their chosen class. This is not a universal system (8 reaction profiles on every NPC would be an authoring nightmare) but a selective tool used on important characters to dynamically tailor the story to player state.
+
+An Enculted who stacks Orthodoxy gets treated like a Gentleman by NPCs who care about identity. A Human who has visibly drifted into Corruption territory gets reactions appropriate to what they've become, not what they started as. The rep companion is the most sensitive to this — they react to identity drift as a personal betrayal or validation depending on alignment.
+
 ## Opposing Stat Philosophy
 
 Opposing stats should feel **wrong and disappointing** on an otherwise great item, but not cripple the character unless deliberately stacked. The negative multiplier (-0.25x to -0.5x) is a tax, not a death sentence.
@@ -135,14 +221,18 @@ Design space exists for **build-around uniques** that require stacking your oppo
 
 ## Design Intent
 
-Items carry moral weight. A Forged player finding Orthodoxy-heavy gear is actively hurt by it — reinforcing character identity at the itemization level. This ties directly into the 2D morality plane and makes item drops feel meaningful beyond raw numbers.
+Items carry moral weight. A Forged player finding Orthodoxy-heavy gear is actively hurt by it — reinforcing character identity at the itemization level. Combined with the tier perk system and visual metamorphosis, item drops feel meaningful beyond raw numbers — every piece of gear is a statement about who you're becoming.
 
 ## Open Questions
 
 - Exact **team stat scaling multiplier** (0.25x is a starting point, needs playtesting).
 - Exact **negative scaling multiplier** (-0.25x to -0.5x range, needs playtesting).
+- Exact **tier perk breakpoints** (40/60/80% is the starting design, needs playtesting).
 - **Class-specific stat functions** for Orthodoxy, Optimization, Ingenuity, Clarity, Corruption.
+- **Tier perks** for most classes beyond tier 1 — see tier perk table above.
+- **Origin class tier perks** — what does balanced Human/Cyborg actually unlock?
 - **Tooltip design**: show stats the character scales off (positive or negative); hide irrelevant 0x stats to reduce noise.
 - What does **Soul** govern beyond being a derived stat? Candidates: willpower, resilience, HP, CC resistance.
 - What does **Interface** govern beyond being a derived stat? Candidates: precision, latency, cooldown reduction, cast speed.
 - **Resource system** for each class — 1 unique resource per class (8 total). See individual class pages.
+- **Visual metamorphosis art pipeline** — modular mesh kits per stat, shader channels, VFX layers. Needs concept work per class.

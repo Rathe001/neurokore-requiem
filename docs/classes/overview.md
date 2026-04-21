@@ -21,14 +21,20 @@ Each class has **one unique resource** that encapsulates the energy they would e
 
 | Class | Resource | Description |
 |---|---|---|
-| Human | TBD | |
-| Cyborg | TBD | |
+| Human | TBD | Generalist — should capture the unaugmented human experience |
+| Cyborg | TBD | Generalist — should capture the augmented machine experience |
 | Survivalist | Adrenaline | Builds under pressure, decays when safe |
-| Gentleman | Composure | Maintained through controlled play, breaks under panic |
-| Enculted | TBD | Rethinking — the more corrupt, the more powerful |
+| Gentleman / Lady | Composure | Maintained through controlled play, breaks under panic |
+| Enculted | TBD | Rethinking — should align with corruption-as-power fantasy |
 | Forged | Power Grid | Power budget — manage what's active simultaneously |
 | Automaton | Bandwidth | Caps how many drones/scripts run simultaneously |
 | Polymath | TBD | Rethinking — was Memory/CPU dual axis, may simplify to one resource |
+
+## Stat Identity & Tier Perks
+
+Attribute distribution drives **tier perks** — mechanical rewards that unlock at stat breakpoints and are lost if the breakpoint is no longer met. Gear swaps have real consequences. Each class has unique perks; origin classes are rewarded for balance. Character appearance transforms dynamically to reflect stat identity.
+
+See [Attribute System — Stat Identity](../design/attribute-system.md#stat-identity--tier-perks--visual-metamorphosis) for full details on breakpoints, cross-class perk unlocking, visual metamorphosis, and NPC identity reactions.
 
 ## Character Creation
 

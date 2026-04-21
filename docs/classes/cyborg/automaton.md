@@ -11,6 +11,10 @@
 
 **Fantasy:** command the machine through AI scripting and a fleet of drones. Set conditions, automate responses, build a system that fights alongside you.
 
+**Attribute:** Optimization — precision and efficiency of machine control. Opposes Ingenuity. See [Attribute System](../../design/attribute-system.md).
+
+**Tier perks:** Stacking Optimization unlocks additional drones per tier. See [Stat Identity](../../design/attribute-system.md#stat-identity--tier-perks--visual-metamorphosis).
+
 **Resource: Bandwidth** — caps how many drones/scripts can run simultaneously.
 
 - **Drones are the physical expression of scripts** — each script runs on a drone. The drone type determines what the script can do. Losing a drone means losing that script until redeployed.

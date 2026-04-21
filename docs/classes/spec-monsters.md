@@ -17,6 +17,9 @@ Certain enemies have class-specific variants — different forms of the same bas
 
 Class variants **stack** with the standard enemy — both types appear in the same encounter. The base encounter is always the foundation; your class adds a personal layer of threat on top.
 
+!!! question "Open Question: Stat Identity & Monster Variants"
+    Monster variants are currently tied to the player's **chosen class**. As the [stat identity system](../design/attribute-system.md#stat-identity--tier-perks--visual-metamorphosis) evolves, there's design space for variants to also respond to the player's **dominant attribute** — a Human who has drifted deep into Deviation might start encountering Nanobyte swarms alongside their Human-origin threats. Whether variants track chosen class, stat identity, or both is TBD.
+
 ## Multiplayer Implication
 
 !!! note "Multiplayer is TBD"

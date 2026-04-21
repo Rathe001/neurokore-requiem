@@ -40,6 +40,9 @@ Basic attacks can be modified through skill tree nodes. Examples of the kinds of
 
 These nodes allow basic attacks to remain relevant at all stages of the game rather than becoming obsolete once class skills are unlocked.
 
+!!! note "Skill tree vs. tier perks"
+    Skill tree nodes are a separate system from [stat identity tier perks](attribute-system.md#stat-identity--tier-perks--visual-metamorphosis). Skill tree nodes are unlocked through progression within the chosen class. Tier perks are driven by attribute distribution (gear) and can be gained or lost at any time. The skill tree *does* interact with attributes through the [team stat scaling mechanic](attribute-system.md#team-stat-scaling--skill-tree-mechanic) (lowest/average/highest).
+
 ---
 
 ## Tutorial Progression

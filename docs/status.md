@@ -41,7 +41,8 @@ The flattening tween was removed deliberately — unaltered model in its death p
 
 ## Open design areas
 
-- Itemization — attribute system designed ([attribute-system.md](design/attribute-system.md)); implementation TBD
+- Itemization — attribute system designed ([attribute-system.md](design/attribute-system.md)) including stat identity tier perks, visual metamorphosis, and NPC identity reactions; implementation TBD
+- Morality system — [on hold](design/morality-system.md), may resurface as a hidden narrative system
 - Progression / leveling
 - Economy / crafting
 - End-game loop

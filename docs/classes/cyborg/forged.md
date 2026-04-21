@@ -11,6 +11,10 @@
 
 **Fantasy:** sell nearly all remaining humanity for raw mechanical power. Extra limbs, chassis upgrades, heavy attachments.
 
+**Attribute:** Deviation — the more augmented you become, the more limbs you can attach. Opposes Orthodoxy. See [Attribute System](../../design/attribute-system.md).
+
+**Tier perks:** Stacking Deviation unlocks extra appendage slots for mounting additional weapons and tools. See [Stat Identity](../../design/attribute-system.md#stat-identity--tier-perks--visual-metamorphosis).
+
 **Resource: Power Grid** — a power *budget*, not a pool. Each augmentation has a draw cost. You manage what's active simultaneously.
 
 - **Overclock:** push past grid capacity for burst power at the risk of brownout or shutdown.
