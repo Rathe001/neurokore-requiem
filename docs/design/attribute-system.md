@@ -8,31 +8,31 @@ Each of the 8 classes maps to a moral attribute. Items roll these stats, and cha
 
 Six **class stats** roll on items. Two **origin stats** are derived, not rolled.
 
-| Stat | Class | Opposes | Rollable |
-|---|---|---|---|
-| Soul | Human | Interface | No (derived) |
-| Interface | Cyborg | Soul | No (derived) |
-| Orthodoxy | Gentleman | Deviation | Yes |
-| Deviation | Forged | Orthodoxy | Yes |
-| Optimization | Automaton | Ingenuity | Yes |
-| Ingenuity | Survivalist | Optimization | Yes |
-| Clarity | Polymath | Ambition | Yes |
-| Ambition | Enculted | Clarity | Yes |
+| Stat | Short | Class | Opposes | Rollable |
+|---|---|---|---|---|
+| Soul | SOU | Human | Interface | No (derived) |
+| Interface | INT | Cyborg | Soul | No (derived) |
+| Orthodoxy | ORT | Gentleman | Deviation | Yes |
+| Deviation | DEV | Forged | Orthodoxy | Yes |
+| Optimization | OPT | Automaton | Ingenuity | Yes |
+| Ingenuity | ING | Survivalist | Optimization | Yes |
+| Clarity | CLA | Polymath | Ambition | Yes |
+| Ambition | AMB | Enculted | Clarity | Yes |
 
 ### Attribute Colors
 
 Each attribute uses the accent color of its class UI theme. These colors appear on item tooltips, stat displays, and anywhere an attribute value is shown.
 
-| Stat | Color Name | RGB |
-|---|---|---|
-| Soul | Brown | `(0.65, 0.45, 0.25)` |
-| Interface | Cyan | `(0.3, 0.85, 1.0)` |
-| Orthodoxy | Ivory | `(0.95, 0.92, 0.8)` |
-| Deviation | Red | `(0.9, 0.25, 0.2)` |
-| Optimization | Steel blue | `(0.55, 0.78, 0.85)` |
-| Ingenuity | Olive green | `(0.7, 0.85, 0.35)` |
-| Clarity | Yellow | `(0.95, 0.9, 0.3)` |
-| Ambition | Purple | `(0.78, 0.35, 0.85)` |
+| Stat | Short | Color Name | RGB |
+|---|---|---|---|
+| Soul | SOU | Brown | `(0.65, 0.45, 0.25)` |
+| Interface | INT | Cyan | `(0.3, 0.85, 1.0)` |
+| Orthodoxy | ORT | Ivory | `(0.95, 0.92, 0.8)` |
+| Deviation | DEV | Red | `(0.9, 0.25, 0.2)` |
+| Optimization | OPT | Steel blue | `(0.55, 0.78, 0.85)` |
+| Ingenuity | ING | Olive green | `(0.7, 0.85, 0.35)` |
+| Clarity | CLA | Yellow | `(0.95, 0.9, 0.3)` |
+| Ambition | AMB | Purple | `(0.78, 0.35, 0.85)` |
 
 These match the `accent` field in each class's `UIThemeConfig` resource (`game/resources/ui/theme_*.tres`).
 
