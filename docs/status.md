@@ -1,6 +1,6 @@
 # Status
 
-Early 3D prototype. Design docs cover most systems; itemization, progression/leveling, economy/crafting, end-game loop, and death/failure are still TBD and will be designed as the prototype reveals what's needed.
+Early 3D prototype. Design docs cover most systems; progression/leveling, economy/crafting, end-game loop, and death/failure are still TBD and will be designed as the prototype reveals what's needed.
 
 ## Tech
 
@@ -41,7 +41,7 @@ The flattening tween was removed deliberately — unaltered model in its death p
 
 ## Open design areas
 
-- Itemization
+- Itemization — attribute system designed ([attribute-system.md](design/attribute-system.md)); implementation TBD
 - Progression / leveling
 - Economy / crafting
 - End-game loop

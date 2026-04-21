@@ -48,6 +48,7 @@ Full class details:
 - [`docs/design/skill-tree.md`](docs/design/skill-tree.md) — basic attacks, tutorial progression, starting skills, hotkeys
 - [`docs/design/zones.md`](docs/design/zones.md) — zone design philosophy, Sub-Level Zero, zone registry
 - [`docs/design/dialog-ui.md`](docs/design/dialog-ui.md) — animated portraits, spec effects, UI philosophy
+- [`docs/design/attribute-system.md`](docs/design/attribute-system.md) — 8 moral attributes, item stat budgets, spec scaling, opposing stats
 - [`docs/design/controls.md`](docs/design/controls.md) — WASD movement, mouse for attacks, controller as future work
 - [`docs/world/lighting.md`](docs/world/lighting.md) — darkness as default, equippable light sources, zone lighting tiers
 
