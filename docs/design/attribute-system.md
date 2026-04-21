@@ -11,7 +11,7 @@ Six **class stats** roll on items. Two **origin stats** are derived, not rolled.
 | Stat | Short | Class | Opposes | Rollable |
 |---|---|---|---|---|
 | Soul | SOU | Human | Interface | No (derived) |
-| Interface | INT | Cyborg | Soul | No (derived) |
+| Interface | ITF | Cyborg | Soul | No (derived) |
 | Orthodoxy | ORT | Gentleman | Deviation | Yes |
 | Deviation | DEV | Forged | Orthodoxy | Yes |
 | Optimization | OPT | Automaton | Ingenuity | Yes |
@@ -26,7 +26,7 @@ Each attribute uses the accent color of its class UI theme. These colors appear 
 | Stat | Short | Color Name | RGB |
 |---|---|---|---|
 | Soul | SOU | Brown | `(0.65, 0.45, 0.25)` |
-| Interface | INT | Cyan | `(0.3, 0.85, 1.0)` |
+| Interface | ITF | Cyan | `(0.3, 0.85, 1.0)` |
 | Orthodoxy | ORT | Ivory | `(0.95, 0.92, 0.8)` |
 | Deviation | DEV | Red | `(0.9, 0.25, 0.2)` |
 | Optimization | OPT | Steel blue | `(0.55, 0.78, 0.85)` |
