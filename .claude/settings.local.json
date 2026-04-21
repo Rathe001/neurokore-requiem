@@ -15,7 +15,15 @@
       "Bash(rm -f scenes/world/world.tscn scenes/world/switch.tscn scenes/world/zone_exit.tscn scenes/ui/hud.tscn scenes/ui/health_bar.tscn scripts/ui/hud.gd scripts/ui/hud.gd.uid scripts/ui/health_bar.gd scripts/ui/health_bar.gd.uid scripts/skills/attack_indicator.gd scripts/skills/attack_indicator.gd.uid scripts/systems/game_state.gd scripts/systems/game_state.gd.uid resources/skills/enemy_melee.tres resources/skills/enemy_melee.tres.uid)",
       "Bash(python -c 'from PIL import Image; im=Image.open\\('\\\\''__TRACKED_VAR__'\\\\''\\); print\\('\\\\''__TRACKED_VAR__'\\\\'', im.size\\)')",
       "Bash(python3 -c \"from PIL import Image; im=Image.open\\('C:/Users/josh/Projects/neurokore-requiem/docs/reference/mockups/classes/human/ui.png'\\); print\\(im.size\\)\")",
-      "Bash(python -c \"from PIL import Image; im=Image.open\\('C:/Users/josh/Projects/neurokore-requiem/docs/reference/mockups/classes/human/ui.png'\\); print\\(im.size\\)\")"
+      "Bash(python -c \"from PIL import Image; im=Image.open\\('C:/Users/josh/Projects/neurokore-requiem/docs/reference/mockups/classes/human/ui.png'\\); print\\(im.size\\)\")",
+      "Bash(python3 *)",
+      "Bash(grep -Pao '[A-Za-z][A-Za-z_]{3,}' \"/c/Users/josh/Projects/neurokore-requiem/game/.godot/imported/UAL1_Standard.glb-eb79ed67aab45122569e7e8a360d1c23.scn\")",
+      "Bash(dd if=\"/c/Users/josh/Projects/neurokore-requiem/game/art/3d/characters/quaternius/UAL1_Standard.glb\" bs=1 skip=12 count=4)",
+      "Bash(dd if=\"/c/Users/josh/Projects/neurokore-requiem/game/art/3d/characters/quaternius/UAL1_Standard.glb\" bs=1 skip=20 count=1995492)",
+      "Bash(xargs grep *)",
+      "Bash(grep -oa '\"animations\":\\\\[.\\\\{1,200000\\\\}')",
+      "Bash(node *)",
+      "Bash(xargs rm *)"
     ]
   }
 }

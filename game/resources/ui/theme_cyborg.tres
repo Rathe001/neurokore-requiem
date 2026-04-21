@@ -1,9 +1,6 @@
-[gd_resource type="Resource" script_class="UIThemeConfig" load_steps=5 format=3]
+[gd_resource type="Resource" script_class="UIThemeConfig" load_steps=2 format=3]
 
 [ext_resource type="Script" path="res://scripts/systems/ui_theme_config.gd" id="1_script"]
-[ext_resource type="Texture2D" path="res://resources/ui/cyborg/hp_bar_frame.tres" id="2_hp_frame"]
-[ext_resource type="Texture2D" path="res://resources/ui/cyborg/resource_bar_frame.tres" id="3_resource_frame"]
-[ext_resource type="Texture2D" path="res://resources/ui/cyborg/slot_frame.tres" id="4_slot_frame"]
 
 [resource]
 script = ExtResource("1_script")
@@ -21,8 +18,4 @@ slot_bg = Color(0.05, 0.1, 0.14, 1)
 slot_border = Color(0.3, 0.55, 0.72, 1)
 credits = Color(0.6, 0.95, 1.0, 1)
 player_color = Color(0.45, 0.78, 0.98, 1)
-hp_bar_frame = ExtResource("2_hp_frame")
-resource_bar_frame = ExtResource("3_resource_frame")
-slot_frame = ExtResource("4_slot_frame")
-frame_patch_margin = 20
 base_font_size = 13
