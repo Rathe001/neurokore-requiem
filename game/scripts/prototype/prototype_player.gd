@@ -176,7 +176,7 @@ func _physics_process(delta: float) -> void:
 		var step := accel * (1.0 if wish_dir.length_squared() > 0.0 else 2.5) * delta
 		flat = flat.move_toward(target, step)
 		velocity.x = flat.x
-		velocity.z = flat.z
+		velocity.z = flat.y
 	velocity.y = 0.0
 	move_and_slide()
 
