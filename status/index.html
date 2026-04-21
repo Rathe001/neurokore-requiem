@@ -1363,7 +1363,7 @@
   <span class="md-ellipsis">
     
   
-    Spec Monster Variants
+    Class Monster Variants
   
 
     
@@ -1642,7 +1642,7 @@
 <li>Always-visible player (depth test off + render priority)</li>
 <li>Line-of-sight wall fade — walls go transparent only when between camera and player and overlapping the player on screen (view-space projection in <code>tech_wall.gdshader</code>, fed by <code>player_world_pos</code> global shader uniform)</li>
 <li>Persistent corpses with bounded pool — see <a href="#enemies">Enemies</a> below</li>
-<li>Class/spec UI themes wired through <code>UIThemeState</code> (<code>SPEC_THEMES</code> lookup keyed by <code>class/spec</code>)</li>
+<li>Class UI themes wired through <code>UIThemeState</code> (<code>SPEC_THEMES</code> lookup keyed by class)</li>
 </ul>
 <h2 id="enemies">Enemies<a class="headerlink" href="#enemies" title="Permanent link">&para;</a></h2>
 <p>Spawning model is <strong>D2-style</strong>, not horde-streaming: enemies are placed at level load, do not respawn during play, and the level can be fully cleared.</p>

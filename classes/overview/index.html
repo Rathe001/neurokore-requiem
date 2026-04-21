@@ -1062,10 +1062,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#base-class-resource-system" class="md-nav__link">
+  <a href="#origin-vs-specialized-classes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Base Class Resource System
+        Origin vs. Specialized Classes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resource-system" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resource System
       
     </span>
   </a>
@@ -1456,7 +1467,7 @@
   <span class="md-ellipsis">
     
   
-    Spec Monster Variants
+    Class Monster Variants
   
 
     
@@ -1542,10 +1553,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#base-class-resource-system" class="md-nav__link">
+  <a href="#origin-vs-specialized-classes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Base Class Resource System
+        Origin vs. Specialized Classes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resource-system" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resource System
       
     </span>
   </a>
@@ -1588,16 +1610,68 @@
 <h2 id="core-principles">Core Principles<a class="headerlink" href="#core-principles" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Class-specific core mechanics — not all classes share the same resource systems, survival mechanics, or win conditions. For example, not all classes will have a health bar.</li>
-<li>2 classes at launch: <strong><a href="../human/">Human</a></strong> and <strong><a href="../cyborg/">Cyborg</a></strong> (name subject to change).</li>
-<li>Each class has a fully viable <strong>base form</strong> plus <strong>3 specializations</strong> unlocked through specific quests — similar to WoW Legion artifact weapon quests. The unlock quest should feel thematic and personal to the spec.</li>
+<li>8 classes at launch: 2 <strong>origin classes</strong> (<a href="../human/">Human</a> and <a href="../cyborg/">Cyborg</a>) plus 6 <strong>specialized classes</strong> (3 per origin).</li>
+<li>Specialized classes are unlocked through specific quests — similar to WoW Legion artifact weapon quests. The unlock quest should feel thematic and personal to the class.</li>
 <li>Deep build diversity per class, with itemization designed to create build desire — finding an item should make you want to try a new build.</li>
 </ul>
-<h2 id="base-class-resource-system">Base Class Resource System<a class="headerlink" href="#base-class-resource-system" title="Permanent link">&para;</a></h2>
-<p>The base (unspecced) form of each class runs all 3 resource meters simultaneously. The early skill tree includes one skill tied to each resource, naturally introducing the player to each spec's mechanics through play.</p>
-<p>When a spec is chosen, the player commits to that resource system exclusively — the other two systems disappear from the UI. This makes specialization feel like a meaningful threshold, not just a menu choice.</p>
-<p>The base class remains viable through breadth: access to all three resource types and their associated skills, without the depth a specialized build achieves.</p>
+<h2 id="origin-vs-specialized-classes">Origin vs. Specialized Classes<a class="headerlink" href="#origin-vs-specialized-classes" title="Permanent link">&para;</a></h2>
+<p>Origin classes (Human and Cyborg) are generalists — jack of all trades for their respective path. They are the easiest to understand and the most forgiving to gear. All three of their team's attributes contribute equally to a single derived stat (Soul or Interface).</p>
+<p>Specialized classes trade that flexibility for depth. They scale primarily off one attribute, get partial benefit from their two team stats, and are actively hurt by their opposing stat. See <a href="../../design/attribute-system/">Attribute System</a> for full scaling rules.</p>
+<h2 id="resource-system">Resource System<a class="headerlink" href="#resource-system" title="Permanent link">&para;</a></h2>
+<p>Each class has <strong>one unique resource</strong> that encapsulates the energy they would expend in the real world. Resources are class-specific and mechanically distinct.</p>
+<table>
+<thead>
+<tr>
+<th>Class</th>
+<th>Resource</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Human</td>
+<td>TBD</td>
+<td></td>
+</tr>
+<tr>
+<td>Cyborg</td>
+<td>TBD</td>
+<td></td>
+</tr>
+<tr>
+<td>Survivalist</td>
+<td>Adrenaline</td>
+<td>Builds under pressure, decays when safe</td>
+</tr>
+<tr>
+<td>Gentleman</td>
+<td>Composure</td>
+<td>Maintained through controlled play, breaks under panic</td>
+</tr>
+<tr>
+<td>Enculted</td>
+<td>TBD</td>
+<td>Rethinking — the more corrupt, the more powerful</td>
+</tr>
+<tr>
+<td>Forged</td>
+<td>Power Grid</td>
+<td>Power budget — manage what's active simultaneously</td>
+</tr>
+<tr>
+<td>Automaton</td>
+<td>Bandwidth</td>
+<td>Caps how many drones/scripts run simultaneously</td>
+</tr>
+<tr>
+<td>Polymath</td>
+<td>TBD</td>
+<td>Rethinking — was Memory/CPU dual axis, may simplify to one resource</td>
+</tr>
+</tbody>
+</table>
 <h2 id="character-creation">Character Creation<a class="headerlink" href="#character-creation" title="Permanent link">&para;</a></h2>
-<p>Players choose male or female at the start. Both are fully supported for all classes and specs. This effectively doubles the required player character models — a scope consideration for production and a factor in tech stack decisions around animation systems.</p>
+<p>Players choose male or female at the start. Both are fully supported for all classes. This effectively doubles the required player character models — a scope consideration for production and a factor in tech stack decisions around animation systems.</p>
 
 
 
