@@ -126,7 +126,7 @@ func _rarity_color(rarity: StringName) -> Color:
 
 func _build_stats_text(item: Item) -> String:
 	var lines: Array[String] = []
-	if item.kind == &"light":
+	if item.kind == &"optics":
 		lines.append("%s: %d m" % [tr("ITEM_STATS_LIGHT_RANGE"), int(item.light_range)])
 		lines.append("%s: %d" % [tr("ITEM_STATS_LIGHT_ENERGY"), int(item.light_energy)])
 	if item.kind == &"backpack" and item.inventory_bonus > 0:

@@ -20,6 +20,11 @@ class_name LevelTheme
 @export var fps_fog_density: float = 0.35
 @export var fps_fog_color: Color = Color(0.002, 0.003, 0.006)
 
+@export_group("Pit")
+@export var pit_depth: float = 3.0
+@export var pit_ooze_color: Color = Color(0.15, 0.85, 0.2, 1.0)
+@export var pit_ooze_energy: float = 2.5
+
 @export_group("Fluorescent Geometry")
 @export var fluorescent_housing_size: Vector3 = Vector3(1.2, 0.06, 0.2)
 @export var fluorescent_tube_size: Vector3 = Vector3(1.1, 0.02, 0.08)

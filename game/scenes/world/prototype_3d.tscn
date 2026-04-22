@@ -1,4 +1,4 @@
-[gd_scene load_steps=16 format=3]
+[gd_scene load_steps=14 format=3]
 
 [ext_resource type="Script" path="res://scripts/prototype/prototype_root.gd" id="script_root"]
 [ext_resource type="Script" path="res://scripts/prototype/prototype_camera.gd" id="script_camera"]
@@ -7,8 +7,6 @@
 [ext_resource type="PackedScene" path="res://scenes/prototype/prototype_hud.tscn" id="scene_hud"]
 [ext_resource type="PackedScene" path="res://scenes/prototype/prototype_switch.tscn" id="scene_switch"]
 [ext_resource type="PackedScene" path="res://art/3d/characters/quaternius/UAL1_Standard.glb" id="char_model_player"]
-[ext_resource type="Resource" path="res://resources/skills/basic_attack.tres" id="skill_basic"]
-[ext_resource type="Resource" path="res://resources/skills/aoe_burst.tres" id="skill_aoe"]
 [ext_resource type="Resource" path="res://resources/skills/energy.tres" id="pool_energy"]
 [ext_resource type="Resource" path="res://resources/level/layouts/prototype_layout.tres" id="layout"]
 
@@ -51,7 +49,7 @@ layout = ExtResource("layout")
 [node name="Player" type="CharacterBody3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -4)
 script = ExtResource("script_player")
-skills = Array[Skill]([ExtResource("skill_basic"), ExtResource("skill_aoe"), null, null, null, null, null, null])
+skills = Array[Skill]([null, null, null, null, null, null])
 resource_pool = ExtResource("pool_energy")
 
 [node name="Visual" type="Node3D" parent="Player"]

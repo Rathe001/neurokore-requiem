@@ -8,13 +8,17 @@
 | Space | Jump |
 | Left Ctrl | Crouch (hold) |
 | V | Toggle FPS camera |
-| Left mouse button | Basic single-target attack |
-| Right mouse button | Basic AoE attack |
+| Left mouse button | Fire (weapon's primary attack) |
+| Right mouse button | Alt Fire (offhand attack if 1H weapon; weapon's alt attack if 2H weapon) |
+| R | Reload (ranged weapons only — see [Gear Augmentation](gear-augmentation.md#magazine--reload)) |
 | 1 | First class skill / Interact (near interactable or crosshair on interactable in FPS) |
 | 2 – ? | Subsequent skills (TBD per [Skill Tree](skill-tree.md)) |
 | F | Interact (proximity, iso view) |
+| Tab | Toggle minimap (corner ↔ fullscreen) |
+| Escape | Close fullscreen minimap (also opens main menu from corner view) |
+| L | Toggle equipped light |
 
-**No click-to-move.** Left and right mouse buttons are reserved for the basic attacks defined in [Skill Tree](skill-tree.md). Movement is keyboard only — the modern ARPG / twin-stick convention.
+**No click-to-move.** Left and right mouse buttons are reserved for Fire and Alt Fire as defined in [Skill Tree](skill-tree.md). Movement is keyboard only — the modern ARPG / twin-stick convention.
 
 ## FPS Mode
 
@@ -42,7 +46,7 @@ Planned but not in the initial prototype. Notes for when we get there:
 
 - Left analog stick → movement
 - Right analog stick → attack/skill targeting (or aim assist)
-- Face buttons → basic attacks and skill 1
+- Face buttons → Fire / Alt Fire and skill 1
 - Triggers / shoulders → additional skill slots
 - Rebinding UI required for both controller and mouse/keyboard
 

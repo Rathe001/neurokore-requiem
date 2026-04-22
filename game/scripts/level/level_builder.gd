@@ -152,6 +152,96 @@ func _build_corridor_floor(center: Vector3, cd: CorridorDef) -> void:
 				center + Vector3(s * half_gap, _PIT_TRIM_H * 0.5, 0.0),
 				layout.theme.wall_thickness, _PIT_TRIM_H, sw)
 
+	_build_pit_interior(center, cd)
+
+func _build_pit_interior(center: Vector3, cd: CorridorDef) -> void:
+	var t := layout.theme
+	var along_z := cd.axis == CorridorDef.Axis.Z
+	var sw := cd.width
+	var half_gap := cd.pit_width * 0.5
+	var depth := t.pit_depth
+	var thick := t.wall_thickness
+
+	# Four inner walls lining the pit shaft.
+	# "travel" walls run along the travel axis on both sides.
+	# "cross" walls span the corridor width at the front and back of the gap.
+	var travel_len := cd.pit_width  # length along travel axis
+	var cross_len := sw             # width of corridor
+
+	if along_z:
+		# East / west walls (along Z)
+		for s in [-1.0, 1.0]:
+			_create_pit_wall(
+				center + Vector3(s * (sw * 0.5), -depth * 0.5, 0.0),
+				thick, depth, travel_len)
+		# North / south walls (across X)
+		for s in [-1.0, 1.0]:
+			_create_pit_wall(
+				center + Vector3(0.0, -depth * 0.5, s * half_gap),
+				cross_len + thick * 2.0, depth, thick)
+	else:
+		# North / south walls (along X)
+		for s in [-1.0, 1.0]:
+			_create_pit_wall(
+				center + Vector3(0.0, -depth * 0.5, s * (sw * 0.5)),
+				travel_len, depth, thick)
+		# East / west walls (across Z)
+		for s in [-1.0, 1.0]:
+			_create_pit_wall(
+				center + Vector3(s * half_gap, -depth * 0.5, 0.0),
+				thick, depth, cross_len + thick * 2.0)
+
+	# Glowing ooze surface at the bottom of the pit.
+	var ooze_y := -depth + 0.02
+	var ooze_sx: float
+	var ooze_sz: float
+	if along_z:
+		ooze_sx = sw
+		ooze_sz = cd.pit_width
+	else:
+		ooze_sx = cd.pit_width
+		ooze_sz = sw
+
+	var ooze_mat := StandardMaterial3D.new()
+	ooze_mat.albedo_color = t.pit_ooze_color
+	ooze_mat.emission_enabled = true
+	ooze_mat.emission = t.pit_ooze_color
+	ooze_mat.emission_energy_multiplier = t.pit_ooze_energy
+	ooze_mat.metallic = 0.0
+	ooze_mat.roughness = 0.2
+
+	var ooze_mesh := PlaneMesh.new()
+	ooze_mesh.size = Vector2(ooze_sx, ooze_sz)
+	ooze_mesh.material = ooze_mat
+
+	var ooze_inst := MeshInstance3D.new()
+	ooze_inst.name = &"PitOoze"
+	ooze_inst.mesh = ooze_mesh
+	ooze_inst.position = center + Vector3(0.0, ooze_y, 0.0)
+	add_child(ooze_inst)
+	ooze_inst.add_to_group(&"structures")
+
+	# Ooze light — casts a glow upward from the pit.
+	var ooze_light := OmniLight3D.new()
+	ooze_light.light_color = t.pit_ooze_color
+	ooze_light.light_energy = t.pit_ooze_energy * 0.6
+	ooze_light.omni_range = depth + 2.0
+	ooze_light.omni_attenuation = 1.8
+	ooze_light.shadow_enabled = false
+	ooze_light.light_volumetric_fog_energy = 0.0
+	ooze_light.position = center + Vector3(0.0, ooze_y + 0.5, 0.0)
+	add_child(ooze_light)
+
+func _create_pit_wall(pos: Vector3, sx: float, sy: float, sz: float) -> void:
+	var mesh_inst := MeshInstance3D.new()
+	mesh_inst.mesh = BoxMesh.new()
+	(mesh_inst.mesh as BoxMesh).size = Vector3(sx, sy, sz)
+	if _wall_material != null:
+		mesh_inst.material_override = _wall_material
+	mesh_inst.position = pos
+	add_child(mesh_inst)
+	mesh_inst.add_to_group(&"structures")
+
 func _create_trim_box(pos: Vector3, sx: float, sy: float, sz: float) -> void:
 	var body := StaticBody3D.new()
 	body.input_ray_pickable = false

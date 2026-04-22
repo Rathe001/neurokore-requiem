@@ -10,6 +10,9 @@ const MAX_INVENTORY_SIZE := 40
 const MAX_UTILITY_SLOTS := 4
 
 const STARTER_FLASHLIGHT: Item = preload("res://resources/items/common_flashlight.tres")
+const STARTER_LANTERN: Item = preload("res://resources/items/common_lantern.tres")
+const STARTER_SCANNER: Item = preload("res://resources/items/common_scanner.tres")
+const STARTER_UV_LIGHT: Item = preload("res://resources/items/common_uv_light.tres")
 const STARTER_BACKPACK: Item = preload("res://resources/items/common_backpack.tres")
 const STARTER_BELT: Item = preload("res://resources/items/common_belt.tres")
 const SEED_HELMET: Item = preload("res://resources/items/common_helmet.tres")
@@ -31,10 +34,10 @@ func _ready() -> void:
 	inventory[3] = SEED_CHEST
 	inventory[4] = SEED_WEAPON
 	inventory[5] = SEED_OFFHAND
-	inventory[6] = SEED_GLOVES
-	inventory[7] = SEED_BOOTS
-	inventory[8] = SEED_UTILITY
-	inventory[9] = STARTER_FLASHLIGHT
+	inventory[6] = STARTER_FLASHLIGHT
+	inventory[7] = STARTER_LANTERN
+	inventory[8] = STARTER_SCANNER
+	inventory[9] = STARTER_UV_LIGHT
 
 func get_equipped(slot: StringName) -> Item:
 	return equipment.get(slot, null)
@@ -43,6 +46,10 @@ func get_inventory_item(index: int) -> Item:
 	if index < 0 or index >= inventory.size():
 		return null
 	return inventory[index]
+
+func is_two_handed_equipped() -> bool:
+	var weapon: Item = equipment.get(&"weapon", null)
+	return weapon != null and weapon.two_handed
 
 func set_equipped(slot: StringName, item: Item) -> void:
 	var is_backpack := slot == &"backpack"
@@ -57,6 +64,15 @@ func set_equipped(slot: StringName, item: Item) -> void:
 	equipment_changed.emit(slot)
 
 	var overflow: Array[Item] = []
+
+	# 2H weapon displaces offhand.
+	if slot == &"weapon" and item != null and item.two_handed:
+		var displaced: Item = equipment.get(&"offhand", null)
+		if displaced != null:
+			equipment.erase(&"offhand")
+			equipment_changed.emit(&"offhand")
+			if not add_to_inventory(displaced):
+				overflow.append(displaced)
 
 	if is_belt:
 		var new_util_cap := get_utility_capacity()

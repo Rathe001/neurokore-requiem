@@ -2,6 +2,8 @@ class_name ItemSlot extends Control
 
 enum Role { INVENTORY, EQUIPMENT }
 
+signal clicked(slot: ItemSlot)
+
 var role: Role = Role.INVENTORY
 var slot_id: StringName = &""
 var accepts_kind: StringName = &""
@@ -96,6 +98,25 @@ func _build_visuals() -> void:
 	_glyph.visible = false
 	add_child(_glyph)
 
+func set_highlight(color: Color) -> void:
+	if _border != null:
+		_border.border_color = color
+		_border.border_width = 2.0 if color != UIThemeState.palette.slot_border else 1.0
+
+func clear_highlight() -> void:
+	if _border != null:
+		_border.border_color = UIThemeState.palette.slot_border
+		_border.border_width = 1.0
+
+func can_accept_item(item: Item) -> bool:
+	if item == null:
+		return false
+	if role == Role.EQUIPMENT and item.kind != accepts_kind:
+		return false
+	if role == Role.EQUIPMENT and slot_id == &"offhand" and InventoryState.is_two_handed_equipped():
+		return false
+	return true
+
 func _refresh() -> void:
 	var item := current_item()
 	var has_item := item != null
@@ -134,7 +155,18 @@ func _notification(what: int) -> void:
 	_assign(null)
 	get_tree().call_group(&"world_item_dropper", &"drop_item", item)
 
+func _gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.button_index == MOUSE_BUTTON_LEFT and mb.pressed:
+			clicked.emit(self)
+			accept_event()
+
 func _get_drag_data(_pos: Vector2) -> Variant:
+	# Don't start a drag while the character panel has a held item (click-to-move mode)
+	var panel := get_tree().get_first_node_in_group(&"ui_modal")
+	if panel != null and panel.has_method(&"is_holding_item") and panel.is_holding_item():
+		return null
 	var item := current_item()
 	if item == null:
 		return null
@@ -157,6 +189,8 @@ func _can_drop_data(_pos: Vector2, data: Variant) -> bool:
 	if incoming == null or source == self:
 		return false
 	if role == Role.EQUIPMENT and incoming.kind != accepts_kind:
+		return false
+	if role == Role.EQUIPMENT and slot_id == &"offhand" and InventoryState.is_two_handed_equipped():
 		return false
 	var my_prev := current_item()
 	if my_prev != null and source.role == Role.EQUIPMENT and my_prev.kind != source.accepts_kind:

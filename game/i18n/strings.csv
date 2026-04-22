@@ -70,7 +70,7 @@ EQUIP_GLOVES,Gloves
 EQUIP_BELT,Belt
 EQUIP_MAINBOARD,Mainboard
 EQUIP_BOOTS,Boots
-EQUIP_LIGHT,Light
+EQUIP_OPTICS,Optics
 EQUIP_BACKPACK,Pack
 EQUIP_UTILITY_FORMAT,Utility %d
 EQUIP_BUS_FORMAT,Bus %d
@@ -94,6 +94,13 @@ ITEM_BOOTS,Stomper Boots
 ITEM_BOOTS_DESC,Reinforced toes. Good for long walks and short arguments.
 ITEM_MEDKIT,Medkit
 ITEM_MEDKIT_DESC,A single-use trauma kit. Slow to use. Fast to matter.
+ITEM_LANTERN,Lantern
+ITEM_LANTERN_DESC,A battered oil lantern. Casts a warm glow in every direction. Short range but no blind spots.
+ITEM_SCANNER,Scanner
+ITEM_SCANNER_DESC,Outlines nearby hostiles through walls. Doesn't light a thing.
+ITEM_UV_LIGHT,UV Light
+ITEM_UV_LIGHT_DESC,A compact blacklight. Reveals what was meant to stay hidden.
+ITEM_STATS_LIGHT_TYPE,Type
 ITEM_STATS_LIGHT_RANGE,Range
 ITEM_STATS_LIGHT_ENERGY,Brightness
 ITEM_STATS_INVENTORY_BONUS,Inventory Slots
@@ -107,7 +114,7 @@ DEBUG_SHOW_TELEGRAPHS,Show Attack Telegraphs
 DEBUG_SHOW_OVERLAY,Show Overlay
 DEBUG_START_POS,Start pos:
 DEBUG_START_CR,Start cr:
-HUD_HOTKEY_HINTS,(F1) +25  (F2) Clear  (F3) Debug  (C) Character  (Ctrl) Crouch  (F) Light
+HUD_HOTKEY_HINTS,(F1) +25  (F2) Clear  (F3) Debug  (C) Character  (Ctrl) Crouch  (F) Light  (Tab) Map
 HUD_BANNER_DIED,You died
 HUD_BANNER_NO_LIGHT,I wish I had a light...
 HUD_CREDITS_FORMAT,%d cr

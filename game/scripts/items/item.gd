@@ -8,13 +8,21 @@ class_name Item extends Resource
 @export var glyph: String = "?"
 @export var glyph_color: Color = Color(1, 1, 1, 1)
 
+enum LightType { DIRECTIONAL, RADIANT, SCANNER, UV }
+
 @export_group("Light")
+@export var light_type: LightType = LightType.DIRECTIONAL
 @export var light_energy: float = 0.0
 @export var light_range: float = 0.0
 @export var light_color: Color = Color(1, 1, 1, 1)
 
 @export_group("Container")
 @export var inventory_bonus: int = 0
+
+@export_group("Combat")
+@export var two_handed: bool = false
+@export var fire_skill: Skill
+@export var alt_fire_skill: Skill
 
 @export_group("Belt")
 @export var utility_slots: int = 0

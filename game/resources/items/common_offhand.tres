@@ -1,6 +1,7 @@
-[gd_resource type="Resource" load_steps=2 format=3]
+[gd_resource type="Resource" load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/items/item.gd" id="1_item"]
+[ext_resource type="Resource" path="res://resources/skills/shield_bash.tres" id="2_fire"]
 
 [resource]
 script = ExtResource("1_item")
@@ -11,3 +12,4 @@ kind = &"offhand"
 rarity = &"common"
 glyph = "O"
 glyph_color = Color(0.78, 0.85, 0.95, 1)
+fire_skill = ExtResource("2_fire")

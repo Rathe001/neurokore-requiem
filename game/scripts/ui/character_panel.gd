@@ -19,7 +19,7 @@ const BACKDROP_COLOR := Color(0.0, 0.0, 0.0, 0.55)
 
 const EQUIP_SLOTS: Array[Dictionary] = [
 	{"row": 0, "col": 0, "label_key": "EQUIP_HEAD", "id": &"head", "accepts": &"head"},
-	{"row": 0, "col": 1, "label_key": "EQUIP_LIGHT", "id": &"light", "accepts": &"light"},
+	{"row": 0, "col": 1, "label_key": "EQUIP_OPTICS", "id": &"optics", "accepts": &"optics"},
 	{"row": 0, "col": 2, "label_key": "EQUIP_BACKPACK", "id": &"backpack", "accepts": &"backpack"},
 	{"row": 1, "col": 0, "label_key": "EQUIP_WEAPON", "id": &"weapon", "accepts": &"weapon"},
 	{"row": 1, "col": 1, "label_key": "EQUIP_CHEST", "id": &"chest", "accepts": &"chest"},
@@ -40,6 +40,10 @@ var _inventory_host: Control = null
 var _inventory_grid: Control = null
 var _panel_node: Panel = null
 var _divider_node: ColorRect = null
+var _held_item: Item = null
+var _held_source: ItemSlot = null
+var _held_cursor: Label = null
+var _all_slots: Array[ItemSlot] = []
 
 func _ready() -> void:
 	visible = false
@@ -55,6 +59,10 @@ func _ready() -> void:
 	_refresh_utility_visibility()
 	_rebuild_inventory_grid()
 
+func _process(_delta: float) -> void:
+	if _held_cursor != null:
+		_held_cursor.position = get_viewport().get_mouse_position() - Vector2(12, 12)
+
 func _on_theme_changed() -> void:
 	theme = UIThemeState.theme
 	var p := UIThemeState.palette
@@ -65,7 +73,20 @@ func _on_theme_changed() -> void:
 	if _credits_label != null:
 		_credits_label.add_theme_color_override(&"font_color", p.credits)
 
+func _gui_input(event: InputEvent) -> void:
+	if _held_item != null and event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.pressed and (mb.button_index == MOUSE_BUTTON_RIGHT or mb.button_index == MOUSE_BUTTON_LEFT):
+			_cancel_held()
+			accept_event()
+
 func _unhandled_input(event: InputEvent) -> void:
+	if _held_item != null and event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.pressed and mb.button_index == MOUSE_BUTTON_RIGHT:
+			_cancel_held()
+			get_viewport().set_input_as_handled()
+			return
 	if event.is_action_pressed(&"toggle_inventory"):
 		if visible:
 			close_menu()
@@ -73,11 +94,86 @@ func _unhandled_input(event: InputEvent) -> void:
 			open_menu()
 		get_viewport().set_input_as_handled()
 
+func is_holding_item() -> bool:
+	return _held_item != null
+
 func open_menu() -> void:
 	visible = true
 
 func close_menu() -> void:
+	_cancel_held()
 	visible = false
+
+func _on_slot_clicked(slot: ItemSlot) -> void:
+	if _held_item == null:
+		# Pick up
+		var item := slot.current_item()
+		if item == null:
+			return
+		_held_item = item
+		_held_source = slot
+		slot._assign(null)
+		_show_held_cursor(item)
+		_update_slot_highlights()
+	else:
+		# Place
+		if slot == _held_source:
+			# Click same slot — cancel
+			_held_source._assign(_held_item)
+			_clear_held()
+			return
+		if not slot.can_accept_item(_held_item):
+			return
+		# Swap if target has an item
+		var existing := slot.current_item()
+		if existing != null and _held_source != null:
+			if not _held_source.can_accept_item(existing):
+				return
+		slot._assign(_held_item) # This must happen before assigning existing back
+		if existing != null and _held_source != null:
+			_held_source._assign(existing)
+		_clear_held()
+
+func _cancel_held() -> void:
+	if _held_item != null and _held_source != null:
+		_held_source._assign(_held_item)
+	_clear_held()
+
+func _clear_held() -> void:
+	_held_item = null
+	_held_source = null
+	if _held_cursor != null:
+		_held_cursor.queue_free()
+		_held_cursor = null
+	_clear_slot_highlights()
+
+func _show_held_cursor(item: Item) -> void:
+	if _held_cursor != null:
+		_held_cursor.queue_free()
+	_held_cursor = Label.new()
+	_held_cursor.text = item.glyph
+	_held_cursor.theme_type_variation = &"DragPreview"
+	_held_cursor.modulate = item.glyph_color
+	_held_cursor.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_held_cursor.z_index = 100
+	add_child(_held_cursor)
+
+func _update_slot_highlights() -> void:
+	if _held_item == null:
+		_clear_slot_highlights()
+		return
+	var p := UIThemeState.palette
+	for slot in _all_slots:
+		if slot == _held_source:
+			slot.set_highlight(p.accent_dim)
+		elif slot.can_accept_item(_held_item):
+			slot.set_highlight(p.accent)
+		else:
+			slot.clear_highlight()
+
+func _clear_slot_highlights() -> void:
+	for slot in _all_slots:
+		slot.clear_highlight()
 
 func _build_layout() -> void:
 	var p := UIThemeState.palette
@@ -174,7 +270,9 @@ func _build_character_sheet(parent: Control) -> void:
 			float(col) * (EQUIP_SLOT_SIZE.x + EQUIP_GAP),
 			float(row) * (EQUIP_SLOT_SIZE.y + EQUIP_GAP),
 		)
+		slot.clicked.connect(_on_slot_clicked)
 		equip.add_child(slot)
+		_all_slots.append(slot)
 
 	_build_utility_row(parent, equip.position.x, equip.position.y + equip_total_height + 12.0, equip_total_width)
 
@@ -198,8 +296,10 @@ func _build_utility_row(parent: Control, equip_x: float, y: float, _equip_width:
 		var empty_text := tr(_utility_format_key()) % (i + 1)
 		slot.configure_equipment(id, empty_text, &"utility")
 		slot.position = Vector2(float(i) * (EQUIP_SLOT_SIZE.x + EQUIP_GAP), 0.0)
+		slot.clicked.connect(_on_slot_clicked)
 		_utility_row.add_child(slot)
 		_utility_slots.append(slot)
+		_all_slots.append(slot)
 
 func _refresh_utility_visibility() -> void:
 	if _utility_slots.is_empty():
@@ -221,6 +321,10 @@ func _rebuild_inventory_grid() -> void:
 	if _inventory_host == null:
 		return
 	if _inventory_grid != null:
+		# Remove old inventory slots from tracking
+		for child in _inventory_grid.get_children():
+			if child is ItemSlot:
+				_all_slots.erase(child as ItemSlot)
 		_inventory_grid.queue_free()
 		_inventory_grid = null
 	var capacity := InventoryState.get_inventory_capacity()
@@ -244,7 +348,9 @@ func _rebuild_inventory_grid() -> void:
 			float(c) * (INV_SLOT_SIZE.x + INV_GAP),
 			float(r) * (INV_SLOT_SIZE.y + INV_GAP),
 		)
+		slot.clicked.connect(_on_slot_clicked)
 		grid.add_child(slot)
+		_all_slots.append(slot)
 	_inventory_grid = grid
 
 func _on_capacity_changed() -> void:

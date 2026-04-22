@@ -41,8 +41,10 @@ var _banner_token: int = 0
 var _debug_overlay_accum: float = 0.0
 var _state_flashlight: bool = false
 var _state_crouch: bool = false
+var _minimap: Minimap
 
 func _ready() -> void:
+	add_to_group(&"hud")
 	_apply_theme()
 	_update_avatar_glyph()
 	UIThemeState.changed.connect(_apply_theme)
@@ -69,6 +71,7 @@ func _ready() -> void:
 	_on_health_changed(_max_health, _max_health)
 	_bind_skill_slots(player)
 	_bind_resource_pool(player)
+	_build_minimap(player)
 
 func _apply_theme() -> void:
 	root.theme = UIThemeState.theme
@@ -174,7 +177,7 @@ func _bind_skill_slots(player: Node) -> void:
 		var slot := skill_bar.get_node_or_null("Slot%d" % i) as SkillSlot
 		if slot == null:
 			continue
-		var skill: Skill = skills[i] if i < skills.size() else null
+		var skill: Skill = player.resolve_skill(i) if player.has_method(&"resolve_skill") else (skills[i] if i < skills.size() else null)
 		slot.bind(player, skill, SLOT_LABELS[i])
 
 func _bind_resource_pool(player: Node) -> void:
@@ -185,6 +188,17 @@ func _bind_resource_pool(player: Node) -> void:
 		return
 	resource_fill.color = pool.color
 	_on_resource_changed(pool.start_value, pool.max_value)
+
+func _build_minimap(player: Node) -> void:
+	_minimap = Minimap.new()
+	root.add_child(_minimap)
+	# If scanner is already equipped, activate radar overlay.
+	if player.has_method(&"is_scanner_active"):
+		_minimap.scanner_active = player.is_scanner_active()
+
+func set_scanner_active(active: bool) -> void:
+	if _minimap != null:
+		_minimap.scanner_active = active
 
 func _on_health_changed(current: int, max_value: int) -> void:
 	_max_health = max(max_value, 1)

@@ -23,7 +23,7 @@ Darkness is not explained to the player. It simply is. The world looks like this
 
 ## Light Sources
 
-Light sources are equippable gear occupying a dedicated **utility slot** — separate from power gear so they never compete with build choices. Any light source can be equipped by any class. Starting light sources are thematic defaults, not locked assignments.
+Light sources are equippable gear occupying the dedicated **Optics slot** — separate from power gear so they never compete with build choices. Any light source can be equipped by any class. Starting light sources are thematic defaults, not locked assignments.
 
 ### Properties
 

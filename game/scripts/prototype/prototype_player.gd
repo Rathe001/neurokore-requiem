@@ -18,8 +18,8 @@ const INTERACT_RANGE_SQ := 6.25
 const PLAYER_WORLD_POS_PARAM := &"player_world_pos"
 
 const SKILL_INPUTS: Array[StringName] = [
-	&"attack_single",
-	&"attack_aoe",
+	&"fire",
+	&"alt_fire",
 	&"skill_1",
 	&"skill_2",
 	&"skill_3",
@@ -61,6 +61,9 @@ const JUMP_VELOCITY := 6.5
 @onready var _collision: CollisionShape3D = $Collision
 
 const FLASHLIGHT_OFFSET := Vector3(0, 1.4, -0.3)
+const UV_GLOW_COLOR := Color(0.4, 0.15, 0.9, 1.0)
+const UV_GLOW_ENERGY := 4.0
+const UV_GLOW_RANGE := 3.0
 const FPS_HEAD_OFFSET := Vector3(0.0, 1.55, 0.0)
 const FPS_CROUCH_OFFSET := Vector3(0.0, 0.75, 0.0)
 const FPS_PITCH_LIMIT := 1.4
@@ -95,7 +98,9 @@ var _resource_current: float = 0.0
 var _resource_last_int: int = 0
 var _credits: int = 0
 var _death_tween: Tween
-var _flashlight: SpotLight3D
+var _equipped_light: Light3D
+var _scanner_active: bool = false
+var _uv_active: bool = false
 var _anim_reverse: bool = false
 var _light_on: bool = false
 var _fps_mode: bool = false
@@ -154,7 +159,7 @@ func _ready() -> void:
 		anim_player.animation_finished.connect(_on_anim_finished)
 	_play_anim(ANIM_IDLE)
 	_apply_class_appearance()
-	_build_flashlight()
+	_build_light_mount()
 	var we_node := get_parent().get_node_or_null("WorldEnvironment") as WorldEnvironment
 	if we_node != null:
 		_world_env = we_node.environment
@@ -207,7 +212,7 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 	if _health <= 0:
 		_die()
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	RenderingServer.global_shader_parameter_set(PLAYER_WORLD_POS_PARAM, global_position)
 	if _fps_mode:
 		_update_fps_hover()
@@ -291,8 +296,8 @@ func _physics_process(delta: float) -> void:
 			forward.y = 0.0
 			if forward.length_squared() > 0.0001:
 				_face_direction(forward.normalized())
-			if _flashlight != null:
-				_flashlight.rotation.x = _fps_pitch
+			if _equipped_light is SpotLight3D:
+				_equipped_light.rotation.x = _fps_pitch
 		else:
 			var offset := _cursor_offset()
 			if offset.length_squared() > 0.0001:
@@ -324,10 +329,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		_try_interact()
 	elif event.is_action_pressed(&"toggle_light"):
-		if InventoryState.get_equipped(&"light") != null:
+		if InventoryState.get_equipped(&"optics") != null:
 			_light_on = not _light_on
 			light_changed.emit(_light_on)
-			_apply_light_item()
+			_update_light_visibility()
 		else:
 			notification_requested.emit(tr("HUD_BANNER_NO_LIGHT"))
 		get_viewport().set_input_as_handled()
@@ -372,9 +377,24 @@ func _handle_skill_input() -> void:
 			if Input.is_action_just_pressed(SKILL_INPUTS[i]):
 				_try_interact()
 			return
-		if i < skills.size():
-			_cast_skill(skills[i])
+		var skill := resolve_skill(i)
+		if skill != null:
+			_cast_skill(skill)
 		return
+
+func resolve_skill(index: int) -> Skill:
+	var weapon: Item = InventoryState.get_equipped(&"weapon")
+	if index == 0:
+		return weapon.fire_skill if weapon != null else null
+	elif index == 1:
+		if weapon != null and weapon.two_handed:
+			return weapon.alt_fire_skill
+		var offhand: Item = InventoryState.get_equipped(&"offhand")
+		return offhand.fire_skill if offhand != null else null
+	var skill_index := index - 2
+	if skill_index < skills.size():
+		return skills[skill_index]
+	return null
 
 func _is_near_world_interactable() -> bool:
 	var interact_range := sqrt(INTERACT_RANGE_SQ)
@@ -593,29 +613,19 @@ func _set_fps_fog(enabled: bool) -> void:
 	if _world_env != null:
 		_world_env.fog_enabled = enabled
 
-func _build_flashlight() -> void:
+func _build_light_mount() -> void:
 	if visual == null:
 		return
-	_flashlight = SpotLight3D.new()
-	_flashlight.spot_angle = 20.0
-	_flashlight.spot_attenuation = 1.4
-	_flashlight.spot_angle_attenuation = 0.8
-	_flashlight.shadow_enabled = true
-	_flashlight.shadow_bias = 0.02
-	_flashlight.shadow_normal_bias = 0.3
-	_flashlight.position = FLASHLIGHT_OFFSET
-	_flashlight.visible = false
-	visual.add_child(_flashlight)
-	_update_flashlight_pitch(0.0)
 	InventoryState.equipment_changed.connect(_on_equipment_changed)
 	InventoryState.items_overflowed.connect(_on_items_overflowed)
 	_apply_light_item()
 
 func _on_equipment_changed(slot: StringName) -> void:
-	if slot != &"light":
-		return
-	_light_on = InventoryState.get_equipped(&"light") != null
-	_apply_light_item()
+	if slot == &"optics":
+		_light_on = InventoryState.get_equipped(&"optics") != null
+		_apply_light_item()
+	elif slot == &"weapon":
+		light_changed.emit(_light_on)
 
 func _on_items_overflowed(overflow: Array[Item]) -> void:
 	for displaced_item in overflow:
@@ -631,17 +641,86 @@ func drop_item(item: Item) -> void:
 	pickup.global_position = global_position + Vector3(randf_range(-0.5, 0.5), 0.0, randf_range(-0.5, 0.5))
 
 func _apply_light_item() -> void:
-	if _flashlight == null:
+	if visual == null:
 		return
-	var item: Item = InventoryState.get_equipped(&"light")
-	if item != null:
-		_flashlight.light_color = item.light_color
-		_flashlight.light_energy = item.light_energy
-		_flashlight.spot_range = item.light_range
-	_flashlight.visible = item != null and _light_on
+	# Tear down previous light nodes.
+	if _equipped_light != null:
+		_equipped_light.queue_free()
+		_equipped_light = null
+	_scanner_active = false
+	_uv_active = false
+	_set_group_visible(&"uv_hidden", false)
+
+	var item: Item = InventoryState.get_equipped(&"optics")
+	if item == null:
+		return
+
+	match item.light_type:
+		Item.LightType.DIRECTIONAL:
+			var spot := SpotLight3D.new()
+			spot.spot_angle = 20.0
+			spot.spot_attenuation = 1.4
+			spot.spot_angle_attenuation = 0.8
+			spot.shadow_enabled = true
+			spot.shadow_bias = 0.02
+			spot.shadow_normal_bias = 0.3
+			spot.light_color = item.light_color
+			spot.light_energy = item.light_energy
+			spot.spot_range = item.light_range
+			spot.position = FLASHLIGHT_OFFSET
+			_equipped_light = spot
+			visual.add_child(spot)
+			_update_flashlight_pitch(0.0)
+
+		Item.LightType.RADIANT:
+			var omni := OmniLight3D.new()
+			omni.omni_range = item.light_range
+			omni.omni_attenuation = 1.4
+			omni.shadow_enabled = true
+			omni.light_color = item.light_color
+			omni.light_energy = item.light_energy
+			omni.position = FLASHLIGHT_OFFSET
+			_equipped_light = omni
+			visual.add_child(omni)
+
+		Item.LightType.SCANNER:
+			_scanner_active = true
+
+		Item.LightType.UV:
+			_uv_active = true
+			# Faint purple glow — barely illuminates, but reveals uv_hidden objects.
+			var glow := OmniLight3D.new()
+			glow.omni_range = UV_GLOW_RANGE
+			glow.omni_attenuation = 2.0
+			glow.shadow_enabled = false
+			glow.light_color = UV_GLOW_COLOR
+			glow.light_energy = UV_GLOW_ENERGY
+			glow.position = FLASHLIGHT_OFFSET
+			_equipped_light = glow
+			visual.add_child(glow)
+
+	if _equipped_light != null:
+		_equipped_light.visible = _light_on
+	_notify_hud_scanner()
+
+
+func _update_light_visibility() -> void:
+	if _equipped_light != null:
+		_equipped_light.visible = _light_on
+	_notify_hud_scanner()
+	if _uv_active:
+		_set_group_visible(&"uv_hidden", _light_on)
+
+func is_scanner_active() -> bool:
+	return _scanner_active and _light_on
+
+func _notify_hud_scanner() -> void:
+	var hud := get_tree().get_first_node_in_group(&"hud") as PrototypeHud
+	if hud != null:
+		hud.set_scanner_active(_scanner_active and _light_on)
 
 func _update_flashlight_pitch(cursor_distance: float) -> void:
-	if _flashlight == null:
+	if not _equipped_light is SpotLight3D:
 		return
 	var forward_offset := -FLASHLIGHT_OFFSET.z
 	var d := maxf(0.01, cursor_distance - forward_offset)
@@ -652,7 +731,7 @@ func _update_flashlight_pitch(cursor_distance: float) -> void:
 	var vertical := FLASHLIGHT_OFFSET.y - lift_t * (FLASHLIGHT_OFFSET.y + FLASHLIGHT_OVER_LIFT)
 	var pitch := atan2(vertical, d)
 	pitch = clampf(pitch, -deg_to_rad(FLASHLIGHT_MAX_UP_DEG), deg_to_rad(FLASHLIGHT_MAX_PITCH_DEG))
-	_flashlight.rotation.x = -pitch
+	_equipped_light.rotation.x = -pitch
 
 func _face_direction(dir: Vector3) -> void:
 	if visual == null or dir.length_squared() < 0.0001:

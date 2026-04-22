@@ -1,0 +1,17 @@
+[gd_resource type="Resource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/item.gd" id="1_item"]
+
+[resource]
+script = ExtResource("1_item")
+id = &"common_lantern"
+name_key = "ITEM_LANTERN"
+description_key = "ITEM_LANTERN_DESC"
+kind = &"optics"
+rarity = &"common"
+glyph = "O"
+glyph_color = Color(1, 0.85, 0.5, 1)
+light_type = 1
+light_energy = 18.0
+light_range = 8.0
+light_color = Color(1, 0.9, 0.7, 1)
