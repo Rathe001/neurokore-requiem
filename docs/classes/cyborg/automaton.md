@@ -1,14 +1,5 @@
 # Automaton *(mid-range)*
 
-> **Note:** All images in this file are Midjourney-generated concept placeholders. They are directional only and will be replaced with commissioned artist work when the project is further along.
-
-| Portrait | Model |
-|:---:|:---:|
-| ![Automaton portrait](../../reference/mockups/classes/cyborg/automaton/portrait.png){ width=240 } | ![Automaton model](../../reference/mockups/classes/cyborg/automaton/model.png){ width=240 } |
-
-**Resource UI concept**
-![Automaton resource UI concept](../../reference/mockups/classes/cyborg/automaton/ui.png){ width=480 }
-
 **Fantasy:** command the machine through AI scripting and a fleet of drones. Set conditions, automate responses, build a system that fights alongside you.
 
 **Attribute:** Optimization — precision and efficiency of machine control. Opposes Ingenuity. See [Attribute System](../../design/attribute-system.md).

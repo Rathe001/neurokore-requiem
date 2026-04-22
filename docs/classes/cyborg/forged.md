@@ -1,14 +1,5 @@
 # Forged *(melee)*
 
-> **Note:** All images in this file are Midjourney-generated concept placeholders. They are directional only and will be replaced with commissioned artist work when the project is further along.
-
-| Portrait | Model |
-|:---:|:---:|
-| ![Forged portrait](../../reference/mockups/classes/cyborg/forged/portrait.png){ width=240 } | ![Forged model](../../reference/mockups/classes/cyborg/forged/model.png){ width=240 } |
-
-**Resource UI concept**
-![Forged resource UI concept](../../reference/mockups/classes/cyborg/forged/ui.png){ width=480 }
-
 **Fantasy:** sell nearly all remaining humanity for raw mechanical power. Extra limbs, chassis upgrades, heavy attachments.
 
 **Attribute:** Deviation — the more augmented you become, the more limbs you can attach. Opposes Orthodoxy. See [Attribute System](../../design/attribute-system.md).

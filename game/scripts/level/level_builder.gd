@@ -30,6 +30,7 @@ func _ready() -> void:
 			_build_room(piece)
 		elif piece.corridor != null:
 			_build_corridor(piece)
+	_spawn_uv_test_objects()
 
 # ── Shared Resources ─────────────────────────────────────────────────────
 
@@ -741,3 +742,31 @@ func _create_fog_volume(_center: Vector3, _size_x: float, _size_z: float) -> voi
 func get_door(room_id: StringName, wall: RoomDef.Wall) -> Node:
 	var key := StringName("%s_%s" % [room_id, RoomDef.Wall.keys()[wall]])
 	return _doors.get(key)
+
+# ── UV Test Objects ──────────────────────────────────────────────────────
+
+func _spawn_uv_test_objects() -> void:
+	var t := layout.theme
+	var thick := t.wall_thickness if t != null else 0.4
+	var wall_h := t.wall_height if t != null else 3.0
+
+	# UV wall text — operating theater north wall interior face.
+	# Room center (0, 0, -4), size (8, 6), so north wall Z = -4 - 3 = -7.
+	var text_node := UVWallText.new()
+	text_node.text = "PATIENT 7 WAS HERE"
+	text_node.position = Vector3(1.5, wall_h * 0.45, -7.0 + thick * 0.5 + 0.02)
+	add_child(text_node)
+
+	# UV hidden switch — observation hub west wall, unlocks the supply room door.
+	# Obs hub center (0, 0, -27), size (8, 8), west wall X = 0 - 4 = -4.
+	var supply_door := get_door(&"supply_room", RoomDef.Wall.WEST)
+	var switch_node := UVSwitch.new()
+	switch_node.display_name = "Hidden Panel"
+	switch_node.action = UVSwitch.Action.UNLOCK
+	switch_node.position = Vector3(-4.0 + thick * 0.5 + 0.02, wall_h * 0.4, -26.0)
+	# Face the switch inward (toward room center).
+	switch_node.rotation_degrees.y = 90.0
+	add_child(switch_node)
+	# Set path after add_child so both nodes are in the tree.
+	if supply_door != null:
+		switch_node.target_door = switch_node.get_path_to(supply_door)

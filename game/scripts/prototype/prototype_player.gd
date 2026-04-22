@@ -61,9 +61,6 @@ const JUMP_VELOCITY := 6.5
 @onready var _collision: CollisionShape3D = $Collision
 
 const FLASHLIGHT_OFFSET := Vector3(0, 1.4, -0.3)
-const UV_GLOW_COLOR := Color(0.4, 0.15, 0.9, 1.0)
-const UV_GLOW_ENERGY := 4.0
-const UV_GLOW_RANGE := 3.0
 const FPS_HEAD_OFFSET := Vector3(0.0, 1.55, 0.0)
 const FPS_CROUCH_OFFSET := Vector3(0.0, 0.75, 0.0)
 const FPS_PITCH_LIMIT := 1.4
@@ -649,7 +646,6 @@ func _apply_light_item() -> void:
 		_equipped_light = null
 	_scanner_active = false
 	_uv_active = false
-	_set_group_visible(&"uv_hidden", false)
 
 	var item: Item = InventoryState.get_equipped(&"optics")
 	if item == null:
@@ -688,13 +684,13 @@ func _apply_light_item() -> void:
 
 		Item.LightType.UV:
 			_uv_active = true
-			# Faint purple glow — barely illuminates, but reveals uv_hidden objects.
+			# Purple glow — reveals uv_hidden objects.
 			var glow := OmniLight3D.new()
-			glow.omni_range = UV_GLOW_RANGE
+			glow.omni_range = item.light_range
 			glow.omni_attenuation = 2.0
 			glow.shadow_enabled = false
-			glow.light_color = UV_GLOW_COLOR
-			glow.light_energy = UV_GLOW_ENERGY
+			glow.light_color = item.light_color
+			glow.light_energy = item.light_energy
 			glow.position = FLASHLIGHT_OFFSET
 			_equipped_light = glow
 			visual.add_child(glow)
@@ -708,11 +704,18 @@ func _update_light_visibility() -> void:
 	if _equipped_light != null:
 		_equipped_light.visible = _light_on
 	_notify_hud_scanner()
-	if _uv_active:
-		_set_group_visible(&"uv_hidden", _light_on)
 
 func is_scanner_active() -> bool:
 	return _scanner_active and _light_on
+
+func is_uv_active() -> bool:
+	return _uv_active and _light_on
+
+func get_uv_range() -> float:
+	var item: Item = InventoryState.get_equipped(&"optics")
+	if item == null:
+		return 0.0
+	return item.light_range
 
 func _notify_hud_scanner() -> void:
 	var hud := get_tree().get_first_node_in_group(&"hud") as PrototypeHud

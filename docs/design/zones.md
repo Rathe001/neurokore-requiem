@@ -10,10 +10,6 @@ Dark zones are the default. See [Lighting](../world/lighting.md) for the full li
 
 ## Sub-Level Zero
 
-![Sub-Level Zero concept](../reference/mockups/environments/zone3.png)
-
-> *Concept art — Midjourney placeholder, directional only.*
-
 **Type:** Common zone (first zone after both starting paths)
 **Lighting tier:** Blackout
 **Introduced:** Immediately after the starting zone boss battle
@@ -81,30 +77,14 @@ The door leads out of Earth Facility #723 and into the world above.
 
 ### Abandoned City
 
-![Abandoned City concept](../reference/mockups/environments/zone4.png)
-
-> *Concept art — Midjourney placeholder, directional only.*
-
 ---
 
 ### High-Tech Facility
-
-![High-Tech Facility concept](../reference/mockups/environments/zone5.png)
-
-> *Concept art — Midjourney placeholder, directional only.*
 
 ---
 
 ### Organic Zone
 
-![Organic Zone concept](../reference/mockups/environments/zone6.png)
-
-> *Concept art — Midjourney placeholder, directional only.*
-
 ---
 
 ### Tech Cave
-
-![Tech Cave concept](../reference/mockups/environments/zone7.png)
-
-> *Concept art — Midjourney placeholder, directional only.*

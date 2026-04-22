@@ -4,6 +4,8 @@ class_name Item extends Resource
 @export var name_key: String = ""
 @export var description_key: String = ""
 @export var kind: StringName = &""
+@export var main_type: String = ""
+@export var sub_type: String = ""
 @export var rarity: StringName = &"common"
 @export var glyph: String = "?"
 @export var glyph_color: Color = Color(1, 1, 1, 1)

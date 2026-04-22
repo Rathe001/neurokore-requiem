@@ -20,7 +20,7 @@ Every item has a **main type** and a **sub type**.
 | Belt | Utility Belt, Bandolier | Belt (Human origin) |
 | Mainboard | Circuit Board, Neural Bridge | Mainboard (Cyborg origin) |
 | Backpack | Field Pack, Cargo Frame | Backpack |
-| Optics | Flashlight, Headlamp, Glow Stick, Scanner | Optics |
+| Optics | Flashlight, Headlamp, Glow Stick, Sensor | Optics |
 | Utility | Medkit, Illicit Drugs, Family Heirloom | Utility slot (Human origin, via belt) |
 | Bus | Tracking Upgrade, Drone Control Range Upgrade, Bandwidth Optimizer | Bus slot (Cyborg origin, via mainboard) |
 

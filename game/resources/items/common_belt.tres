@@ -8,6 +8,8 @@ id = &"common_belt"
 name_key = "ITEM_BELT"
 description_key = "ITEM_BELT_DESC"
 kind = &"belt"
+main_type = "Gear"
+sub_type = "Utility Belt"
 rarity = &"common"
 glyph = "="
 glyph_color = Color(0.72, 0.55, 0.32, 1)

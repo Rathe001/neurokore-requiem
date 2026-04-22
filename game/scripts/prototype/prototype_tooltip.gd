@@ -10,6 +10,7 @@ var _bg: PanelContainer
 var _vbox: VBoxContainer
 var _text_label: Label
 var _name_label: Label
+var _type_label: Label
 var _desc_label: Label
 var _stats_label: Label
 
@@ -42,6 +43,11 @@ func _build_ui() -> void:
 	_name_label.mouse_filter = MOUSE_FILTER_IGNORE
 	_vbox.add_child(_name_label)
 
+	_type_label = Label.new()
+	_type_label.theme_type_variation = &"SmallLabel"
+	_type_label.mouse_filter = MOUSE_FILTER_IGNORE
+	_vbox.add_child(_type_label)
+
 	_desc_label = Label.new()
 	_desc_label.theme_type_variation = &"TooltipLabel"
 	_desc_label.mouse_filter = MOUSE_FILTER_IGNORE
@@ -70,6 +76,7 @@ func _apply_theme() -> void:
 	style.content_margin_bottom = PADDING_Y
 	_bg.add_theme_stylebox_override(&"panel", style)
 	_text_label.add_theme_color_override(&"font_color", p.text)
+	_type_label.add_theme_color_override(&"font_color", Color(p.text, 0.55))
 	_stats_label.add_theme_color_override(&"font_color", p.text)
 
 func _process(_delta: float) -> void:
@@ -85,6 +92,7 @@ func show_text(text: String) -> void:
 	_text_label.text = text
 	_text_label.visible = true
 	_name_label.visible = false
+	_type_label.visible = false
 	_desc_label.visible = false
 	_stats_label.visible = false
 	_bg.reset_size()
@@ -99,6 +107,10 @@ func show_item(item: Item) -> void:
 	_name_label.text = item.name_key
 	_name_label.add_theme_color_override(&"font_color", _rarity_color(item.rarity))
 	_name_label.visible = true
+
+	var type_text := _build_type_text(item)
+	_type_label.text = type_text
+	_type_label.visible = not type_text.is_empty()
 
 	var has_desc := item.description_key != ""
 	_desc_label.text = item.description_key
@@ -123,6 +135,13 @@ func _rarity_color(rarity: StringName) -> Color:
 		&"unique":
 			return Color(1.0, 0.6, 0.2, 1.0)
 	return Color(0.95, 0.95, 0.95, 1.0)
+
+func _build_type_text(item: Item) -> String:
+	if item.main_type.is_empty():
+		return ""
+	if item.sub_type.is_empty():
+		return item.main_type
+	return "%s — %s" % [item.main_type, item.sub_type]
 
 func _build_stats_text(item: Item) -> String:
 	var lines: Array[String] = []

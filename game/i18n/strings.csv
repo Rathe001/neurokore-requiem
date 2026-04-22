@@ -96,8 +96,8 @@ ITEM_MEDKIT,Medkit
 ITEM_MEDKIT_DESC,A single-use trauma kit. Slow to use. Fast to matter.
 ITEM_LANTERN,Lantern
 ITEM_LANTERN_DESC,A battered oil lantern. Casts a warm glow in every direction. Short range but no blind spots.
-ITEM_SCANNER,Scanner
-ITEM_SCANNER_DESC,Outlines nearby hostiles through walls. Doesn't light a thing.
+ITEM_SCANNER,Phased Surveillance Radar
+ITEM_SCANNER_DESC,Radar sweep reveals nearby hostiles through walls. Doesn't light a thing.
 ITEM_UV_LIGHT,UV Light
 ITEM_UV_LIGHT_DESC,A compact blacklight. Reveals what was meant to stay hidden.
 ITEM_STATS_LIGHT_TYPE,Type

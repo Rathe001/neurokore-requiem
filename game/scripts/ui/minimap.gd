@@ -35,7 +35,6 @@ const CORNER_OPACITY := 0.92
 const FULLSCREEN_OPACITY := 0.4
 const VIEWPORT_SIZE_CORNER := Vector2i(256, 256)
 const VIEWPORT_SIZE_FULL := Vector2i(512, 512)
-const UPDATE_INTERVAL := 0.1  # seconds between minimap renders
 
 var mode: Mode = Mode.CORNER
 var scanner_active: bool = false:
@@ -51,7 +50,6 @@ var _mask_material: ShaderMaterial
 var _player_dot: MinimapPlayerDot
 var _radar: ScannerRadar
 var _player: Node3D
-var _update_accum: float = 0.0
 ## Normalized offset direction matching the main camera's (4, 14, 4).
 var _cam_dir: Vector3
 
@@ -66,7 +64,7 @@ func _ready() -> void:
 	_viewport.world_3d = get_viewport().world_3d
 	_viewport.size = VIEWPORT_SIZE_CORNER
 	_viewport.transparent_bg = false
-	_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	_viewport.msaa_2d = Viewport.MSAA_DISABLED
 	_viewport.debug_draw = Viewport.DEBUG_DRAW_UNSHADED
 	add_child(_viewport)
@@ -115,17 +113,12 @@ func _ready() -> void:
 	_tag_entity_layers()
 	_apply_layout()
 
-func _process(delta: float) -> void:
+func _process(_delta: float) -> void:
 	if _player == null or not is_instance_valid(_player):
 		return
 	var dist := CAMERA_DISTANCE_FULL if mode == Mode.FULLSCREEN else CAMERA_DISTANCE_CORNER
 	_camera.global_position = _player.global_position + _cam_dir * dist
 	_camera.look_at(_player.global_position, Vector3.UP)
-	# Throttle viewport rendering — the minimap doesn't need 60 fps.
-	_update_accum += delta
-	if _update_accum >= UPDATE_INTERVAL:
-		_update_accum = 0.0
-		_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed(&"toggle_minimap"):
