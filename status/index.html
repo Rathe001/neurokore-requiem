@@ -1634,15 +1634,20 @@
 <p><code>game/scenes/world/prototype_3d.tscn</code> — small corridor-and-rooms layout used to exercise core systems.</p>
 <p>Working:</p>
 <ul>
-<li>WASD movement, click-to-attack</li>
+<li>WASD movement, jump (Space), crouch (Ctrl hold)</li>
+<li>Click-to-attack</li>
 <li>Wall collision (per-segment <code>StaticBody3D</code> + <code>BoxShape3D</code>)</li>
-<li>Doors with slide-open animation, lock state, and <code>interact()</code> (F key)</li>
+<li>Doors with slide-open animation, lock state, and <code>interact()</code> (F key / skill slot 1)</li>
 <li>Switches that target a door via <code>NodePath</code> (toggle / open / close / unlock actions)</li>
 <li>Group-based interactable discovery — player picks the nearest node in <code>interactables</code> group within ~2.5m on F</li>
 <li>Always-visible player (depth test off + render priority)</li>
 <li>Line-of-sight wall fade — walls go transparent only when between camera and player and overlapping the player on screen (view-space projection in <code>tech_wall.gdshader</code>, fed by <code>player_world_pos</code> global shader uniform)</li>
 <li>Persistent corpses with bounded pool — see <a href="#enemies">Enemies</a> below</li>
 <li>Class UI themes wired through <code>UIThemeState</code> (<code>SPEC_THEMES</code> lookup keyed by class)</li>
+<li><strong>FPS mode</strong> (V to toggle) — first-person camera with mouse look, crosshair, fill light; crosshair hover triggers same outline + tooltip as iso mouse hover; skill 1 interacts with crosshair target</li>
+<li><strong>Platformer elements</strong> — jump over pits; crouch-only corridors (solid ceiling block forces crouch, player is locked in crouching until they clear the zone); enemies that fall into pits die</li>
+<li><strong>Per-piece floors with true pits</strong> — each room and corridor has its own floor mesh; pit corridors omit floor over the gap; a kill zone at y=−4 destroys anything that falls in</li>
+<li><strong>World-space floor tiling</strong> — <code>tech_floor.gdshader</code> tiles by world position so texture density stays consistent across all floor piece sizes</li>
 </ul>
 <h2 id="enemies">Enemies<a class="headerlink" href="#enemies" title="Permanent link">&para;</a></h2>
 <p>Spawning model is <strong>D2-style</strong>, not horde-streaming: enemies are placed at level load, do not respawn during play, and the level can be fully cleared.</p>

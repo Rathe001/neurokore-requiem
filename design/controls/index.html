@@ -723,6 +723,28 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#fps-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FPS Mode
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#crouch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Crouch
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#controller-support" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1525,6 +1547,28 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#fps-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FPS Mode
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#crouch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Crouch
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#controller-support" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1570,6 +1614,18 @@
 <td>Movement</td>
 </tr>
 <tr>
+<td>Space</td>
+<td>Jump</td>
+</tr>
+<tr>
+<td>Left Ctrl</td>
+<td>Crouch (hold)</td>
+</tr>
+<tr>
+<td>V</td>
+<td>Toggle FPS camera</td>
+</tr>
+<tr>
 <td>Left mouse button</td>
 <td>Basic single-target attack</td>
 </tr>
@@ -1579,15 +1635,35 @@
 </tr>
 <tr>
 <td>1</td>
-<td>First class skill</td>
+<td>First class skill / Interact (near interactable or crosshair on interactable in FPS)</td>
 </tr>
 <tr>
 <td>2 – ?</td>
 <td>Subsequent skills (TBD per <a href="../skill-tree/">Skill Tree</a>)</td>
 </tr>
+<tr>
+<td>F</td>
+<td>Interact (proximity, iso view)</td>
+</tr>
 </tbody>
 </table>
 <p><strong>No click-to-move.</strong> Left and right mouse buttons are reserved for the basic attacks defined in <a href="../skill-tree/">Skill Tree</a>. Movement is keyboard only — the modern ARPG / twin-stick convention.</p>
+<h2 id="fps-mode">FPS Mode<a class="headerlink" href="#fps-mode" title="Permanent link">&para;</a></h2>
+<p>Pressing <strong>V</strong> toggles between the fixed isometric camera and a first-person camera. In FPS mode:</p>
+<ul>
+<li>Mouse look controls camera pitch and player yaw (cursor is captured).</li>
+<li>A crosshair is always visible. When the crosshair is over an interactable (door, switch, etc.) the outline and tooltip appear, matching the iso hover behavior.</li>
+<li>Pressing <strong>1</strong> while the crosshair is on an interactable triggers the interaction.</li>
+<li>A fill light attached to the FPS camera illuminates the immediate area so dark zones remain navigable.</li>
+</ul>
+<h2 id="crouch">Crouch<a class="headerlink" href="#crouch" title="Permanent link">&para;</a></h2>
+<p>Hold <strong>Left Ctrl</strong> to crouch. While crouching:</p>
+<ul>
+<li>Movement speed is reduced (~45% of normal).</li>
+<li>The player's collision capsule shrinks so they can pass through low-ceiling corridors.</li>
+<li>If inside a crouch-only zone (low ceiling block present), the player is <strong>locked to crouching</strong> and cannot stand even if the key is released — they must leave the zone first.</li>
+<li>In FPS mode the camera drops to head height for the crouched stance.</li>
+</ul>
 <hr />
 <h2 id="controller-support">Controller Support<a class="headerlink" href="#controller-support" title="Permanent link">&para;</a></h2>
 <p>Planned but not in the initial prototype. Notes for when we get there:</p>
