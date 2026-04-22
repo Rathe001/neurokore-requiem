@@ -5,12 +5,34 @@
 | Input | Action |
 |---|---|
 | W / A / S / D | Movement |
+| Space | Jump |
+| Left Ctrl | Crouch (hold) |
+| V | Toggle FPS camera |
 | Left mouse button | Basic single-target attack |
 | Right mouse button | Basic AoE attack |
-| 1 | First class skill |
+| 1 | First class skill / Interact (near interactable or crosshair on interactable in FPS) |
 | 2 – ? | Subsequent skills (TBD per [Skill Tree](skill-tree.md)) |
+| F | Interact (proximity, iso view) |
 
 **No click-to-move.** Left and right mouse buttons are reserved for the basic attacks defined in [Skill Tree](skill-tree.md). Movement is keyboard only — the modern ARPG / twin-stick convention.
+
+## FPS Mode
+
+Pressing **V** toggles between the fixed isometric camera and a first-person camera. In FPS mode:
+
+- Mouse look controls camera pitch and player yaw (cursor is captured).
+- A crosshair is always visible. When the crosshair is over an interactable (door, switch, etc.) the outline and tooltip appear, matching the iso hover behavior.
+- Pressing **1** while the crosshair is on an interactable triggers the interaction.
+- A fill light attached to the FPS camera illuminates the immediate area so dark zones remain navigable.
+
+## Crouch
+
+Hold **Left Ctrl** to crouch. While crouching:
+
+- Movement speed is reduced (~45% of normal).
+- The player's collision capsule shrinks so they can pass through low-ceiling corridors.
+- If inside a crouch-only zone (low ceiling block present), the player is **locked to crouching** and cannot stand even if the key is released — they must leave the zone first.
+- In FPS mode the camera drops to head height for the crouched stance.
 
 ---
 

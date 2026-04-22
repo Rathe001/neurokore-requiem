@@ -1,7 +1,7 @@
 extends Control
 
 const PANEL_SIZE := Vector2(220.0, 200.0)
-const SETTINGS_PANEL_SIZE := Vector2(360.0, 320.0)
+const SETTINGS_PANEL_SIZE := Vector2(360.0, 380.0)
 const BUTTON_SIZE := Vector2(168.0, 32.0)
 const BUTTON_GAP := 6.0
 const ROW_LABEL_WIDTH := 110.0
@@ -11,6 +11,7 @@ var _main_panel: Control
 var _settings_panel: Control
 var _window_mode_option: OptionButton
 var _resolution_option: OptionButton
+var _sensitivity_slider: HSlider
 
 func _ready() -> void:
 	visible = false
@@ -71,6 +72,10 @@ func _build_settings_panel() -> void:
 	_resolution_option = _make_resolution_option()
 	body.add_child(_make_option_row("MENU_SETTINGS_RESOLUTION", _resolution_option))
 
+	body.add_child(_make_section_label("MENU_SETTINGS_CONTROLS"))
+	_sensitivity_slider = _make_sensitivity_slider()
+	body.add_child(_make_slider_row("MENU_SETTINGS_MOUSE_SENSITIVITY", _sensitivity_slider))
+
 	body.add_child(_make_section_label("MENU_SETTINGS_ACCESSIBILITY"))
 
 	var back := _make_button("COMMON_BACK", _on_back_pressed)
@@ -124,6 +129,7 @@ func _refresh_display_options() -> void:
 			_resolution_option.select(i)
 			break
 	_resolution_option.disabled = DisplayState.config.mode != DisplayConfig.Mode.WINDOWED
+	_sensitivity_slider.set_value_no_signal(DisplayState.config.fps_mouse_sensitivity)
 
 func _on_window_mode_selected(index: int) -> void:
 	DisplayState.set_mode(_window_mode_option.get_item_id(index))
@@ -133,6 +139,39 @@ func _on_resolution_selected(index: int) -> void:
 	if index < 0 or index >= resolutions.size():
 		return
 	DisplayState.set_resolution(resolutions[index])
+
+func _make_sensitivity_slider() -> HSlider:
+	var slider := HSlider.new()
+	slider.min_value = 0.001
+	slider.max_value = 0.020
+	slider.step = 0.001
+	slider.value = DisplayState.config.fps_mouse_sensitivity if DisplayState.config != null else 0.006
+	slider.custom_minimum_size = Vector2(OPTION_WIDTH - 40.0, 26.0)
+	slider.value_changed.connect(func(v: float) -> void:
+		if DisplayState.config != null:
+			DisplayState.config.fps_mouse_sensitivity = v
+			DisplayState.save()
+	)
+	return slider
+
+func _make_slider_row(label_key: String, slider: HSlider) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override(&"separation", 8)
+	var label := Label.new()
+	label.text = label_key
+	label.theme_type_variation = &"SubLabel"
+	label.custom_minimum_size = Vector2(ROW_LABEL_WIDTH, 0.0)
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(label)
+	row.add_child(slider)
+	var value_label := Label.new()
+	value_label.theme_type_variation = &"BodyLabel"
+	value_label.custom_minimum_size = Vector2(36.0, 0.0)
+	value_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	value_label.text = "%.3f" % slider.value
+	slider.value_changed.connect(func(v: float) -> void: value_label.text = "%.3f" % v)
+	row.add_child(value_label)
+	return row
 
 func _make_section_label(text: String) -> Label:
 	var label := Label.new()

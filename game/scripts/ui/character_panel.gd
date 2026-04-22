@@ -38,6 +38,8 @@ var _utility_row: Control = null
 var _utility_slots: Array[ItemSlot] = []
 var _inventory_host: Control = null
 var _inventory_grid: Control = null
+var _panel_node: Panel = null
+var _divider_node: ColorRect = null
 
 func _ready() -> void:
 	visible = false
@@ -55,6 +57,13 @@ func _ready() -> void:
 
 func _on_theme_changed() -> void:
 	theme = UIThemeState.theme
+	var p := UIThemeState.palette
+	if _panel_node != null:
+		_panel_node.add_theme_stylebox_override(&"panel", _opaque_panel_style(p))
+	if _divider_node != null:
+		_divider_node.color = Color(p.accent_dim.r, p.accent_dim.g, p.accent_dim.b, 0.7)
+	if _credits_label != null:
+		_credits_label.add_theme_color_override(&"font_color", p.credits)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed(&"toggle_inventory"):
@@ -90,6 +99,7 @@ func _build_layout() -> void:
 	panel.add_theme_stylebox_override(&"panel", _opaque_panel_style(p))
 	panel.add_to_group(&"modal_inner_panel")
 	add_child(panel)
+	_panel_node = panel
 
 	var sheet := Control.new()
 	sheet.name = "CharacterSheet"
@@ -105,6 +115,7 @@ func _build_layout() -> void:
 	divider.size = Vector2(PANEL_SIZE.x - 24.0, 1.0)
 	divider.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(divider)
+	_divider_node = divider
 
 	var inv := Control.new()
 	inv.name = "Inventory"
@@ -129,7 +140,6 @@ func _build_character_sheet(parent: Control) -> void:
 	parent.add_child(stats)
 	stats.add_child(_make_stat_row("CHARACTER_PANEL_NAME", "CHARACTER_PANEL_OPERATOR"))
 	stats.add_child(_make_stat_row("CHARACTER_PANEL_CLASS", _class_label()))
-	stats.add_child(_make_stat_row("CHARACTER_PANEL_SPEC", _spec_label()))
 	stats.add_child(_make_stat_row("CHARACTER_PANEL_LEVEL", "1"))
 	_hp_label = _make_stat_value("— / —")
 	stats.add_child(_make_stat_row_with_value("CHARACTER_PANEL_HEALTH", _hp_label))
@@ -363,11 +373,13 @@ func _on_credits_changed(amount: int) -> void:
 		_credits_label.text = "₢ %d" % max(amount, 0)
 
 func _class_label() -> String:
+	if PlayerState.spec_id != &"":
+		var class_str := String(PlayerState.class_id).to_upper()
+		var spec_str := String(PlayerState.spec_id).to_upper()
+		return "SPEC_%s_%s" % [class_str, spec_str]
 	match PlayerState.class_id:
-		&"human":
-			return "CLASS_HUMAN"
-		&"cyborg":
-			return "CLASS_CYBORG"
+		&"human": return "CLASS_HUMAN"
+		&"cyborg": return "CLASS_CYBORG"
 	return "COMMON_DASH"
 
 func _belt_label_key() -> String:
@@ -390,9 +402,3 @@ func _opaque_panel_style(p: UIThemeConfig) -> StyleBoxFlat:
 	s.border_width_bottom = 2
 	return s
 
-func _spec_label() -> String:
-	if PlayerState.spec_id == &"":
-		return "SPEC_NONE"
-	var class_str := String(PlayerState.class_id).to_upper()
-	var spec_str := String(PlayerState.spec_id).to_upper()
-	return "SPEC_%s_%s" % [class_str, spec_str]

@@ -12,15 +12,20 @@ Godot 4 + GDScript, Forward+ renderer. Fixed-camera low-poly 3D with PBR + reali
 
 Working:
 
-- WASD movement, click-to-attack
+- WASD movement, jump (Space), crouch (Ctrl hold)
+- Click-to-attack
 - Wall collision (per-segment `StaticBody3D` + `BoxShape3D`)
-- Doors with slide-open animation, lock state, and `interact()` (F key)
+- Doors with slide-open animation, lock state, and `interact()` (F key / skill slot 1)
 - Switches that target a door via `NodePath` (toggle / open / close / unlock actions)
 - Group-based interactable discovery — player picks the nearest node in `interactables` group within ~2.5m on F
 - Always-visible player (depth test off + render priority)
 - Line-of-sight wall fade — walls go transparent only when between camera and player and overlapping the player on screen (view-space projection in `tech_wall.gdshader`, fed by `player_world_pos` global shader uniform)
 - Persistent corpses with bounded pool — see [Enemies](#enemies) below
 - Class UI themes wired through `UIThemeState` (`SPEC_THEMES` lookup keyed by class)
+- **FPS mode** (V to toggle) — first-person camera with mouse look, crosshair, fill light; crosshair hover triggers same outline + tooltip as iso mouse hover; skill 1 interacts with crosshair target
+- **Platformer elements** — jump over pits; crouch-only corridors (solid ceiling block forces crouch, player is locked in crouching until they clear the zone); enemies that fall into pits die
+- **Per-piece floors with true pits** — each room and corridor has its own floor mesh; pit corridors omit floor over the gap; a kill zone at y=−4 destroys anything that falls in
+- **World-space floor tiling** — `tech_floor.gdshader` tiles by world position so texture density stays consistent across all floor piece sizes
 
 ## Enemies
 

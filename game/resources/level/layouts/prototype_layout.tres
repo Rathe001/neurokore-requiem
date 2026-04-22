@@ -136,7 +136,7 @@ script = ExtResource("script_piece")
 position = Vector3(9, 0, -15)
 room = SubResource("room_supply")
 
-; 8. Warning corridor — fluorescent lit
+; 8. Warning corridor — fluorescent lit, low ceiling forces crouch
 [sub_resource type="Resource" id="corr_warning"]
 script = ExtResource("script_corridor")
 width = 4.0
@@ -144,6 +144,7 @@ length = 6.0
 axis = 1
 light_color = ExtResource("light_fluoro")
 light_interval = 4.0
+ceiling_height = 1.1
 
 [sub_resource type="Resource" id="piece_corr_warning"]
 script = ExtResource("script_piece")
@@ -165,12 +166,13 @@ position = Vector3(0, 0, -27)
 room = SubResource("room_obs")
 enemy_positions = [Vector3(2, 0, 2), Vector3(-2, 0, -2)]
 
-; 10. Lab corridor — blackout, no lights
+; 10. Lab corridor — blackout, no lights, pit in the centre
 [sub_resource type="Resource" id="corr_lab"]
 script = ExtResource("script_corridor")
 width = 4.0
 length = 6.0
 axis = 0
+pit_width = 2.5
 
 [sub_resource type="Resource" id="piece_corr_lab"]
 script = ExtResource("script_piece")

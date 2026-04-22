@@ -16,6 +16,10 @@ class_name LevelTheme
 @export var floor_metallic: float = 0.2
 @export var floor_roughness: float = 0.7
 
+@export_group("FPS Fog")
+@export var fps_fog_density: float = 0.35
+@export var fps_fog_color: Color = Color(0.002, 0.003, 0.006)
+
 @export_group("Fluorescent Geometry")
 @export var fluorescent_housing_size: Vector3 = Vector3(1.2, 0.06, 0.2)
 @export var fluorescent_tube_size: Vector3 = Vector3(1.1, 0.02, 0.08)

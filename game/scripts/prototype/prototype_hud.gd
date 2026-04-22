@@ -1,24 +1,33 @@
 extends CanvasLayer
 class_name PrototypeHud
 
-const HP_BAR_WIDTH := 136.0
-const RESOURCE_BAR_WIDTH := 136.0
+const HP_BAR_WIDTH := 156.0
+const RESOURCE_BAR_WIDTH := 156.0
 const LOW_HP_RATIO := 0.35
 
 const SLOT_LABELS: Array[String] = ["LMB", "RMB", "1", "2", "3", "4", "Q", "E"]
 const DEBUG_OVERLAY_INTERVAL := 0.1
 
 @onready var root: Control = $Root
+@onready var hud_bg: ColorRect = %HudBackground
+@onready var hud_border: ReferenceRect = %HudBorder
 @onready var hp_fill: ColorRect = %HPFill
 @onready var hp_label: Label = %HPLabel
-@onready var hp_bg: ColorRect = $Root/HPContainer/HPBackground
-@onready var hp_border: ReferenceRect = $Root/HPContainer/HPBorder
+@onready var hp_bg: ColorRect = %HPBackground
+@onready var hp_border: ReferenceRect = %HPBorder
 @onready var hp_frame: NinePatchRect = %HPFrame
 @onready var resource_fill: ColorRect = %ResourceFill
 @onready var resource_label: Label = %ResourceLabel
-@onready var resource_bg: ColorRect = $Root/ResourceContainer/ResourceBackground
-@onready var resource_border: ReferenceRect = $Root/ResourceContainer/ResourceBorder
+@onready var resource_bg: ColorRect = %ResourceBackground
+@onready var resource_border: ReferenceRect = %ResourceBorder
 @onready var resource_frame: NinePatchRect = %ResourceFrame
+@onready var avatar_bg: ColorRect = %AvatarBackground
+@onready var avatar_border: ReferenceRect = %AvatarBorder
+@onready var avatar_label: Label = %AvatarLabel
+@onready var flashlight_bg: ColorRect = %FBg
+@onready var flashlight_border: ReferenceRect = %FBorder
+@onready var crouch_bg: ColorRect = %CBg
+@onready var crouch_border: ReferenceRect = %CBorder
 @onready var skill_bar: Control = %SkillBar
 @onready var banner: Label = %Banner
 @onready var debug_label: Label = %DebugLabel
@@ -30,10 +39,15 @@ var _max_health: int = 1
 var _last_hp_current: int = 0
 var _banner_token: int = 0
 var _debug_overlay_accum: float = 0.0
+var _state_flashlight: bool = false
+var _state_crouch: bool = false
 
 func _ready() -> void:
 	_apply_theme()
+	_update_avatar_glyph()
 	UIThemeState.changed.connect(_apply_theme)
+	PlayerState.class_changed.connect(func(_id: StringName) -> void: _update_avatar_glyph())
+	PlayerState.spec_changed.connect(func(_id: StringName) -> void: _update_avatar_glyph())
 	var player := get_tree().get_first_node_in_group(&"player")
 	if player == null:
 		push_warning("[prototype_hud] no player in group")
@@ -48,6 +62,10 @@ func _ready() -> void:
 		player.died.connect(_on_player_died)
 	if player.has_signal(&"notification_requested"):
 		player.notification_requested.connect(_on_notification_requested)
+	if player.has_signal(&"crouch_changed"):
+		player.crouch_changed.connect(_on_crouch_changed)
+	if player.has_signal(&"light_changed"):
+		player.light_changed.connect(_on_light_changed)
 	_on_health_changed(_max_health, _max_health)
 	_bind_skill_slots(player)
 	_bind_resource_pool(player)
@@ -55,14 +73,23 @@ func _ready() -> void:
 func _apply_theme() -> void:
 	root.theme = UIThemeState.theme
 	var p := UIThemeState.palette
+	var panel_dark := Color(p.panel_bg.r * 0.65, p.panel_bg.g * 0.65, p.panel_bg.b * 0.65, 0.92)
+	hud_bg.color = panel_dark
+	hud_border.border_color = Color(p.panel_border.r, p.panel_border.g, p.panel_border.b, 0.65)
 	hp_bg.color = p.hp_bar_bg
 	hp_border.border_color = p.hp_bar_border
 	resource_bg.color = p.hp_bar_bg
 	resource_border.border_color = p.hp_bar_border
+	var accent_dark := Color(p.accent.r * 0.15, p.accent.g * 0.15, p.accent.b * 0.15, 0.95)
+	avatar_bg.color = accent_dark
+	avatar_border.border_color = Color(p.accent.r, p.accent.g, p.accent.b, 0.65)
+	avatar_label.add_theme_color_override(&"font_color", p.accent)
 	debug_bg.color = Color(p.panel_bg.r, p.panel_bg.g, p.panel_bg.b, 0.75)
 	_apply_frame(hp_frame, hp_border, p.hp_bar_frame, p.frame_patch_margin)
 	_apply_frame(resource_frame, resource_border, p.resource_bar_frame, p.frame_patch_margin)
 	_repaint_hp()
+	_apply_indicator(flashlight_bg, flashlight_border, _state_flashlight)
+	_apply_indicator(crouch_bg, crouch_border, _state_crouch)
 
 func _apply_frame(frame: NinePatchRect, fallback_border: ReferenceRect, tex: Texture2D, margin: int) -> void:
 	if tex == null:
@@ -77,6 +104,27 @@ func _apply_frame(frame: NinePatchRect, fallback_border: ReferenceRect, tex: Tex
 	frame.patch_margin_bottom = margin
 	frame.visible = true
 	fallback_border.visible = false
+
+func _apply_indicator(bg: ColorRect, border: ReferenceRect, active: bool) -> void:
+	var p := UIThemeState.palette
+	if active:
+		bg.color = Color(p.accent.r * 0.35, p.accent.g * 0.35, p.accent.b * 0.35, 0.95)
+		border.border_color = p.accent
+	else:
+		bg.color = p.slot_bg
+		border.border_color = Color(p.slot_border.r, p.slot_border.g, p.slot_border.b, 0.5)
+
+func _update_avatar_glyph() -> void:
+	var id: StringName = PlayerState.spec_id if PlayerState.spec_id != &"" else PlayerState.class_id
+	avatar_label.text = (id as String).substr(0, 1).to_upper()
+
+func _on_crouch_changed(is_crouching: bool) -> void:
+	_state_crouch = is_crouching
+	_apply_indicator(crouch_bg, crouch_border, _state_crouch)
+
+func _on_light_changed(is_on: bool) -> void:
+	_state_flashlight = is_on
+	_apply_indicator(flashlight_bg, flashlight_border, _state_flashlight)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not event.is_action_pressed(&"ui_cancel"):
@@ -115,7 +163,7 @@ func _process(delta: float) -> void:
 		frame_ms,
 		SpatialGrid.count(&"enemies"),
 		tree.get_nodes_in_group(&"corpses").size(),
-		SpatialGrid.count(&"pickups"),
+		tree.get_nodes_in_group(&"pickups").size(),
 		tree.get_nodes_in_group(&"structures").size(),
 		tree.get_node_count(),
 	]

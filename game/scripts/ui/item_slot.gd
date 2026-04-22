@@ -11,6 +11,8 @@ var empty_label_text: String = ""
 var _empty_label: Label
 var _glyph: Label
 var _is_drag_source: bool = false
+var _bg: ColorRect
+var _border: ReferenceRect
 
 func configure_equipment(id: StringName, empty_text: String, accepts: StringName = &"") -> void:
 	role = Role.EQUIPMENT
@@ -25,13 +27,25 @@ func configure_inventory(index: int) -> void:
 
 func _ready() -> void:
 	mouse_filter = MOUSE_FILTER_STOP
+	theme = UIThemeState.theme
 	_build_visuals()
 	InventoryState.equipment_changed.connect(_on_equipment_changed)
 	InventoryState.inventory_changed.connect(_on_inventory_changed)
+	UIThemeState.changed.connect(_on_theme_changed)
 	mouse_entered.connect(_on_mouse_entered)
 	mouse_exited.connect(_on_mouse_exited)
 	tree_exiting.connect(_on_mouse_exited)
 	_refresh()
+
+func _on_theme_changed() -> void:
+	theme = UIThemeState.theme
+	var p := UIThemeState.palette
+	if _bg != null:
+		_bg.color = p.slot_bg
+	if _border != null:
+		_border.border_color = p.slot_border
+	if _empty_label != null:
+		_empty_label.add_theme_color_override(&"font_color", Color(p.text_dim.r, p.text_dim.g, p.text_dim.b, 0.85))
 
 func _on_mouse_entered() -> void:
 	var item := current_item()
@@ -49,19 +63,19 @@ func current_item() -> Item:
 
 func _build_visuals() -> void:
 	var p := UIThemeState.palette
-	var bg := ColorRect.new()
-	bg.color = p.slot_bg
-	bg.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
-	bg.mouse_filter = MOUSE_FILTER_IGNORE
-	add_child(bg)
+	_bg = ColorRect.new()
+	_bg.color = p.slot_bg
+	_bg.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	_bg.mouse_filter = MOUSE_FILTER_IGNORE
+	add_child(_bg)
 
-	var border := ReferenceRect.new()
-	border.border_color = p.slot_border
-	border.border_width = 1.0
-	border.editor_only = false
-	border.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
-	border.mouse_filter = MOUSE_FILTER_IGNORE
-	add_child(border)
+	_border = ReferenceRect.new()
+	_border.border_color = p.slot_border
+	_border.border_width = 1.0
+	_border.editor_only = false
+	_border.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	_border.mouse_filter = MOUSE_FILTER_IGNORE
+	add_child(_border)
 
 	_empty_label = Label.new()
 	_empty_label.text = empty_label_text

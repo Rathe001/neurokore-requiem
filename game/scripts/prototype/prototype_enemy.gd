@@ -11,6 +11,7 @@ const CREDIT_DROP_MIN := 1
 const CREDIT_DROP_MAX := 5
 const CREDIT_PICKUP_SCENE: PackedScene = preload("res://scenes/prototype/prototype_credit_pickup.tscn")
 
+const GRAVITY := 22.0
 const CHASE_SPEED := 3.2
 const AGGRO_RANGE := 10.0
 const ATTACK_RANGE := 2.2
@@ -152,6 +153,11 @@ func _physics_process(delta: float) -> void:
 		return
 	_attack_cd = maxf(0.0, _attack_cd - delta)
 
+	if is_on_floor():
+		velocity.y = 0.0
+	else:
+		velocity.y -= GRAVITY * delta
+
 	if _knockback_remain > 0.0:
 		velocity.x = _knockback_vel.x
 		velocity.z = _knockback_vel.z
@@ -162,7 +168,6 @@ func _physics_process(delta: float) -> void:
 		velocity.z = 0.0
 	else:
 		_chase_tick()
-	velocity.y = 0.0
 	move_and_slide()
 
 	if _alive and not _casting and _knockback_remain <= 0.0:

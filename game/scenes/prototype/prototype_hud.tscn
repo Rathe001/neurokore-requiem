@@ -15,159 +15,272 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 mouse_filter = 2
 
-[node name="HPContainer" type="Control" parent="Root"]
+[node name="AvatarPanel" type="Control" parent="Root"]
+anchor_left = 0.5
+anchor_right = 0.5
 anchor_top = 1.0
 anchor_bottom = 1.0
-offset_left = 12.0
-offset_top = -32.0
-offset_right = 152.0
-offset_bottom = -12.0
+offset_left = -236.0
+offset_top = -98.0
+offset_right = -180.0
+offset_bottom = -8.0
 mouse_filter = 2
 
-[node name="HPBackground" type="ColorRect" parent="Root/HPContainer"]
+[node name="AvatarBackground" type="ColorRect" parent="Root/AvatarPanel"]
+unique_name_in_owner = true
 anchor_right = 1.0
 anchor_bottom = 1.0
 color = Color(0.04, 0.05, 0.08, 0.9)
 
-[node name="HPBorder" type="ReferenceRect" parent="Root/HPContainer"]
+[node name="AvatarBorder" type="ReferenceRect" parent="Root/AvatarPanel"]
+unique_name_in_owner = true
+anchor_right = 1.0
+anchor_bottom = 1.0
+border_color = Color(0.3, 0.5, 0.7, 0.7)
+border_width = 1.0
+editor_only = false
+
+[node name="AvatarLabel" type="Label" parent="Root/AvatarPanel"]
+unique_name_in_owner = true
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_font_sizes/font_size = 24
+text = "H"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="HudPanel" type="Control" parent="Root"]
+anchor_left = 0.5
+anchor_right = 0.5
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = -176.0
+offset_top = -98.0
+offset_right = 176.0
+offset_bottom = -8.0
+mouse_filter = 2
+
+[node name="HudBackground" type="ColorRect" parent="Root/HudPanel"]
+unique_name_in_owner = true
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.04, 0.05, 0.08, 0.88)
+
+[node name="HudBorder" type="ReferenceRect" parent="Root/HudPanel"]
+unique_name_in_owner = true
+anchor_right = 1.0
+anchor_bottom = 1.0
+border_color = Color(0.3, 0.5, 0.7, 0.6)
+border_width = 1.0
+editor_only = false
+
+[node name="HPContainer" type="Control" parent="Root/HudPanel"]
+offset_left = 10.0
+offset_top = 8.0
+offset_right = 170.0
+offset_bottom = 44.0
+mouse_filter = 2
+
+[node name="HPBackground" type="ColorRect" parent="Root/HudPanel/HPContainer"]
+unique_name_in_owner = true
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.04, 0.05, 0.08, 0.9)
+
+[node name="HPBorder" type="ReferenceRect" parent="Root/HudPanel/HPContainer"]
+unique_name_in_owner = true
 anchor_right = 1.0
 anchor_bottom = 1.0
 border_color = Color(0.3, 0.5, 0.7, 0.7)
 border_width = 2.0
 editor_only = false
 
-[node name="HPFrame" type="NinePatchRect" parent="Root/HPContainer"]
+[node name="HPFrame" type="NinePatchRect" parent="Root/HudPanel/HPContainer"]
 unique_name_in_owner = true
 anchor_right = 1.0
 anchor_bottom = 1.0
 visible = false
 mouse_filter = 2
 
-[node name="HPFill" type="ColorRect" parent="Root/HPContainer"]
+[node name="HPFill" type="ColorRect" parent="Root/HudPanel/HPContainer"]
 unique_name_in_owner = true
 offset_left = 2.0
 offset_top = 2.0
-offset_right = 138.0
+offset_right = 158.0
 offset_bottom = -2.0
 anchor_bottom = 1.0
 color = Color(0.3, 0.95, 1.0, 1.0)
 
-[node name="HPLabel" type="Label" parent="Root/HPContainer"]
+[node name="HPLabel" type="Label" parent="Root/HudPanel/HPContainer"]
 unique_name_in_owner = true
 anchor_right = 1.0
 anchor_bottom = 1.0
-theme_override_font_sizes/font_size = 11
+theme_override_font_sizes/font_size = 9
 text = "100 / 100"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="ResourceContainer" type="Control" parent="Root"]
-anchor_left = 1.0
-anchor_top = 1.0
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = -152.0
-offset_top = -32.0
-offset_right = -12.0
-offset_bottom = -12.0
+[node name="ResourceContainer" type="Control" parent="Root/HudPanel"]
+offset_left = 182.0
+offset_top = 8.0
+offset_right = 342.0
+offset_bottom = 44.0
 mouse_filter = 2
 
-[node name="ResourceBackground" type="ColorRect" parent="Root/ResourceContainer"]
+[node name="ResourceBackground" type="ColorRect" parent="Root/HudPanel/ResourceContainer"]
+unique_name_in_owner = true
 anchor_right = 1.0
 anchor_bottom = 1.0
 color = Color(0.04, 0.05, 0.08, 0.9)
 
-[node name="ResourceBorder" type="ReferenceRect" parent="Root/ResourceContainer"]
+[node name="ResourceBorder" type="ReferenceRect" parent="Root/HudPanel/ResourceContainer"]
+unique_name_in_owner = true
 anchor_right = 1.0
 anchor_bottom = 1.0
 border_color = Color(0.3, 0.5, 0.7, 0.7)
 border_width = 2.0
 editor_only = false
 
-[node name="ResourceFrame" type="NinePatchRect" parent="Root/ResourceContainer"]
+[node name="ResourceFrame" type="NinePatchRect" parent="Root/HudPanel/ResourceContainer"]
 unique_name_in_owner = true
 anchor_right = 1.0
 anchor_bottom = 1.0
 visible = false
 mouse_filter = 2
 
-[node name="ResourceFill" type="ColorRect" parent="Root/ResourceContainer"]
+[node name="ResourceFill" type="ColorRect" parent="Root/HudPanel/ResourceContainer"]
 unique_name_in_owner = true
 offset_left = 2.0
 offset_top = 2.0
-offset_right = 138.0
+offset_right = 158.0
 offset_bottom = -2.0
 anchor_bottom = 1.0
 color = Color(0.4, 0.7, 1.0, 1.0)
 
-[node name="ResourceLabel" type="Label" parent="Root/ResourceContainer"]
+[node name="ResourceLabel" type="Label" parent="Root/HudPanel/ResourceContainer"]
 unique_name_in_owner = true
 anchor_right = 1.0
 anchor_bottom = 1.0
-theme_override_font_sizes/font_size = 11
+theme_override_font_sizes/font_size = 9
 text = "100 / 100"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="SkillBar" type="Control" parent="Root"]
+[node name="SkillBar" type="Control" parent="Root/HudPanel"]
 unique_name_in_owner = true
-anchor_left = 0.5
-anchor_top = 1.0
-anchor_right = 0.5
-anchor_bottom = 1.0
-offset_left = -142.0
-offset_top = -44.0
-offset_right = 142.0
-offset_bottom = -12.0
+offset_left = 10.0
+offset_top = 48.0
+offset_right = 342.0
+offset_bottom = 88.0
 mouse_filter = 2
 
-[node name="Slot0" parent="Root/SkillBar" instance=ExtResource("scene_skill_slot")]
+[node name="Slot0" parent="Root/HudPanel/SkillBar" instance=ExtResource("scene_skill_slot")]
 offset_left = 0.0
 offset_top = 0.0
 offset_right = 32.0
 offset_bottom = 32.0
 
-[node name="Slot1" parent="Root/SkillBar" instance=ExtResource("scene_skill_slot")]
+[node name="Slot1" parent="Root/HudPanel/SkillBar" instance=ExtResource("scene_skill_slot")]
 offset_left = 36.0
 offset_top = 0.0
 offset_right = 68.0
 offset_bottom = 32.0
 
-[node name="Slot2" parent="Root/SkillBar" instance=ExtResource("scene_skill_slot")]
+[node name="Slot2" parent="Root/HudPanel/SkillBar" instance=ExtResource("scene_skill_slot")]
 offset_left = 72.0
 offset_top = 0.0
 offset_right = 104.0
 offset_bottom = 32.0
 
-[node name="Slot3" parent="Root/SkillBar" instance=ExtResource("scene_skill_slot")]
+[node name="Slot3" parent="Root/HudPanel/SkillBar" instance=ExtResource("scene_skill_slot")]
 offset_left = 108.0
 offset_top = 0.0
 offset_right = 140.0
 offset_bottom = 32.0
 
-[node name="Slot4" parent="Root/SkillBar" instance=ExtResource("scene_skill_slot")]
+[node name="Slot4" parent="Root/HudPanel/SkillBar" instance=ExtResource("scene_skill_slot")]
 offset_left = 144.0
 offset_top = 0.0
 offset_right = 176.0
 offset_bottom = 32.0
 
-[node name="Slot5" parent="Root/SkillBar" instance=ExtResource("scene_skill_slot")]
+[node name="Slot5" parent="Root/HudPanel/SkillBar" instance=ExtResource("scene_skill_slot")]
 offset_left = 180.0
 offset_top = 0.0
 offset_right = 212.0
 offset_bottom = 32.0
 
-[node name="Slot6" parent="Root/SkillBar" instance=ExtResource("scene_skill_slot")]
+[node name="Slot6" parent="Root/HudPanel/SkillBar" instance=ExtResource("scene_skill_slot")]
 offset_left = 216.0
 offset_top = 0.0
 offset_right = 248.0
 offset_bottom = 32.0
 
-[node name="Slot7" parent="Root/SkillBar" instance=ExtResource("scene_skill_slot")]
+[node name="Slot7" parent="Root/HudPanel/SkillBar" instance=ExtResource("scene_skill_slot")]
 offset_left = 252.0
 offset_top = 0.0
 offset_right = 284.0
 offset_bottom = 32.0
+
+[node name="FlashlightIndicator" type="Control" parent="Root/HudPanel/SkillBar"]
+unique_name_in_owner = true
+offset_left = 290.0
+offset_top = 0.0
+offset_right = 310.0
+offset_bottom = 32.0
+mouse_filter = 2
+
+[node name="FBg" type="ColorRect" parent="Root/HudPanel/SkillBar/FlashlightIndicator"]
+unique_name_in_owner = true
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.04, 0.05, 0.08, 0.9)
+
+[node name="FBorder" type="ReferenceRect" parent="Root/HudPanel/SkillBar/FlashlightIndicator"]
+unique_name_in_owner = true
+anchor_right = 1.0
+anchor_bottom = 1.0
+border_color = Color(0.3, 0.5, 0.7, 0.45)
+border_width = 1.0
+editor_only = false
+
+[node name="FLabel" type="Label" parent="Root/HudPanel/SkillBar/FlashlightIndicator"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_font_sizes/font_size = 9
+text = "F"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="CrouchIndicator" type="Control" parent="Root/HudPanel/SkillBar"]
+unique_name_in_owner = true
+offset_left = 313.0
+offset_top = 0.0
+offset_right = 333.0
+offset_bottom = 32.0
+mouse_filter = 2
+
+[node name="CBg" type="ColorRect" parent="Root/HudPanel/SkillBar/CrouchIndicator"]
+unique_name_in_owner = true
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.04, 0.05, 0.08, 0.9)
+
+[node name="CBorder" type="ReferenceRect" parent="Root/HudPanel/SkillBar/CrouchIndicator"]
+unique_name_in_owner = true
+anchor_right = 1.0
+anchor_bottom = 1.0
+border_color = Color(0.3, 0.5, 0.7, 0.45)
+border_width = 1.0
+editor_only = false
+
+[node name="CLabel" type="Label" parent="Root/HudPanel/SkillBar/CrouchIndicator"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_font_sizes/font_size = 9
+text = "^"
+horizontal_alignment = 1
+vertical_alignment = 1
 
 [node name="Banner" type="Label" parent="Root"]
 unique_name_in_owner = true
@@ -230,4 +343,3 @@ unique_name_in_owner = true
 
 [node name="Tooltip" type="Control" parent="Root"]
 script = ExtResource("script_tooltip")
-

@@ -6,6 +6,8 @@
 
 [resource]
 script = ExtResource("1")
+fps_fog_density = 0.35
+fps_fog_color = Color(0.002, 0.003, 0.006, 1)
 wall_height = 4.5
 wall_thickness = 0.4
 wall_shader = ExtResource("wall_shader")

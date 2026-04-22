@@ -108,12 +108,12 @@ Each `UIThemeConfig` resource defines these semantic color fields. Read them via
 |---|---|
 | accent | `(0.95, 0.92, 0.8)` — Ivory / ORT |
 | accent_dim | `(0.62, 0.6, 0.52)` |
-| panel_bg | `(0.06, 0.04, 0.05, 0.94)` |
-| panel_border | `(0.78, 0.62, 0.32, 0.9)` |
-| text | `(0.98, 0.92, 0.82)` |
-| text_dim | `(0.78, 0.68, 0.55)` |
-| credits | `(0.95, 0.82, 0.4)` |
-| player_color | `(0.85, 0.7, 0.45)` |
+| panel_bg | `(0.06, 0.05, 0.05, 0.94)` |
+| panel_border | `(0.85, 0.82, 0.68, 0.9)` |
+| text | `(0.98, 0.96, 0.9)` |
+| text_dim | `(0.75, 0.72, 0.62)` |
+| credits | `(0.98, 0.95, 0.75)` |
+| player_color | `(0.92, 0.88, 0.72)` |
 
 ### Human / Enculted
 
@@ -149,12 +149,12 @@ Each `UIThemeConfig` resource defines these semantic color fields. Read them via
 |---|---|
 | accent | `(0.9, 0.25, 0.2)` — Red / DEV |
 | accent_dim | `(0.58, 0.16, 0.13)` |
-| panel_bg | `(0.08, 0.05, 0.03, 0.94)` |
-| panel_border | `(0.85, 0.5, 0.18, 0.9)` |
+| panel_bg | `(0.08, 0.04, 0.03, 0.94)` |
+| panel_border | `(0.85, 0.22, 0.18, 0.9)` |
 | text | `(1.0, 0.92, 0.78)` |
-| text_dim | `(0.78, 0.62, 0.45)` |
+| text_dim | `(0.78, 0.55, 0.45)` |
 | credits | `(1.0, 0.82, 0.3)` |
-| player_color | `(0.95, 0.6, 0.3)` |
+| player_color | `(0.95, 0.42, 0.35)` |
 
 ### Cyborg / Automaton
 
@@ -175,12 +175,12 @@ Each `UIThemeConfig` resource defines these semantic color fields. Read them via
 |---|---|
 | accent | `(0.95, 0.9, 0.3)` — Yellow / CLA |
 | accent_dim | `(0.62, 0.58, 0.2)` |
-| panel_bg | `(0.04, 0.04, 0.09, 0.94)` |
-| panel_border | `(0.55, 0.4, 0.95, 0.9)` |
-| text | `(0.9, 0.88, 1.0)` |
-| text_dim | `(0.62, 0.6, 0.78)` |
-| credits | `(0.7, 0.95, 1.0)` |
-| player_color | `(0.7, 0.55, 0.95)` |
+| panel_bg | `(0.05, 0.04, 0.02, 0.94)` |
+| panel_border | `(0.75, 0.7, 0.25, 0.9)` |
+| text | `(0.98, 0.96, 0.82)` |
+| text_dim | `(0.72, 0.68, 0.5)` |
+| credits | `(0.95, 0.88, 0.4)` |
+| player_color | `(0.82, 0.78, 0.4)` |
 
 ## i18n Conventions
 

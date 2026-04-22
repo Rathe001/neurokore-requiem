@@ -5,6 +5,8 @@ const ENEMY_SCENE_DEFAULT: PackedScene = preload("res://scenes/prototype/prototy
 const DOOR_SCENE: PackedScene = preload("res://scenes/prototype/prototype_door.tscn")
 const _DOOR_MESH_WIDTH := 4.0  # door scene mesh Z-extent
 const _SEAM := 0.02  # anti-z-fight gap for corridor walls abutting room geometry
+const _FLOOR_OVERLAP := 0.2   # extends piece floors to cover under walls (= wall_thickness * 0.5)
+const _PIT_TRIM_H := 0.12     # height of raised lip at pit edges
 
 @export var layout: LevelLayout
 
@@ -21,6 +23,8 @@ func _ready() -> void:
 		return
 	_init_shared_resources()
 	_build_ground()
+	_build_ceiling()
+	_configure_fps_fog()
 	for piece: LevelPiece in layout.pieces:
 		if piece.room != null:
 			_build_room(piece)
@@ -60,17 +64,171 @@ func _init_shared_resources() -> void:
 	_fog_material.albedo = Color(1, 1, 1, 1)
 
 # ── Ground ────────────────────────────────────────────────────────────────
+# No global plane — each room and corridor builds its own floor so pits are
+# possible.  A world-bottom body catches stray physics objects; a kill zone
+# just below the play surface kills anything that falls into a pit.
 
 func _build_ground() -> void:
+	var w := layout.ground_size.x + 40.0
+	var d := layout.ground_size.y + 40.0
+
+	var bottom := StaticBody3D.new()
+	bottom.name = &"WorldBottom"
+	bottom.input_ray_pickable = false
+	var bs := CollisionShape3D.new()
+	bs.shape = BoxShape3D.new()
+	(bs.shape as BoxShape3D).size = Vector3(w, 1.0, d)
+	bs.position.y = -20.0
+	bottom.add_child(bs)
+	add_child(bottom)
+
+	var kill := Area3D.new()
+	kill.name = &"KillZone"
+	var ks := CollisionShape3D.new()
+	ks.shape = BoxShape3D.new()
+	(ks.shape as BoxShape3D).size = Vector3(w, 4.0, d)
+	kill.position.y = -4.0
+	kill.add_child(ks)
+	kill.body_entered.connect(func(body: Node) -> void:
+		if body.has_method(&"take_damage"):
+			body.take_damage(9999, Vector3.ZERO, 0.0)
+	)
+	add_child(kill)
+
+func _build_piece_floor(center: Vector3, size_x: float, size_z: float) -> void:
+	_build_exact_floor(center, size_x + _FLOOR_OVERLAP * 2.0, size_z + _FLOOR_OVERLAP * 2.0)
+
+func _build_exact_floor(center: Vector3, size_x: float, size_z: float) -> void:
 	var mesh := PlaneMesh.new()
-	mesh.size = layout.ground_size
+	mesh.size = Vector2(size_x, size_z)
 	if _floor_material != null:
 		mesh.material = _floor_material
+	var body := StaticBody3D.new()
+	body.name = &"Floor"
+	body.input_ray_pickable = false
+	body.transform.origin = center
 	var inst := MeshInstance3D.new()
-	inst.name = &"Ground"
+	inst.name = &"Mesh"
 	inst.mesh = mesh
+	body.add_child(inst)
+	var col := CollisionShape3D.new()
+	col.name = &"Collision"
+	col.shape = BoxShape3D.new()
+	(col.shape as BoxShape3D).size = Vector3(size_x, 0.1, size_z)
+	col.position.y = -0.05
+	body.add_child(col)
+	add_child(body)
+	body.add_to_group(&"structures")
+
+func _build_corridor_floor(center: Vector3, cd: CorridorDef) -> void:
+	var along_z := cd.axis == CorridorDef.Axis.Z
+	var sw := cd.width   # perpendicular to travel
+	var sl := cd.length  # along travel axis
+
+	if cd.pit_width <= 0.0:
+		var sx := sw if along_z else sl
+		var sz := sl if along_z else sw
+		_build_piece_floor(center, sx, sz)
+		return
+
+	# Two floor sections flanking the pit gap (no overlap toward the gap edge).
+	var section_len := (sl - cd.pit_width) * 0.5
+	if section_len < 0.01:
+		return
+	var half_gap := cd.pit_width * 0.5
+	var offset := section_len * 0.5 + half_gap
+	if along_z:
+		_build_exact_floor(center + Vector3(0.0, 0.0, -offset), sw, section_len)
+		_build_exact_floor(center + Vector3(0.0, 0.0,  offset), sw, section_len)
+		for s in [-1.0, 1.0]:
+			_create_trim_box(
+				center + Vector3(0.0, _PIT_TRIM_H * 0.5, s * half_gap),
+				sw, _PIT_TRIM_H, layout.theme.wall_thickness)
+	else:
+		_build_exact_floor(center + Vector3(-offset, 0.0, 0.0), section_len, sw)
+		_build_exact_floor(center + Vector3( offset, 0.0, 0.0), section_len, sw)
+		for s in [-1.0, 1.0]:
+			_create_trim_box(
+				center + Vector3(s * half_gap, _PIT_TRIM_H * 0.5, 0.0),
+				layout.theme.wall_thickness, _PIT_TRIM_H, sw)
+
+func _create_trim_box(pos: Vector3, sx: float, sy: float, sz: float) -> void:
+	var body := StaticBody3D.new()
+	body.input_ray_pickable = false
+	body.transform.origin = pos
+	var col := CollisionShape3D.new()
+	col.shape = BoxShape3D.new()
+	(col.shape as BoxShape3D).size = Vector3(sx, sy, sz)
+	body.add_child(col)
+	var mesh_inst := MeshInstance3D.new()
+	mesh_inst.mesh = BoxMesh.new()
+	(mesh_inst.mesh as BoxMesh).size = Vector3(sx, sy, sz)
+	if _wall_material != null:
+		mesh_inst.material_override = _wall_material
+	body.add_child(mesh_inst)
+	add_child(body)
+	body.add_to_group(&"structures")
+
+func _build_low_ceiling(center: Vector3, cd: CorridorDef) -> void:
+	var h := cd.ceiling_height
+	var along_z := cd.axis == CorridorDef.Axis.Z
+	var sw := cd.width  if along_z else cd.length  # perpendicular span
+	var sl := cd.length if along_z else cd.width   # travel-axis span
+	var t := layout.theme
+	var block_h := t.wall_height - h
+	var block_cy := h + block_h * 0.5
+
+	# Solid block filling the corridor from ceiling_height to wall_height.
+	# The open gap at the bottom (0..ceiling_height) is the crawl space.
+	# Extend slightly into the side walls to eliminate coplanar z-fighting.
+	var bx := sw + t.wall_thickness if along_z else sl
+	var bz := sl if along_z else sw + t.wall_thickness
+	var box := BoxMesh.new()
+	box.size = Vector3(bx, block_h, bz)
+	if _wall_material != null:
+		box.material = _wall_material
+	var mesh_inst := MeshInstance3D.new()
+	mesh_inst.mesh = box
+	mesh_inst.position = center + Vector3(0.0, block_cy, 0.0)
+	add_child(mesh_inst)
+	mesh_inst.add_to_group(&"structures")
+
+	# Collision — thin slab just above ceiling_height; prevents the player
+	# from standing up inside the crawl zone.
+	var body := StaticBody3D.new()
+	body.name = &"LowCeiling"
+	body.input_ray_pickable = false
+	body.transform.origin = center + Vector3(0.0, h + 0.05, 0.0)
+	var col := CollisionShape3D.new()
+	col.shape = BoxShape3D.new()
+	(col.shape as BoxShape3D).size = Vector3(sw, 0.1, sl)
+	body.add_child(col)
+	add_child(body)
+
+# ── Ceiling ──────────────────────────────────────────────────────────────
+
+func _build_ceiling() -> void:
+	var t := layout.theme
+	var mesh := PlaneMesh.new()
+	mesh.size = layout.ground_size
+	if _wall_material != null:
+		mesh.material = _wall_material
+
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = t.wall_color if t.wall_shader == null else Color(0.12, 0.12, 0.14)
+	mat.metallic = t.wall_metallic if t.wall_shader == null else 0.1
+	mat.roughness = t.wall_roughness if t.wall_shader == null else 0.8
+	mat.cull_mode = BaseMaterial3D.CULL_BACK
+
+	var inst := MeshInstance3D.new()
+	inst.name = &"Ceiling"
+	inst.mesh = mesh
+	inst.material_override = mat
+	inst.position = Vector3(0.0, t.wall_height, 0.0)
+	inst.rotation.x = PI
+	inst.visible = false
+	inst.add_to_group(&"fps_ceiling")
 	add_child(inst)
-	inst.add_to_group(&"structures")
 
 # ── Walls ─────────────────────────────────────────────────────────────────
 
@@ -345,6 +503,8 @@ func _build_room(piece: LevelPiece) -> void:
 	var t := layout.theme
 	var thick := t.wall_thickness
 
+	_build_piece_floor(center, rd.size.x, rd.size.y)
+
 	# Single procedural wall mesh for the entire room.
 	var mesh_inst := _build_room_mesh(center, rd)
 	add_child(mesh_inst)
@@ -415,6 +575,10 @@ func _build_corridor(piece: LevelPiece) -> void:
 		_create_wall(center + Vector3(0, 0, hw), cd.length + thick - _SEAM * 2.0, thick)
 		_create_wall(center + Vector3(0, 0, -hw), cd.length + thick - _SEAM * 2.0, thick)
 
+	_build_corridor_floor(center, cd)
+	if cd.ceiling_height > 0.0:
+		_build_low_ceiling(center, cd)
+
 	_place_corridor_fluorescents(center, cd)
 
 	var hx := hw if cd.axis == CorridorDef.Axis.Z else hl
@@ -461,6 +625,20 @@ func _create_fill_light(center: Vector3, size_x: float, size_z: float) -> void:
 	light.light_volumetric_fog_energy = 0.0
 	light.transform.origin = center + Vector3(0, 2.0, 0)
 	add_child(light)
+
+# ── FPS Fog ───────────────────────────────────────────────────────────────
+# Pre-configures WorldEnvironment fog from the theme so the player only needs
+# to toggle fog_enabled — density and color are already correct.
+
+func _configure_fps_fog() -> void:
+	var t := layout.theme
+	var we_node := get_parent().get_node_or_null("WorldEnvironment") as WorldEnvironment
+	if we_node == null or we_node.environment == null:
+		return
+	var env := we_node.environment
+	env.fog_enabled = false
+	env.fog_light_color = t.fps_fog_color
+	env.fog_density = t.fps_fog_density
 
 # ── Fog Volumes ───────────────────────────────────────────────────────────
 

@@ -14,3 +14,7 @@ enum Axis { X, Z }
 @export_group("Enemies")
 @export var enemy_count: int = 0
 @export var enemy_scene: PackedScene
+
+@export_group("Platformer")
+@export var ceiling_height: float = 0.0  ## 0 = theme default; forces a low ceiling when > 0
+@export var pit_width: float = 0.0       ## 0 = solid floor; creates a gap of this width at centre

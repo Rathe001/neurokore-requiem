@@ -14,3 +14,4 @@ enum Mode {
 
 @export var mode: Mode = Mode.WINDOWED
 @export var resolution: Vector2i = Vector2i(1280, 720)
+@export var fps_mouse_sensitivity: float = 0.006

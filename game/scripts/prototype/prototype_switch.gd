@@ -33,8 +33,11 @@ func _ready() -> void:
 
 func _build_outline() -> void:
 	_outline = MeshInstance3D.new()
-	_outline.mesh = mesh.mesh
 	_outline.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var st := SurfaceTool.new()
+	st.create_from(mesh.mesh, 0)
+	st.generate_normals(true)
+	_outline.mesh = st.commit()
 	var m := StandardMaterial3D.new()
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	m.albedo_color = Color.WHITE
