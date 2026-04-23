@@ -1,0 +1,448 @@
+extends Node
+class_name AffixTable
+
+## All prefix and suffix definitions for item generation.
+##
+## Usage:
+##   AffixTable.get_prefixes("1H Weapon")  -> Array[ItemAffix]
+##   AffixTable.get_suffixes("Chest Armor") -> Array[ItemAffix]
+##   AffixTable.roll_prefix("1H Weapon", item_level, rng) -> ItemAffix or null
+##   AffixTable.roll_suffix("1H Weapon", item_level, rng) -> ItemAffix or null
+##
+## item_types match Item.main_type strings exactly. An affix with an empty
+## item_types list is universal and appears on every item type.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PREFIXES
+# ─────────────────────────────────────────────────────────────────────────────
+
+const PREFIXES: Array[Dictionary] = [
+	# ── Weapon prefixes ──────────────────────────────────────────────────────
+	{
+		"id": &"searing",
+		"label": "Searing",
+		"kind": ItemAffix.Kind.PREFIX,
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "fire_damage_bonus": 10 },
+		"min_item_level": 1,
+		"weight": 100,
+	},
+	{
+		"id": &"precise",
+		"label": "Precise",
+		"kind": ItemAffix.Kind.PREFIX,
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "crit_chance_bonus": 5 },
+		"min_item_level": 1,
+		"weight": 100,
+	},
+	{
+		"id": &"brutal",
+		"label": "Brutal",
+		"kind": ItemAffix.Kind.PREFIX,
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "base_damage_bonus": 8 },
+		"min_item_level": 1,
+		"weight": 100,
+	},
+	{
+		"id": &"swift",
+		"label": "Swift",
+		"kind": ItemAffix.Kind.PREFIX,
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "cooldown_reduction": 10 },
+		"min_item_level": 5,
+		"weight": 80,
+	},
+	{
+		"id": &"cryo",
+		"label": "Cryo",
+		"kind": ItemAffix.Kind.PREFIX,
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "cryo_damage_bonus": 10 },
+		"min_item_level": 8,
+		"weight": 70,
+	},
+	{
+		"id": &"voltaic",
+		"label": "Voltaic",
+		"kind": ItemAffix.Kind.PREFIX,
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "electric_damage_bonus": 10 },
+		"min_item_level": 8,
+		"weight": 70,
+	},
+	{
+		"id": &"toxic",
+		"label": "Toxic",
+		"kind": ItemAffix.Kind.PREFIX,
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "toxic_damage_bonus": 10 },
+		"min_item_level": 8,
+		"weight": 70,
+	},
+	# ── Armor prefixes ───────────────────────────────────────────────────────
+	{
+		"id": &"hardened",
+		"label": "Hardened",
+		"kind": ItemAffix.Kind.PREFIX,
+		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Boots"],
+		"stat_modifiers": { "damage_reduction": 6 },
+		"min_item_level": 1,
+		"weight": 100,
+	},
+	{
+		"id": &"nimble",
+		"label": "Nimble",
+		"kind": ItemAffix.Kind.PREFIX,
+		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Boots"],
+		"stat_modifiers": { "move_speed_bonus": 5 },
+		"min_item_level": 1,
+		"weight": 90,
+	},
+	{
+		"id": &"fortified",
+		"label": "Fortified",
+		"kind": ItemAffix.Kind.PREFIX,
+		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Boots"],
+		"stat_modifiers": { "max_health_bonus": 15 },
+		"min_item_level": 1,
+		"weight": 90,
+	},
+	{
+		"id": &"insulated",
+		"label": "Insulated",
+		"kind": ItemAffix.Kind.PREFIX,
+		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Boots"],
+		"stat_modifiers": { "electric_resistance": 8 },
+		"min_item_level": 5,
+		"weight": 70,
+	},
+	{
+		"id": &"cryo_lined",
+		"label": "Cryo-Lined",
+		"kind": ItemAffix.Kind.PREFIX,
+		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Boots"],
+		"stat_modifiers": { "cryo_resistance": 8 },
+		"min_item_level": 5,
+		"weight": 70,
+	},
+	{
+		"id": &"hazmat",
+		"label": "Hazmat",
+		"kind": ItemAffix.Kind.PREFIX,
+		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Boots"],
+		"stat_modifiers": { "toxic_resistance": 8 },
+		"min_item_level": 5,
+		"weight": 70,
+	},
+	# ── Attribute prefixes (universal — any item type) ────────────────────────
+	{
+		"id": &"orthodox",
+		"label": "Orthodox",
+		"kind": ItemAffix.Kind.PREFIX,
+		"item_types": [],
+		"stat_modifiers": { "orthodoxy": 6 },
+		"min_item_level": 1,
+		"weight": 80,
+	},
+	{
+		"id": &"deviant",
+		"label": "Deviant",
+		"kind": ItemAffix.Kind.PREFIX,
+		"item_types": [],
+		"stat_modifiers": { "deviation": 6 },
+		"min_item_level": 1,
+		"weight": 80,
+	},
+	{
+		"id": &"optimized",
+		"label": "Optimized",
+		"kind": ItemAffix.Kind.PREFIX,
+		"item_types": [],
+		"stat_modifiers": { "optimization": 6 },
+		"min_item_level": 1,
+		"weight": 80,
+	},
+	{
+		"id": &"ingenious",
+		"label": "Ingenious",
+		"kind": ItemAffix.Kind.PREFIX,
+		"item_types": [],
+		"stat_modifiers": { "ingenuity": 6 },
+		"min_item_level": 1,
+		"weight": 80,
+	},
+	{
+		"id": &"lucid",
+		"label": "Lucid",
+		"kind": ItemAffix.Kind.PREFIX,
+		"item_types": [],
+		"stat_modifiers": { "clarity": 6 },
+		"min_item_level": 1,
+		"weight": 80,
+	},
+	{
+		"id": &"ambitious",
+		"label": "Ambitious",
+		"kind": ItemAffix.Kind.PREFIX,
+		"item_types": [],
+		"stat_modifiers": { "ambition": 6 },
+		"min_item_level": 1,
+		"weight": 80,
+	},
+	# ── Backpack prefixes ────────────────────────────────────────────────────
+	{
+		"id": &"spacious",
+		"label": "Spacious",
+		"kind": ItemAffix.Kind.PREFIX,
+		"item_types": ["Backpack"],
+		"stat_modifiers": { "inventory_bonus": 4 },
+		"min_item_level": 1,
+		"weight": 100,
+	},
+	{
+		"id": &"reinforced_pack",
+		"label": "Reinforced",
+		"kind": ItemAffix.Kind.PREFIX,
+		"item_types": ["Backpack"],
+		"stat_modifiers": { "inventory_bonus": 2, "damage_reduction": 3 },
+		"min_item_level": 5,
+		"weight": 70,
+	},
+]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SUFFIXES
+# ─────────────────────────────────────────────────────────────────────────────
+
+const SUFFIXES: Array[Dictionary] = [
+	# ── Weapon suffixes ──────────────────────────────────────────────────────
+	{
+		"id": &"of_the_marksman",
+		"label": "of the Marksman",
+		"kind": ItemAffix.Kind.SUFFIX,
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "range_bonus": 8 },
+		"min_item_level": 1,
+		"weight": 90,
+	},
+	{
+		"id": &"of_devastation",
+		"label": "of Devastation",
+		"kind": ItemAffix.Kind.SUFFIX,
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "knockback_bonus": 12 },
+		"min_item_level": 1,
+		"weight": 90,
+	},
+	{
+		"id": &"of_efficiency",
+		"label": "of Efficiency",
+		"kind": ItemAffix.Kind.SUFFIX,
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "resource_cost_reduction": 10 },
+		"min_item_level": 5,
+		"weight": 80,
+	},
+	{
+		"id": &"of_the_leech",
+		"label": "of the Leech",
+		"kind": ItemAffix.Kind.SUFFIX,
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "lifesteal_percent": 3 },
+		"min_item_level": 10,
+		"weight": 60,
+	},
+	{
+		"id": &"of_perforation",
+		"label": "of Perforation",
+		"kind": ItemAffix.Kind.SUFFIX,
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "armor_penetration": 8 },
+		"min_item_level": 8,
+		"weight": 70,
+	},
+	# ── Armor suffixes ───────────────────────────────────────────────────────
+	{
+		"id": &"of_the_bear",
+		"label": "of the Bear",
+		"kind": ItemAffix.Kind.SUFFIX,
+		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Boots", "Backpack", "Belt", "Mainboard"],
+		"stat_modifiers": { "carry_capacity_bonus": 10 },
+		"min_item_level": 1,
+		"weight": 90,
+	},
+	{
+		"id": &"of_resilience",
+		"label": "of Resilience",
+		"kind": ItemAffix.Kind.SUFFIX,
+		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Boots"],
+		"stat_modifiers": { "elemental_resistance": 6 },
+		"min_item_level": 5,
+		"weight": 80,
+	},
+	{
+		"id": &"of_the_vault",
+		"label": "of the Vault",
+		"kind": ItemAffix.Kind.SUFFIX,
+		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Boots"],
+		"stat_modifiers": { "max_health_bonus": 10 },
+		"min_item_level": 1,
+		"weight": 90,
+	},
+	# ── Attribute suffixes (universal) ────────────────────────────────────────
+	{
+		"id": &"of_orthodoxy",
+		"label": "of Orthodoxy",
+		"kind": ItemAffix.Kind.SUFFIX,
+		"item_types": [],
+		"stat_modifiers": { "orthodoxy": 4 },
+		"min_item_level": 1,
+		"weight": 80,
+	},
+	{
+		"id": &"of_deviation",
+		"label": "of Deviation",
+		"kind": ItemAffix.Kind.SUFFIX,
+		"item_types": [],
+		"stat_modifiers": { "deviation": 4 },
+		"min_item_level": 1,
+		"weight": 80,
+	},
+	{
+		"id": &"of_optimization",
+		"label": "of Optimization",
+		"kind": ItemAffix.Kind.SUFFIX,
+		"item_types": [],
+		"stat_modifiers": { "optimization": 4 },
+		"min_item_level": 1,
+		"weight": 80,
+	},
+	{
+		"id": &"of_ingenuity",
+		"label": "of Ingenuity",
+		"kind": ItemAffix.Kind.SUFFIX,
+		"item_types": [],
+		"stat_modifiers": { "ingenuity": 4 },
+		"min_item_level": 1,
+		"weight": 80,
+	},
+	{
+		"id": &"of_clarity",
+		"label": "of Clarity",
+		"kind": ItemAffix.Kind.SUFFIX,
+		"item_types": [],
+		"stat_modifiers": { "clarity": 4 },
+		"min_item_level": 1,
+		"weight": 80,
+	},
+	{
+		"id": &"of_ambition",
+		"label": "of Ambition",
+		"kind": ItemAffix.Kind.SUFFIX,
+		"item_types": [],
+		"stat_modifiers": { "ambition": 4 },
+		"min_item_level": 1,
+		"weight": 80,
+	},
+	# ── Optics suffixes ──────────────────────────────────────────────────────
+	{
+		"id": &"of_focus",
+		"label": "of Focus",
+		"kind": ItemAffix.Kind.SUFFIX,
+		"item_types": ["Optics"],
+		"stat_modifiers": { "light_range_bonus": 4 },
+		"min_item_level": 1,
+		"weight": 90,
+	},
+	{
+		"id": &"of_lumens",
+		"label": "of Lumens",
+		"kind": ItemAffix.Kind.SUFFIX,
+		"item_types": ["Optics"],
+		"stat_modifiers": { "light_energy_bonus": 20 },
+		"min_item_level": 5,
+		"weight": 70,
+	},
+]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Runtime cache — built once on first access.
+# ─────────────────────────────────────────────────────────────────────────────
+
+var _prefixes: Array[ItemAffix] = []
+var _suffixes: Array[ItemAffix] = []
+var _ready_called := false
+
+func _ready() -> void:
+	_build_cache()
+
+func _build_cache() -> void:
+	if _ready_called:
+		return
+	_ready_called = true
+	for d in PREFIXES:
+		_prefixes.append(_dict_to_affix(d))
+	for d in SUFFIXES:
+		_suffixes.append(_dict_to_affix(d))
+
+func _dict_to_affix(d: Dictionary) -> ItemAffix:
+	var a := ItemAffix.new()
+	a.id = d.get("id", &"")
+	a.label = d.get("label", "")
+	a.kind = d.get("kind", ItemAffix.Kind.PREFIX)
+	a.item_types = Array(d.get("item_types", []), TYPE_STRING, "", null)
+	a.stat_modifiers = d.get("stat_modifiers", {})
+	a.min_item_level = d.get("min_item_level", 1)
+	a.weight = d.get("weight", 100)
+	return a
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Public API
+# ─────────────────────────────────────────────────────────────────────────────
+
+## All prefixes valid for item_type at item_level.
+func get_prefixes(item_type: String, item_level: int = 1) -> Array[ItemAffix]:
+	_build_cache()
+	return _filter(_prefixes, item_type, item_level)
+
+## All suffixes valid for item_type at item_level.
+func get_suffixes(item_type: String, item_level: int = 1) -> Array[ItemAffix]:
+	_build_cache()
+	return _filter(_suffixes, item_type, item_level)
+
+## Weighted random prefix roll. Returns null if the pool is empty.
+func roll_prefix(item_type: String, item_level: int, rng: RandomNumberGenerator) -> ItemAffix:
+	return _weighted_pick(get_prefixes(item_type, item_level), rng)
+
+## Weighted random suffix roll. Returns null if the pool is empty.
+func roll_suffix(item_type: String, item_level: int, rng: RandomNumberGenerator) -> ItemAffix:
+	return _weighted_pick(get_suffixes(item_type, item_level), rng)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+func _filter(pool: Array[ItemAffix], item_type: String, item_level: int) -> Array[ItemAffix]:
+	var out: Array[ItemAffix] = []
+	for a in pool:
+		if a.min_item_level > item_level:
+			continue
+		if a.item_types.is_empty() or item_type in a.item_types:
+			out.append(a)
+	return out
+
+func _weighted_pick(pool: Array[ItemAffix], rng: RandomNumberGenerator) -> ItemAffix:
+	if pool.is_empty():
+		return null
+	var total := 0
+	for a in pool:
+		total += a.weight
+	var roll := rng.randi_range(0, total - 1)
+	var acc := 0
+	for a in pool:
+		acc += a.weight
+		if roll < acc:
+			return a
+	return pool[-1]

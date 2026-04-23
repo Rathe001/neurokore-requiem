@@ -274,7 +274,10 @@ func _build_character_sheet(parent: Control) -> void:
 		equip.add_child(slot)
 		_all_slots.append(slot)
 
-	_build_utility_row(parent, equip.position.x, equip.position.y + equip_total_height + 12.0, equip_total_width)
+	# Utility/bus row must clear the attribute section (header 17px + grid 56px below ATTR_POS.y).
+	var attr_bottom := ATTR_POS.y + 17.0 + 56.0
+	var util_y := maxf(equip.position.y + equip_total_height + 12.0, attr_bottom + 12.0)
+	_build_utility_row(parent, equip.position.x, util_y, equip_total_width)
 
 func _build_utility_row(parent: Control, equip_x: float, y: float, _equip_width: float) -> void:
 	var util_total_width := float(UTIL_SLOTS) * EQUIP_SLOT_SIZE.x + float(UTIL_SLOTS - 1) * EQUIP_GAP

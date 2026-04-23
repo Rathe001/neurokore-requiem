@@ -750,11 +750,14 @@ func _spawn_uv_test_objects() -> void:
 	var thick := t.wall_thickness if t != null else 0.4
 	var wall_h := t.wall_height if t != null else 3.0
 
-	# UV wall text — operating theater north wall interior face.
-	# Room center (0, 0, -4), size (8, 6), so north wall Z = -4 - 3 = -7.
+	# UV wall text — operating theater west wall interior face.
+	# North wall has the corridor opening so it isn't solid. West wall is solid.
+	# Room center (0, 0, -4), width 8 → west wall X = 0 - 4 = -4, inner face at -4 + thick.
+	# rotation −90° makes local −Z face east (+X) into the room.
 	var text_node := UVWallText.new()
 	text_node.text = "PATIENT 7 WAS HERE"
-	text_node.position = Vector3(1.5, wall_h * 0.45, -7.0 + thick * 0.5 + 0.02)
+	text_node.position = Vector3(-4.0 + thick, wall_h * 0.45, -4.0)
+	text_node.rotation_degrees.y = 90.0
 	add_child(text_node)
 
 	# UV hidden switch — observation hub west wall, unlocks the supply room door.

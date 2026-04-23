@@ -143,6 +143,7 @@ func _apply_layout() -> void:
 			_camera.size = CAMERA_ORTHO_SIZE_CORNER
 			_mask_material.set_shader_parameter(&"border_width", 2.0)
 			_mask_material.set_shader_parameter(&"opacity", CORNER_OPACITY)
+			_mask_material.set_shader_parameter(&"bg_color", Color(0.04, 0.05, 0.04, 0.95))
 
 		Mode.FULLSCREEN:
 			var s := minf(screen.x, screen.y) * FULLSCREEN_FRACTION
@@ -152,12 +153,15 @@ func _apply_layout() -> void:
 			_camera.size = CAMERA_ORTHO_SIZE_FULL
 			_mask_material.set_shader_parameter(&"border_width", 0.0)
 			_mask_material.set_shader_parameter(&"opacity", FULLSCREEN_OPACITY)
+			# Transparent bg so only map surfaces are visible — no filled gray circle.
+			_mask_material.set_shader_parameter(&"bg_color", Color(0.04, 0.05, 0.04, 0.0))
 
 	# Match radar and player dot to the texture rect.
 	var map_r := Rect2(_texture_rect.position, _texture_rect.size)
 	var o := FULLSCREEN_OPACITY if mode == Mode.FULLSCREEN else 1.0
 	_radar.map_rect = map_r
 	_radar.camera_ortho_size = _camera.size
+	_radar.minimap_camera = _camera
 	_radar.opacity = o
 	_player_dot.map_center = map_r.get_center()
 	_player_dot.opacity = o

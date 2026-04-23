@@ -31,6 +31,7 @@ SpatialGrid="*res://scripts/systems/spatial_grid.gd"
 EntityPool="*res://scripts/systems/entity_pool.gd"
 InventoryState="*res://scripts/systems/inventory_state.gd"
 AttributeState="*res://scripts/systems/attribute_state.gd"
+AffixTable="*res://scripts/items/affix_table.gd"
 
 [display]
 
