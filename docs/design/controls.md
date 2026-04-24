@@ -14,6 +14,7 @@
 | 1 | First class skill / Interact (near interactable or crosshair on interactable in FPS) |
 | 2 – ? | Subsequent skills (TBD per [Skill Tree](skill-tree.md)) |
 | F | Interact (proximity, iso view) |
+| N | Open/close talents panel |
 | Tab | Toggle minimap (corner ↔ fullscreen) |
 | Escape | Close fullscreen minimap (also opens main menu from corner view) |
 | L | Toggle equipped light |

@@ -13,13 +13,13 @@ const CARD_ROW_GAP := 6.0
 const PORTRAIT_SIZE := 64.0
 
 const PICKS: Array[Dictionary] = [
-	{"class_id": &"human",  "spec_id": &"",           "label_key": "STARTUP_PICK_HUMAN",              "glyph": "H", "stat": "STAT_SOUL",         "opposes": "STAT_INTERFACE",    "backstory": "STARTUP_BACKSTORY_HUMAN"},
+	{"class_id": &"analog",  "spec_id": &"",           "label_key": "STARTUP_PICK_ANALOG",              "glyph": "H", "stat": "STAT_SOUL",         "opposes": "STAT_INTERFACE",    "backstory": "STARTUP_BACKSTORY_ANALOG"},
 	{"class_id": &"cyborg", "spec_id": &"",           "label_key": "STARTUP_PICK_CYBORG",             "glyph": "C", "stat": "STAT_INTERFACE",     "opposes": "STAT_SOUL",         "backstory": "STARTUP_BACKSTORY_CYBORG"},
-	{"class_id": &"human",  "spec_id": &"gentleman",  "label_key": "STARTUP_PICK_HUMAN_GENTLEMAN",    "glyph": "G", "stat": "STAT_ORTHODOXY",     "opposes": "STAT_DEVIATION",    "backstory": "STARTUP_BACKSTORY_GENTLEMAN"},
+	{"class_id": &"analog",  "spec_id": &"gentleman",  "label_key": "STARTUP_PICK_ANALOG_GENTLEMAN",    "glyph": "G", "stat": "STAT_ORTHODOXY",     "opposes": "STAT_DEVIATION",    "backstory": "STARTUP_BACKSTORY_GENTLEMAN"},
 	{"class_id": &"cyborg", "spec_id": &"forged",     "label_key": "STARTUP_PICK_CYBORG_FORGED",      "glyph": "F", "stat": "STAT_DEVIATION",     "opposes": "STAT_ORTHODOXY",    "backstory": "STARTUP_BACKSTORY_FORGED"},
-	{"class_id": &"human",  "spec_id": &"survivalist","label_key": "STARTUP_PICK_HUMAN_SURVIVALIST",  "glyph": "S", "stat": "STAT_INGENUITY",     "opposes": "STAT_OPTIMIZATION", "backstory": "STARTUP_BACKSTORY_SURVIVALIST"},
+	{"class_id": &"analog",  "spec_id": &"survivalist","label_key": "STARTUP_PICK_ANALOG_SURVIVALIST",  "glyph": "S", "stat": "STAT_INGENUITY",     "opposes": "STAT_OPTIMIZATION", "backstory": "STARTUP_BACKSTORY_SURVIVALIST"},
 	{"class_id": &"cyborg", "spec_id": &"automaton",  "label_key": "STARTUP_PICK_CYBORG_AUTOMATON",   "glyph": "A", "stat": "STAT_OPTIMIZATION",  "opposes": "STAT_INGENUITY",    "backstory": "STARTUP_BACKSTORY_AUTOMATON"},
-	{"class_id": &"human",  "spec_id": &"enculted",   "label_key": "STARTUP_PICK_HUMAN_ENCULTED",     "glyph": "E", "stat": "STAT_AMBITION",      "opposes": "STAT_CLARITY",      "backstory": "STARTUP_BACKSTORY_ENCULTED"},
+	{"class_id": &"analog",  "spec_id": &"enculted",   "label_key": "STARTUP_PICK_ANALOG_ENCULTED",     "glyph": "E", "stat": "STAT_AMBITION",      "opposes": "STAT_CLARITY",      "backstory": "STARTUP_BACKSTORY_ENCULTED"},
 	{"class_id": &"cyborg", "spec_id": &"polymath",   "label_key": "STARTUP_PICK_CYBORG_POLYMATH",    "glyph": "P", "stat": "STAT_CLARITY",       "opposes": "STAT_AMBITION",     "backstory": "STARTUP_BACKSTORY_POLYMATH"},
 ]
 

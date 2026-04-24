@@ -59,7 +59,7 @@ Each rep has a worldview shaped by their quadrant. They react when the player dr
 | **Polymath** | Selfish + Corrupted | Made a conscious, deliberate decision to augment their intelligence for personal power. The "curiosity" framing is how they justify it. Corrupted through ambition dressed as scholarship. Reacts to decisions that suggest the player values others over their own advancement. |
 | **Forged** | Selfish + Corrupted | Power through total self-erasure. Reacts to any decision that suggests the player still values their humanity. |
 
-**Example:** A Human player who chose the Survivalist rep but begins making cold, self-serving decisions — taking resources from those who need them, letting others die for personal gain — will hear the Survivalist comment on it. Quietly at first, then less quietly. They've seen this before. They know where it ends.
+**Example:** An Analog player who chose the Survivalist rep but begins making cold, self-serving decisions — taking resources from those who need them, letting others die for personal gain — will hear the Survivalist comment on it. Quietly at first, then less quietly. They've seen this before. They know where it ends.
 
 The rep isn't a conscience system. They're a person with a worldview, and your choices are telling them who you really are.
 

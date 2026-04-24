@@ -5,13 +5,13 @@
 ## Core Principles
 
 - Class-specific core mechanics — not all classes share the same resource systems, survival mechanics, or win conditions. For example, not all classes will have a health bar.
-- 8 classes at launch: 2 **origin classes** ([Human](human.md) and [Cyborg](cyborg.md)) plus 6 **specialized classes** (3 per origin).
+- 8 classes at launch: 2 **origin classes** ([Analog](human.md) and [Cyborg](cyborg.md)) plus 6 **specialized classes** (3 per origin).
 - Specialized classes are unlocked through specific quests — similar to WoW Legion artifact weapon quests. The unlock quest should feel thematic and personal to the class.
 - Deep build diversity per class, with itemization designed to create build desire — finding an item should make you want to try a new build.
 
 ## Origin vs. Specialized Classes
 
-Origin classes (Human and Cyborg) are generalists — jack of all trades for their respective path. They are the easiest to understand and the most forgiving to gear. All three of their team's attributes contribute equally to a single derived stat (Soul or Interface).
+Origin classes (Analog and Cyborg) are generalists — jack of all trades for their respective path. They are the easiest to understand and the most forgiving to gear. All three of their team's attributes contribute equally to a single derived stat (Soul or Interface).
 
 Specialized classes trade that flexibility for depth. They scale primarily off one attribute, get partial benefit from their two team stats, and are actively hurt by their opposing stat. See [Attribute System](../design/attribute-system.md) for full scaling rules.
 
@@ -21,7 +21,7 @@ Each class has **one unique resource** that encapsulates the energy they would e
 
 | Class | Resource | Description |
 |---|---|---|
-| Human | TBD | Generalist — should capture the unaugmented human experience |
+| Analog | TBD | Generalist — should capture the unaugmented analog experience |
 | Cyborg | TBD | Generalist — should capture the augmented machine experience |
 | Survivalist | Adrenaline | Builds under pressure, decays when safe |
 | Gentleman / Lady | Composure | Maintained through controlled play, breaks under panic |

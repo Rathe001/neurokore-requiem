@@ -72,6 +72,7 @@ func _ready() -> void:
 	_bind_skill_slots(player)
 	_bind_resource_pool(player)
 	_build_minimap(player)
+	_build_talents_panel()
 
 func _apply_theme() -> void:
 	root.theme = UIThemeState.theme
@@ -195,6 +196,10 @@ func _build_minimap(player: Node) -> void:
 	# If scanner is already equipped, activate radar overlay.
 	if player.has_method(&"is_scanner_active"):
 		_minimap.scanner_active = player.is_scanner_active()
+
+func _build_talents_panel() -> void:
+	var talents := TalentsPanel.new()
+	root.add_child(talents)
 
 func set_scanner_active(active: bool) -> void:
 	if _minimap != null:

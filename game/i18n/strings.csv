@@ -7,25 +7,25 @@ COMMON_RESUME,Resume
 COMMON_SETTINGS,Settings
 COMMON_QUIT_TO_DESKTOP,Quit to Desktop
 COMMON_DASH,—
-CLASS_HUMAN,Human
+CLASS_ANALOG,Analog
 CLASS_CYBORG,Cyborg
 SPEC_NONE,Unspecialized
-SPEC_HUMAN_SURVIVALIST,Survivalist
-SPEC_HUMAN_GENTLEMAN,Gentleman-Lady
-SPEC_HUMAN_ENCULTED,Enculted
+SPEC_ANALOG_SURVIVALIST,Survivalist
+SPEC_ANALOG_GENTLEMAN,Gentleman-Lady
+SPEC_ANALOG_ENCULTED,Enculted
 SPEC_CYBORG_FORGED,Forged
 SPEC_CYBORG_AUTOMATON,Automaton
 SPEC_CYBORG_POLYMATH,Polymath
 STARTUP_TITLE,Choose Your Class
-STARTUP_PICK_HUMAN,Human
+STARTUP_PICK_ANALOG,Analog
 STARTUP_PICK_CYBORG,Cyborg
-STARTUP_PICK_HUMAN_SURVIVALIST,Survivalist
-STARTUP_PICK_HUMAN_GENTLEMAN,Gentleman-Lady
-STARTUP_PICK_HUMAN_ENCULTED,Enculted
+STARTUP_PICK_ANALOG_SURVIVALIST,Survivalist
+STARTUP_PICK_ANALOG_GENTLEMAN,Gentleman-Lady
+STARTUP_PICK_ANALOG_ENCULTED,Enculted
 STARTUP_PICK_CYBORG_FORGED,Forged
 STARTUP_PICK_CYBORG_AUTOMATON,Automaton
 STARTUP_PICK_CYBORG_POLYMATH,Polymath
-STARTUP_BACKSTORY_HUMAN,Unaugmented and proud of it. Survives on wit and adaptability — flesh that refuses to become obsolete.
+STARTUP_BACKSTORY_ANALOG,Unaugmented and proud of it. Survives on wit and adaptability — flesh that refuses to become obsolete.
 STARTUP_BACKSTORY_CYBORG,Half human, half machine — all pragmatism. Whether by choice or necessity, you've crossed the threshold most only dream about.
 STARTUP_BACKSTORY_SURVIVALIST,The city tried to kill you. It failed. You've made weapons from wreckage and learned the best tool is the one you have right now.
 STARTUP_BACKSTORY_FORGED,You didn't stop at practical. Every limb, every organ — an opportunity for something harder. The flesh that remains is just scaffolding.
@@ -114,7 +114,7 @@ DEBUG_SHOW_TELEGRAPHS,Show Attack Telegraphs
 DEBUG_SHOW_OVERLAY,Show Overlay
 DEBUG_START_POS,Start pos:
 DEBUG_START_CR,Start cr:
-HUD_HOTKEY_HINTS,(F1) +25  (F2) Clear  (F3) Debug  (C) Character  (Ctrl) Crouch  (F) Light  (Tab) Map
+HUD_HOTKEY_HINTS,(F1) +25  (F2) Clear  (F3) Debug  (C) Character  (N) Talents  (Ctrl) Crouch  (F) Light  (Tab) Map
 HUD_BANNER_DIED,You died
 HUD_BANNER_NO_LIGHT,I wish I had a light...
 HUD_CREDITS_FORMAT,%d cr

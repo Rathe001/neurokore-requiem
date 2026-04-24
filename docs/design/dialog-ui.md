@@ -36,7 +36,7 @@ Portraits for player characters and allied reps reflect their class identity thr
 | Survivalist | Grit and sweat, unstable lighting (matches their light source) |
 | Gentleman / Lady | Crisp, controlled — no distortion, sharp contrast |
 | Enculted | Sickly green edge glow, occasional frame of something wrong that disappears immediately |
-| Human / Cyborg | Clean, no overlay — the absence of effect is the effect |
+| Analog / Cyborg | Clean, no overlay — the absence of effect is the effect |
 
 Enemy portraits follow the same format but use corruption, grotesquery, and faction-specific visual language. A failed augmentation experiment looks different from a corporate security enforcer looks different from something that came out of Sub-Level Zero.
 
@@ -45,7 +45,7 @@ Enemy portraits follow the same format but use corruption, grotesquery, and fact
 ## UI Philosophy
 
 - **Stat identity** — the character screen displays a stat distribution visualization showing each attribute's percentage of total stats, current tier perks, and proximity to breakpoints. Recognized stat combinations display a combo description. See [Attribute System — Stat Identity](attribute-system.md#stat-identity--tier-perks--visual-metamorphosis) for full details.
-- **Resource indicators** — class-specific and visually distinct from each other. Each class has its own UI concept; see the individual class pages under [Cyborg](../classes/cyborg.md) and [Human](../classes/human.md).
+- **Resource indicators** — class-specific and visually distinct from each other. Each class has its own UI concept; see the individual class pages under [Cyborg](../classes/cyborg.md) and [Analog](../classes/human.md).
 - **Light source status** — visible without occupying prime screen real estate. See [Lighting](../world/lighting.md) for the full lighting system and equippable light source design.
 - **Skill tree** — locked and invisible until the first rep encounter. See [Skill Tree](skill-tree.md) for unlock behavior and hotkey layout.
 

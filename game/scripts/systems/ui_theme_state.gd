@@ -9,19 +9,19 @@ extends Node
 signal changed
 
 const THEME_DEFAULT: UIThemeConfig = preload("res://resources/ui/theme_default.tres")
-const THEME_HUMAN: UIThemeConfig = preload("res://resources/ui/theme_human.tres")
+const THEME_ANALOG: UIThemeConfig = preload("res://resources/ui/theme_human.tres")
 const THEME_CYBORG: UIThemeConfig = preload("res://resources/ui/theme_cyborg.tres")
-const THEME_HUMAN_SURVIVALIST: UIThemeConfig = preload("res://resources/ui/theme_human_survivalist.tres")
-const THEME_HUMAN_GENTLEMAN: UIThemeConfig = preload("res://resources/ui/theme_human_gentleman.tres")
-const THEME_HUMAN_ENCULTED: UIThemeConfig = preload("res://resources/ui/theme_human_enculted.tres")
+const THEME_ANALOG_SURVIVALIST: UIThemeConfig = preload("res://resources/ui/theme_human_survivalist.tres")
+const THEME_ANALOG_GENTLEMAN: UIThemeConfig = preload("res://resources/ui/theme_human_gentleman.tres")
+const THEME_ANALOG_ENCULTED: UIThemeConfig = preload("res://resources/ui/theme_human_enculted.tres")
 const THEME_CYBORG_FORGED: UIThemeConfig = preload("res://resources/ui/theme_cyborg_forged.tres")
 const THEME_CYBORG_AUTOMATON: UIThemeConfig = preload("res://resources/ui/theme_cyborg_automaton.tres")
 const THEME_CYBORG_POLYMATH: UIThemeConfig = preload("res://resources/ui/theme_cyborg_polymath.tres")
 
 const SPEC_THEMES: Dictionary = {
-	&"human/survivalist": THEME_HUMAN_SURVIVALIST,
-	&"human/gentleman": THEME_HUMAN_GENTLEMAN,
-	&"human/enculted": THEME_HUMAN_ENCULTED,
+	&"analog/survivalist": THEME_ANALOG_SURVIVALIST,
+	&"analog/gentleman": THEME_ANALOG_GENTLEMAN,
+	&"analog/enculted": THEME_ANALOG_ENCULTED,
 	&"cyborg/forged": THEME_CYBORG_FORGED,
 	&"cyborg/automaton": THEME_CYBORG_AUTOMATON,
 	&"cyborg/polymath": THEME_CYBORG_POLYMATH,
@@ -53,8 +53,8 @@ func _palette_for(class_id: StringName, spec_id: StringName) -> UIThemeConfig:
 		if SPEC_THEMES.has(key):
 			return SPEC_THEMES[key]
 	match class_id:
-		&"human":
-			return THEME_HUMAN
+		&"analog":
+			return THEME_ANALOG
 		&"cyborg":
 			return THEME_CYBORG
 	return THEME_DEFAULT

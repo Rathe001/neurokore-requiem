@@ -36,3 +36,22 @@ The player should feel:
 - **Watched** — surveillance is ambient and total. Not threatening. Just present.
 - **Expendable** — not persecuted, just irrelevant. The horror of the facility isn't that the corp wanted the people inside to die. It's that the corp didn't think about them at all.
 - **Occasionally awed** — the world is genuinely strange and sometimes beautiful. Neon in rain. Bioluminescent experiments. The deep network, glimpsed.
+
+---
+
+## The Faction Dynamic
+
+The Analog and Cyborg paths are ideologically opposed. Analog rejects the machine — flesh that refuses to become obsolete. Cyborg embraces it — pragmatism that crossed the threshold. They distrust each other on principle.
+
+But they share an enemy.
+
+The corporation that owns Earth Facility #723 — and everything else — cares about neither side. Analog workers are cheap labor. Cyborg assets are expensive hardware to be depreciated. Both are line items. The corp did not choose a side in the flesh-versus-machine debate. It chose profit.
+
+This makes the factional tension a secondary conflict beneath a shared existential one. The two origins will never like each other. But when the alternative is corporate indifference — the kind that cuts power to a facility and forgets the people inside — the enemy of my enemy is enough. For now.
+
+**What this means for the player:**
+- Safe houses and vendor hubs contain both origins, coexisting uneasily
+- NPCs from the other origin are dismissive or suspicious, not hostile
+- Dialog reflects ideological friction — not open war
+- The corporation is always the bigger problem
+- Cooperation feels grudging and temporary, never warm

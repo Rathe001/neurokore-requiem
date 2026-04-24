@@ -95,6 +95,6 @@ The player will spend most of the game in Blackout and Failing tiers. Lit and Re
 
 ## Starting Zone Lighting
 
-Both starting zones begin in the **Failing** tier — institutional lighting that flickers, dims, and fails in rolling waves. The Human path begins mid-blackout (the inciting power cut). The Cyborg path wakes in a ward where half the lights have already failed.
+Both starting zones begin in the **Failing** tier — institutional lighting that flickers, dims, and fails in rolling waves. The Analog path begins mid-blackout (the inciting power cut). The Cyborg path wakes in a ward where half the lights have already failed.
 
 Neither starting zone reaches full Blackout — there is always *some* light, however unreliable. This eases the player into the lighting system before Sub-Level Zero removes that comfort entirely.

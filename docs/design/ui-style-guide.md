@@ -76,7 +76,7 @@ Each `UIThemeConfig` resource defines these semantic color fields. Read them via
 
 ---
 
-### Human
+### Analog
 
 | Field | RGB |
 |---|---|
@@ -89,7 +89,7 @@ Each `UIThemeConfig` resource defines these semantic color fields. Read them via
 | credits | `(1.0, 0.85, 0.25)` |
 | player_color | `(0.95, 0.68, 0.48)` |
 
-### Human / Survivalist
+### Analog / Survivalist
 
 | Field | RGB |
 |---|---|
@@ -102,7 +102,7 @@ Each `UIThemeConfig` resource defines these semantic color fields. Read them via
 | credits | `(0.95, 0.85, 0.3)` |
 | player_color | `(0.78, 0.85, 0.5)` |
 
-### Human / Gentleman-Lady
+### Analog / Gentleman-Lady
 
 | Field | RGB |
 |---|---|
@@ -115,7 +115,7 @@ Each `UIThemeConfig` resource defines these semantic color fields. Read them via
 | credits | `(0.98, 0.95, 0.75)` |
 | player_color | `(0.92, 0.88, 0.72)` |
 
-### Human / Enculted
+### Analog / Enculted
 
 | Field | RGB |
 |---|---|

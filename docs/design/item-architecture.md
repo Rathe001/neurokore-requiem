@@ -17,23 +17,23 @@ Every item has a **main type** and a **sub type**.
 | Chest Armor | Vest, Jacket, Plate Rig, Hardsuit | Chest |
 | Gloves | Work Gloves, Gauntlets, Interface Gloves | Gloves |
 | Boots | Runners, Stompers, Mag-Boots | Boots |
-| Belt | Utility Belt, Bandolier | Belt (Human origin) |
+| Belt | Utility Belt, Bandolier | Belt (Analog origin) |
 | Mainboard | Circuit Board, Neural Bridge | Mainboard (Cyborg origin) |
 | Backpack | Field Pack, Cargo Frame | Backpack |
 | Optics | Flashlight, Headlamp, Glow Stick, Sensor | Optics |
-| Utility | Medkit, Illicit Drugs, Family Heirloom | Utility slot (Human origin, via belt) |
+| Utility | Medkit, Illicit Drugs, Family Heirloom | Utility slot (Analog origin, via belt) |
 | Bus | Tracking Upgrade, Drone Control Range Upgrade, Bandwidth Optimizer | Bus slot (Cyborg origin, via mainboard) |
 
 ### Origin-Specific Slot Systems
 
 | Origin | Expansion Slot | Sub-Slots | Inspiration |
 |---|---|---|---|
-| Human | Belt | Utility slots (consumables, drugs, heirlooms, tools) | Utility belt — quick-access field items |
+| Analog | Belt | Utility slots (consumables, drugs, heirlooms, tools) | Utility belt — quick-access field items |
 | Cyborg | Mainboard | Bus slots (system upgrades, modules, firmware) | EVE Online — fitting modules to a ship |
 
 The belt grants utility slots; the mainboard grants bus slots. Both work identically to the current system — the expansion item determines how many sub-slots are available.
 
-**Origin-locked:** Belts and utility items can only be equipped by Human classes. Mainboards and bus items can only be equipped by Cyborg classes. These items still drop for all players (trade value, future multiplayer), but cannot be used by the wrong origin.
+**Origin-locked:** Belts and utility items can only be equipped by Analog classes. Mainboards and bus items can only be equipped by Cyborg classes. These items still drop for all players (trade value, future multiplayer), but cannot be used by the wrong origin.
 
 ---
 
@@ -49,9 +49,9 @@ The belt grants utility slots; the mainboard grants bus slots. Both work identic
 | Boots | Yes | |
 | Backpack | Yes | Grants inventory capacity. |
 | Optics | Yes | Flashlight, scanner, UV, etc. |
-| Belt | Human only | Grants utility sub-slots. Cannot be equipped by Cyborg classes. |
-| Mainboard | Cyborg only | Grants bus sub-slots. Cannot be equipped by Human classes. |
-| Utility 1–N | Human only | Granted by belt. Utility items are origin-locked to Human. |
+| Belt | Analog only | Grants utility sub-slots. Cannot be equipped by Cyborg classes. |
+| Mainboard | Cyborg only | Grants bus sub-slots. Cannot be equipped by Analog classes. |
+| Utility 1–N | Analog only | Granted by belt. Utility items are origin-locked to Analog. |
 | Bus 1–N | Cyborg only | Granted by mainboard. Bus items are origin-locked to Cyborg. |
 
 ---

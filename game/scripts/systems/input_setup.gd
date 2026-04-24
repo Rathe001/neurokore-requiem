@@ -26,6 +26,7 @@ func _ready() -> void:
 	_register_keys(&"jump", [KEY_SPACE])
 	_register_keys(&"toggle_view", [KEY_V])
 	_register_keys(&"toggle_minimap", [KEY_TAB])
+	_register_keys(&"toggle_talents", [KEY_N])
 	_register_keys(&"toggle_fullscreen", [KEY_F11])
 	_register_keys(&"toggle_debug_panel", [KEY_F3])
 	_register_keys(&"debug_horde_spawn", [KEY_F1])

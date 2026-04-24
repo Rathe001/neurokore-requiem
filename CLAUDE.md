@@ -29,7 +29,7 @@ Two **origin classes** (generalist) and six **specialized classes** (3 per origi
 
 | Origin | Specialized Classes |
 |---|---|
-| **Human** | Survivalist, Gentleman/Lady, Enculted |
+| **Analog** | Survivalist, Gentleman/Lady, Enculted |
 | **Cyborg** | Forged, Automaton, Polymath |
 
 Each class has one unique resource. See [`docs/classes/overview.md`](docs/classes/overview.md) for the full resource table.
@@ -37,7 +37,7 @@ Each class has one unique resource. See [`docs/classes/overview.md`](docs/classe
 Full class details:
 - [`docs/classes/overview.md`](docs/classes/overview.md)
 - [`docs/classes/cyborg.md`](docs/classes/cyborg.md)
-- [`docs/classes/human.md`](docs/classes/human.md)
+- [`docs/classes/human.md`](docs/classes/human.md) *(Analog origin class)*
 - [`docs/classes/spec-monsters.md`](docs/classes/spec-monsters.md)
 
 ## Visual Style & Level Design

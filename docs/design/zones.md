@@ -26,7 +26,7 @@ That was some time ago.
 
 ### Convergence
 
-Sub-Level Zero is where the Cyborg and Human paths meet for the first time. Both players escape downward from their respective wings and emerge into the same basement. They were in the same building for their entire starting zone without knowing it.
+Sub-Level Zero is where the Cyborg and Analog paths meet for the first time. Both players escape downward from their respective wings and emerge into the same basement. They were in the same building for their entire starting zone without knowing it.
 
 Neither is expecting the other.
 
@@ -62,7 +62,7 @@ The door leads out of Earth Facility #723 and into the world above.
 | Zone | Type | Lighting Tier | Status |
 |---|---|---|---|
 | Earth Facility #723 — Augmentation Wing | Cyborg starting zone | Failing | Documented in [Starting Zones](starting-zones.md) |
-| Earth Facility #723 — Detention Wing | Human starting zone | Failing | Documented in [Starting Zones](starting-zones.md) |
+| Earth Facility #723 — Detention Wing | Analog starting zone | Failing | Documented in [Starting Zones](starting-zones.md) |
 | Sub-Level Zero | First common zone | Blackout | Above |
 | Abandoned City | Common zone | Dim | Concept only |
 | High-Tech Facility | Common zone | Lit | Concept only |

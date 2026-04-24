@@ -99,7 +99,7 @@ Each skill is taught immediately after the rep's save moment — the ability the
 | Automaton | **Autoturret** | Toggle. A turret forms on the player's shoulder and auto-attacks nearby enemies for small/medium piercing damage. Consumes 90% of Bandwidth while active — the drain is intentional, so the player immediately understands what the resource does. | Bandwidth |
 | Polymath | **DDoS** | Large single-target damage. Deals bonus damage vs. mechanical enemies. | TBD |
 
-**Human-origin**
+**Analog-origin**
 
 | Class | Skill | Description | Resource |
 |---|---|---|---|

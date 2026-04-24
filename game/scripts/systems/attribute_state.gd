@@ -43,8 +43,8 @@ const STAT_SHORT: Dictionary = {
 	&"amb":  "AMB",
 }
 
-# Display order for UI — Human origin (left col), Cyborg origin (right col)
-const HUMAN_STATS: Array[StringName] = [&"soul", &"ort", &"ing", &"amb"]
+# Display order for UI — Analog origin (left col), Cyborg origin (right col)
+const ANALOG_STATS: Array[StringName] = [&"soul", &"ort", &"ing", &"amb"]
 const CYBORG_STATS: Array[StringName] = [&"itf", &"dev", &"opt", &"cla"]
 
 # Rollable stats — set via set_stat()

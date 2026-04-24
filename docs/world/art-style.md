@@ -30,7 +30,7 @@ Each class has a consistent color identity used across models, materials, UI, ab
 | Forged | Red |
 | Automaton | Teal/green data |
 | Polymath | Yellow |
-| Human (origin) | Brown |
+| Analog (origin) | Brown |
 | Survivalist | Dirty yellow, rust orange |
 | Gentleman / Lady | Ivory |
 | Enculted | Purple |

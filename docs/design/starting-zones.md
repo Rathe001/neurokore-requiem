@@ -23,7 +23,7 @@ The people inside — patients, prisoners, staff, experiments — were not menti
 
 ```
 [ AUGMENTATION WING ]          [ DETENTION WING ]
-  Cyborg starting zone           Human starting zone
+  Cyborg starting zone           Analog starting zone
          |                              |
          |______________________________|
                        |
@@ -32,7 +32,7 @@ The people inside — patients, prisoners, staff, experiments — were not menti
                corridors / escape
 ```
 
-The two paths converge in the facility's lower maintenance infrastructure — utilitarian tunnels neither wing's inhabitants would typically have reason to enter. This is where Cyborg and Human players meet for the first time before escaping together.
+The two paths converge in the facility's lower maintenance infrastructure — utilitarian tunnels neither wing's inhabitants would typically have reason to enter. This is where Cyborg and Analog players meet for the first time before escaping together.
 
 ---
 
@@ -87,9 +87,9 @@ A volunteer research subject for cognitive augmentation beyond approved limits. 
 
 ---
 
-## Human Path: The Detention Wing
+## Analog Path: The Detention Wing
 
-The Human player is an inmate in the facility's high-security detention block. The prison holds people who couldn't afford augmentation, refused it, or were flagged as threats to the corp's augmentation agenda. Many were destined for experimental procedures without consent.
+The Analog player is an inmate in the facility's high-security detention block. The prison holds people who couldn't afford augmentation, refused it, or were flagged as threats to the corp's augmentation agenda. Many were destined for experimental procedures without consent.
 
 The power goes out. The cells open.
 
@@ -173,9 +173,9 @@ Three-on-one, it becomes apparent around the three-quarter mark that this was a 
 
 Then a fourth figure enters.
 
-**The mystery representative** — a Human for Cyborg players, a Cyborg for Human players. They intervene without explanation, turning a losing fight into a winnable one.
+**The mystery representative** — an Analog for Cyborg players, a Cyborg for Analog players. They intervene without explanation, turning a losing fight into a winnable one.
 
-After the battle, they introduce themselves. They are the representative of those who refused to sell their humanity for power — the only path that costs you nothing and gives you nothing except yourself. They will fill the companion role going forward, same as any class rep.
+After the battle, they introduce themselves. They are the representative of those who refused to sell themselves for power — the only path that costs you nothing and gives you nothing except yourself. They will fill the companion role going forward, same as any class rep.
 
 The difference: the player didn't choose this. They failed to choose anything, and were given something anyway. The mystery rep knows this. They don't mention it — but they know.
 
@@ -185,6 +185,6 @@ The difference: the player didn't choose this. They failed to choose anything, a
 
 ## Post-Choice: The Convergence
 
-After the boss battle, both Cyborg and Human players escape through the same lower maintenance corridors. This is where the two starting zones physically meet — the first point where both classes share the same space.
+After the boss battle, both Cyborg and Analog players escape through the same lower maintenance corridors. This is where the two starting zones physically meet — the first point where both classes share the same space.
 
 The convergence zone leads out of Earth Facility #723 into the common game world.

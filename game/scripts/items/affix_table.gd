@@ -1,5 +1,4 @@
 extends Node
-class_name AffixTable
 
 ## All prefix and suffix definitions for item generation.
 ##

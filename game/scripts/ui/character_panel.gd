@@ -373,11 +373,11 @@ func _build_attribute_section(parent: Control) -> void:
 	grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	parent.add_child(grid)
 
-	var human_col := VBoxContainer.new()
-	human_col.add_theme_constant_override(&"separation", 2)
-	human_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	human_col.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	grid.add_child(human_col)
+	var analog_col := VBoxContainer.new()
+	analog_col.add_theme_constant_override(&"separation", 2)
+	analog_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	analog_col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	grid.add_child(analog_col)
 
 	var cyborg_col := VBoxContainer.new()
 	cyborg_col.add_theme_constant_override(&"separation", 2)
@@ -385,8 +385,8 @@ func _build_attribute_section(parent: Control) -> void:
 	cyborg_col.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	grid.add_child(cyborg_col)
 
-	for stat_id in AttributeState.HUMAN_STATS:
-		human_col.add_child(_make_attr_row(stat_id))
+	for stat_id in AttributeState.ANALOG_STATS:
+		analog_col.add_child(_make_attr_row(stat_id))
 	for stat_id in AttributeState.CYBORG_STATS:
 		cyborg_col.add_child(_make_attr_row(stat_id))
 
@@ -487,7 +487,7 @@ func _class_label() -> String:
 		var spec_str := String(PlayerState.spec_id).to_upper()
 		return "SPEC_%s_%s" % [class_str, spec_str]
 	match PlayerState.class_id:
-		&"human": return "CLASS_HUMAN"
+		&"analog": return "CLASS_ANALOG"
 		&"cyborg": return "CLASS_CYBORG"
 	return "COMMON_DASH"
 
