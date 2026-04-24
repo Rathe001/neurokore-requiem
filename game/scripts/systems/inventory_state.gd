@@ -38,6 +38,28 @@ func _ready() -> void:
 	inventory[7] = STARTER_LANTERN
 	inventory[8] = STARTER_SCANNER
 	inventory[9] = STARTER_UV_LIGHT
+	# Stat test items — equip these to unlock talent tree tiers.
+	inventory[10] = _make_stat_item(&"stat_vest_ort",   &"chest",    "C", Color(0.95, 0.92, 0.8),  {&"ort": 30})
+	inventory[11] = _make_stat_item(&"stat_helmet_ing", &"head",     "H", Color(0.7,  0.85, 0.35), {&"ing": 25})
+	inventory[12] = _make_stat_item(&"stat_gloves_dev", &"gloves",   "G", Color(0.9,  0.25, 0.2),  {&"dev": 35})
+	inventory[13] = _make_stat_item(&"stat_boots_opt",  &"boots",    "B", Color(0.55, 0.78, 0.85), {&"opt": 20})
+	inventory[14] = _make_stat_item(&"stat_optic_cla",  &"optics",   "O", Color(0.95, 0.9,  0.3),  {&"cla": 15})
+	inventory[15] = _make_stat_item(&"stat_pack_amb",   &"backpack", "K", Color(0.78, 0.35, 0.85), {&"amb": 25})
+
+func _make_stat_item(id: StringName, kind: StringName, glyph: String, color: Color, stats: Dictionary) -> Item:
+	var item := Item.new()
+	item.id = id
+	item.kind = kind
+	item.main_type = String(kind).capitalize()
+	item.glyph = glyph
+	item.glyph_color = color
+	item.rarity = &"uncommon"
+	item.stat_modifiers = stats
+	var stat_parts: Array[String] = []
+	for k in stats:
+		stat_parts.append("+%d %s" % [stats[k], (k as String).to_upper()])
+	item.name_key = " / ".join(stat_parts)
+	return item
 
 func get_equipped(slot: StringName) -> Item:
 	return equipment.get(slot, null)

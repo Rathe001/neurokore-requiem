@@ -64,6 +64,26 @@ var itf: int:
 	get:
 		return _avg3(dev, opt, cla)
 
+func _ready() -> void:
+	InventoryState.equipment_changed.connect(func(_slot: StringName) -> void: _recompute_from_equipment())
+
+## Recompute all rollable stats from currently equipped items.
+func _recompute_from_equipment() -> void:
+	var totals: Dictionary = {&"ort": 0, &"ing": 0, &"amb": 0, &"dev": 0, &"opt": 0, &"cla": 0}
+	for item in InventoryState.equipment.values():
+		if item == null:
+			continue
+		for stat_id in item.stat_modifiers:
+			if totals.has(stat_id):
+				totals[stat_id] += int(item.stat_modifiers[stat_id])
+	ort = totals[&"ort"]
+	ing = totals[&"ing"]
+	amb = totals[&"amb"]
+	dev = totals[&"dev"]
+	opt = totals[&"opt"]
+	cla = totals[&"cla"]
+	stats_changed.emit()
+
 func get_stat(id: StringName) -> int:
 	match id:
 		&"soul": return soul

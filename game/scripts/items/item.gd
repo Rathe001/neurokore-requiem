@@ -28,3 +28,8 @@ enum LightType { DIRECTIONAL, RADIANT, SCANNER, UV }
 
 @export_group("Belt")
 @export var utility_slots: int = 0
+
+@export_group("Stats")
+## Flat stat bonuses applied when this item is equipped.
+## Keys match AttributeState rollable stat IDs: ort, ing, amb, dev, opt, cla.
+@export var stat_modifiers: Dictionary = {}
