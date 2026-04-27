@@ -17,6 +17,12 @@ const INV_COLS := 8
 
 const BACKDROP_COLOR := Color(0.0, 0.0, 0.0, 0.55)
 
+const ALLOC_BAR_HEIGHT    := 10.0
+const ALLOC_LABEL_HEIGHT  := 9.0
+const ALLOC_LABEL_GAP     := 4.0
+const ALLOC_SEG_GAP       := 2.0
+const ALLOC_BAR_BG        := Color(0.12, 0.12, 0.12, 0.9)
+
 const EQUIP_SLOTS: Array[Dictionary] = [
 	{"row": 0, "col": 0, "label_key": "EQUIP_HEAD", "id": &"head", "accepts": &"head"},
 	{"row": 0, "col": 1, "label_key": "EQUIP_OPTICS", "id": &"optics", "accepts": &"optics"},
@@ -28,6 +34,13 @@ const EQUIP_SLOTS: Array[Dictionary] = [
 	{"row": 2, "col": 1, "label_key": "", "id": &"belt", "accepts": &"belt", "belt": true},
 	{"row": 2, "col": 2, "label_key": "EQUIP_BOOTS", "id": &"boots", "accepts": &"boots"},
 ]
+
+var _alloc_bar: Control = null
+var _alloc_segments: Array[ColorRect] = []
+var _alloc_labels: Array[Label] = []
+var _alloc_seg_bounds: Array[float] = []
+var _alloc_stat_order: Array[StringName] = []
+var _alloc_stat_pcts: Dictionary = {}
 
 var _hp_label: Label
 var _resource_label: Label
@@ -52,7 +65,7 @@ func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_to_group(&"ui_modal")
 	_build_layout()
-	_bind_player()
+	_bind_player.call_deferred()
 	UIThemeState.changed.connect(_on_theme_changed)
 	InventoryState.capacity_changed.connect(_on_capacity_changed)
 	AttributeState.stats_changed.connect(_on_stats_changed)
@@ -76,7 +89,16 @@ func _on_theme_changed() -> void:
 func _gui_input(event: InputEvent) -> void:
 	if _held_item != null and event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
-		if mb.pressed and (mb.button_index == MOUSE_BUTTON_RIGHT or mb.button_index == MOUSE_BUTTON_LEFT):
+		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
+			var inside := _panel_node != null and _panel_node.get_global_rect().has_point(mb.global_position)
+			if inside:
+				_cancel_held()
+			else:
+				var item := _held_item
+				_clear_held()
+				get_tree().call_group(&"world_item_dropper", &"drop_item", item)
+			accept_event()
+		elif mb.pressed and mb.button_index == MOUSE_BUTTON_RIGHT:
 			_cancel_held()
 			accept_event()
 
@@ -98,6 +120,7 @@ func is_holding_item() -> bool:
 	return _held_item != null
 
 func open_menu() -> void:
+	get_tree().call_group(&"ui_modal", &"close_menu")
 	visible = true
 
 func close_menu() -> void:
@@ -133,6 +156,51 @@ func _on_slot_clicked(slot: ItemSlot) -> void:
 		if existing != null and _held_source != null:
 			_held_source._assign(existing)
 		_clear_held()
+
+func _on_slot_right_clicked(slot: ItemSlot) -> void:
+	if _held_item != null:
+		_cancel_held()
+		return
+	if slot.role == ItemSlot.Role.INVENTORY:
+		_quick_equip(slot)
+	else:
+		_quick_unequip(slot)
+
+func _quick_equip(slot: ItemSlot) -> void:
+	var item := slot.current_item()
+	if item == null:
+		return
+	var equip_slot_id := _find_equip_slot_for_kind(item.kind)
+	if equip_slot_id == &"":
+		return
+	var displaced := InventoryState.get_equipped(equip_slot_id)
+	# Free inventory slot first so set_equipped has room for 2H offhand displacement
+	InventoryState.set_inventory_item(slot.inventory_index, null)
+	InventoryState.set_equipped(equip_slot_id, item)
+	if displaced != null:
+		if not InventoryState.add_to_inventory(displaced):
+			get_tree().call_group(&"world_item_dropper", &"drop_item", displaced)
+
+func _quick_unequip(slot: ItemSlot) -> void:
+	var item := slot.current_item()
+	if item == null:
+		return
+	if not InventoryState.add_to_inventory(item):
+		return
+	InventoryState.set_equipped(slot.slot_id, null)
+
+func _find_equip_slot_for_kind(kind: StringName) -> StringName:
+	if kind == &"utility":
+		var cap := InventoryState.get_utility_capacity()
+		for i in cap:
+			var uid := StringName("utility_%d" % (i + 1))
+			if InventoryState.get_equipped(uid) == null:
+				return uid
+		return &"utility_1" if cap > 0 else &""
+	for entry: Dictionary in EQUIP_SLOTS:
+		if (entry["accepts"] as StringName) == kind:
+			return entry["id"]
+	return &""
 
 func _cancel_held() -> void:
 	if _held_item != null and _held_source != null:
@@ -246,6 +314,7 @@ func _build_character_sheet(parent: Control) -> void:
 	stats.add_child(_make_stat_row_with_value("CHARACTER_PANEL_CREDITS", _credits_label))
 
 	_build_attribute_section(parent)
+	_build_alloc_bar(parent)
 
 	var equip_total_width := float(EQUIP_COLS) * EQUIP_SLOT_SIZE.x + float(EQUIP_COLS - 1) * EQUIP_GAP
 	var equip_total_height := float(EQUIP_ROWS) * EQUIP_SLOT_SIZE.y + float(EQUIP_ROWS - 1) * EQUIP_GAP
@@ -271,6 +340,7 @@ func _build_character_sheet(parent: Control) -> void:
 			float(row) * (EQUIP_SLOT_SIZE.y + EQUIP_GAP),
 		)
 		slot.clicked.connect(_on_slot_clicked)
+		slot.right_clicked.connect(_on_slot_right_clicked)
 		equip.add_child(slot)
 		_all_slots.append(slot)
 
@@ -300,6 +370,7 @@ func _build_utility_row(parent: Control, equip_x: float, y: float, _equip_width:
 		slot.configure_equipment(id, empty_text, &"utility")
 		slot.position = Vector2(float(i) * (EQUIP_SLOT_SIZE.x + EQUIP_GAP), 0.0)
 		slot.clicked.connect(_on_slot_clicked)
+		slot.right_clicked.connect(_on_slot_right_clicked)
 		_utility_row.add_child(slot)
 		_utility_slots.append(slot)
 		_all_slots.append(slot)
@@ -323,42 +394,157 @@ func _build_inventory(parent: Control) -> void:
 func _rebuild_inventory_grid() -> void:
 	if _inventory_host == null:
 		return
-	if _inventory_grid != null:
-		# Remove old inventory slots from tracking
-		for child in _inventory_grid.get_children():
-			if child is ItemSlot:
-				_all_slots.erase(child as ItemSlot)
-		_inventory_grid.queue_free()
-		_inventory_grid = null
 	var capacity := InventoryState.get_inventory_capacity()
-	var rows := int(ceil(float(capacity) / float(INV_COLS)))
-	rows = max(rows, 1)
+	var rows := maxi(int(ceil(float(capacity) / float(INV_COLS))), 1)
 	var grid_width := float(INV_COLS) * INV_SLOT_SIZE.x + float(INV_COLS - 1) * INV_GAP
 	var grid_height := float(rows) * INV_SLOT_SIZE.y + float(rows - 1) * INV_GAP
-	var grid := Control.new()
-	grid.size = Vector2(grid_width, grid_height)
-	grid.position = Vector2((PANEL_SIZE.x - grid_width) * 0.5, 28.0)
-	grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_inventory_host.add_child(grid)
-	for i in capacity:
-		var r := i / INV_COLS
-		var c := i % INV_COLS
-		var slot := ItemSlot.new()
-		slot.size = INV_SLOT_SIZE
-		slot.custom_minimum_size = INV_SLOT_SIZE
-		slot.configure_inventory(i)
-		slot.position = Vector2(
-			float(c) * (INV_SLOT_SIZE.x + INV_GAP),
-			float(r) * (INV_SLOT_SIZE.y + INV_GAP),
-		)
-		slot.clicked.connect(_on_slot_clicked)
-		grid.add_child(slot)
-		_all_slots.append(slot)
-	_inventory_grid = grid
+
+	if _inventory_grid == null:
+		var grid := Control.new()
+		grid.size = Vector2(grid_width, grid_height)
+		grid.position = Vector2((PANEL_SIZE.x - grid_width) * 0.5, 28.0)
+		grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_inventory_host.add_child(grid)
+		_inventory_grid = grid
+
+	_inventory_grid.size = Vector2(grid_width, grid_height)
+
+	# Collect current inventory slots in index order.
+	var inv_slots: Array[ItemSlot] = []
+	for slot: ItemSlot in _inventory_grid.get_children():
+		inv_slots.append(slot)
+
+	var current := inv_slots.size()
+	if capacity > current:
+		for i in range(current, capacity):
+			var r: int = floori(float(i) / INV_COLS)
+			var c: int = i - r * INV_COLS
+			var slot := ItemSlot.new()
+			slot.size = INV_SLOT_SIZE
+			slot.custom_minimum_size = INV_SLOT_SIZE
+			slot.configure_inventory(i)
+			slot.position = Vector2(
+				float(c) * (INV_SLOT_SIZE.x + INV_GAP),
+				float(r) * (INV_SLOT_SIZE.y + INV_GAP),
+			)
+			slot.clicked.connect(_on_slot_clicked)
+			slot.right_clicked.connect(_on_slot_right_clicked)
+			_inventory_grid.add_child(slot)
+			_all_slots.append(slot)
+	elif capacity < current:
+		for i in range(capacity, current):
+			var slot := inv_slots[i]
+			_all_slots.erase(slot)
+			slot.queue_free()
 
 func _on_capacity_changed() -> void:
 	_refresh_utility_visibility()
 	_rebuild_inventory_grid()
+
+func _build_alloc_bar(parent: Control) -> void:
+	var bar_x := ATTR_POS.x
+	var bar_w := PANEL_SIZE.x - ATTR_POS.x * 2.0
+	var bar_area_h := ALLOC_LABEL_HEIGHT + ALLOC_LABEL_GAP + ALLOC_BAR_HEIGHT
+	var bar_y := ATTR_POS.y + 17.0 + 56.0 + 12.0
+
+	_alloc_bar = Control.new()
+	_alloc_bar.position = Vector2(bar_x, bar_y)
+	_alloc_bar.size = Vector2(bar_w, bar_area_h)
+	_alloc_bar.mouse_filter = Control.MOUSE_FILTER_STOP
+	_alloc_bar.mouse_exited.connect(func() -> void:
+		get_tree().call_group(&"interactable_tooltip", &"hide_tooltip"))
+	_alloc_bar.gui_input.connect(_on_alloc_bar_input)
+	parent.add_child(_alloc_bar)
+
+	var rollable: Array[StringName] = AttributeState.ANALOG_TEAM_STATS.duplicate()
+	rollable.append_array(AttributeState.CYBORG_TEAM_STATS)
+	for _stat in rollable:
+		var lbl := Label.new()
+		lbl.theme_type_variation = &"SmallLabel"
+		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_alloc_bar.add_child(lbl)
+		_alloc_labels.append(lbl)
+
+		var seg := ColorRect.new()
+		seg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		seg.color = ALLOC_BAR_BG
+		_alloc_bar.add_child(seg)
+		_alloc_segments.append(seg)
+
+	_repaint_alloc_bar()
+
+func _repaint_alloc_bar() -> void:
+	if _alloc_bar == null:
+		return
+	var pcts := AttributeState.get_all_stat_pcts()
+	_alloc_stat_pcts = pcts
+	var total := 0.0
+	for pct: float in pcts.values():
+		total += pct
+
+	# Sort: primary → team → opp_team → opposing (same priority as talents panel)
+	var rollable: Array[StringName] = AttributeState.ANALOG_TEAM_STATS.duplicate()
+	rollable.append_array(AttributeState.CYBORG_TEAM_STATS)
+	var sorted: Array[StringName] = rollable.duplicate()
+	sorted.sort_custom(func(a: StringName, b: StringName) -> bool:
+		return AttributeState.get_stat_rel_priority(a, PlayerState.class_id, PlayerState.spec_id) \
+			< AttributeState.get_stat_rel_priority(b, PlayerState.class_id, PlayerState.spec_id))
+	_alloc_stat_order = sorted
+
+	var bar_w := _alloc_bar.size.x
+	var avail_w := bar_w - float(sorted.size() - 1) * ALLOC_SEG_GAP
+	var label_y := 0.0
+	var seg_y := ALLOC_LABEL_HEIGHT + ALLOC_LABEL_GAP
+	_alloc_seg_bounds.clear()
+	var x := 0.0
+	for i in sorted.size():
+		var stat_id: StringName = sorted[i]
+		var pct: float = pcts.get(stat_id, 0.0)
+		var seg_w: float = (pct / total) * avail_w if total > 0.001 else avail_w / float(sorted.size())
+		_alloc_seg_bounds.append(x)
+		var stat_color: Color = AttributeState.STAT_COLORS.get(stat_id, Color.WHITE)
+		var short_name: String = AttributeState.STAT_SHORT.get(stat_id, (stat_id as String).to_upper())
+		var lbl: Label = _alloc_labels[i]
+		lbl.visible = pct > 0.0
+		lbl.text = "%s %d%%" % [short_name, int(pct * 100)]
+		lbl.position = Vector2(x, label_y)
+		lbl.size = Vector2(seg_w, ALLOC_LABEL_HEIGHT)
+		lbl.add_theme_color_override(&"font_color", Color(stat_color.r, stat_color.g, stat_color.b, 0.8))
+		lbl.add_theme_font_size_override(&"font_size", 8)
+		var seg: ColorRect = _alloc_segments[i]
+		seg.position = Vector2(x, seg_y)
+		seg.size = Vector2(seg_w, ALLOC_BAR_HEIGHT)
+		var rel_key := AttributeState.get_stat_rel_color_key(stat_id, PlayerState.class_id, PlayerState.spec_id)
+		var rel_color: Color = AttributeState.RELATIONSHIP_COLORS[rel_key]
+		seg.color = Color(rel_color.r, rel_color.g, rel_color.b, 0.7 if total > 0.001 else 0.15)
+		x += seg_w + ALLOC_SEG_GAP
+	_alloc_seg_bounds.append(x)
+
+func _on_alloc_bar_input(event: InputEvent) -> void:
+	if not (event is InputEventMouseMotion):
+		return
+	if _alloc_stat_order.is_empty() or _alloc_seg_bounds.size() < 2:
+		return
+	var mx: float = (event as InputEventMouseMotion).position.x
+	var hover_idx := -1
+	for i in _alloc_stat_order.size():
+		if mx >= _alloc_seg_bounds[i]:
+			hover_idx = i
+	if hover_idx < 0:
+		get_tree().call_group(&"interactable_tooltip", &"hide_tooltip")
+		return
+	var stat_id: StringName = _alloc_stat_order[hover_idx]
+	var key: StringName = AttributeState.STAT_I18N.get(stat_id, &"")
+	var stat_name: String = tr(key) if key != &"" else (stat_id as String).capitalize()
+	var pct: float = _alloc_stat_pcts.get(stat_id, 0.0)
+	var unlocked: int = AttributeState.get_unlocked_tier(stat_id, PlayerState.class_id, PlayerState.spec_id)
+	var thresholds: Array[float] = AttributeState.get_tier_thresholds(stat_id, PlayerState.class_id, PlayerState.spec_id)
+	var tier_text: String = "Tier %s unlocked" % AttributeState.TIER_ROMAN[unlocked - 1] if unlocked > 0 else "no tier unlocked"
+	var next_text: String = "Tier %s at %d%%" % [AttributeState.TIER_ROMAN[unlocked], int(thresholds[unlocked] * 100)] if unlocked < 5 else "maxed"
+	get_tree().call_group(&"interactable_tooltip", &"show_text",
+		"%s  %d%%\n%s · next: %s" % [stat_name, int(pct * 100), tier_text, next_text])
 
 func _build_attribute_section(parent: Control) -> void:
 	var header := _make_label("CHARACTER_PANEL_ATTRIBUTES", &"SectionLabel")
@@ -419,6 +605,7 @@ func _make_attr_row(stat_id: StringName) -> HBoxContainer:
 func _on_stats_changed() -> void:
 	for stat_id: StringName in _attr_value_labels:
 		_attr_value_labels[stat_id].text = str(AttributeState.get_stat(stat_id))
+	_repaint_alloc_bar()
 
 func _make_stat_row(label_text: String, value_text: String) -> HBoxContainer:
 	var value := _make_stat_value(value_text)
@@ -510,4 +697,3 @@ func _opaque_panel_style(p: UIThemeConfig) -> StyleBoxFlat:
 	s.border_width_right = 2
 	s.border_width_bottom = 2
 	return s
-

@@ -2,9 +2,15 @@ class_name PrototypeTooltip
 extends Control
 
 const SCREEN_MARGIN := Vector2(12, 12)
+const MOUSE_OFFSET := Vector2(14.0, 14.0)
 const PADDING_X := 8
 const PADDING_Y := 6
 const CONTENT_MIN_WIDTH := 200.0
+
+var COLOR_PRIMARY:  Color = AttributeState.RELATIONSHIP_COLORS[&"primary"]
+var COLOR_TEAM:     Color = AttributeState.RELATIONSHIP_COLORS[&"team"]
+var COLOR_OPP_TEAM: Color = AttributeState.RELATIONSHIP_COLORS[&"opp_team"]
+var COLOR_OPPOSING: Color = AttributeState.RELATIONSHIP_COLORS[&"opposing"]
 
 var _bg: PanelContainer
 var _vbox: VBoxContainer
@@ -12,7 +18,7 @@ var _text_label: Label
 var _name_label: Label
 var _type_label: Label
 var _desc_label: Label
-var _stats_label: Label
+var _stats_label: RichTextLabel
 
 func _ready() -> void:
 	add_to_group(&"interactable_tooltip")
@@ -54,8 +60,11 @@ func _build_ui() -> void:
 	_desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_vbox.add_child(_desc_label)
 
-	_stats_label = Label.new()
-	_stats_label.theme_type_variation = &"TooltipLabel"
+	_stats_label = RichTextLabel.new()
+	_stats_label.bbcode_enabled = true
+	_stats_label.fit_content = true
+	_stats_label.scroll_active = false
+	_stats_label.autowrap_mode = TextServer.AUTOWRAP_OFF
 	_stats_label.mouse_filter = MOUSE_FILTER_IGNORE
 	_vbox.add_child(_stats_label)
 
@@ -77,13 +86,18 @@ func _apply_theme() -> void:
 	_bg.add_theme_stylebox_override(&"panel", style)
 	_text_label.add_theme_color_override(&"font_color", p.text)
 	_type_label.add_theme_color_override(&"font_color", Color(p.text, 0.55))
-	_stats_label.add_theme_color_override(&"font_color", p.text)
+	_stats_label.add_theme_color_override(&"default_color", p.text)
 
-func _process(_delta: float) -> void:
-	if not visible:
-		return
+func _input(event: InputEvent) -> void:
+	if visible and event is InputEventMouseMotion:
+		_reposition((event as InputEventMouseMotion).position)
+
+func _reposition(mouse: Vector2) -> void:
 	var vp_size := get_viewport().get_visible_rect().size
-	position = vp_size - _bg.size - SCREEN_MARGIN
+	var pos := mouse + MOUSE_OFFSET
+	pos.x = minf(pos.x, vp_size.x - _bg.size.x - SCREEN_MARGIN.x)
+	pos.y = minf(pos.y, vp_size.y - _bg.size.y - SCREEN_MARGIN.y)
+	position = pos
 
 func show_text(text: String) -> void:
 	if text.is_empty():
@@ -97,6 +111,7 @@ func show_text(text: String) -> void:
 	_stats_label.visible = false
 	_bg.reset_size()
 	visible = true
+	_reposition(get_viewport().get_mouse_position())
 
 func show_item(item: Item) -> void:
 	if item == null:
@@ -122,6 +137,20 @@ func show_item(item: Item) -> void:
 
 	_bg.reset_size()
 	visible = true
+	_reposition(get_viewport().get_mouse_position())
+
+func show_talent_node(title: String, body: String) -> void:
+	_text_label.visible = false
+	_name_label.text = title
+	_name_label.add_theme_color_override(&"font_color", Color(0.95, 0.95, 0.95, 1.0))
+	_name_label.visible = true
+	_type_label.visible = false
+	_desc_label.text = body
+	_desc_label.visible = true
+	_stats_label.visible = false
+	_bg.reset_size()
+	visible = true
+	_reposition(get_viewport().get_mouse_position())
 
 func hide_tooltip() -> void:
 	visible = false
@@ -152,4 +181,25 @@ func _build_stats_text(item: Item) -> String:
 		lines.append("+%d %s" % [item.inventory_bonus, tr("ITEM_STATS_INVENTORY_BONUS")])
 	if item.kind == &"belt" and item.utility_slots > 0:
 		lines.append("+%d %s" % [item.utility_slots, tr("ITEM_STATS_UTILITY_SLOTS")])
+	for stat_id: StringName in item.stat_modifiers:
+		var amount: int = int(item.stat_modifiers[stat_id])
+		var color := _stat_rel_color(stat_id)
+		var hex := "#%s" % color.to_html(false)
+		var label := _stat_display_name(stat_id)
+		lines.append("[color=%s]+%d %s[/color]" % [hex, amount, label])
 	return "\n".join(lines)
+
+func _stat_rel_color(stat_id: StringName) -> Color:
+	var rel := AttributeState.get_stat_relationship(stat_id, PlayerState.class_id, PlayerState.spec_id)
+	if rel == &"primary":
+		return COLOR_PRIMARY
+	elif rel == &"team":
+		return COLOR_TEAM
+	var my_stat: StringName = AttributeState.get_spec_stat(PlayerState.spec_id)
+	if my_stat != &"" and AttributeState.NEMESIS_STAT.get(my_stat, &"") == stat_id:
+		return COLOR_OPPOSING
+	return COLOR_OPP_TEAM
+
+func _stat_display_name(stat_id: StringName) -> String:
+	var key: StringName = AttributeState.STAT_I18N.get(stat_id, &"")
+	return tr(key) if key != &"" else (stat_id as String).capitalize()

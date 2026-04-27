@@ -22,6 +22,9 @@ Working:
 - Line-of-sight wall fade — walls go transparent only when between camera and player and overlapping the player on screen (view-space projection in `tech_wall.gdshader`, fed by `player_world_pos` global shader uniform)
 - Persistent corpses with bounded pool — see [Enemies](#enemies) below
 - Class UI themes wired through `UIThemeState` (`SPEC_THEMES` lookup keyed by class)
+- **Attribute system** — 6 rollable stats (ORT/ING/AMB/DEV/OPT/CLA) derived from equipped items; Soul and Interface are averaged from their origin's three team stats; tier unlock thresholds per relationship type (primary/team/opposing); `PlayerState` tier-crossing signals; data integrity asserts on startup
+- **Talents panel** (N) — per-class stat rows with 5-tier node grids; tier bars fill by whole unlocked tiers; tier/node tooltips; locked node preview with unlock % shown; allocation persists in `PlayerState`
+- **Character panel stat bar** — compact multibar on character sheet shows stat allocation % with relationship coloring and hover tooltips matching the talents panel
 - **FPS mode** (V to toggle) — first-person camera with mouse look, crosshair, fill light; crosshair hover triggers same outline + tooltip as iso mouse hover; skill 1 interacts with crosshair target
 - **Platformer elements** — jump over pits; crouch-only corridors (solid ceiling block forces crouch, player is locked in crouching until they clear the zone); enemies that fall into pits die
 - **Per-piece floors with true pits** — each room and corridor has its own floor mesh; pit corridors omit floor over the gap; a kill zone at y=−4 destroys anything that falls in
@@ -46,7 +49,7 @@ The flattening tween was removed deliberately — unaltered model in its death p
 
 ## Open design areas
 
-- Itemization — attribute system designed ([attribute-system.md](design/attribute-system.md)) including stat identity tier perks, visual metamorphosis, and NPC identity reactions; implementation TBD
+- Itemization — attribute system core implemented (see [attribute-system.md](design/attribute-system.md)); tier perk mechanics, team stat scaling multipliers, visual metamorphosis, and NPC identity reactions still TBD
 - Morality system — [on hold](design/morality-system.md), may resurface as a hidden narrative system
 - Progression / leveling
 - Economy / crafting

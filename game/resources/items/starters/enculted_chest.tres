@@ -1,0 +1,16 @@
+[gd_resource type="Resource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/item.gd" id="1_item"]
+
+[resource]
+script = ExtResource("1_item")
+id = &"enculted_chest"
+name_key = "Marked Robe"
+description_key = ""
+kind = &"chest"
+main_type = "Chest"
+sub_type = "Armor"
+rarity = &"common"
+glyph = "C"
+glyph_color = Color(0.78, 0.35, 0.85, 1)
+stat_modifiers = {&"amb": 6, &"ort": 8, &"ing": 8}

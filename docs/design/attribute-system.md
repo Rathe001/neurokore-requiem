@@ -1,6 +1,6 @@
 # Attribute System
 
-> Status: Design phase — not yet implemented.
+> Status: Core system implemented. Stat tracking, tier unlocking, talent panel UI, and character panel allocation bar are working. Tier perk mechanics, team stat scaling multipliers, visual metamorphosis, and NPC reactions are still TBD.
 
 ## Core Philosophy
 
@@ -108,9 +108,9 @@ Each stat falls into one of **three categories** relative to a player's class:
 
 | Relationship | Who | Scaling | Threshold |
 |---|---|---|---|
-| **Primary** | Own class stat | Full (1x) | Always unlocked |
-| **Team** | Other two stats from same origin | Partial (~0.25x) | Low |
-| **Opposing** | All three stats from other origin | Interference + distortion | High |
+| **Primary** | Own class stat | Full (1x) | Easier (12/25/40/55/72%) — class identity unlocks fast |
+| **Team** | Other two stats from same origin | Partial (~0.25x) | Standard (20/40/60/75/90%) |
+| **Opposing** | All three stats from other origin | Interference + distortion | Hard (30/50/70/85/95%) |
 
 > There is no fourth category. All stats from the opposite origin are treated as opposing — pairwise naming is flavor, not a mechanical distinction.
 
@@ -248,17 +248,18 @@ Tier thresholds are based on what percentage of total stats a single attribute r
 
 | Tier | Own Class | Team Trees | Opposing Trees | Effect |
 |---|---|---|---|---|
-| 0 | — | < 10% | < 20% | No perk, no visual change |
-| 1 | Free | 10% | 20% | Entry perk unlocked, faint visual hint |
-| 2 | Free | 20% | 30% | Second perk, subtle visual shift |
-| 3 | Free | 35% | 45% | Third perk, pronounced visual change |
-| 4 | Free | 50% | 60% | Fourth perk, major transformation |
-| 5 | Free | 70% | 80% | Full perk, dramatic transformation |
+| 0 | — | < 20% | < 30% | No perk, no visual change |
+| 1 | 12% | 20% | 30% | Entry perk unlocked, faint visual hint |
+| 2 | 25% | 40% | 50% | Second perk, subtle visual shift |
+| 3 | 40% | 60% | 70% | Third perk, pronounced visual change |
+| 4 | 55% | 75% | 85% | Fourth perk, major transformation |
+| 5 | 72% | 90% | 95% | Full perk, dramatic transformation |
 
-**Example — Forged (Cyborg):**
-- Deviation: always fully unlocked (own class)
-- Optimization, Clarity: team rates (10/20/35/50/70%)
-- Orthodoxy, Ingenuity, Ambition: opposing rates (20/30/45/60/80%)
+> **Design note:** Primary stat tiers unlock significantly easier than team or opposing stats — class identity should feel immediate. Starter gear (~35% primary share) unlocks T1 and T2 for the chosen class. T3 requires intentional gearing. Stacking your primary stat is doubly rewarded: cheaper unlock thresholds *and* full 1× power scaling.
+
+**Cross-class access:** Any class can unlock any stat's tree by meeting that stat's threshold. An Analog pushing Optimization past the team threshold gets Automaton tier 1. A Gentleman pushing Deviation past the opposing threshold starts unlocking Forged nodes — while also experiencing distortion. Tier access is not permanent: dropping below a threshold locks the tier and deactivates its nodes (points stay allocated but dormant).
+
+> **Code source of truth:** Threshold values are defined in `game/scripts/systems/attribute_state.gd` — `TIERS_OWN`, `TIERS_TEAM`, `TIERS_OPPOSING`. Update there; this table documents the current values.
 
 ### Talent Points
 
@@ -282,20 +283,6 @@ Each class tree: **4 nodes × 5 tiers = 20 nodes**. Six class trees = **120 tota
 | Ingenuity | Survivalist | TBD | TBD | TBD | TBD | TBD |
 | Clarity | Polymath | TBD | TBD | TBD | TBD | TBD |
 | Ambition | Enculted | Tier 1 curse | TBD | TBD | TBD | TBD |
-
-### Skill Tree Access
-
-| Tier | Own Class | Team | Opposing | Nodes |
-|---|---|---|---|---|
-| 1 | Free | 10% | 20% | 4 |
-| 2 | Free | 20% | 30% | 4 |
-| 3 | Free | 35% | 45% | 4 |
-| 4 | Free | 50% | 60% | 4 |
-| 5 | Free | 70% | 80% | 4 |
-
-**Cross-class access:** Any class can unlock any stat's tree by meeting the threshold. An Analog pushing Optimization past 20% (team rate) gets Automaton tier 1. A Gentleman pushing Deviation past 30% (opposing rate) starts unlocking Forged nodes — while also experiencing distortion from the opposing stat interference.
-
-**Tier access is not permanent.** Dropping below a threshold locks the tier and deactivates its nodes. The points stay allocated but dormant.
 
 **Gear swap confirmation:** When equipping an item would cross a breakpoint, a confirmation dialog shows exactly what changes. This is behind a Help Tooltips toggle for players who prefer to manage it themselves.
 
@@ -409,7 +396,7 @@ Key NPCs (reps, vendors, bosses, gate encounters) can react to the player's domi
 
 - Exact **team stat scaling multiplier** (~0.25x is a starting point, needs playtesting).
 - Exact **opposing stat interference mechanics** — what specifically distorts for each class? Needs design per class.
-- Exact **tier breakpoints** (own free / team 10/20/35/50/70% / opposing 20/30/45/60/80%) — needs playtesting.
+- Exact **tier breakpoints** — implemented (see breakpoints table and `attribute_state.gd`), needs playtesting.
 - **Team node specific bonuses** — what do tiers 1/2/3 actually grant?
 - **Team node keystone** — what is the tier 3 high-investment reward?
 - **Class-specific stat functions** for Orthodoxy, Optimization, Ingenuity, Clarity, Ambition.

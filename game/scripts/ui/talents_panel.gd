@@ -1,52 +1,55 @@
 extends Control
 class_name TalentsPanel
 
-## Talents panel — 6 class rows (one per rollable stat), each with a progress
-## bar driven by equipped gear (AttributeState) and a clickable 5-tier skill
-## tree. Talent points are stored in PlayerState and persist with the character.
-##
-## Tier unlock thresholds are determined by the player's class relationship to
-## each stat tree (own / team / opposing). The own-class tree is always fully
-## open; team and opposing trees require gear investment to unlock.
+## Talents panel — 6 class stat rows. Progress bars are driven by equipped gear
+## (AttributeState). Tier unlock thresholds and relationship logic live in
+## AttributeState. Talent points are stored in PlayerState and persist.
 
 const TIER_COUNT := 5
 const NODES_PER_TIER := 4
 const NODE_ROWS := 2
 const NODE_COLS := 2
 
-const PANEL_MARGIN := Vector2(32.0, 28.0)
-const TITLE_HEIGHT := 28.0
-const TALENT_HEIGHT := 16.0
-const NOTE_HEIGHT := 14.0
-const HEADER_GAP := 10.0
-const ROW_GAP := 10.0
-const BAR_HEIGHT := 14.0
-const BAR_NODE_GAP := 4.0
-const NODE_SIZE := Vector2(24.0, 24.0)
-const NODE_GAP := 4.0
+const PANEL_MARGIN := Vector2(20.0, 14.0)
+const TITLE_HEIGHT := 18.0
+const TALENT_HEIGHT := 12.0
+const NOTE_HEIGHT := 0.0
+const HEADER_GAP := 6.0
+const ROW_GAP := 3.0
+const COL_GAP := 12.0
+const BAR_HEIGHT := 13.0
+const BAR_NODE_GAP := 2.0
+const SUMMARY_LABEL_HEIGHT := 9.0
+const SUMMARY_LABEL_GAP := 5.0
+const SUMMARY_BAR_HEIGHT := 10.0
+const SUMMARY_BAR_GAP := 8.0
+const SUMMARY_SEG_GAP := 2.0
+const NODE_SIZE := Vector2(18.0, 18.0)
+const NODE_GAP := 3.0
 const TIER_MARKER_WIDTH := 2.0
-const LABEL_WIDTH := 130.0
-const LABEL_GAP := 10.0
-const CLASS_NAME_HEIGHT := 20.0
-const STAT_LINE_HEIGHT := 14.0
+const LABEL_WIDTH := 120.0
+const LABEL_GAP := 8.0
+const CLASS_NAME_HEIGHT := 15.0
+const STAT_LINE_HEIGHT := 11.0
 
 const BACKDROP_COLOR := Color(0.0, 0.0, 0.0, 0.55)
 const BAR_BG_COLOR := Color(0.12, 0.12, 0.12, 0.9)
-const NODE_LOCKED_COLOR := Color(0.2, 0.2, 0.2, 0.6)
-const NODE_AVAILABLE_ALPHA := 0.12
-const NODE_ALLOCATED_ALPHA := 0.45
+const NODE_AVAILABLE_ALPHA := 0.25
+const NODE_ALLOCATED_ALPHA := 1.0
+const NODE_GHOST_COLOR := Color(1.0, 1.0, 1.0, 0.04)
 const TIER_MARKER_COLOR := Color(1.0, 1.0, 1.0, 0.45)
 const TALENT_POINT_COLOR := Color(0.95, 0.85, 0.4, 1.0)
 const TIER_LABEL_COLOR := Color(1.0, 1.0, 1.0, 0.25)
+const ROW_LOCKED_ALPHA := 0.3
+var REL_PRIMARY_COLOR:  Color = AttributeState.RELATIONSHIP_COLORS[&"primary"]
+var REL_TEAM_COLOR:     Color = AttributeState.RELATIONSHIP_COLORS[&"team"]
+var REL_OPP_TEAM_COLOR: Color = AttributeState.RELATIONSHIP_COLORS[&"opp_team"]
+var REL_OPPOSING_COLOR: Color = AttributeState.RELATIONSHIP_COLORS[&"opposing"]
 
 const ANALOG_GROUP_COLOR := Color(0.65, 0.45, 0.25, 0.06)
 const CYBORG_GROUP_COLOR := Color(0.3, 0.85, 1.0, 0.06)
-const GROUP_PADDING := Vector2(6.0, 4.0)
-const GROUP_GAP := 14.0
-
-const TIERS_OWN: Array[float] = [0.0, 0.0, 0.0, 0.0, 0.0]
-const TIERS_TEAM: Array[float] = [0.10, 0.20, 0.35, 0.50, 0.70]
-const TIERS_OPPOSING: Array[float] = [0.20, 0.30, 0.45, 0.60, 0.80]
+const GROUP_PADDING := Vector2(4.0, 3.0)
+const ROW_HIGHLIGHT_W := 2.0
 
 const STAT_ROWS: Array[Dictionary] = [
 	{"stat": &"ort", "class": "Gentleman",   "short": "ORT", "origin": &"analog"},
@@ -57,26 +60,19 @@ const STAT_ROWS: Array[Dictionary] = [
 	{"stat": &"cla", "class": "Polymath",    "short": "CLA", "origin": &"cyborg"},
 ]
 
-## Maps spec_id to the primary stat for that class.
-const SPEC_STAT: Dictionary = {
-	&"gentleman": &"ort", &"survivalist": &"ing", &"enculted": &"amb",
-	&"forged": &"dev",    &"automaton":   &"opt", &"polymath":  &"cla",
-}
-
-## Maps spec_id to its origin group.
-const SPEC_ORIGIN: Dictionary = {
-	&"gentleman": &"analog", &"survivalist": &"analog", &"enculted": &"analog",
-	&"forged": &"cyborg",   &"automaton":   &"cyborg", &"polymath":  &"cyborg",
-}
-
 var _backdrop: ColorRect
 var _panel: PanelContainer
 var _content: Control
 var _title_label: Label
 var _talent_label: Label
-var _note_label: Label
 var _analog_group_bg: ColorRect
 var _cyborg_group_bg: ColorRect
+var _summary_bar: Control
+var _summary_labels: Array[Label] = []
+var _summary_segments: Array[ColorRect] = []
+var _summary_stat_order: Array[StringName] = []
+var _summary_seg_bounds: Array[float] = []
+var _summary_stat_pcts: Dictionary = {}
 var _rows: Array[Dictionary] = []
 
 func _ready() -> void:
@@ -101,78 +97,28 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 func open_menu() -> void:
+	get_tree().call_group(&"ui_modal", &"close_menu")
 	visible = true
 
 func close_menu() -> void:
 	visible = false
 
-# ── Player state helpers ───────────────────────────────────────────────────
-
-func _player_class_stat() -> StringName:
-	return SPEC_STAT.get(PlayerState.spec_id, &"")
-
-func _player_class_origin() -> StringName:
-	if PlayerState.spec_id != &"":
-		return SPEC_ORIGIN.get(PlayerState.spec_id, &"analog")
-	return PlayerState.class_id if PlayerState.class_id != &"" else &"analog"
-
-func _compute_pcts() -> Dictionary:
-	var rollable: Array[StringName] = [&"ort", &"ing", &"amb", &"dev", &"opt", &"cla"]
-	var total := 0
-	for s in rollable:
-		total += AttributeState.get_stat(s)
-	var pcts: Dictionary = {}
-	for s in rollable:
-		pcts[s] = float(AttributeState.get_stat(s)) / maxf(float(total), 1.0)
-	return pcts
-
-func _total_spent() -> int:
-	return PlayerState.get_talent_points_spent()
-
-# ── Threshold logic ────────────────────────────────────────────────────────
-
-func _get_tiers_for_stat(row_stat: StringName, row_origin: StringName) -> Array[float]:
-	var class_stat := _player_class_stat()
-	if class_stat != &"" and row_stat == class_stat:
-		return TIERS_OWN
-	if row_origin == _player_class_origin():
-		return TIERS_TEAM
-	return TIERS_OPPOSING
-
-func _calc_unlocked_tier(pct: float, tiers: Array[float]) -> int:
-	var unlocked := 0
-	for i in TIER_COUNT:
-		if pct >= tiers[i]:
-			unlocked = i + 1
-	return unlocked
-
-# ── Click handling ─────────────────────────────────────────────────────────
+# ── Click handling ─────────────────────────────────────────────────────────────
 
 func _on_node_clicked(event: InputEvent, stat_id: StringName, tier: int, node_idx: int) -> void:
 	if not (event is InputEventMouseButton and (event as InputEventMouseButton).pressed):
 		return
 	if (event as InputEventMouseButton).button_index != MOUSE_BUTTON_LEFT:
 		return
-	var row := _find_row(stat_id)
-	if row.is_empty():
-		return
-	var unlocked := _calc_unlocked_tier(row["pct"], row["tiers"])
+	var unlocked := AttributeState.get_unlocked_tier(stat_id, PlayerState.class_id, PlayerState.spec_id)
 	if tier + 1 > unlocked:
 		return
-	var tiers_data: Array = PlayerState.talent_allocations.get(stat_id, [])
-	var is_allocated: bool = not tiers_data.is_empty() and tiers_data[tier][node_idx]
-	if is_allocated:
+	if PlayerState.is_talent_allocated(stat_id, tier, node_idx):
 		PlayerState.set_talent_alloc(stat_id, tier, node_idx, false)
-	elif _total_spent() < PlayerState.talent_points_total:
+	elif PlayerState.get_talent_points_spent() < PlayerState.talent_points_total:
 		PlayerState.set_talent_alloc(stat_id, tier, node_idx, true)
 
-func _find_row(stat_id: StringName) -> Dictionary:
-	for row: Dictionary in _rows:
-		if row["stat_id"] == stat_id:
-			return row
-	return {}
-
-# ── Signals ────────────────────────────────────────────────────────────────
+# ── Signals ────────────────────────────────────────────────────────────────────
 
 func _on_player_class_changed(_id: StringName) -> void:
 	if _rows.is_empty():
@@ -187,25 +133,24 @@ func _on_stats_changed() -> void:
 	_repaint()
 
 func _refresh_row_pcts() -> void:
-	var pcts := _compute_pcts()
+	var pcts := AttributeState.get_all_stat_pcts()
 	for row: Dictionary in _rows:
-		row["pct"] = pcts.get(row["stat_id"], 0.0)
-		row["tiers"] = _get_tiers_for_stat(row["stat_id"], row["origin"])
-		var key: StringName = AttributeState.STAT_I18N.get(row["stat_id"], &"")
-		var display: String = tr(key) if key != &"" else str(row["stat_id"])
-		(row["stat_label"] as Label).text = "%s  %d%%" % [display, int(row["pct"] * 100)]
+		var sid: StringName = row["stat_id"]
+		row["pct"] = pcts.get(sid, 0.0)
+		var key: StringName = AttributeState.STAT_I18N.get(sid, &"")
+		(row["header"] as Label).text = tr(key) if key != &"" else str(sid)
 
 func _rebuild() -> void:
 	for row: Dictionary in _rows:
 		(row["container"] as Control).queue_free()
 	_rows.clear()
-	var pcts := _compute_pcts()
+	var pcts := AttributeState.get_all_stat_pcts()
 	for row_def: Dictionary in STAT_ROWS:
 		_rows.append(_build_row(row_def, pcts))
 	_do_layout()
 	_repaint()
 
-# ── Build ──────────────────────────────────────────────────────────────────
+# ── Build ──────────────────────────────────────────────────────────────────────
 
 func _build_layout() -> void:
 	_backdrop = ColorRect.new()
@@ -233,12 +178,6 @@ func _build_layout() -> void:
 	_talent_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_content.add_child(_talent_label)
 
-	_note_label = Label.new()
-	_note_label.theme_type_variation = &"SmallLabel"
-	_note_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_note_label.text = "Percentages reflect share of total stat allocation from equipped gear"
-	_content.add_child(_note_label)
-
 	_analog_group_bg = ColorRect.new()
 	_analog_group_bg.color = ANALOG_GROUP_COLOR
 	_analog_group_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -249,7 +188,27 @@ func _build_layout() -> void:
 	_cyborg_group_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_content.add_child(_cyborg_group_bg)
 
-	var pcts := _compute_pcts()
+	_summary_bar = Control.new()
+	_summary_bar.mouse_filter = Control.MOUSE_FILTER_STOP
+	_summary_bar.mouse_exited.connect(func() -> void:
+		get_tree().call_group(&"interactable_tooltip", &"hide_tooltip"))
+	_summary_bar.gui_input.connect(_on_summary_bar_input)
+	_content.add_child(_summary_bar)
+	for _i in STAT_ROWS.size():
+		var lbl := Label.new()
+		lbl.theme_type_variation = &"SmallLabel"
+		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_summary_bar.add_child(lbl)
+		_summary_labels.append(lbl)
+		var seg := ColorRect.new()
+		seg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		seg.color = BAR_BG_COLOR
+		_summary_bar.add_child(seg)
+		_summary_segments.append(seg)
+
+	var pcts := AttributeState.get_all_stat_pcts()
 	for row_def: Dictionary in STAT_ROWS:
 		_rows.append(_build_row(row_def, pcts))
 
@@ -258,27 +217,24 @@ func _build_layout() -> void:
 
 func _build_row(row_def: Dictionary, pcts: Dictionary) -> Dictionary:
 	var stat_id: StringName = row_def["stat"]
-	var row_origin: StringName = row_def["origin"]
 	var stat_color: Color = AttributeState.STAT_COLORS.get(stat_id, Color.WHITE)
 	var pct: float = pcts.get(stat_id, 0.0)
-	var tiers: Array[float] = _get_tiers_for_stat(stat_id, row_origin)
 
 	var container := Control.new()
 	container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_content.add_child(container)
 
-	var header := Label.new()
-	header.text = row_def["class"]
-	header.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
-	container.add_child(header)
+	var highlight_bar := ColorRect.new()
+	highlight_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	highlight_bar.visible = false
+	container.add_child(highlight_bar)
 
 	var key: StringName = AttributeState.STAT_I18N.get(stat_id, &"")
 	var display: String = tr(key) if key != &"" else str(stat_id)
-	var stat_label := Label.new()
-	stat_label.text = "%s  %d%%" % [display, int(pct * 100)]
-	stat_label.theme_type_variation = &"SmallLabel"
-	stat_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
-	container.add_child(stat_label)
+	var header := Label.new()
+	header.text = display
+	header.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	container.add_child(header)
 
 	var bar_bg := ColorRect.new()
 	bar_bg.color = BAR_BG_COLOR
@@ -301,10 +257,11 @@ func _build_row(row_def: Dictionary, pcts: Dictionary) -> Dictionary:
 	var tier_labels: Array[Label] = []
 	for i in TIER_COUNT:
 		var lbl := Label.new()
-		lbl.text = "T%d" % (i + 1)
+		lbl.text = AttributeState.TIER_ROMAN[i]
 		lbl.theme_type_variation = &"SmallLabel"
 		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		lbl.z_index = 1
 		container.add_child(lbl)
 		tier_labels.append(lbl)
 
@@ -315,40 +272,39 @@ func _build_row(row_def: Dictionary, pcts: Dictionary) -> Dictionary:
 			var node_rect := ColorRect.new()
 			node_rect.mouse_filter = Control.MOUSE_FILTER_STOP
 			node_rect.gui_input.connect(_on_node_clicked.bind(stat_id, tier, j))
+			node_rect.mouse_entered.connect(_on_node_hovered.bind(stat_id, tier, j))
+			node_rect.mouse_exited.connect(_on_node_unhovered)
 			container.add_child(node_rect)
 			tier_nodes.append(node_rect)
 		node_rects.append(tier_nodes)
 
 	return {
-		"container": container,
-		"header": header,
-		"stat_label": stat_label,
-		"bar_bg": bar_bg,
-		"bar_fill": bar_fill,
-		"markers": markers,
-		"tier_labels": tier_labels,
-		"node_rects": node_rects,
-		"stat_id": stat_id,
-		"origin": row_origin,
-		"stat_color": stat_color,
-		"pct": pct,
-		"tiers": tiers,
+		"container":     container,
+		"highlight_bar": highlight_bar,
+		"header":        header,
+		"bar_bg":        bar_bg,
+		"bar_fill":      bar_fill,
+		"markers":       markers,
+		"tier_labels":   tier_labels,
+		"node_rects":    node_rects,
+		"stat_id":       stat_id,
+		"stat_color":    stat_color,
+		"pct":           pct,
 	}
 
-# ── Layout ─────────────────────────────────────────────────────────────────
+# ── Layout ─────────────────────────────────────────────────────────────────────
 
 func _do_layout() -> void:
 	var screen := get_viewport_rect().size
-
 	var node_grid_h: float = float(NODE_ROWS) * NODE_SIZE.y + float(NODE_ROWS - 1) * NODE_GAP
 	var row_h: float = BAR_HEIGHT + BAR_NODE_GAP + node_grid_h
-	var rows_per_group := 3
-	var group_count := 2
-	var group_inner_h: float = float(rows_per_group) * row_h + float(rows_per_group - 1) * ROW_GAP
-	var body_h: float = float(group_count) * group_inner_h + GROUP_GAP
+	var rows_per_col := 3
+	var col_inner_h: float = float(rows_per_col) * row_h + float(rows_per_col - 1) * ROW_GAP
+	var body_h: float = col_inner_h
 
-	var panel_h: float = PANEL_MARGIN.y * 2.0 + TITLE_HEIGHT + TALENT_HEIGHT + NOTE_HEIGHT + HEADER_GAP + body_h
-	var panel_w: float = minf(screen.x * 0.9, 1000.0)
+	var summary_area_h: float = SUMMARY_LABEL_HEIGHT + SUMMARY_LABEL_GAP + SUMMARY_BAR_HEIGHT
+	var panel_h: float = PANEL_MARGIN.y * 2.0 + TITLE_HEIGHT + TALENT_HEIGHT + NOTE_HEIGHT + HEADER_GAP + summary_area_h + SUMMARY_BAR_GAP + body_h
+	var panel_w: float = minf(screen.x * 0.75, 820.0)
 
 	_panel.position = Vector2((screen.x - panel_w) * 0.5, (screen.y - panel_h) * 0.5)
 	_panel.size = Vector2(panel_w, panel_h)
@@ -366,70 +322,87 @@ func _do_layout() -> void:
 	_title_label.size = Vector2(panel_w, TITLE_HEIGHT)
 	_talent_label.position = Vector2(0, 8 + TITLE_HEIGHT)
 	_talent_label.size = Vector2(panel_w, TALENT_HEIGHT)
-	_note_label.position = Vector2(0, 8 + TITLE_HEIGHT + TALENT_HEIGHT)
-	_note_label.size = Vector2(panel_w, NOTE_HEIGHT)
+	var content_w: float = panel_w - PANEL_MARGIN.x * 2.0
+	var col_w: float = (content_w - COL_GAP) * 0.5
+	var col_bar_w: float = col_w - LABEL_WIDTH - LABEL_GAP
+	var header_bottom: float = PANEL_MARGIN.y + TITLE_HEIGHT + TALENT_HEIGHT + NOTE_HEIGHT + HEADER_GAP
 
-	var bar_w: float = panel_w - (PANEL_MARGIN.x + LABEL_WIDTH + LABEL_GAP) - PANEL_MARGIN.x
-	var body_y: float = PANEL_MARGIN.y + TITLE_HEIGHT + TALENT_HEIGHT + NOTE_HEIGHT + HEADER_GAP
+	_summary_bar.position = Vector2(PANEL_MARGIN.x, header_bottom)
+	_summary_bar.size = Vector2(content_w, summary_area_h)
+
+	var body_y: float = header_bottom + summary_area_h + SUMMARY_BAR_GAP
+	var cyborg_col_x: float = PANEL_MARGIN.x + col_w + COL_GAP
 
 	_analog_group_bg.position = Vector2(PANEL_MARGIN.x - GROUP_PADDING.x, body_y - GROUP_PADDING.y)
-	_analog_group_bg.size = Vector2(panel_w - PANEL_MARGIN.x * 2.0 + GROUP_PADDING.x * 2.0, group_inner_h + GROUP_PADDING.y * 2.0)
+	_analog_group_bg.size = Vector2(col_w + GROUP_PADDING.x * 2.0, col_inner_h + GROUP_PADDING.y * 2.0)
+	_cyborg_group_bg.position = Vector2(cyborg_col_x - GROUP_PADDING.x, body_y - GROUP_PADDING.y)
+	_cyborg_group_bg.size = Vector2(col_w + GROUP_PADDING.x * 2.0, col_inner_h + GROUP_PADDING.y * 2.0)
 
-	_cyborg_group_bg.position = Vector2(PANEL_MARGIN.x - GROUP_PADDING.x, body_y + group_inner_h + GROUP_GAP - GROUP_PADDING.y)
-	_cyborg_group_bg.size = Vector2(panel_w - PANEL_MARGIN.x * 2.0 + GROUP_PADDING.x * 2.0, group_inner_h + GROUP_PADDING.y * 2.0)
-
-	var section_w: float = bar_w / float(TIER_COUNT)
-
+	var section_w: float = col_bar_w / float(TIER_COUNT)
 	for ri in STAT_ROWS.size():
 		var row: Dictionary = _rows[ri]
-		var group_offset: float = GROUP_GAP if ri >= rows_per_group else 0.0
-		var ry: float = body_y + float(ri) * (row_h + ROW_GAP) + group_offset
+		var is_cyborg: bool = ri >= rows_per_col
+		var col_x: float = cyborg_col_x if is_cyborg else PANEL_MARGIN.x
+		var local_ri: int = ri - rows_per_col if is_cyborg else ri
+		var ry: float = body_y + float(local_ri) * (row_h + ROW_GAP)
+		_layout_row(row, Vector2(col_x, ry), col_w, col_bar_w, section_w, TIER_COUNT)
 
-		row["container"].position = Vector2(PANEL_MARGIN.x, ry)
-		row["container"].size = Vector2(panel_w - PANEL_MARGIN.x * 2.0, row_h)
+func _layout_row(row: Dictionary, row_pos: Vector2, row_w: float, bar_w: float, section_w: float, tier_count: int) -> void:
+	var node_grid_h: float = float(NODE_ROWS) * NODE_SIZE.y + float(NODE_ROWS - 1) * NODE_GAP
+	var row_h: float = BAR_HEIGHT + BAR_NODE_GAP + node_grid_h
 
-		var label_block_h: float = CLASS_NAME_HEIGHT + STAT_LINE_HEIGHT
-		var label_y: float = (row_h - label_block_h) * 0.5
-		row["header"].position = Vector2(0, label_y)
-		row["header"].size = Vector2(LABEL_WIDTH, CLASS_NAME_HEIGHT)
-		row["stat_label"].position = Vector2(0, label_y + CLASS_NAME_HEIGHT)
-		row["stat_label"].size = Vector2(LABEL_WIDTH, STAT_LINE_HEIGHT)
+	row["container"].position = row_pos
+	row["container"].size = Vector2(row_w, row_h)
 
-		var local_bar_x: float = LABEL_WIDTH + LABEL_GAP
-		row["bar_bg"].position = Vector2(local_bar_x, 0)
-		row["bar_bg"].size = Vector2(bar_w, BAR_HEIGHT)
-		row["bar_fill"].position = Vector2(local_bar_x, 0)
-		row["bar_fill"].size = Vector2(bar_w * clampf(row["pct"], 0.0, 1.0), BAR_HEIGHT)
+	if row.has("highlight_bar"):
+		(row["highlight_bar"] as ColorRect).position = Vector2(-ROW_HIGHLIGHT_W - 2.0, 0.0)
+		(row["highlight_bar"] as ColorRect).size = Vector2(ROW_HIGHLIGHT_W, row_h)
 
-		for mi in TIER_COUNT:
-			var mx: float = local_bar_x + section_w * float(mi + 1)
-			row["markers"][mi].position = Vector2(mx - TIER_MARKER_WIDTH * 0.5, 0)
-			row["markers"][mi].size = Vector2(TIER_MARKER_WIDTH, BAR_HEIGHT)
-			row["markers"][mi].visible = mi < TIER_COUNT - 1
+	var label_y: float = (row_h - CLASS_NAME_HEIGHT) * 0.5
+	row["header"].position = Vector2(0, label_y)
+	row["header"].size = Vector2(LABEL_WIDTH, CLASS_NAME_HEIGHT)
 
-		var nodes_y: float = BAR_HEIGHT + BAR_NODE_GAP
-		var node_grid_w: float = float(NODE_COLS) * NODE_SIZE.x + float(NODE_COLS - 1) * NODE_GAP
-		var inner_grid_h: float = float(NODE_ROWS) * NODE_SIZE.y + float(NODE_ROWS - 1) * NODE_GAP
-		for ti in TIER_COUNT:
-			var sx: float = local_bar_x + section_w * float(ti)
-			row["tier_labels"][ti].position = Vector2(sx, 0)
-			row["tier_labels"][ti].size = Vector2(section_w, BAR_HEIGHT)
+	var local_bar_x: float = LABEL_WIDTH + LABEL_GAP
+	row["bar_bg"].position = Vector2(local_bar_x, 0)
+	row["bar_bg"].size = Vector2(bar_w, BAR_HEIGHT)
 
-			var grid_x: float = sx + (section_w - node_grid_w) * 0.5
-			var grid_y: float = nodes_y + (node_grid_h - inner_grid_h) * 0.5
-			for j in NODES_PER_TIER:
-				var nr: int = j / NODE_COLS
-				var nc: int = j % NODE_COLS
-				row["node_rects"][ti][j].position = Vector2(grid_x + float(nc) * (NODE_SIZE.x + NODE_GAP), grid_y + float(nr) * (NODE_SIZE.y + NODE_GAP))
-				row["node_rects"][ti][j].size = NODE_SIZE
+	row["bar_fill"].position = Vector2(local_bar_x, 0)
+	row["bar_fill"].size = Vector2(0.0, BAR_HEIGHT)  # width set per-paint in _paint_row
 
-# ── Paint ──────────────────────────────────────────────────────────────────
+	var markers: Array = row["markers"]
+	for mi in tier_count:
+		markers[mi].visible = false
+
+	var nodes_y: float = BAR_HEIGHT + BAR_NODE_GAP
+	var tier_labels: Array = row["tier_labels"]
+	var node_rects: Array = row["node_rects"]
+
+	# Compute a uniform column gap so intra-tier and inter-tier spacing are identical.
+	var total_cols: int = tier_count * NODE_COLS
+	var uniform_col_gap: float = (bar_w - float(total_cols) * NODE_SIZE.x) / float(total_cols - 1) if total_cols > 1 else 0.0
+	var col_stride: float = NODE_SIZE.x + uniform_col_gap
+
+	for ti in tier_count:
+		tier_labels[ti].position = Vector2(local_bar_x + section_w * float(ti), 0)
+		tier_labels[ti].size = Vector2(section_w, BAR_HEIGHT)
+
+		for j in NODES_PER_TIER:
+			var nr: int = floori(float(j) / NODE_COLS)
+			var nc: int = j - nr * NODE_COLS
+			var global_col: int = ti * NODE_COLS + nc
+			(node_rects[ti][j] as ColorRect).position = Vector2(
+				local_bar_x + float(global_col) * col_stride,
+				nodes_y + float(nr) * (NODE_SIZE.y + NODE_GAP)
+			)
+			(node_rects[ti][j] as ColorRect).size = NODE_SIZE
+
+# ── Paint ──────────────────────────────────────────────────────────────────────
 
 func _repaint() -> void:
 	if _rows.is_empty():
 		return
 	var p := UIThemeState.palette
-	var spent := _total_spent()
+	var spent := PlayerState.get_talent_points_spent()
 	var remaining := PlayerState.talent_points_total - spent
 
 	var class_key: StringName = PlayerState.spec_id if PlayerState.spec_id != &"" else PlayerState.class_id
@@ -440,28 +413,153 @@ func _repaint() -> void:
 		remaining, "" if remaining == 1 else "s", spent, PlayerState.talent_points_total
 	]
 	_talent_label.add_theme_color_override(&"font_color", TALENT_POINT_COLOR)
-	_note_label.add_theme_color_override(&"font_color", Color(p.text_dim, 0.5))
+	_repaint_summary()
 
 	for row: Dictionary in _rows:
-		var stat_color: Color = row["stat_color"]
-		var unlocked_tier: int = _calc_unlocked_tier(row["pct"], row["tiers"])
+		_paint_row(row, _stat_rel_color(row["stat_id"]),
+			AttributeState.get_unlocked_tier(row["stat_id"], PlayerState.class_id, PlayerState.spec_id))
 
-		row["header"].add_theme_color_override(&"font_color", stat_color)
-		row["stat_label"].add_theme_color_override(&"font_color", Color(stat_color, 0.6))
+func _stat_rel_color(stat_id: StringName) -> Color:
+	var key := AttributeState.get_stat_rel_color_key(stat_id, PlayerState.class_id, PlayerState.spec_id)
+	return AttributeState.RELATIONSHIP_COLORS[key]
 
-		for ti in TIER_COUNT:
-			var unlocked: bool = (ti + 1) <= unlocked_tier
-			row["tier_labels"][ti].add_theme_color_override(&"font_color", stat_color if unlocked else TIER_LABEL_COLOR)
+func _rel_priority(stat_id: StringName) -> int:
+	return AttributeState.get_stat_rel_priority(stat_id, PlayerState.class_id, PlayerState.spec_id)
 
-		var tiers_data: Array = PlayerState.talent_allocations.get(row["stat_id"], [])
-		for tier in TIER_COUNT:
-			var tier_unlocked: bool = (tier + 1) <= unlocked_tier
-			for j in NODES_PER_TIER:
-				var rect: ColorRect = row["node_rects"][tier][j]
-				var is_allocated: bool = not tiers_data.is_empty() and tiers_data[tier][j]
-				if tier_unlocked and is_allocated:
-					rect.color = Color(stat_color.r, stat_color.g, stat_color.b, NODE_ALLOCATED_ALPHA)
-				elif tier_unlocked:
-					rect.color = Color(stat_color.r, stat_color.g, stat_color.b, NODE_AVAILABLE_ALPHA)
-				else:
-					rect.color = NODE_LOCKED_COLOR
+func _repaint_summary() -> void:
+	var pcts := AttributeState.get_all_stat_pcts()
+	_summary_stat_pcts = pcts
+	var total := 0.0
+	for row_def: Dictionary in STAT_ROWS:
+		total += pcts.get(row_def["stat"], 0.0)
+
+	# Sort: primary(green) → team(dim green) → opp-team(yellow) → nemesis(red)
+	var sorted: Array[StringName] = []
+	for row_def: Dictionary in STAT_ROWS:
+		sorted.append(row_def["stat"] as StringName)
+	sorted.sort_custom(func(a: StringName, b: StringName) -> bool:
+		return _rel_priority(a) < _rel_priority(b))
+	_summary_stat_order = sorted
+
+	var avail_w: float = _summary_bar.size.x - float(STAT_ROWS.size() - 1) * SUMMARY_SEG_GAP
+	var bar_y: float = SUMMARY_LABEL_HEIGHT + SUMMARY_LABEL_GAP
+	_summary_seg_bounds.clear()
+	var x := 0.0
+	for i in sorted.size():
+		var stat_id: StringName = sorted[i]
+		var lbl: Label = _summary_labels[i]
+		var seg: ColorRect = _summary_segments[i]
+		var pct: float = pcts.get(stat_id, 0.0)
+		var seg_w: float = (pct / total) * avail_w if total > 0.001 else avail_w / float(STAT_ROWS.size())
+		_summary_seg_bounds.append(x)
+		var stat_color: Color = AttributeState.STAT_COLORS.get(stat_id, Color.WHITE)
+		var short_name: String = AttributeState.STAT_SHORT.get(stat_id, (stat_id as String).to_upper())
+		lbl.visible = pct > 0.0
+		lbl.text = "%s %d%%" % [short_name, int(pct * 100)]
+		lbl.position = Vector2(x, 0.0)
+		lbl.size = Vector2(seg_w, SUMMARY_LABEL_HEIGHT)
+		lbl.add_theme_color_override(&"font_color", Color(stat_color.r, stat_color.g, stat_color.b, 0.8))
+		lbl.add_theme_font_size_override(&"font_size", 8)
+		seg.position = Vector2(x, bar_y)
+		seg.size = Vector2(seg_w, SUMMARY_BAR_HEIGHT)
+		var rel_color := _stat_rel_color(stat_id)
+		seg.color = Color(rel_color.r, rel_color.g, rel_color.b, 0.7 if total > 0.001 else 0.15)
+		x += seg_w + SUMMARY_SEG_GAP
+	_summary_seg_bounds.append(x)
+
+func _on_summary_bar_input(event: InputEvent) -> void:
+	if not (event is InputEventMouseMotion):
+		return
+	if _summary_stat_order.is_empty() or _summary_seg_bounds.size() < 2:
+		return
+	var mx: float = (event as InputEventMouseMotion).position.x
+	var hover_idx := -1
+	for i in _summary_stat_order.size():
+		if mx >= _summary_seg_bounds[i]:
+			hover_idx = i
+	if hover_idx < 0:
+		get_tree().call_group(&"interactable_tooltip", &"hide_tooltip")
+		return
+	var stat_id: StringName = _summary_stat_order[hover_idx]
+	var key: StringName = AttributeState.STAT_I18N.get(stat_id, &"")
+	var stat_name: String = tr(key) if key != &"" else (stat_id as String).capitalize()
+	var pct: float = _summary_stat_pcts.get(stat_id, 0.0)
+	var unlocked: int = AttributeState.get_unlocked_tier(stat_id, PlayerState.class_id, PlayerState.spec_id)
+	var thresholds: Array[float] = AttributeState.get_tier_thresholds(stat_id, PlayerState.class_id, PlayerState.spec_id)
+	var tier_text: String = "%s unlocked" % AttributeState.TIER_ROMAN[unlocked - 1] if unlocked > 0 else "no tier unlocked"
+	var next_text: String = "%s at %d%%" % [AttributeState.TIER_ROMAN[unlocked], int(thresholds[unlocked] * 100)] if unlocked < 5 else "maxed"
+	get_tree().call_group(&"interactable_tooltip", &"show_text",
+		"%s  %d%%\n%s · next: %s" % [stat_name, int(pct * 100), tier_text, next_text])
+
+func _on_node_hovered(stat_id: StringName, tier: int, node_idx: int) -> void:
+	var key: StringName = AttributeState.STAT_I18N.get(stat_id, &"")
+	var stat_name: String = tr(key) if key != &"" else (stat_id as String).capitalize()
+	var unlocked := AttributeState.get_unlocked_tier(stat_id, PlayerState.class_id, PlayerState.spec_id)
+	var is_locked := tier >= unlocked
+	var title := "%s %s · Node %d" % [stat_name, AttributeState.TIER_ROMAN[tier], node_idx + 1]
+	var body: String
+	if is_locked:
+		var thresholds := AttributeState.get_tier_thresholds(stat_id, PlayerState.class_id, PlayerState.spec_id)
+		var needed_pct := int(thresholds[tier] * 100)
+		title += "  ·  Locked (%d%%)" % needed_pct
+		body = "Reach %d%% %s allocation to unlock this tier. Lorem ipsum dolor sit amet, consectetur adipiscing elit." % [needed_pct, stat_name]
+	else:
+		body = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."
+	get_tree().call_group(&"interactable_tooltip", &"show_talent_node", title, body)
+
+func _on_node_unhovered() -> void:
+	get_tree().call_group(&"interactable_tooltip", &"hide_tooltip")
+
+func _paint_row(row: Dictionary, rel_color: Color, unlocked_tier: int) -> void:
+	var fade := ROW_LOCKED_ALPHA if unlocked_tier == 0 else 1.0
+	(row["container"] as Control).modulate = Color(1.0, 1.0, 1.0, fade)
+	var stat_color: Color = row.get("stat_color", rel_color)
+	row["header"].add_theme_color_override(&"font_color", stat_color)
+	var bar_bg := row["bar_bg"] as ColorRect
+	var bar_fill := row["bar_fill"] as ColorRect
+	bar_fill.color = stat_color
+	bar_fill.size.x = bar_bg.size.x * float(unlocked_tier) / float(TIER_COUNT)
+	if row.has("highlight_bar"):
+		var is_primary := rel_color == REL_PRIMARY_COLOR
+		var hbar := row["highlight_bar"] as ColorRect
+		hbar.visible = is_primary
+		hbar.color = stat_color
+
+	# tier_state = ti - unlocked_tier:
+	#   < 0  → active (tier is unlocked)
+	#   >= 0 → dim ghost preview (always visible so players can see what's ahead)
+	var tier_labels: Array = row["tier_labels"]
+	for ti in tier_labels.size():
+		var tier_state: int = ti - unlocked_tier
+		var lbl := tier_labels[ti] as Label
+		if tier_state < 0:
+			lbl.visible = true
+			lbl.add_theme_color_override(&"font_color", Color.WHITE)
+			lbl.add_theme_constant_override(&"outline_size", 4)
+			lbl.add_theme_color_override(&"font_outline_color", Color.BLACK)
+		else:
+			lbl.visible = true
+			lbl.add_theme_color_override(&"font_color", TIER_LABEL_COLOR)
+			lbl.add_theme_constant_override(&"outline_size", 0)
+
+	# Markers sit between sections. Show only within the visible range
+	# (unlocked + one ghost tier). Hide orphaned markers beyond that.
+	var markers: Array = row["markers"]
+	for mi in markers.size():
+		(markers[mi] as ColorRect).visible = (mi + 1) <= unlocked_tier and mi < markers.size() - 1
+
+	var node_rects: Array = row["node_rects"]
+	for tier in node_rects.size():
+		var tier_state: int = tier - unlocked_tier
+		for j in NODES_PER_TIER:
+			var rect: ColorRect = node_rects[tier][j]
+			if tier_state < 0:
+				var is_allocated := PlayerState.is_talent_allocated(row["stat_id"], tier, j)
+				rect.visible = true
+				rect.mouse_filter = Control.MOUSE_FILTER_STOP
+				rect.color = Color(stat_color.r, stat_color.g, stat_color.b,
+					NODE_ALLOCATED_ALPHA if is_allocated else NODE_AVAILABLE_ALPHA)
+			else:
+				rect.visible = true
+				rect.mouse_filter = Control.MOUSE_FILTER_STOP
+				rect.color = NODE_GHOST_COLOR

@@ -6,6 +6,9 @@ extends Node
 signal class_changed(class_id: StringName)
 signal spec_changed(spec_id: StringName)
 signal talents_changed
+signal tier_changed(stat_id: StringName, old_tier: int, new_tier: int)
+signal origin_tier_changed(old_tier: int, new_tier: int)
+signal team_nodes_tier_changed(old_tier: int, new_tier: int)
 
 var class_id: StringName = &""
 var spec_id: StringName = &""
@@ -13,9 +16,22 @@ var spec_id: StringName = &""
 ## Talent point budget — 1 per 5 levels. Placeholder until leveling exists.
 var talent_points_total: int = 20
 
-## Spent talent points per stat, tier, and node.
-## Layout: { stat_id: [[bool]*4]*5 } — 5 tiers x 4 nodes each.
+## Spent talent points per stat tree.
+## Layout: { stat_id: [[bool]*4]*5 } — 5 tiers × 4 nodes each.
 var talent_allocations: Dictionary = {}
+
+## Spent talent points for team nodes.
+## Layout: [[bool]*4]*3 — 3 tiers × 4 nodes.
+var team_node_allocations: Array = []
+
+var _cached_tiers: Dictionary = {}
+var _cached_origin_tier: int = -1
+var _cached_team_nodes_tier: int = -1
+
+func _ready() -> void:
+	AttributeState.stats_changed.connect(_recompute_tiers)
+
+# ── Class / spec identity ─────────────────────────────────────────────────────
 
 func set_class(id: StringName) -> void:
 	if class_id == id:
@@ -23,6 +39,7 @@ func set_class(id: StringName) -> void:
 	class_id = id
 	spec_id = &""
 	reset_talents()
+	_recompute_tiers()
 	class_changed.emit(class_id)
 	spec_changed.emit(spec_id)
 
@@ -30,6 +47,8 @@ func set_spec(id: StringName) -> void:
 	if spec_id == id:
 		return
 	spec_id = id
+	_reset_tier_cache()
+	_recompute_tiers()
 	spec_changed.emit(spec_id)
 
 func set_class_and_spec(new_class: StringName, new_spec: StringName) -> void:
@@ -39,9 +58,14 @@ func set_class_and_spec(new_class: StringName, new_spec: StringName) -> void:
 	spec_id = new_spec
 	if class_diff:
 		reset_talents()
+	_reset_tier_cache()
+	_recompute_tiers()
+	if class_diff:
 		class_changed.emit(class_id)
 	if spec_diff:
 		spec_changed.emit(spec_id)
+
+# ── Talent allocations ────────────────────────────────────────────────────────
 
 func set_talent_alloc(stat: StringName, tier: int, node: int, allocated: bool) -> void:
 	if not talent_allocations.has(stat):
@@ -55,6 +79,18 @@ func set_talent_alloc(stat: StringName, tier: int, node: int, allocated: bool) -
 	talent_allocations[stat][tier][node] = allocated
 	talents_changed.emit()
 
+func set_team_node_alloc(tier: int, node: int, allocated: bool) -> void:
+	if team_node_allocations.is_empty():
+		team_node_allocations = [
+			[false, false, false, false],
+			[false, false, false, false],
+			[false, false, false, false],
+			[false, false, false, false],
+			[false, false, false, false],
+		]
+	team_node_allocations[tier][node] = allocated
+	talents_changed.emit()
+
 func get_talent_points_spent() -> int:
 	var total := 0
 	for tier_rows in talent_allocations.values():
@@ -62,8 +98,60 @@ func get_talent_points_spent() -> int:
 			for allocated in node_row:
 				if allocated:
 					total += 1
+	for tier_row in team_node_allocations:
+		for allocated in tier_row:
+			if allocated:
+				total += 1
 	return total
+
+## True if a stat tree node has a point allocated (regardless of tier unlock state).
+func is_talent_allocated(stat: StringName, tier: int, node: int) -> bool:
+	var tiers_data: Array = talent_allocations.get(stat, [])
+	return not tiers_data.is_empty() and tiers_data[tier][node]
+
+## True if a stat tree node is allocated AND its tier is currently unlocked by stats.
+func is_node_active(stat_id: StringName, tier: int, node: int) -> bool:
+	var tiers_data: Array = talent_allocations.get(stat_id, [])
+	if tiers_data.is_empty() or not tiers_data[tier][node]:
+		return false
+	return (tier + 1) <= AttributeState.get_unlocked_tier(stat_id, class_id, spec_id)
+
+## True if a team node is allocated AND its tier is currently unlocked by stats.
+func is_team_node_active(tier: int, node: int) -> bool:
+	if team_node_allocations.is_empty() or not team_node_allocations[tier][node]:
+		return false
+	return (tier + 1) <= AttributeState.get_team_nodes_tier(class_id, spec_id)
 
 func reset_talents() -> void:
 	talent_allocations.clear()
+	team_node_allocations.clear()
+	_reset_tier_cache()
 	talents_changed.emit()
+
+# ── Tier crossing detection ───────────────────────────────────────────────────
+
+func _reset_tier_cache() -> void:
+	_cached_tiers.clear()
+	_cached_origin_tier = -1
+	_cached_team_nodes_tier = -1
+
+func _recompute_tiers() -> void:
+	if class_id == &"":
+		return
+	for stat_id in AttributeState.ROLLABLE_STATS:
+		var new_tier := AttributeState.get_unlocked_tier(stat_id, class_id, spec_id)
+		var old_tier: int = _cached_tiers.get(stat_id, -1)
+		if old_tier >= 0 and old_tier != new_tier:
+			tier_changed.emit(stat_id, old_tier, new_tier)
+		_cached_tiers[stat_id] = new_tier
+
+	var new_team_tier := AttributeState.get_team_nodes_tier(class_id, spec_id)
+	if _cached_team_nodes_tier >= 0 and _cached_team_nodes_tier != new_team_tier:
+		team_nodes_tier_changed.emit(_cached_team_nodes_tier, new_team_tier)
+	_cached_team_nodes_tier = new_team_tier
+
+	if class_id == &"analog" or class_id == &"cyborg":
+		var new_origin_tier := AttributeState.get_origin_tier(class_id)
+		if _cached_origin_tier >= 0 and _cached_origin_tier != new_origin_tier:
+			origin_tier_changed.emit(_cached_origin_tier, new_origin_tier)
+		_cached_origin_tier = new_origin_tier
