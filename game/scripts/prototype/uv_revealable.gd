@@ -30,7 +30,6 @@ func _process(delta: float) -> void:
 	else:
 		_alpha = maxf(_alpha - FADE_OUT_SPEED * delta, 0.0)
 
-	var was_revealed := _revealed
 	_revealed = _alpha > 0.0
 	_parent.visible = _revealed
 

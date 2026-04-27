@@ -7,8 +7,8 @@ extends Node
 ## within a radius without iterating the entire population.
 
 const DEFAULT_CELL_SIZE := 4.0
+const MOVE_THRESHOLD_SQ := 0.25
 
-var _cell_size: float = DEFAULT_CELL_SIZE
 var _inv_cell_size: float = 1.0 / DEFAULT_CELL_SIZE
 
 # category -> { cell_key: Vector2i -> Array[Node3D] }
@@ -31,7 +31,7 @@ func register(node: Node3D, category: StringName) -> void:
 		_grids[category] = {}
 	var cell := _cell_for(node.global_position)
 	_insert(node, category, cell)
-	_tracked[node] = { "category": category, "cell": cell }
+	_tracked[node] = { "category": category, "cell": cell, "last_pos": node.global_position }
 
 func unregister(node: Node3D) -> void:
 	if not _tracked.has(node):
@@ -140,7 +140,12 @@ func _update_all_positions() -> void:
 			_tracked.erase(node)
 			continue
 		var info: Dictionary = _tracked[node]
-		var new_cell := _cell_for(node.global_position)
+		var pos := node.global_position
+		var last: Vector3 = info["last_pos"]
+		if pos.distance_squared_to(last) < MOVE_THRESHOLD_SQ:
+			continue
+		info["last_pos"] = pos
+		var new_cell := _cell_for(pos)
 		if new_cell != info["cell"]:
 			var cat: StringName = info["category"]
 			_remove(node, cat, info["cell"])

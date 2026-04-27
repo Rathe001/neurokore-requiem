@@ -21,9 +21,9 @@ static var _material_template_cache: Dictionary = {}  # Color -> StandardMateria
 static func spawn(host: Node3D, skill: Skill, aim: Vector3) -> void:
 	match skill.targeting_mode:
 		Skill.TargetingMode.SINGLE_CONE:
-			spawn_cone(host, aim, skill.range, skill.cone_deg, skill.wind_up)
+			spawn_cone(host, aim, skill.skill_range, skill.cone_deg, skill.wind_up)
 		Skill.TargetingMode.AOE_RADIAL:
-			spawn_radial(host, skill.range, skill.wind_up)
+			spawn_radial(host, skill.skill_range, skill.wind_up)
 
 static func spawn_cone(host: Node3D, aim: Vector3, attack_range: float, cone_deg: float, wind_up: float = 0.0) -> void:
 	if not _telegraphs_enabled():

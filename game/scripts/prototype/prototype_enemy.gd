@@ -32,6 +32,8 @@ const ANIM_DEATH: Array[StringName] = [
 
 const OUTLINE_GROW := 0.04
 
+static var _s_outline_mat: StandardMaterial3D
+
 @export var max_health: int = 40
 @export_range(0.0, 1.0, 0.05) var credit_drop_chance: float = 0.6
 @export var display_name: String = "Enemy"
@@ -50,7 +52,6 @@ var _attack_cd: float = 0.0
 var _casting: bool = false
 var _want_dir: Vector3 = Vector3.ZERO
 var _player_ref: Node3D
-var _outline_mat: StandardMaterial3D
 var _outlined_meshes: Array[MeshInstance3D] = []
 var _hover_hooked: bool = false
 
@@ -83,18 +84,26 @@ func _init_enemy() -> void:
 	if health_bar != null:
 		health_bar.visible = false
 
+## Called by EntityPool.release() before pooling. Disconnects stale listeners.
+func _pool_release() -> void:
+	for conn in died.get_connections():
+		died.disconnect(conn["callable"])
+	_set_outline(false)
+
 ## Re-initialize an enemy returned from the pool.
 func reset() -> void:
 	remove_from_group(&"corpses")
 	_init_enemy()
 
 func _setup_hover() -> void:
-	_outline_mat = StandardMaterial3D.new()
-	_outline_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_outline_mat.albedo_color = Color.WHITE
-	_outline_mat.cull_mode = BaseMaterial3D.CULL_FRONT
-	_outline_mat.grow = true
-	_outline_mat.grow_amount = OUTLINE_GROW
+	if _s_outline_mat == null:
+		_s_outline_mat = StandardMaterial3D.new()
+		_s_outline_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_s_outline_mat.albedo_color = Color.WHITE
+		_s_outline_mat.cull_mode = BaseMaterial3D.CULL_FRONT
+		_s_outline_mat.grow = true
+		_s_outline_mat.grow_amount = OUTLINE_GROW
+	_outlined_meshes.clear()
 	_collect_meshes(visual)
 	if not _hover_hooked:
 		mouse_entered.connect(_on_mouse_entered)
@@ -110,7 +119,7 @@ func _collect_meshes(root: Node) -> void:
 		_collect_meshes(child)
 
 func _set_outline(on: bool) -> void:
-	var mat: Material = _outline_mat if on else null
+	var mat: Material = _s_outline_mat if on else null
 	for mi in _outlined_meshes:
 		if is_instance_valid(mi):
 			mi.material_overlay = mat
@@ -274,10 +283,10 @@ func _face_direction(dir: Vector3) -> void:
 func _play_anim(candidates: Array[StringName], speed: float = 1.0) -> bool:
 	if anim_player == null:
 		return false
-	for name in candidates:
-		if not anim_player.has_animation(name):
+	for anim_name in candidates:
+		if not anim_player.has_animation(anim_name):
 			continue
-		var name_str := String(name)
+		var name_str := String(anim_name)
 		if anim_player.current_animation == name_str and anim_player.is_playing():
 			return true
 		anim_player.speed_scale = speed
@@ -288,10 +297,10 @@ func _play_anim(candidates: Array[StringName], speed: float = 1.0) -> bool:
 func _ensure_loop(candidates: Array[StringName]) -> void:
 	if anim_player == null:
 		return
-	for name in candidates:
-		if not anim_player.has_animation(name):
+	for anim_name in candidates:
+		if not anim_player.has_animation(anim_name):
 			continue
-		var anim := anim_player.get_animation(name)
+		var anim := anim_player.get_animation(anim_name)
 		if anim != null:
 			anim.loop_mode = Animation.LOOP_LINEAR
 		return

@@ -72,6 +72,7 @@ const FPS_FILL_ENERGY := 1.2
 const FPS_FILL_RANGE := 6.0
 const FPS_FILL_ATTENUATION := 2.0
 const INTERACT_ANIM_SPEED := 3.0
+const FPS_HOVER_INTERVAL := 0.05
 const FLASHLIGHT_MAX_PITCH_DEG := 82.0
 const FLASHLIGHT_MAX_UP_DEG := 10.0
 # Cursor distance at which the beam fully levels off (and begins tilting up).
@@ -116,6 +117,7 @@ var _fps_hovered: Node3D = null
 var _crosshair_root: Control = null
 var _crosshair_bars: Array[ColorRect] = []
 var _stand_test_shape: CapsuleShape3D = null
+var _fps_hover_timer: float = 0.0
 
 func _ready() -> void:
 	_camera = get_viewport().get_camera_3d()
@@ -212,7 +214,10 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 func _process(delta: float) -> void:
 	RenderingServer.global_shader_parameter_set(PLAYER_WORLD_POS_PARAM, global_position)
 	if _fps_mode:
-		_update_fps_hover()
+		_fps_hover_timer -= delta
+		if _fps_hover_timer <= 0.0:
+			_fps_hover_timer = FPS_HOVER_INTERVAL
+			_update_fps_hover()
 	else:
 		_update_interact_cursor()
 	_tick_fps_mouse_mode()
@@ -440,20 +445,20 @@ func _cast_skill(skill: Skill) -> void:
 func _resolve_skill_hit(skill: Skill, aim: Vector3) -> void:
 	match skill.targeting_mode:
 		Skill.TargetingMode.SINGLE_CONE:
-			PrototypeAttackIndicator.spawn_hit_cone(self, aim, skill.range, skill.cone_deg)
+			PrototypeAttackIndicator.spawn_hit_cone(self, aim, skill.skill_range, skill.cone_deg)
 			_resolve_cone(skill, aim)
 		Skill.TargetingMode.AOE_RADIAL:
-			PrototypeAttackIndicator.spawn_hit_radial(self, skill.range)
+			PrototypeAttackIndicator.spawn_hit_radial(self, skill.skill_range)
 			_resolve_aoe(skill)
 
 func _resolve_cone(skill: Skill, aim: Vector3) -> void:
 	var half_cos := cos(deg_to_rad(skill.cone_deg * 0.5))
-	for enode: Node3D in SpatialGrid.query_cone(global_position, aim, skill.range, half_cos, &"enemies"):
+	for enode: Node3D in SpatialGrid.query_cone(global_position, aim, skill.skill_range, half_cos, &"enemies"):
 		if enode.has_method(&"take_damage"):
 			enode.take_damage(skill.damage, global_position, skill.knockback)
 
 func _resolve_aoe(skill: Skill) -> void:
-	for enode: Node3D in SpatialGrid.query_radius(global_position, skill.range, &"enemies"):
+	for enode: Node3D in SpatialGrid.query_radius(global_position, skill.skill_range, &"enemies"):
 		if enode.has_method(&"take_damage"):
 			enode.take_damage(skill.damage, global_position, skill.knockback)
 
@@ -593,16 +598,16 @@ func _toggle_fps() -> void:
 		_fps_transitioning = false
 	)
 
-func _set_meshes_visible(node: Node, is_visible: bool) -> void:
+func _set_meshes_visible(node: Node, make_visible: bool) -> void:
 	if node is MeshInstance3D:
-		(node as MeshInstance3D).visible = is_visible
+		(node as MeshInstance3D).visible = make_visible
 	for child in node.get_children():
-		_set_meshes_visible(child, is_visible)
+		_set_meshes_visible(child, make_visible)
 
-func _set_group_visible(group: StringName, is_visible: bool) -> void:
+func _set_group_visible(group: StringName, make_visible: bool) -> void:
 	for node: Node in get_tree().get_nodes_in_group(group):
 		if node is Node3D:
-			(node as Node3D).visible = is_visible
+			(node as Node3D).visible = make_visible
 
 func _set_fps_fog(enabled: bool) -> void:
 	if _fps_fill_light != null:
@@ -745,10 +750,10 @@ func _play_anim(candidates: Array[StringName], speed: float = 1.0, blend: float 
 	if anim_player == null:
 		return false
 	var reverse := speed < 0.0
-	for name in candidates:
-		if not anim_player.has_animation(name):
+	for anim_name in candidates:
+		if not anim_player.has_animation(anim_name):
 			continue
-		var name_str := String(name)
+		var name_str := String(anim_name)
 		if anim_player.current_animation == name_str and anim_player.is_playing() and _anim_reverse == reverse:
 			return true
 		_anim_reverse = reverse
@@ -760,10 +765,10 @@ func _play_anim(candidates: Array[StringName], speed: float = 1.0, blend: float 
 func _ensure_loop(candidates: Array[StringName]) -> void:
 	if anim_player == null:
 		return
-	for name in candidates:
-		if not anim_player.has_animation(name):
+	for anim_name in candidates:
+		if not anim_player.has_animation(anim_name):
 			continue
-		var anim := anim_player.get_animation(name)
+		var anim := anim_player.get_animation(anim_name)
 		if anim != null:
 			anim.loop_mode = Animation.LOOP_LINEAR
 		return

@@ -3,6 +3,7 @@ class_name ItemSlot extends Control
 enum Role { INVENTORY, EQUIPMENT }
 
 signal clicked(slot: ItemSlot)
+signal right_clicked(slot: ItemSlot)
 
 var role: Role = Role.INVENTORY
 var slot_id: StringName = &""
@@ -160,6 +161,9 @@ func _gui_input(event: InputEvent) -> void:
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_LEFT and mb.pressed:
 			clicked.emit(self)
+			accept_event()
+		elif mb.button_index == MOUSE_BUTTON_RIGHT and mb.pressed:
+			right_clicked.emit(self)
 			accept_event()
 
 func _get_drag_data(_pos: Vector2) -> Variant:

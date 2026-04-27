@@ -27,6 +27,7 @@ func _on_theme_changed() -> void:
 	theme = UIThemeState.theme
 
 func open_menu() -> void:
+	get_tree().call_group(&"ui_modal", &"close_menu")
 	visible = true
 	_show_main()
 

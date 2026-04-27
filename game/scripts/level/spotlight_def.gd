@@ -5,7 +5,7 @@ class_name SpotlightDef
 @export var rotation_degrees: Vector3 = Vector3(-90, 0, 0)
 @export var color: Color = Color.WHITE
 @export var energy: float = 16.0
-@export var range: float = 10.0
+@export var light_range: float = 10.0
 @export var angle: float = 30.0
 @export var angle_attenuation: float = 0.15
 @export var attenuation: float = 0.6

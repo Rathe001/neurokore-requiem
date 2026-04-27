@@ -16,8 +16,10 @@ var _wall_meshes: Dictionary = {}
 var _wall_shapes: Dictionary = {}
 var _doors: Dictionary = {}
 var _fog_material: FogMaterial
+var _wall_keys: Array = []
 
 func _ready() -> void:
+	_wall_keys = RoomDef.Wall.keys()
 	if layout == null:
 		push_warning("[LevelBuilder] No layout assigned.")
 		return
@@ -385,11 +387,11 @@ func _create_wall_body(pos: Vector3, size_x: float, size_z: float) -> void:
 # generate_normals() averages vertices that share the same position.
 static func _vquad(st: SurfaceTool, bl: Vector3, br: Vector3, h: float) -> void:
 	var tl := bl + Vector3(0, h, 0)
-	var tr := br + Vector3(0, h, 0)
+	var top_right := br + Vector3(0, h, 0)
 	var n := (br - bl).cross(tl - bl).normalized()
 	st.set_normal(n)
-	st.add_vertex(bl); st.add_vertex(tr); st.add_vertex(br)
-	st.add_vertex(bl); st.add_vertex(tl); st.add_vertex(tr)
+	st.add_vertex(bl); st.add_vertex(top_right); st.add_vertex(br)
+	st.add_vertex(bl); st.add_vertex(tl); st.add_vertex(top_right)
 
 # Adds a horizontal quad at height y with normal +Y (CCW from above).
 # x1>x0, z1>z0 required.
@@ -610,7 +612,7 @@ func _build_room(piece: LevelPiece) -> void:
 	]
 
 	for w: Dictionary in walls:
-		var side: RoomDef.Wall = w["side"]
+		var side: RoomDef.Wall = w["side"] as RoomDef.Wall
 		var wpos: Vector3 = w["pos"]
 		var span: float = w["span"]
 		var sx: float = w["sx"]
@@ -638,7 +640,7 @@ func _build_room(piece: LevelPiece) -> void:
 				if side in rd.locked_doors and door is PrototypeDoor:
 					(door as PrototypeDoor).locked = true
 				add_child(door)
-				_doors[StringName("%s_%s" % [rd.id, RoomDef.Wall.keys()[side]])] = door
+				_doors[StringName("%s_%s" % [rd.id, _wall_keys[side]])] = door
 		else:
 			var wall_sx := span * sx + thick * sz
 			var wall_sz := span * sz + thick * sx
@@ -740,7 +742,7 @@ func _create_fog_volume(_center: Vector3, _size_x: float, _size_z: float) -> voi
 # ── Door Access ───────────────────────────────────────────────────────────
 
 func get_door(room_id: StringName, wall: RoomDef.Wall) -> Node:
-	var key := StringName("%s_%s" % [room_id, RoomDef.Wall.keys()[wall]])
+	var key := StringName("%s_%s" % [room_id, _wall_keys[wall]])
 	return _doors.get(key)
 
 # ── UV Test Objects ──────────────────────────────────────────────────────

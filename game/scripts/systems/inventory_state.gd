@@ -9,6 +9,15 @@ const BASE_INVENTORY_SIZE := 10
 const MAX_INVENTORY_SIZE := 40
 const MAX_UTILITY_SLOTS := 4
 
+const STARTER_ITEMS: Dictionary = {
+	&"gentleman":  [preload("res://resources/items/starters/gentleman_weapon.tres"),  preload("res://resources/items/starters/gentleman_chest.tres")],
+	&"survivalist":[preload("res://resources/items/starters/survivalist_weapon.tres"), preload("res://resources/items/starters/survivalist_chest.tres")],
+	&"enculted":   [preload("res://resources/items/starters/enculted_weapon.tres"),   preload("res://resources/items/starters/enculted_chest.tres")],
+	&"forged":     [preload("res://resources/items/starters/forged_weapon.tres"),     preload("res://resources/items/starters/forged_chest.tres")],
+	&"automaton":  [preload("res://resources/items/starters/automaton_weapon.tres"),  preload("res://resources/items/starters/automaton_chest.tres")],
+	&"polymath":   [preload("res://resources/items/starters/polymath_weapon.tres"),   preload("res://resources/items/starters/polymath_chest.tres")],
+}
+
 const STARTER_FLASHLIGHT: Item = preload("res://resources/items/common_flashlight.tres")
 const STARTER_LANTERN: Item = preload("res://resources/items/common_lantern.tres")
 const STARTER_SCANNER: Item = preload("res://resources/items/common_scanner.tres")
@@ -27,6 +36,7 @@ var equipment: Dictionary = {}
 var inventory: Array[Item] = []
 
 func _ready() -> void:
+	PlayerState.spec_changed.connect(_on_spec_changed)
 	inventory.resize(MAX_INVENTORY_SIZE)
 	inventory[0] = STARTER_BACKPACK
 	inventory[1] = STARTER_BELT
@@ -38,13 +48,19 @@ func _ready() -> void:
 	inventory[7] = STARTER_LANTERN
 	inventory[8] = STARTER_SCANNER
 	inventory[9] = STARTER_UV_LIGHT
-	# Stat test items — equip these to unlock talent tree tiers.
-	inventory[10] = _make_stat_item(&"stat_vest_ort",   &"chest",    "C", Color(0.95, 0.92, 0.8),  {&"ort": 30})
-	inventory[11] = _make_stat_item(&"stat_helmet_ing", &"head",     "H", Color(0.7,  0.85, 0.35), {&"ing": 25})
-	inventory[12] = _make_stat_item(&"stat_gloves_dev", &"gloves",   "G", Color(0.9,  0.25, 0.2),  {&"dev": 35})
-	inventory[13] = _make_stat_item(&"stat_boots_opt",  &"boots",    "B", Color(0.55, 0.78, 0.85), {&"opt": 20})
-	inventory[14] = _make_stat_item(&"stat_optic_cla",  &"optics",   "O", Color(0.95, 0.9,  0.3),  {&"cla": 15})
-	inventory[15] = _make_stat_item(&"stat_pack_amb",   &"backpack", "K", Color(0.78, 0.35, 0.85), {&"amb": 25})
+	# Mixed-stat test items — each covers all 4 relationship colors from one class's perspective.
+	# Gentleman:  ORT=primary, ING=team, OPT=opp-team, DEV=nemesis
+	inventory[10] = _make_stat_item(&"stat_vest_ort",   &"chest",    "C", Color(0.95, 0.92, 0.8),  {&"ort": 18, &"ing": 8,  &"opt": 6,  &"dev": 10})
+	# Survivalist: ING=primary, AMB=team, CLA=opp-team, OPT=nemesis
+	inventory[11] = _make_stat_item(&"stat_helmet_ing", &"head",     "H", Color(0.7,  0.85, 0.35), {&"ing": 15, &"amb": 7,  &"cla": 5,  &"opt": 12})
+	# Forged:      DEV=primary, CLA=team, ING=opp-team, ORT=nemesis
+	inventory[12] = _make_stat_item(&"stat_gloves_dev", &"gloves",   "G", Color(0.9,  0.25, 0.2),  {&"dev": 20, &"cla": 8,  &"ing": 7,  &"ort": 10})
+	# Automaton:   OPT=primary, DEV=team, ORT=opp-team, ING=nemesis
+	inventory[13] = _make_stat_item(&"stat_boots_opt",  &"boots",    "B", Color(0.55, 0.78, 0.85), {&"opt": 15, &"dev": 6,  &"ort": 8,  &"ing": 10})
+	# Polymath:    CLA=primary, OPT=team, ORT=opp-team, AMB=nemesis
+	inventory[14] = _make_stat_item(&"stat_optic_cla",  &"optics",   "O", Color(0.95, 0.9,  0.3),  {&"cla": 14, &"opt": 7,  &"ort": 8,  &"amb": 9})
+	# Enculted:    AMB=primary, ORT=team, DEV=opp-team, CLA=nemesis
+	inventory[15] = _make_stat_item(&"stat_pack_amb",   &"backpack", "K", Color(0.78, 0.35, 0.85), {&"amb": 18, &"ort": 6,  &"dev": 9,  &"cla": 12})
 
 func _make_stat_item(id: StringName, kind: StringName, glyph: String, color: Color, stats: Dictionary) -> Item:
 	var item := Item.new()
@@ -147,3 +163,10 @@ func get_utility_capacity() -> int:
 	if belt == null:
 		return 0
 	return clamp(belt.utility_slots, 0, MAX_UTILITY_SLOTS)
+
+func _on_spec_changed(spec_id: StringName) -> void:
+	var items: Array = STARTER_ITEMS.get(spec_id, [])
+	if items.is_empty():
+		return
+	set_equipped(&"weapon", items[0])
+	set_equipped(&"chest", items[1])

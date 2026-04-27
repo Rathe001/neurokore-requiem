@@ -39,6 +39,8 @@ func release(node: Node3D) -> void:
 	if scene.is_empty():
 		node.queue_free()
 		return
+	if node.has_method(&"_pool_release"):
+		node._pool_release()
 	node.set_physics_process(false)
 	node.set_process(false)
 	node.visible = false

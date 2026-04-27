@@ -6,6 +6,6 @@
 script = ExtResource("1")
 color = Color(1.0, 0.75, 0.3, 1)
 energy = 8.0
-range = 14.0
+light_range = 14.0
 attenuation = 1.0
 shadows = true
