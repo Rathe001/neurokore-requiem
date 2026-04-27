@@ -911,17 +911,6 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#skill-tree-access" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Skill Tree Access
-      
-    </span>
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
   
@@ -2163,17 +2152,6 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#skill-tree-access" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Skill Tree Access
-      
-    </span>
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
   
@@ -2345,7 +2323,7 @@
 
 <h1 id="attribute-system">Attribute System<a class="headerlink" href="#attribute-system" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p>Status: Design phase — not yet implemented.</p>
+<p>Status: Core system implemented. Stat tracking, tier unlocking, talent panel UI, and character panel allocation bar are working. Tier perk mechanics, team stat scaling multipliers, visual metamorphosis, and NPC reactions are still TBD.</p>
 </blockquote>
 <h2 id="core-philosophy">Core Philosophy<a class="headerlink" href="#core-philosophy" title="Permanent link">&para;</a></h2>
 <ul>
@@ -2636,19 +2614,19 @@
 <td><strong>Primary</strong></td>
 <td>Own class stat</td>
 <td>Full (1x)</td>
-<td>Always unlocked</td>
+<td>Easier (12/25/40/55/72%) — class identity unlocks fast</td>
 </tr>
 <tr>
 <td><strong>Team</strong></td>
 <td>Other two stats from same origin</td>
 <td>Partial (~0.25x)</td>
-<td>Low</td>
+<td>Standard (20/40/60/75/90%)</td>
 </tr>
 <tr>
 <td><strong>Opposing</strong></td>
 <td>All three stats from other origin</td>
 <td>Interference + distortion</td>
-<td>High</td>
+<td>Hard (30/50/70/85/95%)</td>
 </tr>
 </tbody>
 </table>
@@ -2943,51 +2921,54 @@
 <tr>
 <td>0</td>
 <td>—</td>
-<td>&lt; 10%</td>
 <td>&lt; 20%</td>
+<td>&lt; 30%</td>
 <td>No perk, no visual change</td>
 </tr>
 <tr>
 <td>1</td>
-<td>Free</td>
-<td>10%</td>
+<td>12%</td>
 <td>20%</td>
+<td>30%</td>
 <td>Entry perk unlocked, faint visual hint</td>
 </tr>
 <tr>
 <td>2</td>
-<td>Free</td>
-<td>20%</td>
-<td>30%</td>
+<td>25%</td>
+<td>40%</td>
+<td>50%</td>
 <td>Second perk, subtle visual shift</td>
 </tr>
 <tr>
 <td>3</td>
-<td>Free</td>
-<td>35%</td>
-<td>45%</td>
+<td>40%</td>
+<td>60%</td>
+<td>70%</td>
 <td>Third perk, pronounced visual change</td>
 </tr>
 <tr>
 <td>4</td>
-<td>Free</td>
-<td>50%</td>
-<td>60%</td>
+<td>55%</td>
+<td>75%</td>
+<td>85%</td>
 <td>Fourth perk, major transformation</td>
 </tr>
 <tr>
 <td>5</td>
-<td>Free</td>
-<td>70%</td>
-<td>80%</td>
+<td>72%</td>
+<td>90%</td>
+<td>95%</td>
 <td>Full perk, dramatic transformation</td>
 </tr>
 </tbody>
 </table>
-<p><strong>Example — Forged (Cyborg):</strong>
-- Deviation: always fully unlocked (own class)
-- Optimization, Clarity: team rates (10/20/35/50/70%)
-- Orthodoxy, Ingenuity, Ambition: opposing rates (20/30/45/60/80%)</p>
+<blockquote>
+<p><strong>Design note:</strong> Primary stat tiers unlock significantly easier than team or opposing stats — class identity should feel immediate. Starter gear (~35% primary share) unlocks T1 and T2 for the chosen class. T3 requires intentional gearing. Stacking your primary stat is doubly rewarded: cheaper unlock thresholds <em>and</em> full 1× power scaling.</p>
+</blockquote>
+<p><strong>Cross-class access:</strong> Any class can unlock any stat's tree by meeting that stat's threshold. An Analog pushing Optimization past the team threshold gets Automaton tier 1. A Gentleman pushing Deviation past the opposing threshold starts unlocking Forged nodes — while also experiencing distortion. Tier access is not permanent: dropping below a threshold locks the tier and deactivates its nodes (points stay allocated but dormant).</p>
+<blockquote>
+<p><strong>Code source of truth:</strong> Threshold values are defined in <code>game/scripts/systems/attribute_state.gd</code> — <code>TIERS_OWN</code>, <code>TIERS_TEAM</code>, <code>TIERS_OPPOSING</code>. Update there; this table documents the current values.</p>
+</blockquote>
 <h3 id="talent-points">Talent Points<a class="headerlink" href="#talent-points" title="Permanent link">&para;</a></h3>
 <p>Players earn <strong>1 talent point every 5 levels</strong>. At level 100: 20 points. Points are spent on individual nodes within unlocked tiers.</p>
 <p>Each class tree: <strong>4 nodes × 5 tiers = 20 nodes</strong>. Six class trees = <strong>120 total nodes</strong>.</p>
@@ -3064,57 +3045,6 @@
 </tr>
 </tbody>
 </table>
-<h3 id="skill-tree-access">Skill Tree Access<a class="headerlink" href="#skill-tree-access" title="Permanent link">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Tier</th>
-<th>Own Class</th>
-<th>Team</th>
-<th>Opposing</th>
-<th>Nodes</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>1</td>
-<td>Free</td>
-<td>10%</td>
-<td>20%</td>
-<td>4</td>
-</tr>
-<tr>
-<td>2</td>
-<td>Free</td>
-<td>20%</td>
-<td>30%</td>
-<td>4</td>
-</tr>
-<tr>
-<td>3</td>
-<td>Free</td>
-<td>35%</td>
-<td>45%</td>
-<td>4</td>
-</tr>
-<tr>
-<td>4</td>
-<td>Free</td>
-<td>50%</td>
-<td>60%</td>
-<td>4</td>
-</tr>
-<tr>
-<td>5</td>
-<td>Free</td>
-<td>70%</td>
-<td>80%</td>
-<td>4</td>
-</tr>
-</tbody>
-</table>
-<p><strong>Cross-class access:</strong> Any class can unlock any stat's tree by meeting the threshold. An Analog pushing Optimization past 20% (team rate) gets Automaton tier 1. A Gentleman pushing Deviation past 30% (opposing rate) starts unlocking Forged nodes — while also experiencing distortion from the opposing stat interference.</p>
-<p><strong>Tier access is not permanent.</strong> Dropping below a threshold locks the tier and deactivates its nodes. The points stay allocated but dormant.</p>
 <p><strong>Gear swap confirmation:</strong> When equipping an item would cross a breakpoint, a confirmation dialog shows exactly what changes. This is behind a Help Tooltips toggle for players who prefer to manage it themselves.</p>
 <hr />
 <h2 id="team-nodes">Team Nodes<a class="headerlink" href="#team-nodes" title="Permanent link">&para;</a></h2>
@@ -3236,7 +3166,7 @@
 <ul>
 <li>Exact <strong>team stat scaling multiplier</strong> (~0.25x is a starting point, needs playtesting).</li>
 <li>Exact <strong>opposing stat interference mechanics</strong> — what specifically distorts for each class? Needs design per class.</li>
-<li>Exact <strong>tier breakpoints</strong> (own free / team 10/20/35/50/70% / opposing 20/30/45/60/80%) — needs playtesting.</li>
+<li>Exact <strong>tier breakpoints</strong> — implemented (see breakpoints table and <code>attribute_state.gd</code>), needs playtesting.</li>
 <li><strong>Team node specific bonuses</strong> — what do tiers 1/2/3 actually grant?</li>
 <li><strong>Team node keystone</strong> — what is the tier 3 high-investment reward?</li>
 <li><strong>Class-specific stat functions</strong> for Orthodoxy, Optimization, Ingenuity, Clarity, Ambition.</li>

@@ -1644,6 +1644,9 @@
 <li>Line-of-sight wall fade — walls go transparent only when between camera and player and overlapping the player on screen (view-space projection in <code>tech_wall.gdshader</code>, fed by <code>player_world_pos</code> global shader uniform)</li>
 <li>Persistent corpses with bounded pool — see <a href="#enemies">Enemies</a> below</li>
 <li>Class UI themes wired through <code>UIThemeState</code> (<code>SPEC_THEMES</code> lookup keyed by class)</li>
+<li><strong>Attribute system</strong> — 6 rollable stats (ORT/ING/AMB/DEV/OPT/CLA) derived from equipped items; Soul and Interface are averaged from their origin's three team stats; tier unlock thresholds per relationship type (primary/team/opposing); <code>PlayerState</code> tier-crossing signals; data integrity asserts on startup</li>
+<li><strong>Talents panel</strong> (N) — per-class stat rows with 5-tier node grids; tier bars fill by whole unlocked tiers; tier/node tooltips; locked node preview with unlock % shown; allocation persists in <code>PlayerState</code></li>
+<li><strong>Character panel stat bar</strong> — compact multibar on character sheet shows stat allocation % with relationship coloring and hover tooltips matching the talents panel</li>
 <li><strong>FPS mode</strong> (V to toggle) — first-person camera with mouse look, crosshair, fill light; crosshair hover triggers same outline + tooltip as iso mouse hover; skill 1 interacts with crosshair target</li>
 <li><strong>Platformer elements</strong> — jump over pits; crouch-only corridors (solid ceiling block forces crouch, player is locked in crouching until they clear the zone); enemies that fall into pits die</li>
 <li><strong>Per-piece floors with true pits</strong> — each room and corridor has its own floor mesh; pit corridors omit floor over the gap; a kill zone at y=−4 destroys anything that falls in</li>
@@ -1663,7 +1666,7 @@
 <p><strong>Open work:</strong> corpse-pool cap is per-scene right now. When real zones come online, persistence across zone swaps still needs designing — corpses currently die with the scene.</p>
 <h2 id="open-design-areas">Open design areas<a class="headerlink" href="#open-design-areas" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Itemization — attribute system designed (<a href="../design/attribute-system/">attribute-system.md</a>) including stat identity tier perks, visual metamorphosis, and NPC identity reactions; implementation TBD</li>
+<li>Itemization — attribute system core implemented (see <a href="../design/attribute-system/">attribute-system.md</a>); tier perk mechanics, team stat scaling multipliers, visual metamorphosis, and NPC identity reactions still TBD</li>
 <li>Morality system — <a href="../design/morality-system/">on hold</a>, may resurface as a hidden narrative system</li>
 <li>Progression / leveling</li>
 <li>Economy / crafting</li>
