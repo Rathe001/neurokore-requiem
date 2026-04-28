@@ -1,16 +1,19 @@
 extends Control
 
 const PANEL_SIZE := Vector2(220.0, 200.0)
-const SETTINGS_PANEL_SIZE := Vector2(360.0, 380.0)
+const SETTINGS_PANEL_SIZE := Vector2(360.0, 500.0)
 const BUTTON_SIZE := Vector2(168.0, 32.0)
 const BUTTON_GAP := 6.0
-const ROW_LABEL_WIDTH := 110.0
-const OPTION_WIDTH := 190.0
+const ROW_LABEL_WIDTH := 130.0
+const OPTION_WIDTH := 170.0
 
 var _main_panel: Control
 var _settings_panel: Control
 var _window_mode_option: OptionButton
 var _resolution_option: OptionButton
+var _msaa_option: OptionButton
+var _fxaa_option: OptionButton
+var _bloom_option: OptionButton
 var _sensitivity_slider: HSlider
 
 func _ready() -> void:
@@ -72,6 +75,12 @@ func _build_settings_panel() -> void:
 	body.add_child(_make_option_row("MENU_SETTINGS_WINDOW_MODE", _window_mode_option))
 	_resolution_option = _make_resolution_option()
 	body.add_child(_make_option_row("MENU_SETTINGS_RESOLUTION", _resolution_option))
+	_msaa_option = _make_msaa_option()
+	body.add_child(_make_option_row("MENU_SETTINGS_MSAA", _msaa_option))
+	_fxaa_option = _make_fxaa_option()
+	body.add_child(_make_option_row("MENU_SETTINGS_FXAA", _fxaa_option))
+	_bloom_option = _make_bloom_option()
+	body.add_child(_make_option_row("MENU_SETTINGS_BLOOM", _bloom_option))
 
 	body.add_child(_make_section_label("MENU_SETTINGS_CONTROLS"))
 	_sensitivity_slider = _make_sensitivity_slider()
@@ -119,6 +128,32 @@ func _make_resolution_option() -> OptionButton:
 	option.item_selected.connect(_on_resolution_selected)
 	return option
 
+func _make_msaa_option() -> OptionButton:
+	var option := OptionButton.new()
+	option.add_theme_font_size_override(&"font_size", UIThemeState.palette.font_size_sublabel)
+	option.add_item(tr("COMMON_OFF"), Viewport.MSAA_DISABLED)
+	option.add_item(tr("MSAA_2X"), Viewport.MSAA_2X)
+	option.add_item(tr("MSAA_4X"), Viewport.MSAA_4X)
+	option.add_item(tr("MSAA_8X"), Viewport.MSAA_8X)
+	option.item_selected.connect(_on_msaa_selected)
+	return option
+
+func _make_fxaa_option() -> OptionButton:
+	var option := OptionButton.new()
+	option.add_theme_font_size_override(&"font_size", UIThemeState.palette.font_size_sublabel)
+	option.add_item(tr("COMMON_OFF"), Viewport.SCREEN_SPACE_AA_DISABLED)
+	option.add_item(tr("COMMON_ON"), Viewport.SCREEN_SPACE_AA_FXAA)
+	option.item_selected.connect(_on_fxaa_selected)
+	return option
+
+func _make_bloom_option() -> OptionButton:
+	var option := OptionButton.new()
+	option.add_theme_font_size_override(&"font_size", UIThemeState.palette.font_size_sublabel)
+	option.add_item(tr("COMMON_OFF"), 0)
+	option.add_item(tr("COMMON_ON"), 1)
+	option.item_selected.connect(_on_bloom_selected)
+	return option
+
 func _refresh_display_options() -> void:
 	if DisplayState.config == null:
 		return
@@ -130,6 +165,9 @@ func _refresh_display_options() -> void:
 			_resolution_option.select(i)
 			break
 	_resolution_option.disabled = DisplayState.config.mode != DisplayConfig.Mode.WINDOWED
+	_msaa_option.select(_msaa_option.get_item_index(DisplayState.config.msaa_3d))
+	_fxaa_option.select(_fxaa_option.get_item_index(DisplayState.config.screen_space_aa))
+	_bloom_option.select(_bloom_option.get_item_index(1 if DisplayState.config.bloom_enabled else 0))
 	_sensitivity_slider.set_value_no_signal(DisplayState.config.fps_mouse_sensitivity)
 
 func _on_window_mode_selected(index: int) -> void:
@@ -140,6 +178,15 @@ func _on_resolution_selected(index: int) -> void:
 	if index < 0 or index >= resolutions.size():
 		return
 	DisplayState.set_resolution(resolutions[index])
+
+func _on_msaa_selected(index: int) -> void:
+	DisplayState.set_msaa_3d(_msaa_option.get_item_id(index))
+
+func _on_fxaa_selected(index: int) -> void:
+	DisplayState.set_screen_space_aa(_fxaa_option.get_item_id(index))
+
+func _on_bloom_selected(index: int) -> void:
+	DisplayState.set_bloom_enabled(_bloom_option.get_item_id(index) == 1)
 
 func _make_sensitivity_slider() -> HSlider:
 	var slider := HSlider.new()
@@ -180,22 +227,22 @@ func _make_section_label(text: String) -> Label:
 	label.theme_type_variation = &"SectionLabel"
 	return label
 
-func _make_panel(size: Vector2, title_text: String) -> Panel:
+func _make_panel(panel_size: Vector2, title_text: String) -> Panel:
 	var panel := Panel.new()
-	panel.custom_minimum_size = size
-	panel.size = size
+	panel.custom_minimum_size = panel_size
+	panel.size = panel_size
 	panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	panel.offset_left = -size.x * 0.5
-	panel.offset_top = -size.y * 0.5
-	panel.offset_right = size.x * 0.5
-	panel.offset_bottom = size.y * 0.5
+	panel.offset_left = -panel_size.x * 0.5
+	panel.offset_top = -panel_size.y * 0.5
+	panel.offset_right = panel_size.x * 0.5
+	panel.offset_bottom = panel_size.y * 0.5
 
 	var title := Label.new()
 	title.text = title_text
 	title.theme_type_variation = &"HeadingLabel"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.position = Vector2(0.0, 14.0)
-	title.size = Vector2(size.x, 22.0)
+	title.size = Vector2(panel_size.x, 22.0)
 	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(title)
 

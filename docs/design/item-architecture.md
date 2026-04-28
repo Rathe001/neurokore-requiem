@@ -225,11 +225,48 @@ These are illustrative — the full affix table will be built when the stat syst
 |---|---|
 | of the Bear | +carry capacity |
 | of Resilience | +elemental resistance |
-| of Clarity | +Clarity stat |
+| of the Bulwark | +max health |
 
-### Attribute Stats on Items
+### Class Attribute Stats on Items
 
-Items can roll attribute bonuses (Deviation, Ambition, Orthodoxy, etc.) as prefixes or suffixes. This is the primary way players shift their stat distribution and trigger [tier perk breakpoints](attribute-system.md#stat-identity--tier-perks--visual-metamorphosis). Swapping a chest piece with +15 Ambition for one with +15 Deviation can cross a tier threshold — hence the [gear swap confirmation dialog](attribute-system.md).
+Items can roll bonuses to the six rollable class attribute stats — Orthodoxy, Ambition, Deviation, Optimization, Indulgence, Clarity — as a **separate slot system** independent of the prefix/suffix affix budget. The number of class stat slots an item may carry is gated by item level:
+
+| Item Level Range | Class Stat Slots | Game Phase |
+|---|---|---|
+| 1 – 33 | 1 | Early game |
+| 34 – 66 | 1 – 2 | Mid game |
+| 67 – 100 | 1 – 3 | Late game |
+
+Class stat slots are **additive** to prefix/suffix slots. A blue mid-game chest could carry 1 prefix + 1 suffix + 1–2 class stat rolls. Combat-side affixes (crit, pierce, attack speed, etc.) live entirely in the prefix/suffix pools and never compete with class identity for budget.
+
+Tier perks fire on the player's **aggregate** equipped class-stat totals (see [Attribute System](attribute-system.md)). Multi-stat late-game items therefore don't inflate tier perk magnitudes — they relax slot economy, letting endgame players trade gear slots for hybrid builds (e.g. three hybrid items reaching T5 Deviation + T3 Orthodoxy instead of needing five Deviation-only items). This is the intended endgame power lever.
+
+Swapping a piece whose class-stat rolls differ can cross tier thresholds — hence the [gear swap confirmation dialog](attribute-system.md).
+
+### Combat Affix Pool
+
+Combat affixes fill the standard prefix/suffix slots and tune how a build kills. The list is intentionally extensible — more affixes will be added as systems come online. All numerical ranges scale with item level.
+
+**Damage / offense (prefix-leaning):**
+- Base damage bonus
+- Hit chance
+- Crit chance
+- Crit damage
+- Pierce
+- Attack speed
+- Elemental damage (cryo, fire, electric, toxic — see [Equipment](equipment.md) damage types)
+
+**Utility / defense (suffix-leaning):**
+- Cooldown reduction
+- Movement speed
+- Lifesteal / leech on hit
+- Resource regen on hit
+- Reduced resource cost
+- Range, knockback (weapon-specific)
+- Damage reduction, elemental resistance (armor-specific)
+- Carry capacity, max health
+
+The prefix/suffix split is convention; the affix table maps each entry to its pool. Class attribute stats are **not** in this pool — they roll in the separate class-stat slot system above.
 
 ---
 
@@ -255,16 +292,20 @@ See [Gear Augmentation](gear-augmentation.md) for the full augment system (schem
 2. Roll item main type + sub type (weighted by enemy type, zone, etc.)
 3. Roll item level (player level, enemy level, variance)
 4. Roll rarity (separate algorithm — MF%, zone modifiers, etc.)
-5. Based on rarity:
-   - Gray:   no modifiers
+5. Based on rarity, roll combat affixes (prefix/suffix pool):
+   - Gray:   no affixes
    - Green:  roll 1 prefix OR 1 suffix
    - Blue:   roll 1 prefix AND 1 suffix
    - Purple: roll 1 prefix + 1 suffix + 1 special modifier
    - Orange: load hand-crafted definition
-6. Roll stat values for each modifier (bounded by item level budget)
-7. Roll augment slot count (item level + rarity weighted)
-8. Roll weight (base weight for sub type + variance from modifiers)
-9. Assign item properties → spawn pickup in world
+6. Roll class attribute stat slots based on item level (additive to affixes):
+   - ilvl 1–33:   1 class stat
+   - ilvl 34–66:  1–2 class stats
+   - ilvl 67–100: 1–3 class stats
+7. Roll values for each affix and class stat (bounded by item level budget)
+8. Roll augment slot count (item level + rarity weighted)
+9. Roll weight (base weight for sub type + variance from modifiers)
+10. Assign item properties → spawn pickup in world
 ```
 
 !!! question "Open Questions — Item Generation"

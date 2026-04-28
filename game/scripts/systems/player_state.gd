@@ -21,7 +21,7 @@ var talent_points_total: int = 20
 var talent_allocations: Dictionary = {}
 
 ## Spent talent points for team nodes.
-## Layout: [[bool]*4]*3 — 3 tiers × 4 nodes.
+## Layout: [[bool]*4]*5 — 5 tiers × 4 nodes.
 var team_node_allocations: Array = []
 
 var _cached_tiers: Dictionary = {}

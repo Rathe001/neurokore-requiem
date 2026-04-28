@@ -31,7 +31,9 @@ SpatialGrid="*res://scripts/systems/spatial_grid.gd"
 EntityPool="*res://scripts/systems/entity_pool.gd"
 InventoryState="*res://scripts/systems/inventory_state.gd"
 AttributeState="*res://scripts/systems/attribute_state.gd"
+PerkState="*res://scripts/systems/perk_state.gd"
 AffixTable="*res://scripts/items/affix_table.gd"
+ItemRoller="*res://scripts/items/item_roller.gd"
 
 [display]
 
@@ -68,8 +70,10 @@ move_right={
 [rendering]
 
 textures/canvas_textures/default_texture_filter=0
+anti_aliasing/quality/msaa_3d=2
 anti_aliasing/quality/use_debanding=true
 environment/defaults/default_clear_color=Color(0.05, 0.05, 0.08, 1)
+anti_aliasing/quality/screen_space_aa=1
 
 [shader_globals]
 

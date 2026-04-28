@@ -49,13 +49,14 @@ func bind(player: Node, skill: Skill, keybind_label: String) -> void:
 		glyph_label.visible = false
 		key_label.visible = true
 	key_label.text = keybind_label
-	cooldown_overlay.position.y = 0.0
-	cooldown_overlay.size.y = 0.0
+	cooldown_overlay.visible = false
 
 func _process(_delta: float) -> void:
 	if _player == null or _skill == null or not _player.has_method(&"get_cooldown_ratio"):
 		return
 	var ratio: float = _player.get_cooldown_ratio(_skill)
-	var h := size.y
-	cooldown_overlay.position.y = h * (1.0 - ratio)
-	cooldown_overlay.size.y = h * ratio
+	if ratio <= 0.0:
+		cooldown_overlay.visible = false
+		return
+	cooldown_overlay.visible = true
+	cooldown_overlay.offset_top = size.y * (1.0 - ratio)

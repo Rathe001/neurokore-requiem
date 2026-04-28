@@ -80,6 +80,33 @@ const PREFIXES: Array[Dictionary] = [
 		"min_item_level": 8,
 		"weight": 70,
 	},
+	{
+		"id": &"honed",
+		"label": "Honed",
+		"kind": ItemAffix.Kind.PREFIX,
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "hit_chance_bonus": 6 },
+		"min_item_level": 1,
+		"weight": 90,
+	},
+	{
+		"id": &"vicious",
+		"label": "Vicious",
+		"kind": ItemAffix.Kind.PREFIX,
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "crit_damage_bonus": 15 },
+		"min_item_level": 5,
+		"weight": 80,
+	},
+	{
+		"id": &"rapid",
+		"label": "Rapid",
+		"kind": ItemAffix.Kind.PREFIX,
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "attack_speed_bonus": 8 },
+		"min_item_level": 3,
+		"weight": 80,
+	},
 	# ── Armor prefixes ───────────────────────────────────────────────────────
 	{
 		"id": &"hardened",
@@ -134,61 +161,6 @@ const PREFIXES: Array[Dictionary] = [
 		"stat_modifiers": { "toxic_resistance": 8 },
 		"min_item_level": 5,
 		"weight": 70,
-	},
-	# ── Attribute prefixes (universal — any item type) ────────────────────────
-	{
-		"id": &"orthodox",
-		"label": "Orthodox",
-		"kind": ItemAffix.Kind.PREFIX,
-		"item_types": [],
-		"stat_modifiers": { "orthodoxy": 6 },
-		"min_item_level": 1,
-		"weight": 80,
-	},
-	{
-		"id": &"deviant",
-		"label": "Deviant",
-		"kind": ItemAffix.Kind.PREFIX,
-		"item_types": [],
-		"stat_modifiers": { "deviation": 6 },
-		"min_item_level": 1,
-		"weight": 80,
-	},
-	{
-		"id": &"optimized",
-		"label": "Optimized",
-		"kind": ItemAffix.Kind.PREFIX,
-		"item_types": [],
-		"stat_modifiers": { "optimization": 6 },
-		"min_item_level": 1,
-		"weight": 80,
-	},
-	{
-		"id": &"ingenious",
-		"label": "Ingenious",
-		"kind": ItemAffix.Kind.PREFIX,
-		"item_types": [],
-		"stat_modifiers": { "ingenuity": 6 },
-		"min_item_level": 1,
-		"weight": 80,
-	},
-	{
-		"id": &"lucid",
-		"label": "Lucid",
-		"kind": ItemAffix.Kind.PREFIX,
-		"item_types": [],
-		"stat_modifiers": { "clarity": 6 },
-		"min_item_level": 1,
-		"weight": 80,
-	},
-	{
-		"id": &"ambitious",
-		"label": "Ambitious",
-		"kind": ItemAffix.Kind.PREFIX,
-		"item_types": [],
-		"stat_modifiers": { "ambition": 6 },
-		"min_item_level": 1,
-		"weight": 80,
 	},
 	# ── Backpack prefixes ────────────────────────────────────────────────────
 	{
@@ -290,60 +262,14 @@ const SUFFIXES: Array[Dictionary] = [
 		"min_item_level": 1,
 		"weight": 90,
 	},
-	# ── Attribute suffixes (universal) ────────────────────────────────────────
 	{
-		"id": &"of_orthodoxy",
-		"label": "of Orthodoxy",
+		"id": &"of_renewal",
+		"label": "of Renewal",
 		"kind": ItemAffix.Kind.SUFFIX,
-		"item_types": [],
-		"stat_modifiers": { "orthodoxy": 4 },
-		"min_item_level": 1,
-		"weight": 80,
-	},
-	{
-		"id": &"of_deviation",
-		"label": "of Deviation",
-		"kind": ItemAffix.Kind.SUFFIX,
-		"item_types": [],
-		"stat_modifiers": { "deviation": 4 },
-		"min_item_level": 1,
-		"weight": 80,
-	},
-	{
-		"id": &"of_optimization",
-		"label": "of Optimization",
-		"kind": ItemAffix.Kind.SUFFIX,
-		"item_types": [],
-		"stat_modifiers": { "optimization": 4 },
-		"min_item_level": 1,
-		"weight": 80,
-	},
-	{
-		"id": &"of_ingenuity",
-		"label": "of Ingenuity",
-		"kind": ItemAffix.Kind.SUFFIX,
-		"item_types": [],
-		"stat_modifiers": { "ingenuity": 4 },
-		"min_item_level": 1,
-		"weight": 80,
-	},
-	{
-		"id": &"of_clarity",
-		"label": "of Clarity",
-		"kind": ItemAffix.Kind.SUFFIX,
-		"item_types": [],
-		"stat_modifiers": { "clarity": 4 },
-		"min_item_level": 1,
-		"weight": 80,
-	},
-	{
-		"id": &"of_ambition",
-		"label": "of Ambition",
-		"kind": ItemAffix.Kind.SUFFIX,
-		"item_types": [],
-		"stat_modifiers": { "ambition": 4 },
-		"min_item_level": 1,
-		"weight": 80,
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "resource_on_hit": 2 },
+		"min_item_level": 5,
+		"weight": 75,
 	},
 	# ── Optics suffixes ──────────────────────────────────────────────────────
 	{
@@ -390,7 +316,7 @@ func _dict_to_affix(d: Dictionary) -> ItemAffix:
 	var a := ItemAffix.new()
 	a.id = d.get("id", &"")
 	a.label = d.get("label", "")
-	a.kind = d.get("kind", ItemAffix.Kind.PREFIX)
+	a.kind = d.get("kind", ItemAffix.Kind.PREFIX) as ItemAffix.Kind
 	a.item_types = Array(d.get("item_types", []), TYPE_STRING, "", null)
 	a.stat_modifiers = d.get("stat_modifiers", {})
 	a.min_item_level = d.get("min_item_level", 1)

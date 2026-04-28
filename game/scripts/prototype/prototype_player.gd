@@ -83,6 +83,7 @@ const FLASHLIGHT_OVER_LIFT := 0.8
 
 var class_id: StringName = &""
 var spec_id: StringName = &""
+var _base_mat: StandardMaterial3D = null
 var _camera: Camera3D
 var _health: int
 var _alive: bool = true
@@ -171,12 +172,21 @@ func _ready() -> void:
 	_stand_test_shape = CapsuleShape3D.new()
 	_stand_test_shape.radius = 0.4
 	_stand_test_shape.height = STAND_HEIGHT
+	_build_stat_vfx()
+
+func _build_stat_vfx() -> void:
+	if _base_mat == null or visual == null:
+		return
+	var controller := StatVFXController.new()
+	add_child(controller)
+	controller.setup(visual, _base_mat)
 
 func _apply_class_appearance() -> void:
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = UIThemeState.palette.player_color
 	mat.metallic = 0.1
 	mat.roughness = 0.6
+	_base_mat = mat
 	_tint_meshes(visual, mat)
 
 func _tint_meshes(node: Node, mat: Material) -> void:
@@ -451,16 +461,40 @@ func _resolve_skill_hit(skill: Skill, aim: Vector3) -> void:
 			PrototypeAttackIndicator.spawn_hit_radial(self, skill.skill_range)
 			_resolve_aoe(skill)
 
+# Prototype baseline so crit visuals are testable until class crit perks ship.
+const PROTO_BASE_CRIT_CHANCE: float = 0.15
+const PROTO_BASE_CRIT_MULT: float = 1.5
+
 func _resolve_cone(skill: Skill, aim: Vector3) -> void:
 	var half_cos := cos(deg_to_rad(skill.cone_deg * 0.5))
+	var hits := PerkState.roll_multistrike()
 	for enode: Node3D in SpatialGrid.query_cone(global_position, aim, skill.skill_range, half_cos, &"enemies"):
-		if enode.has_method(&"take_damage"):
-			enode.take_damage(skill.damage, global_position, skill.knockback)
+		if not enode.has_method(&"take_damage"):
+			continue
+		for _i in hits:
+			var is_crit := _roll_crit()
+			var dmg := _crit_damage(skill.damage, is_crit)
+			enode.take_damage(dmg, global_position, skill.knockback, hits, is_crit)
 
 func _resolve_aoe(skill: Skill) -> void:
+	var hits := PerkState.roll_multistrike()
 	for enode: Node3D in SpatialGrid.query_radius(global_position, skill.skill_range, &"enemies"):
-		if enode.has_method(&"take_damage"):
-			enode.take_damage(skill.damage, global_position, skill.knockback)
+		if not enode.has_method(&"take_damage"):
+			continue
+		for _i in hits:
+			var is_crit := _roll_crit()
+			var dmg := _crit_damage(skill.damage, is_crit)
+			enode.take_damage(dmg, global_position, skill.knockback, hits, is_crit)
+
+func _roll_crit() -> bool:
+	var chance := PROTO_BASE_CRIT_CHANCE + PerkState.get_aggregate(&"crit_chance_pct")
+	return randf() < chance
+
+func _crit_damage(base: int, is_crit: bool) -> int:
+	if not is_crit:
+		return base
+	var mult := PROTO_BASE_CRIT_MULT + PerkState.get_aggregate(&"crit_damage_pct")
+	return int(round(float(base) * mult))
 
 func _tick_cooldowns(delta: float) -> void:
 	for skill in _cooldowns.keys():

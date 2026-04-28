@@ -24,6 +24,7 @@ const SUMMARY_LABEL_GAP := 5.0
 const SUMMARY_BAR_HEIGHT := 10.0
 const SUMMARY_BAR_GAP := 8.0
 const SUMMARY_SEG_GAP := 2.0
+const SUMMARY_SEG_MIN_WIDTH := 40.0
 const NODE_SIZE := Vector2(18.0, 18.0)
 const NODE_GAP := 3.0
 const TIER_MARKER_WIDTH := 2.0
@@ -41,10 +42,6 @@ const TIER_MARKER_COLOR := Color(1.0, 1.0, 1.0, 0.45)
 const TALENT_POINT_COLOR := Color(0.95, 0.85, 0.4, 1.0)
 const TIER_LABEL_COLOR := Color(1.0, 1.0, 1.0, 0.25)
 const ROW_LOCKED_ALPHA := 0.3
-var REL_PRIMARY_COLOR:  Color = AttributeState.RELATIONSHIP_COLORS[&"primary"]
-var REL_TEAM_COLOR:     Color = AttributeState.RELATIONSHIP_COLORS[&"team"]
-var REL_OPP_TEAM_COLOR: Color = AttributeState.RELATIONSHIP_COLORS[&"opp_team"]
-var REL_OPPOSING_COLOR: Color = AttributeState.RELATIONSHIP_COLORS[&"opposing"]
 
 const ANALOG_GROUP_COLOR := Color(0.65, 0.45, 0.25, 0.06)
 const CYBORG_GROUP_COLOR := Color(0.3, 0.85, 1.0, 0.06)
@@ -441,7 +438,19 @@ func _repaint_summary() -> void:
 		return _rel_priority(a) < _rel_priority(b))
 	_summary_stat_order = sorted
 
-	var avail_w: float = _summary_bar.size.x - float(STAT_ROWS.size() - 1) * SUMMARY_SEG_GAP
+	var bar_w: float = _summary_bar.size.x
+	var visible_count := 0
+	for s: StringName in sorted:
+		if pcts.get(s, 0.0) > 0.0:
+			visible_count += 1
+	# Reserve a minimum slice per visible segment so labels stay readable; the
+	# remainder is split proportionally. Empty state splits evenly across all
+	# segments as gray placeholders.
+	var is_empty := total <= 0.001
+	var visual_count: int = sorted.size() if is_empty else visible_count
+	var gap_total := float(maxi(visual_count - 1, 0)) * SUMMARY_SEG_GAP
+	var avail_w := bar_w - gap_total
+	var proportional_w := maxf(avail_w - float(visual_count) * SUMMARY_SEG_MIN_WIDTH, 0.0)
 	var bar_y: float = SUMMARY_LABEL_HEIGHT + SUMMARY_LABEL_GAP
 	_summary_seg_bounds.clear()
 	var x := 0.0
@@ -450,7 +459,13 @@ func _repaint_summary() -> void:
 		var lbl: Label = _summary_labels[i]
 		var seg: ColorRect = _summary_segments[i]
 		var pct: float = pcts.get(stat_id, 0.0)
-		var seg_w: float = (pct / total) * avail_w if total > 0.001 else avail_w / float(STAT_ROWS.size())
+		var seg_w: float
+		if is_empty:
+			seg_w = avail_w / float(sorted.size())
+		elif pct > 0.0:
+			seg_w = SUMMARY_SEG_MIN_WIDTH + (pct / total) * proportional_w
+		else:
+			seg_w = 0.0
 		_summary_seg_bounds.append(x)
 		var stat_color: Color = AttributeState.STAT_COLORS.get(stat_id, Color.WHITE)
 		var short_name: String = AttributeState.STAT_SHORT.get(stat_id, (stat_id as String).to_upper())
@@ -463,8 +478,9 @@ func _repaint_summary() -> void:
 		seg.position = Vector2(x, bar_y)
 		seg.size = Vector2(seg_w, SUMMARY_BAR_HEIGHT)
 		var rel_color := _stat_rel_color(stat_id)
-		seg.color = Color(rel_color.r, rel_color.g, rel_color.b, 0.7 if total > 0.001 else 0.15)
-		x += seg_w + SUMMARY_SEG_GAP
+		seg.color = Color(rel_color.r, rel_color.g, rel_color.b, 0.7 if not is_empty else 0.15)
+		if seg_w > 0.0:
+			x += seg_w + SUMMARY_SEG_GAP
 	_summary_seg_bounds.append(x)
 
 func _on_summary_bar_input(event: InputEvent) -> void:
@@ -520,7 +536,7 @@ func _paint_row(row: Dictionary, rel_color: Color, unlocked_tier: int) -> void:
 	bar_fill.color = stat_color
 	bar_fill.size.x = bar_bg.size.x * float(unlocked_tier) / float(TIER_COUNT)
 	if row.has("highlight_bar"):
-		var is_primary := rel_color == REL_PRIMARY_COLOR
+		var is_primary := rel_color == AttributeState.RELATIONSHIP_COLORS[&"primary"]
 		var hbar := row["highlight_bar"] as ColorRect
 		hbar.visible = is_primary
 		hbar.color = stat_color

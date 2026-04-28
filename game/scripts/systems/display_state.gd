@@ -33,6 +33,9 @@ var config: DisplayConfig
 
 func _ready() -> void:
 	config = _load_config()
+	# Sync newly-spawned WorldEnvironment nodes with the current bloom setting
+	# so scene transitions don't reintroduce glow when the user disabled it.
+	get_tree().node_added.connect(_on_node_added)
 	apply()
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -66,6 +69,27 @@ func set_resolution(new_resolution: Vector2i) -> void:
 	apply()
 	save()
 
+func set_msaa_3d(new_msaa: int) -> void:
+	if config == null or config.msaa_3d == new_msaa:
+		return
+	config.msaa_3d = new_msaa
+	apply()
+	save()
+
+func set_screen_space_aa(new_ssaa: int) -> void:
+	if config == null or config.screen_space_aa == new_ssaa:
+		return
+	config.screen_space_aa = new_ssaa
+	apply()
+	save()
+
+func set_bloom_enabled(enabled: bool) -> void:
+	if config == null or config.bloom_enabled == enabled:
+		return
+	config.bloom_enabled = enabled
+	apply()
+	save()
+
 func toggle_fullscreen() -> void:
 	if config == null:
 		return
@@ -87,7 +111,32 @@ func apply() -> void:
 		DisplayConfig.Mode.EXCLUSIVE_FULLSCREEN:
 			DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_BORDERLESS, false)
 			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN)
+	# Apply AA to the root viewport. Both settings live on Viewport in Godot 4
+	# and override project.godot defaults at runtime.
+	var vp := get_viewport()
+	if vp != null:
+		vp.msaa_3d = config.msaa_3d
+		vp.screen_space_aa = config.screen_space_aa
+	_apply_bloom_to_environments()
 	changed.emit()
+
+func _apply_bloom_to_environments() -> void:
+	var root := get_tree().root if get_tree() != null else null
+	if root == null:
+		return
+	for node in root.find_children("*", "WorldEnvironment", true, false):
+		var we := node as WorldEnvironment
+		if we != null and we.environment != null:
+			we.environment.glow_enabled = config.bloom_enabled
+
+func _on_node_added(node: Node) -> void:
+	# Catches WorldEnvironment nodes added after _ready (level loads, scene
+	# changes) so the user's bloom preference applies to them too.
+	if config == null:
+		return
+	var we := node as WorldEnvironment
+	if we != null and we.environment != null:
+		we.environment.glow_enabled = config.bloom_enabled
 
 func save() -> void:
 	if config == null:
@@ -108,4 +157,6 @@ func _center_window() -> void:
 	var screen_size := DisplayServer.screen_get_size(screen)
 	var screen_origin := DisplayServer.screen_get_position(screen)
 	var window_size := DisplayServer.window_get_size()
-	DisplayServer.window_set_position(screen_origin + (screen_size - window_size) / 2)
+	@warning_ignore("integer_division")
+	var offset := (screen_size - window_size) / 2
+	DisplayServer.window_set_position(screen_origin + offset)

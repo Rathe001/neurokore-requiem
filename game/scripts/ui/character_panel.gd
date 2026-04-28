@@ -1,4 +1,5 @@
 extends Control
+class_name CharacterPanel
 
 const PANEL_SIZE := Vector2(440.0, 500.0)
 const SHEET_HEIGHT := 290.0
@@ -21,6 +22,7 @@ const ALLOC_BAR_HEIGHT    := 10.0
 const ALLOC_LABEL_HEIGHT  := 9.0
 const ALLOC_LABEL_GAP     := 4.0
 const ALLOC_SEG_GAP       := 2.0
+const ALLOC_SEG_MIN_WIDTH := 40.0
 const ALLOC_BAR_BG        := Color(0.12, 0.12, 0.12, 0.9)
 
 const EQUIP_SLOTS: Array[Dictionary] = [
@@ -494,7 +496,18 @@ func _repaint_alloc_bar() -> void:
 	_alloc_stat_order = sorted
 
 	var bar_w := _alloc_bar.size.x
-	var avail_w := bar_w - float(sorted.size() - 1) * ALLOC_SEG_GAP
+	var visible_count := 0
+	for s: StringName in sorted:
+		if pcts.get(s, 0.0) > 0.0:
+			visible_count += 1
+	# Reserve a minimum slice per visible segment so labels stay readable; the
+	# remainder is split proportionally. Empty state splits evenly across all
+	# segments as gray placeholders.
+	var is_empty := total <= 0.001
+	var visual_count: int = sorted.size() if is_empty else visible_count
+	var gap_total := float(maxi(visual_count - 1, 0)) * ALLOC_SEG_GAP
+	var avail_w := bar_w - gap_total
+	var proportional_w := maxf(avail_w - float(visual_count) * ALLOC_SEG_MIN_WIDTH, 0.0)
 	var label_y := 0.0
 	var seg_y := ALLOC_LABEL_HEIGHT + ALLOC_LABEL_GAP
 	_alloc_seg_bounds.clear()
@@ -502,7 +515,13 @@ func _repaint_alloc_bar() -> void:
 	for i in sorted.size():
 		var stat_id: StringName = sorted[i]
 		var pct: float = pcts.get(stat_id, 0.0)
-		var seg_w: float = (pct / total) * avail_w if total > 0.001 else avail_w / float(sorted.size())
+		var seg_w: float
+		if is_empty:
+			seg_w = avail_w / float(sorted.size())
+		elif pct > 0.0:
+			seg_w = ALLOC_SEG_MIN_WIDTH + (pct / total) * proportional_w
+		else:
+			seg_w = 0.0
 		_alloc_seg_bounds.append(x)
 		var stat_color: Color = AttributeState.STAT_COLORS.get(stat_id, Color.WHITE)
 		var short_name: String = AttributeState.STAT_SHORT.get(stat_id, (stat_id as String).to_upper())
@@ -518,8 +537,9 @@ func _repaint_alloc_bar() -> void:
 		seg.size = Vector2(seg_w, ALLOC_BAR_HEIGHT)
 		var rel_key := AttributeState.get_stat_rel_color_key(stat_id, PlayerState.class_id, PlayerState.spec_id)
 		var rel_color: Color = AttributeState.RELATIONSHIP_COLORS[rel_key]
-		seg.color = Color(rel_color.r, rel_color.g, rel_color.b, 0.7 if total > 0.001 else 0.15)
-		x += seg_w + ALLOC_SEG_GAP
+		seg.color = Color(rel_color.r, rel_color.g, rel_color.b, 0.7 if not is_empty else 0.15)
+		if seg_w > 0.0:
+			x += seg_w + ALLOC_SEG_GAP
 	_alloc_seg_bounds.append(x)
 
 func _on_alloc_bar_input(event: InputEvent) -> void:

@@ -68,6 +68,7 @@ func _ready() -> void:
 		player.crouch_changed.connect(_on_crouch_changed)
 	if player.has_signal(&"light_changed"):
 		player.light_changed.connect(_on_light_changed)
+	PerkState.perk_gained.connect(_on_perk_gained)
 	_on_health_changed(_max_health, _max_health)
 	_bind_skill_slots(player)
 	_bind_resource_pool(player)
@@ -213,13 +214,13 @@ func _on_health_changed(current: int, max_value: int) -> void:
 func _repaint_hp() -> void:
 	var ratio := clampf(float(_last_hp_current) / float(_max_health), 0.0, 1.0)
 	var p := UIThemeState.palette
-	hp_fill.size.x = HP_BAR_WIDTH * ratio
+	hp_fill.offset_right = hp_fill.offset_left + HP_BAR_WIDTH * ratio
 	hp_fill.color = p.hp_full if ratio > LOW_HP_RATIO else p.hp_low
 	hp_label.text = "%d / %d" % [max(_last_hp_current, 0), _max_health]
 
 func _on_resource_changed(current: int, max_value: int) -> void:
 	var ratio := 0.0 if max_value <= 0 else clampf(float(current) / float(max_value), 0.0, 1.0)
-	resource_fill.size.x = RESOURCE_BAR_WIDTH * ratio
+	resource_fill.offset_right = resource_fill.offset_left + RESOURCE_BAR_WIDTH * ratio
 	resource_label.text = "%d / %d" % [max(current, 0), max_value]
 
 func _on_player_died() -> void:
@@ -227,6 +228,9 @@ func _on_player_died() -> void:
 
 func _on_notification_requested(text: String) -> void:
 	_show_banner(text, 2.5)
+
+func _on_perk_gained(perk: Dictionary) -> void:
+	_show_banner("%s — %s" % [perk.get("label", ""), perk.get("description", "")], 3.0)
 
 func _show_banner(text: String, duration: float) -> void:
 	_banner_token += 1

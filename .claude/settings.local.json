@@ -23,7 +23,11 @@
       "Bash(xargs grep *)",
       "Bash(grep -oa '\"animations\":\\\\[.\\\\{1,200000\\\\}')",
       "Bash(node *)",
-      "Bash(xargs rm *)"
+      "Bash(xargs rm *)",
+      "Bash(rm -f \"C:/Users/josh/Projects/neurokore-requiem/game/resources/items/starters/\"*.tres)",
+      "Bash(rm -f \"C:/Users/josh/Projects/neurokore-requiem/game/resources/items/common_\"*.tres)",
+      "Bash(grep -E \"\\\\.uid$\")",
+      "Bash(python *)"
     ]
   }
 }

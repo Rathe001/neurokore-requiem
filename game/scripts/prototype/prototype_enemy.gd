@@ -10,6 +10,11 @@ const DEATH_FALLBACK_DURATION := 0.6
 const CREDIT_DROP_MIN := 1
 const CREDIT_DROP_MAX := 5
 const CREDIT_PICKUP_SCENE: PackedScene = preload("res://scenes/prototype/prototype_credit_pickup.tscn")
+const ITEM_PICKUP_SCENE: PackedScene = preload("res://scenes/prototype/prototype_item_pickup.tscn")
+const ITEM_DROP_CHANCE: float = 0.30
+# Prototype: spread ilvl across all bands so the new design is visible end-to-end.
+const ITEM_DROP_ILVL_MIN: int = 1
+const ITEM_DROP_ILVL_MAX: int = 100
 
 const GRAVITY := 22.0
 const CHASE_SPEED := 3.2
@@ -134,13 +139,15 @@ func _on_mouse_exited() -> void:
 	_set_outline(false)
 	get_tree().call_group(&"interactable_tooltip", &"hide_tooltip")
 
-func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_strength: float = 0.0) -> void:
+func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_strength: float = 0.0, multistrike: int = 1, is_crit: bool = false) -> void:
 	if not _alive:
 		return
 	if DebugState.config != null and DebugState.config.one_shot_enemies:
 		amount = max(amount, max_health)
 	_health -= amount
 	_update_health_bar()
+	var head := global_position + Vector3(0.0, 1.8, 0.0)
+	DamageNumber.spawn(get_parent(), head, amount, multistrike, is_crit)
 	if knockback_strength > 0.0:
 		var dir := global_position - knockback_from
 		dir.y = 0.0
@@ -240,6 +247,7 @@ func _die() -> void:
 	if health_bar != null:
 		health_bar.visible = false
 	_drop_credits()
+	_drop_item()
 	var played := _play_anim(ANIM_DEATH, 1.0)
 	if not played:
 		if anim_player != null:
@@ -258,6 +266,21 @@ func _drop_credits() -> void:
 		return
 	var pickup := CREDIT_PICKUP_SCENE.instantiate()
 	pickup.amount = randi_range(CREDIT_DROP_MIN, CREDIT_DROP_MAX)
+	parent.add_child(pickup)
+	pickup.global_position = global_position + Vector3(0.0, 1.0, 0.0)
+
+func _drop_item() -> void:
+	if randf() >= ITEM_DROP_CHANCE:
+		return
+	var parent := get_parent()
+	if parent == null:
+		return
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var ilvl := rng.randi_range(ITEM_DROP_ILVL_MIN, ITEM_DROP_ILVL_MAX)
+	var item := ItemRoller.roll_random(ilvl, rng)
+	var pickup := ITEM_PICKUP_SCENE.instantiate()
+	pickup.configure(item)
 	parent.add_child(pickup)
 	pickup.global_position = global_position + Vector3(0.0, 1.0, 0.0)
 
