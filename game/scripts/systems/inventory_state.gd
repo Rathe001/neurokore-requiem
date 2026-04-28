@@ -10,55 +10,33 @@ const BASE_INVENTORY_SIZE := 40
 const MAX_INVENTORY_SIZE := 40
 const MAX_UTILITY_SLOTS := 4
 
-# Test items follow the item-architecture model: each carries only its rolled
-# class stats (no splash). Solo-equipping a tier-N single-stat item lands that
-# stat exactly on its tier threshold (matches AttributeState.TIERS_OWN).
-const TIER_PCTS: Array[int] = [12, 25, 40, 55, 72]
+# Tier-5 starter kit: one single-stat item per specialized class. Equip the
+# matching item alone (no other stat-bearing gear) to push that class's primary
+# stat to >= 72% of the budget, hitting AttributeState.TIERS_OWN tier 5.
+const T5_STAT_PCT: int = 72
 
-const TEST_SLOTS: Array[StringName] = [
-	&"head", &"optics", &"backpack", &"weapon", &"chest",
-	&"offhand", &"gloves", &"belt", &"boots",
-]
-
-const TIER_RARITIES: Array[StringName] = [&"common", &"magic", &"rare", &"unique", &"unique"]
-
-# Mid-game showcase: each pair gets T2 on both stats (25% + 25%).
-const DUAL_STAT_PAIRS: Array = [
-	[&"dev", &"ort"],
-	[&"opt", &"cla"],
-	[&"ing", &"amb"],
-	[&"dev", &"opt"],
-	[&"ort", &"ing"],
-	[&"amb", &"cla"],
-]
-
-# Late-game showcase: each trio gets T1 on all three (12% + 12% + 12%).
-const TRIPLE_STAT_TRIOS: Array = [
-	[&"dev", &"opt", &"cla"],
-	[&"ort", &"ing", &"amb"],
-	[&"ort", &"dev", &"opt"],
-]
+# Slot per class for the starter T5 items. Picked so all six can sit in the
+# inventory simultaneously without colliding with the auto-equipped weapon.
+const STARTER_KIT_SLOTS: Dictionary = {
+	&"gentleman":   &"head",
+	&"survivalist": &"chest",
+	&"enculted":    &"gloves",
+	&"forged":      &"boots",
+	&"automaton":   &"belt",
+	&"polymath":    &"offhand",
+}
 
 var equipment: Dictionary = {}
 var inventory: Array[Item] = []
 
 func _ready() -> void:
 	inventory.resize(MAX_INVENTORY_SIZE)
-	var idx := 0
-	for stat: StringName in AttributeState.ROLLABLE_STATS:
-		for tier_idx in 5:
-			var slot := TEST_SLOTS[idx % TEST_SLOTS.size()]
-			inventory[idx] = _make_test_item(stat, tier_idx + 1, slot)
-			idx += 1
-	for pair: Array in DUAL_STAT_PAIRS:
-		var slot := TEST_SLOTS[idx % TEST_SLOTS.size()]
-		inventory[idx] = _make_multi_stat_item(pair, 2, slot)
-		idx += 1
-	for trio: Array in TRIPLE_STAT_TRIOS:
-		var slot := TEST_SLOTS[idx % TEST_SLOTS.size()]
-		inventory[idx] = _make_multi_stat_item(trio, 1, slot)
-		idx += 1
+	var i := 0
+	for spec_id: StringName in AttributeState.CLASS_DEFINITIONS:
+		inventory[i] = _make_class_tier5_item(spec_id)
+		i += 1
 	equipment[&"weapon"] = _make_starter_weapon()
+	equipment[&"offhand"] = _make_starter_offhand()
 
 func get_equipped(slot: StringName) -> Item:
 	return equipment.get(slot, null)
@@ -150,53 +128,34 @@ func get_utility_capacity() -> int:
 # ── Test items ────────────────────────────────────────────────────────────────
 
 func _make_starter_weapon() -> Item:
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	return ItemRoller.roll("1H Weapon", 1, &"common", rng)
+
+func _make_starter_offhand() -> Item:
 	var item := Item.new()
-	item.id = &"starter_weapon"
-	item.kind = &"weapon"
-	item.main_type = "Weapon"
-	item.sub_type = "Starter"
-	item.glyph = "/"
-	item.glyph_color = Color(0.85, 0.90, 1.00)
+	item.id = &"starter_offhand"
+	item.kind = &"offhand"
+	item.main_type = "Offhand"
+	item.glyph = "("
+	item.glyph_color = ItemRoller.RARITY_COLOR.get(&"common", Color.WHITE)
 	item.rarity = &"common"
-	item.name_key = "Training Blade"
-	item.two_handed = false
-	item.fire_skill = load("res://resources/skills/basic_attack.tres") as Skill
+	item.name_key = "Starter Offhand"
+	item.fire_skill = preload("res://resources/skills/aoe_burst.tres")
 	return item
 
-func _make_test_item(stat: StringName, tier: int, slot: StringName) -> Item:
+func _make_class_tier5_item(spec_id: StringName) -> Item:
+	var stat: StringName = AttributeState.CLASS_DEFINITIONS[spec_id][&"stat"]
+	var slot: StringName = STARTER_KIT_SLOTS.get(spec_id, &"head")
 	var short: String = AttributeState.STAT_SHORT.get(stat, "?")
-	var pct: int = TIER_PCTS[tier - 1]
+	var spec_label := String(spec_id).capitalize()
 	var item := Item.new()
-	item.id = StringName("test_%s_t%d" % [stat, tier])
+	item.id = StringName("starter_t5_%s" % spec_id)
 	item.kind = slot
 	item.main_type = String(slot).capitalize()
-	item.glyph = AttributeState.TIER_ROMAN[tier - 1]
+	item.glyph = AttributeState.TIER_ROMAN[4]
 	item.glyph_color = AttributeState.STAT_COLORS.get(stat, Color.WHITE)
-	item.rarity = TIER_RARITIES[tier - 1]
-	item.name_key = "%s T%d (%d%%)" % [short, tier, pct]
-	item.stat_modifiers = {stat: pct}
-	return item
-
-func _make_multi_stat_item(stats: Array, tier: int, slot: StringName) -> Item:
-	var pct: int = TIER_PCTS[tier - 1]
-	var shorts: Array[String] = []
-	var blended := Color(0.0, 0.0, 0.0, 0.0)
-	for s: StringName in stats:
-		shorts.append(AttributeState.STAT_SHORT.get(s, "?"))
-		blended += AttributeState.STAT_COLORS.get(s, Color.WHITE)
-	blended /= float(stats.size())
-	var label := "+".join(shorts)
-
-	var item := Item.new()
-	item.id = StringName("test_multi_%s_t%d" % [label.to_lower(), tier])
-	item.kind = slot
-	item.main_type = String(slot).capitalize()
-	item.glyph = AttributeState.TIER_ROMAN[tier - 1]
-	item.glyph_color = blended
-	item.rarity = TIER_RARITIES[tier - 1]
-	item.name_key = "%s T%d (%d%% ea)" % [label, tier, pct]
-	var mods: Dictionary = {}
-	for s: StringName in stats:
-		mods[s] = pct
-	item.stat_modifiers = mods
+	item.rarity = &"unique"
+	item.name_key = "%s T5 (%s %d%%)" % [spec_label, short, T5_STAT_PCT]
+	item.stat_modifiers = {stat: T5_STAT_PCT}
 	return item

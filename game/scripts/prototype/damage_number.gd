@@ -1,9 +1,15 @@
 class_name DamageNumber extends Node3D
 
+# Pooled floating combat numbers. At horde scale every kill / multistrike
+# emits at least one of these; allocating a fresh Node3D + Label3D + Tween
+# per hit was visible in profiler. Free instances are kept on a static stack
+# and rebound to a new world parent on reuse.
+
 const DURATION: float = 0.7
 const RISE: float = 1.0
 const SPREAD: float = 0.35
 const PIXEL_SIZE: float = 0.004
+const POOL_LIMIT: int = 64
 
 const FONT_NORMAL: int = 56
 const FONT_MULTISTRIKE: int = 78
@@ -20,23 +26,47 @@ const COLOR_CRIT: Color = Color(1.00, 0.40, 0.30, 1.0)
 const OUTLINE_COLOR: Color = Color(0.05, 0.05, 0.08, 1.0)
 const OUTLINE_SIZE: int = 12
 
+static var _pool: Array[DamageNumber] = []
+
 var _label: Label3D
 var _shake: float = 0.0
 var _elapsed: float = 0.0
+var _tween: Tween
 
 static func spawn(world: Node, pos: Vector3, amount: int, multistrike: int = 1, is_crit: bool = false) -> void:
-	var n := DamageNumber.new()
-	n.top_level = true
-	n.global_position = pos + Vector3(randf_range(-SPREAD, SPREAD), 0.0, randf_range(-SPREAD, SPREAD))
-
-	var label := Label3D.new()
+	var n: DamageNumber = _acquire()
+	var label := n._label
 	var text := str(amount)
 	if multistrike > 1:
 		text += " ×%d" % multistrike
 	label.text = text
 	label.font_size = _font_for(multistrike, is_crit)
-	label.pixel_size = PIXEL_SIZE
 	label.modulate = COLOR_CRIT if is_crit else COLOR_NORMAL
+	label.position = Vector3.ZERO
+	n._shake = _shake_for(multistrike, is_crit)
+	n._elapsed = 0.0
+
+	var current_parent := n.get_parent()
+	if current_parent != world:
+		if current_parent != null:
+			current_parent.remove_child(n)
+		world.add_child(n)
+
+	n.global_position = pos + Vector3(randf_range(-SPREAD, SPREAD), 0.0, randf_range(-SPREAD, SPREAD))
+	n._animate()
+
+static func _acquire() -> DamageNumber:
+	while _pool.size() > 0:
+		var n: DamageNumber = _pool.pop_back()
+		if is_instance_valid(n) and is_instance_valid(n._label):
+			return n
+	return _build_new()
+
+static func _build_new() -> DamageNumber:
+	var n := DamageNumber.new()
+	n.top_level = true
+	var label := Label3D.new()
+	label.pixel_size = PIXEL_SIZE
 	label.outline_modulate = OUTLINE_COLOR
 	label.outline_size = OUTLINE_SIZE
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
@@ -45,10 +75,7 @@ static func spawn(world: Node, pos: Vector3, amount: int, multistrike: int = 1, 
 	label.fixed_size = false
 	n._label = label
 	n.add_child(label)
-
-	n._shake = _shake_for(multistrike, is_crit)
-	world.add_child(n)
-	n._animate()
+	return n
 
 static func _font_for(multistrike: int, is_crit: bool) -> int:
 	if is_crit and multistrike > 1:
@@ -69,12 +96,26 @@ static func _shake_for(multistrike: int, is_crit: bool) -> float:
 	return SHAKE_NONE
 
 func _animate() -> void:
+	if _tween != null and _tween.is_valid():
+		_tween.kill()
 	var start := global_position
 	var end := start + Vector3(0.0, RISE, 0.0)
-	var tween := create_tween().set_parallel(true)
-	tween.tween_property(self, ^"global_position", end, DURATION).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tween.tween_property(_label, ^"modulate:a", 0.0, DURATION).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN).set_delay(DURATION * 0.35)
-	tween.chain().tween_callback(queue_free)
+	_label.modulate.a = 1.0
+	_tween = create_tween().set_parallel(true)
+	_tween.tween_property(self, ^"global_position", end, DURATION).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_tween.tween_property(_label, ^"modulate:a", 0.0, DURATION).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN).set_delay(DURATION * 0.35)
+	_tween.chain().tween_callback(_release)
+
+func _release() -> void:
+	_tween = null
+	_shake = 0.0
+	if _pool.size() < POOL_LIMIT:
+		var parent := get_parent()
+		if parent != null:
+			parent.remove_child(self)
+		_pool.append(self)
+	else:
+		queue_free()
 
 func _process(delta: float) -> void:
 	if _shake <= 0.0 or _label == null:

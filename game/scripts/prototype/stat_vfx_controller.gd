@@ -6,7 +6,10 @@ extends Node3D
 # T5 → halo. Stats at the same tier band still blend (e.g. two stats at T1
 # blend their emissive colors).
 
-const STAT_COLORS: Dictionary = {
+# Punchier than AttributeState.STAT_COLORS by design — the UI palette reads
+# legibly on text/icons; VFX needs higher saturation to register on emissive
+# meshes and additive particles. Keep the two palettes separate.
+const VFX_STAT_COLORS: Dictionary = {
 	&"ort": Color(1.00, 0.85, 0.30, 1.0),  # gold
 	&"ing": Color(0.10, 1.00, 0.50, 1.0),  # bioluminescent green
 	&"amb": Color(0.55, 0.10, 0.90, 1.0),  # deep purple
@@ -91,7 +94,7 @@ func _blend_emissive() -> void:
 	for stat_id in _current_tiers:
 		if int(_current_tiers[stat_id]) != 1:
 			continue
-		var col: Color = STAT_COLORS.get(stat_id, Color.WHITE)
+		var col: Color = VFX_STAT_COLORS.get(stat_id, Color.WHITE)
 		r += col.r
 		g += col.g
 		b += col.b
@@ -129,7 +132,7 @@ func _build_mist_particles(stat_id: StringName, visual: Node3D) -> void:
 	proc.damping_max = 0.9
 	p.process_material = proc
 
-	var col: Color = STAT_COLORS.get(stat_id, Color.WHITE)
+	var col: Color = VFX_STAT_COLORS.get(stat_id, Color.WHITE)
 	var puff := SphereMesh.new()
 	puff.radius = 0.05
 	puff.height = 0.10
@@ -184,7 +187,7 @@ func _build_directional_particles(stat_id: StringName, visual: Node3D) -> void:
 	var draw_mat := StandardMaterial3D.new()
 	draw_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	draw_mat.emission_enabled = true
-	draw_mat.emission = STAT_COLORS.get(stat_id, Color.WHITE)
+	draw_mat.emission = VFX_STAT_COLORS.get(stat_id, Color.WHITE)
 	draw_mat.emission_energy_multiplier = 4.0
 	draw_mat.albedo_color = Color(0, 0, 0, 0)
 	draw_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -246,7 +249,7 @@ func _blend_aura() -> void:
 	for stat_id in _current_tiers:
 		if int(_current_tiers[stat_id]) != 4:
 			continue
-		var col: Color = STAT_COLORS.get(stat_id, Color.WHITE)
+		var col: Color = VFX_STAT_COLORS.get(stat_id, Color.WHITE)
 		r += col.r
 		g += col.g
 		b += col.b
@@ -301,7 +304,7 @@ func _refresh_halo(stat_id: StringName, tier: int) -> void:
 
 func _build_halo(stat_id: StringName) -> MeshInstance3D:
 	var inst := MeshInstance3D.new()
-	var col: Color = STAT_COLORS.get(stat_id, Color.WHITE)
+	var col: Color = VFX_STAT_COLORS.get(stat_id, Color.WHITE)
 	var rot_speed := 0.0
 
 	match stat_id:

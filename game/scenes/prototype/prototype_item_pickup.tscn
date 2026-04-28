@@ -34,17 +34,8 @@ mesh = SubResource("beam_mesh")
 cast_shadow = 0
 visible = false
 
-[node name="Glyph" type="Label3D" parent="Visual"]
-position = Vector3(0, 0.9, 0)
-pixel_size = 0.012
-text = "?"
-font_size = 96
-horizontal_alignment = 1
-vertical_alignment = 1
-outline_size = 18
-alpha_cut = 1
-double_sided = true
-billboard = 1
+[node name="Object" type="Node3D" parent="Visual"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
 
 [node name="PickupArea" type="Area3D" parent="."]
 position = Vector3(0, 0.5, 0)

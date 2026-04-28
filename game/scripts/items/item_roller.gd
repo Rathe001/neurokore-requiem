@@ -68,6 +68,17 @@ const TYPE_GLYPH: Dictionary = {
 	"Optics":      "*",
 }
 
+# Registry of weapon bases keyed by main_type. The roller picks one at random
+# when generating a weapon, then rolls each stat range into the Item instance.
+const WEAPON_BASE_PATHS: Dictionary = {
+	"1H Weapon": [
+		"res://resources/items/weapon_bases/melee_1h.tres",
+	],
+	"2H Weapon": [
+		"res://resources/items/weapon_bases/melee_2h.tres",
+	],
+}
+
 func roll(main_type: String, item_level: int, rarity: StringName, rng: RandomNumberGenerator) -> Item:
 	var item := Item.new()
 	item.main_type = main_type
@@ -80,6 +91,8 @@ func roll(main_type: String, item_level: int, rarity: StringName, rng: RandomNum
 
 	if main_type == "2H Weapon":
 		item.two_handed = true
+
+	_apply_weapon_base(item, main_type, rng)
 
 	var affix_labels: Array[String] = []
 	var prefix_count: int = RARITY_PREFIX_COUNT.get(rarity, 0)
@@ -134,11 +147,11 @@ func _roll_rarity(rng: RandomNumberGenerator) -> StringName:
 	var total := 0
 	for r: StringName in RARITY_WEIGHTS:
 		total += int(RARITY_WEIGHTS[r])
-	var roll := rng.randi_range(0, total - 1)
+	var pick := rng.randi_range(0, total - 1)
 	var acc := 0
 	for r: StringName in RARITY_WEIGHTS:
 		acc += int(RARITY_WEIGHTS[r])
-		if roll < acc:
+		if pick < acc:
 			return r
 	return &"common"
 
@@ -146,6 +159,30 @@ func _apply_affix(item: Item, affix: ItemAffix) -> void:
 	for k in affix.stat_modifiers:
 		var prior: int = int(item.stat_modifiers.get(k, 0))
 		item.stat_modifiers[k] = prior + int(affix.stat_modifiers[k])
+
+func _apply_weapon_base(item: Item, main_type: String, rng: RandomNumberGenerator) -> void:
+	var paths: Array = WEAPON_BASE_PATHS.get(main_type, [])
+	if paths.is_empty():
+		return
+	var path: String = paths[rng.randi_range(0, paths.size() - 1)]
+	var base := load(path) as WeaponBase
+	if base == null:
+		push_warning("[ItemRoller] missing WeaponBase: %s" % path)
+		return
+	item.weapon_base_id = base.id
+	item.two_handed = base.two_handed
+	item.fire_skill = base.fire_skill
+	item.alt_fire_skill = base.alt_fire_skill
+	if item.glyph == TYPE_GLYPH.get(main_type, "?") and base.glyph != "":
+		item.glyph = base.glyph
+	# Damage roll: ensure max >= min so combat damage rolls aren't inverted.
+	var dmin := int(round(rng.randf_range(base.damage_min_range.x, base.damage_min_range.y)))
+	var dmax := int(round(rng.randf_range(base.damage_max_range.x, base.damage_max_range.y)))
+	item.damage_min = mini(dmin, dmax)
+	item.damage_max = maxi(dmin, dmax)
+	item.attack_speed = rng.randf_range(base.attack_speed_range.x, base.attack_speed_range.y)
+	item.crit_chance = rng.randf_range(base.crit_chance_range.x, base.crit_chance_range.y)
+	item.accuracy = rng.randf_range(base.accuracy_range.x, base.accuracy_range.y)
 
 func _build_name(main_type: String, affix_labels: Array[String]) -> String:
 	if affix_labels.is_empty():

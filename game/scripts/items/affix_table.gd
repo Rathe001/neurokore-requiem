@@ -293,11 +293,19 @@ const SUFFIXES: Array[Dictionary] = [
 ]
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Runtime cache — built once on first access.
+# Runtime cache — built once on first access. Affixes are also pre-bucketed
+# by item_type so roll_*/get_* avoid a full-pool scan; with N affixes and M
+# rolls per drop, this turns the inner cost from O(N) to O(applicable).
+# Universal affixes (empty item_types) live in a separate bucket and are
+# unioned into every type-specific result.
 # ─────────────────────────────────────────────────────────────────────────────
 
 var _prefixes: Array[ItemAffix] = []
 var _suffixes: Array[ItemAffix] = []
+var _prefixes_by_type: Dictionary = {}
+var _suffixes_by_type: Dictionary = {}
+var _prefixes_universal: Array[ItemAffix] = []
+var _suffixes_universal: Array[ItemAffix] = []
 var _ready_called := false
 
 func _ready() -> void:
@@ -308,9 +316,23 @@ func _build_cache() -> void:
 		return
 	_ready_called = true
 	for d in PREFIXES:
-		_prefixes.append(_dict_to_affix(d))
+		var a := _dict_to_affix(d)
+		_prefixes.append(a)
+		_index_affix(a, _prefixes_by_type, _prefixes_universal)
 	for d in SUFFIXES:
-		_suffixes.append(_dict_to_affix(d))
+		var a := _dict_to_affix(d)
+		_suffixes.append(a)
+		_index_affix(a, _suffixes_by_type, _suffixes_universal)
+
+func _index_affix(a: ItemAffix, by_type: Dictionary, universal: Array[ItemAffix]) -> void:
+	if a.item_types.is_empty():
+		universal.append(a)
+		return
+	for t: String in a.item_types:
+		if not by_type.has(t):
+			by_type[t] = []
+		var bucket: Array = by_type[t]
+		bucket.append(a)
 
 func _dict_to_affix(d: Dictionary) -> ItemAffix:
 	var a := ItemAffix.new()
@@ -330,12 +352,12 @@ func _dict_to_affix(d: Dictionary) -> ItemAffix:
 ## All prefixes valid for item_type at item_level.
 func get_prefixes(item_type: String, item_level: int = 1) -> Array[ItemAffix]:
 	_build_cache()
-	return _filter(_prefixes, item_type, item_level)
+	return _filter_buckets(_prefixes_by_type, _prefixes_universal, item_type, item_level)
 
 ## All suffixes valid for item_type at item_level.
 func get_suffixes(item_type: String, item_level: int = 1) -> Array[ItemAffix]:
 	_build_cache()
-	return _filter(_suffixes, item_type, item_level)
+	return _filter_buckets(_suffixes_by_type, _suffixes_universal, item_type, item_level)
 
 ## Weighted random prefix roll. Returns null if the pool is empty.
 func roll_prefix(item_type: String, item_level: int, rng: RandomNumberGenerator) -> ItemAffix:
@@ -349,12 +371,14 @@ func roll_suffix(item_type: String, item_level: int, rng: RandomNumberGenerator)
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
-func _filter(pool: Array[ItemAffix], item_type: String, item_level: int) -> Array[ItemAffix]:
+func _filter_buckets(by_type: Dictionary, universal: Array[ItemAffix], item_type: String, item_level: int) -> Array[ItemAffix]:
 	var out: Array[ItemAffix] = []
-	for a in pool:
-		if a.min_item_level > item_level:
-			continue
-		if a.item_types.is_empty() or item_type in a.item_types:
+	var typed: Array = by_type.get(item_type, [])
+	for a: ItemAffix in typed:
+		if a.min_item_level <= item_level:
+			out.append(a)
+	for a in universal:
+		if a.min_item_level <= item_level:
 			out.append(a)
 	return out
 

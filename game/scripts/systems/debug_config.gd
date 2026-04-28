@@ -19,7 +19,7 @@ extends Resource
 @export var disable_enemies: bool = false
 
 @export_group("Combat Feedback")
-@export var show_attack_telegraphs: bool = true
+@export var show_attack_telegraphs: bool = false
 
 @export_group("Overlay")
-@export var show_debug_overlay: bool = true
+@export var show_debug_overlay: bool = false

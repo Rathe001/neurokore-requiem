@@ -53,9 +53,11 @@ func _on_mouse_entered() -> void:
 		return
 	_label.outline_size = OUTLINE_SIZE_HOVER
 	_label.outline_modulate = OUTLINE_COLOR_HOVER
+	add_to_group(&"tooltip_target")
 	get_tree().call_group(&"interactable_tooltip", &"show_text", text)
 
 func _on_mouse_exited() -> void:
 	_label.outline_size = OUTLINE_SIZE_IDLE
 	_label.outline_modulate = OUTLINE_COLOR_IDLE
+	remove_from_group(&"tooltip_target")
 	get_tree().call_group(&"interactable_tooltip", &"hide_tooltip")

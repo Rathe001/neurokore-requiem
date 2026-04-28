@@ -3,7 +3,17 @@ class_name PrototypeEnemy
 
 signal died
 
-const KNOCKBACK_DURATION := 0.15
+# Knockback decays quadratically over this window so enemies coast to a stop
+# instead of snapping back to chase mid-shove. Pre-decay this was a hard
+# velocity hold + abrupt cutoff, which read as bouncy.
+const KNOCKBACK_DURATION := 0.22
+
+# Hit-squash punch: brief Y compression + horizontal flare to sell the impact
+# without leaning fully cartoony. Sized small so PBR characters don't deform
+# noticeably outside the strike window.
+const HIT_SQUASH_SCALE := Vector3(1.10, 0.85, 1.10)
+const HIT_SQUASH_IN := 0.06
+const HIT_SQUASH_OUT := 0.16
 const DEATH_HOLD := 1.6
 const DEATH_FALLBACK_DURATION := 0.6
 
@@ -36,8 +46,10 @@ const ANIM_DEATH: Array[StringName] = [
 ]
 
 const OUTLINE_GROW := 0.04
+const OUTLINE_LOCKED_COLOR := Color(1.0, 0.15, 0.15)
 
 static var _s_outline_mat: StandardMaterial3D
+static var _s_outline_mat_locked: StandardMaterial3D
 
 @export var max_health: int = 40
 @export_range(0.0, 1.0, 0.05) var credit_drop_chance: float = 0.6
@@ -59,6 +71,10 @@ var _want_dir: Vector3 = Vector3.ZERO
 var _player_ref: Node3D
 var _outlined_meshes: Array[MeshInstance3D] = []
 var _hover_hooked: bool = false
+var _hovered: bool = false
+# Locked overrides hovered: red persists past mouse-exit until LMB release.
+var _tooltip_locked: bool = false
+var _hit_tween: Tween
 
 func _ready() -> void:
 	_init_enemy()
@@ -83,6 +99,10 @@ func _init_enemy() -> void:
 		floor_ring.visible = true
 	if visual != null:
 		visual.rotation = Vector3.ZERO
+		visual.scale = Vector3.ONE
+	if _hit_tween != null and _hit_tween.is_valid():
+		_hit_tween.kill()
+		_hit_tween = null
 	_ensure_loop(ANIM_IDLE)
 	_ensure_loop(ANIM_RUN)
 	_play_anim(ANIM_IDLE)
@@ -93,7 +113,9 @@ func _init_enemy() -> void:
 func _pool_release() -> void:
 	for conn in died.get_connections():
 		died.disconnect(conn["callable"])
-	_set_outline(false)
+	_hovered = false
+	_tooltip_locked = false
+	_refresh_outline()
 
 ## Re-initialize an enemy returned from the pool.
 func reset() -> void:
@@ -108,6 +130,13 @@ func _setup_hover() -> void:
 		_s_outline_mat.cull_mode = BaseMaterial3D.CULL_FRONT
 		_s_outline_mat.grow = true
 		_s_outline_mat.grow_amount = OUTLINE_GROW
+	if _s_outline_mat_locked == null:
+		_s_outline_mat_locked = StandardMaterial3D.new()
+		_s_outline_mat_locked.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_s_outline_mat_locked.albedo_color = OUTLINE_LOCKED_COLOR
+		_s_outline_mat_locked.cull_mode = BaseMaterial3D.CULL_FRONT
+		_s_outline_mat_locked.grow = true
+		_s_outline_mat_locked.grow_amount = OUTLINE_GROW
 	_outlined_meshes.clear()
 	_collect_meshes(visual)
 	if not _hover_hooked:
@@ -123,8 +152,12 @@ func _collect_meshes(root: Node) -> void:
 			_outlined_meshes.append(child)
 		_collect_meshes(child)
 
-func _set_outline(on: bool) -> void:
-	var mat: Material = _s_outline_mat if on else null
+func _refresh_outline() -> void:
+	var mat: Material = null
+	if _tooltip_locked:
+		mat = _s_outline_mat_locked
+	elif _hovered:
+		mat = _s_outline_mat
 	for mi in _outlined_meshes:
 		if is_instance_valid(mi):
 			mi.material_overlay = mat
@@ -132,12 +165,20 @@ func _set_outline(on: bool) -> void:
 func _on_mouse_entered() -> void:
 	if not _alive:
 		return
-	_set_outline(true)
+	_hovered = true
+	_refresh_outline()
+	add_to_group(&"tooltip_target")
 	get_tree().call_group(&"interactable_tooltip", &"show_text", display_name)
 
 func _on_mouse_exited() -> void:
-	_set_outline(false)
+	_hovered = false
+	_refresh_outline()
+	remove_from_group(&"tooltip_target")
 	get_tree().call_group(&"interactable_tooltip", &"hide_tooltip")
+
+func set_tooltip_locked(on: bool) -> void:
+	_tooltip_locked = on
+	_refresh_outline()
 
 func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_strength: float = 0.0, multistrike: int = 1, is_crit: bool = false) -> void:
 	if not _alive:
@@ -154,8 +195,21 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 		if dir.length_squared() > 0.0001:
 			_knockback_vel = dir.normalized() * knockback_strength
 			_knockback_remain = KNOCKBACK_DURATION
+	_play_hit_squash()
 	if _health <= 0:
 		_die()
+
+func _play_hit_squash() -> void:
+	if visual == null or not _alive:
+		return
+	if _hit_tween != null and _hit_tween.is_valid():
+		_hit_tween.kill()
+	visual.scale = Vector3.ONE
+	_hit_tween = create_tween()
+	_hit_tween.tween_property(visual, "scale", HIT_SQUASH_SCALE, HIT_SQUASH_IN) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_hit_tween.tween_property(visual, "scale", Vector3.ONE, HIT_SQUASH_OUT) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 
 func _update_health_bar() -> void:
 	if health_bar == null:
@@ -175,8 +229,12 @@ func _physics_process(delta: float) -> void:
 		velocity.y -= GRAVITY * delta
 
 	if _knockback_remain > 0.0:
-		velocity.x = _knockback_vel.x
-		velocity.z = _knockback_vel.z
+		# Quadratic ease-out: full velocity at the moment of impact, near-zero
+		# by the end of the window — replaces the previous hard-stop bounce.
+		var t: float = _knockback_remain / KNOCKBACK_DURATION
+		var falloff: float = t * t
+		velocity.x = _knockback_vel.x * falloff
+		velocity.z = _knockback_vel.z * falloff
 		_knockback_remain -= delta
 		_want_dir = Vector3.ZERO
 	elif _casting:
@@ -288,7 +346,10 @@ func _become_corpse() -> void:
 	SpatialGrid.unregister(self)
 	remove_from_group(&"enemies")
 	add_to_group(&"corpses")
-	_set_outline(false)
+	_hovered = false
+	_tooltip_locked = false
+	_refresh_outline()
+	remove_from_group(&"tooltip_target")
 	get_tree().call_group(&"interactable_tooltip", &"hide_tooltip")
 	if collision != null:
 		collision.disabled = true

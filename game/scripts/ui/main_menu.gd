@@ -180,10 +180,10 @@ func _on_resolution_selected(index: int) -> void:
 	DisplayState.set_resolution(resolutions[index])
 
 func _on_msaa_selected(index: int) -> void:
-	DisplayState.set_msaa_3d(_msaa_option.get_item_id(index))
+	DisplayState.set_msaa_3d(_msaa_option.get_item_id(index) as Viewport.MSAA)
 
 func _on_fxaa_selected(index: int) -> void:
-	DisplayState.set_screen_space_aa(_fxaa_option.get_item_id(index))
+	DisplayState.set_screen_space_aa(_fxaa_option.get_item_id(index) as Viewport.ScreenSpaceAA)
 
 func _on_bloom_selected(index: int) -> void:
 	DisplayState.set_bloom_enabled(_bloom_option.get_item_id(index) == 1)

@@ -25,6 +25,14 @@ enum LightType { DIRECTIONAL, RADIANT, SCANNER, UV }
 @export var two_handed: bool = false
 @export var fire_skill: Skill
 @export var alt_fire_skill: Skill
+## Weapon stats rolled once at item generation from the WeaponBase ranges.
+## Defaults are no-ops so non-weapon items don't accidentally affect combat.
+@export var weapon_base_id: StringName = &""
+@export var damage_min: int = 0
+@export var damage_max: int = 0
+@export var attack_speed: float = 1.0
+@export var crit_chance: float = 0.0
+@export var accuracy: float = 1.0
 
 @export_group("Belt")
 @export var utility_slots: int = 0

@@ -8,14 +8,30 @@ const DISK_SEGMENTS := 48
 const PLAYER_COLOR := Color(0.3, 0.7, 1.0)
 const ENEMY_COLOR := Color(1.0, 0.2, 0.15)
 
+# Shockwave hit FX. Both variants use a screen-space refraction shader — no
+# color tint, just a heat-ripple-like warp of whatever's behind. Radial uses an
+# expanding sphere centered on the host. Cone uses a hemispherical wedge whose
+# apex sits at the host and whose arc opens forward across the swing's cone,
+# so the wavefront reads as a directional blast rather than a 360° bubble.
+const SHOCKWAVE_DURATION_RADIAL := 0.50
+const SHOCKWAVE_DURATION_CONE := 0.36
+const SHOCKWAVE_START_SCALE := 0.06
+const SHOCKWAVE_BUBBLE_DISTORTION := 0.10
+const SHOCKWAVE_BUBBLE_CHROMA := 0.014
+const SHOCKWAVE_BUBBLE_RIM := 0.25
+const SHOCKWAVE_BUBBLE_LIFT := 0.05      # origin slightly above ground
+const CONE_DOME_RINGS := 10
+const CONE_DOME_SEGMENTS := 24
+const SHOCKWAVE_BUBBLE_SHADER: Shader = preload("res://scripts/prototype/shockwave_bubble.gdshader")
+
 # Mesh cache: cone outlines keyed by Vector2(range, cone_deg),
 # disk outlines keyed by float(range). ArrayMesh resources are
 # shareable across MeshInstance3D, so a small set of unique
 # (radius, angle) combinations keeps telegraph spawns allocation-free.
 static var _cone_cache: Dictionary = {}
 static var _disk_cache: Dictionary = {}
-static var _cone_fill_cache: Dictionary = {}
-static var _disk_fill_cache: Dictionary = {}
+static var _bubble_mesh_cache: Dictionary = {}
+static var _cone_dome_cache: Dictionary = {}
 static var _material_template_cache: Dictionary = {}  # Color -> StandardMaterial3D template
 
 static func spawn(host: Node3D, skill: Skill, aim: Vector3) -> void:
@@ -50,31 +66,42 @@ static func spawn_radial(host: Node3D, radius: float, wind_up: float = 0.0) -> v
 	_play_fade(node, mat, wind_up)
 
 static func spawn_hit_cone(host: Node3D, aim: Vector3, attack_range: float, cone_deg: float) -> void:
-	var node := MeshInstance3D.new()
-	node.mesh = _cone_fill_mesh(attack_range, cone_deg)
-	var mat := _build_material(_color_for_host(host))
-	mat.albedo_color.a = 0.32
-	node.material_override = mat
-	host.add_child(node)
-	node.position = Vector3(0.0, GROUND_OFFSET, 0.0)
-	if aim.length_squared() > 0.0001:
-		node.look_at(node.global_position + aim, Vector3.UP)
-	var tween := node.create_tween()
-	tween.tween_property(mat, "albedo_color:a", 0.0, 0.2).set_trans(Tween.TRANS_QUAD)
-	tween.tween_callback(node.queue_free)
+	var forward := Vector3(aim.x, 0.0, aim.z)
+	if forward.length_squared() > 0.0001:
+		forward = forward.normalized()
+	else:
+		forward = -host.global_transform.basis.z
+	var pos := host.global_position + Vector3(0.0, SHOCKWAVE_BUBBLE_LIFT, 0.0)
+	_spawn_shockwave(host, pos, _cone_dome_mesh(attack_range, cone_deg), forward, SHOCKWAVE_DURATION_CONE)
 
 static func spawn_hit_radial(host: Node3D, radius: float) -> void:
+	var pos := host.global_position + Vector3(0.0, SHOCKWAVE_BUBBLE_LIFT, 0.0)
+	_spawn_shockwave(host, pos, _bubble_mesh(radius), Vector3.ZERO, SHOCKWAVE_DURATION_RADIAL)
+
+# Detached from host so the wave stays where it was unleashed even if the
+# host moves or rotates during the effect. forward == ZERO means no orientation
+# (radial sphere); otherwise the mesh's local -Z is aimed along forward.
+static func _spawn_shockwave(host: Node3D, world_pos: Vector3, mesh: Mesh, forward: Vector3, duration: float) -> void:
+	var parent: Node = host.get_parent()
+	if parent == null:
+		parent = host
 	var node := MeshInstance3D.new()
-	node.mesh = _disk_fill_mesh(radius)
-	var mat := _build_material(_color_for_host(host))
-	mat.albedo_color.a = 0.25
+	node.mesh = mesh
+	var mat := ShaderMaterial.new()
+	mat.shader = SHOCKWAVE_BUBBLE_SHADER
+	mat.set_shader_parameter(&"distortion", SHOCKWAVE_BUBBLE_DISTORTION)
+	mat.set_shader_parameter(&"chroma", SHOCKWAVE_BUBBLE_CHROMA)
+	mat.set_shader_parameter(&"rim_strength", SHOCKWAVE_BUBBLE_RIM)
+	mat.set_shader_parameter(&"intensity", 1.0)
 	node.material_override = mat
-	node.scale = Vector3.ONE * 0.15
-	host.add_child(node)
-	node.position = Vector3(0.0, GROUND_OFFSET, 0.0)
+	node.scale = Vector3.ONE * SHOCKWAVE_START_SCALE
+	parent.add_child(node)
+	node.global_position = world_pos
+	if forward.length_squared() > 0.0001:
+		node.look_at(world_pos + forward, Vector3.UP)
 	var tween := node.create_tween().set_parallel(true)
-	tween.tween_property(node, "scale", Vector3.ONE, 0.35).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tween.tween_property(mat, "albedo_color:a", 0.0, 0.35).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tween.tween_property(node, "scale", Vector3.ONE, duration).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.tween_property(mat, "shader_parameter/intensity", 0.0, duration).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	tween.chain().tween_callback(node.queue_free)
 
 static func _telegraphs_enabled() -> bool:
@@ -132,44 +159,62 @@ static func _make_line_mesh(verts: PackedVector3Array) -> ArrayMesh:
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_LINE_STRIP, arrays)
 	return mesh
 
-static func _cone_fill_mesh(radius: float, angle_deg: float) -> ArrayMesh:
-	var key := Vector2(radius, angle_deg)
-	var cached: ArrayMesh = _cone_fill_cache.get(key)
+# Hemispherical wedge: apex at +Y pole, expanding outward to the equator and
+# clipped horizontally to the cone arc. Local -Z points along the aim, so the
+# wedge opens in front of the swinger. Outward-facing per-vertex normals feed
+# the refraction shader's screen-space offset.
+static func _cone_dome_mesh(radius: float, cone_deg: float) -> ArrayMesh:
+	var key := Vector2(radius, cone_deg)
+	var cached: ArrayMesh = _cone_dome_cache.get(key)
 	if cached != null:
 		return cached
-	var half := deg_to_rad(angle_deg * 0.5)
+	var half := deg_to_rad(cone_deg * 0.5)
+	var rings := CONE_DOME_RINGS
+	var segments := CONE_DOME_SEGMENTS
 	var verts := PackedVector3Array()
-	for i in range(CONE_SEGMENTS):
-		var a0: float = lerp(-half, half, float(i) / float(CONE_SEGMENTS))
-		var a1: float = lerp(-half, half, float(i + 1) / float(CONE_SEGMENTS))
-		verts.append(Vector3.ZERO)
-		verts.append(Vector3(sin(a0) * radius, 0.0, -cos(a0) * radius))
-		verts.append(Vector3(sin(a1) * radius, 0.0, -cos(a1) * radius))
-	var mesh := ArrayMesh.new()
+	var normals := PackedVector3Array()
+	var indices := PackedInt32Array()
+	for r in range(rings + 1):
+		var lat: float = lerp(0.0, PI * 0.5, float(r) / float(rings))
+		var sin_lat := sin(lat)
+		var cos_lat := cos(lat)
+		for s in range(segments + 1):
+			var lon: float = lerp(-half, half, float(s) / float(segments))
+			var dir := Vector3(sin_lat * sin(lon), cos_lat, -sin_lat * cos(lon))
+			verts.append(dir * radius)
+			normals.append(dir)
+	for r in range(rings):
+		for s in range(segments):
+			var i0 := r * (segments + 1) + s
+			var i1 := i0 + 1
+			var i2 := i0 + (segments + 1)
+			var i3 := i2 + 1
+			indices.append(i0)
+			indices.append(i2)
+			indices.append(i1)
+			indices.append(i1)
+			indices.append(i2)
+			indices.append(i3)
 	var arrays := []
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_INDEX] = indices
+	var mesh := ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-	_cone_fill_cache[key] = mesh
+	_cone_dome_cache[key] = mesh
 	return mesh
 
-static func _disk_fill_mesh(radius: float) -> ArrayMesh:
-	var cached: ArrayMesh = _disk_fill_cache.get(radius)
+static func _bubble_mesh(radius: float) -> SphereMesh:
+	var cached: SphereMesh = _bubble_mesh_cache.get(radius)
 	if cached != null:
 		return cached
-	var verts := PackedVector3Array()
-	for i in range(DISK_SEGMENTS):
-		var a0 := TAU * float(i) / float(DISK_SEGMENTS)
-		var a1 := TAU * float(i + 1) / float(DISK_SEGMENTS)
-		verts.append(Vector3.ZERO)
-		verts.append(Vector3(cos(a0) * radius, 0.0, sin(a0) * radius))
-		verts.append(Vector3(cos(a1) * radius, 0.0, sin(a1) * radius))
-	var mesh := ArrayMesh.new()
-	var arrays := []
-	arrays.resize(Mesh.ARRAY_MAX)
-	arrays[Mesh.ARRAY_VERTEX] = verts
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-	_disk_fill_cache[radius] = mesh
+	var mesh := SphereMesh.new()
+	mesh.radius = radius
+	mesh.height = radius * 2.0
+	mesh.radial_segments = 32
+	mesh.rings = 12
+	_bubble_mesh_cache[radius] = mesh
 	return mesh
 
 static func _build_material(color: Color) -> StandardMaterial3D:

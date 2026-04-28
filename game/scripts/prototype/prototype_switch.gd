@@ -50,10 +50,14 @@ func _build_outline() -> void:
 
 func _on_mouse_entered() -> void:
 	_outline.visible = true
+	add_to_group(&"hovered_clickable")
+	add_to_group(&"tooltip_target")
 	get_tree().call_group(&"interactable_tooltip", &"show_text", display_name)
 
 func _on_mouse_exited() -> void:
 	_outline.visible = false
+	remove_from_group(&"hovered_clickable")
+	remove_from_group(&"tooltip_target")
 	get_tree().call_group(&"interactable_tooltip", &"hide_tooltip")
 
 func interact(_user: Node) -> void:

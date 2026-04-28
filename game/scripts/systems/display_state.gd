@@ -69,14 +69,14 @@ func set_resolution(new_resolution: Vector2i) -> void:
 	apply()
 	save()
 
-func set_msaa_3d(new_msaa: int) -> void:
+func set_msaa_3d(new_msaa: Viewport.MSAA) -> void:
 	if config == null or config.msaa_3d == new_msaa:
 		return
 	config.msaa_3d = new_msaa
 	apply()
 	save()
 
-func set_screen_space_aa(new_ssaa: int) -> void:
+func set_screen_space_aa(new_ssaa: Viewport.ScreenSpaceAA) -> void:
 	if config == null or config.screen_space_aa == new_ssaa:
 		return
 	config.screen_space_aa = new_ssaa

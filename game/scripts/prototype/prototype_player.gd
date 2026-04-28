@@ -11,7 +11,7 @@ signal light_changed(is_on: bool)
 
 const ITEM_PICKUP_SCENE: PackedScene = preload("res://scenes/prototype/prototype_item_pickup.tscn")
 
-const KNOCKBACK_DURATION := 0.15
+const KNOCKBACK_DURATION := 0.22
 const DEATH_HOLD := 0.9
 const RESPAWN_DELAY := 1.0
 const INTERACT_RANGE_SQ := 6.25
@@ -50,8 +50,22 @@ const CROUCH_HEIGHT := 0.9
 const GRAVITY := 22.0
 const JUMP_VELOCITY := 6.5
 
+# Body rotation rates. Aim turns are snappier so kiting stays responsive.
+const TURN_RATE_MOVE := 12.0  # rad/s — ~130 ms for a 90° turn
+const TURN_RATE_AIM := 30.0   # rad/s — near-instant when an attack is held
+# Velocity threshold below which we don't repoint at the velocity vector,
+# so the player keeps their facing during a coast-to-stop instead of yanking
+# back to the last input direction.
+const FACE_BY_VELOCITY_MIN := 0.5
+# Scales the run animation playback rate. The source clip is calibrated for a
+# slower travel speed than our 6 m/s default, so feet skate without this. Tune
+# by eye — at full sprint feet should plant cleanly with no slide.
+const RUN_ANIM_SPEED_FACTOR := 1.5
+const RUN_ANIM_SPEED_MIN := 0.6
+const RUN_ANIM_SPEED_MAX := 1.9
+
 @export var move_speed: float = 6.0
-@export var accel: float = 200.0
+@export var accel: float = 30.0
 @export var max_health: int = 100
 @export var skills: Array[Skill] = []
 @export var resource_pool: ResourcePool
@@ -91,6 +105,10 @@ var _knockback_vel: Vector3 = Vector3.ZERO
 var _knockback_remain: float = 0.0
 var _attacking: bool = false
 var _attack_aim: Vector3 = Vector3.ZERO
+# Item that owns the in-flight skill (weapon or offhand). Captured at cast
+# start so wind-up timing and hit resolution use the same stats even if the
+# player swaps gear mid-attack. Null for class skills.
+var _attack_weapon: Item = null
 var _want_dir: Vector3 = Vector3.ZERO
 var _cooldowns: Dictionary = {}
 var _resource_current: float = 0.0
@@ -266,8 +284,12 @@ func _physics_process(delta: float) -> void:
 		_is_airborne = false
 
 	if _knockback_remain > 0.0:
-		velocity.x = _knockback_vel.x
-		velocity.z = _knockback_vel.z
+		# Quadratic ease-out: matches PrototypeEnemy so the player coasts to a
+		# stop on hit instead of snapping back to input mid-shove.
+		var t: float = _knockback_remain / KNOCKBACK_DURATION
+		var falloff: float = t * t
+		velocity.x = _knockback_vel.x * falloff
+		velocity.z = _knockback_vel.z * falloff
 		_knockback_remain -= delta
 		_want_dir = Vector3.ZERO
 	elif _attacking and not _is_airborne:
@@ -304,6 +326,8 @@ func _physics_process(delta: float) -> void:
 
 	if _alive and not _attacking and _knockback_remain <= 0.0:
 		if _fps_mode:
+			# In FPS the body follows camera yaw; snapping is fine because the
+			# camera *is* the player view.
 			var forward := -_fps_camera.global_transform.basis.z
 			forward.y = 0.0
 			if forward.length_squared() > 0.0001:
@@ -311,17 +335,37 @@ func _physics_process(delta: float) -> void:
 			if _equipped_light is SpotLight3D:
 				_equipped_light.rotation.x = _fps_pitch
 		else:
-			var offset := _cursor_offset()
-			if offset.length_squared() > 0.0001:
-				_face_direction(offset.normalized())
-				_update_flashlight_pitch(offset.length())
+			# Top-down: face the cursor while an attack input is held, otherwise
+			# face the direction the player is travelling. Smooth in both cases
+			# so direction changes have weight instead of snapping.
+			var aiming := _is_aim_input_held()
+			var target_dir := Vector3.ZERO
+			if aiming:
+				var offset := _cursor_offset()
+				if offset.length_squared() > 0.0001:
+					target_dir = offset.normalized()
+			elif _want_dir.length_squared() > 0.01:
+				target_dir = _want_dir
+			elif Vector2(velocity.x, velocity.z).length_squared() > FACE_BY_VELOCITY_MIN * FACE_BY_VELOCITY_MIN:
+				target_dir = Vector3(velocity.x, 0.0, velocity.z).normalized()
+			if target_dir.length_squared() > 0.0001:
+				_smooth_face(target_dir, TURN_RATE_AIM if aiming else TURN_RATE_MOVE, delta)
+			# Flashlight pitch always tracks cursor distance regardless of body facing.
+			if _equipped_light is SpotLight3D:
+				_update_flashlight_pitch(_cursor_offset().length())
 		if _is_airborne:
+			anim_player.speed_scale = 1.0
 			if velocity.y > 0.0:
 				_play_anim(ANIM_JUMP_START, 1.2, 0.1)
 			else:
 				_play_anim(ANIM_JUMP_AIR, 1.0, 0.15)
 		elif not _interacting:
 			if _want_dir.length_squared() > 0.01:
+				# Match feet to travel speed so animation tracks reality during
+				# the accel ramp instead of looking like skating.
+				var flat_speed := Vector2(velocity.x, velocity.z).length()
+				var run_ratio := (flat_speed / move_speed) * RUN_ANIM_SPEED_FACTOR
+				anim_player.speed_scale = clampf(run_ratio, RUN_ANIM_SPEED_MIN, RUN_ANIM_SPEED_MAX)
 				if _crouching:
 					_play_anim(ANIM_CROUCH_MOVE, 1.0, 0.15)
 				elif _backing:
@@ -329,6 +373,7 @@ func _physics_process(delta: float) -> void:
 				else:
 					_play_anim(ANIM_RUN, 1.0, 0.15)
 			else:
+				anim_player.speed_scale = 1.0
 				_play_anim(ANIM_CROUCH_IDLE if _crouching else ANIM_IDLE, 1.0, 0.15)
 
 	_handle_skill_input()
@@ -385,10 +430,12 @@ func _handle_skill_input() -> void:
 			if Input.is_action_just_pressed(SKILL_INPUTS[i]):
 				_try_interact_with(_fps_hovered)
 			return
-		elif i == 0 and not _fps_mode and _is_near_world_interactable():
-			if Input.is_action_just_pressed(SKILL_INPUTS[i]):
-				_try_interact()
-			return
+		elif i == 0 and not _fps_mode:
+			var hovered := _hovered_clickable()
+			if hovered != null:
+				if Input.is_action_just_pressed(SKILL_INPUTS[i]):
+					_interact_with_hovered(hovered)
+				return
 		var skill := resolve_skill(i)
 		if skill != null:
 			_cast_skill(skill)
@@ -411,6 +458,26 @@ func resolve_skill(index: int) -> Skill:
 func _is_near_world_interactable() -> bool:
 	var interact_range := sqrt(INTERACT_RANGE_SQ)
 	return SpatialGrid.query_nearest(global_position, interact_range, &"interactables") != null
+
+func _hovered_clickable() -> Node:
+	var nodes := get_tree().get_nodes_in_group(&"hovered_clickable")
+	for node in nodes:
+		if is_instance_valid(node):
+			return node
+	return null
+
+# Pickups consume their own click via Area3D input_event, so we just suppress
+# the skill cast and let the pickup handle it. Doors / switches need an explicit
+# interact() call.
+func _interact_with_hovered(node: Node) -> void:
+	if node == null or not is_instance_valid(node):
+		return
+	if not node.has_method(&"interact"):
+		return
+	if not node.is_in_group(&"pickups") and not _is_airborne:
+		_interacting = true
+		_play_anim(ANIM_INTERACT, INTERACT_ANIM_SPEED, 0.1)
+	node.interact(self)
 
 func _is_any_modal_open() -> bool:
 	if _modal_nodes.is_empty():
@@ -437,16 +504,21 @@ func _cast_skill(skill: Skill) -> void:
 	var aim := _aim_direction()
 	if aim == Vector3.ZERO:
 		return
-	_cooldowns[skill] = skill.cooldown
+	var weapon := _resolve_skill_source(skill)
+	var atk_spd := weapon.attack_speed if weapon != null else 1.0
+	if atk_spd <= 0.0:
+		atk_spd = 1.0
+	_cooldowns[skill] = skill.cooldown / atk_spd
 	if skill.resource_cost > 0:
 		_spend_resource(skill.resource_cost)
 	_attacking = true
 	_attack_aim = aim
+	_attack_weapon = weapon
 	_face_direction(aim)
 	_play_anim(ANIM_ATTACK, 1.4)
 	PrototypeAttackIndicator.spawn(self, skill, aim)
 	if skill.wind_up > 0.0:
-		await get_tree().create_timer(skill.wind_up).timeout
+		await get_tree().create_timer(skill.wind_up / atk_spd).timeout
 	_attacking = false
 	if not _alive:
 		return
@@ -468,27 +540,56 @@ const PROTO_BASE_CRIT_MULT: float = 1.5
 func _resolve_cone(skill: Skill, aim: Vector3) -> void:
 	var half_cos := cos(deg_to_rad(skill.cone_deg * 0.5))
 	var hits := PerkState.roll_multistrike()
+	var weapon := _attack_weapon
 	for enode: Node3D in SpatialGrid.query_cone(global_position, aim, skill.skill_range, half_cos, &"enemies"):
 		if not enode.has_method(&"take_damage"):
 			continue
 		for _i in hits:
-			var is_crit := _roll_crit()
-			var dmg := _crit_damage(skill.damage, is_crit)
+			if not _roll_hit(weapon):
+				continue
+			var is_crit := _roll_crit(weapon)
+			var dmg := _crit_damage(_roll_skill_damage(skill, weapon), is_crit)
 			enode.take_damage(dmg, global_position, skill.knockback, hits, is_crit)
 
 func _resolve_aoe(skill: Skill) -> void:
 	var hits := PerkState.roll_multistrike()
+	var weapon := _attack_weapon
 	for enode: Node3D in SpatialGrid.query_radius(global_position, skill.skill_range, &"enemies"):
 		if not enode.has_method(&"take_damage"):
 			continue
 		for _i in hits:
-			var is_crit := _roll_crit()
-			var dmg := _crit_damage(skill.damage, is_crit)
+			if not _roll_hit(weapon):
+				continue
+			var is_crit := _roll_crit(weapon)
+			var dmg := _crit_damage(_roll_skill_damage(skill, weapon), is_crit)
 			enode.take_damage(dmg, global_position, skill.knockback, hits, is_crit)
 
-func _roll_crit() -> bool:
-	var chance := PROTO_BASE_CRIT_CHANCE + PerkState.get_aggregate(&"crit_chance_pct")
+func _roll_crit(weapon: Item = null) -> bool:
+	var base_crit := weapon.crit_chance if weapon != null and weapon.crit_chance > 0.0 else PROTO_BASE_CRIT_CHANCE
+	var chance := base_crit + PerkState.get_aggregate(&"crit_chance_pct")
 	return randf() < chance
+
+func _roll_hit(weapon: Item) -> bool:
+	if weapon == null or weapon.accuracy >= 1.0:
+		return true
+	return randf() < weapon.accuracy
+
+func _roll_skill_damage(skill: Skill, weapon: Item) -> int:
+	if weapon != null and weapon.damage_max > 0:
+		return randi_range(weapon.damage_min, weapon.damage_max)
+	return skill.damage
+
+# Walks the equipped weapon and offhand to find which item provided this skill,
+# so weapon-driven stats (speed, dmg range, crit, accuracy) come from the right
+# slot. Class skills aren't backed by an item — those return null.
+func _resolve_skill_source(skill: Skill) -> Item:
+	var weapon: Item = InventoryState.get_equipped(&"weapon")
+	if weapon != null and (weapon.fire_skill == skill or weapon.alt_fire_skill == skill):
+		return weapon
+	var offhand: Item = InventoryState.get_equipped(&"offhand")
+	if offhand != null and (offhand.fire_skill == skill or offhand.alt_fire_skill == skill):
+		return offhand
+	return null
 
 func _crit_damage(base: int, is_crit: bool) -> int:
 	if not is_crit:
@@ -780,6 +881,24 @@ func _face_direction(dir: Vector3) -> void:
 		return
 	visual.look_at(visual.global_position + dir, Vector3.UP)
 
+func _smooth_face(dir: Vector3, turn_rate: float, delta: float) -> void:
+	# Rotate the visual yaw toward `dir` at most `turn_rate` rad/sec, taking
+	# the shortest angular path. Only modifies the Y axis so animation tilt
+	# (e.g. crouch lean) is preserved.
+	if visual == null or dir.length_squared() < 0.0001:
+		return
+	var target_yaw := atan2(-dir.x, -dir.z)
+	var current_yaw := visual.rotation.y
+	var diff := wrapf(target_yaw - current_yaw, -PI, PI)
+	var step := turn_rate * delta
+	visual.rotation.y = current_yaw + clampf(diff, -step, step)
+
+func _is_aim_input_held() -> bool:
+	for action in SKILL_INPUTS:
+		if Input.is_action_pressed(action):
+			return true
+	return false
+
 func _play_anim(candidates: Array[StringName], speed: float = 1.0, blend: float = 0.0) -> bool:
 	if anim_player == null:
 		return false
@@ -887,9 +1006,7 @@ func _update_interact_cursor() -> void:
 	if not _alive or _is_any_modal_open():
 		Input.set_default_cursor_shape(Input.CURSOR_ARROW)
 		return
-	var cursor_world := global_position + _cursor_offset()
-	var nearby := SpatialGrid.query_nearest(cursor_world, 1.5, &"interactables")
-	if nearby != null:
+	if _hovered_clickable() != null:
 		Input.set_default_cursor_shape(Input.CURSOR_POINTING_HAND)
 	else:
 		Input.set_default_cursor_shape(Input.CURSOR_ARROW)
