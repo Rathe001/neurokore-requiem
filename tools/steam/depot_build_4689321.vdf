@@ -1,0 +1,23 @@
+"DepotBuildConfig"
+{
+	"DepotID"	"4689321"
+
+	// Empty = inherit "contentroot" from app_build_4689320.vdf.
+	"ContentRoot"	""
+
+	"FileMapping"
+	{
+		// Recursive grab of everything in contentroot. The "*" glob with
+		// recursive=1 mirrors the entire export folder into the depot root.
+		"LocalPath"		"*"
+		"DepotPath"		"."
+		"recursive"		"1"
+	}
+
+	// Strip artifacts that shouldn't ship to playtesters.
+	"FileExclusion"		"*.pdb"
+	"FileExclusion"		"*.log"
+	"FileExclusion"		"*.tmp"
+	"FileExclusion"		".DS_Store"
+	"FileExclusion"		"Thumbs.db"
+}

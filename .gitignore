@@ -4,5 +4,8 @@
 # MkDocs build output
 site/
 
+# Godot exported builds (Steam, etc.)
+build/
+
 # macOS
 .DS_Store

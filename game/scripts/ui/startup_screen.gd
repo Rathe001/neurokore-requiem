@@ -25,6 +25,7 @@ const PICKS: Array[Dictionary] = [
 
 var _main_panel: Control
 var _class_panel: Control
+var _settings_panel: SettingsPanel
 
 func _ready() -> void:
 	theme = UIThemeState.theme
@@ -32,9 +33,16 @@ func _ready() -> void:
 	_build_background()
 	_build_main_panel()
 	_build_class_panel()
+	_build_settings_panel()
 	_build_version_stamp()
 	_show_main()
 	UIThemeState.changed.connect(_on_theme_changed)
+
+func _build_settings_panel() -> void:
+	_settings_panel = SettingsPanel.new()
+	_settings_panel.visible = false
+	_settings_panel.back_pressed.connect(_show_main)
+	add_child(_settings_panel)
 
 func _build_version_stamp() -> void:
 	var label := Label.new()
@@ -93,12 +101,14 @@ func _build_main_panel() -> void:
 	buttons.anchor_bottom = 1.0
 	buttons.offset_left = -BUTTON_SIZE.x * 0.5
 	buttons.offset_right = BUTTON_SIZE.x * 0.5
-	buttons.offset_top = -200.0
+	buttons.offset_top = -280.0
 	buttons.offset_bottom = -60.0
 	_main_panel.add_child(buttons)
 
 	buttons.add_child(_make_button("COMMON_NEW_GAME", _on_new_game_pressed))
-	buttons.add_child(_make_button("COMMON_OPTIONS", _on_options_pressed, false))
+	buttons.add_child(_make_button("COMMON_OPTIONS", _on_options_pressed))
+	buttons.add_child(_make_button("COMMON_REPORT_BUG", _on_report_bug_pressed))
+	buttons.add_child(_make_button("COMMON_OPEN_LOGS", _on_open_logs_pressed))
 	buttons.add_child(_make_button("COMMON_QUIT", _on_quit_pressed))
 
 func _build_class_panel() -> void:
@@ -302,22 +312,40 @@ func _make_button(text: String, callback: Callable, enabled: bool = true) -> But
 func _show_main() -> void:
 	_main_panel.visible = true
 	_class_panel.visible = false
+	_settings_panel.visible = false
 
 func _show_class_select() -> void:
 	_main_panel.visible = false
 	_class_panel.visible = true
+	_settings_panel.visible = false
+
+func _show_settings() -> void:
+	_main_panel.visible = false
+	_class_panel.visible = false
+	_settings_panel.visible = true
 
 func _on_new_game_pressed() -> void:
 	_show_class_select()
 
 func _on_options_pressed() -> void:
-	pass
+	_show_settings()
 
 func _on_back_pressed() -> void:
 	_show_main()
 
 func _on_quit_pressed() -> void:
 	get_tree().quit()
+
+func _on_report_bug_pressed() -> void:
+	OS.shell_open(BuildInfo.BUG_REPORT_URL)
+
+func _on_open_logs_pressed() -> void:
+	var user_dir := OS.get_user_data_dir()
+	var log_dir := user_dir.path_join("logs")
+	if DirAccess.dir_exists_absolute(log_dir):
+		OS.shell_open(log_dir)
+	else:
+		OS.shell_open(user_dir)
 
 func _on_pick_selected(class_id: StringName, spec_id: StringName) -> void:
 	PlayerState.set_class_and_spec(class_id, spec_id)

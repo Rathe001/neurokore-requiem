@@ -1,0 +1,30 @@
+"appbuild"
+{
+	"appid"			"4689320"
+	"desc"			"NeuroKore: Requiem Playtest"
+
+	// Where SteamPipe writes its build logs and intermediate state.
+	// Created on first run. Safe to .gitignore.
+	"buildoutput"	"./output/"
+
+	// Root folder containing the actual files to upload. Must match the
+	// Godot Windows export path. Update this if you move the project.
+	"contentroot"	"C:/Users/josh/Projects/neurokore-requiem/build/windows/"
+
+	// Empty = upload only, do not auto-set live on a branch. After upload,
+	// pick the build in the Steamworks dashboard and set live manually.
+	// Set to a branch name (e.g. "default") once the workflow is trusted.
+	"setlive"		""
+
+	// "1" runs a dry-run that validates the depot tree without uploading.
+	// Useful for the first run to confirm files are mapped correctly.
+	"preview"		"0"
+
+	// Local content server (advanced). Leave empty for normal uploads.
+	"local"			""
+
+	"depots"
+	{
+		"4689321" "depot_build_4689321.vdf"
+	}
+}
