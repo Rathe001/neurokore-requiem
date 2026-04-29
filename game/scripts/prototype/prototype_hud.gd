@@ -32,7 +32,8 @@ const DEBUG_OVERLAY_INTERVAL := 0.1
 @onready var banner: Label = %Banner
 @onready var debug_label: Label = %DebugLabel
 @onready var debug_bg: ColorRect = $Root/DebugPanel/DebugBack
-@onready var hotkey_hints: Label = %HotkeyHints
+@onready var xp_fill: ColorRect = %XPFill
+@onready var xp_bg: ColorRect = %XPBackground
 @onready var main_menu: Node = %MainMenu
 
 var _max_health: int = 1
@@ -46,10 +47,11 @@ var _minimap: Minimap
 func _ready() -> void:
 	add_to_group(&"hud")
 	_apply_theme()
-	_update_avatar_glyph()
+	_update_avatar_label()
+	_repaint_xp(PlayerState.xp, PlayerState.xp_to_next)
 	UIThemeState.changed.connect(_apply_theme)
-	PlayerState.class_changed.connect(func(_id: StringName) -> void: _update_avatar_glyph())
-	PlayerState.spec_changed.connect(func(_id: StringName) -> void: _update_avatar_glyph())
+	PlayerState.level_changed.connect(func(_n: int, _o: int) -> void: _update_avatar_label())
+	PlayerState.xp_changed.connect(_repaint_xp)
 	var player := get_tree().get_first_node_in_group(&"player")
 	if player == null:
 		push_warning("[prototype_hud] no player in group")
@@ -119,9 +121,16 @@ func _apply_indicator(bg: ColorRect, border: ReferenceRect, active: bool) -> voi
 		bg.color = p.slot_bg
 		border.border_color = Color(p.slot_border.r, p.slot_border.g, p.slot_border.b, 0.5)
 
-func _update_avatar_glyph() -> void:
-	var id: StringName = PlayerState.spec_id if PlayerState.spec_id != &"" else PlayerState.class_id
-	avatar_label.text = (id as String).substr(0, 1).to_upper()
+func _update_avatar_label() -> void:
+	avatar_label.text = tr("HUD_LEVEL_FORMAT") % PlayerState.level
+
+func _repaint_xp(current: int, to_next: int) -> void:
+	if xp_fill == null:
+		return
+	var ratio: float = 0.0
+	if to_next > 0:
+		ratio = clampf(float(current) / float(to_next), 0.0, 1.0)
+	xp_fill.anchor_right = ratio
 
 func _on_crouch_changed(is_crouching: bool) -> void:
 	_state_crouch = is_crouching
@@ -152,8 +161,6 @@ func _process(delta: float) -> void:
 	var overlay_on := DebugState.config == null or DebugState.config.show_debug_overlay
 	if panel.visible != overlay_on:
 		panel.visible = overlay_on
-	if hotkey_hints.visible != overlay_on:
-		hotkey_hints.visible = overlay_on
 	if not overlay_on:
 		return
 	_debug_overlay_accum += delta

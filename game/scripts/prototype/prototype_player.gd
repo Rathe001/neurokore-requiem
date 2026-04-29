@@ -115,6 +115,7 @@ var _resource_current: float = 0.0
 var _resource_last_int: int = 0
 var _credits: int = 0
 var _death_tween: Tween
+var _spawn_position: Vector3 = Vector3.ZERO
 var _equipped_light: Light3D
 var _scanner_active: bool = false
 var _uv_active: bool = false
@@ -166,6 +167,7 @@ func _ready() -> void:
 	SpatialGrid.register(self, &"player")
 	class_id = PlayerState.class_id
 	spec_id = PlayerState.spec_id
+	PlayerState.leveled_up.connect(_on_player_leveled_up)
 	_health = max_health
 	_ensure_loop(ANIM_IDLE)
 	_ensure_loop(ANIM_RUN)
@@ -186,6 +188,7 @@ func _ready() -> void:
 		_resource_last_int = int(_resource_current)
 		resource_changed.emit(_resource_last_int, resource_pool.max_value)
 	_apply_debug_overrides()
+	_spawn_position = global_position
 	_build_crosshair()
 	_stand_test_shape = CapsuleShape3D.new()
 	_stand_test_shape.radius = 0.4
@@ -238,6 +241,43 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 			_knockback_remain = KNOCKBACK_DURATION
 	if _health <= 0:
 		_die()
+
+func _on_player_leveled_up(new_level: int, hp_gain: int) -> void:
+	max_health += hp_gain
+	_health = max_health
+	health_changed.emit(_health, max_health)
+	notification_requested.emit(tr("HUD_LEVEL_UP_FORMAT") % new_level)
+	_play_levelup_vfx()
+
+func _play_levelup_vfx() -> void:
+	if visual == null:
+		return
+	var ring := MeshInstance3D.new()
+	var torus := TorusMesh.new()
+	torus.inner_radius = 0.55
+	torus.outer_radius = 0.7
+	torus.rings = 32
+	torus.ring_segments = 8
+	ring.mesh = torus
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.albedo_color = Color(1.0, 0.85, 0.4, 0.85)
+	mat.emission_enabled = true
+	mat.emission = Color(1.0, 0.85, 0.4)
+	mat.emission_energy_multiplier = 3.0
+	ring.material_override = mat
+	add_child(ring)
+	ring.position = Vector3(0.0, 0.05, 0.0)
+	ring.scale = Vector3(0.4, 0.4, 0.4)
+	var tween := create_tween().set_parallel(true)
+	tween.tween_property(ring, "scale", Vector3(3.5, 0.4, 3.5), 0.7) \
+		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tween.tween_property(mat, "albedo_color:a", 0.0, 0.7) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tween.tween_property(ring, "position:y", 0.6, 0.7) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.chain().tween_callback(ring.queue_free)
 
 func _process(delta: float) -> void:
 	RenderingServer.global_shader_parameter_set(PLAYER_WORLD_POS_PARAM, global_position)
@@ -320,8 +360,10 @@ func _physics_process(delta: float) -> void:
 			velocity.z = flat.y
 	move_and_slide()
 
-	# Auto-uncrouch as soon as there's headroom and the key isn't held.
-	if _crouching and not Input.is_action_pressed(&"crouch"):
+	# Auto-uncrouch as soon as the key isn't held. Polls the physical key
+	# directly because Godot's action system can miss the release event for
+	# Ctrl when it's released while another key (e.g. WASD) is still held.
+	if _crouching and not Input.is_physical_key_pressed(KEY_CTRL):
 		_set_crouch(false)
 
 	if _alive and not _attacking and _knockback_remain <= 0.0:
@@ -350,9 +392,11 @@ func _physics_process(delta: float) -> void:
 				target_dir = Vector3(velocity.x, 0.0, velocity.z).normalized()
 			if target_dir.length_squared() > 0.0001:
 				_smooth_face(target_dir, TURN_RATE_AIM if aiming else TURN_RATE_MOVE, delta)
-			# Flashlight pitch always tracks cursor distance regardless of body facing.
+			# Flashlight tracks the cursor in world space, independent of body
+			# facing — the body smooths toward movement direction, but the beam
+			# should follow the mouse so aiming reads as instant.
 			if _equipped_light is SpotLight3D:
-				_update_flashlight_pitch(_cursor_offset().length())
+				_aim_flashlight_at_cursor()
 		if _is_airborne:
 			anim_player.speed_scale = 1.0
 			if velocity.y > 0.0:
@@ -399,7 +443,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_released(&"crouch"):
 		_set_crouch(false)
 		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed(&"toggle_view"):
+	elif event.is_action_pressed(&"toggle_view") and BuildInfo.dev_tools_enabled():
 		_toggle_fps()
 		get_viewport().set_input_as_handled()
 	elif _fps_mode and not _fps_transitioning and event is InputEventMouseMotion:
@@ -575,9 +619,13 @@ func _roll_hit(weapon: Item) -> bool:
 	return randf() < weapon.accuracy
 
 func _roll_skill_damage(skill: Skill, weapon: Item) -> int:
+	var base: int
 	if weapon != null and weapon.damage_max > 0:
-		return randi_range(weapon.damage_min, weapon.damage_max)
-	return skill.damage
+		base = randi_range(weapon.damage_min, weapon.damage_max)
+	else:
+		base = skill.damage
+	var mult := AttributeState.get_player_damage_mult(PlayerState.class_id, PlayerState.spec_id)
+	return int(round(float(base) * mult))
 
 # Walks the equipped weapon and offhand to find which item provided this skill,
 # so weapon-driven stats (speed, dmg range, crit, accuracy) come from the right
@@ -649,13 +697,13 @@ func _die() -> void:
 		_death_tween.tween_property(visual, "scale:y", 0.15, 0.5)
 	await get_tree().create_timer(DEATH_HOLD).timeout
 	await get_tree().create_timer(RESPAWN_DELAY).timeout
-	_respawn()
+	respawn()
 
-func _respawn() -> void:
+func respawn() -> void:
 	if _death_tween != null and _death_tween.is_valid():
 		_death_tween.kill()
 		_death_tween = null
-	global_position = Vector3(0.0, 0.0, -4.0)
+	global_position = _spawn_position
 	velocity = Vector3.ZERO
 	_knockback_remain = 0.0
 	_attacking = false
@@ -875,6 +923,36 @@ func _update_flashlight_pitch(cursor_distance: float) -> void:
 	var pitch := atan2(vertical, d)
 	pitch = clampf(pitch, -deg_to_rad(FLASHLIGHT_MAX_UP_DEG), deg_to_rad(FLASHLIGHT_MAX_PITCH_DEG))
 	_equipped_light.rotation.x = -pitch
+
+# Top-down aim: set the flashlight's world rotation directly so its yaw follows
+# the cursor instead of the player visual. Pitch reuses the same lift curve as
+# the FPS path (target Y derived from cursor distance).
+func _aim_flashlight_at_cursor() -> void:
+	if not _equipped_light is SpotLight3D:
+		return
+	var offset := _cursor_offset()
+	var cursor_distance := offset.length()
+	var horiz_dir: Vector3
+	if cursor_distance > 0.0001:
+		horiz_dir = offset / cursor_distance
+	elif visual != null:
+		horiz_dir = -visual.global_transform.basis.z
+		horiz_dir.y = 0.0
+		if horiz_dir.length_squared() < 0.0001:
+			return
+		horiz_dir = horiz_dir.normalized()
+	else:
+		return
+	var forward_offset := -FLASHLIGHT_OFFSET.z
+	var d := maxf(0.01, cursor_distance - forward_offset)
+	var lift_t := clampf(cursor_distance / FLASHLIGHT_LEVEL_DISTANCE, 0.0, 1.0)
+	var vertical := FLASHLIGHT_OFFSET.y - lift_t * (FLASHLIGHT_OFFSET.y + FLASHLIGHT_OVER_LIFT)
+	var pitch := atan2(vertical, d)
+	pitch = clampf(pitch, -deg_to_rad(FLASHLIGHT_MAX_UP_DEG), deg_to_rad(FLASHLIGHT_MAX_PITCH_DEG))
+	var clamped_vertical := tan(pitch) * d
+	var fl_pos := _equipped_light.global_position
+	var target := fl_pos + horiz_dir * d + Vector3(0.0, -clamped_vertical, 0.0)
+	_equipped_light.look_at(target, Vector3.UP)
 
 func _face_direction(dir: Vector3) -> void:
 	if visual == null or dir.length_squared() < 0.0001:

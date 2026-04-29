@@ -35,6 +35,9 @@ func acquire(scene: PackedScene) -> Node3D:
 func release(node: Node3D) -> void:
 	if not is_instance_valid(node):
 		return
+	# Pooled nodes leave the tree but the SpatialGrid keeps a reference until the
+	# node is reused. Drop the registration so queries can't return parked nodes.
+	SpatialGrid.unregister(node)
 	var scene := node.scene_file_path
 	if scene.is_empty():
 		node.queue_free()

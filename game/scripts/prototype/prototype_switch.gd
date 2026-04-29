@@ -1,70 +1,48 @@
 class_name PrototypeSwitch
-extends StaticBody3D
+extends HoverableInteractable
 
 enum Action { TOGGLE, OPEN, CLOSE, UNLOCK }
 
 const COLOR_ACTIVE := Color(0.35, 0.95, 1.0, 1.0)
 const COLOR_USED := Color(0.4, 0.5, 0.55, 1.0)
-const OUTLINE_GROW := 0.04
 
 @export var target_door: NodePath
 @export var action: Action = Action.TOGGLE
-@export var display_name: String = "Switch"
 
 @onready var mesh: MeshInstance3D = $Mesh
 @onready var lamp: MeshInstance3D = $Lamp
 
 var _used: bool = false
 var _mat: StandardMaterial3D
-var _outline: MeshInstance3D
 
 func _ready() -> void:
-	add_to_group(&"interactables")
-	SpatialGrid.register(self, &"interactables")
 	_mat = StandardMaterial3D.new()
 	_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	_mat.emission_enabled = true
 	_mat.emission_energy_multiplier = 4.0
 	lamp.material_override = _mat
-	_build_outline()
-	mouse_entered.connect(_on_mouse_entered)
-	mouse_exited.connect(_on_mouse_exited)
+	super._ready()
 	_refresh_lamp()
 
-func _build_outline() -> void:
-	_outline = MeshInstance3D.new()
-	_outline.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var st := SurfaceTool.new()
-	st.create_from(mesh.mesh, 0)
-	st.generate_normals(true)
-	_outline.mesh = st.commit()
-	var m := StandardMaterial3D.new()
-	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	m.albedo_color = Color.WHITE
-	m.cull_mode = BaseMaterial3D.CULL_FRONT
-	m.grow = true
-	m.grow_amount = OUTLINE_GROW
-	_outline.material_override = m
-	_outline.visible = false
-	mesh.add_child(_outline)
+func _get_outline_source() -> MeshInstance3D:
+	return mesh
 
-func _on_mouse_entered() -> void:
-	_outline.visible = true
-	add_to_group(&"hovered_clickable")
-	add_to_group(&"tooltip_target")
-	get_tree().call_group(&"interactable_tooltip", &"show_text", display_name)
-
-func _on_mouse_exited() -> void:
-	_outline.visible = false
-	remove_from_group(&"hovered_clickable")
-	remove_from_group(&"tooltip_target")
-	get_tree().call_group(&"interactable_tooltip", &"hide_tooltip")
+# Clear the "used" lamp state so the switch is interactable again after reset.
+func reset_state() -> void:
+	_used = false
+	_refresh_lamp()
+	_set_interactive(true)
 
 func interact(_user: Node) -> void:
 	if target_door == NodePath():
 		return
 	var door := get_node_or_null(target_door) as PrototypeDoor
 	if door == null:
+		return
+	# One-shot actions become inert once consumed so multi-switch puzzles can't
+	# be cheesed by re-triggering the same panel. Toggle is intentionally
+	# excluded — it's the only repeatable action.
+	if _used and action != Action.TOGGLE:
 		return
 	match action:
 		Action.TOGGLE:
@@ -84,6 +62,22 @@ func _mark_used() -> void:
 		return
 	_used = true
 	_refresh_lamp()
+	_set_interactive(false)
+
+# Used switches drop out of mouse picking, the SpatialGrid interactable index,
+# and any active hover/tooltip state so they read as inert. reset_state() flips
+# this back on for NG+ runs.
+func _set_interactive(on: bool) -> void:
+	input_ray_pickable = on
+	if on:
+		SpatialGrid.register(self, &"interactables")
+	else:
+		SpatialGrid.unregister(self)
+		if _outline != null:
+			_outline.visible = false
+		remove_from_group(&"hovered_clickable")
+		remove_from_group(&"tooltip_target")
+		get_tree().call_group(&"interactable_tooltip", &"hide_tooltip")
 
 func _refresh_lamp() -> void:
 	var c := COLOR_USED if _used else COLOR_ACTIVE

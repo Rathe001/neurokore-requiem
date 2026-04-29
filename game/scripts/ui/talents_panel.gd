@@ -518,9 +518,9 @@ func _on_node_hovered(stat_id: StringName, tier: int, node_idx: int) -> void:
 		var thresholds := AttributeState.get_tier_thresholds(stat_id, PlayerState.class_id, PlayerState.spec_id)
 		var needed_pct := int(thresholds[tier] * 100)
 		title += "  ·  Locked (%d%%)" % needed_pct
-		body = "Reach %d%% %s allocation to unlock this tier. Lorem ipsum dolor sit amet, consectetur adipiscing elit." % [needed_pct, stat_name]
+		body = "Reach %d%% %s allocation to unlock this tier." % [needed_pct, stat_name]
 	else:
-		body = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."
+		body = "Perk effect TBD."
 	get_tree().call_group(&"interactable_tooltip", &"show_talent_node", title, body)
 
 func _on_node_unhovered() -> void:

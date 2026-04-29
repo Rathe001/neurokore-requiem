@@ -106,6 +106,11 @@ const ORIGIN_TIER_CAPS: Array[Array] = [
 # Team nodes: 5-tier tree unlocked by combined team stat share.
 const TEAM_NODE_THRESHOLDS: Array[float] = [0.20, 0.35, 0.50, 0.65, 0.80]
 
+# Outgoing player damage scales with the class's main stat. 1% per point gives
+# us roughly D2-shaped scaling for the playtest: a fully-geared character lands
+# in the +50–100% range. Tuning lives here so combat balance stays in one file.
+const DAMAGE_PER_MAIN_STAT_PCT: float = 0.01
+
 # ── Stat values ───────────────────────────────────────────────────────────────
 
 var ort: int = 0
@@ -260,6 +265,27 @@ func get_opposing_stats_for_origin(origin: StringName) -> Array[StringName]:
 ## Returns the primary stat for a specialized class, or &"" for origin classes.
 func get_spec_stat(spec_id: StringName) -> StringName:
 	return CLASS_DEFINITIONS.get(spec_id, {}).get(&"stat", &"")
+
+## Returns the player's main stat for combat scaling.
+## Specialized classes use their primary stat; origin classes use the derived
+## origin stat (analog → soul, cyborg → itf).
+func get_class_main_stat_id(class_id: StringName, spec_id: StringName) -> StringName:
+	if spec_id != &"":
+		return get_spec_stat(spec_id)
+	if class_id == &"analog":
+		return &"soul"
+	if class_id == &"cyborg":
+		return &"itf"
+	return &""
+
+## Outgoing damage multiplier from the player's main stat. 1.0 means no bonus;
+## 1.5 means +50% damage. Multiply weapon-rolled damage by this value before
+## crit/perk modifiers in the player's damage path.
+func get_player_damage_mult(class_id: StringName, spec_id: StringName) -> float:
+	var stat_id := get_class_main_stat_id(class_id, spec_id)
+	if stat_id == &"":
+		return 1.0
+	return 1.0 + float(get_stat(stat_id)) * DAMAGE_PER_MAIN_STAT_PCT
 
 ## Returns the origin (&"analog" or &"cyborg") for a specialized class spec_id.
 func get_spec_origin(spec_id: StringName) -> StringName:

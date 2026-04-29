@@ -29,6 +29,11 @@ Working:
 - **Platformer elements** — jump over pits; crouch-only corridors (solid ceiling block forces crouch, player is locked in crouching until they clear the zone); enemies that fall into pits die
 - **Per-piece floors with true pits** — each room and corridor has its own floor mesh; pit corridors omit floor over the gap; a kill zone at y=−4 destroys anything that falls in
 - **World-space floor tiling** — `tech_floor.gdshader` tiles by world position so texture density stays consistent across all floor piece sizes
+- **Variant wall/floor shaders** — rooms use smooth panel walls + flat tile floor; corridors use riveted-panel walls + diamond-tread floor (`tech_wall_riveted.gdshader` / `tech_floor_grate.gdshader`). Corridor surfaces sit on a sub-millimetre Y bias so the room surface wins the depth tie at the geometric overlap that hides seams between pieces — without that bias, mismatched coplanar shaders flicker per frame
+- **Door-specific shader** — door slabs use `tech_door.gdshader` (mesh-local UVs) so the panel pattern stays anchored to the slab as it slides instead of scrolling across world-space tiling
+- **Reflective floor puddles** — procedural blob-masked decal (`puddle.gdshader`) with fbm-distorted silhouette, low-roughness dielectric, and time-driven ripple normals. Placement is deterministic per-room (id-hashed seed) so re-entering doesn't shuffle. Configured per-room via `RoomDef.puddle_count` / `puddle_size`
+- **Hoverable interactable scaffolding** — shared base class for clickable world objects (doors, switches, exit pad). Wraps an outline halo around the source mesh, manages hover/tooltip dispatch, and exposes a `reset_state()` hook the level-reset loop calls via the `resettable` group
+- **Exit pad** — `PrototypeExit` listens on the `boss_listeners` group; when the boss dies the pad unlocks, pulses, and `interact()` triggers a level reset
 
 ## Enemies
 

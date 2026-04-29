@@ -8,7 +8,7 @@
 script = ExtResource("1_weapon_base")
 id = &"melee_2h"
 display_name = "2H Sledgehammer"
-glyph = "|"
+glyph = "‡"
 two_handed = true
 damage_min_range = Vector2(10, 14)
 damage_max_range = Vector2(16, 22)

@@ -19,6 +19,7 @@ size = Vector3(0.05, 0.3, 0.4)
 
 [node name="Switch" type="StaticBody3D"]
 script = ExtResource("1_script")
+display_name = "Switch"
 
 [node name="Mesh" type="MeshInstance3D" parent="."]
 mesh = SubResource("mesh_switch_housing")

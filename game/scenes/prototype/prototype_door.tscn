@@ -10,6 +10,7 @@ size = Vector3(0.4, 4.5, 4)
 
 [node name="Door" type="StaticBody3D"]
 script = ExtResource("1_script")
+display_name = "Door"
 
 [node name="Mesh" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.25, 0)

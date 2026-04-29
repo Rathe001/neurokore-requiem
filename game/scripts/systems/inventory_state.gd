@@ -26,6 +26,18 @@ const STARTER_KIT_SLOTS: Dictionary = {
 	&"polymath":    &"offhand",
 }
 
+# Slot-kind → ItemRoller main_type label, used to pick the right TYPE_GLYPH for
+# starter kit items. The two armor slots embed "Armor" in the label; everything
+# else just title-cases the slot name.
+const STARTER_SLOT_MAIN_TYPE: Dictionary = {
+	&"head":    "Head Armor",
+	&"chest":   "Chest Armor",
+	&"gloves":  "Gloves",
+	&"boots":   "Boots",
+	&"belt":    "Belt",
+	&"offhand": "Offhand",
+}
+
 var equipment: Dictionary = {}
 var inventory: Array[Item] = []
 
@@ -137,7 +149,7 @@ func _make_starter_offhand() -> Item:
 	item.id = &"starter_offhand"
 	item.kind = &"offhand"
 	item.main_type = "Offhand"
-	item.glyph = "("
+	item.glyph = ItemRoller.TYPE_GLYPH.get("Offhand", "?")
 	item.glyph_color = ItemRoller.RARITY_COLOR.get(&"common", Color.WHITE)
 	item.rarity = &"common"
 	item.name_key = "Starter Offhand"
@@ -152,8 +164,8 @@ func _make_class_tier5_item(spec_id: StringName) -> Item:
 	var item := Item.new()
 	item.id = StringName("starter_t5_%s" % spec_id)
 	item.kind = slot
-	item.main_type = String(slot).capitalize()
-	item.glyph = AttributeState.TIER_ROMAN[4]
+	item.main_type = STARTER_SLOT_MAIN_TYPE.get(slot, String(slot).capitalize())
+	item.glyph = ItemRoller.TYPE_GLYPH.get(item.main_type, AttributeState.TIER_ROMAN[4])
 	item.glyph_color = AttributeState.STAT_COLORS.get(stat, Color.WHITE)
 	item.rarity = &"unique"
 	item.name_key = "%s T5 (%s %d%%)" % [spec_label, short, T5_STAT_PCT]

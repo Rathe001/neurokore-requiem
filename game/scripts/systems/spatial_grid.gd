@@ -135,12 +135,17 @@ func count(category: StringName) -> int:
 # ── Internal ──────────────────────────────────────────────────────────────
 
 func _update_all_positions() -> void:
-	for node: Node3D in _tracked.keys():
+	# Iterate a snapshot — keys() can hold freed-object references when callers
+	# queue_free a tracked node without unregister(). Typed iteration over those
+	# would error on the freed-instance cast. Defer erases to after the loop.
+	var keys := _tracked.keys()
+	var dead: Array = []
+	for node in keys:
 		if not is_instance_valid(node):
-			_tracked.erase(node)
+			dead.append(node)
 			continue
 		var info: Dictionary = _tracked[node]
-		var pos := node.global_position
+		var pos: Vector3 = node.global_position
 		var last: Vector3 = info["last_pos"]
 		if pos.distance_squared_to(last) < MOVE_THRESHOLD_SQ:
 			continue
@@ -151,6 +156,10 @@ func _update_all_positions() -> void:
 			_remove(node, cat, info["cell"])
 			_insert(node, cat, new_cell)
 			info["cell"] = new_cell
+	for d in dead:
+		var info2: Dictionary = _tracked[d]
+		_remove(d, info2["category"], info2["cell"])
+		_tracked.erase(d)
 
 func _cell_for(pos: Vector3) -> Vector2i:
 	return Vector2i(

@@ -1,68 +1,88 @@
 class_name PrototypeDoor
-extends StaticBody3D
+extends HoverableInteractable
 
 const SLIDE_DURATION := 0.4
 const SLIDE_DISTANCE := 4.7
-const TINT_NEUTRAL := Color(0.55, 0.65, 0.75, 1.0)
-const TINT_LOCKED := Color(0.85, 0.25, 0.2, 1.0)
-const OUTLINE_GROW := 0.04
+const FRAME_LOCKED := Color(1.0, 0.25, 0.2, 1.0)
+const FRAME_UNLOCKED := Color(0.3, 1.0, 0.45, 1.0)
+const FRAME_HOVER_BOOST := 1.6
+# Door dimensions (matches the BoxMesh in prototype_door.tscn). X = thickness,
+# Y = height, Z = width.
+const DOOR_THICKNESS := 0.4
+const DOOR_HEIGHT := 4.5
+const DOOR_WIDTH := 4.0
+# State-frame trim around each wide face of the door — thickness of each bar
+# and how far it juts out past the door surface so it reads as a glowing rim.
+const FRAME_BAR := 0.12
+const FRAME_OUT := 0.04
 
 @export var locked: bool = false
-@export var display_name: String = "Door"
+
+# Number of unlock() calls required before the door actually opens. Multi-switch
+# puzzles set this on the door (e.g. 3 switches → 3); each switch's unlock()
+# decrements the counter, and only the last call flips `locked` to false.
+@export_range(1, 9) var unlocks_required: int = 1
+
+# Listen for the boss-died group call and unlock automatically. Mutually
+# compatible with multi-switch (boss kill counts as one unlock).
+@export var unlock_on_boss: bool = false
 
 @onready var mesh: MeshInstance3D = $Mesh
 @onready var collision: CollisionShape3D = $Collision
 
 var _open: bool = false
 var _rest_y: float = 0.0
+var _initial_locked: bool = false
+var _unlocks_remaining: int = 1
+var _hovered: bool = false
 var _tween: Tween
 var _mat: ShaderMaterial
-var _outline: MeshInstance3D
+var _frame_mat: StandardMaterial3D
+var _frame_bars: Array[MeshInstance3D] = []
 
-const _FADE_SHADER: Shader = preload("res://scripts/prototype/proximity_fade.gdshader")
+const _DOOR_SHADER: Shader = preload("res://scripts/prototype/tech_door.gdshader")
 
 func _ready() -> void:
 	add_to_group(&"doors")
-	add_to_group(&"interactables")
-	SpatialGrid.register(self, &"interactables")
+	if unlock_on_boss:
+		add_to_group(&"boss_listeners")
 	_rest_y = mesh.position.y
+	_initial_locked = locked
+	_unlocks_remaining = unlocks_required
+	# Dedicated door shader — same colour palette as the walls but the
+	# detailing rides with the slab as it slides (mesh-local UVs instead of
+	# world-space triplanar) so the panel pattern doesn't scroll.
 	_mat = ShaderMaterial.new()
-	_mat.shader = _FADE_SHADER
+	_mat.shader = _DOOR_SHADER
 	mesh.material_override = _mat
-	_build_outline()
-	mouse_entered.connect(_on_mouse_entered)
-	mouse_exited.connect(_on_mouse_exited)
+	super._ready()
+	_build_state_frame()
 	_refresh_tint()
 
-func _build_outline() -> void:
-	_outline = MeshInstance3D.new()
-	_outline.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var st := SurfaceTool.new()
-	st.create_from(mesh.mesh, 0)
-	st.generate_normals(true)
-	_outline.mesh = st.commit()
-	var m := StandardMaterial3D.new()
-	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	m.albedo_color = Color.WHITE
-	m.cull_mode = BaseMaterial3D.CULL_FRONT
-	m.grow = true
-	m.grow_amount = OUTLINE_GROW
-	_outline.material_override = m
-	_outline.visible = false
-	mesh.add_child(_outline)
+func _get_outline_source() -> MeshInstance3D:
+	# Skip the inherited grow-and-cull-front outline; doors use _frame_bars
+	# (which work even when surrounding walls would occlude the silhouette
+	# halo). Hover feedback comes through the frame brightening instead.
+	return null
 
-func _on_mouse_entered() -> void:
-	_outline.visible = true
-	add_to_group(&"hovered_clickable")
-	add_to_group(&"tooltip_target")
-	var label := "%s (Locked)" % display_name if locked else display_name
-	get_tree().call_group(&"interactable_tooltip", &"show_text", label)
+func _get_tooltip_text() -> String:
+	if not locked:
+		return display_name
+	if unlocks_required > 1:
+		var done := unlocks_required - _unlocks_remaining
+		return "%s (Locked — %d / %d)" % [display_name, done, unlocks_required]
+	return "%s (Locked)" % display_name
 
-func _on_mouse_exited() -> void:
-	_outline.visible = false
-	remove_from_group(&"hovered_clickable")
-	remove_from_group(&"tooltip_target")
-	get_tree().call_group(&"interactable_tooltip", &"hide_tooltip")
+# Restore initial open/locked state on level reset.
+func reset_state() -> void:
+	if _tween != null and _tween.is_valid():
+		_tween.kill()
+	_open = false
+	collision.disabled = false
+	mesh.position.y = _rest_y
+	locked = _initial_locked
+	_unlocks_remaining = unlocks_required
+	_refresh_tint()
 
 func is_open() -> bool:
 	return _open
@@ -76,6 +96,7 @@ func open() -> void:
 	_open = true
 	collision.disabled = true
 	_animate(_rest_y + SLIDE_DISTANCE)
+	_refresh_tint()
 
 func close() -> void:
 	if not _open:
@@ -83,6 +104,7 @@ func close() -> void:
 	_open = false
 	collision.disabled = false
 	_animate(_rest_y)
+	_refresh_tint()
 
 func toggle() -> void:
 	if _open:
@@ -98,8 +120,18 @@ func interact(_user: Node) -> void:
 func unlock() -> void:
 	if not locked:
 		return
+	_unlocks_remaining = maxi(0, _unlocks_remaining - 1)
+	if _unlocks_remaining > 0:
+		# Partial progress — keep locked but refresh in case UI shows count.
+		_refresh_tint()
+		return
 	locked = false
 	_refresh_tint()
+
+# Group dispatch from PrototypeEnemy._die() when a boss falls. Only doors
+# flagged with unlock_on_boss subscribe.
+func on_boss_died(_boss: Node) -> void:
+	unlock()
 
 func _animate(target_y: float) -> void:
 	if _tween != null and _tween.is_valid():
@@ -107,7 +139,66 @@ func _animate(target_y: float) -> void:
 	_tween = create_tween()
 	_tween.tween_property(mesh, "position:y", target_y, SLIDE_DURATION).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
 
+func _on_mouse_entered() -> void:
+	_hovered = true
+	add_to_group(&"hovered_clickable")
+	add_to_group(&"tooltip_target")
+	var text := _get_tooltip_text()
+	if text != "":
+		get_tree().call_group(&"interactable_tooltip", &"show_text", text)
+	_refresh_tint()
+
+func _on_mouse_exited() -> void:
+	_hovered = false
+	remove_from_group(&"hovered_clickable")
+	remove_from_group(&"tooltip_target")
+	get_tree().call_group(&"interactable_tooltip", &"hide_tooltip")
+	_refresh_tint()
+
+# Builds an emissive trim frame on each wide face of the door so the locked /
+# unlocked state is readable from any angle. The grow-and-cull-front outline
+# trick is unreliable here because the doorway walls occlude the silhouette
+# halo; explicit bars sit out past the door surface and stay visible.
+func _build_state_frame() -> void:
+	_frame_mat = StandardMaterial3D.new()
+	_frame_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_frame_mat.emission_enabled = true
+	_frame_mat.emission_energy_multiplier = 2.0
+	var half_thick := DOOR_THICKNESS * 0.5 + FRAME_OUT * 0.5
+	var inner_h := DOOR_HEIGHT - FRAME_BAR * 2.0
+	for s: int in [1, -1]:
+		var x := float(s) * half_thick
+		# Top, bottom (full width)
+		_add_frame_bar(Vector3(x, (DOOR_HEIGHT - FRAME_BAR) * 0.5, 0.0), Vector3(FRAME_OUT, FRAME_BAR, DOOR_WIDTH))
+		_add_frame_bar(Vector3(x, -(DOOR_HEIGHT - FRAME_BAR) * 0.5, 0.0), Vector3(FRAME_OUT, FRAME_BAR, DOOR_WIDTH))
+		# Left, right (between top and bottom bars so corners don't overlap)
+		_add_frame_bar(Vector3(x, 0.0, -(DOOR_WIDTH - FRAME_BAR) * 0.5), Vector3(FRAME_OUT, inner_h, FRAME_BAR))
+		_add_frame_bar(Vector3(x, 0.0, (DOOR_WIDTH - FRAME_BAR) * 0.5), Vector3(FRAME_OUT, inner_h, FRAME_BAR))
+
+func _add_frame_bar(pos: Vector3, size: Vector3) -> void:
+	var bar := MeshInstance3D.new()
+	var box := BoxMesh.new()
+	box.size = size
+	bar.mesh = box
+	bar.position = pos
+	bar.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	bar.material_override = _frame_mat
+	mesh.add_child(bar)
+	_frame_bars.append(bar)
+
 func _refresh_tint() -> void:
-	var c := TINT_LOCKED if locked else TINT_NEUTRAL
-	_mat.set_shader_parameter(&"base_color", Color(c.r, c.g, c.b))
-	_mat.set_shader_parameter(&"emission_color", Color(c.r, c.g, c.b))
+	if _frame_mat == null:
+		return
+	# Hide the frame when the door is up — there's no surface to rim.
+	for bar in _frame_bars:
+		bar.visible = not _open
+	var oc := FRAME_LOCKED if locked else FRAME_UNLOCKED
+	if _hovered:
+		oc = Color(
+			minf(oc.r * FRAME_HOVER_BOOST, 1.0),
+			minf(oc.g * FRAME_HOVER_BOOST, 1.0),
+			minf(oc.b * FRAME_HOVER_BOOST, 1.0),
+			1.0,
+		)
+	_frame_mat.albedo_color = oc
+	_frame_mat.emission = oc

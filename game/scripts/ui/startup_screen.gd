@@ -32,8 +32,28 @@ func _ready() -> void:
 	_build_background()
 	_build_main_panel()
 	_build_class_panel()
+	_build_version_stamp()
 	_show_main()
 	UIThemeState.changed.connect(_on_theme_changed)
+
+func _build_version_stamp() -> void:
+	var label := Label.new()
+	label.text = BuildInfo.display_string()
+	label.theme_type_variation = &"SmallLabel"
+	label.add_theme_color_override(&"font_color", Color(1.0, 1.0, 1.0, 0.35))
+	label.add_theme_font_size_override(&"font_size", 9)
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	label.anchor_left = 1.0
+	label.anchor_right = 1.0
+	label.anchor_top = 1.0
+	label.anchor_bottom = 1.0
+	label.offset_left = -220.0
+	label.offset_right = -8.0
+	label.offset_top = -22.0
+	label.offset_bottom = -6.0
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	add_child(label)
 
 func _on_theme_changed() -> void:
 	theme = UIThemeState.theme

@@ -3,15 +3,30 @@ class_name LevelBuilder
 
 const ENEMY_SCENE_DEFAULT: PackedScene = preload("res://scenes/prototype/prototype_enemy.tscn")
 const DOOR_SCENE: PackedScene = preload("res://scenes/prototype/prototype_door.tscn")
+const _PUDDLE_SHADER: Shader = preload("res://scripts/prototype/puddle.gdshader")
 const _DOOR_MESH_WIDTH := 4.0  # door scene mesh Z-extent
 const _SEAM := 0.02  # anti-z-fight gap for corridor walls abutting room geometry
 const _FLOOR_OVERLAP := 0.2   # extends piece floors to cover under walls (= wall_thickness * 0.5)
 const _PIT_TRIM_H := 0.12     # height of raised lip at pit edges
+# Sub-millimetre vertical bias applied to corridor surfaces. Corridor wall
+# tops and corridor floors geometrically overlap room geometry inside the
+# wall-thickness zone — that overlap is invisible when both surfaces share a
+# shader (identical pixels even when depth ties), but flickers as soon as the
+# corridor uses a variant. Pushing corridors 1–1.5 mm down breaks the depth
+# tie so the room surface wins every frame; the offset is far below visible
+# scale at the fixed top-down camera.
+const _CORRIDOR_WALL_Y_BIAS := -0.001
+const _CORRIDOR_FLOOR_Y_BIAS := -0.0015
+const PUDDLE_Y := 0.005       # tiny lift so puddles don't z-fight the floor
 
 @export var layout: LevelLayout
 
 var _wall_material: Material
 var _floor_material: Material
+# Variant materials used for corridor pieces. Fall back to the primary wall
+# / floor material when the theme doesn't supply an alt shader.
+var _wall_material_alt: Material
+var _floor_material_alt: Material
 var _wall_meshes: Dictionary = {}
 var _wall_shapes: Dictionary = {}
 var _doors: Dictionary = {}
@@ -32,7 +47,6 @@ func _ready() -> void:
 			_build_room(piece)
 		elif piece.corridor != null:
 			_build_corridor(piece)
-	_spawn_uv_test_objects()
 
 # ── Shared Resources ─────────────────────────────────────────────────────
 
@@ -61,6 +75,18 @@ func _init_shared_resources() -> void:
 		mat.metallic = t.floor_metallic
 		mat.roughness = t.floor_roughness
 		_floor_material = mat
+
+	if t.wall_shader_alt != null:
+		_wall_material_alt = ShaderMaterial.new()
+		(_wall_material_alt as ShaderMaterial).shader = t.wall_shader_alt
+	else:
+		_wall_material_alt = _wall_material
+
+	if t.floor_shader_alt != null:
+		_floor_material_alt = ShaderMaterial.new()
+		(_floor_material_alt as ShaderMaterial).shader = t.floor_shader_alt
+	else:
+		_floor_material_alt = _floor_material
 
 	_fog_material = FogMaterial.new()
 	_fog_material.density = 0.001
@@ -98,14 +124,15 @@ func _build_ground() -> void:
 	)
 	add_child(kill)
 
-func _build_piece_floor(center: Vector3, size_x: float, size_z: float) -> void:
-	_build_exact_floor(center, size_x + _FLOOR_OVERLAP * 2.0, size_z + _FLOOR_OVERLAP * 2.0)
+func _build_piece_floor(center: Vector3, size_x: float, size_z: float, mat: Material = null) -> void:
+	_build_exact_floor(center, size_x + _FLOOR_OVERLAP * 2.0, size_z + _FLOOR_OVERLAP * 2.0, mat)
 
-func _build_exact_floor(center: Vector3, size_x: float, size_z: float) -> void:
+func _build_exact_floor(center: Vector3, size_x: float, size_z: float, mat: Material = null) -> void:
 	var mesh := PlaneMesh.new()
 	mesh.size = Vector2(size_x, size_z)
-	if _floor_material != null:
-		mesh.material = _floor_material
+	var floor_mat := mat if mat != null else _floor_material
+	if floor_mat != null:
+		mesh.material = floor_mat
 	var body := StaticBody3D.new()
 	body.name = &"Floor"
 	body.input_ray_pickable = false
@@ -127,11 +154,15 @@ func _build_corridor_floor(center: Vector3, cd: CorridorDef) -> void:
 	var along_z := cd.axis == CorridorDef.Axis.Z
 	var sw := cd.width   # perpendicular to travel
 	var sl := cd.length  # along travel axis
+	# Lift the corridor floor centre downward by a sub-mm bias so the corridor
+	# surface loses the depth tie wherever it overlaps the room floor under a
+	# shared wall — see _CORRIDOR_FLOOR_Y_BIAS comment.
+	var floor_center := center + Vector3(0.0, _CORRIDOR_FLOOR_Y_BIAS, 0.0)
 
 	if cd.pit_width <= 0.0:
 		var sx := sw if along_z else sl
 		var sz := sl if along_z else sw
-		_build_piece_floor(center, sx, sz)
+		_build_piece_floor(floor_center, sx, sz, _floor_material_alt)
 		return
 
 	# Two floor sections flanking the pit gap (no overlap toward the gap edge).
@@ -141,19 +172,19 @@ func _build_corridor_floor(center: Vector3, cd: CorridorDef) -> void:
 	var half_gap := cd.pit_width * 0.5
 	var offset := section_len * 0.5 + half_gap
 	if along_z:
-		_build_exact_floor(center + Vector3(0.0, 0.0, -offset), sw, section_len)
-		_build_exact_floor(center + Vector3(0.0, 0.0,  offset), sw, section_len)
+		_build_exact_floor(floor_center + Vector3(0.0, 0.0, -offset), sw, section_len, _floor_material_alt)
+		_build_exact_floor(floor_center + Vector3(0.0, 0.0,  offset), sw, section_len, _floor_material_alt)
 		for s in [-1.0, 1.0]:
 			_create_trim_box(
 				center + Vector3(0.0, _PIT_TRIM_H * 0.5, s * half_gap),
-				sw, _PIT_TRIM_H, layout.theme.wall_thickness)
+				sw, _PIT_TRIM_H, layout.theme.wall_thickness, _wall_material_alt)
 	else:
-		_build_exact_floor(center + Vector3(-offset, 0.0, 0.0), section_len, sw)
-		_build_exact_floor(center + Vector3( offset, 0.0, 0.0), section_len, sw)
+		_build_exact_floor(floor_center + Vector3(-offset, 0.0, 0.0), section_len, sw, _floor_material_alt)
+		_build_exact_floor(floor_center + Vector3( offset, 0.0, 0.0), section_len, sw, _floor_material_alt)
 		for s in [-1.0, 1.0]:
 			_create_trim_box(
 				center + Vector3(s * half_gap, _PIT_TRIM_H * 0.5, 0.0),
-				layout.theme.wall_thickness, _PIT_TRIM_H, sw)
+				layout.theme.wall_thickness, _PIT_TRIM_H, sw, _wall_material_alt)
 
 	_build_pit_interior(center, cd)
 
@@ -176,23 +207,23 @@ func _build_pit_interior(center: Vector3, cd: CorridorDef) -> void:
 		for s in [-1.0, 1.0]:
 			_create_pit_wall(
 				center + Vector3(s * (sw * 0.5), -depth * 0.5, 0.0),
-				thick, depth, travel_len)
+				thick, depth, travel_len, _wall_material_alt)
 		# North / south walls (across X)
 		for s in [-1.0, 1.0]:
 			_create_pit_wall(
 				center + Vector3(0.0, -depth * 0.5, s * half_gap),
-				cross_len + thick * 2.0, depth, thick)
+				cross_len + thick * 2.0, depth, thick, _wall_material_alt)
 	else:
 		# North / south walls (along X)
 		for s in [-1.0, 1.0]:
 			_create_pit_wall(
 				center + Vector3(0.0, -depth * 0.5, s * (sw * 0.5)),
-				travel_len, depth, thick)
+				travel_len, depth, thick, _wall_material_alt)
 		# East / west walls (across Z)
 		for s in [-1.0, 1.0]:
 			_create_pit_wall(
 				center + Vector3(s * half_gap, -depth * 0.5, 0.0),
-				thick, depth, cross_len + thick * 2.0)
+				thick, depth, cross_len + thick * 2.0, _wall_material_alt)
 
 	# Glowing ooze surface at the bottom of the pit.
 	var ooze_y := -depth + 0.02
@@ -235,17 +266,18 @@ func _build_pit_interior(center: Vector3, cd: CorridorDef) -> void:
 	ooze_light.position = center + Vector3(0.0, ooze_y + 0.5, 0.0)
 	add_child(ooze_light)
 
-func _create_pit_wall(pos: Vector3, sx: float, sy: float, sz: float) -> void:
+func _create_pit_wall(pos: Vector3, sx: float, sy: float, sz: float, mat: Material = null) -> void:
 	var mesh_inst := MeshInstance3D.new()
 	mesh_inst.mesh = BoxMesh.new()
 	(mesh_inst.mesh as BoxMesh).size = Vector3(sx, sy, sz)
-	if _wall_material != null:
-		mesh_inst.material_override = _wall_material
+	var wall_mat := mat if mat != null else _wall_material
+	if wall_mat != null:
+		mesh_inst.material_override = wall_mat
 	mesh_inst.position = pos
 	add_child(mesh_inst)
 	mesh_inst.add_to_group(&"structures")
 
-func _create_trim_box(pos: Vector3, sx: float, sy: float, sz: float) -> void:
+func _create_trim_box(pos: Vector3, sx: float, sy: float, sz: float, mat: Material = null) -> void:
 	var body := StaticBody3D.new()
 	body.input_ray_pickable = false
 	body.transform.origin = pos
@@ -256,8 +288,9 @@ func _create_trim_box(pos: Vector3, sx: float, sy: float, sz: float) -> void:
 	var mesh_inst := MeshInstance3D.new()
 	mesh_inst.mesh = BoxMesh.new()
 	(mesh_inst.mesh as BoxMesh).size = Vector3(sx, sy, sz)
-	if _wall_material != null:
-		mesh_inst.material_override = _wall_material
+	var wall_mat := mat if mat != null else _wall_material
+	if wall_mat != null:
+		mesh_inst.material_override = wall_mat
 	body.add_child(mesh_inst)
 	add_child(body)
 	body.add_to_group(&"structures")
@@ -278,10 +311,10 @@ func _build_low_ceiling(center: Vector3, cd: CorridorDef) -> void:
 	var bz := sl if along_z else sw + t.wall_thickness
 	var box := BoxMesh.new()
 	box.size = Vector3(bx, block_h, bz)
-	if _wall_material != null:
-		box.material = _wall_material
 	var mesh_inst := MeshInstance3D.new()
 	mesh_inst.mesh = box
+	if _wall_material_alt != null:
+		mesh_inst.material_override = _wall_material_alt
 	mesh_inst.position = center + Vector3(0.0, block_cy, 0.0)
 	add_child(mesh_inst)
 	mesh_inst.add_to_group(&"structures")
@@ -332,8 +365,8 @@ func _get_wall_mesh(size_x: float, size_z: float) -> BoxMesh:
 	var mesh := BoxMesh.new()
 	var t := layout.theme
 	mesh.size = Vector3(size_x, t.wall_height, size_z)
-	if _wall_material != null:
-		mesh.material = _wall_material
+	# Material applied per-instance via material_override so the same cached
+	# mesh can carry either the primary or alt wall shader.
 	_wall_meshes[key] = mesh
 	return mesh
 
@@ -347,7 +380,7 @@ func _get_wall_shape(size_x: float, size_z: float) -> BoxShape3D:
 	_wall_shapes[key] = shape
 	return shape
 
-func _create_wall(pos: Vector3, size_x: float, size_z: float) -> StaticBody3D:
+func _create_wall(pos: Vector3, size_x: float, size_z: float, mat: Material = null) -> StaticBody3D:
 	var t := layout.theme
 	var body := StaticBody3D.new()
 	body.transform.origin = pos + Vector3(0, t.wall_height * 0.5, 0)
@@ -356,6 +389,9 @@ func _create_wall(pos: Vector3, size_x: float, size_z: float) -> StaticBody3D:
 	var mesh_inst := MeshInstance3D.new()
 	mesh_inst.name = &"Mesh"
 	mesh_inst.mesh = _get_wall_mesh(size_x, size_z)
+	var wall_mat := mat if mat != null else _wall_material
+	if wall_mat != null:
+		mesh_inst.material_override = wall_mat
 	body.add_child(mesh_inst)
 
 	var col := CollisionShape3D.new()
@@ -586,6 +622,45 @@ func _place_corridor_fluorescents(center: Vector3, cd: CorridorDef) -> void:
 		_create_ceiling_light(pos, lc)
 		v += cd.light_interval
 
+# ── Puddles / Reflective Decals ──────────────────────────────────────────
+# Each puddle is a flat plane with a procedural blob mask in the shader, so
+# the silhouette is irregular without per-puddle modelling. The shader runs
+# at low roughness so the room's fluorescent specular catches as a sharp
+# highlight on the water surface — that's the "wet" read.
+
+func _place_puddles(center: Vector3, hx: float, hz: float, rd: RoomDef) -> void:
+	if rd.puddle_count <= 0:
+		return
+	# Deterministic placement keyed off the room id so re-entering the room
+	# doesn't shuffle puddles. Hash the id string into a seed.
+	var seed_hash := 0
+	for c in String(rd.id):
+		seed_hash = (seed_hash * 31 + c.unicode_at(0)) & 0x7FFFFFFF
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_hash if seed_hash != 0 else 1
+
+	var margin := 1.2  # keep puddles off the wall line
+	for i in rd.puddle_count:
+		var radius := rng.randf_range(rd.puddle_size.x, rd.puddle_size.y)
+		var px := rng.randf_range(-hx + margin + radius, hx - margin - radius)
+		var pz := rng.randf_range(-hz + margin + radius, hz - margin - radius)
+		_create_puddle(center + Vector3(px, PUDDLE_Y, pz), radius * 2.0, rng.randf_range(0.0, 100.0))
+
+func _create_puddle(pos: Vector3, diameter: float, shader_seed: float) -> void:
+	var mesh := PlaneMesh.new()
+	mesh.size = Vector2(diameter, diameter)
+	var mat := ShaderMaterial.new()
+	mat.shader = _PUDDLE_SHADER
+	mat.set_shader_parameter(&"seed", shader_seed)
+	var inst := MeshInstance3D.new()
+	inst.name = &"Puddle"
+	inst.mesh = mesh
+	inst.material_override = mat
+	inst.position = pos
+	inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(inst)
+	inst.add_to_group(&"structures")
+
 # ── Rooms ─────────────────────────────────────────────────────────────────
 
 func _build_room(piece: LevelPiece) -> void:
@@ -637,8 +712,14 @@ func _build_room(piece: LevelPiece) -> void:
 					door.rotation_degrees.y = 90.0
 				var perp := rd.size.x - thick if (side == RoomDef.Wall.NORTH or side == RoomDef.Wall.SOUTH) else rd.size.y - thick
 				door.scale.z = minf(rd.opening_width, perp) / _DOOR_MESH_WIDTH
-				if side in rd.locked_doors and door is PrototypeDoor:
-					(door as PrototypeDoor).locked = true
+				if door is PrototypeDoor:
+					var pdoor := door as PrototypeDoor
+					if side in rd.locked_doors:
+						pdoor.locked = true
+					if rd.unlock_required_doors.has(side):
+						pdoor.unlocks_required = int(rd.unlock_required_doors[side])
+					if side in rd.boss_unlock_doors:
+						pdoor.unlock_on_boss = true
 				add_child(door)
 				_doors[StringName("%s_%s" % [rd.id, _wall_keys[side]])] = door
 		else:
@@ -649,6 +730,7 @@ func _build_room(piece: LevelPiece) -> void:
 	_place_room_fluorescents(center, rd)
 	_create_fill_light(center, rd.size.x, rd.size.y)
 	_create_fog_volume(center, rd.size.x, rd.size.y)
+	_place_puddles(center, hx, hz, rd)
 	_spawn_enemies_in_bounds(piece, center, hx, hz, rd.enemy_count, rd.enemy_scene)
 
 # ── Corridors ─────────────────────────────────────────────────────────────
@@ -661,12 +743,13 @@ func _build_corridor(piece: LevelPiece) -> void:
 	var hw := cd.width * 0.5
 	var hl := cd.length * 0.5
 
+	var wall_y := _CORRIDOR_WALL_Y_BIAS
 	if cd.axis == CorridorDef.Axis.Z:
-		_create_wall(center + Vector3(hw, 0, 0), thick, cd.length + thick - _SEAM)
-		_create_wall(center + Vector3(-hw, 0, 0), thick, cd.length + thick - _SEAM)
+		_create_wall(center + Vector3(hw, wall_y, 0), thick, cd.length + thick - _SEAM, _wall_material_alt)
+		_create_wall(center + Vector3(-hw, wall_y, 0), thick, cd.length + thick - _SEAM, _wall_material_alt)
 	else:
-		_create_wall(center + Vector3(0, 0, hw), cd.length + thick - _SEAM * 2.0, thick)
-		_create_wall(center + Vector3(0, 0, -hw), cd.length + thick - _SEAM * 2.0, thick)
+		_create_wall(center + Vector3(0, wall_y, hw), cd.length + thick - _SEAM * 2.0, thick, _wall_material_alt)
+		_create_wall(center + Vector3(0, wall_y, -hw), cd.length + thick - _SEAM * 2.0, thick, _wall_material_alt)
 
 	_build_corridor_floor(center, cd)
 	if cd.ceiling_height > 0.0:
@@ -684,27 +767,55 @@ func _build_corridor(piece: LevelPiece) -> void:
 
 # ── Enemies ───────────────────────────────────────────────────────────────
 
-func _spawn_enemies_in_bounds(piece: LevelPiece, center: Vector3, hx: float, hz: float, count: int, scene: PackedScene) -> void:
+func _spawn_enemies_in_bounds(piece: LevelPiece, center: Vector3, hx: float, hz: float, count: int, scene: PackedScene, level_range: Vector2i = Vector2i.ZERO) -> void:
 	if scene == null:
 		scene = ENEMY_SCENE_DEFAULT
 
 	if piece.enemy_positions.size() > 0:
 		for epos: Vector3 in piece.enemy_positions:
-			_spawn_enemy(center + epos, scene)
+			_spawn_enemy(center + epos, scene, _roll_level(level_range))
 		return
 
 	var margin := 1.0
 	for i in count:
 		var ex := center.x + randf_range(-hx + margin, hx - margin)
 		var ez := center.z + randf_range(-hz + margin, hz - margin)
-		_spawn_enemy(Vector3(ex, 0, ez), scene)
+		_spawn_enemy(Vector3(ex, 0, ez), scene, _roll_level(level_range))
 
-func _spawn_enemy(pos: Vector3, scene: PackedScene) -> void:
+func _roll_level(level_range: Vector2i) -> int:
+	if level_range.x <= 0 or level_range.y <= 0:
+		return 0
+	return randi_range(level_range.x, level_range.y)
+
+func _spawn_enemy(pos: Vector3, scene: PackedScene, level_override: int = 0) -> void:
 	var enemy := EntityPool.acquire(scene)
 	add_child(enemy)
 	enemy.global_position = pos
+	if level_override > 0 and "level" in enemy:
+		enemy.level = level_override
 	if enemy.has_method(&"reset"):
 		enemy.reset()
+
+# Re-spawns every piece's enemies at their original positions, each rolling a
+# level in [center_level - spread, center_level + spread] (clamped >= 1) so
+# the demo stays challenging as the player levels up.
+func respawn_enemies(center_level: int, spread: int = 1) -> void:
+	if layout == null:
+		return
+	var lo := maxi(1, center_level - spread)
+	var hi := maxi(lo, center_level + spread)
+	var lvl_range := Vector2i(lo, hi)
+	for piece: LevelPiece in layout.pieces:
+		if piece.room != null:
+			var rd := piece.room
+			var hx := rd.size.x * 0.5
+			var hz := rd.size.y * 0.5
+			_spawn_enemies_in_bounds(piece, piece.position, hx, hz, rd.enemy_count, rd.enemy_scene, lvl_range)
+		elif piece.corridor != null:
+			var cd := piece.corridor
+			var hx := cd.width * 0.5 if cd.axis == CorridorDef.Axis.Z else cd.length * 0.5
+			var hz := cd.length * 0.5 if cd.axis == CorridorDef.Axis.Z else cd.width * 0.5
+			_spawn_enemies_in_bounds(piece, piece.position, hx, hz, cd.enemy_count, cd.enemy_scene, lvl_range)
 
 # ── Fill Lights ───────────────────────────────────────────────────────────
 
@@ -744,34 +855,3 @@ func _create_fog_volume(_center: Vector3, _size_x: float, _size_z: float) -> voi
 func get_door(room_id: StringName, wall: RoomDef.Wall) -> Node:
 	var key := StringName("%s_%s" % [room_id, _wall_keys[wall]])
 	return _doors.get(key)
-
-# ── UV Test Objects ──────────────────────────────────────────────────────
-
-func _spawn_uv_test_objects() -> void:
-	var t := layout.theme
-	var thick := t.wall_thickness if t != null else 0.4
-	var wall_h := t.wall_height if t != null else 3.0
-
-	# UV wall text — operating theater west wall interior face.
-	# North wall has the corridor opening so it isn't solid. West wall is solid.
-	# Room center (0, 0, -4), width 8 → west wall X = 0 - 4 = -4, inner face at -4 + thick.
-	# rotation −90° makes local −Z face east (+X) into the room.
-	var text_node := UVWallText.new()
-	text_node.text = "PATIENT 7 WAS HERE"
-	text_node.position = Vector3(-4.0 + thick, wall_h * 0.45, -4.0)
-	text_node.rotation_degrees.y = 90.0
-	add_child(text_node)
-
-	# UV hidden switch — observation hub west wall, unlocks the supply room door.
-	# Obs hub center (0, 0, -27), size (8, 8), west wall X = 0 - 4 = -4.
-	var supply_door := get_door(&"supply_room", RoomDef.Wall.WEST)
-	var switch_node := UVSwitch.new()
-	switch_node.display_name = "Hidden Panel"
-	switch_node.action = UVSwitch.Action.UNLOCK
-	switch_node.position = Vector3(-4.0 + thick * 0.5 + 0.02, wall_h * 0.4, -26.0)
-	# Face the switch inward (toward room center).
-	switch_node.rotation_degrees.y = 90.0
-	add_child(switch_node)
-	# Set path after add_child so both nodes are in the tree.
-	if supply_door != null:
-		switch_node.target_door = switch_node.get_path_to(supply_door)

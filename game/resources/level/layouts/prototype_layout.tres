@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="LevelLayout" load_steps=18 format=3]
+[gd_resource type="Resource" script_class="LevelLayout" load_steps=33 format=3]
 
 [ext_resource type="Script" path="res://scripts/level/level_layout.gd" id="script_layout"]
 [ext_resource type="Script" path="res://scripts/level/level_piece.gd" id="script_piece"]
@@ -8,112 +8,55 @@
 [ext_resource type="Resource" path="res://resources/level/lights/fluorescent_white.tres" id="light_fluoro"]
 
 ; ══════════════════════════════════════════════════════════════════════════════
-; AUGMENTATION WING — THE WARD
+; SUB-LEVEL ZERO — THE PICKLE GAUNTLET (expanded)
 ;
-; Layout (top-down, -Z is north):
+; Top-down (-Z is north, +X is east). Player spawns south in the operating
+; theater, picks up loot in side rooms, fights through the cross hub, collects
+; three switches across the east arm and north spine, then breaches the boss
+; arena to fight Pickle and reach the stairwell exit.
 ;
-;                    [Server Vault 12x8]
-;                       (0, 0, -57)
-;                            |
-;                  [Atrium North Corr len=6]
-;                       (0, 0, -50)
-;                            |
-;                       [Atrium 14x10]
-;                       (0, 0, -42)
-;                            |
-;                     [Dark Corr len=6]
-;                       (0, 0, -34)
-;                            |
-;   [Research Lab 6x6]--[Obs Hub 8x8]--[Obs East Corr len=4]--[Cold Storage 8x4]
-;    (-13, 0, -27)      (0, 0, -27)        (6, 0, -27)         (12, 0, -27)
-;                            |                                       |
-;                    [Warning Corr len=6]                  [Cold North Corr len=4 + pit]
-;                       (0, 0, -20)                              (12, 0, -31)
-;                            |                                       |
-;  [Patient Ward 8x6]--[Junction 4x4]--[Supply 6x4]          [Records Vault 4x6]
-;   (-10, 0, -15)      (0, 0, -15)     (9, 0, -15)              (12, 0, -36)
-;                            |
-;                     [Exit Corr len=6]
-;                       (0, 0, -10)
-;                            |
-;                    [Operating Room 8x6]
-;                       (0, 0, -4)
-;                       (player start)
+; Wall enum: NORTH=0, SOUTH=1, EAST=2, WEST=3
+;
+;                                              [Archive]──[Obs Hall 10x10]    <- switch 3
+;                                                           (0, 0, -63)
+;                                                                │
+;                                                       [Sensor Corr len=12 Z, pit]
+;                                                           (0, 0, -52)
+;                                                                │
+;                          [Spec Lab W]──[Containment Bay 14x14]──[Spec Lab E]   <- switch 2
+;                          (-12,0,-39)        (0, 0, -39)        (12,0,-39)
+;                                                                │
+;                                                       [Crouch Corr len=8 Z]
+;                                                           (0, 0, -28)
+;                                                                │
+;     [Stair]──[Boss Exit]──[Boss Arena 14x10]──[Approach B]──[Boss Junction]──[Approach A]──[Cross Hub 8x8]──[East A]──[East Junction]──[East B]──[Power Closet]──[Gen Corr]──[Gen Room]
+;     (-41)                  (-25,0,-20)                       (-10,0,-20)                     (0,0,-20)                  (13,0,-20)              (23,0,-20)              (33,0,-20)
+;        ↑                       ↑↑                                 │                              │                          │                       ↑                                  <- switch 1 (closet)
+;        exit pad                3-switch east lock                 │                              │                          │
+;        (boss-unlock)           boss-unlock west door     [Holding Corr]                  [Spawn Corr]               [Eng Corr]
+;                                                              │                              (0,0,-12)                     │
+;                                                       [Holding Pen]                          │                       [Eng Closet]
+;                                                       (-10,0,-28)                  [Op Theater 8x8]──[Recov Corr]──[Recovery Ward]
+;                                                                                       (0,0,-4)                     (10,0,-4)
+;                                                                                          ← player spawn
 ; ══════════════════════════════════════════════════════════════════════════════
 
-; ── Room Definitions ─────────────────────────────────────────────────────────
-
-; 1. Operating Theater — player wakes here
-[sub_resource type="Resource" id="room_operating"]
+; ── 1. Operating Theater — player wakes here, side door east to recovery ward ──
+[sub_resource type="Resource" id="room_op"]
 script = ExtResource("script_room")
 id = &"operating_theater"
-size = Vector2(8, 6)
-openings = [0]
+size = Vector2(8, 8)
+openings = [0, 2]
 opening_width = 4.0
 light_color = ExtResource("light_fluoro")
 
-[sub_resource type="Resource" id="piece_operating"]
+[sub_resource type="Resource" id="piece_op"]
 script = ExtResource("script_piece")
 position = Vector3(0, 0, -4)
-room = SubResource("room_operating")
+room = SubResource("room_op")
 
-; 2. Exit corridor — institutional fluorescent lighting
-[sub_resource type="Resource" id="corr_exit"]
-script = ExtResource("script_corridor")
-width = 4.0
-length = 6.0
-axis = 1
-light_color = ExtResource("light_fluoro")
-light_interval = 6.0
-
-[sub_resource type="Resource" id="piece_corr_exit"]
-script = ExtResource("script_piece")
-position = Vector3(0, 0, -10)
-corridor = SubResource("corr_exit")
-
-; 3. Junction — hub connecting ward, supply, and deeper facility
-[sub_resource type="Resource" id="room_junction"]
-script = ExtResource("script_room")
-id = &"junction"
-size = Vector2(4, 4)
-openings = [0, 1, 2, 3]
-opening_width = 4.0
-light_color = ExtResource("light_fluoro")
-
-[sub_resource type="Resource" id="piece_junction"]
-script = ExtResource("script_piece")
-position = Vector3(0, 0, -15)
-room = SubResource("room_junction")
-
-; 4. West branch — dark connector to patient ward
-[sub_resource type="Resource" id="corr_west"]
-script = ExtResource("script_corridor")
-width = 4.0
-length = 4.0
-axis = 0
-
-[sub_resource type="Resource" id="piece_corr_west"]
-script = ExtResource("script_piece")
-position = Vector3(-4, 0, -15)
-corridor = SubResource("corr_west")
-
-; 5. Patient Ward — flickering fluorescents
-[sub_resource type="Resource" id="room_ward"]
-script = ExtResource("script_room")
-id = &"patient_ward"
-size = Vector2(8, 6)
-openings = [2]
-opening_width = 4.0
-light_color = ExtResource("light_fluoro")
-enemy_count = 3
-
-[sub_resource type="Resource" id="piece_ward"]
-script = ExtResource("script_piece")
-position = Vector3(-10, 0, -15)
-room = SubResource("room_ward")
-
-; 6. East branch — lit connector to supply
-[sub_resource type="Resource" id="corr_east"]
+; ── 2. Recovery corridor — op theater east → recovery ward ──────────────────
+[sub_resource type="Resource" id="corr_recovery"]
 script = ExtResource("script_corridor")
 width = 4.0
 length = 4.0
@@ -121,202 +64,438 @@ axis = 0
 light_color = ExtResource("light_fluoro")
 light_interval = 4.0
 
-[sub_resource type="Resource" id="piece_corr_east"]
+[sub_resource type="Resource" id="piece_recovery_corr"]
 script = ExtResource("script_piece")
-position = Vector3(4, 0, -15)
-corridor = SubResource("corr_east")
+position = Vector3(6, 0, -4)
+corridor = SubResource("corr_recovery")
 
-; 7. Supply Room — locked
-[sub_resource type="Resource" id="room_supply"]
+; ── 3. Recovery Ward — small loot side room ────────────────────────────────
+[sub_resource type="Resource" id="room_recovery"]
 script = ExtResource("script_room")
-id = &"supply_room"
-size = Vector2(6, 4)
+id = &"recovery_ward"
+size = Vector2(4, 4)
 openings = [3]
 opening_width = 4.0
 light_color = ExtResource("light_fluoro")
-door_openings = [3]
-locked_doors = [3]
+enemy_count = 1
 
-[sub_resource type="Resource" id="piece_supply"]
+[sub_resource type="Resource" id="piece_recovery"]
 script = ExtResource("script_piece")
-position = Vector3(9, 0, -15)
-room = SubResource("room_supply")
+position = Vector3(10, 0, -4)
+room = SubResource("room_recovery")
 
-; 8. Warning corridor — fluorescent lit, low ceiling forces crouch
-[sub_resource type="Resource" id="corr_warning"]
+; ── 4. Spawn corridor — operating theater → cross hub ───────────────────────
+[sub_resource type="Resource" id="corr_spawn"]
+script = ExtResource("script_corridor")
+width = 4.0
+length = 8.0
+axis = 1
+light_color = ExtResource("light_fluoro")
+light_interval = 4.0
+
+[sub_resource type="Resource" id="piece_spawn"]
+script = ExtResource("script_piece")
+position = Vector3(0, 0, -12)
+corridor = SubResource("corr_spawn")
+
+; ── 5. Cross Hub — 4-way junction ───────────────────────────────────────────
+[sub_resource type="Resource" id="room_hub"]
+script = ExtResource("script_room")
+id = &"cross_hub"
+size = Vector2(8, 8)
+openings = [0, 1, 2, 3]
+opening_width = 4.0
+light_color = ExtResource("light_fluoro")
+enemy_count = 2
+
+[sub_resource type="Resource" id="piece_hub"]
+script = ExtResource("script_piece")
+position = Vector3(0, 0, -20)
+room = SubResource("room_hub")
+
+; ── 6. East Corridor A — cross hub → east junction ──────────────────────────
+[sub_resource type="Resource" id="corr_east_a"]
 script = ExtResource("script_corridor")
 width = 4.0
 length = 6.0
+axis = 0
+light_color = ExtResource("light_fluoro")
+light_interval = 6.0
+
+[sub_resource type="Resource" id="piece_east_a"]
+script = ExtResource("script_piece")
+position = Vector3(7, 0, -20)
+corridor = SubResource("corr_east_a")
+
+; ── 7. East Junction — T-junction with south branch to engineering closet ──
+[sub_resource type="Resource" id="room_east_junction"]
+script = ExtResource("script_room")
+id = &"east_junction"
+size = Vector2(6, 6)
+openings = [1, 2, 3]
+opening_width = 4.0
+light_color = ExtResource("light_fluoro")
+enemy_count = 1
+
+[sub_resource type="Resource" id="piece_east_junction"]
+script = ExtResource("script_piece")
+position = Vector3(13, 0, -20)
+room = SubResource("room_east_junction")
+
+; ── 8. Engineering corridor — junction south → eng closet ───────────────────
+[sub_resource type="Resource" id="corr_eng"]
+script = ExtResource("script_corridor")
+width = 4.0
+length = 4.0
+axis = 1
+light_color = ExtResource("light_fluoro")
+light_interval = 4.0
+
+[sub_resource type="Resource" id="piece_eng_corr"]
+script = ExtResource("script_piece")
+position = Vector3(13, 0, -15)
+corridor = SubResource("corr_eng")
+
+; ── 9. Engineering Closet — small loot dead-end ─────────────────────────────
+[sub_resource type="Resource" id="room_eng"]
+script = ExtResource("script_room")
+id = &"eng_closet"
+size = Vector2(6, 6)
+openings = [0]
+opening_width = 4.0
+light_color = ExtResource("light_fluoro")
+enemy_count = 2
+
+[sub_resource type="Resource" id="piece_eng_closet"]
+script = ExtResource("script_piece")
+position = Vector3(13, 0, -10)
+room = SubResource("room_eng")
+
+; ── 10. East Corridor B — junction → power closet ──────────────────────────
+[sub_resource type="Resource" id="corr_east_b"]
+script = ExtResource("script_corridor")
+width = 4.0
+length = 4.0
+axis = 0
+light_color = ExtResource("light_fluoro")
+light_interval = 4.0
+
+[sub_resource type="Resource" id="piece_east_b"]
+script = ExtResource("script_piece")
+position = Vector3(18, 0, -20)
+corridor = SubResource("corr_east_b")
+
+; ── 11. Power Closet — switch 1, also has east door to generator branch ────
+[sub_resource type="Resource" id="room_power"]
+script = ExtResource("script_room")
+id = &"power_closet"
+size = Vector2(6, 6)
+openings = [2, 3]
+opening_width = 4.0
+light_color = ExtResource("light_fluoro")
+enemy_count = 2
+
+[sub_resource type="Resource" id="piece_power"]
+script = ExtResource("script_piece")
+position = Vector3(23, 0, -20)
+room = SubResource("room_power")
+
+; ── 12. Generator corridor — power closet east → generator room ────────────
+[sub_resource type="Resource" id="corr_gen"]
+script = ExtResource("script_corridor")
+width = 4.0
+length = 4.0
+axis = 0
+light_color = ExtResource("light_fluoro")
+light_interval = 4.0
+
+[sub_resource type="Resource" id="piece_gen_corr"]
+script = ExtResource("script_piece")
+position = Vector3(28, 0, -20)
+corridor = SubResource("corr_gen")
+
+; ── 13. Generator Room — high-density loot dead-end ────────────────────────
+[sub_resource type="Resource" id="room_gen"]
+script = ExtResource("script_room")
+id = &"gen_room"
+size = Vector2(6, 6)
+openings = [3]
+opening_width = 4.0
+light_color = ExtResource("light_fluoro")
+enemy_count = 3
+
+[sub_resource type="Resource" id="piece_gen_room"]
+script = ExtResource("script_piece")
+position = Vector3(33, 0, -20)
+room = SubResource("room_gen")
+
+; ── 14. Boss Approach A — cross hub → boss junction (dark, tense) ──────────
+[sub_resource type="Resource" id="corr_boss_approach_a"]
+script = ExtResource("script_corridor")
+width = 4.0
+length = 4.0
+axis = 0
+
+[sub_resource type="Resource" id="piece_boss_approach_a"]
+script = ExtResource("script_piece")
+position = Vector3(-6, 0, -20)
+corridor = SubResource("corr_boss_approach_a")
+
+; ── 15. Boss Junction — small T with north branch to holding pen ───────────
+[sub_resource type="Resource" id="room_boss_junction"]
+script = ExtResource("script_room")
+id = &"boss_junction"
+size = Vector2(4, 4)
+openings = [0, 2, 3]
+opening_width = 4.0
+
+[sub_resource type="Resource" id="piece_boss_junction"]
+script = ExtResource("script_piece")
+position = Vector3(-10, 0, -20)
+room = SubResource("room_boss_junction")
+
+; ── 16. Holding corridor — junction north → holding pen ────────────────────
+[sub_resource type="Resource" id="corr_holding"]
+script = ExtResource("script_corridor")
+width = 4.0
+length = 4.0
+axis = 1
+
+[sub_resource type="Resource" id="piece_holding_corr"]
+script = ExtResource("script_piece")
+position = Vector3(-10, 0, -24)
+corridor = SubResource("corr_holding")
+
+; ── 17. Holding Pen — atmospheric loot room, dim ───────────────────────────
+[sub_resource type="Resource" id="room_holding"]
+script = ExtResource("script_room")
+id = &"holding_pen"
+size = Vector2(6, 4)
+openings = [1]
+opening_width = 4.0
+enemy_count = 2
+puddle_count = 1
+puddle_size = Vector2(0.7, 1.1)
+
+[sub_resource type="Resource" id="piece_holding"]
+script = ExtResource("script_piece")
+position = Vector3(-10, 0, -28)
+room = SubResource("room_holding")
+
+; ── 18. Boss Approach B — boss junction → boss arena (dark, tense) ─────────
+[sub_resource type="Resource" id="corr_boss_approach_b"]
+script = ExtResource("script_corridor")
+width = 4.0
+length = 6.0
+axis = 0
+
+[sub_resource type="Resource" id="piece_boss_approach_b"]
+script = ExtResource("script_piece")
+position = Vector3(-15, 0, -20)
+corridor = SubResource("corr_boss_approach_b")
+
+; ── 19. Boss Arena — east door = 3-switch lock, west door = boss-unlock ────
+[sub_resource type="Resource" id="room_boss"]
+script = ExtResource("script_room")
+id = &"boss_arena"
+size = Vector2(14, 10)
+openings = [2, 3]
+opening_width = 4.0
+light_color = ExtResource("light_fluoro")
+enemy_count = 4
+door_openings = [2, 3]
+locked_doors = [2, 3]
+unlock_required_doors = {2: 3}
+boss_unlock_doors = [3]
+puddle_count = 2
+puddle_size = Vector2(1.1, 1.8)
+
+[sub_resource type="Resource" id="piece_boss"]
+script = ExtResource("script_piece")
+position = Vector3(-25, 0, -20)
+room = SubResource("room_boss")
+
+; ── 20. Boss exit corridor — boss arena → stair vault ──────────────────────
+[sub_resource type="Resource" id="corr_boss_exit"]
+script = ExtResource("script_corridor")
+width = 4.0
+length = 6.0
+axis = 0
+light_color = ExtResource("light_fluoro")
+light_interval = 6.0
+
+[sub_resource type="Resource" id="piece_boss_exit"]
+script = ExtResource("script_piece")
+position = Vector3(-35, 0, -20)
+corridor = SubResource("corr_boss_exit")
+
+; ── 21. Stair Vault — exit pad lives here ──────────────────────────────────
+[sub_resource type="Resource" id="room_stair"]
+script = ExtResource("script_room")
+id = &"stair_vault"
+size = Vector2(6, 6)
+openings = [2]
+opening_width = 4.0
+light_color = ExtResource("light_fluoro")
+
+[sub_resource type="Resource" id="piece_stair"]
+script = ExtResource("script_piece")
+position = Vector3(-41, 0, -20)
+room = SubResource("room_stair")
+
+; ── 22. Crouch corridor — low ceiling, north of cross hub ──────────────────
+[sub_resource type="Resource" id="corr_crouch"]
+script = ExtResource("script_corridor")
+width = 4.0
+length = 8.0
 axis = 1
 light_color = ExtResource("light_fluoro")
 light_interval = 4.0
 ceiling_height = 1.1
 
-[sub_resource type="Resource" id="piece_corr_warning"]
+[sub_resource type="Resource" id="piece_crouch"]
 script = ExtResource("script_piece")
-position = Vector3(0, 0, -20)
-corridor = SubResource("corr_warning")
+position = Vector3(0, 0, -28)
+corridor = SubResource("corr_crouch")
 
-; 9. Observation Hub
-[sub_resource type="Resource" id="room_obs"]
+; ── 23. Containment Bay — switch 2, four-way (E/W to specimen labs) ────────
+[sub_resource type="Resource" id="room_containment"]
 script = ExtResource("script_room")
-id = &"observation_hub"
-size = Vector2(8, 8)
+id = &"containment_bay"
+size = Vector2(14, 14)
 openings = [0, 1, 2, 3]
 opening_width = 4.0
 light_color = ExtResource("light_fluoro")
+enemy_count = 4
+puddle_count = 3
+puddle_size = Vector2(0.9, 1.6)
 
-[sub_resource type="Resource" id="piece_obs"]
+[sub_resource type="Resource" id="piece_containment"]
 script = ExtResource("script_piece")
-position = Vector3(0, 0, -27)
-room = SubResource("room_obs")
-enemy_positions = [Vector3(2, 0, 2), Vector3(-2, 0, -2)]
+position = Vector3(0, 0, -39)
+room = SubResource("room_containment")
 
-; 10. Lab corridor — blackout, no lights, pit in the centre
-[sub_resource type="Resource" id="corr_lab"]
+; ── 24. Specimen Lab East corridor ─────────────────────────────────────────
+[sub_resource type="Resource" id="corr_spec_e"]
 script = ExtResource("script_corridor")
 width = 4.0
-length = 6.0
+length = 2.0
 axis = 0
-pit_width = 2.5
+light_color = ExtResource("light_fluoro")
+light_interval = 2.0
 
-[sub_resource type="Resource" id="piece_corr_lab"]
+[sub_resource type="Resource" id="piece_spec_corr_e"]
 script = ExtResource("script_piece")
-position = Vector3(-7, 0, -27)
-corridor = SubResource("corr_lab")
+position = Vector3(8, 0, -39)
+corridor = SubResource("corr_spec_e")
 
-; 11. Research Lab
-[sub_resource type="Resource" id="room_lab"]
+; ── 25. Specimen Lab East — loot dead-end ──────────────────────────────────
+[sub_resource type="Resource" id="room_spec_e"]
 script = ExtResource("script_room")
-id = &"research_lab"
+id = &"spec_lab_e"
+size = Vector2(6, 6)
+openings = [3]
+opening_width = 4.0
+light_color = ExtResource("light_fluoro")
+enemy_count = 2
+
+[sub_resource type="Resource" id="piece_spec_lab_e"]
+script = ExtResource("script_piece")
+position = Vector3(12, 0, -39)
+room = SubResource("room_spec_e")
+
+; ── 26. Specimen Lab West corridor ─────────────────────────────────────────
+[sub_resource type="Resource" id="corr_spec_w"]
+script = ExtResource("script_corridor")
+width = 4.0
+length = 2.0
+axis = 0
+light_color = ExtResource("light_fluoro")
+light_interval = 2.0
+
+[sub_resource type="Resource" id="piece_spec_corr_w"]
+script = ExtResource("script_piece")
+position = Vector3(-8, 0, -39)
+corridor = SubResource("corr_spec_w")
+
+; ── 27. Specimen Lab West — loot dead-end ──────────────────────────────────
+[sub_resource type="Resource" id="room_spec_w"]
+script = ExtResource("script_room")
+id = &"spec_lab_w"
 size = Vector2(6, 6)
 openings = [2]
 opening_width = 4.0
 light_color = ExtResource("light_fluoro")
 enemy_count = 2
 
-[sub_resource type="Resource" id="piece_lab"]
+[sub_resource type="Resource" id="piece_spec_lab_w"]
 script = ExtResource("script_piece")
-position = Vector3(-13, 0, -27)
-room = SubResource("room_lab")
+position = Vector3(-12, 0, -39)
+room = SubResource("room_spec_w")
 
-; 12. Dark corridor — no lights
-[sub_resource type="Resource" id="corr_dark"]
+; ── 28. Sensor corridor — dark, with a pit ─────────────────────────────────
+[sub_resource type="Resource" id="corr_sensor"]
 script = ExtResource("script_corridor")
 width = 4.0
-length = 6.0
+length = 12.0
 axis = 1
+pit_width = 2.0
 
-[sub_resource type="Resource" id="piece_corr_dark"]
+[sub_resource type="Resource" id="piece_sensor"]
 script = ExtResource("script_piece")
-position = Vector3(0, 0, -34)
-corridor = SubResource("corr_dark")
-enemy_positions = [Vector3(0, 0, 2), Vector3(1, 0, -1), Vector3(-1, 0, -2)]
+position = Vector3(0, 0, -52)
+corridor = SubResource("corr_sensor")
 
-; 13. The Atrium — large open space
-[sub_resource type="Resource" id="room_atrium"]
+; ── 29. Observation Hall — switch 3, west branch to archive ────────────────
+[sub_resource type="Resource" id="room_obs"]
 script = ExtResource("script_room")
-id = &"atrium"
-size = Vector2(14, 10)
-openings = [0, 1]
+id = &"observation_hall"
+size = Vector2(10, 10)
+openings = [1, 3]
 opening_width = 4.0
 light_color = ExtResource("light_fluoro")
 enemy_count = 3
+puddle_count = 2
+puddle_size = Vector2(0.8, 1.4)
 
-[sub_resource type="Resource" id="piece_atrium"]
+[sub_resource type="Resource" id="piece_obs"]
 script = ExtResource("script_piece")
-position = Vector3(0, 0, -42)
-room = SubResource("room_atrium")
+position = Vector3(0, 0, -63)
+room = SubResource("room_obs")
 
-; 14. Obs east corridor — fluorescent lit, leads to cold storage branch
-[sub_resource type="Resource" id="corr_obs_east"]
+; ── 30. Archive corridor ───────────────────────────────────────────────────
+[sub_resource type="Resource" id="corr_archive"]
 script = ExtResource("script_corridor")
 width = 4.0
-length = 4.0
+length = 2.0
 axis = 0
 light_color = ExtResource("light_fluoro")
-light_interval = 4.0
+light_interval = 2.0
 
-[sub_resource type="Resource" id="piece_corr_obs_east"]
+[sub_resource type="Resource" id="piece_archive_corr"]
 script = ExtResource("script_piece")
-position = Vector3(6, 0, -27)
-corridor = SubResource("corr_obs_east")
+position = Vector3(-6, 0, -63)
+corridor = SubResource("corr_archive")
 
-; 15. Cold Storage — guarded antechamber
-[sub_resource type="Resource" id="room_cold_storage"]
+; ── 31. Archive Stacks — final loot dead-end ───────────────────────────────
+[sub_resource type="Resource" id="room_archive"]
 script = ExtResource("script_room")
-id = &"cold_storage"
-size = Vector2(8, 4)
-openings = [0, 3]
+id = &"archive_stacks"
+size = Vector2(6, 8)
+openings = [2]
 opening_width = 4.0
 light_color = ExtResource("light_fluoro")
 enemy_count = 2
 
-[sub_resource type="Resource" id="piece_cold_storage"]
+[sub_resource type="Resource" id="piece_archive"]
 script = ExtResource("script_piece")
-position = Vector3(12, 0, -27)
-room = SubResource("room_cold_storage")
+position = Vector3(-10, 0, -63)
+room = SubResource("room_archive")
 
-; 16. Cold-storage north corridor — dark, with a pit at its centre
-[sub_resource type="Resource" id="corr_cold_north"]
-script = ExtResource("script_corridor")
-width = 4.0
-length = 4.0
-axis = 1
-pit_width = 2.0
-
-[sub_resource type="Resource" id="piece_corr_cold_north"]
-script = ExtResource("script_piece")
-position = Vector3(12, 0, -31)
-corridor = SubResource("corr_cold_north")
-
-; 17. Records Vault — small loot stash, no enemies
-[sub_resource type="Resource" id="room_records"]
-script = ExtResource("script_room")
-id = &"records_vault"
-size = Vector2(4, 6)
-openings = [1]
-opening_width = 4.0
-light_color = ExtResource("light_fluoro")
-
-[sub_resource type="Resource" id="piece_records"]
-script = ExtResource("script_piece")
-position = Vector3(12, 0, -36)
-room = SubResource("room_records")
-
-; 18. Atrium north corridor — fluorescent lit, deeper into the facility
-[sub_resource type="Resource" id="corr_atrium_north"]
-script = ExtResource("script_corridor")
-width = 4.0
-length = 6.0
-axis = 1
-light_color = ExtResource("light_fluoro")
-light_interval = 6.0
-
-[sub_resource type="Resource" id="piece_corr_atrium_north"]
-script = ExtResource("script_piece")
-position = Vector3(0, 0, -50)
-corridor = SubResource("corr_atrium_north")
-
-; 19. Server Vault — large terminal hall, end of map
-[sub_resource type="Resource" id="room_server_vault"]
-script = ExtResource("script_room")
-id = &"server_vault"
-size = Vector2(12, 8)
-openings = [1]
-opening_width = 4.0
-light_color = ExtResource("light_fluoro")
-enemy_count = 4
-
-[sub_resource type="Resource" id="piece_server_vault"]
-script = ExtResource("script_piece")
-position = Vector3(0, 0, -57)
-room = SubResource("room_server_vault")
-
-; ── Layout Resource ──────────────────────────────────────────────────────────
+; ── Layout Resource ────────────────────────────────────────────────────────
 
 [resource]
 script = ExtResource("script_layout")
 theme = ExtResource("theme")
-ground_size = Vector2(60, 130)
-pieces = [SubResource("piece_operating"), SubResource("piece_corr_exit"), SubResource("piece_junction"), SubResource("piece_corr_west"), SubResource("piece_ward"), SubResource("piece_corr_east"), SubResource("piece_supply"), SubResource("piece_corr_warning"), SubResource("piece_obs"), SubResource("piece_corr_lab"), SubResource("piece_lab"), SubResource("piece_corr_dark"), SubResource("piece_atrium"), SubResource("piece_corr_obs_east"), SubResource("piece_cold_storage"), SubResource("piece_corr_cold_north"), SubResource("piece_records"), SubResource("piece_corr_atrium_north"), SubResource("piece_server_vault")]
+ground_size = Vector2(100, 90)
+pieces = [SubResource("piece_op"), SubResource("piece_recovery_corr"), SubResource("piece_recovery"), SubResource("piece_spawn"), SubResource("piece_hub"), SubResource("piece_east_a"), SubResource("piece_east_junction"), SubResource("piece_eng_corr"), SubResource("piece_eng_closet"), SubResource("piece_east_b"), SubResource("piece_power"), SubResource("piece_gen_corr"), SubResource("piece_gen_room"), SubResource("piece_boss_approach_a"), SubResource("piece_boss_junction"), SubResource("piece_holding_corr"), SubResource("piece_holding"), SubResource("piece_boss_approach_b"), SubResource("piece_boss"), SubResource("piece_boss_exit"), SubResource("piece_stair"), SubResource("piece_crouch"), SubResource("piece_containment"), SubResource("piece_spec_corr_e"), SubResource("piece_spec_lab_e"), SubResource("piece_spec_corr_w"), SubResource("piece_spec_lab_w"), SubResource("piece_sensor"), SubResource("piece_obs"), SubResource("piece_archive_corr"), SubResource("piece_archive")]

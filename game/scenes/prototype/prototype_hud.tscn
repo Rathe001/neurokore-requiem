@@ -44,8 +44,8 @@ editor_only = false
 unique_name_in_owner = true
 anchor_right = 1.0
 anchor_bottom = 1.0
-theme_override_font_sizes/font_size = 24
-text = "H"
+theme_override_font_sizes/font_size = 22
+text = "Lv 1"
 horizontal_alignment = 1
 vertical_alignment = 1
 
@@ -284,16 +284,17 @@ vertical_alignment = 1
 
 [node name="Banner" type="Label" parent="Root"]
 unique_name_in_owner = true
-anchor_left = 0.5
-anchor_right = 0.5
-offset_left = -240.0
+anchor_left = 0.0
+anchor_right = 1.0
+offset_left = 80.0
 offset_top = 160.0
-offset_right = 240.0
-offset_bottom = 220.0
-theme_override_font_sizes/font_size = 36
+offset_right = -80.0
+offset_bottom = 260.0
+theme_override_font_sizes/font_size = 22
 text = ""
 horizontal_alignment = 1
 vertical_alignment = 1
+autowrap_mode = 3
 visible = false
 
 [node name="DebugPanel" type="Control" parent="Root"]
@@ -328,11 +329,32 @@ text = "FPS: --"
 unique_name_in_owner = true
 offset_left = 12.0
 offset_top = 12.0
-offset_right = 280.0
+offset_right = 740.0
 offset_bottom = 28.0
 theme_override_font_sizes/font_size = 10
-theme_override_colors/font_color = Color(0.7, 0.85, 1.0, 1)
+theme_override_colors/font_color = Color(0.7, 0.85, 1.0, 0.55)
 text = "HUD_HOTKEY_HINTS"
+
+[node name="XPBar" type="Control" parent="Root"]
+anchor_left = 0.0
+anchor_right = 1.0
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_top = -4.0
+offset_bottom = 0.0
+mouse_filter = 2
+
+[node name="XPBackground" type="ColorRect" parent="Root/XPBar"]
+unique_name_in_owner = true
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.04, 0.05, 0.08, 0.9)
+
+[node name="XPFill" type="ColorRect" parent="Root/XPBar"]
+unique_name_in_owner = true
+anchor_right = 0.0
+anchor_bottom = 1.0
+color = Color(1.0, 0.85, 0.4, 0.95)
 
 [node name="CharacterPanel" parent="Root" instance=ExtResource("scene_character_panel")]
 

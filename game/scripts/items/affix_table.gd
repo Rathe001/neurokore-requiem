@@ -20,7 +20,6 @@ const PREFIXES: Array[Dictionary] = [
 	{
 		"id": &"searing",
 		"label": "Searing",
-		"kind": ItemAffix.Kind.PREFIX,
 		"item_types": ["1H Weapon", "2H Weapon"],
 		"stat_modifiers": { "fire_damage_bonus": 10 },
 		"min_item_level": 1,
@@ -29,7 +28,6 @@ const PREFIXES: Array[Dictionary] = [
 	{
 		"id": &"precise",
 		"label": "Precise",
-		"kind": ItemAffix.Kind.PREFIX,
 		"item_types": ["1H Weapon", "2H Weapon"],
 		"stat_modifiers": { "crit_chance_bonus": 5 },
 		"min_item_level": 1,
@@ -38,7 +36,6 @@ const PREFIXES: Array[Dictionary] = [
 	{
 		"id": &"brutal",
 		"label": "Brutal",
-		"kind": ItemAffix.Kind.PREFIX,
 		"item_types": ["1H Weapon", "2H Weapon"],
 		"stat_modifiers": { "base_damage_bonus": 8 },
 		"min_item_level": 1,
@@ -47,7 +44,6 @@ const PREFIXES: Array[Dictionary] = [
 	{
 		"id": &"swift",
 		"label": "Swift",
-		"kind": ItemAffix.Kind.PREFIX,
 		"item_types": ["1H Weapon", "2H Weapon"],
 		"stat_modifiers": { "cooldown_reduction": 10 },
 		"min_item_level": 5,
@@ -56,7 +52,6 @@ const PREFIXES: Array[Dictionary] = [
 	{
 		"id": &"cryo",
 		"label": "Cryo",
-		"kind": ItemAffix.Kind.PREFIX,
 		"item_types": ["1H Weapon", "2H Weapon"],
 		"stat_modifiers": { "cryo_damage_bonus": 10 },
 		"min_item_level": 8,
@@ -65,7 +60,6 @@ const PREFIXES: Array[Dictionary] = [
 	{
 		"id": &"voltaic",
 		"label": "Voltaic",
-		"kind": ItemAffix.Kind.PREFIX,
 		"item_types": ["1H Weapon", "2H Weapon"],
 		"stat_modifiers": { "electric_damage_bonus": 10 },
 		"min_item_level": 8,
@@ -74,7 +68,6 @@ const PREFIXES: Array[Dictionary] = [
 	{
 		"id": &"toxic",
 		"label": "Toxic",
-		"kind": ItemAffix.Kind.PREFIX,
 		"item_types": ["1H Weapon", "2H Weapon"],
 		"stat_modifiers": { "toxic_damage_bonus": 10 },
 		"min_item_level": 8,
@@ -83,7 +76,6 @@ const PREFIXES: Array[Dictionary] = [
 	{
 		"id": &"honed",
 		"label": "Honed",
-		"kind": ItemAffix.Kind.PREFIX,
 		"item_types": ["1H Weapon", "2H Weapon"],
 		"stat_modifiers": { "hit_chance_bonus": 6 },
 		"min_item_level": 1,
@@ -92,7 +84,6 @@ const PREFIXES: Array[Dictionary] = [
 	{
 		"id": &"vicious",
 		"label": "Vicious",
-		"kind": ItemAffix.Kind.PREFIX,
 		"item_types": ["1H Weapon", "2H Weapon"],
 		"stat_modifiers": { "crit_damage_bonus": 15 },
 		"min_item_level": 5,
@@ -101,7 +92,6 @@ const PREFIXES: Array[Dictionary] = [
 	{
 		"id": &"rapid",
 		"label": "Rapid",
-		"kind": ItemAffix.Kind.PREFIX,
 		"item_types": ["1H Weapon", "2H Weapon"],
 		"stat_modifiers": { "attack_speed_bonus": 8 },
 		"min_item_level": 3,
@@ -111,7 +101,6 @@ const PREFIXES: Array[Dictionary] = [
 	{
 		"id": &"hardened",
 		"label": "Hardened",
-		"kind": ItemAffix.Kind.PREFIX,
 		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Boots"],
 		"stat_modifiers": { "damage_reduction": 6 },
 		"min_item_level": 1,
@@ -120,7 +109,6 @@ const PREFIXES: Array[Dictionary] = [
 	{
 		"id": &"nimble",
 		"label": "Nimble",
-		"kind": ItemAffix.Kind.PREFIX,
 		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Boots"],
 		"stat_modifiers": { "move_speed_bonus": 5 },
 		"min_item_level": 1,
@@ -129,7 +117,6 @@ const PREFIXES: Array[Dictionary] = [
 	{
 		"id": &"fortified",
 		"label": "Fortified",
-		"kind": ItemAffix.Kind.PREFIX,
 		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Boots"],
 		"stat_modifiers": { "max_health_bonus": 15 },
 		"min_item_level": 1,
@@ -138,7 +125,6 @@ const PREFIXES: Array[Dictionary] = [
 	{
 		"id": &"insulated",
 		"label": "Insulated",
-		"kind": ItemAffix.Kind.PREFIX,
 		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Boots"],
 		"stat_modifiers": { "electric_resistance": 8 },
 		"min_item_level": 5,
@@ -147,7 +133,6 @@ const PREFIXES: Array[Dictionary] = [
 	{
 		"id": &"cryo_lined",
 		"label": "Cryo-Lined",
-		"kind": ItemAffix.Kind.PREFIX,
 		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Boots"],
 		"stat_modifiers": { "cryo_resistance": 8 },
 		"min_item_level": 5,
@@ -156,7 +141,6 @@ const PREFIXES: Array[Dictionary] = [
 	{
 		"id": &"hazmat",
 		"label": "Hazmat",
-		"kind": ItemAffix.Kind.PREFIX,
 		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Boots"],
 		"stat_modifiers": { "toxic_resistance": 8 },
 		"min_item_level": 5,
@@ -166,7 +150,6 @@ const PREFIXES: Array[Dictionary] = [
 	{
 		"id": &"spacious",
 		"label": "Spacious",
-		"kind": ItemAffix.Kind.PREFIX,
 		"item_types": ["Backpack"],
 		"stat_modifiers": { "inventory_bonus": 4 },
 		"min_item_level": 1,
@@ -175,7 +158,6 @@ const PREFIXES: Array[Dictionary] = [
 	{
 		"id": &"reinforced_pack",
 		"label": "Reinforced",
-		"kind": ItemAffix.Kind.PREFIX,
 		"item_types": ["Backpack"],
 		"stat_modifiers": { "inventory_bonus": 2, "damage_reduction": 3 },
 		"min_item_level": 5,
@@ -192,7 +174,6 @@ const SUFFIXES: Array[Dictionary] = [
 	{
 		"id": &"of_the_marksman",
 		"label": "of the Marksman",
-		"kind": ItemAffix.Kind.SUFFIX,
 		"item_types": ["1H Weapon", "2H Weapon"],
 		"stat_modifiers": { "range_bonus": 8 },
 		"min_item_level": 1,
@@ -201,7 +182,6 @@ const SUFFIXES: Array[Dictionary] = [
 	{
 		"id": &"of_devastation",
 		"label": "of Devastation",
-		"kind": ItemAffix.Kind.SUFFIX,
 		"item_types": ["1H Weapon", "2H Weapon"],
 		"stat_modifiers": { "knockback_bonus": 12 },
 		"min_item_level": 1,
@@ -210,7 +190,6 @@ const SUFFIXES: Array[Dictionary] = [
 	{
 		"id": &"of_efficiency",
 		"label": "of Efficiency",
-		"kind": ItemAffix.Kind.SUFFIX,
 		"item_types": ["1H Weapon", "2H Weapon"],
 		"stat_modifiers": { "resource_cost_reduction": 10 },
 		"min_item_level": 5,
@@ -219,7 +198,6 @@ const SUFFIXES: Array[Dictionary] = [
 	{
 		"id": &"of_the_leech",
 		"label": "of the Leech",
-		"kind": ItemAffix.Kind.SUFFIX,
 		"item_types": ["1H Weapon", "2H Weapon"],
 		"stat_modifiers": { "lifesteal_percent": 3 },
 		"min_item_level": 10,
@@ -228,7 +206,6 @@ const SUFFIXES: Array[Dictionary] = [
 	{
 		"id": &"of_perforation",
 		"label": "of Perforation",
-		"kind": ItemAffix.Kind.SUFFIX,
 		"item_types": ["1H Weapon", "2H Weapon"],
 		"stat_modifiers": { "armor_penetration": 8 },
 		"min_item_level": 8,
@@ -238,7 +215,6 @@ const SUFFIXES: Array[Dictionary] = [
 	{
 		"id": &"of_the_bear",
 		"label": "of the Bear",
-		"kind": ItemAffix.Kind.SUFFIX,
 		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Boots", "Backpack", "Belt", "Mainboard"],
 		"stat_modifiers": { "carry_capacity_bonus": 10 },
 		"min_item_level": 1,
@@ -247,7 +223,6 @@ const SUFFIXES: Array[Dictionary] = [
 	{
 		"id": &"of_resilience",
 		"label": "of Resilience",
-		"kind": ItemAffix.Kind.SUFFIX,
 		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Boots"],
 		"stat_modifiers": { "elemental_resistance": 6 },
 		"min_item_level": 5,
@@ -256,7 +231,6 @@ const SUFFIXES: Array[Dictionary] = [
 	{
 		"id": &"of_the_vault",
 		"label": "of the Vault",
-		"kind": ItemAffix.Kind.SUFFIX,
 		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Boots"],
 		"stat_modifiers": { "max_health_bonus": 10 },
 		"min_item_level": 1,
@@ -265,7 +239,6 @@ const SUFFIXES: Array[Dictionary] = [
 	{
 		"id": &"of_renewal",
 		"label": "of Renewal",
-		"kind": ItemAffix.Kind.SUFFIX,
 		"item_types": ["1H Weapon", "2H Weapon"],
 		"stat_modifiers": { "resource_on_hit": 2 },
 		"min_item_level": 5,
@@ -275,7 +248,6 @@ const SUFFIXES: Array[Dictionary] = [
 	{
 		"id": &"of_focus",
 		"label": "of Focus",
-		"kind": ItemAffix.Kind.SUFFIX,
 		"item_types": ["Optics"],
 		"stat_modifiers": { "light_range_bonus": 4 },
 		"min_item_level": 1,
@@ -284,7 +256,6 @@ const SUFFIXES: Array[Dictionary] = [
 	{
 		"id": &"of_lumens",
 		"label": "of Lumens",
-		"kind": ItemAffix.Kind.SUFFIX,
 		"item_types": ["Optics"],
 		"stat_modifiers": { "light_energy_bonus": 20 },
 		"min_item_level": 5,
@@ -316,11 +287,11 @@ func _build_cache() -> void:
 		return
 	_ready_called = true
 	for d in PREFIXES:
-		var a := _dict_to_affix(d)
+		var a := _dict_to_affix(d, ItemAffix.Kind.PREFIX)
 		_prefixes.append(a)
 		_index_affix(a, _prefixes_by_type, _prefixes_universal)
 	for d in SUFFIXES:
-		var a := _dict_to_affix(d)
+		var a := _dict_to_affix(d, ItemAffix.Kind.SUFFIX)
 		_suffixes.append(a)
 		_index_affix(a, _suffixes_by_type, _suffixes_universal)
 
@@ -334,11 +305,11 @@ func _index_affix(a: ItemAffix, by_type: Dictionary, universal: Array[ItemAffix]
 		var bucket: Array = by_type[t]
 		bucket.append(a)
 
-func _dict_to_affix(d: Dictionary) -> ItemAffix:
+func _dict_to_affix(d: Dictionary, kind: ItemAffix.Kind) -> ItemAffix:
 	var a := ItemAffix.new()
 	a.id = d.get("id", &"")
 	a.label = d.get("label", "")
-	a.kind = d.get("kind", ItemAffix.Kind.PREFIX) as ItemAffix.Kind
+	a.kind = kind
 	a.item_types = Array(d.get("item_types", []), TYPE_STRING, "", null)
 	a.stat_modifiers = d.get("stat_modifiers", {})
 	a.min_item_level = d.get("min_item_level", 1)

@@ -9,12 +9,34 @@ signal talents_changed
 signal tier_changed(stat_id: StringName, old_tier: int, new_tier: int)
 signal origin_tier_changed(old_tier: int, new_tier: int)
 signal team_nodes_tier_changed(old_tier: int, new_tier: int)
+signal level_changed(new_level: int, old_level: int)
+signal xp_changed(current_xp: int, xp_to_next: int)
+signal leveled_up(new_level: int, hp_gain: int)
+
+# XP curve: each level requires ~1.35× the previous, so leveling slows as you
+# climb. With XP_PER_ENEMY_LEVEL=20, a level-1 enemy is 20 xp; a level-5 enemy
+# is 100. Tuned for friends-mode demo pacing.
+const STARTING_XP_TO_NEXT := 100
+const XP_CURVE_GROWTH := 1.35
+const XP_PER_ENEMY_LEVEL := 20
+const HP_GAIN_PER_LEVEL_MIN := 20
+const HP_GAIN_PER_LEVEL_MAX := 25
+const TALENT_POINTS_PER_LEVEL := 1
 
 var class_id: StringName = &""
 var spec_id: StringName = &""
 
-## Talent point budget — 1 per 5 levels. Placeholder until leveling exists.
-var talent_points_total: int = 20
+## Total talent points granted by leveling. +1 per level; starts at 1 (level 1).
+var talent_points_total: int = 1
+
+## Player progression. Level 1 = fresh character, no XP.
+var level: int = 1
+var xp: int = 0
+var xp_to_next: int = STARTING_XP_TO_NEXT
+
+## Number of times the player has cleared the level and triggered a reset.
+## Drives the "New Game +N" banner.
+var new_game_plus: int = 0
 
 ## Spent talent points per stat tree.
 ## Layout: { stat_id: [[bool]*4]*5 } — 5 tiers × 4 nodes each.
@@ -127,6 +149,32 @@ func reset_talents() -> void:
 	team_node_allocations.clear()
 	_reset_tier_cache()
 	talents_changed.emit()
+
+# ── Leveling ──────────────────────────────────────────────────────────────────
+
+## XP awarded for killing an enemy of `enemy_level`. Linear scaling.
+func xp_award_for_enemy(enemy_level: int) -> int:
+	return XP_PER_ENEMY_LEVEL * maxi(enemy_level, 1)
+
+## Add XP and process any level-ups. Emits xp_changed once at the end and
+## leveled_up per level crossed (so multi-level XP awards still feel correct).
+func gain_xp(amount: int) -> void:
+	if amount <= 0:
+		return
+	xp += amount
+	while xp >= xp_to_next:
+		xp -= xp_to_next
+		_do_level_up()
+	xp_changed.emit(xp, xp_to_next)
+
+func _do_level_up() -> void:
+	var old := level
+	level += 1
+	talent_points_total += TALENT_POINTS_PER_LEVEL
+	xp_to_next = int(round(STARTING_XP_TO_NEXT * pow(XP_CURVE_GROWTH, float(level - 1))))
+	var hp_gain := randi_range(HP_GAIN_PER_LEVEL_MIN, HP_GAIN_PER_LEVEL_MAX)
+	level_changed.emit(level, old)
+	leveled_up.emit(level, hp_gain)
 
 # ── Tier crossing detection ───────────────────────────────────────────────────
 

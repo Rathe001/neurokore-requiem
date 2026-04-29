@@ -1,0 +1,35 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/prototype/prototype_exit.gd" id="1_script"]
+
+[sub_resource type="CylinderMesh" id="mesh_exit_pad"]
+top_radius = 1.4
+bottom_radius = 1.4
+height = 0.06
+radial_segments = 32
+
+[sub_resource type="TorusMesh" id="mesh_exit_ring"]
+inner_radius = 1.45
+outer_radius = 1.65
+rings = 32
+ring_segments = 8
+
+[sub_resource type="CylinderShape3D" id="shape_exit_pad"]
+radius = 1.4
+height = 0.06
+
+[node name="Exit" type="StaticBody3D"]
+script = ExtResource("1_script")
+display_name = "Exit"
+
+[node name="Pad" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.03, 0)
+mesh = SubResource("mesh_exit_pad")
+
+[node name="Ring" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.07, 0)
+mesh = SubResource("mesh_exit_ring")
+
+[node name="Collision" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.03, 0)
+shape = SubResource("shape_exit_pad")

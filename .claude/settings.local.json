@@ -27,7 +27,11 @@
       "Bash(rm -f \"C:/Users/josh/Projects/neurokore-requiem/game/resources/items/starters/\"*.tres)",
       "Bash(rm -f \"C:/Users/josh/Projects/neurokore-requiem/game/resources/items/common_\"*.tres)",
       "Bash(grep -E \"\\\\.uid$\")",
-      "Bash(python *)"
+      "Bash(python *)",
+      "Bash(\"C:/Program Files \\(x86\\)/Steam/steamapps/common/Godot Engine/godot.windows.editor.x86_64.exe\" --headless --path game --check-only --quit)",
+      "Bash(\"/c/Users/josh/Tools/Godot/Godot_v4.6.2-stable_win64_console.exe\" --headless --path \"C:/Users/josh/Projects/neurokore-requiem/game\" --quit)",
+      "Bash(\"/c/Users/josh/Tools/Godot/Godot_v4.6.2-stable_win64_console.exe\" --headless --path \"C:/Users/josh/Projects/neurokore-requiem/game\" --check-only --quit-after 1)",
+      "Bash(\"/c/Users/josh/Tools/Godot/Godot_v4.6.2-stable_win64_console.exe\" --headless --path \"C:/Users/josh/Projects/neurokore-requiem/game\" --script \"res://__check.gd\")"
     ]
   }
 }

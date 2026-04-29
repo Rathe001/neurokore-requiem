@@ -1,6 +1,6 @@
 extends Control
 
-const PANEL_SIZE := Vector2(220.0, 200.0)
+const PANEL_SIZE := Vector2(220.0, 280.0)
 const SETTINGS_PANEL_SIZE := Vector2(360.0, 500.0)
 const BUTTON_SIZE := Vector2(168.0, 32.0)
 const BUTTON_GAP := 6.0
@@ -24,7 +24,27 @@ func _ready() -> void:
 	add_to_group(&"ui_modal")
 	_build_main_panel()
 	_build_settings_panel()
+	_build_version_stamp()
 	UIThemeState.changed.connect(_on_theme_changed)
+
+func _build_version_stamp() -> void:
+	var label := Label.new()
+	label.text = BuildInfo.display_string()
+	label.theme_type_variation = &"SmallLabel"
+	label.add_theme_color_override(&"font_color", Color(1.0, 1.0, 1.0, 0.35))
+	label.add_theme_font_size_override(&"font_size", 9)
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	label.anchor_left = 1.0
+	label.anchor_right = 1.0
+	label.anchor_top = 1.0
+	label.anchor_bottom = 1.0
+	label.offset_left = -220.0
+	label.offset_right = -8.0
+	label.offset_top = -22.0
+	label.offset_bottom = -6.0
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	add_child(label)
 
 func _on_theme_changed() -> void:
 	theme = UIThemeState.theme
@@ -57,6 +77,8 @@ func _build_main_panel() -> void:
 
 	buttons.add_child(_make_button("COMMON_RESUME", _on_resume_pressed))
 	buttons.add_child(_make_button("COMMON_SETTINGS", _on_settings_pressed))
+	buttons.add_child(_make_button("COMMON_REPORT_BUG", _on_report_bug_pressed))
+	buttons.add_child(_make_button("COMMON_OPEN_LOGS", _on_open_logs_pressed))
 	buttons.add_child(_make_button("COMMON_QUIT_TO_DESKTOP", _on_quit_pressed))
 
 func _build_settings_panel() -> void:
@@ -267,3 +289,16 @@ func _on_back_pressed() -> void:
 
 func _on_quit_pressed() -> void:
 	get_tree().quit()
+
+func _on_report_bug_pressed() -> void:
+	OS.shell_open(BuildInfo.BUG_REPORT_URL)
+
+func _on_open_logs_pressed() -> void:
+	# Logs land in user_data/logs/ but the directory may not exist on first
+	# run, so fall back to the parent so the button always opens something.
+	var user_dir := OS.get_user_data_dir()
+	var log_dir := user_dir.path_join("logs")
+	if DirAccess.dir_exists_absolute(log_dir):
+		OS.shell_open(log_dir)
+	else:
+		OS.shell_open(user_dir)

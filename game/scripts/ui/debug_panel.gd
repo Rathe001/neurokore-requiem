@@ -26,6 +26,8 @@ func _on_theme_changed() -> void:
 	theme = UIThemeState.theme
 
 func _unhandled_input(event: InputEvent) -> void:
+	if not BuildInfo.dev_tools_enabled():
+		return
 	if event.is_action_pressed(&"toggle_debug_panel"):
 		visible = not visible
 		get_viewport().set_input_as_handled()

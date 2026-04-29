@@ -6,6 +6,8 @@ COMMON_BACK,Back
 COMMON_RESUME,Resume
 COMMON_SETTINGS,Settings
 COMMON_QUIT_TO_DESKTOP,Quit to Desktop
+COMMON_REPORT_BUG,Report a Bug
+COMMON_OPEN_LOGS,Open Log Folder
 COMMON_DASH,—
 COMMON_OFF,Off
 COMMON_ON,On
@@ -122,9 +124,15 @@ DEBUG_SHOW_TELEGRAPHS,Show Attack Telegraphs
 DEBUG_SHOW_OVERLAY,Show Overlay
 DEBUG_START_POS,Start pos:
 DEBUG_START_CR,Start cr:
-HUD_HOTKEY_HINTS,(F1) +25  (F2) Clear  (F3) Debug  (C) Character  (N) Talents  (Ctrl) Crouch  (F) Light  (Tab) Map
+HUD_HOTKEY_HINTS,WASD Move · LMB Fire · RMB Skill · Space Jump · Ctrl Crouch · I Inventory · N Talents · Tab Map · Esc Menu
+EXIT_TOOLTIP_LOCKED,Exit (Locked — defeat the boss)
+EXIT_TOOLTIP_UNLOCKED,Exit (Reset Level)
+HUD_BANNER_LEVEL_RESET,New Game +%d
 HUD_BANNER_DIED,You died
 HUD_BANNER_NO_LIGHT,I wish I had a light...
+HUD_LEVEL_UP_FORMAT,You are now level %d! Press N to view talents
+HUD_LEVEL_FORMAT,Lv %d
+HUD_XP_FORMAT,%d / %d XP
 HUD_CREDITS_FORMAT,%d cr
 HUD_DEBUG_OVERLAY_FORMAT,"FPS: %d  (%.1f ms)\nEnemies: %d\nCorpses: %d\nPickups: %d\nStructures: %d\nTotal nodes: %d"
 PICK_LABEL_FORMAT,%s / %s

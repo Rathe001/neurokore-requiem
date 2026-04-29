@@ -55,17 +55,17 @@ const RARITY_COLOR: Dictionary = {
 }
 
 const TYPE_GLYPH: Dictionary = {
-	"1H Weapon":   "/",
-	"2H Weapon":   "|",
-	"Offhand":     "(",
-	"Head Armor":  "^",
-	"Chest Armor": "[",
-	"Gloves":      "{",
-	"Boots":       "_",
-	"Belt":        "~",
-	"Mainboard":   "#",
-	"Backpack":    "B",
-	"Optics":      "*",
+	"1H Weapon":   "†",
+	"2H Weapon":   "‡",
+	"Offhand":     "◊",
+	"Head Armor":  "▲",
+	"Chest Armor": "▣",
+	"Gloves":      "Ψ",
+	"Boots":       "⌐",
+	"Belt":        "═",
+	"Mainboard":   "⌬",
+	"Backpack":    "▤",
+	"Optics":      "✦",
 }
 
 # Registry of weapon bases keyed by main_type. The roller picks one at random
@@ -78,6 +78,44 @@ const WEAPON_BASE_PATHS: Dictionary = {
 		"res://resources/items/weapon_bases/melee_2h.tres",
 	],
 }
+
+# Optics variants. One of these is rolled when main_type == "Optics" so each
+# light item carries the right type, range, energy, and color to actually work
+# when equipped. Probability is uniform — friends-mode demo wants visibility.
+const OPTICS_VARIANTS: Array[Dictionary] = [
+	{
+		"name": "Flashlight",
+		"glyph": "✸",
+		"light_type": Item.LightType.DIRECTIONAL,
+		"range": 12.0,
+		"energy_range": Vector2(2.0, 3.0),
+		"color": Color(1.0, 0.95, 0.85),
+	},
+	{
+		"name": "Lantern",
+		"glyph": "◉",
+		"light_type": Item.LightType.RADIANT,
+		"range": 6.0,
+		"energy_range": Vector2(1.5, 2.2),
+		"color": Color(1.0, 0.85, 0.6),
+	},
+	{
+		"name": "Phased Surveillance Radar",
+		"glyph": "◎",
+		"light_type": Item.LightType.SCANNER,
+		"range": 12.0,
+		"energy_range": Vector2(0.0, 0.0),
+		"color": Color(0.5, 1.0, 1.0),
+	},
+	{
+		"name": "UV Light",
+		"glyph": "❉",
+		"light_type": Item.LightType.UV,
+		"range": 5.0,
+		"energy_range": Vector2(1.2, 1.8),
+		"color": Color(0.6, 0.4, 1.0),
+	},
+]
 
 func roll(main_type: String, item_level: int, rarity: StringName, rng: RandomNumberGenerator) -> Item:
 	var item := Item.new()
@@ -93,6 +131,7 @@ func roll(main_type: String, item_level: int, rarity: StringName, rng: RandomNum
 		item.two_handed = true
 
 	_apply_weapon_base(item, main_type, rng)
+	_apply_optics_variant(item, main_type, rng)
 
 	var affix_labels: Array[String] = []
 	var prefix_count: int = RARITY_PREFIX_COUNT.get(rarity, 0)
@@ -113,7 +152,7 @@ func roll(main_type: String, item_level: int, rarity: StringName, rng: RandomNum
 		var value := _class_stat_value(item_level, rng)
 		item.stat_modifiers[s] = int(item.stat_modifiers.get(s, 0)) + value
 
-	item.name_key = _build_name(main_type, affix_labels)
+	item.name_key = _build_name(main_type, item.sub_type, affix_labels)
 	return item
 
 func roll_random(item_level: int, rng: RandomNumberGenerator) -> Item:
@@ -184,9 +223,24 @@ func _apply_weapon_base(item: Item, main_type: String, rng: RandomNumberGenerato
 	item.crit_chance = rng.randf_range(base.crit_chance_range.x, base.crit_chance_range.y)
 	item.accuracy = rng.randf_range(base.accuracy_range.x, base.accuracy_range.y)
 
-func _build_name(main_type: String, affix_labels: Array[String]) -> String:
+func _apply_optics_variant(item: Item, main_type: String, rng: RandomNumberGenerator) -> void:
+	if main_type != "Optics":
+		return
+	var variant: Dictionary = OPTICS_VARIANTS[rng.randi_range(0, OPTICS_VARIANTS.size() - 1)]
+	item.light_type = variant["light_type"]
+	item.light_range = variant["range"]
+	var energy_range: Vector2 = variant["energy_range"]
+	item.light_energy = rng.randf_range(energy_range.x, energy_range.y)
+	item.light_color = variant["color"]
+	item.sub_type = variant["name"]
+	item.glyph = variant["glyph"]
+
+func _build_name(main_type: String, sub_type: String, affix_labels: Array[String]) -> String:
+	# Sub-type (e.g. "Flashlight" for Optics) is more descriptive than the
+	# bucket name when set, so prefer it as the noun in the rolled name.
+	var noun := sub_type if sub_type != "" else main_type
 	if affix_labels.is_empty():
-		return main_type
+		return noun
 	var prefixes: Array[String] = []
 	var suffixes: Array[String] = []
 	for label in affix_labels:
@@ -196,6 +250,6 @@ func _build_name(main_type: String, affix_labels: Array[String]) -> String:
 			prefixes.append(label)
 	var parts: Array[String] = []
 	parts.append_array(prefixes)
-	parts.append(main_type)
+	parts.append(noun)
 	parts.append_array(suffixes)
 	return " ".join(parts)
