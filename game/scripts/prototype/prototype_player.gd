@@ -107,6 +107,9 @@ var _knockback_remain: float = 0.0
 var _attacking: bool = false
 var _attack_aim: Vector3 = Vector3.ZERO
 var _click_consumed: bool = false
+# Auto-aim target while LMB is held over an enemy. Cleared on release, on
+# target death/pooling, or in FPS mode. Drives _aim_direction when set.
+var _lock_target: Node3D = null
 
 ## Called by pickups/interactables to suppress the fire input this frame.
 func consume_click() -> void:
@@ -348,7 +351,9 @@ func _physics_process(delta: float) -> void:
 	if not _alive:
 		velocity = Vector3.ZERO
 		return
-	_click_consumed = false
+	if not Input.is_action_pressed(SKILL_INPUTS[0]):
+		_click_consumed = false
+	_update_lock_target()
 	_combat.tick_cooldowns(delta)
 	_tick_resource_regen(delta)
 
@@ -614,7 +619,12 @@ func _cast_skill(skill: Skill) -> void:
 	_attacking = false
 	if not _alive:
 		return
-	_combat.resolve_skill_hit(skill, _attack_aim, _attack_weapon)
+	var fire_aim := _attack_aim
+	if _lock_target != null:
+		var refreshed := _aim_direction()
+		if refreshed != Vector3.ZERO:
+			fire_aim = refreshed
+	_combat.resolve_skill_hit(skill, fire_aim, _attack_weapon)
 
 func _tick_resource_regen(delta: float) -> void:
 	if resource_pool == null or resource_pool.regen_per_sec <= 0.0:
@@ -704,10 +714,34 @@ func _aim_direction() -> Vector3:
 		var forward := -_fps_camera.global_transform.basis.z
 		forward.y = 0.0
 		return forward.normalized() if forward.length_squared() > 0.0001 else Vector3.ZERO
+	if _lock_target != null:
+		var to_target := _lock_target.global_position - global_position
+		to_target.y = 0.0
+		if to_target.length_squared() > 0.0001:
+			return to_target.normalized()
 	var offset := _cursor_offset()
 	if offset.length_squared() < 0.0001:
 		return Vector3.ZERO
 	return offset.normalized()
+
+# Engages on LMB-press over a hovered enemy; releases on LMB-up or when the
+# target dies / leaves the enemies group. FPS mode uses its own raycast hover
+# and skips lock-on entirely.
+func _update_lock_target() -> void:
+	if _fps_mode:
+		_lock_target = null
+		return
+	if not Input.is_action_pressed(SKILL_INPUTS[0]):
+		_lock_target = null
+		return
+	if _lock_target != null:
+		if not is_instance_valid(_lock_target) or not _lock_target.is_in_group(&"enemies"):
+			_lock_target = null
+	if _lock_target == null and Input.is_action_just_pressed(SKILL_INPUTS[0]):
+		for n in get_tree().get_nodes_in_group(&"tooltip_target"):
+			if n is Node3D and n.is_in_group(&"enemies"):
+				_lock_target = n
+				break
 
 func _toggle_fps() -> void:
 	if _fps_transitioning:

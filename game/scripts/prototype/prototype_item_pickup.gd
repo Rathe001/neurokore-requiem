@@ -83,7 +83,19 @@ func _halo_energy_for(rarity: StringName) -> float:
 func _physics_process(delta: float) -> void:
 	if _popping:
 		_velocity.y -= GRAVITY * delta
-		global_position += _velocity * delta
+		var next_pos := global_position + _velocity * delta
+		var horiz := Vector3(_velocity.x, 0.0, _velocity.z)
+		if horiz.length_squared() > 0.0001:
+			var space := get_world_3d().direct_space_state
+			var ray_from := global_position + Vector3(0.0, 0.4, 0.0)
+			var ray_to := next_pos + Vector3(0.0, 0.4, 0.0)
+			var query := PhysicsRayQueryParameters3D.create(ray_from, ray_to, 1)
+			if not space.intersect_ray(query).is_empty():
+				next_pos.x = global_position.x
+				next_pos.z = global_position.z
+				_velocity.x = 0.0
+				_velocity.z = 0.0
+		global_position = next_pos
 		if global_position.y <= SETTLED_HEIGHT and _velocity.y < 0.0:
 			global_position.y = SETTLED_HEIGHT
 			_velocity = Vector3.ZERO

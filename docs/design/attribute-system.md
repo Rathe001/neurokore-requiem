@@ -253,9 +253,12 @@ Three tiers drive everything: talent tree access, tier perks, VFX metamorphosis,
 
 > **Design note:** Primary stat tiers unlock significantly easier than team or opposing stats — class identity should feel immediate. Team requires moderate investment. Opposing demands heavy commitment. Thresholds are set so that unlocking 4+ class trees simultaneously is mathematically impossible (12+25+25+40 = 102% > 100%), enforcing a natural **3-tree cap**.
 
-> **3-tree build patterns:**
-> - **3-0-0:** All 3 tiers in 1 class. Deep specialist — one large resource pool.
+> **Tier 3 is exclusive:** Reaching tier 3 in any stat locks every other stat to tier 0 — no other perks anywhere. Tier 3 is a hard "all-in" commitment, not a bonus on top of mid-tier perks. If multiple stats meet their tier-3 threshold (rare but mathematically possible), the highest-percentage stat wins exclusivity. Tiers 1 and 2 still stack freely across stats.
+
+> **Build patterns:**
+> - **3-only:** Tier 3 in one stat, nothing elsewhere. Pure specialist — one large resource pool, one perk ladder, dramatic visual transformation.
 > - **2-1-0:** 2 tiers in one class, 1 in another. Moderate hybrid — two resource pools.
+> - **2-2-0 / 2-1-1:** Wider mid-tier spreads. Several small perk ladders, no apex perk.
 > - **1-1-1:** 1 tier in each of 3 classes. Wide hybrid — three small resource pools.
 
 **Cross-class access:** Any class can unlock any stat's tree by meeting that stat's threshold. An Analog pushing Optimization past the team threshold gets Automaton tier 1. A Count pushing Deviation past the opposing threshold starts unlocking Forged nodes — while also experiencing distortion. Tier access is not permanent: dropping below a threshold locks the tier and deactivates its nodes (points stay allocated but dormant).

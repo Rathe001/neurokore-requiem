@@ -231,7 +231,15 @@ func get_tier_thresholds(stat_id: StringName, class_id: StringName, spec_id: Str
 	return TIERS_OPPOSING
 
 ## Returns the currently unlocked tier (0–3) for a stat tree given class context.
+##
+## Tier 3 is exclusive: if any stat reaches its tier-3 threshold, ALL other stats
+## return 0 and only the tier-3 owner keeps its perks. When multiple stats meet
+## tier 3, the highest-pct stat wins. This makes tier 3 a hard "all-in" choice
+## rather than a free addition on top of mid-tier perks elsewhere.
 func get_unlocked_tier(stat_id: StringName, class_id: StringName, spec_id: StringName) -> int:
+	var owner := get_tier3_owner(class_id, spec_id)
+	if owner != &"":
+		return TIER_COUNT if stat_id == owner else 0
 	var pct := get_stat_pct(stat_id)
 	var thresholds := get_tier_thresholds(stat_id, class_id, spec_id)
 	var unlocked := 0
@@ -239,6 +247,19 @@ func get_unlocked_tier(stat_id: StringName, class_id: StringName, spec_id: Strin
 		if pct >= thresholds[i]:
 			unlocked = i + 1
 	return unlocked
+
+## Returns the stat_id that owns tier-3 exclusivity (highest-pct stat at or above
+## its tier-3 threshold), or &"" if no stat has reached tier 3.
+func get_tier3_owner(class_id: StringName, spec_id: StringName) -> StringName:
+	var owner: StringName = &""
+	var owner_pct := 0.0
+	for sid in ROLLABLE_STATS:
+		var pct := get_stat_pct(sid)
+		var thresholds := get_tier_thresholds(sid, class_id, spec_id)
+		if pct >= thresholds[TIER_COUNT - 1] and pct > owner_pct:
+			owner = sid
+			owner_pct = pct
+	return owner
 
 ## Returns the balance tier (0–3) for an origin class (Analog/Cyborg).
 ## Higher = tighter stat balance; perks are maintained up to the returned tier.

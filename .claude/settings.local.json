@@ -35,7 +35,13 @@
       "Bash(mkdir -p /c/Users/josh/steamcmd)",
       "Bash(curl -L -o steamcmd.zip https://steamcdn-a.akamaihd.net/client/installer/steamcmd.zip)",
       "Bash(tar -xf steamcmd.zip)",
-      "PowerShell(& \"C:\\\\Users\\\\josh\\\\steamcmd\\\\steamcmd.exe\" +quit)"
+      "PowerShell(& \"C:\\\\Users\\\\josh\\\\steamcmd\\\\steamcmd.exe\" +quit)",
+      "Bash(where.exe godot *)",
+      "Bash(cmd //c \"where godot\")",
+      "Bash(\"/c/Users/josh/Tools/Godot/Godot_v4.6.2-stable_win64_console.exe\" --headless --path \"C:/Users/josh/Projects/neurokore-requiem/game\" --check-only --script scripts/level/level_builder.gd)",
+      "Bash(\"/c/Users/josh/Tools/Godot/Godot_v4.6.2-stable_win64_console.exe\" --headless --path \"C:/Users/josh/Projects/neurokore-requiem/game\" --quit-after 1)",
+      "Bash(\"/c/Users/josh/Tools/Godot/Godot_v4.6.2-stable_win64_console.exe\" --headless --path \"C:/Users/josh/Projects/neurokore-requiem/game\" --quit-after 60 res://scenes/world/prototype_3d.tscn)",
+      "Bash(\"/c/Users/josh/Tools/Godot/Godot_v4.6.2-stable_win64_console.exe\" --headless --path \"C:/Users/josh/Projects/neurokore-requiem/game\" --import)"
     ]
   }
 }

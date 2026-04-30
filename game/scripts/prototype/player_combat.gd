@@ -123,16 +123,16 @@ func _resolve_hitscan(skill: Skill, aim: Vector3, eff_range: float, weapon: Item
 	var origin := _host.global_position + Vector3(0.0, 1.0, 0.0)
 	var aim_norm := aim.normalized()
 	var wall_dist := eff_range
+	var hit_target: Node3D = null
 	var space := _host.get_world_3d().direct_space_state
 	var ray_end := origin + aim_norm * eff_range
-	var query := PhysicsRayQueryParameters3D.create(origin, ray_end, 1, [_host.get_rid()])
+	var query := PhysicsRayQueryParameters3D.create(origin, ray_end, 1)
 	var result := space.intersect_ray(query)
 	if not result.is_empty():
 		wall_dist = origin.distance_to(result["position"])
 	var half_cos := cos(deg_to_rad(2.5))
-	var hit_target: Node3D = null
 	var closest_dist := INF
-	for enode: Node3D in SpatialGrid.query_cone(_host.global_position, aim, wall_dist, half_cos, &"enemies"):
+	for enode: Node3D in SpatialGrid.query_cone(_host.global_position, aim_norm, wall_dist, half_cos, &"enemies"):
 		if not enode.has_method(&"take_damage"):
 			continue
 		var dist := _host.global_position.distance_squared_to(enode.global_position)

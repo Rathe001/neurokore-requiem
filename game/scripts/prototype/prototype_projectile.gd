@@ -48,15 +48,14 @@ func _physics_process(delta: float) -> void:
 func _on_body_entered(body: Node3D) -> void:
 	if _hit:
 		return
-	if not body.is_in_group(&"enemies"):
-		return
-	if not body.has_method(&"take_damage"):
+	if body.is_in_group(&"player"):
 		return
 	_hit = true
-	if _roll_hit():
-		var is_crit := _roll_crit()
-		var dmg := _roll_damage(is_crit)
-		body.take_damage(dmg, source_position, knockback_strength, 1, is_crit)
+	if body.is_in_group(&"enemies") and body.has_method(&"take_damage"):
+		if _roll_hit():
+			var is_crit := _roll_crit()
+			var dmg := _roll_damage(is_crit)
+			body.take_damage(dmg, source_position, knockback_strength, 1, is_crit)
 	_release()
 
 func _release() -> void:

@@ -159,8 +159,8 @@ func _init_enemy() -> void:
 	_want_dir = Vector3.ZERO
 	_player_ref = null
 	set_physics_process(true)
-	collision_layer = 1
-	collision_mask = 1
+	collision_layer = 2
+	collision_mask = 1 | 2 | 4
 	if collision != null:
 		collision.disabled = false
 	if floor_ring != null:

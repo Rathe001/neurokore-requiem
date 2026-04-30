@@ -20,7 +20,7 @@ emission_energy_multiplier = 6.0
 
 [node name="PrototypeProjectile" type="Area3D"]
 collision_layer = 0
-collision_mask = 1
+collision_mask = 3
 monitorable = false
 script = ExtResource("1_script")
 
