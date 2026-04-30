@@ -85,7 +85,7 @@ static func build(entry: Dictionary, on_pressed: Callable) -> Button:
 	vbox.add_child(name_label)
 
 	var desc_label := Label.new()
-	desc_label.text = tr(entry["backstory"])
+	desc_label.text = TranslationServer.translate(entry["backstory"])
 	desc_label.theme_type_variation = &"SmallLabel"
 	desc_label.add_theme_font_size_override(&"font_size", 9)
 	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -132,7 +132,7 @@ static func build(entry: Dictionary, on_pressed: Callable) -> Button:
 	pos_tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tags_row.add_child(pos_tag)
 	var plus_stat := Label.new()
-	plus_stat.text = "+" + tr(entry["stat"])
+	plus_stat.text = "+" + TranslationServer.translate(entry["stat"])
 	plus_stat.theme_type_variation = &"StatLabel"
 	plus_stat.add_theme_color_override(&"font_color", Color(0.35, 0.9, 0.45, 1.0))
 	plus_stat.add_theme_font_size_override(&"font_size", 7)
@@ -144,7 +144,7 @@ static func build(entry: Dictionary, on_pressed: Callable) -> Button:
 	neg_tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tags_row.add_child(neg_tag)
 	var minus_opp := Label.new()
-	minus_opp.text = "-" + tr(entry["opposes"])
+	minus_opp.text = "-" + TranslationServer.translate(entry["opposes"])
 	minus_opp.theme_type_variation = &"StatLabel"
 	minus_opp.add_theme_color_override(&"font_color", Color(0.9, 0.3, 0.3, 0.85))
 	minus_opp.add_theme_font_size_override(&"font_size", 7)
