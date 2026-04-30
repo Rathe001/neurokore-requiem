@@ -10,15 +10,15 @@ const BASE_INVENTORY_SIZE := 40
 const MAX_INVENTORY_SIZE := 40
 const MAX_UTILITY_SLOTS := 4
 
-# Tier-5 starter kit: one single-stat item per specialized class. Equip the
+# Tier-3 starter kit: one single-stat item per specialized class. Equip the
 # matching item alone (no other stat-bearing gear) to push that class's primary
-# stat to >= 72% of the budget, hitting AttributeState.TIERS_OWN tier 5.
-const T5_STAT_PCT: int = 72
+# stat to >= 40% of the budget, hitting AttributeState.TIERS_OWN tier 3.
+const T3_STAT_PCT: int = 40
 
-# Slot per class for the starter T5 items. Picked so all six can sit in the
+# Slot per class for the starter T3 items. Picked so all six can sit in the
 # inventory simultaneously without colliding with the auto-equipped weapon.
 const STARTER_KIT_SLOTS: Dictionary = {
-	&"gentleman":   &"head",
+	&"count":   &"head",
 	&"survivalist": &"chest",
 	&"enculted":    &"gloves",
 	&"forged":      &"boots",
@@ -45,7 +45,7 @@ func _ready() -> void:
 	inventory.resize(MAX_INVENTORY_SIZE)
 	var i := 0
 	for spec_id: StringName in AttributeState.CLASS_DEFINITIONS:
-		inventory[i] = _make_class_tier5_item(spec_id)
+		inventory[i] = _make_class_tier3_item(spec_id)
 		i += 1
 	equipment[&"weapon"] = _make_starter_weapon()
 	equipment[&"offhand"] = _make_starter_offhand()
@@ -156,18 +156,18 @@ func _make_starter_offhand() -> Item:
 	item.fire_skill = preload("res://resources/skills/aoe_burst.tres")
 	return item
 
-func _make_class_tier5_item(spec_id: StringName) -> Item:
+func _make_class_tier3_item(spec_id: StringName) -> Item:
 	var stat: StringName = AttributeState.CLASS_DEFINITIONS[spec_id][&"stat"]
 	var slot: StringName = STARTER_KIT_SLOTS.get(spec_id, &"head")
 	var short: String = AttributeState.STAT_SHORT.get(stat, "?")
 	var spec_label := String(spec_id).capitalize()
 	var item := Item.new()
-	item.id = StringName("starter_t5_%s" % spec_id)
+	item.id = StringName("starter_t3_%s" % spec_id)
 	item.kind = slot
 	item.main_type = STARTER_SLOT_MAIN_TYPE.get(slot, String(slot).capitalize())
-	item.glyph = ItemRoller.TYPE_GLYPH.get(item.main_type, AttributeState.TIER_ROMAN[4])
+	item.glyph = ItemRoller.TYPE_GLYPH.get(item.main_type, AttributeState.TIER_ROMAN[2])
 	item.glyph_color = AttributeState.STAT_COLORS.get(stat, Color.WHITE)
 	item.rarity = &"unique"
-	item.name_key = "%s T5 (%s %d%%)" % [spec_label, short, T5_STAT_PCT]
-	item.stat_modifiers = {stat: T5_STAT_PCT}
+	item.name_key = "%s T3 (%s %d%%)" % [spec_label, short, T3_STAT_PCT]
+	item.stat_modifiers = {stat: T3_STAT_PCT}
 	return item

@@ -5,10 +5,9 @@ const SCREEN_MARGIN := Vector2(12, 12)
 const MOUSE_OFFSET := Vector2(14.0, 14.0)
 const PADDING_X := 8
 const PADDING_Y := 6
-const CONTENT_MIN_WIDTH := 200.0
+const CONTENT_MIN_WIDTH := 140.0
 const PARK_DURATION := 0.14
 const PARK_TOP_MARGIN := 24.0
-const FADE_OUT_DURATION := 0.10
 const ANCHOR_OFFSET_Y := -16.0  # tooltip sits this far above target's screen point
 
 var COLOR_PRIMARY:  Color = AttributeState.RELATIONSHIP_COLORS[&"primary"]
@@ -29,7 +28,6 @@ var _stats_label: RichTextLabel
 # unlocked and dismissed.
 var _lmb_held: bool = false
 var _park_tween: Tween
-var _fade_tween: Tween
 # 3D node currently providing the tooltip. While set, the tooltip tracks the
 # target's screen-space position each frame instead of following the mouse.
 # UI sources (item slots, talent nodes) leave this null and use mouse-follow.
@@ -43,6 +41,7 @@ func _ready() -> void:
 	mouse_filter = MOUSE_FILTER_IGNORE
 	top_level = true
 	visible = false
+	size = Vector2.ZERO
 	_build_ui()
 	_apply_theme()
 	UIThemeState.changed.connect(_apply_theme)
@@ -50,37 +49,44 @@ func _ready() -> void:
 func _process(_dt: float) -> void:
 	if _anchor_target == null or not is_instance_valid(_anchor_target):
 		return
-	if not visible or _lmb_held or _is_fading():
+	if not visible or _lmb_held:
 		return
 	_reposition_to_anchor()
 
 func _build_ui() -> void:
 	_bg = PanelContainer.new()
 	_bg.mouse_filter = MOUSE_FILTER_IGNORE
+	# Prevent stretching to parent — size from content only.
+	_bg.set_anchors_and_offsets_preset(PRESET_TOP_LEFT)
 	add_child(_bg)
 
 	_vbox = VBoxContainer.new()
 	_vbox.custom_minimum_size = Vector2(CONTENT_MIN_WIDTH, 0.0)
 	_vbox.add_theme_constant_override(&"separation", 3)
+	_vbox.mouse_filter = MOUSE_FILTER_IGNORE
 	_bg.add_child(_vbox)
 
 	_text_label = Label.new()
-	_text_label.theme_type_variation = &"BodyLabel"
+	_text_label.theme_type_variation = &"SmallLabel"
+	_text_label.add_theme_font_size_override(&"font_size", 8)
 	_text_label.mouse_filter = MOUSE_FILTER_IGNORE
 	_vbox.add_child(_text_label)
 
 	_name_label = Label.new()
-	_name_label.theme_type_variation = &"CardTitle"
+	_name_label.theme_type_variation = &"BodyLabel"
+	_name_label.add_theme_font_size_override(&"font_size", 10)
 	_name_label.mouse_filter = MOUSE_FILTER_IGNORE
 	_vbox.add_child(_name_label)
 
 	_type_label = Label.new()
 	_type_label.theme_type_variation = &"SmallLabel"
+	_type_label.add_theme_font_size_override(&"font_size", 7)
 	_type_label.mouse_filter = MOUSE_FILTER_IGNORE
 	_vbox.add_child(_type_label)
 
 	_desc_label = Label.new()
-	_desc_label.theme_type_variation = &"TooltipLabel"
+	_desc_label.theme_type_variation = &"SmallLabel"
+	_desc_label.add_theme_font_size_override(&"font_size", 7)
 	_desc_label.mouse_filter = MOUSE_FILTER_IGNORE
 	_desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_vbox.add_child(_desc_label)
@@ -90,6 +96,8 @@ func _build_ui() -> void:
 	_stats_label.fit_content = true
 	_stats_label.scroll_active = false
 	_stats_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	_stats_label.add_theme_font_size_override(&"normal_font_size", 7)
+	_stats_label.add_theme_font_size_override(&"bold_font_size", 7)
 	_stats_label.mouse_filter = MOUSE_FILTER_IGNORE
 	_vbox.add_child(_stats_label)
 
@@ -118,18 +126,19 @@ func _input(event: InputEvent) -> void:
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_LEFT:
 			if mb.pressed:
-				if not _lmb_held:
+				# Only park when clicking on a 3D-anchored target (enemies, interactables).
+				if not _lmb_held and visible and _anchor_target != null:
 					_lmb_held = true
-					if visible:
-						_park_to_top_center()
-						_lock_target()
+					_park_to_top_center()
+					_lock_target()
 			else:
-				_lmb_held = false
-				_kill_park_tween()
-				_fade_out()
-				_release_target()
+				if _lmb_held:
+					_lmb_held = false
+					_kill_park_tween()
+					_dismiss()
+					_release_target()
 		return
-	if visible and not _lmb_held and not _is_fading() and _anchor_target == null and event is InputEventMouseMotion:
+	if visible and not _lmb_held and _anchor_target == null and event is InputEventMouseMotion:
 		_reposition((event as InputEventMouseMotion).position)
 
 func _park_to_top_center() -> void:
@@ -160,29 +169,10 @@ func _release_target() -> void:
 		_locked_target.set_tooltip_locked(false)
 	_locked_target = null
 
-func _fade_out() -> void:
-	_kill_fade_tween()
-	if not visible:
-		return
-	_fade_tween = create_tween()
-	_fade_tween.tween_property(self, "modulate:a", 0.0, FADE_OUT_DURATION)
-	_fade_tween.tween_callback(_on_fade_complete)
-
-func _on_fade_complete() -> void:
+func _dismiss() -> void:
 	visible = false
-	modulate.a = 1.0
-
-func _kill_fade_tween() -> void:
-	if _fade_tween != null and _fade_tween.is_valid():
-		_fade_tween.kill()
-	_fade_tween = null
-
-func _is_fading() -> bool:
-	return _fade_tween != null and _fade_tween.is_valid()
 
 func _show_now() -> void:
-	_kill_fade_tween()
-	modulate.a = 1.0
 	visible = true
 
 func _reposition(mouse: Vector2) -> void:
@@ -276,7 +266,7 @@ func show_talent_node(title: String, body: String) -> void:
 func hide_tooltip() -> void:
 	if _lmb_held:
 		return
-	_fade_out()
+	_dismiss()
 	_anchor_target = null
 
 # Pick the anchor (if a 3D source is currently hovered) and place the tooltip
@@ -308,13 +298,29 @@ func _build_type_text(item: Item) -> String:
 
 func _build_stats_text(item: Item) -> String:
 	var lines: Array[String] = []
+	# Weapon / combat stats
+	if item.damage_max > 0:
+		lines.append("Damage: %d–%d" % [item.damage_min, item.damage_max])
+	if item.attack_speed != 1.0:
+		lines.append("Speed: %.2f" % item.attack_speed)
+	if item.crit_chance > 0.0:
+		lines.append("Crit: %d%%" % int(item.crit_chance * 100))
+	if item.accuracy != 1.0:
+		lines.append("Accuracy: %d%%" % int(item.accuracy * 100))
+	if item.weapon_range > 0.0 and item.damage_max > 0:
+		lines.append("Range: %.1f m" % item.weapon_range)
+	if item.two_handed:
+		lines.append("Two-Handed")
+	# Optics
 	if item.kind == &"optics":
 		lines.append("%s: %d m" % [tr("ITEM_STATS_LIGHT_RANGE"), int(item.light_range)])
 		lines.append("%s: %d" % [tr("ITEM_STATS_LIGHT_ENERGY"), int(item.light_energy)])
+	# Container / belt
 	if item.kind == &"backpack" and item.inventory_bonus > 0:
 		lines.append("+%d %s" % [item.inventory_bonus, tr("ITEM_STATS_INVENTORY_BONUS")])
 	if item.kind == &"belt" and item.utility_slots > 0:
 		lines.append("+%d %s" % [item.utility_slots, tr("ITEM_STATS_UTILITY_SLOTS")])
+	# Attribute modifiers
 	for stat_id: StringName in item.stat_modifiers:
 		var amount: int = int(item.stat_modifiers[stat_id])
 		var color := _stat_rel_color(stat_id)

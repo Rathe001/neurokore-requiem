@@ -17,6 +17,7 @@ const BOSS_SCENE: PackedScene = preload("res://scenes/prototype/prototype_enemy.
 
 var _corpses: Array[Node3D] = []
 var _corpse_head: int = 0
+var _spec_overlay: SpecSelectOverlay
 
 func _ready() -> void:
 	add_to_group(&"corpse_manager")
@@ -117,6 +118,22 @@ func reset_level() -> void:
 	# joins "resettable" via HoverableInteractable._ready and provides its own
 	# reset_state() override.
 	get_tree().call_group(&"resettable", &"reset_state")
+
+	# First completion: let the player choose a specialization before continuing.
+	if PlayerState.new_game_plus == 0:
+		_show_spec_select()
+	else:
+		_reset_player()
+
+func _show_spec_select() -> void:
+	if _spec_overlay == null:
+		_spec_overlay = SpecSelectOverlay.new()
+		add_child(_spec_overlay)
+		_spec_overlay.class_selected.connect(_on_spec_selected)
+	_spec_overlay.show_for_origin(PlayerState.class_id)
+
+func _on_spec_selected(class_id: StringName, spec_id: StringName) -> void:
+	PlayerState.set_class_and_spec(class_id, spec_id)
 	_reset_player()
 
 func _reset_player() -> void:

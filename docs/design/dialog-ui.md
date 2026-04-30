@@ -34,7 +34,7 @@ Portraits for player characters and allied reps reflect their class identity thr
 | Automaton | Scanline overlay, data readout ticking in background |
 | Polymath | Violet neural glow, faint data fragments drifting |
 | Survivalist | Grit and sweat, unstable lighting (matches their light source) |
-| Gentleman / Lady | Crisp, controlled — no distortion, sharp contrast |
+| Count / Countess | Crisp, controlled — no distortion, sharp contrast |
 | Enculted | Sickly green edge glow, occasional frame of something wrong that disappears immediately |
 | Analog / Cyborg | Clean, no overlay — the absence of effect is the effect |
 

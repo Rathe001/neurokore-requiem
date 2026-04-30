@@ -104,7 +104,7 @@ Each skill is taught immediately after the rep's save moment — the ability the
 | Class | Skill | Description | Resource |
 |---|---|---|---|
 | Survivalist | **IED** | Scavenge nearby corpses or destructibles to craft an improvised grenade dealing medium AoE damage. Damage type is determined by what was scavenged. | Adrenaline |
-| Gentleman / Lady | **Malice** | Attack with the equipped weapon for bonus damage. Each consecutive hit deals additional damage on top of the last. | Composure |
+| Count / Countess | **Malice** | Attack with the equipped weapon for bonus damage. Each consecutive hit deals additional damage on top of the last. | Composure |
 | Enculted | **Blaspheme** | Curse a target. Flesh-based enemies take increased damage and deal reduced damage for the curse's duration. | TBD |
 
 ---

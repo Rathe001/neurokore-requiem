@@ -105,13 +105,13 @@ Use Godot's group system (`add_to_group(&"enemies")`, `get_tree().get_nodes_in_g
 ## Infrastructure In Place
 
 - **Spatial partitioning** — `SpatialGrid` autoload provides O(nearby) proximity queries for combat, pickups, and interactables. All entities register/unregister themselves; the grid updates positions each physics frame. Use `SpatialGrid.query_radius()`, `query_cone()`, or `query_nearest()` instead of `get_nodes_in_group()` for proximity-dependent logic.
-- **Object pooling** — `EntityPool` autoload recycles `Node3D` instances. Use `EntityPool.acquire(scene)` / `EntityPool.release(node)` instead of `instantiate()` / `queue_free()` for frequently spawned entities (enemies, projectiles, pickups). Pooled entities must implement a `reset()` method to re-initialize state.
+- **Object pooling** — `EntityPool` autoload recycles `Node3D` instances. Use `EntityPool.acquire(scene)` / `EntityPool.release(node)` instead of `instantiate()` / `queue_free()` for frequently spawned entities. Currently pooled: enemies, projectiles, credit pickups. Pooled entities implement `_pool_release()` (cleanup before parking) and `reset()` (re-initialize after acquire).
 
 ## What We Defer
 
 These are reasonable patterns we may adopt later. Listed here so we don't forget — not in place now to avoid premature abstraction.
 
-- **Component pattern** (separate `HealthComponent`, `HitboxComponent` nodes) — adopt when 3+ entity types share the same logic.
+- **Component pattern** — partially adopted. `PlayerCombat` extracts damage resolution and cooldown tracking from `PrototypePlayer`. Further extraction (separate `HealthComponent`, `HitboxComponent` nodes) when 3+ entity types share the same logic.
 - **Event bus / autoload signal hub** — adopt when cross-system events become common.
 - **Resource-based stats** (`.tres` files for entity / weapon / skill stats) — adopt when designer-tunable content grows beyond a handful of values.
 - **Standalone scene per entity** — adopt when entities need to spawn at runtime or appear in multiple scenes.

@@ -6,15 +6,21 @@ class_name MinimapPlayerDot
 
 const DOT_RADIUS := 3.0
 
-var map_center := Vector2.ZERO
-var opacity: float = 1.0
+var map_center := Vector2.ZERO:
+	set(value):
+		if map_center != value:
+			map_center = value
+			queue_redraw()
+
+var opacity: float = 1.0:
+	set(value):
+		if opacity != value:
+			opacity = value
+			queue_redraw()
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-
-func _process(_delta: float) -> void:
-	queue_redraw()
 
 func _draw() -> void:
 	var col: Color = UIThemeState.palette.player_color

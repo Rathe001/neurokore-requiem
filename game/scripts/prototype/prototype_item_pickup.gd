@@ -118,5 +118,8 @@ func _on_input_event(_camera: Node, event: InputEvent, _pos: Vector3, _normal: V
 			return
 	if InventoryState.add_to_inventory(item):
 		get_tree().call_group(&"interactable_tooltip", &"hide_tooltip")
+		var player := get_tree().get_first_node_in_group(&"player")
+		if player != null and player.has_method(&"consume_click"):
+			player.consume_click()
 		SpatialGrid.unregister(self)
 		queue_free()

@@ -47,7 +47,7 @@ Each class begins with a thematic default that can be replaced through loot, pur
 | **Automaton** | Scout drone overhead light | Omnidirectional | Cold blue-white | Steady |
 | **Polymath** | Scanning ocular implant | Sweeping directional | Violet | Intermittent |
 | **Survivalist** | Jury-rigged handheld torch | Directional | Warm yellow | Unstable |
-| **Gentleman / Lady** | Precision monocle lamp | Narrow directional | Crisp white | Steady |
+| **Count / Countess** | Precision monocle lamp | Narrow directional | Crisp white | Steady |
 | **Enculted** | *See below* | Directional | Sickly green | Intermittent |
 | **Origin Class** | Standard flashlight | Directional | White | Steady |
 

@@ -24,7 +24,7 @@ Each class has **one unique resource** that encapsulates the energy they would e
 | Analog | TBD | Generalist — should capture the unaugmented analog experience |
 | Cyborg | TBD | Generalist — should capture the augmented machine experience |
 | Survivalist | Adrenaline | Builds under pressure, decays when safe |
-| Gentleman / Lady | Composure | Maintained through controlled play, breaks under panic |
+| Count / Countess | Composure | Maintained through controlled play, breaks under panic |
 | Enculted | TBD | Rethinking — should align with ambition-as-power fantasy |
 | Forged | Power Grid | Power budget — manage what's active simultaneously |
 | Automaton | Bandwidth | Caps how many drones/scripts run simultaneously |

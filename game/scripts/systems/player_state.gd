@@ -25,9 +25,10 @@ const TALENT_POINTS_PER_LEVEL := 1
 
 var class_id: StringName = &""
 var spec_id: StringName = &""
+var gender: StringName = &"male"
 
-## Total talent points granted by leveling. +1 per level; starts at 1 (level 1).
-var talent_points_total: int = 1
+## Total talent points granted by leveling. +1 per level-up; starts at 0.
+var talent_points_total: int = 0
 
 ## Player progression. Level 1 = fresh character, no XP.
 var level: int = 1
@@ -39,11 +40,11 @@ var xp_to_next: int = STARTING_XP_TO_NEXT
 var new_game_plus: int = 0
 
 ## Spent talent points per stat tree.
-## Layout: { stat_id: [[bool]*4]*5 } — 5 tiers × 4 nodes each.
+## Layout: { stat_id: [[bool]*8]*3 } — 3 tiers × 8 nodes each.
 var talent_allocations: Dictionary = {}
 
 ## Spent talent points for team nodes.
-## Layout: [[bool]*4]*5 — 5 tiers × 4 nodes.
+## Layout: [[bool]*4]*3 — 3 tiers × 4 nodes.
 var team_node_allocations: Array = []
 
 var _cached_tiers: Dictionary = {}
@@ -91,27 +92,27 @@ func set_class_and_spec(new_class: StringName, new_spec: StringName) -> void:
 
 func set_talent_alloc(stat: StringName, tier: int, node: int, allocated: bool) -> void:
 	if not talent_allocations.has(stat):
-		talent_allocations[stat] = [
-			[false, false, false, false],
-			[false, false, false, false],
-			[false, false, false, false],
-			[false, false, false, false],
-			[false, false, false, false],
-		]
+		var rows: Array = []
+		for _i in AttributeState.TIER_COUNT:
+			rows.append(_make_node_row(AttributeState.TALENT_NODES_PER_TIER))
+		talent_allocations[stat] = rows
 	talent_allocations[stat][tier][node] = allocated
 	talents_changed.emit()
 
 func set_team_node_alloc(tier: int, node: int, allocated: bool) -> void:
 	if team_node_allocations.is_empty():
-		team_node_allocations = [
-			[false, false, false, false],
-			[false, false, false, false],
-			[false, false, false, false],
-			[false, false, false, false],
-			[false, false, false, false],
-		]
+		var rows: Array = []
+		for _i in AttributeState.TEAM_NODE_TIER_COUNT:
+			rows.append(_make_node_row(AttributeState.TEAM_NODE_NODES_PER_TIER))
+		team_node_allocations = rows
 	team_node_allocations[tier][node] = allocated
 	talents_changed.emit()
+
+static func _make_node_row(count: int) -> Array:
+	var row: Array = []
+	row.resize(count)
+	row.fill(false)
+	return row
 
 func get_talent_points_spent() -> int:
 	var total := 0

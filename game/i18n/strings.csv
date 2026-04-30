@@ -15,28 +15,36 @@ CLASS_ANALOG,Analog
 CLASS_CYBORG,Cyborg
 SPEC_NONE,Unspecialized
 SPEC_ANALOG_SURVIVALIST,Survivalist
-SPEC_ANALOG_GENTLEMAN,Gentleman-Lady
+SPEC_ANALOG_COUNT,Count
+SPEC_ANALOG_COUNTESS,Countess
 SPEC_ANALOG_ENCULTED,Enculted
 SPEC_CYBORG_FORGED,Forged
 SPEC_CYBORG_AUTOMATON,Automaton
 SPEC_CYBORG_POLYMATH,Polymath
 STARTUP_TITLE,Choose Your Class
+STARTUP_TITLE_SPEC,Choose Your Specialization
+STARTUP_TITLE_GENDER,Choose Your Identity
+STARTUP_GENDER_MALE,Male
+STARTUP_GENDER_FEMALE,Female
+STARTUP_GENDER_DESC_MALE,He/Him
+STARTUP_GENDER_DESC_FEMALE,She/Her
 STARTUP_PICK_ANALOG,Analog
 STARTUP_PICK_CYBORG,Cyborg
 STARTUP_PICK_ANALOG_SURVIVALIST,Survivalist
-STARTUP_PICK_ANALOG_GENTLEMAN,Gentleman-Lady
+STARTUP_PICK_ANALOG_COUNT,Count
+STARTUP_PICK_ANALOG_COUNTESS,Countess
 STARTUP_PICK_ANALOG_ENCULTED,Enculted
 STARTUP_PICK_CYBORG_FORGED,Forged
 STARTUP_PICK_CYBORG_AUTOMATON,Automaton
 STARTUP_PICK_CYBORG_POLYMATH,Polymath
 STARTUP_BACKSTORY_ANALOG,Unaugmented and proud of it. Survives on wit and adaptability — flesh that refuses to become obsolete.
-STARTUP_BACKSTORY_CYBORG,Half human, half machine — all pragmatism. Whether by choice or necessity, you've crossed the threshold most only dream about.
+STARTUP_BACKSTORY_CYBORG,"Half human, half machine — all pragmatism. Whether by choice or necessity, you've crossed the threshold most only dream about."
 STARTUP_BACKSTORY_SURVIVALIST,The city tried to kill you. It failed. You've made weapons from wreckage and learned the best tool is the one you have right now.
-STARTUP_BACKSTORY_FORGED,You didn't stop at practical. Every limb, every organ — an opportunity for something harder. The flesh that remains is just scaffolding.
-STARTUP_BACKSTORY_GENTLEMAN,Composed under pressure. Lethal in formal wear. You've turned restraint into a weapon — your enemies don't see it coming until it's done.
+STARTUP_BACKSTORY_FORGED,"You didn't stop at practical. Every limb, every organ — an opportunity for something harder. The flesh that remains is just scaffolding."
+STARTUP_BACKSTORY_COUNT,Composed under pressure. Lethal in formal wear. You've turned restraint into a weapon — your enemies don't see it coming until it's done.
 STARTUP_BACKSTORY_AUTOMATON,Precision. Efficiency. You've outsourced instinct to systems that never panic. Your drone network sees what you don't.
-STARTUP_BACKSTORY_ENCULTED,You found something in the dark and it found you back. What others call ambition, you call clarity. What they call madness, you call perspective.
-STARTUP_BACKSTORY_POLYMATH,Where others specialize, you synthesize. Arcane theory meets cybernetic precision. Your enemies can't prepare for what they can't categorize.
+STARTUP_BACKSTORY_ENCULTED,"You found something in the dark and it found you back. What others call ambition, you call clarity. What they call madness, you call perspective."
+STARTUP_BACKSTORY_POLYMATH,"Where others specialize, you synthesize. Arcane theory meets cybernetic precision. Your enemies can't prepare for what they can't categorize."
 STAT_SOUL,Soul
 STAT_INTERFACE,Interface
 STAT_INGENUITY,Ingenuity

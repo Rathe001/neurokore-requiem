@@ -21,7 +21,7 @@ Full world and tone detail: [`docs/world/tone.md`](docs/world/tone.md)
 - Deep build diversity through loot-driven itemization
 - Deliberate, weighted, build-dependent combat
 
-Full combat design: [`docs/design/combat.md`](docs/design/combat.md)
+Full combat design: [`docs/design/combat.md`](docs/design/combat.md) — includes targeting modes (cone, AoE, projectile, hitscan) and damage pipeline
 
 ## Classes (8 at launch)
 
@@ -29,7 +29,7 @@ Two **origin classes** (generalist) and six **specialized classes** (3 per origi
 
 | Origin | Specialized Classes |
 |---|---|
-| **Analog** | Survivalist, Gentleman/Lady, Enculted |
+| **Analog** | Survivalist, Count/Countess, Enculted |
 | **Cyborg** | Forged, Automaton, Polymath |
 
 Each class has one unique resource. See [`docs/classes/overview.md`](docs/classes/overview.md) for the full resource table.
@@ -55,7 +55,7 @@ Full class details:
 - [`docs/design/gear-augmentation.md`](docs/design/gear-augmentation.md) — schematics (workbench), field augments (class skills), ammo types, magazine/reload, augment slots
 - [`docs/design/zones.md`](docs/design/zones.md) — zone design philosophy, Sub-Level Zero, zone registry
 - [`docs/design/dialog-ui.md`](docs/design/dialog-ui.md) — animated portraits, class effects, UI philosophy
-- [`docs/design/attribute-system.md`](docs/design/attribute-system.md) — 8 moral attributes, item stat budgets, class scaling, opposing stats, tier perks, visual metamorphosis, NPC identity reactions
+- [`docs/design/attribute-system.md`](docs/design/attribute-system.md) — 8 moral attributes, item stat budgets, class scaling, opposing stats, tier perks, visual metamorphosis, NPC identity reactions, HP/resource stat scaling (implemented)
 - [`docs/design/controls.md`](docs/design/controls.md) — WASD movement, mouse for attacks, controller as future work
 - [`docs/world/lighting.md`](docs/world/lighting.md) — darkness as default, equippable light sources, zone lighting tiers
 - [`docs/design/ui-style-guide.md`](docs/design/ui-style-guide.md) — type scale, tag components, color groups, all 9 class palettes, i18n and theming conventions

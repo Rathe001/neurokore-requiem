@@ -98,6 +98,7 @@ const FLASHLIGHT_OVER_LIFT := 0.8
 var class_id: StringName = &""
 var spec_id: StringName = &""
 var _base_mat: StandardMaterial3D = null
+var _combat: PlayerCombat
 var _camera: Camera3D
 var _health: int
 var _alive: bool = true
@@ -105,12 +106,16 @@ var _knockback_vel: Vector3 = Vector3.ZERO
 var _knockback_remain: float = 0.0
 var _attacking: bool = false
 var _attack_aim: Vector3 = Vector3.ZERO
+var _click_consumed: bool = false
+
+## Called by pickups/interactables to suppress the fire input this frame.
+func consume_click() -> void:
+	_click_consumed = true
 # Item that owns the in-flight skill (weapon or offhand). Captured at cast
 # start so wind-up timing and hit resolution use the same stats even if the
 # player swaps gear mid-attack. Null for class skills.
 var _attack_weapon: Item = null
 var _want_dir: Vector3 = Vector3.ZERO
-var _cooldowns: Dictionary = {}
 var _resource_current: float = 0.0
 var _resource_last_int: int = 0
 var _credits: int = 0
@@ -138,8 +143,16 @@ var _crosshair_root: Control = null
 var _crosshair_bars: Array[ColorRect] = []
 var _stand_test_shape: CapsuleShape3D = null
 var _fps_hover_timer: float = 0.0
+# Stat-driven HP tracking: base + level gains + stat bonus = max_health.
+var _base_max_health: int = 100
+var _level_hp_bonus: int = 0
+# Base resource pool max before stat bonuses.
+var _base_resource_max: int = 100
 
 func _ready() -> void:
+	_combat = PlayerCombat.new()
+	_combat.setup(self)
+	add_child(_combat)
 	_camera = get_viewport().get_camera_3d()
 	_fps_camera = Camera3D.new()
 	_fps_camera.position = FPS_HEAD_OFFSET
@@ -168,6 +181,11 @@ func _ready() -> void:
 	class_id = PlayerState.class_id
 	spec_id = PlayerState.spec_id
 	PlayerState.leveled_up.connect(_on_player_leveled_up)
+	AttributeState.stats_changed.connect(_recompute_stat_bonuses)
+	_base_max_health = max_health
+	if resource_pool != null:
+		_base_resource_max = resource_pool.max_value
+	_recompute_stat_bonuses()
 	_health = max_health
 	_ensure_loop(ANIM_IDLE)
 	_ensure_loop(ANIM_RUN)
@@ -243,7 +261,8 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 		_die()
 
 func _on_player_leveled_up(new_level: int, hp_gain: int) -> void:
-	max_health += hp_gain
+	_level_hp_bonus += hp_gain
+	_recompute_stat_bonuses()
 	_health = max_health
 	health_changed.emit(_health, max_health)
 	notification_requested.emit(tr("HUD_LEVEL_UP_FORMAT") % new_level)
@@ -279,6 +298,31 @@ func _play_levelup_vfx() -> void:
 		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	tween.chain().tween_callback(ring.queue_free)
 
+func _recompute_stat_bonuses() -> void:
+	var hp_bonus := AttributeState.get_stat_bonus_hp(class_id, spec_id)
+	var new_max := _base_max_health + _level_hp_bonus + hp_bonus
+	if new_max != max_health:
+		var old_max := max_health
+		max_health = new_max
+		# Scale current HP proportionally so equipping gear doesn't leave the
+		# player at 50/200 when they were at 50/100. On first call (_health==0)
+		# just fill to max.
+		if old_max > 0 and _health > 0:
+			_health = clampi(int(round(float(_health) * float(new_max) / float(old_max))), 1, new_max)
+		health_changed.emit(_health, max_health)
+	if resource_pool != null:
+		var res_bonus := AttributeState.get_stat_bonus_resource(class_id, spec_id)
+		var new_res_max := _base_resource_max + res_bonus
+		if new_res_max != resource_pool.max_value:
+			var old_res_max := resource_pool.max_value
+			resource_pool.max_value = new_res_max
+			# Scale current resource proportionally, same logic as HP.
+			if old_res_max > 0 and _resource_current > 0.0:
+				_resource_current = clampf(_resource_current * float(new_res_max) / float(old_res_max), 0.0, float(new_res_max))
+			_emit_resource_if_changed()
+			# Force emit even if int didn't change, since max changed.
+			resource_changed.emit(int(_resource_current), resource_pool.max_value)
+
 func _process(delta: float) -> void:
 	RenderingServer.global_shader_parameter_set(PLAYER_WORLD_POS_PARAM, global_position)
 	if _fps_mode:
@@ -304,7 +348,8 @@ func _physics_process(delta: float) -> void:
 	if not _alive:
 		velocity = Vector3.ZERO
 		return
-	_tick_cooldowns(delta)
+	_click_consumed = false
+	_combat.tick_cooldowns(delta)
 	_tick_resource_regen(delta)
 
 	var on_floor := is_on_floor()
@@ -470,6 +515,8 @@ func _handle_skill_input() -> void:
 			continue
 		if _is_any_modal_open() or _is_mouse_over_ui():
 			return
+		if i == 0 and _click_consumed:
+			return
 		if i == 0 and _fps_mode and _fps_hovered != null:
 			if Input.is_action_just_pressed(SKILL_INPUTS[i]):
 				_try_interact_with(_fps_hovered)
@@ -478,6 +525,7 @@ func _handle_skill_input() -> void:
 			var hovered := _hovered_clickable()
 			if hovered != null:
 				if Input.is_action_just_pressed(SKILL_INPUTS[i]):
+					_click_consumed = true
 					_interact_with_hovered(hovered)
 				return
 		var skill := resolve_skill(i)
@@ -540,7 +588,7 @@ func _cast_skill(skill: Skill) -> void:
 	if skill == null or _attacking:
 		return
 	_interacting = false
-	if _cooldowns.get(skill, 0.0) > 0.0:
+	if _combat.is_on_cooldown(skill):
 		return
 	var infinite_resource := DebugState.config != null and DebugState.config.infinite_resource
 	if skill.resource_cost > 0 and not infinite_resource and _resource_current < float(skill.resource_cost):
@@ -548,11 +596,11 @@ func _cast_skill(skill: Skill) -> void:
 	var aim := _aim_direction()
 	if aim == Vector3.ZERO:
 		return
-	var weapon := _resolve_skill_source(skill)
+	var weapon := _combat.resolve_skill_source(skill)
 	var atk_spd := weapon.attack_speed if weapon != null else 1.0
 	if atk_spd <= 0.0:
 		atk_spd = 1.0
-	_cooldowns[skill] = skill.cooldown / atk_spd
+	_combat.start_cooldown(skill, atk_spd)
 	if skill.resource_cost > 0:
 		_spend_resource(skill.resource_cost)
 	_attacking = true
@@ -560,94 +608,13 @@ func _cast_skill(skill: Skill) -> void:
 	_attack_weapon = weapon
 	_face_direction(aim)
 	_play_anim(ANIM_ATTACK, 1.4)
-	PrototypeAttackIndicator.spawn(self, skill, aim)
+	PrototypeAttackIndicator.spawn(self, skill, aim, _combat.effective_range(skill, weapon))
 	if skill.wind_up > 0.0:
 		await get_tree().create_timer(skill.wind_up / atk_spd).timeout
 	_attacking = false
 	if not _alive:
 		return
-	_resolve_skill_hit(skill, _attack_aim)
-
-func _resolve_skill_hit(skill: Skill, aim: Vector3) -> void:
-	match skill.targeting_mode:
-		Skill.TargetingMode.SINGLE_CONE:
-			PrototypeAttackIndicator.spawn_hit_cone(self, aim, skill.skill_range, skill.cone_deg)
-			_resolve_cone(skill, aim)
-		Skill.TargetingMode.AOE_RADIAL:
-			PrototypeAttackIndicator.spawn_hit_radial(self, skill.skill_range)
-			_resolve_aoe(skill)
-
-# Prototype baseline so crit visuals are testable until class crit perks ship.
-const PROTO_BASE_CRIT_CHANCE: float = 0.15
-const PROTO_BASE_CRIT_MULT: float = 1.5
-
-func _resolve_cone(skill: Skill, aim: Vector3) -> void:
-	var half_cos := cos(deg_to_rad(skill.cone_deg * 0.5))
-	var hits := PerkState.roll_multistrike()
-	var weapon := _attack_weapon
-	for enode: Node3D in SpatialGrid.query_cone(global_position, aim, skill.skill_range, half_cos, &"enemies"):
-		if not enode.has_method(&"take_damage"):
-			continue
-		for _i in hits:
-			if not _roll_hit(weapon):
-				continue
-			var is_crit := _roll_crit(weapon)
-			var dmg := _crit_damage(_roll_skill_damage(skill, weapon), is_crit)
-			enode.take_damage(dmg, global_position, skill.knockback, hits, is_crit)
-
-func _resolve_aoe(skill: Skill) -> void:
-	var hits := PerkState.roll_multistrike()
-	var weapon := _attack_weapon
-	for enode: Node3D in SpatialGrid.query_radius(global_position, skill.skill_range, &"enemies"):
-		if not enode.has_method(&"take_damage"):
-			continue
-		for _i in hits:
-			if not _roll_hit(weapon):
-				continue
-			var is_crit := _roll_crit(weapon)
-			var dmg := _crit_damage(_roll_skill_damage(skill, weapon), is_crit)
-			enode.take_damage(dmg, global_position, skill.knockback, hits, is_crit)
-
-func _roll_crit(weapon: Item = null) -> bool:
-	var base_crit := weapon.crit_chance if weapon != null and weapon.crit_chance > 0.0 else PROTO_BASE_CRIT_CHANCE
-	var chance := base_crit + PerkState.get_aggregate(&"crit_chance_pct")
-	return randf() < chance
-
-func _roll_hit(weapon: Item) -> bool:
-	if weapon == null or weapon.accuracy >= 1.0:
-		return true
-	return randf() < weapon.accuracy
-
-func _roll_skill_damage(skill: Skill, weapon: Item) -> int:
-	var base: int
-	if weapon != null and weapon.damage_max > 0:
-		base = randi_range(weapon.damage_min, weapon.damage_max)
-	else:
-		base = skill.damage
-	var mult := AttributeState.get_player_damage_mult(PlayerState.class_id, PlayerState.spec_id)
-	return int(round(float(base) * mult))
-
-# Walks the equipped weapon and offhand to find which item provided this skill,
-# so weapon-driven stats (speed, dmg range, crit, accuracy) come from the right
-# slot. Class skills aren't backed by an item — those return null.
-func _resolve_skill_source(skill: Skill) -> Item:
-	var weapon: Item = InventoryState.get_equipped(&"weapon")
-	if weapon != null and (weapon.fire_skill == skill or weapon.alt_fire_skill == skill):
-		return weapon
-	var offhand: Item = InventoryState.get_equipped(&"offhand")
-	if offhand != null and (offhand.fire_skill == skill or offhand.alt_fire_skill == skill):
-		return offhand
-	return null
-
-func _crit_damage(base: int, is_crit: bool) -> int:
-	if not is_crit:
-		return base
-	var mult := PROTO_BASE_CRIT_MULT + PerkState.get_aggregate(&"crit_damage_pct")
-	return int(round(float(base) * mult))
-
-func _tick_cooldowns(delta: float) -> void:
-	for skill in _cooldowns.keys():
-		_cooldowns[skill] = maxf(0.0, _cooldowns[skill] - delta)
+	_combat.resolve_skill_hit(skill, _attack_aim, _attack_weapon)
 
 func _tick_resource_regen(delta: float) -> void:
 	if resource_pool == null or resource_pool.regen_per_sec <= 0.0:
@@ -681,10 +648,7 @@ func get_credits() -> int:
 	return _credits
 
 func get_cooldown_ratio(skill: Skill) -> float:
-	if skill == null or skill.cooldown <= 0.0:
-		return 0.0
-	var remaining: float = _cooldowns.get(skill, 0.0)
-	return clampf(remaining / skill.cooldown, 0.0, 1.0)
+	return _combat.get_cooldown_ratio(skill)
 
 func _die() -> void:
 	_alive = false
@@ -707,13 +671,14 @@ func respawn() -> void:
 	velocity = Vector3.ZERO
 	_knockback_remain = 0.0
 	_attacking = false
+	_recompute_stat_bonuses()
 	_health = max_health
 	_alive = true
-	_cooldowns.clear()
+	_combat.clear_cooldowns()
 	if visual != null:
 		visual.scale = Vector3.ONE
 	if resource_pool != null:
-		_resource_current = float(resource_pool.start_value)
+		_resource_current = float(resource_pool.max_value)
 		_resource_last_int = int(_resource_current)
 		resource_changed.emit(_resource_last_int, resource_pool.max_value)
 	health_changed.emit(_health, max_health)

@@ -33,6 +33,7 @@ enum LightType { DIRECTIONAL, RADIANT, SCANNER, UV }
 @export var attack_speed: float = 1.0
 @export var crit_chance: float = 0.0
 @export var accuracy: float = 1.0
+@export var weapon_range: float = 3.0
 
 @export_group("Belt")
 @export var utility_slots: int = 0

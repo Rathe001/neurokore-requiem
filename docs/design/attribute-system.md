@@ -23,7 +23,7 @@ Six **class stats** roll on items. Two **origin stats** are derived, not rolled.
 |---|---|---|---|---|
 | Soul | SOU | Analog | — | No (derived) |
 | Interface | ITF | Cyborg | — | No (derived) |
-| Orthodoxy | ORT | Gentleman | Deviation | Yes |
+| Orthodoxy | ORT | Count | Deviation | Yes |
 | Deviation | DEV | Forged | Orthodoxy | Yes |
 | Optimization | OPT | Automaton | Ingenuity | Yes |
 | Ingenuity | ING | Survivalist | Optimization | Yes |
@@ -186,10 +186,8 @@ Origin classes are rewarded for **balance** — their tier perks are maintained 
 |---|---|---|---|
 | 0 | Any team stat ≥ 55% | Any opposing stat ≥ 45% | Too lopsided — all origin perks lost |
 | 1 | No team stat ≥ 55% | No opposing stat ≥ 45% | Almost free |
-| 2 | No team stat ≥ 45% | No opposing stat ≥ 35% | Easy with spread gearing |
-| 3 | No team stat ≥ 35% | No opposing stat ≥ 25% | Moderate — needs intentional balance |
-| 4 | No team stat ≥ 30% | No opposing stat ≥ 20% | Demanding — tight spread |
-| 5 | No team stat ≥ 25% | No opposing stat ≥ 15% | Near-perfect balance. Aspirational ceiling. |
+| 2 | No team stat ≥ 40% | No opposing stat ≥ 30% | Intentional balance |
+| 3 | No team stat ≥ 30% | No opposing stat ≥ 20% | Tight spread — aspirational |
 
 An origin class who starts pushing a single stat loses origin perks but begins gaining the specialized class's tier perks instead. The system reflects that they are choosing to specialize.
 
@@ -227,7 +225,7 @@ Each class's main stat affects damage and has a unique mechanical function tied 
 
 | Stat | Class | Damage Scaling | Special Function |
 |---|---|---|---|
-| Orthodoxy | Gentleman | Yes | TBD |
+| Orthodoxy | Count | Yes | TBD |
 | Deviation | Forged | Yes | Allows attaching more limbs |
 | Optimization | Automaton | Yes | TBD |
 | Ingenuity | Survivalist | Yes | TBD |
@@ -240,32 +238,37 @@ Each class's main stat affects damage and has a unique mechanical function tied 
 
 As a character's stat distribution shifts, two things happen: they unlock **tier perks** (mechanical rewards) and their **appearance transforms**. Both are driven by the same breakpoints and are always in sync.
 
-### Breakpoints
+### Breakpoints (3 tiers)
 
-Tier thresholds are based on what percentage of total stats a single attribute represents. Five tiers provide granular progression — cheap early dips, expensive deep commitments.
+Three tiers drive everything: talent tree access, tier perks, VFX metamorphosis, and NPC reactions. Thresholds are based on what percentage of total stats a single attribute represents.
 
 **Specialized class thresholds:**
 
 | Tier | Own Class | Team Trees | Opposing Trees | Effect |
 |---|---|---|---|---|
-| 0 | — | < 20% | < 30% | No perk, no visual change |
-| 1 | 12% | 20% | 30% | Entry perk unlocked, faint visual hint |
-| 2 | 25% | 40% | 50% | Second perk, subtle visual shift |
-| 3 | 40% | 60% | 70% | Third perk, pronounced visual change |
-| 4 | 55% | 75% | 85% | Fourth perk, major transformation |
-| 5 | 72% | 90% | 95% | Full perk, dramatic transformation |
+| 0 | — | < 25% | < 40% | No perk, no visual change |
+| 1 | 12% | 25% | 40% | Entry perk, faint visual hint, resource bar unlocked |
+| 2 | 25% | 40% | 55% | Second perk, moderate visual shift |
+| 3 | 40% | 55% | 70% | Full perk, dramatic transformation |
 
-> **Design note:** Primary stat tiers unlock significantly easier than team or opposing stats — class identity should feel immediate. Starter gear (~35% primary share) unlocks T1 and T2 for the chosen class. T3 requires intentional gearing. Stacking your primary stat is doubly rewarded: cheaper unlock thresholds *and* full 1× power scaling.
+> **Design note:** Primary stat tiers unlock significantly easier than team or opposing stats — class identity should feel immediate. Team requires moderate investment. Opposing demands heavy commitment. Thresholds are set so that unlocking 4+ class trees simultaneously is mathematically impossible (12+25+25+40 = 102% > 100%), enforcing a natural **3-tree cap**.
 
-**Cross-class access:** Any class can unlock any stat's tree by meeting that stat's threshold. An Analog pushing Optimization past the team threshold gets Automaton tier 1. A Gentleman pushing Deviation past the opposing threshold starts unlocking Forged nodes — while also experiencing distortion. Tier access is not permanent: dropping below a threshold locks the tier and deactivates its nodes (points stay allocated but dormant).
+> **3-tree build patterns:**
+> - **3-0-0:** All 3 tiers in 1 class. Deep specialist — one large resource pool.
+> - **2-1-0:** 2 tiers in one class, 1 in another. Moderate hybrid — two resource pools.
+> - **1-1-1:** 1 tier in each of 3 classes. Wide hybrid — three small resource pools.
+
+**Cross-class access:** Any class can unlock any stat's tree by meeting that stat's threshold. An Analog pushing Optimization past the team threshold gets Automaton tier 1. A Count pushing Deviation past the opposing threshold starts unlocking Forged nodes — while also experiencing distortion. Tier access is not permanent: dropping below a threshold locks the tier and deactivates its nodes (points stay allocated but dormant).
 
 > **Code source of truth:** Threshold values are defined in `game/scripts/systems/attribute_state.gd` — `TIERS_OWN`, `TIERS_TEAM`, `TIERS_OPPOSING`. Update there; this table documents the current values.
 
 ### Talent Points
 
-Players earn **1 talent point every 5 levels**. At level 100: 20 points. Points are spent on individual nodes within unlocked tiers.
+Players earn **1 talent point per level**. At level 100: ~100 points (tuning TBD). Points are spent on individual nodes within unlocked talent tiers.
 
-Each class tree: **4 nodes × 5 tiers = 20 nodes**. Six class trees = **120 total nodes**.
+Each class tree: **8 nodes × 3 tiers = 24 nodes**. Six class trees = **144 total nodes**.
+
+With 20 points at level 100, a fully committed build can't fill even one class tree (20 of 24). Every tier forces meaningful choices — the question is always "which nodes," not "can I even get here."
 
 **Spending:** Each node costs 1 point. Nodes can only be purchased in unlocked tiers.
 
@@ -275,14 +278,14 @@ Each class tree: **4 nodes × 5 tiers = 20 nodes**. Six class trees = **120 tota
 
 ### Specialized Class Tier Perks
 
-| Stat | Class | Tier 1 | Tier 2 | Tier 3 | Tier 4 | Tier 5 |
-|---|---|---|---|---|---|---|
-| Orthodoxy | Gentleman | TBD | TBD | TBD | TBD | TBD |
-| Deviation | Forged | TBD | Extra appendage slot | TBD | TBD | TBD |
-| Optimization | Automaton | TBD | Additional drone | TBD | TBD | TBD |
-| Ingenuity | Survivalist | TBD | TBD | TBD | TBD | TBD |
-| Clarity | Polymath | TBD | TBD | TBD | TBD | TBD |
-| Ambition | Enculted | Tier 1 curse | TBD | TBD | TBD | TBD |
+| Stat | Class | Tier 1 | Tier 2 | Tier 3 |
+|---|---|---|---|---|
+| Orthodoxy | Count | TBD | TBD | TBD |
+| Deviation | Forged | Erratic Strikes (8% double) | Frenzied Strikes (+10% double, 5% triple) | Unbound Frenzy (+7% double, +7% triple) |
+| Optimization | Automaton | TBD | Additional drone | TBD |
+| Ingenuity | Survivalist | TBD | TBD | TBD |
+| Clarity | Polymath | TBD | TBD | TBD |
+| Ambition | Enculted | Tier 1 curse | TBD | TBD |
 
 **Gear swap confirmation:** When equipping an item would cross a breakpoint, a confirmation dialog shows exactly what changes. This is behind a Help Tooltips toggle for players who prefer to manage it themselves.
 
@@ -303,15 +306,18 @@ They do **not** provide class-specific mechanics, outscale class nodes, or scale
 
 ### Structure
 
-- **3 tiers** (vs 5 for class trees)
+- **3 tiers** (matching talent tree depth)
+- **4 nodes per tier** (smaller tree than class trees — supplementary, not identity-defining)
 - **Combined threshold unlocks** — tier access is gated by the *sum* of all three team stats, not any individual stat
 - **Additive bonuses** — effects are additive, not multiplicative
 
 | Tier | Combined Team Stat | Design Type |
 |---|---|---|
-| 1 | ~30% combined | QoL, minor consistency |
-| 2 | ~60% combined | Moderate flow improvements |
-| 3 | ~90% combined | Strong broad bonus; plateau hard after this |
+| 1 | 20% combined | QoL, minor consistency |
+| 2 | 35% combined | Moderate flow improvements |
+| 3 | 50% combined | Strong broad bonus; plateau hard after this |
+
+> **Code source of truth:** `TEAM_NODE_THRESHOLDS` in `attribute_state.gd`. Values above document the current implementation.
 
 ### Power Curve
 
@@ -344,7 +350,7 @@ Builds that heavily invest in opposing stats or cross-origin trees should feel:
 
 - **Viable but inefficient** — functional in the hands of a skilled player
 - **Mechanically distinct** — the distortion creates a genuinely different play experience
-- **Thematically resonant** — a Gentleman stacking Deviation is a character at war with themselves
+- **Thematically resonant** — a Count stacking Deviation is a character at war with themselves
 
 They should not feel:
 - Optimal (specialization always wins at extremes)
@@ -377,7 +383,7 @@ If a gear swap causes both a loss and a gain, effects play in sequence: **lost f
 
 The character sheet displays a **stat distribution visualization** showing each attribute's share of total stats, current tier perks, and proximity to breakpoints. When a stat combination has a recognized identity, the sheet shows a **combo description** — a short flavor line describing what the character has become.
 
-Key NPCs (reps, vendors, bosses, gate encounters) can react to the player's dominant stat identity rather than their chosen class. An Enculted who stacks Orthodoxy gets treated like a Gentleman. An Analog who has visibly drifted into Ambition territory gets reactions appropriate to what they've become. The rep companion is the most sensitive to this.
+Key NPCs (reps, vendors, bosses, gate encounters) can react to the player's dominant stat identity rather than their chosen class. An Enculted who stacks Orthodoxy gets treated like a Count. An Analog who has visibly drifted into Ambition territory gets reactions appropriate to what they've become. The rep companion is the most sensitive to this.
 
 ---
 
@@ -396,16 +402,18 @@ Key NPCs (reps, vendors, bosses, gate encounters) can react to the player's domi
 
 - Exact **team stat scaling multiplier** (~0.25x is a starting point, needs playtesting).
 - Exact **opposing stat interference mechanics** — what specifically distorts for each class? Needs design per class.
-- Exact **tier breakpoints** — implemented (see breakpoints table and `attribute_state.gd`), needs playtesting.
+- Exact **tier breakpoints** — implemented as 3 tiers (see breakpoints table and `attribute_state.gd`), needs playtesting.
 - **Team node specific bonuses** — what do tiers 1/2/3 actually grant?
 - **Team node keystone** — what is the tier 3 high-investment reward?
 - **Class-specific stat functions** for Orthodoxy, Optimization, Ingenuity, Clarity, Ambition.
 - **Tier perks** for most classes — see tier perk table above.
 - **Origin class tier perks** — what does balanced Analog/Cyborg actually unlock?
-- **Talent point cadence** — every 5 levels (20 points at level 100). Needs tuning.
+- **Talent point cadence** — currently 1 per level (code: `TALENT_POINTS_PER_LEVEL`). At level 100 that's ~100 points, well above the 20-point budget intended for meaningful scarcity. Needs tuning.
 - **Node prerequisites** — do higher-tier nodes require specific lower-tier nodes, or just tier access?
 - What does **Soul** govern beyond being a derived stat? Candidates: willpower, resilience, HP, CC resistance.
 - What does **Interface** govern beyond being a derived stat? Candidates: precision, latency, cooldown reduction, cast speed.
-- **Resource system** for each class — 1 unique resource per class (8 total). See individual class pages.
+- **Resource system** for each class — 1 unique resource per class (8 total). Resource bars are shown for each class with T1+ unlocked (max 3 bars). Pool size scales with contribution-weighted stat total. Origin classes use a single resource bar tied to Soul/Interface. See individual class pages.
+- **HP scaling** — implemented. Max HP = base (100) + level-up gains + stat bonus. Stat bonus uses contribution-weighted totals: primary stat at 1.0x, team stats at 0.25x, opposing stats at 0.10x, multiplied by `HP_PER_WEIGHTED_STAT` (2.0). Current HP scales proportionally when max changes so equipping/unequipping gear doesn't leave the player at a strange ratio. Code: `AttributeState.get_stat_bonus_hp()`, `PrototypePlayer._recompute_stat_bonuses()`.
+- **Resource pool scaling** — implemented alongside HP. Uses the same weighted stat total multiplied by `RESOURCE_PER_WEIGHTED_STAT` (1.0). Code: `AttributeState.get_stat_bonus_resource()`.
 - **Visual metamorphosis art pipeline** — modular mesh kits per stat, shader channels, VFX layers. Needs concept work per class.
 - **Relationship overlay** implementation — where exactly do overlays appear (item tooltips, stat bars, talent panel, character sheet)?

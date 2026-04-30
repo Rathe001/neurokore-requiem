@@ -5,10 +5,10 @@ class_name TalentsPanel
 ## (AttributeState). Tier unlock thresholds and relationship logic live in
 ## AttributeState. Talent points are stored in PlayerState and persist.
 
-const TIER_COUNT := 5
-const NODES_PER_TIER := 4
+const TIER_COUNT := AttributeState.TIER_COUNT                  # 3
+const NODES_PER_TIER := AttributeState.TALENT_NODES_PER_TIER  # 8
 const NODE_ROWS := 2
-const NODE_COLS := 2
+const NODE_COLS := 4
 
 const PANEL_MARGIN := Vector2(20.0, 14.0)
 const TITLE_HEIGHT := 18.0
@@ -25,8 +25,8 @@ const SUMMARY_BAR_HEIGHT := 10.0
 const SUMMARY_BAR_GAP := 8.0
 const SUMMARY_SEG_GAP := 2.0
 const SUMMARY_SEG_MIN_WIDTH := 40.0
-const NODE_SIZE := Vector2(18.0, 18.0)
-const NODE_GAP := 3.0
+const NODE_GAP := 2.0
+const TIER_GAP := 8.0
 const TIER_MARKER_WIDTH := 2.0
 const LABEL_WIDTH := 120.0
 const LABEL_GAP := 8.0
@@ -49,7 +49,7 @@ const GROUP_PADDING := Vector2(4.0, 3.0)
 const ROW_HIGHLIGHT_W := 2.0
 
 const STAT_ROWS: Array[Dictionary] = [
-	{"stat": &"ort", "class": "Gentleman",   "short": "ORT", "origin": &"analog"},
+	{"stat": &"ort", "class": "Count",       "short": "ORT", "origin": &"analog"},
 	{"stat": &"ing", "class": "Survivalist", "short": "ING", "origin": &"analog"},
 	{"stat": &"amb", "class": "Enculted",    "short": "AMB", "origin": &"analog"},
 	{"stat": &"dev", "class": "Forged",      "short": "DEV", "origin": &"cyborg"},
@@ -82,6 +82,7 @@ func _ready() -> void:
 	PlayerState.class_changed.connect(_on_player_class_changed)
 	PlayerState.spec_changed.connect(_on_player_class_changed)
 	PlayerState.talents_changed.connect(_repaint)
+	PlayerState.leveled_up.connect(func(_lv: int, _hp: int) -> void: _repaint())
 	AttributeState.stats_changed.connect(_on_stats_changed)
 	_build_layout()
 
@@ -293,15 +294,23 @@ func _build_row(row_def: Dictionary, pcts: Dictionary) -> Dictionary:
 
 func _do_layout() -> void:
 	var screen := get_viewport_rect().size
-	var node_grid_h: float = float(NODE_ROWS) * NODE_SIZE.y + float(NODE_ROWS - 1) * NODE_GAP
+	var panel_w: float = minf(screen.x * 0.75, 820.0)
+	var content_w: float = panel_w - PANEL_MARGIN.x * 2.0
+	var col_w: float = (content_w - COL_GAP) * 0.5
+	var col_bar_w: float = col_w - LABEL_WIDTH - LABEL_GAP
+
+	# Derive node size from available bar width so nodes always fit.
+	var total_gaps: float = float(TIER_COUNT - 1) * TIER_GAP + float(TIER_COUNT) * float(NODE_COLS - 1) * NODE_GAP
+	var node_side: float = floorf((col_bar_w - total_gaps) / float(TIER_COUNT * NODE_COLS))
+	var node_size := Vector2(node_side, node_side)
+
+	var node_grid_h: float = float(NODE_ROWS) * node_size.y + float(NODE_ROWS - 1) * NODE_GAP
 	var row_h: float = BAR_HEIGHT + BAR_NODE_GAP + node_grid_h
 	var rows_per_col := 3
 	var col_inner_h: float = float(rows_per_col) * row_h + float(rows_per_col - 1) * ROW_GAP
-	var body_h: float = col_inner_h
 
 	var summary_area_h: float = SUMMARY_LABEL_HEIGHT + SUMMARY_LABEL_GAP + SUMMARY_BAR_HEIGHT
-	var panel_h: float = PANEL_MARGIN.y * 2.0 + TITLE_HEIGHT + TALENT_HEIGHT + NOTE_HEIGHT + HEADER_GAP + summary_area_h + SUMMARY_BAR_GAP + body_h
-	var panel_w: float = minf(screen.x * 0.75, 820.0)
+	var panel_h: float = PANEL_MARGIN.y * 2.0 + TITLE_HEIGHT + TALENT_HEIGHT + NOTE_HEIGHT + HEADER_GAP + summary_area_h + SUMMARY_BAR_GAP + col_inner_h
 
 	_panel.position = Vector2((screen.x - panel_w) * 0.5, (screen.y - panel_h) * 0.5)
 	_panel.size = Vector2(panel_w, panel_h)
@@ -319,9 +328,6 @@ func _do_layout() -> void:
 	_title_label.size = Vector2(panel_w, TITLE_HEIGHT)
 	_talent_label.position = Vector2(0, 8 + TITLE_HEIGHT)
 	_talent_label.size = Vector2(panel_w, TALENT_HEIGHT)
-	var content_w: float = panel_w - PANEL_MARGIN.x * 2.0
-	var col_w: float = (content_w - COL_GAP) * 0.5
-	var col_bar_w: float = col_w - LABEL_WIDTH - LABEL_GAP
 	var header_bottom: float = PANEL_MARGIN.y + TITLE_HEIGHT + TALENT_HEIGHT + NOTE_HEIGHT + HEADER_GAP
 
 	_summary_bar.position = Vector2(PANEL_MARGIN.x, header_bottom)
@@ -335,17 +341,16 @@ func _do_layout() -> void:
 	_cyborg_group_bg.position = Vector2(cyborg_col_x - GROUP_PADDING.x, body_y - GROUP_PADDING.y)
 	_cyborg_group_bg.size = Vector2(col_w + GROUP_PADDING.x * 2.0, col_inner_h + GROUP_PADDING.y * 2.0)
 
-	var section_w: float = col_bar_w / float(TIER_COUNT)
 	for ri in STAT_ROWS.size():
 		var row: Dictionary = _rows[ri]
 		var is_cyborg: bool = ri >= rows_per_col
 		var col_x: float = cyborg_col_x if is_cyborg else PANEL_MARGIN.x
 		var local_ri: int = ri - rows_per_col if is_cyborg else ri
 		var ry: float = body_y + float(local_ri) * (row_h + ROW_GAP)
-		_layout_row(row, Vector2(col_x, ry), col_w, col_bar_w, section_w, TIER_COUNT)
+		_layout_row(row, Vector2(col_x, ry), col_w, col_bar_w, node_size, TIER_COUNT)
 
-func _layout_row(row: Dictionary, row_pos: Vector2, row_w: float, bar_w: float, section_w: float, tier_count: int) -> void:
-	var node_grid_h: float = float(NODE_ROWS) * NODE_SIZE.y + float(NODE_ROWS - 1) * NODE_GAP
+func _layout_row(row: Dictionary, row_pos: Vector2, row_w: float, bar_w: float, node_size: Vector2, tier_count: int) -> void:
+	var node_grid_h: float = float(NODE_ROWS) * node_size.y + float(NODE_ROWS - 1) * NODE_GAP
 	var row_h: float = BAR_HEIGHT + BAR_NODE_GAP + node_grid_h
 
 	row["container"].position = row_pos
@@ -364,34 +369,41 @@ func _layout_row(row: Dictionary, row_pos: Vector2, row_w: float, bar_w: float, 
 	row["bar_bg"].size = Vector2(bar_w, BAR_HEIGHT)
 
 	row["bar_fill"].position = Vector2(local_bar_x, 0)
-	row["bar_fill"].size = Vector2(0.0, BAR_HEIGHT)  # width set per-paint in _paint_row
-
-	var markers: Array = row["markers"]
-	for mi in tier_count:
-		markers[mi].visible = false
+	row["bar_fill"].size = Vector2(0.0, BAR_HEIGHT)
 
 	var nodes_y: float = BAR_HEIGHT + BAR_NODE_GAP
 	var tier_labels: Array = row["tier_labels"]
 	var node_rects: Array = row["node_rects"]
 
-	# Compute a uniform column gap so intra-tier and inter-tier spacing are identical.
-	var total_cols: int = tier_count * NODE_COLS
-	var uniform_col_gap: float = (bar_w - float(total_cols) * NODE_SIZE.x) / float(total_cols - 1) if total_cols > 1 else 0.0
-	var col_stride: float = NODE_SIZE.x + uniform_col_gap
+	# Tier width = nodes + intra-gaps. Any leftover bar space is added to intra-gaps.
+	var fixed_gaps: float = float(tier_count - 1) * TIER_GAP + float(tier_count) * float(NODE_COLS - 1) * NODE_GAP
+	var fixed_nodes: float = float(tier_count * NODE_COLS) * node_size.x
+	var extra_per_intra: float = maxf((bar_w - fixed_nodes - fixed_gaps) / float(tier_count * (NODE_COLS - 1)), 0.0)
+	var intra_gap: float = NODE_GAP + extra_per_intra
+	var tier_w: float = float(NODE_COLS) * node_size.x + float(NODE_COLS - 1) * intra_gap
 
 	for ti in tier_count:
-		tier_labels[ti].position = Vector2(local_bar_x + section_w * float(ti), 0)
-		tier_labels[ti].size = Vector2(section_w, BAR_HEIGHT)
+		var tier_x: float = local_bar_x + float(ti) * (tier_w + TIER_GAP)
+		tier_labels[ti].position = Vector2(tier_x, 0)
+		tier_labels[ti].size = Vector2(tier_w, BAR_HEIGHT)
 
 		for j in NODES_PER_TIER:
 			var nr: int = floori(float(j) / NODE_COLS)
 			var nc: int = j - nr * NODE_COLS
-			var global_col: int = ti * NODE_COLS + nc
 			(node_rects[ti][j] as ColorRect).position = Vector2(
-				local_bar_x + float(global_col) * col_stride,
-				nodes_y + float(nr) * (NODE_SIZE.y + NODE_GAP)
+				tier_x + float(nc) * (node_size.x + intra_gap),
+				nodes_y + float(nr) * (node_size.y + NODE_GAP)
 			)
-			(node_rects[ti][j] as ColorRect).size = NODE_SIZE
+			(node_rects[ti][j] as ColorRect).size = node_size
+
+	# Position tier markers centered in the gap between tier groups.
+	var markers: Array = row["markers"]
+	for mi in markers.size():
+		if mi < tier_count - 1:
+			var marker_x: float = local_bar_x + float(mi + 1) * (tier_w + TIER_GAP) - TIER_GAP * 0.5 - TIER_MARKER_WIDTH * 0.5
+			(markers[mi] as ColorRect).position = Vector2(marker_x, nodes_y)
+			(markers[mi] as ColorRect).size = Vector2(TIER_MARKER_WIDTH, node_grid_h)
+		(markers[mi] as ColorRect).visible = false
 
 # ── Paint ──────────────────────────────────────────────────────────────────────
 
@@ -403,7 +415,14 @@ func _repaint() -> void:
 	var remaining := PlayerState.talent_points_total - spent
 
 	var class_key: StringName = PlayerState.spec_id if PlayerState.spec_id != &"" else PlayerState.class_id
-	_title_label.text = "TALENTS — %s" % (class_key.capitalize() if class_key != &"" else "—")
+	var class_display: String
+	if class_key == &"count":
+		class_display = "Countess" if PlayerState.gender == &"female" else "Count"
+	elif class_key != &"":
+		class_display = String(class_key).capitalize()
+	else:
+		class_display = "—"
+	_title_label.text = "TALENTS — %s" % class_display
 	_title_label.add_theme_color_override(&"font_color", p.accent)
 
 	_talent_label.text = "%d point%s remaining  (%d / %d spent)" % [
@@ -503,7 +522,7 @@ func _on_summary_bar_input(event: InputEvent) -> void:
 	var unlocked: int = AttributeState.get_unlocked_tier(stat_id, PlayerState.class_id, PlayerState.spec_id)
 	var thresholds: Array[float] = AttributeState.get_tier_thresholds(stat_id, PlayerState.class_id, PlayerState.spec_id)
 	var tier_text: String = "%s unlocked" % AttributeState.TIER_ROMAN[unlocked - 1] if unlocked > 0 else "no tier unlocked"
-	var next_text: String = "%s at %d%%" % [AttributeState.TIER_ROMAN[unlocked], int(thresholds[unlocked] * 100)] if unlocked < 5 else "maxed"
+	var next_text: String = "%s at %d%%" % [AttributeState.TIER_ROMAN[unlocked], int(thresholds[unlocked] * 100)] if unlocked < AttributeState.TIER_COUNT else "maxed"
 	get_tree().call_group(&"interactable_tooltip", &"show_text",
 		"%s  %d%%\n%s · next: %s" % [stat_name, int(pct * 100), tier_text, next_text])
 
@@ -520,7 +539,7 @@ func _on_node_hovered(stat_id: StringName, tier: int, node_idx: int) -> void:
 		title += "  ·  Locked (%d%%)" % needed_pct
 		body = "Reach %d%% %s allocation to unlock this tier." % [needed_pct, stat_name]
 	else:
-		body = "Perk effect TBD."
+		body = "Node effect TBD."
 	get_tree().call_group(&"interactable_tooltip", &"show_talent_node", title, body)
 
 func _on_node_unhovered() -> void:

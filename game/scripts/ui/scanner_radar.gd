@@ -11,7 +11,7 @@ class_name ScannerRadar
 const SWEEP_SPEED := TAU * 0.4  # radians per second (~one rotation per 2.5s)
 const BLIP_FADE_TIME := 2.5     # seconds a blip stays visible after sweep
 const RING_COUNT := 3
-const RING_SEGMENTS := 64
+const RING_SEGMENTS := 32
 const MAX_SCANNER_RANGE := 12.0 # world units — matches common_scanner light_range
 const TRAIL_STEPS := 30
 const TRAIL_ARC := TAU * 0.25   # quarter-circle sweep trail
@@ -30,8 +30,10 @@ const BLIP_RADIUS_THRESHOLD := 120.0  # map_radius above which fullscreen size i
 var map_rect := Rect2(0.0, 0.0, 170.0, 170.0)
 ## The minimap camera's orthographic size — used to scale the scanner detection ring.
 var camera_ortho_size: float = 30.0
-## Reference to the minimap camera — used to project world positions onto the map.
-var minimap_camera: Camera3D = null
+## Basis vectors from the bake camera — used to project world positions onto the map.
+## Set by the parent Minimap after baking.
+var project_right: Vector3 = Vector3.RIGHT
+var project_up: Vector3 = Vector3.UP
 ## Master opacity multiplier (reduced in fullscreen so the radar doesn't overpower the game).
 var opacity: float = 1.0
 
@@ -41,6 +43,7 @@ var _player: Node3D = null
 ## Each blip stores { node: Node3D, age: float, last_pos: Vector3 }.
 ## last_pos is kept so blips linger at the enemy's last known position after they die.
 var _blips: Array[Dictionary] = []
+var _frame_counter: int = 0
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -54,7 +57,12 @@ func _process(delta: float) -> void:
 		return
 	var old_angle := _sweep_angle
 	_sweep_angle = fmod(_sweep_angle + SWEEP_SPEED * delta, TAU)
-	_update_blips(delta, old_angle, _sweep_angle)
+	_frame_counter += 1
+	# Only query the spatial grid every 3rd frame; age blips every frame.
+	if _frame_counter % 3 == 0:
+		_update_blips(delta * 3.0, old_angle, _sweep_angle)
+	else:
+		_age_blips(delta)
 	queue_redraw()
 
 func _draw() -> void:
@@ -104,14 +112,12 @@ func _draw() -> void:
 
 
 func _world_to_map(world_pos: Vector3) -> Vector2:
-	if minimap_camera == null or not is_instance_valid(minimap_camera) or _player == null:
+	if _player == null:
 		return map_rect.get_center()
 	var offset := world_pos - _player.global_position
-	var right := minimap_camera.global_transform.basis.x
-	var up_world := minimap_camera.global_transform.basis.y
 	var px_per_world := map_rect.size.y / maxf(camera_ortho_size, 0.01)
-	var sx := offset.dot(right) * px_per_world
-	var sy := -offset.dot(up_world) * px_per_world  # screen Y is inverted vs world up
+	var sx := offset.dot(project_right) * px_per_world
+	var sy := -offset.dot(project_up) * px_per_world  # screen Y is inverted vs world up
 	return map_rect.get_center() + Vector2(sx, sy)
 
 
@@ -123,8 +129,7 @@ func _draw_ring(center: Vector2, radius: float, color: Color, width: float = 1.0
 		draw_line(prev, next, color, width)
 		prev = next
 
-func _update_blips(delta: float, old_angle: float, new_angle: float) -> void:
-	# Age existing blips; update last known position while node is valid.
+func _age_blips(delta: float) -> void:
 	var i := _blips.size() - 1
 	while i >= 0:
 		_blips[i].age += delta
@@ -133,6 +138,9 @@ func _update_blips(delta: float, old_angle: float, new_angle: float) -> void:
 		if _blips[i].age > BLIP_FADE_TIME:
 			_blips.remove_at(i)
 		i -= 1
+
+func _update_blips(delta: float, old_angle: float, new_angle: float) -> void:
+	_age_blips(delta)
 
 	if _player == null or not is_instance_valid(_player):
 		return

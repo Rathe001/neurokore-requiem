@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="WeaponBase" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/weapon_base.gd" id="1_weapon_base"]
+[ext_resource type="Resource" path="res://resources/skills/plasma_bolt.tres" id="2_fire_skill"]
+[ext_resource type="Resource" path="res://resources/skills/plasma_charged.tres" id="3_alt_fire"]
+
+[resource]
+script = ExtResource("1_weapon_base")
+id = &"ranged_2h"
+display_name = "2H Plasma Rifle"
+glyph = "╪"
+two_handed = true
+damage_min_range = Vector2(8, 12)
+damage_max_range = Vector2(14, 20)
+attack_speed_range = Vector2(0.7, 1.0)
+crit_chance_range = Vector2(0.08, 0.15)
+accuracy_range = Vector2(0.82, 0.92)
+weapon_range_range = Vector2(18.0, 24.0)
+fire_skill = ExtResource("2_fire_skill")
+alt_fire_skill = ExtResource("3_alt_fire")

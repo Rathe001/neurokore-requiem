@@ -1,4 +1,4 @@
-[gd_scene load_steps=15 format=3]
+[gd_scene load_steps=16 format=3]
 
 [ext_resource type="Script" path="res://scripts/prototype/prototype_root.gd" id="script_root"]
 [ext_resource type="Script" path="res://scripts/prototype/prototype_camera.gd" id="script_camera"]
@@ -10,6 +10,7 @@
 [ext_resource type="PackedScene" path="res://art/3d/characters/quaternius/UAL1_Standard.glb" id="char_model_player"]
 [ext_resource type="Resource" path="res://resources/skills/energy.tres" id="pool_energy"]
 [ext_resource type="Resource" path="res://resources/level/layouts/prototype_layout.tres" id="layout"]
+[ext_resource type="PackedScene" path="res://scenes/prototype/prototype_loot_crate.tscn" id="scene_loot_crate"]
 
 [sub_resource type="Environment" id="env_prototype"]
 background_mode = 1
@@ -92,6 +93,10 @@ display_name = "Observation Hall Switch"
 
 [node name="Exit" parent="." instance=ExtResource("scene_exit")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -41, 0, -20)
+
+[node name="LootCrate" parent="." instance=ExtResource("scene_loot_crate")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 0.3, -3)
+test_weapon_base_paths = Array[String](["res://resources/items/weapon_bases/ranged_1h.tres", "res://resources/items/weapon_bases/ranged_2h.tres"])
 
 [node name="HUD" parent="." instance=ExtResource("scene_hud")]
 

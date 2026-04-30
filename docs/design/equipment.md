@@ -79,7 +79,7 @@ Weapons gated by **tier perks**, not class selection. Any class that has unlocke
 | Ancient Text | Enculted I | 1H | Channel curse at target | — | Slow, powerful, scales with Ambition |
 | Exo-Gauntlet | Forged I | 1H | Augmented punch | — | Melee, scales with Deviation |
 | Scavenger's Multi-Tool | Survivalist I | 1H | Context-dependent (melee near, throws far) | — | Adapts to range — knife up close, thrown hatchet at distance |
-| Etiquette Piece | Gentleman/Lady I | 1H | Precise strike (bonus crit) | — | Low base damage, high crit multiplier, scales with Orthodoxy |
+| Etiquette Piece | Count/Countess I | 1H | Precise strike (bonus crit) | — | Low base damage, high crit multiplier, scales with Orthodoxy |
 | Synthesis Staff | Polymath I | 2H | Arcane bolt | Overload pulse (AoE) | Hybrid energy/elemental, scales with Clarity |
 
 Because tier perks can be lost when stats shift (see [stat identity breakpoints](attribute-system.md#stat-identity--tier-perks--visual-metamorphosis)), equipping a class-specific weapon is a commitment — if you lose the tier perk, the weapon becomes unusable until the perk is regained. The [gear swap confirmation dialog](attribute-system.md) warns the player if a stat change would lock them out of an equipped class-specific weapon.

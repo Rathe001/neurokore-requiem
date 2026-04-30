@@ -56,7 +56,7 @@ const CYBORG_TEAM_STATS: Array[StringName] = [&"dev", &"opt", &"cla"]
 # All specialized class definitions in one place — avoids sync bugs when adding classes.
 # Keys: spec_id → { stat: primary_stat, origin: origin_id }
 const CLASS_DEFINITIONS: Dictionary = {
-	&"gentleman":  {&"stat": &"ort", &"origin": &"analog"},
+	&"count":  {&"stat": &"ort", &"origin": &"analog"},
 	&"survivalist": {&"stat": &"ing", &"origin": &"analog"},
 	&"enculted":   {&"stat": &"amb", &"origin": &"analog"},
 	&"forged":     {&"stat": &"dev", &"origin": &"cyborg"},
@@ -72,7 +72,8 @@ const NEMESIS_STAT: Dictionary = {
 }
 
 # Roman numeral tier labels — shared across all UI that displays tiers.
-const TIER_ROMAN: Array[String] = ["I", "II", "III", "IV", "V"]
+const TIER_ROMAN: Array[String] = ["I", "II", "III"]
+const TIER_COUNT := 3
 
 # Relationship accent colors — used by talents panel, tooltip, and any future UI.
 # primary = own class stat, team = same origin, opp_team = opposite origin, opposing = nemesis stat.
@@ -83,33 +84,50 @@ const RELATIONSHIP_COLORS: Dictionary = {
 	&"opposing": Color(0.85, 0.18, 0.18, 1.0),
 }
 
-# Tier unlock thresholds: stat's share of total rollable stats required for each tier 1–5.
-# Primary stat unlocks much more easily — class identity should feel immediate.
-# Team stats use standard thresholds; opposing stats are hardest to unlock.
+# Tier unlock thresholds (3 tiers): stat's share of total rollable stats.
+# Primary unlocks easily — class identity is immediate. Team requires moderate
+# investment. Opposing demands heavy commitment. Thresholds are set so that
+# unlocking 4+ class trees simultaneously is mathematically impossible
+# (12+25+25+40 = 102% > 100%), enforcing a natural 3-tree cap.
 # See docs/design/attribute-system.md § Breakpoints.
-const TIERS_OWN:      Array[float] = [0.12, 0.25, 0.40, 0.55, 0.72]
-const TIERS_TEAM:     Array[float] = [0.20, 0.40, 0.60, 0.75, 0.90]
-const TIERS_OPPOSING: Array[float] = [0.30, 0.50, 0.70, 0.85, 0.95]
+const TIERS_OWN:      Array[float] = [0.12, 0.25, 0.40]
+const TIERS_TEAM:     Array[float] = [0.25, 0.40, 0.55]
+const TIERS_OPPOSING: Array[float] = [0.40, 0.55, 0.70]
 
-# Origin class balance tier caps. Indexed 1–5. Each entry is [max_any_team_pct, max_any_opposing_pct].
+# Talent tree node dimensions — 8 nodes per tier means 24 per class tree.
+# With 20 talent points, even a fully committed build can't fill one tree.
+const TALENT_NODES_PER_TIER := 8
+
+# Origin class balance tier caps. Indexed 1–3. Each entry is [max_any_team_pct, max_any_opposing_pct].
 # Tier N requires: no team stat >= max_any_team_pct AND no opposing stat >= max_any_opposing_pct.
 # Tier 0 is the fallback (any stat too dominant → all balance perks lost).
 const ORIGIN_TIER_CAPS: Array[Array] = [
 	[],           # index 0 — unused placeholder
 	[0.55, 0.45], # tier 1: almost free
-	[0.45, 0.35], # tier 2: spread gearing
-	[0.35, 0.25], # tier 3: moderate
-	[0.30, 0.20], # tier 4: demanding
-	[0.25, 0.15], # tier 5: near-perfect balance
+	[0.40, 0.30], # tier 2: intentional balance
+	[0.30, 0.20], # tier 3: tight spread — aspirational
 ]
 
-# Team nodes: 5-tier tree unlocked by combined team stat share.
-const TEAM_NODE_THRESHOLDS: Array[float] = [0.20, 0.35, 0.50, 0.65, 0.80]
+# Team nodes: 3-tier tree unlocked by combined team stat share.
+const TEAM_NODE_TIER_COUNT := 3
+const TEAM_NODE_NODES_PER_TIER := 4
+const TEAM_NODE_THRESHOLDS: Array[float] = [0.20, 0.35, 0.50]
 
 # Outgoing player damage scales with the class's main stat. 1% per point gives
 # us roughly D2-shaped scaling for the playtest: a fully-geared character lands
 # in the +50–100% range. Tuning lives here so combat balance stays in one file.
 const DAMAGE_PER_MAIN_STAT_PCT: float = 0.01
+
+# ── HP / Resource scaling from stats ─────────────────────────────────────────
+# Contribution weights per stat relationship when computing HP and resource
+# bonuses. Primary stat contributes most; opposing stat is heavily penalised.
+const STAT_WEIGHT_PRIMARY:  float = 1.0
+const STAT_WEIGHT_TEAM:     float = 0.25
+const STAT_WEIGHT_OPPOSING: float = 0.10
+
+# How many bonus HP / resource-max each weighted stat point grants.
+const HP_PER_WEIGHTED_STAT: float = 2.0
+const RESOURCE_PER_WEIGHTED_STAT: float = 1.0
 
 # ── Stat values ───────────────────────────────────────────────────────────────
 
@@ -134,6 +152,7 @@ func _ready() -> void:
 		assert(stat in STAT_I18N,   "AttributeState: missing STAT_I18N entry for '%s'" % stat)
 		assert(stat in STAT_SHORT,  "AttributeState: missing STAT_SHORT entry for '%s'" % stat)
 	InventoryState.equipment_changed.connect(func(_slot: StringName) -> void: _recompute_from_equipment())
+	_recompute_from_equipment()
 
 func _recompute_from_equipment() -> void:
 	var totals: Dictionary = {&"ort": 0, &"ing": 0, &"amb": 0, &"dev": 0, &"opt": 0, &"cla": 0}
@@ -204,25 +223,25 @@ func get_stat_relationship(stat_id: StringName, class_id: StringName, spec_id: S
 	# Origin class: no primary stat
 	return &"team" if stat_id in get_team_stats_for_origin(class_id) else &"opposing"
 
-## Returns the 5-element threshold array for unlocking each tier of a stat's tree.
+## Returns the threshold array for unlocking each tier of a stat's tree.
 func get_tier_thresholds(stat_id: StringName, class_id: StringName, spec_id: StringName) -> Array[float]:
 	match get_stat_relationship(stat_id, class_id, spec_id):
 		&"primary": return TIERS_OWN
 		&"team":    return TIERS_TEAM
 	return TIERS_OPPOSING
 
-## Returns the currently unlocked tier (0–5) for a stat tree given class context.
+## Returns the currently unlocked tier (0–3) for a stat tree given class context.
 func get_unlocked_tier(stat_id: StringName, class_id: StringName, spec_id: StringName) -> int:
 	var pct := get_stat_pct(stat_id)
 	var thresholds := get_tier_thresholds(stat_id, class_id, spec_id)
 	var unlocked := 0
-	for i in 5:
+	for i in TIER_COUNT:
 		if pct >= thresholds[i]:
 			unlocked = i + 1
 	return unlocked
 
-## Returns the balance tier (0–5) for an origin class (Analog/Cyborg).
-## Higher = tighter stat balance; perk perks are maintained up to the returned tier.
+## Returns the balance tier (0–3) for an origin class (Analog/Cyborg).
+## Higher = tighter stat balance; perks are maintained up to the returned tier.
 func get_origin_tier(class_id: StringName) -> int:
 	var pcts := get_all_stat_pcts()
 	var team := get_team_stats_for_origin(class_id)
@@ -233,7 +252,7 @@ func get_origin_tier(class_id: StringName) -> int:
 	var max_opp := 0.0
 	for s in opposing:
 		max_opp = maxf(max_opp, pcts.get(s, 0.0))
-	for tier in range(5, 0, -1):
+	for tier in range(TIER_COUNT, 0, -1):
 		var caps: Array = ORIGIN_TIER_CAPS[tier]
 		if max_team < caps[0] and max_opp < caps[1]:
 			return tier
@@ -310,6 +329,62 @@ func get_stat_rel_color_key(stat_id: StringName, class_id: StringName, spec_id: 
 	var my_stat := get_spec_stat(spec_id)
 	if my_stat != &"" and NEMESIS_STAT.get(my_stat, &"") == stat_id: return &"opposing"
 	return &"opp_team"
+
+## Returns a BBCode-formatted scaling hint for a class/spec, used by selection UI.
+## Stat names are wrapped in [color] tags matching their STAT_COLORS.
+func get_scaling_hint(class_id: StringName, spec_id: StringName) -> String:
+	var _colored := func(stat_id: StringName) -> String:
+		var key: StringName = STAT_I18N.get(stat_id, &"")
+		var label: String = tr(key) if key != &"" else String(stat_id).capitalize()
+		var col: Color = STAT_COLORS.get(stat_id, Color.WHITE)
+		return "[color=#%s]%s[/color]" % [col.to_html(false), label]
+
+	if spec_id == &"":
+		var team := get_team_stats_for_origin(class_id)
+		var team_names: Array[String] = []
+		for s in team:
+			team_names.append(_colored.call(s))
+		var derived_stat: StringName = &"soul" if class_id == &"analog" else &"itf"
+		var derived: String = _colored.call(derived_stat)
+		return "Scales with %s (average of %s). Rewards balanced investment across all three." % [
+			derived, ", ".join(team_names)]
+
+	var primary: StringName = get_spec_stat(spec_id)
+	var origin: StringName = get_spec_origin(spec_id)
+	var team := get_team_stats_for_origin(origin)
+	var nemesis: StringName = NEMESIS_STAT.get(primary, &"")
+
+	var team_names: Array[String] = []
+	for s in team:
+		if s != primary:
+			team_names.append(_colored.call(s))
+
+	return "Scales with %s. Benefits from %s. Weak against %s." % [
+		_colored.call(primary), " and ".join(team_names), _colored.call(nemesis)]
+
+## Returns the contribution-weighted sum of all rollable stats for the given
+## class context. Primary stat counts fully, team stats partially, opposing
+## stats minimally. Used to derive bonus HP and resource pool size.
+func get_weighted_stat_total(class_id: StringName, spec_id: StringName) -> float:
+	var total := 0.0
+	for stat_id in ROLLABLE_STATS:
+		var value := float(get_stat(stat_id))
+		if value <= 0.0:
+			continue
+		var rel := get_stat_relationship(stat_id, class_id, spec_id)
+		match rel:
+			&"primary": total += value * STAT_WEIGHT_PRIMARY
+			&"team":    total += value * STAT_WEIGHT_TEAM
+			_:          total += value * STAT_WEIGHT_OPPOSING
+	return total
+
+## Bonus HP granted by current stats for the given class context.
+func get_stat_bonus_hp(class_id: StringName, spec_id: StringName) -> int:
+	return int(get_weighted_stat_total(class_id, spec_id) * HP_PER_WEIGHTED_STAT)
+
+## Bonus resource-pool max granted by current stats for the given class context.
+func get_stat_bonus_resource(class_id: StringName, spec_id: StringName) -> int:
+	return int(get_weighted_stat_total(class_id, spec_id) * RESOURCE_PER_WEIGHTED_STAT)
 
 func _avg3(a: int, b: int, c: int) -> int:
 	return int(round((a + b + c) / 3.0))

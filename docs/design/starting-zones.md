@@ -109,7 +109,7 @@ A fellow prisoner who has been preparing for exactly this. Has spent months conv
 
 The administrative and research sections between the cell block and the deep facility. More organized resistance from guards. Less chaos, more danger.
 
-**Rep introduced: The Gentleman / Lady**
+**Rep introduced: The Count / Countess**
 
 A political prisoner — incarcerated for refusing a mandatory augmentation order. Has maintained composure, routine, and an almost absurd dignity throughout their detention. The player walks into a corridor with a guard sniper covering the only exit.
 

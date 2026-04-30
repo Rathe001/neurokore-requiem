@@ -52,7 +52,7 @@ Each rep has a worldview shaped by their quadrant. They react when the player dr
 | Representative | Quadrant | Character Notes |
 |---|---|---|
 | **Mystery Rep** | Selfless + Human | The only rep in this quadrant. Reacts most strongly to any drift toward Corrupted or Selfish. |
-| **Gentleman / Lady** | Selfish + Human | Extreme arrogance and a superiority complex — "I didn't need a machine to make me dangerous." Their refusal of augmentation is not humility; it's contempt. Reacts to any loss of composure or signs of desperation. |
+| **Count / Countess** | Selfish + Human | Extreme arrogance and a superiority complex — "I didn't need a machine to make me dangerous." Their refusal of augmentation is not humility; it's contempt. Reacts to any loss of composure or signs of desperation. |
 | **Survivalist** | Selfless + Corrupted | Corrupted by trauma — watched everyone they knew get augmented, broken, or killed. Helps others because they've seen what happens when nobody does, but the cost has hollowed them out. Reacts to cold, self-serving decisions that mirror the people who destroyed everything they cared about. |
 | **Automaton** | Selfless + Corrupted | Binary logic has no room for selfishness — selfishness requires a self making a preference. The Automaton has dissolved their moral agency into scripts and systems. Not corrupted through malice, but through the removal of the self from the equation entirely. Reacts to emotional or personally motivated decisions as noise in the system. |
 | **Enculted** | Selfish + Corrupted | Sold their soul for power. The constant battle to prevent complete insanity is the price of that bargain — a cost they accepted knowingly. Reacts to selfless decisions as a waste of what they sacrificed everything to obtain. |

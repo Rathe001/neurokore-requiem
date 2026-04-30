@@ -18,7 +18,7 @@ extends Node
 #   target_slowed_damage_pct      — % bonus damage vs slowed/staggered targets
 #
 # Perks for higher tiers stack additively on top of lower tiers — reaching
-# tier 5 means tiers 1..5 are all active simultaneously.
+# tier 3 means tiers 1..3 are all active simultaneously.
 
 signal perk_gained(perk: Dictionary)
 signal perk_lost(perk: Dictionary)
@@ -31,42 +31,30 @@ const STAT_PERKS: Dictionary = {
 		{
 			"id": &"dev_t1",
 			"label": "Erratic Strikes",
-			"description": "5% chance to strike twice.",
-			"effects": [{"kind": &"multistrike_double_chance", "magnitude": 0.05}],
+			"description": "8% chance to strike twice.",
+			"effects": [{"kind": &"multistrike_double_chance", "magnitude": 0.08}],
 		},
 		{
 			"id": &"dev_t2",
 			"label": "Frenzied Strikes",
-			"description": "Additional 5% chance to strike twice.",
-			"effects": [{"kind": &"multistrike_double_chance", "magnitude": 0.05}],
-		},
-		{
-			"id": &"dev_t3",
-			"label": "Manic Cadence",
-			"description": "Additional 8% chance to strike twice.",
-			"effects": [{"kind": &"multistrike_double_chance", "magnitude": 0.08}],
-		},
-		{
-			"id": &"dev_t4",
-			"label": "Shattered Tempo",
-			"description": "Additional 4% chance to strike twice; 5% chance to strike thrice.",
+			"description": "Additional 10% chance to strike twice; 5% chance to strike thrice.",
 			"effects": [
-				{"kind": &"multistrike_double_chance", "magnitude": 0.04},
+				{"kind": &"multistrike_double_chance", "magnitude": 0.10},
 				{"kind": &"multistrike_triple_chance", "magnitude": 0.05},
 			],
 		},
 		{
-			"id": &"dev_t5",
+			"id": &"dev_t3",
 			"label": "Unbound Frenzy",
-			"description": "Additional 3% chance to strike twice; additional 7% chance to strike thrice.",
+			"description": "Additional 7% chance to strike twice; additional 7% chance to strike thrice.",
 			"effects": [
-				{"kind": &"multistrike_double_chance", "magnitude": 0.03},
+				{"kind": &"multistrike_double_chance", "magnitude": 0.07},
 				{"kind": &"multistrike_triple_chance", "magnitude": 0.07},
 			],
 		},
 	],
 	# Other stat ladders pending design — see attribute-system.md "Specialized
-	# Class Tier Perks" table. Target T5 effective DPS ≈ 1.45×, expressed
+	# Class Tier Perks" table. Target T3 effective DPS ≈ 1.45×, expressed
 	# through each class's flavor lever (crit, cooldowns, conditional damage).
 	&"ort": [],
 	&"opt": [],

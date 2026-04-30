@@ -9,6 +9,11 @@ uniform float brightness_threshold : hint_range(0.0, 1.0) = 0.08;
 uniform float brightness_smoothing : hint_range(0.01, 0.3) = 0.06;
 uniform float opacity : hint_range(0.0, 1.0) = 1.0;
 
+// UV panning for baked minimap: offset and scale control which portion of the
+// full-map texture is visible inside the circle.
+uniform vec2 uv_offset = vec2(0.0, 0.0);
+uniform float uv_scale = 1.0;
+
 // Standard Rec. 709 luminance weights.
 const vec3 LUMINANCE_WEIGHTS = vec3(0.299, 0.587, 0.114);
 
@@ -19,9 +24,18 @@ void fragment() {
 	if (dist > 1.0) {
 		discard;
 	}
-	// Convert viewport texture to a simple floorplan:
-	// dark background + light gray for visible surfaces.
-	vec4 tex = COLOR;
+
+	// Remap UV through offset/scale so we pan across the baked texture.
+	vec2 map_uv = (UV - 0.5) * uv_scale + 0.5 + uv_offset;
+
+	// Sample the texture at the panned UV. Out-of-bounds shows bg_color.
+	vec4 tex;
+	if (map_uv.x < 0.0 || map_uv.x > 1.0 || map_uv.y < 0.0 || map_uv.y > 1.0) {
+		tex = bg_color;
+	} else {
+		tex = texture(TEXTURE, map_uv);
+	}
+
 	float lum = dot(tex.rgb, LUMINANCE_WEIGHTS);
 	// Anything above the threshold is "walkable surface" -> path color.
 	// Everything else is void -> background color.

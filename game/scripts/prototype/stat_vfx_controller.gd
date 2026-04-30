@@ -1,10 +1,10 @@
 class_name StatVFXController
 extends Node3D
 
-# Each tier band owns a single signature; lower tiers' visuals do not carry
-# upward. T1 → emissive, T2 → mist, T3 → directional particles, T4 → aura,
-# T5 → halo. Stats at the same tier band still blend (e.g. two stats at T1
-# blend their emissive colors).
+# Each tier band owns a layered visual stack. Effects accumulate upward:
+# T1 → emissive glow, T2 → emissive + mist + directional particles,
+# T3 → all of the above + aura + halo. Stats at the same tier blend
+# (e.g. two stats at T1 blend their emissive colors).
 
 # Punchier than AttributeState.STAT_COLORS by design — the UI palette reads
 # legibly on text/icons; VFX needs higher saturation to register on emissive
@@ -82,7 +82,7 @@ func _refresh_blended_layers() -> void:
 	_blend_emissive()
 	_blend_aura()
 
-# ── T1: base emissive ─────────────────────────────────────────────────────────
+# ── T1+: base emissive ────────────────────────────────────────────────────────
 
 func _blend_emissive() -> void:
 	if _base_mat == null:
@@ -92,7 +92,7 @@ func _blend_emissive() -> void:
 	var b := 0.0
 	var count := 0
 	for stat_id in _current_tiers:
-		if int(_current_tiers[stat_id]) != 1:
+		if int(_current_tiers[stat_id]) < 1:
 			continue
 		var col: Color = VFX_STAT_COLORS.get(stat_id, Color.WHITE)
 		r += col.r
@@ -107,7 +107,7 @@ func _blend_emissive() -> void:
 		_base_mat.emission = Color(r / peak, g / peak, b / peak, 1.0)
 	_base_mat.emission_energy_multiplier = EMISSIVE_ENERGY
 
-# ── T2: ground mist particles ─────────────────────────────────────────────────
+# ── T2+: ground mist particles ────────────────────────────────────────────────
 
 func _build_mist_particles(stat_id: StringName, visual: Node3D) -> void:
 	var p := GPUParticles3D.new()
@@ -155,9 +155,9 @@ func _refresh_mist(stat_id: StringName, tier: int) -> void:
 	var p: GPUParticles3D = _mists.get(stat_id)
 	if p == null:
 		return
-	p.emitting = tier == 2
+	p.emitting = tier >= 2
 
-# ── T3: directional per-stat particles ────────────────────────────────────────
+# ── T2+: directional per-stat particles ───────────────────────────────────────
 
 func _build_directional_particles(stat_id: StringName, visual: Node3D) -> void:
 	var particles := GPUParticles3D.new()
@@ -237,9 +237,9 @@ func _refresh_directional(stat_id: StringName, tier: int) -> void:
 	var particles: GPUParticles3D = _directional.get(stat_id)
 	if particles == null:
 		return
-	particles.emitting = tier == 3
+	particles.emitting = tier >= 2
 
-# ── T4: aura sphere ───────────────────────────────────────────────────────────
+# ── T3: aura sphere ──────────────────────────────────────────────────────────
 
 func _blend_aura() -> void:
 	var r := 0.0
@@ -247,7 +247,7 @@ func _blend_aura() -> void:
 	var b := 0.0
 	var count := 0
 	for stat_id in _current_tiers:
-		if int(_current_tiers[stat_id]) != 4:
+		if int(_current_tiers[stat_id]) < 3:
 			continue
 		var col: Color = VFX_STAT_COLORS.get(stat_id, Color.WHITE)
 		r += col.r
@@ -289,11 +289,11 @@ func _build_aura() -> void:
 	else:
 		add_child(_aura)
 
-# ── T5: per-stat halo meshes ──────────────────────────────────────────────────
+# ── T3: per-stat halo meshes ──────────────────────────────────────────────────
 
 func _refresh_halo(stat_id: StringName, tier: int) -> void:
 	var halo: MeshInstance3D = _halos.get(stat_id)
-	if tier != 5:
+	if tier < 3:
 		if halo != null:
 			halo.visible = false
 		return

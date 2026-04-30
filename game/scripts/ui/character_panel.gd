@@ -562,7 +562,7 @@ func _on_alloc_bar_input(event: InputEvent) -> void:
 	var unlocked: int = AttributeState.get_unlocked_tier(stat_id, PlayerState.class_id, PlayerState.spec_id)
 	var thresholds: Array[float] = AttributeState.get_tier_thresholds(stat_id, PlayerState.class_id, PlayerState.spec_id)
 	var tier_text: String = "Tier %s unlocked" % AttributeState.TIER_ROMAN[unlocked - 1] if unlocked > 0 else "no tier unlocked"
-	var next_text: String = "Tier %s at %d%%" % [AttributeState.TIER_ROMAN[unlocked], int(thresholds[unlocked] * 100)] if unlocked < 5 else "maxed"
+	var next_text: String = "Tier %s at %d%%" % [AttributeState.TIER_ROMAN[unlocked], int(thresholds[unlocked] * 100)] if unlocked < AttributeState.TIER_COUNT else "maxed"
 	get_tree().call_group(&"interactable_tooltip", &"show_text",
 		"%s  %d%%\n%s · next: %s" % [stat_name, int(pct * 100), tier_text, next_text])
 
@@ -596,11 +596,25 @@ func _build_attribute_section(parent: Control) -> void:
 	for stat_id in AttributeState.CYBORG_STATS:
 		cyborg_col.add_child(_make_attr_row(stat_id))
 
+const STAT_DESCRIPTIONS: Dictionary = {
+	&"soul": "The essence of human willpower and spiritual resilience. Derived from the average of Orthodoxy, Ingenuity, and Ambition.",
+	&"itf": "Mastery over machine integration and digital consciousness. Derived from the average of Deviation, Optimization, and Clarity.",
+	&"ort": "Adherence to tradition and established order. Governs defensive fortitude and resistance to corruption.",
+	&"ing": "Resourcefulness and adaptive thinking. Enhances crafting efficiency and environmental awareness.",
+	&"amb": "Raw desire for power and forbidden knowledge. Fuels dark arts and amplifies risk-reward mechanics.",
+	&"dev": "Willingness to push beyond safe boundaries. Increases raw damage output and critical potential.",
+	&"opt": "Precision engineering and calculated efficiency. Improves cooldown recovery and resource management.",
+	&"cla": "Depth of understanding and analytical insight. Broadens skill versatility and elemental mastery.",
+}
+
 func _make_attr_row(stat_id: StringName) -> HBoxContainer:
 	var color: Color = AttributeState.STAT_COLORS[stat_id]
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override(&"separation", 4)
-	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.mouse_filter = Control.MOUSE_FILTER_STOP
+	row.mouse_entered.connect(_on_attr_row_hovered.bind(stat_id))
+	row.mouse_exited.connect(func() -> void:
+		get_tree().call_group(&"interactable_tooltip", &"hide_tooltip"))
 
 	var name_lbl := Label.new()
 	name_lbl.text = AttributeState.STAT_I18N[stat_id]
@@ -612,7 +626,7 @@ func _make_attr_row(stat_id: StringName) -> HBoxContainer:
 	row.add_child(name_lbl)
 
 	var val_lbl := Label.new()
-	val_lbl.text = str(AttributeState.get_stat(stat_id))
+	val_lbl.text = _format_stat_value(stat_id)
 	val_lbl.theme_type_variation = &"SmallLabel"
 	val_lbl.add_theme_font_size_override(&"font_size", 9)
 	val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -622,9 +636,63 @@ func _make_attr_row(stat_id: StringName) -> HBoxContainer:
 	_attr_value_labels[stat_id] = val_lbl
 	return row
 
+func _on_attr_row_hovered(stat_id: StringName) -> void:
+	var key: StringName = AttributeState.STAT_I18N.get(stat_id, &"")
+	var stat_name: String = tr(key) if key != &"" else (stat_id as String).capitalize()
+	var desc: String = STAT_DESCRIPTIONS.get(stat_id, "")
+	var val := AttributeState.get_stat(stat_id)
+
+	var lines: Array[String] = []
+
+	if stat_id in AttributeState.ROLLABLE_STATS:
+		# Show the total value and percentage share.
+		var total := 0
+		for s in AttributeState.ROLLABLE_STATS:
+			total += AttributeState.get_stat(s)
+		if total > 0:
+			var pct := int(round(float(val) / float(total) * 100.0))
+			lines.append("Total: %d  (%d%% of %d)" % [val, pct, total])
+		else:
+			lines.append("Total: 0")
+
+		# Break down contributions from each equipped item.
+		var has_source := false
+		for slot_id: StringName in InventoryState.equipment:
+			var item: Item = InventoryState.equipment[slot_id]
+			if item == null:
+				continue
+			var amount: int = int(item.stat_modifiers.get(stat_id, 0))
+			if amount != 0:
+				lines.append("  +%d from %s" % [amount, item.name_key])
+				has_source = true
+		if not has_source and val == 0:
+			lines.append("  No equipment bonuses")
+	else:
+		# Derived stat (Soul / Interface) — show the average formula.
+		var team: Array[StringName]
+		if stat_id == &"soul":
+			team = AttributeState.ANALOG_TEAM_STATS
+		else:
+			team = AttributeState.CYBORG_TEAM_STATS
+		var parts: Array[String] = []
+		for s in team:
+			var s_key: StringName = AttributeState.STAT_I18N.get(s, &"")
+			var s_name: String = tr(s_key) if s_key != &"" else String(s).capitalize()
+			parts.append("%s %d" % [s_name, AttributeState.get_stat(s)])
+		lines.append("Value: %d  (avg of %s)" % [val, ", ".join(parts)])
+
+	if not desc.is_empty():
+		lines.append("")
+		lines.append(desc)
+
+	get_tree().call_group(&"interactable_tooltip", &"show_talent_node", stat_name, "\n".join(lines))
+
+func _format_stat_value(stat_id: StringName) -> String:
+	return str(AttributeState.get_stat(stat_id))
+
 func _on_stats_changed() -> void:
 	for stat_id: StringName in _attr_value_labels:
-		_attr_value_labels[stat_id].text = str(AttributeState.get_stat(stat_id))
+		_attr_value_labels[stat_id].text = _format_stat_value(stat_id)
 	_repaint_alloc_bar()
 
 func _make_stat_row(label_text: String, value_text: String) -> HBoxContainer:
@@ -692,6 +760,8 @@ func _class_label() -> String:
 	if PlayerState.spec_id != &"":
 		var class_str := String(PlayerState.class_id).to_upper()
 		var spec_str := String(PlayerState.spec_id).to_upper()
+		if PlayerState.spec_id == &"count" and PlayerState.gender == &"female":
+			return "SPEC_ANALOG_COUNTESS"
 		return "SPEC_%s_%s" % [class_str, spec_str]
 	match PlayerState.class_id:
 		&"analog": return "CLASS_ANALOG"

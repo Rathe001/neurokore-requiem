@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="Skill" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/skills/skill.gd" id="1_skill_script"]
+
+[resource]
+script = ExtResource("1_skill_script")
+display_name = "Laser Shot"
+glyph = "—"
+damage = 15
+skill_range = 15.0
+cooldown = 0.45
+wind_up = 0.1
+resource_cost = 8
+targeting_mode = 3
+cone_deg = 0.0
+knockback = 0.5
+icon_color = Color(0.4, 0.85, 1.0, 1.0)

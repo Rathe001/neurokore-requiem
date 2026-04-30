@@ -11,5 +11,5 @@ Unaugmented. In a world that sells upgrades on every corner, the Analog refused 
 ## Specialized Classes
 
 - [Survivalist](human/survivalist.md)
-- [Gentleman / Lady](human/gentleman.md)
+- [Count / Countess](human/count.md)
 - [Enculted](human/enculted.md)

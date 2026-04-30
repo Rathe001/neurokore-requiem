@@ -18,9 +18,16 @@ var _popping: bool = true
 var _player_ref: Node3D
 
 func _ready() -> void:
+	_init_pickup()
+
+func _init_pickup() -> void:
 	add_to_group(&"pickups")
 	SpatialGrid.register(self, &"pickups")
 	_player_ref = get_tree().get_first_node_in_group(&"player") as Node3D
+	_randomize_pop()
+
+func _randomize_pop() -> void:
+	_popping = true
 	var angle := randf() * TAU
 	var speed_factor := randf_range(0.7, 1.1)
 	_velocity = Vector3(
@@ -28,6 +35,15 @@ func _ready() -> void:
 		POP_UP_SPEED * randf_range(0.9, 1.15),
 		sin(angle) * POP_HORIZONTAL_SPEED * speed_factor,
 	)
+
+func reset() -> void:
+	_init_pickup()
+
+func _pool_release() -> void:
+	remove_from_group(&"pickups")
+	_popping = true
+	_velocity = Vector3.ZERO
+	_player_ref = null
 
 func _physics_process(delta: float) -> void:
 	if visual != null:
@@ -64,4 +80,4 @@ func _collect(player: Node) -> void:
 	if player.has_method(&"add_credits"):
 		player.add_credits(amount)
 	SpatialGrid.unregister(self)
-	queue_free()
+	EntityPool.release(self)

@@ -1,0 +1,38 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/prototype/prototype_loot_crate.gd" id="1_script"]
+
+[sub_resource type="StandardMaterial3D" id="mat_crate_body"]
+albedo_color = Color(0.18, 0.14, 0.08, 1)
+metallic = 0.3
+roughness = 0.7
+
+[sub_resource type="BoxMesh" id="mesh_crate_body"]
+material = SubResource("mat_crate_body")
+size = Vector3(1.0, 0.6, 0.7)
+
+[sub_resource type="BoxShape3D" id="shape_crate"]
+size = Vector3(1.0, 0.6, 0.7)
+
+[sub_resource type="StandardMaterial3D" id="mat_lid"]
+albedo_color = Color(0.22, 0.17, 0.1, 1)
+metallic = 0.3
+roughness = 0.65
+
+[sub_resource type="BoxMesh" id="mesh_lid"]
+material = SubResource("mat_lid")
+size = Vector3(1.05, 0.08, 0.75)
+
+[node name="LootCrate" type="StaticBody3D"]
+script = ExtResource("1_script")
+display_name = "Loot Crate"
+
+[node name="Mesh" type="MeshInstance3D" parent="."]
+mesh = SubResource("mesh_crate_body")
+
+[node name="Collision" type="CollisionShape3D" parent="."]
+shape = SubResource("shape_crate")
+
+[node name="Lid" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.34, -0.335)
+mesh = SubResource("mesh_lid")

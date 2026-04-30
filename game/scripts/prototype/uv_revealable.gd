@@ -9,6 +9,7 @@ const FADE_IN_SPEED := 4.0
 const FADE_OUT_SPEED := 6.0
 
 var _parent: Node3D
+var _player: Node3D
 var _revealed: bool = false
 var _alpha: float = 0.0
 var _registered_interactable: bool = false
@@ -24,16 +25,24 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if _parent == null:
 		return
-	var should_reveal := _is_in_uv_range()
-	if should_reveal:
-		_alpha = minf(_alpha + FADE_IN_SPEED * delta, 1.0)
+	# Already fully hidden and not revealed — skip all work.
+	if _alpha <= 0.0 and not _revealed:
+		if _is_in_uv_range():
+			_alpha = minf(FADE_IN_SPEED * delta, 1.0)
+		else:
+			return
 	else:
-		_alpha = maxf(_alpha - FADE_OUT_SPEED * delta, 0.0)
+		if _is_in_uv_range():
+			_alpha = minf(_alpha + FADE_IN_SPEED * delta, 1.0)
+		else:
+			_alpha = maxf(_alpha - FADE_OUT_SPEED * delta, 0.0)
 
+	var was_revealed := _revealed
 	_revealed = _alpha > 0.0
 	_parent.visible = _revealed
 
-	if _revealed:
+	# Only walk the mesh tree when alpha actually changed visibility state or is mid-fade.
+	if _revealed and (_alpha < 1.0 or not was_revealed):
 		_apply_alpha(_parent, _alpha)
 
 	# Gate interactability on being fully (or mostly) revealed.
@@ -50,16 +59,17 @@ func _process(delta: float) -> void:
 			SpatialGrid.unregister(_parent)
 
 func _is_in_uv_range() -> bool:
-	var players := get_tree().get_nodes_in_group(&"player")
-	if players.is_empty():
+	if _player == null or not is_instance_valid(_player):
+		var players := get_tree().get_nodes_in_group(&"player")
+		if players.is_empty():
+			return false
+		_player = players[0] as Node3D
+	if not _player.has_method(&"is_uv_active"):
 		return false
-	var player: Node = players[0]
-	if not player.has_method(&"is_uv_active"):
+	if not _player.is_uv_active():
 		return false
-	if not player.is_uv_active():
-		return false
-	var uv_range: float = player.get_uv_range()
-	var offset: Vector3 = _parent.global_position - (player as Node3D).global_position
+	var uv_range: float = _player.get_uv_range()
+	var offset: Vector3 = _parent.global_position - _player.global_position
 	return offset.length() <= uv_range
 
 func _apply_alpha(node: Node3D, alpha: float) -> void:

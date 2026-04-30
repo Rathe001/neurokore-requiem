@@ -1,4 +1,4 @@
-# Gentleman / Lady *(title reflects character gender)*
+# Count / Countess *(title reflects character gender)*
 
 **Fantasy:** discipline, composure, old-world refinement. Refused augmentation on principle and became dangerous through mastery instead. Precise, methodical — dueling, marksmanship, controlled aggression.
 
@@ -8,5 +8,5 @@
 
 **Resource: Composure** — maintained through deliberate, controlled play. Breaks under panic, chaos, or sustained damage. High skill ceiling for staying calm under fire.
 
-!!! note "Lady variant"
+!!! note "Countess variant"
     Reference art for the female version of this class is not yet created.

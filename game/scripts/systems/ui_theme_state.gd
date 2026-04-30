@@ -12,7 +12,7 @@ const THEME_DEFAULT: UIThemeConfig = preload("res://resources/ui/theme_default.t
 const THEME_ANALOG: UIThemeConfig = preload("res://resources/ui/theme_human.tres")
 const THEME_CYBORG: UIThemeConfig = preload("res://resources/ui/theme_cyborg.tres")
 const THEME_ANALOG_SURVIVALIST: UIThemeConfig = preload("res://resources/ui/theme_human_survivalist.tres")
-const THEME_ANALOG_GENTLEMAN: UIThemeConfig = preload("res://resources/ui/theme_human_gentleman.tres")
+const THEME_ANALOG_COUNT: UIThemeConfig = preload("res://resources/ui/theme_human_count.tres")
 const THEME_ANALOG_ENCULTED: UIThemeConfig = preload("res://resources/ui/theme_human_enculted.tres")
 const THEME_CYBORG_FORGED: UIThemeConfig = preload("res://resources/ui/theme_cyborg_forged.tres")
 const THEME_CYBORG_AUTOMATON: UIThemeConfig = preload("res://resources/ui/theme_cyborg_automaton.tres")
@@ -20,7 +20,7 @@ const THEME_CYBORG_POLYMATH: UIThemeConfig = preload("res://resources/ui/theme_c
 
 const SPEC_THEMES: Dictionary = {
 	&"analog/survivalist": THEME_ANALOG_SURVIVALIST,
-	&"analog/gentleman": THEME_ANALOG_GENTLEMAN,
+	&"analog/count": THEME_ANALOG_COUNT,
 	&"analog/enculted": THEME_ANALOG_ENCULTED,
 	&"cyborg/forged": THEME_CYBORG_FORGED,
 	&"cyborg/automaton": THEME_CYBORG_AUTOMATON,

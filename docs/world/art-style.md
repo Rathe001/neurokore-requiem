@@ -32,7 +32,7 @@ Each class has a consistent color identity used across models, materials, UI, ab
 | Polymath | Yellow |
 | Analog (origin) | Brown |
 | Survivalist | Dirty yellow, rust orange |
-| Gentleman / Lady | Ivory |
+| Count / Countess | Ivory |
 | Enculted | Purple |
 
 This color language should carry through to ability particle effects, resource meter colors, portrait rim lighting, and class-specific UI elements.

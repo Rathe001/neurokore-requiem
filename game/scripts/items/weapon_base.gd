@@ -26,6 +26,10 @@ class_name WeaponBase extends Resource
 @export var crit_chance_range: Vector2 = Vector2(0.05, 0.10)
 @export var accuracy_range: Vector2 = Vector2(0.90, 0.97)
 
+# Effective range in world units. Melee weapons sit around 2–4; ranged
+# weapons 12–25+. Combat uses the rolled value from the Item.
+@export var weapon_range_range: Vector2 = Vector2(2.5, 3.5)
+
 # The default skills attached to this weapon when rolled. Affixes / class
 # perks layer on top in combat resolution.
 @export var fire_skill: Skill

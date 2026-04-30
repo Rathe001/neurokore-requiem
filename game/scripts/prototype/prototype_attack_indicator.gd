@@ -30,16 +30,22 @@ const SHOCKWAVE_BUBBLE_SHADER: Shader = preload("res://scripts/prototype/shockwa
 # (radius, angle) combinations keeps telegraph spawns allocation-free.
 static var _cone_cache: Dictionary = {}
 static var _disk_cache: Dictionary = {}
+static var _line_cache: Dictionary = {}
 static var _bubble_mesh_cache: Dictionary = {}
 static var _cone_dome_cache: Dictionary = {}
 static var _material_template_cache: Dictionary = {}  # Color -> StandardMaterial3D template
 
-static func spawn(host: Node3D, skill: Skill, aim: Vector3) -> void:
+static func spawn(host: Node3D, skill: Skill, aim: Vector3, attack_range: float = 0.0) -> void:
+	var eff_range := attack_range if attack_range > 0.0 else skill.skill_range
 	match skill.targeting_mode:
 		Skill.TargetingMode.SINGLE_CONE:
-			spawn_cone(host, aim, skill.skill_range, skill.cone_deg, skill.wind_up)
+			spawn_cone(host, aim, eff_range, skill.cone_deg, skill.wind_up)
 		Skill.TargetingMode.AOE_RADIAL:
-			spawn_radial(host, skill.skill_range, skill.wind_up)
+			spawn_radial(host, eff_range, skill.wind_up)
+		Skill.TargetingMode.PROJECTILE:
+			spawn_line(host, aim, eff_range, skill.wind_up)
+		Skill.TargetingMode.HITSCAN:
+			spawn_line(host, aim, eff_range, skill.wind_up)
 
 static func spawn_cone(host: Node3D, aim: Vector3, attack_range: float, cone_deg: float, wind_up: float = 0.0) -> void:
 	if not _telegraphs_enabled():
@@ -64,6 +70,95 @@ static func spawn_radial(host: Node3D, radius: float, wind_up: float = 0.0) -> v
 	host.add_child(node)
 	node.position = Vector3(0.0, GROUND_OFFSET, 0.0)
 	_play_fade(node, mat, wind_up)
+
+static func spawn_line(host: Node3D, aim: Vector3, attack_range: float, wind_up: float = 0.0) -> void:
+	if not _telegraphs_enabled():
+		return
+	var node := MeshInstance3D.new()
+	node.mesh = _line_mesh(attack_range)
+	var mat := _build_material(_color_for_host(host))
+	node.material_override = mat
+	host.add_child(node)
+	node.position = Vector3(0.0, GROUND_OFFSET, 0.0)
+	if aim.length_squared() > 0.0001:
+		node.look_at(node.global_position + aim, Vector3.UP)
+	_play_fade(node, mat, wind_up)
+
+## Instant hitscan beam: a glowing cylinder from the host along aim for `length`
+## units, detached into world space so it stays put while the host moves.
+## Fades quickly (no wind-up phase).
+const BEAM_RADIUS := 0.04
+const BEAM_FADE := 0.18
+
+static func spawn_beam(host: Node3D, aim: Vector3, length: float) -> void:
+	var parent: Node = host.get_parent()
+	if parent == null:
+		parent = host
+	var color := _color_for_host(host)
+
+	# Core beam — bright, slightly transparent cylinder.
+	var core_mat := StandardMaterial3D.new()
+	core_mat.albedo_color = Color(color.r, color.g, color.b, 0.95)
+	core_mat.emission_enabled = true
+	core_mat.emission = color
+	core_mat.emission_energy_multiplier = 12.0
+	core_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	core_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	core_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+
+	var core_mesh := CylinderMesh.new()
+	core_mesh.top_radius = BEAM_RADIUS
+	core_mesh.bottom_radius = BEAM_RADIUS
+	core_mesh.height = length
+	core_mesh.radial_segments = 6
+	core_mesh.rings = 1
+
+	var core := MeshInstance3D.new()
+	core.mesh = core_mesh
+	core.material_override = core_mat
+
+	# Outer glow — wider, softer, more transparent.
+	var glow_mat := StandardMaterial3D.new()
+	glow_mat.albedo_color = Color(color.r, color.g, color.b, 0.3)
+	glow_mat.emission_enabled = true
+	glow_mat.emission = color
+	glow_mat.emission_energy_multiplier = 6.0
+	glow_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	glow_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	glow_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+
+	var glow_mesh := CylinderMesh.new()
+	glow_mesh.top_radius = BEAM_RADIUS * 3.0
+	glow_mesh.bottom_radius = BEAM_RADIUS * 3.0
+	glow_mesh.height = length
+	glow_mesh.radial_segments = 6
+	glow_mesh.rings = 1
+
+	var glow := MeshInstance3D.new()
+	glow.mesh = glow_mesh
+	glow.material_override = glow_mat
+
+	# Container node — cylinder height runs along local Y, so rotate -90° on X
+	# to align with local -Z (the look_at forward), then offset by half length.
+	var node := Node3D.new()
+	parent.add_child(node)
+	node.global_position = host.global_position + Vector3(0.0, 1.0, 0.0)
+	if aim.length_squared() > 0.0001:
+		node.look_at(node.global_position + aim, Vector3.UP)
+
+	core.rotation.x = deg_to_rad(-90.0)
+	core.position.z = -length * 0.5
+	glow.rotation.x = deg_to_rad(-90.0)
+	glow.position.z = -length * 0.5
+	node.add_child(core)
+	node.add_child(glow)
+
+	var tween := node.create_tween().set_parallel(true)
+	tween.tween_property(core_mat, "albedo_color:a", 0.0, BEAM_FADE).set_ease(Tween.EASE_IN)
+	tween.tween_property(glow_mat, "albedo_color:a", 0.0, BEAM_FADE).set_ease(Tween.EASE_IN)
+	tween.tween_property(core_mat, "emission_energy_multiplier", 0.0, BEAM_FADE)
+	tween.tween_property(glow_mat, "emission_energy_multiplier", 0.0, BEAM_FADE)
+	tween.chain().tween_callback(node.queue_free)
 
 static func spawn_hit_cone(host: Node3D, aim: Vector3, attack_range: float, cone_deg: float) -> void:
 	var forward := Vector3(aim.x, 0.0, aim.z)
@@ -149,6 +244,17 @@ static func _disk_mesh(radius: float) -> ArrayMesh:
 		verts.append(Vector3(cos(angle) * radius, 0.0, sin(angle) * radius))
 	var mesh := _make_line_mesh(verts)
 	_disk_cache[radius] = mesh
+	return mesh
+
+static func _line_mesh(length: float) -> ArrayMesh:
+	var cached: ArrayMesh = _line_cache.get(length)
+	if cached != null:
+		return cached
+	var verts := PackedVector3Array()
+	verts.append(Vector3.ZERO)
+	verts.append(Vector3(0.0, 0.0, -length))
+	var mesh := _make_line_mesh(verts)
+	_line_cache[length] = mesh
 	return mesh
 
 static func _make_line_mesh(verts: PackedVector3Array) -> ArrayMesh:

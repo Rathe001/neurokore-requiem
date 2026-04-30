@@ -15,6 +15,6 @@ enum Mode {
 @export var mode: Mode = Mode.WINDOWED
 @export var resolution: Vector2i = Vector2i(1280, 720)
 @export var fps_mouse_sensitivity: float = 0.006
-@export var msaa_3d: Viewport.MSAA = Viewport.MSAA_4X
+@export var msaa_3d: Viewport.MSAA = Viewport.MSAA_DISABLED
 @export var screen_space_aa: Viewport.ScreenSpaceAA = Viewport.SCREEN_SPACE_AA_FXAA
 @export var bloom_enabled: bool = true

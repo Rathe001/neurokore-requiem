@@ -102,7 +102,7 @@ Each `UIThemeConfig` resource defines these semantic color fields. Read them via
 | credits | `(0.95, 0.85, 0.3)` |
 | player_color | `(0.78, 0.85, 0.5)` |
 
-### Analog / Gentleman-Lady
+### Analog / Count-Countess
 
 | Field | RGB |
 |---|---|

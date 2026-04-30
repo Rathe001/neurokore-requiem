@@ -22,7 +22,7 @@ Working:
 - Line-of-sight wall fade — walls go transparent only when between camera and player and overlapping the player on screen (view-space projection in `tech_wall.gdshader`, fed by `player_world_pos` global shader uniform)
 - Persistent corpses with bounded pool — see [Enemies](#enemies) below
 - Class UI themes wired through `UIThemeState` (`SPEC_THEMES` lookup keyed by class)
-- **Attribute system** — 6 rollable stats (ORT/ING/AMB/DEV/OPT/CLA) derived from equipped items; Soul and Interface are averaged from their origin's three team stats; tier unlock thresholds per relationship type (primary/team/opposing); `PlayerState` tier-crossing signals; data integrity asserts on startup
+- **Attribute system** — 6 rollable stats (ORT/ING/AMB/DEV/OPT/CLA) derived from equipped items; Soul and Interface are averaged from their origin's three team stats; tier unlock thresholds per relationship type (primary/team/opposing); `PlayerState` tier-crossing signals; data integrity asserts on startup; contribution-weighted stat scaling drives HP and resource pool maximums (primary 1.0x, team 0.25x, opposing 0.10x)
 - **Talents panel** (N) — per-class stat rows with 5-tier node grids; tier bars fill by whole unlocked tiers; tier/node tooltips; locked node preview with unlock % shown; allocation persists in `PlayerState`
 - **Character panel stat bar** — compact multibar on character sheet shows stat allocation % with relationship coloring and hover tooltips matching the talents panel
 - **FPS mode** (V to toggle) — first-person camera with mouse look, crosshair, fill light; crosshair hover triggers same outline + tooltip as iso mouse hover; skill 1 interacts with crosshair target
@@ -34,6 +34,11 @@ Working:
 - **Reflective floor puddles** — procedural blob-masked decal (`puddle.gdshader`) with fbm-distorted silhouette, low-roughness dielectric, and time-driven ripple normals. Placement is deterministic per-room (id-hashed seed) so re-entering doesn't shuffle. Configured per-room via `RoomDef.puddle_count` / `puddle_size`
 - **Hoverable interactable scaffolding** — shared base class for clickable world objects (doors, switches, exit pad). Wraps an outline halo around the source mesh, manages hover/tooltip dispatch, and exposes a `reset_state()` hook the level-reset loop calls via the `resettable` group
 - **Exit pad** — `PrototypeExit` listens on the `boss_listeners` group; when the boss dies the pad unlocks, pulses, and `interact()` triggers a level reset
+- **Ranged weapons** — `PROJECTILE` and `HITSCAN` targeting modes on skills; projectile nodes travel in a straight line with self-destruct on hit or max range; hitscan uses raycast + narrow cone query clipped to wall distance; line telegraph for both modes; weapon bases for Laser Pistol (1H) and Plasma Rifle (2H)
+- **HP & resource scaling** — max HP and resource pool scale with contribution-weighted stat totals. Base + level-up gains + stat bonus are tracked separately so equipping/unequipping gear proportionally adjusts current HP/resource rather than resetting it
+- **Player combat component** — damage resolution pipeline (cone, AoE, projectile, hitscan), damage rolling, crit logic, and cooldown tracking extracted into `PlayerCombat` child node
+- **Entity pooling** — `EntityPool` autoload used for enemies, projectiles, and credit pickups. Pooled entities implement `_pool_release()` / `reset()` for clean state recycling
+- **Aggro cascade cap** — group aggro propagation capped at depth 2 (`MAX_AGGRO_CASCADE`) to prevent unbounded chaining across the level
 
 ## Enemies
 

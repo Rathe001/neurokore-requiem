@@ -33,6 +33,7 @@ const ITEM_DROP_ILVL_OFFSET_MAX: int = 1
 const GRAVITY := 22.0
 const CHASE_SPEED := 3.2
 const AGGRO_RANGE := 10.0
+const GROUP_AGGRO_RANGE := 8.0
 const ATTACK_RANGE := 2.2
 const ATTACK_COOLDOWN := 1.6
 
@@ -71,6 +72,7 @@ const BOSS_RING_EMISSION := Color(1.0, 0.05, 0.05)
 const ATTACK_WINDUP := 0.4
 const ATTACK_CONE_DEG := 80.0
 const ATTACK_KNOCKBACK := 5.0
+const MAX_AGGRO_CASCADE := 2
 
 const ANIM_IDLE: Array[StringName] = [&"Idle_Normal", &"Idle", &"IDLE_NORMAL"]
 const ANIM_RUN: Array[StringName] = [&"Jog_Fwd", &"Walk_Normal", &"JOG_FWD", &"WALK_NORMAL"]
@@ -128,6 +130,7 @@ var _hovered: bool = false
 var _tooltip_locked: bool = false
 var _hit_tween: Tween
 var _floor_ring_mat: StandardMaterial3D
+var _aggroed: bool = false
 
 func _ready() -> void:
 	_init_enemy()
@@ -152,6 +155,7 @@ func _init_enemy() -> void:
 	_knockback_remain = 0.0
 	_attack_cd = 0.0
 	_casting = false
+	_aggroed = false
 	_want_dir = Vector3.ZERO
 	_player_ref = null
 	set_physics_process(true)
@@ -311,6 +315,8 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 		if dir.length_squared() > 0.0001:
 			_knockback_vel = dir.normalized() * knockback_strength
 			_knockback_remain = KNOCKBACK_DURATION
+	if not _aggroed:
+		aggro()
 	_play_hit_squash()
 	if _health <= 0:
 		_die()
@@ -367,6 +373,20 @@ func _physics_process(delta: float) -> void:
 		else:
 			_play_anim(ANIM_IDLE)
 
+## Force this enemy into aggro state and alert nearby enemies.
+## depth caps the cascade so aggro doesn't chain across the entire level.
+func aggro(depth: int = 0) -> void:
+	if _aggroed:
+		return
+	_aggroed = true
+	if depth >= MAX_AGGRO_CASCADE:
+		return
+	for enode: Node3D in SpatialGrid.query_radius(global_position, GROUP_AGGRO_RANGE, &"enemies"):
+		if enode == self:
+			continue
+		if enode.has_method(&"aggro"):
+			enode.aggro(depth + 1)
+
 func _chase_tick() -> void:
 	_want_dir = Vector3.ZERO
 	if _player_ref == null or not is_instance_valid(_player_ref):
@@ -379,7 +399,10 @@ func _chase_tick() -> void:
 	var to_player: Vector3 = player.global_position - global_position
 	to_player.y = 0.0
 	var dist := to_player.length()
-	if dist > AGGRO_RANGE or dist < 0.001:
+	# Normal proximity aggro.
+	if not _aggroed and dist <= AGGRO_RANGE:
+		aggro()
+	if not _aggroed or dist < 0.001:
 		velocity.x = 0.0
 		velocity.z = 0.0
 		return
@@ -421,6 +444,10 @@ func _die() -> void:
 	# group/collision teardown still waits for _become_corpse so the death
 	# animation and drops can finish.
 	SpatialGrid.unregister(self)
+	collision_layer = 0
+	collision_mask = 0
+	if collision != null:
+		collision.disabled = true
 	died.emit()
 	if is_boss:
 		get_tree().call_group(&"boss_listeners", &"on_boss_died", self)
@@ -446,10 +473,11 @@ func _drop_credits() -> void:
 	var parent := get_parent()
 	if parent == null:
 		return
-	var pickup := CREDIT_PICKUP_SCENE.instantiate()
+	var pickup := EntityPool.acquire(CREDIT_PICKUP_SCENE)
 	pickup.amount = randi_range(CREDIT_DROP_MIN, CREDIT_DROP_MAX)
 	parent.add_child(pickup)
 	pickup.global_position = global_position + Vector3(0.0, 1.0, 0.0)
+	pickup.reset()
 
 func _drop_item() -> void:
 	var drop_chance := ITEM_DROP_CHANCE_BASE + ITEM_DROP_CHANCE_PER_LEVEL * float(maxi(level - 1, 0))
@@ -481,12 +509,8 @@ func _become_corpse() -> void:
 	_refresh_outline()
 	remove_from_group(&"tooltip_target")
 	get_tree().call_group(&"interactable_tooltip", &"hide_tooltip")
-	if collision != null:
-		collision.disabled = true
 	if floor_ring != null:
 		floor_ring.visible = false
-	collision_layer = 0
-	collision_mask = 0
 	get_tree().call_group(&"corpse_manager", &"register_corpse", self)
 
 func _face_direction(dir: Vector3) -> void:

@@ -73,9 +73,11 @@ const TYPE_GLYPH: Dictionary = {
 const WEAPON_BASE_PATHS: Dictionary = {
 	"1H Weapon": [
 		"res://resources/items/weapon_bases/melee_1h.tres",
+		"res://resources/items/weapon_bases/ranged_1h.tres",
 	],
 	"2H Weapon": [
 		"res://resources/items/weapon_bases/melee_2h.tres",
+		"res://resources/items/weapon_bases/ranged_2h.tres",
 	],
 }
 
@@ -155,6 +157,39 @@ func roll(main_type: String, item_level: int, rarity: StringName, rng: RandomNum
 	item.name_key = _build_name(main_type, item.sub_type, affix_labels)
 	return item
 
+func roll_from_base(base: WeaponBase, item_level: int, rarity: StringName, rng: RandomNumberGenerator) -> Item:
+	var main_type := "2H Weapon" if base.two_handed else "1H Weapon"
+	var item := Item.new()
+	item.main_type = main_type
+	item.kind = TYPE_TO_SLOT.get(main_type, &"")
+	item.rarity = rarity
+	item.id = StringName("rolled_%d_%d" % [item_level, rng.randi()])
+	item.glyph = TYPE_GLYPH.get(main_type, "?")
+	item.glyph_color = RARITY_COLOR.get(rarity, Color.WHITE)
+	item.stat_modifiers = {}
+	if base.two_handed:
+		item.two_handed = true
+	_apply_weapon_base_direct(item, base, rng)
+	var affix_labels: Array[String] = []
+	var prefix_count: int = RARITY_PREFIX_COUNT.get(rarity, 0)
+	for _i in prefix_count:
+		var affix := AffixTable.roll_prefix(main_type, item_level, rng)
+		if affix != null:
+			_apply_affix(item, affix)
+			affix_labels.append(affix.label)
+	var suffix_count: int = RARITY_SUFFIX_COUNT.get(rarity, 0)
+	for _i in suffix_count:
+		var affix := AffixTable.roll_suffix(main_type, item_level, rng)
+		if affix != null:
+			_apply_affix(item, affix)
+			affix_labels.append(affix.label)
+	var slot_count := _class_slot_count(item_level, rng)
+	for s: StringName in _pick_class_stats(slot_count, rng):
+		var value := _class_stat_value(item_level, rng)
+		item.stat_modifiers[s] = int(item.stat_modifiers.get(s, 0)) + value
+	item.name_key = _build_name(main_type, item.sub_type, affix_labels)
+	return item
+
 func roll_random(item_level: int, rng: RandomNumberGenerator) -> Item:
 	var rarity := _roll_rarity(rng)
 	var main_type: String = MAIN_TYPES[rng.randi_range(0, MAIN_TYPES.size() - 1)]
@@ -208,10 +243,14 @@ func _apply_weapon_base(item: Item, main_type: String, rng: RandomNumberGenerato
 	if base == null:
 		push_warning("[ItemRoller] missing WeaponBase: %s" % path)
 		return
+	_apply_weapon_base_direct(item, base, rng)
+
+func _apply_weapon_base_direct(item: Item, base: WeaponBase, rng: RandomNumberGenerator) -> void:
 	item.weapon_base_id = base.id
 	item.two_handed = base.two_handed
 	item.fire_skill = base.fire_skill
 	item.alt_fire_skill = base.alt_fire_skill
+	var main_type := "2H Weapon" if base.two_handed else "1H Weapon"
 	if item.glyph == TYPE_GLYPH.get(main_type, "?") and base.glyph != "":
 		item.glyph = base.glyph
 	# Damage roll: ensure max >= min so combat damage rolls aren't inverted.
@@ -222,6 +261,7 @@ func _apply_weapon_base(item: Item, main_type: String, rng: RandomNumberGenerato
 	item.attack_speed = rng.randf_range(base.attack_speed_range.x, base.attack_speed_range.y)
 	item.crit_chance = rng.randf_range(base.crit_chance_range.x, base.crit_chance_range.y)
 	item.accuracy = rng.randf_range(base.accuracy_range.x, base.accuracy_range.y)
+	item.weapon_range = rng.randf_range(base.weapon_range_range.x, base.weapon_range_range.y)
 
 func _apply_optics_variant(item: Item, main_type: String, rng: RandomNumberGenerator) -> void:
 	if main_type != "Optics":
