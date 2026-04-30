@@ -633,6 +633,24 @@
         
       
       
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Combat & Scale
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <a href="./" class="md-nav__link md-nav__link--active">
         
   
@@ -649,6 +667,36 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#targeting-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Targeting Modes
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
       
     </li>
   
@@ -1309,7 +1357,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../classes/human/gentleman/" class="md-nav__link">
+      <a href="../../classes/human/gentleman.md" class="md-nav__link">
         
   
   
@@ -1448,6 +1496,25 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#targeting-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Targeting Modes
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -1475,6 +1542,41 @@
 <li><strong>Stat identity:</strong> Attribute distribution drives tier perks that change combat capabilities — extra appendages, drones, curses, etc. See <a href="../attribute-system/#stat-identity--tier-perks--visual-metamorphosis">Attribute System — Stat Identity</a>.</li>
 <li><strong>Gear augmentation:</strong> Equipment can be modified at workbenches (schematics) or on the fly (class skills). Augments add functional and visual changes beyond stat increases. See <a href="../gear-augmentation/">Gear Augmentation</a>.</li>
 </ul>
+<h2 id="targeting-modes">Targeting Modes<a class="headerlink" href="#targeting-modes" title="Permanent link">&para;</a></h2>
+<p>Each skill has a targeting mode that determines how it resolves hits. Modes are defined on the <code>Skill</code> resource.</p>
+<table>
+<thead>
+<tr>
+<th>Mode</th>
+<th>Behavior</th>
+<th>Telegraph</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>SINGLE_CONE</code></td>
+<td>Spatial query: all enemies in a cone (facing direction, configurable arc). Melee default.</td>
+<td>Cone outline on ground</td>
+</tr>
+<tr>
+<td><code>AOE_RADIAL</code></td>
+<td>Spatial query: all enemies within radius.</td>
+<td>Circle outline on ground</td>
+</tr>
+<tr>
+<td><code>PROJECTILE</code></td>
+<td>Spawns a projectile node that travels in a straight line. Hits the first enemy on contact, then despawns. Self-destructs at max range.</td>
+<td>Line on ground</td>
+</tr>
+<tr>
+<td><code>HITSCAN</code></td>
+<td>Raycast + narrow cone query clipped to wall distance. Hits the closest enemy along the ray. Beam VFX.</td>
+<td>Line on ground + beam flash</td>
+</tr>
+</tbody>
+</table>
+<p>Weapon bases determine which targeting mode their skill uses. Melee weapons use <code>SINGLE_CONE</code> or <code>AOE_RADIAL</code>. Ranged weapons use <code>PROJECTILE</code> or <code>HITSCAN</code>. The targeting mode, damage, range, and cooldown are all properties of the <code>Skill</code> resource attached to the weapon — swapping weapons changes combat behavior entirely.</p>
+<p>Damage resolution for all modes feeds through the same pipeline: accuracy roll → hit/miss → crit roll → base damage roll (weapon or skill) → attribute damage multiplier → crit multiplier. This pipeline lives in the <code>PlayerCombat</code> component.</p>
 
 
 

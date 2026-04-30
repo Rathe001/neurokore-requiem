@@ -1292,7 +1292,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../classes/human/gentleman/" class="md-nav__link">
+      <a href="../classes/human/gentleman.md" class="md-nav__link">
         
   
   
@@ -1644,7 +1644,7 @@
 <li>Line-of-sight wall fade — walls go transparent only when between camera and player and overlapping the player on screen (view-space projection in <code>tech_wall.gdshader</code>, fed by <code>player_world_pos</code> global shader uniform)</li>
 <li>Persistent corpses with bounded pool — see <a href="#enemies">Enemies</a> below</li>
 <li>Class UI themes wired through <code>UIThemeState</code> (<code>SPEC_THEMES</code> lookup keyed by class)</li>
-<li><strong>Attribute system</strong> — 6 rollable stats (ORT/ING/AMB/DEV/OPT/CLA) derived from equipped items; Soul and Interface are averaged from their origin's three team stats; tier unlock thresholds per relationship type (primary/team/opposing); <code>PlayerState</code> tier-crossing signals; data integrity asserts on startup</li>
+<li><strong>Attribute system</strong> — 6 rollable stats (ORT/ING/AMB/DEV/OPT/CLA) derived from equipped items; Soul and Interface are averaged from their origin's three team stats; tier unlock thresholds per relationship type (primary/team/opposing); <code>PlayerState</code> tier-crossing signals; data integrity asserts on startup; contribution-weighted stat scaling drives HP and resource pool maximums (primary 1.0x, team 0.25x, opposing 0.10x)</li>
 <li><strong>Talents panel</strong> (N) — per-class stat rows with 5-tier node grids; tier bars fill by whole unlocked tiers; tier/node tooltips; locked node preview with unlock % shown; allocation persists in <code>PlayerState</code></li>
 <li><strong>Character panel stat bar</strong> — compact multibar on character sheet shows stat allocation % with relationship coloring and hover tooltips matching the talents panel</li>
 <li><strong>FPS mode</strong> (V to toggle) — first-person camera with mouse look, crosshair, fill light; crosshair hover triggers same outline + tooltip as iso mouse hover; skill 1 interacts with crosshair target</li>
@@ -1656,6 +1656,11 @@
 <li><strong>Reflective floor puddles</strong> — procedural blob-masked decal (<code>puddle.gdshader</code>) with fbm-distorted silhouette, low-roughness dielectric, and time-driven ripple normals. Placement is deterministic per-room (id-hashed seed) so re-entering doesn't shuffle. Configured per-room via <code>RoomDef.puddle_count</code> / <code>puddle_size</code></li>
 <li><strong>Hoverable interactable scaffolding</strong> — shared base class for clickable world objects (doors, switches, exit pad). Wraps an outline halo around the source mesh, manages hover/tooltip dispatch, and exposes a <code>reset_state()</code> hook the level-reset loop calls via the <code>resettable</code> group</li>
 <li><strong>Exit pad</strong> — <code>PrototypeExit</code> listens on the <code>boss_listeners</code> group; when the boss dies the pad unlocks, pulses, and <code>interact()</code> triggers a level reset</li>
+<li><strong>Ranged weapons</strong> — <code>PROJECTILE</code> and <code>HITSCAN</code> targeting modes on skills; projectile nodes travel in a straight line with self-destruct on hit or max range; hitscan uses raycast + narrow cone query clipped to wall distance; line telegraph for both modes; weapon bases for Laser Pistol (1H) and Plasma Rifle (2H)</li>
+<li><strong>HP &amp; resource scaling</strong> — max HP and resource pool scale with contribution-weighted stat totals. Base + level-up gains + stat bonus are tracked separately so equipping/unequipping gear proportionally adjusts current HP/resource rather than resetting it</li>
+<li><strong>Player combat component</strong> — damage resolution pipeline (cone, AoE, projectile, hitscan), damage rolling, crit logic, and cooldown tracking extracted into <code>PlayerCombat</code> child node</li>
+<li><strong>Entity pooling</strong> — <code>EntityPool</code> autoload used for enemies, projectiles, and credit pickups. Pooled entities implement <code>_pool_release()</code> / <code>reset()</code> for clean state recycling</li>
+<li><strong>Aggro cascade cap</strong> — group aggro propagation capped at depth 2 (<code>MAX_AGGRO_CASCADE</code>) to prevent unbounded chaining across the level</li>
 </ul>
 <h2 id="enemies">Enemies<a class="headerlink" href="#enemies" title="Permanent link">&para;</a></h2>
 <p>Spawning model is <strong>D2-style</strong>, not horde-streaming: enemies are placed at level load, do not respawn during play, and the level can be fully cleared.</p>

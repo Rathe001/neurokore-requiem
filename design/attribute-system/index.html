@@ -879,10 +879,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#breakpoints" class="md-nav__link">
+  <a href="#breakpoints-3-tiers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Breakpoints
+        Breakpoints (3 tiers)
       
     </span>
   </a>
@@ -1751,7 +1751,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../classes/human/gentleman/" class="md-nav__link">
+      <a href="../../classes/human/gentleman.md" class="md-nav__link">
         
   
   
@@ -2120,10 +2120,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#breakpoints" class="md-nav__link">
+  <a href="#breakpoints-3-tiers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Breakpoints
+        Breakpoints (3 tiers)
       
     </span>
   </a>
@@ -2366,7 +2366,7 @@
 <tr>
 <td>Orthodoxy</td>
 <td>ORT</td>
-<td>Gentleman</td>
+<td>Count</td>
 <td>Deviation</td>
 <td>Yes</td>
 </tr>
@@ -2782,27 +2782,15 @@
 </tr>
 <tr>
 <td>2</td>
-<td>No team stat ≥ 45%</td>
-<td>No opposing stat ≥ 35%</td>
-<td>Easy with spread gearing</td>
+<td>No team stat ≥ 40%</td>
+<td>No opposing stat ≥ 30%</td>
+<td>Intentional balance</td>
 </tr>
 <tr>
 <td>3</td>
-<td>No team stat ≥ 35%</td>
-<td>No opposing stat ≥ 25%</td>
-<td>Moderate — needs intentional balance</td>
-</tr>
-<tr>
-<td>4</td>
 <td>No team stat ≥ 30%</td>
 <td>No opposing stat ≥ 20%</td>
-<td>Demanding — tight spread</td>
-</tr>
-<tr>
-<td>5</td>
-<td>No team stat ≥ 25%</td>
-<td>No opposing stat ≥ 15%</td>
-<td>Near-perfect balance. Aspirational ceiling.</td>
+<td>Tight spread — aspirational</td>
 </tr>
 </tbody>
 </table>
@@ -2865,7 +2853,7 @@
 <tbody>
 <tr>
 <td>Orthodoxy</td>
-<td>Gentleman</td>
+<td>Count</td>
 <td>Yes</td>
 <td>TBD</td>
 </tr>
@@ -2904,8 +2892,8 @@
 <hr />
 <h2 id="stat-identity-tier-perks-visual-metamorphosis">Stat Identity — Tier Perks &amp; Visual Metamorphosis<a class="headerlink" href="#stat-identity-tier-perks-visual-metamorphosis" title="Permanent link">&para;</a></h2>
 <p>As a character's stat distribution shifts, two things happen: they unlock <strong>tier perks</strong> (mechanical rewards) and their <strong>appearance transforms</strong>. Both are driven by the same breakpoints and are always in sync.</p>
-<h3 id="breakpoints">Breakpoints<a class="headerlink" href="#breakpoints" title="Permanent link">&para;</a></h3>
-<p>Tier thresholds are based on what percentage of total stats a single attribute represents. Five tiers provide granular progression — cheap early dips, expensive deep commitments.</p>
+<h3 id="breakpoints-3-tiers">Breakpoints (3 tiers)<a class="headerlink" href="#breakpoints-3-tiers" title="Permanent link">&para;</a></h3>
+<p>Three tiers drive everything: talent tree access, tier perks, VFX metamorphosis, and NPC reactions. Thresholds are based on what percentage of total stats a single attribute represents.</p>
 <p><strong>Specialized class thresholds:</strong></p>
 <table>
 <thead>
@@ -2921,57 +2909,48 @@
 <tr>
 <td>0</td>
 <td>—</td>
-<td>&lt; 20%</td>
-<td>&lt; 30%</td>
+<td>&lt; 25%</td>
+<td>&lt; 40%</td>
 <td>No perk, no visual change</td>
 </tr>
 <tr>
 <td>1</td>
 <td>12%</td>
-<td>20%</td>
-<td>30%</td>
-<td>Entry perk unlocked, faint visual hint</td>
+<td>25%</td>
+<td>40%</td>
+<td>Entry perk, faint visual hint, resource bar unlocked</td>
 </tr>
 <tr>
 <td>2</td>
 <td>25%</td>
 <td>40%</td>
-<td>50%</td>
-<td>Second perk, subtle visual shift</td>
+<td>55%</td>
+<td>Second perk, moderate visual shift</td>
 </tr>
 <tr>
 <td>3</td>
 <td>40%</td>
-<td>60%</td>
-<td>70%</td>
-<td>Third perk, pronounced visual change</td>
-</tr>
-<tr>
-<td>4</td>
 <td>55%</td>
-<td>75%</td>
-<td>85%</td>
-<td>Fourth perk, major transformation</td>
-</tr>
-<tr>
-<td>5</td>
-<td>72%</td>
-<td>90%</td>
-<td>95%</td>
+<td>70%</td>
 <td>Full perk, dramatic transformation</td>
 </tr>
 </tbody>
 </table>
 <blockquote>
-<p><strong>Design note:</strong> Primary stat tiers unlock significantly easier than team or opposing stats — class identity should feel immediate. Starter gear (~35% primary share) unlocks T1 and T2 for the chosen class. T3 requires intentional gearing. Stacking your primary stat is doubly rewarded: cheaper unlock thresholds <em>and</em> full 1× power scaling.</p>
+<p><strong>Design note:</strong> Primary stat tiers unlock significantly easier than team or opposing stats — class identity should feel immediate. Team requires moderate investment. Opposing demands heavy commitment. Thresholds are set so that unlocking 4+ class trees simultaneously is mathematically impossible (12+25+25+40 = 102% &gt; 100%), enforcing a natural <strong>3-tree cap</strong>.</p>
+<p><strong>3-tree build patterns:</strong>
+- <strong>3-0-0:</strong> All 3 tiers in 1 class. Deep specialist — one large resource pool.
+- <strong>2-1-0:</strong> 2 tiers in one class, 1 in another. Moderate hybrid — two resource pools.
+- <strong>1-1-1:</strong> 1 tier in each of 3 classes. Wide hybrid — three small resource pools.</p>
 </blockquote>
-<p><strong>Cross-class access:</strong> Any class can unlock any stat's tree by meeting that stat's threshold. An Analog pushing Optimization past the team threshold gets Automaton tier 1. A Gentleman pushing Deviation past the opposing threshold starts unlocking Forged nodes — while also experiencing distortion. Tier access is not permanent: dropping below a threshold locks the tier and deactivates its nodes (points stay allocated but dormant).</p>
+<p><strong>Cross-class access:</strong> Any class can unlock any stat's tree by meeting that stat's threshold. An Analog pushing Optimization past the team threshold gets Automaton tier 1. A Count pushing Deviation past the opposing threshold starts unlocking Forged nodes — while also experiencing distortion. Tier access is not permanent: dropping below a threshold locks the tier and deactivates its nodes (points stay allocated but dormant).</p>
 <blockquote>
 <p><strong>Code source of truth:</strong> Threshold values are defined in <code>game/scripts/systems/attribute_state.gd</code> — <code>TIERS_OWN</code>, <code>TIERS_TEAM</code>, <code>TIERS_OPPOSING</code>. Update there; this table documents the current values.</p>
 </blockquote>
 <h3 id="talent-points">Talent Points<a class="headerlink" href="#talent-points" title="Permanent link">&para;</a></h3>
-<p>Players earn <strong>1 talent point every 5 levels</strong>. At level 100: 20 points. Points are spent on individual nodes within unlocked tiers.</p>
-<p>Each class tree: <strong>4 nodes × 5 tiers = 20 nodes</strong>. Six class trees = <strong>120 total nodes</strong>.</p>
+<p>Players earn <strong>1 talent point per level</strong>. At level 100: ~100 points (tuning TBD). Points are spent on individual nodes within unlocked talent tiers.</p>
+<p>Each class tree: <strong>8 nodes × 3 tiers = 24 nodes</strong>. Six class trees = <strong>144 total nodes</strong>.</p>
+<p>With 20 points at level 100, a fully committed build can't fill even one class tree (20 of 24). Every tier forces meaningful choices — the question is always "which nodes," not "can I even get here."</p>
 <p><strong>Spending:</strong> Each node costs 1 point. Nodes can only be purchased in unlocked tiers.</p>
 <p><strong>Locked nodes:</strong> If gear drops a stat below a threshold, nodes in that tier become inactive but points remain allocated. Re-gear to reactivate, or reallocate freely.</p>
 <p><strong>Reallocation:</strong> Free at any time. Points are a budget — thresholds are the gate.</p>
@@ -2984,16 +2963,12 @@
 <th>Tier 1</th>
 <th>Tier 2</th>
 <th>Tier 3</th>
-<th>Tier 4</th>
-<th>Tier 5</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td>Orthodoxy</td>
-<td>Gentleman</td>
-<td>TBD</td>
-<td>TBD</td>
+<td>Count</td>
 <td>TBD</td>
 <td>TBD</td>
 <td>TBD</td>
@@ -3001,11 +2976,9 @@
 <tr>
 <td>Deviation</td>
 <td>Forged</td>
-<td>TBD</td>
-<td>Extra appendage slot</td>
-<td>TBD</td>
-<td>TBD</td>
-<td>TBD</td>
+<td>Erratic Strikes (8% double)</td>
+<td>Frenzied Strikes (+10% double, 5% triple)</td>
+<td>Unbound Frenzy (+7% double, +7% triple)</td>
 </tr>
 <tr>
 <td>Optimization</td>
@@ -3013,14 +2986,10 @@
 <td>TBD</td>
 <td>Additional drone</td>
 <td>TBD</td>
-<td>TBD</td>
-<td>TBD</td>
 </tr>
 <tr>
 <td>Ingenuity</td>
 <td>Survivalist</td>
-<td>TBD</td>
-<td>TBD</td>
 <td>TBD</td>
 <td>TBD</td>
 <td>TBD</td>
@@ -3031,15 +3000,11 @@
 <td>TBD</td>
 <td>TBD</td>
 <td>TBD</td>
-<td>TBD</td>
-<td>TBD</td>
 </tr>
 <tr>
 <td>Ambition</td>
 <td>Enculted</td>
 <td>Tier 1 curse</td>
-<td>TBD</td>
-<td>TBD</td>
 <td>TBD</td>
 <td>TBD</td>
 </tr>
@@ -3057,7 +3022,8 @@
 <p>They do <strong>not</strong> provide class-specific mechanics, outscale class nodes, or scale off a single stat.</p>
 <h3 id="structure">Structure<a class="headerlink" href="#structure" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>3 tiers</strong> (vs 5 for class trees)</li>
+<li><strong>3 tiers</strong> (matching talent tree depth)</li>
+<li><strong>4 nodes per tier</strong> (smaller tree than class trees — supplementary, not identity-defining)</li>
 <li><strong>Combined threshold unlocks</strong> — tier access is gated by the <em>sum</em> of all three team stats, not any individual stat</li>
 <li><strong>Additive bonuses</strong> — effects are additive, not multiplicative</li>
 </ul>
@@ -3072,21 +3038,24 @@
 <tbody>
 <tr>
 <td>1</td>
-<td>~30% combined</td>
+<td>20% combined</td>
 <td>QoL, minor consistency</td>
 </tr>
 <tr>
 <td>2</td>
-<td>~60% combined</td>
+<td>35% combined</td>
 <td>Moderate flow improvements</td>
 </tr>
 <tr>
 <td>3</td>
-<td>~90% combined</td>
+<td>50% combined</td>
 <td>Strong broad bonus; plateau hard after this</td>
 </tr>
 </tbody>
 </table>
+<blockquote>
+<p><strong>Code source of truth:</strong> <code>TEAM_NODE_THRESHOLDS</code> in <code>attribute_state.gd</code>. Values above document the current implementation.</p>
+</blockquote>
 <h3 id="power-curve">Power Curve<a class="headerlink" href="#power-curve" title="Permanent link">&para;</a></h3>
 <p>Team nodes are <strong>strong early, plateau hard.</strong> Tier 3 is achievable but demanding — reaching it means committing roughly 30% per team stat, leaving little room for anything else. The payoff is broad but not identity-defining.</p>
 <h3 id="optional-team-keystones">Optional: Team Keystones<a class="headerlink" href="#optional-team-keystones" title="Permanent link">&para;</a></h3>
@@ -3127,7 +3096,7 @@
 <ul>
 <li><strong>Viable but inefficient</strong> — functional in the hands of a skilled player</li>
 <li><strong>Mechanically distinct</strong> — the distortion creates a genuinely different play experience</li>
-<li><strong>Thematically resonant</strong> — a Gentleman stacking Deviation is a character at war with themselves</li>
+<li><strong>Thematically resonant</strong> — a Count stacking Deviation is a character at war with themselves</li>
 </ul>
 <p>They should not feel:
 - Optimal (specialization always wins at extremes)
@@ -3150,7 +3119,7 @@
 <hr />
 <h2 id="character-sheet-npc-reactions">Character Sheet &amp; NPC Reactions<a class="headerlink" href="#character-sheet-npc-reactions" title="Permanent link">&para;</a></h2>
 <p>The character sheet displays a <strong>stat distribution visualization</strong> showing each attribute's share of total stats, current tier perks, and proximity to breakpoints. When a stat combination has a recognized identity, the sheet shows a <strong>combo description</strong> — a short flavor line describing what the character has become.</p>
-<p>Key NPCs (reps, vendors, bosses, gate encounters) can react to the player's dominant stat identity rather than their chosen class. An Enculted who stacks Orthodoxy gets treated like a Gentleman. An Analog who has visibly drifted into Ambition territory gets reactions appropriate to what they've become. The rep companion is the most sensitive to this.</p>
+<p>Key NPCs (reps, vendors, bosses, gate encounters) can react to the player's dominant stat identity rather than their chosen class. An Enculted who stacks Orthodoxy gets treated like a Count. An Analog who has visibly drifted into Ambition territory gets reactions appropriate to what they've become. The rep companion is the most sensitive to this.</p>
 <hr />
 <h2 id="design-goals">Design Goals<a class="headerlink" href="#design-goals" title="Permanent link">&para;</a></h2>
 <ol>
@@ -3166,17 +3135,19 @@
 <ul>
 <li>Exact <strong>team stat scaling multiplier</strong> (~0.25x is a starting point, needs playtesting).</li>
 <li>Exact <strong>opposing stat interference mechanics</strong> — what specifically distorts for each class? Needs design per class.</li>
-<li>Exact <strong>tier breakpoints</strong> — implemented (see breakpoints table and <code>attribute_state.gd</code>), needs playtesting.</li>
+<li>Exact <strong>tier breakpoints</strong> — implemented as 3 tiers (see breakpoints table and <code>attribute_state.gd</code>), needs playtesting.</li>
 <li><strong>Team node specific bonuses</strong> — what do tiers 1/2/3 actually grant?</li>
 <li><strong>Team node keystone</strong> — what is the tier 3 high-investment reward?</li>
 <li><strong>Class-specific stat functions</strong> for Orthodoxy, Optimization, Ingenuity, Clarity, Ambition.</li>
 <li><strong>Tier perks</strong> for most classes — see tier perk table above.</li>
 <li><strong>Origin class tier perks</strong> — what does balanced Analog/Cyborg actually unlock?</li>
-<li><strong>Talent point cadence</strong> — every 5 levels (20 points at level 100). Needs tuning.</li>
+<li><strong>Talent point cadence</strong> — currently 1 per level (code: <code>TALENT_POINTS_PER_LEVEL</code>). At level 100 that's ~100 points, well above the 20-point budget intended for meaningful scarcity. Needs tuning.</li>
 <li><strong>Node prerequisites</strong> — do higher-tier nodes require specific lower-tier nodes, or just tier access?</li>
 <li>What does <strong>Soul</strong> govern beyond being a derived stat? Candidates: willpower, resilience, HP, CC resistance.</li>
 <li>What does <strong>Interface</strong> govern beyond being a derived stat? Candidates: precision, latency, cooldown reduction, cast speed.</li>
-<li><strong>Resource system</strong> for each class — 1 unique resource per class (8 total). See individual class pages.</li>
+<li><strong>Resource system</strong> for each class — 1 unique resource per class (8 total). Resource bars are shown for each class with T1+ unlocked (max 3 bars). Pool size scales with contribution-weighted stat total. Origin classes use a single resource bar tied to Soul/Interface. See individual class pages.</li>
+<li><strong>HP scaling</strong> — implemented. Max HP = base (100) + level-up gains + stat bonus. Stat bonus uses contribution-weighted totals: primary stat at 1.0x, team stats at 0.25x, opposing stats at 0.10x, multiplied by <code>HP_PER_WEIGHTED_STAT</code> (2.0). Current HP scales proportionally when max changes so equipping/unequipping gear doesn't leave the player at a strange ratio. Code: <code>AttributeState.get_stat_bonus_hp()</code>, <code>PrototypePlayer._recompute_stat_bonuses()</code>.</li>
+<li><strong>Resource pool scaling</strong> — implemented alongside HP. Uses the same weighted stat total multiplied by <code>RESOURCE_PER_WEIGHTED_STAT</code> (1.0). Code: <code>AttributeState.get_stat_bonus_resource()</code>.</li>
 <li><strong>Visual metamorphosis art pipeline</strong> — modular mesh kits per stat, shader channels, VFX layers. Needs concept work per class.</li>
 <li><strong>Relationship overlay</strong> implementation — where exactly do overlays appear (item tooltips, stat bars, talent panel, character sheet)?</li>
 </ul>
