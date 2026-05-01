@@ -399,14 +399,17 @@ func _chase_tick() -> void:
 	var to_player: Vector3 = player.global_position - global_position
 	to_player.y = 0.0
 	var dist := to_player.length()
-	# Normal proximity aggro.
-	if not _aggroed and dist <= AGGRO_RANGE:
+	# Normal proximity aggro — gated on line of sight so enemies don't wake
+	# through walls.
+	if not _aggroed and dist <= AGGRO_RANGE and LosCuller.has_los_to_player(self):
 		aggro()
 	if not _aggroed or dist < 0.001:
 		velocity.x = 0.0
 		velocity.z = 0.0
 		return
-	if dist <= ATTACK_RANGE and _attack_cd <= 0.0:
+	# Aggro'd enemies still chase at all times, but won't start a swing through
+	# a wall — the LoS check on attack initiation prevents through-wall hits.
+	if dist <= ATTACK_RANGE and _attack_cd <= 0.0 and LosCuller.has_los_to_player(self):
 		_cast_attack(player, to_player / dist)
 		return
 	var dir := to_player / dist
@@ -433,6 +436,10 @@ func _cast_attack(player: Node3D, aim: Vector3) -> void:
 		return
 	var half_cos := cos(deg_to_rad(ATTACK_CONE_DEG * 0.5))
 	if aim.dot(to_p / dist) < half_cos:
+		return
+	# Re-check LoS at the moment of damage so a player who ducked behind a
+	# wall during the windup doesn't get hit through it.
+	if not LosCuller.has_los_to_player(self):
 		return
 	if player.has_method(&"take_damage"):
 		player.take_damage(_attack_damage, global_position, ATTACK_KNOCKBACK)

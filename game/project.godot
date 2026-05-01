@@ -35,6 +35,7 @@ AttributeState="*res://scripts/systems/attribute_state.gd"
 PerkState="*res://scripts/systems/perk_state.gd"
 AffixTable="*res://scripts/items/affix_table.gd"
 ItemRoller="*res://scripts/items/item_roller.gd"
+LosCuller="*res://scripts/systems/los_culler.gd"
 
 [display]
 
