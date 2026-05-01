@@ -408,7 +408,14 @@ func _physics_process(delta: float) -> void:
 			flat = flat.move_toward(target, step)
 			velocity.x = flat.x
 			velocity.z = flat.y
+	# Capture the wished horizontal motion before move_and_slide so step-up can
+	# probe in that direction even if the slide zeroed velocity against a wall.
+	var wish_horiz := Vector3(velocity.x, 0.0, velocity.z)
 	move_and_slide()
+	# Auto step-up over short obstacles (pit-edge fences, future stair steps).
+	# 0.4m clears anything authored as "low wall" while staying below typical
+	# crouch-tunnel ceiling heights.
+	StepUp.try(self, wish_horiz, 0.4, delta)
 
 	# Auto-uncrouch as soon as the key isn't held. Polls the physical key
 	# directly because Godot's action system can miss the release event for

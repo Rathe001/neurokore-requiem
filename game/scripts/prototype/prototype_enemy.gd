@@ -364,7 +364,13 @@ func _physics_process(delta: float) -> void:
 		velocity.z = 0.0
 	else:
 		_chase_tick()
+	# Capture wished horizontal motion before slide consumes it (see StepUp).
+	var wish_horiz := Vector3(velocity.x, 0.0, velocity.z)
 	move_and_slide()
+	# Auto step-up over short obstacles. 0.3m is slightly tighter than the
+	# player's 0.4m so enemies can't path up onto things the player wouldn't
+	# expect them to (decorative crates, etc.) — still enough for pit fences.
+	StepUp.try(self, wish_horiz, 0.3, delta)
 
 	if _alive and not _casting and _knockback_remain <= 0.0:
 		if _want_dir.length_squared() > 0.01:

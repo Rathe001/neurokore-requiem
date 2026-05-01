@@ -86,33 +86,36 @@ func _process(delta: float) -> void:
 		var dist := Vector2(d2.x, d2.z).length()
 		var factor: float
 		var blocked: bool
-		if dist >= OUTER_RADIUS:
-			# Past the falloff band: locked to DIM_FACTOR regardless of LoS.
-			# Skip the raycast — at horde-level light counts this is the cheap
-			# path that runs for the vast majority of lights every frame.
-			factor = DIM_FACTOR
-			blocked = false  # cosmetic — _visible is gated on dist below anyway
+		# Reuse the cached blocked state when the player hasn't crossed a cell
+		# boundary since the last raycast. Lights are static, so the answer
+		# can't change without the player moving meaningfully.
+		#
+		# We raycast at all distances now, not just within OUTER_RADIUS.
+		# Skipping it for far lights left them stuck at DIM_FACTOR (5%)
+		# regardless of LoS — distant rooms behind walls would glow dimly
+		# from far away and only go dark once the player crossed the falloff
+		# threshold, which read as "rooms get darker when I approach them."
+		# The cell cache caps the raycast cost: ~N raycasts per cell crossing
+		# (≈1/sec at walking speed), not per frame.
+		if cell_changed or not _blocked.has(key):
+			# Horizontal ray at chest height — we only care whether a wall sits
+			# between the player's footprint and the light's footprint, not
+			# whether the light's ceiling mount is reachable. Aiming up at
+			# ceiling-mounted lights would dim everything when crouching under
+			# a low overhead.
+			_query.from = from
+			_query.to = Vector3(light.global_position.x, from.y, light.global_position.z)
+			blocked = not space.intersect_ray(_query).is_empty()
+			_blocked[key] = blocked
 		else:
-			# Reuse the cached blocked state when the player hasn't crossed a
-			# cell boundary since the last raycast. Lights are static, so the
-			# answer can't change without the player moving meaningfully.
-			if cell_changed or not _blocked.has(key):
-				# Horizontal ray at chest height — we only care whether a wall sits
-				# between the player's footprint and the light's footprint, not
-				# whether the light's ceiling mount is reachable. Aiming up at
-				# ceiling-mounted lights would dim everything when crouching under
-				# a low overhead.
-				_query.from = from
-				_query.to = Vector3(light.global_position.x, from.y, light.global_position.z)
-				blocked = not space.intersect_ray(_query).is_empty()
-				_blocked[key] = blocked
-			else:
-				blocked = _blocked[key]
-			if blocked:
-				factor = OCCLUDED_DIM_FACTOR
-			else:
-				var t := smoothstep(INNER_RADIUS, OUTER_RADIUS, dist)
-				factor = lerp(1.0, DIM_FACTOR, t)
+			blocked = _blocked[key]
+		if blocked:
+			factor = OCCLUDED_DIM_FACTOR
+		elif dist >= OUTER_RADIUS:
+			factor = DIM_FACTOR
+		else:
+			var t := smoothstep(INNER_RADIUS, OUTER_RADIUS, dist)
+			factor = lerp(1.0, DIM_FACTOR, t)
 		_visible[key] = (not blocked) and (dist < OUTER_RADIUS)
 		var target: float = baseline * factor
 		light.light_energy = lerp(light.light_energy, target, weight)

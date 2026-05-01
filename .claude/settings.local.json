@@ -41,7 +41,20 @@
       "Bash(\"/c/Users/josh/Tools/Godot/Godot_v4.6.2-stable_win64_console.exe\" --headless --path \"C:/Users/josh/Projects/neurokore-requiem/game\" --check-only --script scripts/level/level_builder.gd)",
       "Bash(\"/c/Users/josh/Tools/Godot/Godot_v4.6.2-stable_win64_console.exe\" --headless --path \"C:/Users/josh/Projects/neurokore-requiem/game\" --quit-after 1)",
       "Bash(\"/c/Users/josh/Tools/Godot/Godot_v4.6.2-stable_win64_console.exe\" --headless --path \"C:/Users/josh/Projects/neurokore-requiem/game\" --quit-after 60 res://scenes/world/prototype_3d.tscn)",
-      "Bash(\"/c/Users/josh/Tools/Godot/Godot_v4.6.2-stable_win64_console.exe\" --headless --path \"C:/Users/josh/Projects/neurokore-requiem/game\" --import)"
+      "Bash(\"/c/Users/josh/Tools/Godot/Godot_v4.6.2-stable_win64_console.exe\" --headless --path \"C:/Users/josh/Projects/neurokore-requiem/game\" --import)",
+      "Bash(Godot --headless --import)",
+      "Bash(\"/c/Users/josh/Tools/Godot/Godot_v4.6.2-stable_win64_console.exe\" --headless --path game --import)",
+      "Bash(timeout 10 \"/c/Users/josh/Tools/Godot/Godot_v4.6.2-stable_win64_console.exe\" --headless --path . res://scenes/world/prototype_3d.tscn)",
+      "Bash(timeout 12 \"/c/Users/josh/Tools/Godot/Godot_v4.6.2-stable_win64_console.exe\" --headless --path . res://scenes/world/prototype_3d.tscn)",
+      "Bash(timeout 25 \"/c/Users/josh/Tools/Godot/Godot_v4.6.2-stable_win64_console.exe\" --headless --path . res://scenes/world/prototype_3d.tscn)",
+      "Bash(ls game/scripts/prototype/*.gdshader)",
+      "Bash(ls game/shaders/)",
+      "Bash(timeout 20 \"/c/Users/josh/Tools/Godot/Godot_v4.6.2-stable_win64_console.exe\" --headless --path . res://scenes/world/prototype_3d.tscn)",
+      "Bash(\"/c/Users/josh/Tools/Godot/Godot_v4.6.2-stable_win64_console.exe\" --headless --check-only --path \"/c/Users/josh/Projects/neurokore-requiem/game\")",
+      "Bash(tasklist)",
+      "Bash(taskkill /F /PID 47304)",
+      "PowerShell(Stop-Process *)",
+      "Bash(xargs -I {} sh -c 'echo \"{}\"; sed -n \"$\\(echo {} | cut -d: -f1\\),+5p\" \"C:\\\\Users\\\\josh\\\\Projects\\\\neurokore-requiem\\\\game\\\\scripts\\\\prototype\\\\prototype_player.gd\"')"
     ]
   }
 }

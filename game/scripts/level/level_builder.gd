@@ -316,8 +316,12 @@ func _build_low_ceiling(center: Vector3, cd: CorridorDef) -> void:
 	if _wall_material_alt != null:
 		mesh_inst.material_override = _wall_material_alt
 	mesh_inst.position = center + Vector3(0.0, block_cy, 0.0)
-	add_child(mesh_inst)
+	# Groups must be set BEFORE add_child so OverhangFader's node_added handler
+	# sees the &"overhang" tag the moment the mesh enters the tree. Adding to a
+	# group post-add_child means the autoload's first sighting misses it.
 	mesh_inst.add_to_group(&"structures")
+	mesh_inst.add_to_group(&"overhang")
+	add_child(mesh_inst)
 
 	# Collision — thin slab just above ceiling_height; prevents the player
 	# from standing up inside the crawl zone.
