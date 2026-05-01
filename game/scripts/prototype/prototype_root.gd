@@ -70,7 +70,10 @@ func corpse_count() -> int:
 	return _corpses.size()
 
 func _spawn_wave(count: int) -> void:
-	var player := get_tree().get_first_node_in_group(&"player") as Node3D
+	var player_node := get_tree().get_first_node_in_group(&"player")
+	var player: Node3D = null
+	if player_node != null and is_instance_valid(player_node):
+		player = player_node as Node3D
 	var center: Vector3 = player.global_position if player != null else Vector3.ZERO
 	for i in count:
 		var angle := randf() * TAU

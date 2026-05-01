@@ -172,8 +172,8 @@ func _update_pan() -> void:
 
 	# uv_scale controls zoom: ratio of view size to bake size.
 	var view_size := FULL_VIEW_SIZE if mode == Mode.FULLSCREEN else CORNER_VIEW_SIZE
-	var scale := view_size / _bake_ortho
-	_mask_material.set_shader_parameter(&"uv_scale", scale)
+	var uv_scale := view_size / _bake_ortho
+	_mask_material.set_shader_parameter(&"uv_scale", uv_scale)
 
 # ── Input ─────────────────────────────────────────────────────────────────────
 

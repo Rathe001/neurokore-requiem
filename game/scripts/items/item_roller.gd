@@ -267,7 +267,7 @@ func _apply_optics_variant(item: Item, main_type: String, rng: RandomNumberGener
 	if main_type != "Optics":
 		return
 	var variant: Dictionary = OPTICS_VARIANTS[rng.randi_range(0, OPTICS_VARIANTS.size() - 1)]
-	item.light_type = variant["light_type"]
+	item.light_type = variant["light_type"] as Item.LightType
 	item.light_range = variant["range"]
 	var energy_range: Vector2 = variant["energy_range"]
 	item.light_energy = rng.randf_range(energy_range.x, energy_range.y)

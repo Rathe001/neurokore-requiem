@@ -522,7 +522,7 @@ func _handle_skill_input() -> void:
 			return
 		if i == 0 and _click_consumed:
 			return
-		if i == 0 and _fps_mode and _fps_hovered != null:
+		if i == 0 and _fps_mode and _fps_hovered != null and is_instance_valid(_fps_hovered):
 			if Input.is_action_just_pressed(SKILL_INPUTS[i]):
 				_try_interact_with(_fps_hovered)
 			return
@@ -577,7 +577,16 @@ func _interact_with_hovered(node: Node) -> void:
 	node.interact(self)
 
 func _is_any_modal_open() -> bool:
-	if _modal_nodes.is_empty():
+	# Cache is built lazily and rebuilt if any entry was freed since last call —
+	# UI modals are usually long-lived, but level reset can free and replace them.
+	var rebuild := _modal_nodes.is_empty()
+	if not rebuild:
+		for modal in _modal_nodes:
+			if not is_instance_valid(modal):
+				rebuild = true
+				break
+	if rebuild:
+		_modal_nodes.clear()
 		for node in get_tree().get_nodes_in_group(&"ui_modal"):
 			if node is CanvasItem:
 				_modal_nodes.append(node as CanvasItem)
@@ -739,6 +748,8 @@ func _update_lock_target() -> void:
 			_lock_target = null
 	if _lock_target == null and Input.is_action_just_pressed(SKILL_INPUTS[0]):
 		for n in get_tree().get_nodes_in_group(&"tooltip_target"):
+			if not is_instance_valid(n):
+				continue
 			if n is Node3D and n.is_in_group(&"enemies"):
 				_lock_target = n
 				break
@@ -905,7 +916,10 @@ func get_uv_range() -> float:
 	return item.light_range
 
 func _notify_hud_scanner() -> void:
-	var hud := get_tree().get_first_node_in_group(&"hud") as PrototypeHud
+	var hud_node := get_tree().get_first_node_in_group(&"hud")
+	if hud_node == null or not is_instance_valid(hud_node):
+		return
+	var hud := hud_node as PrototypeHud
 	if hud != null:
 		hud.set_scanner_active(_scanner_active and _light_on)
 

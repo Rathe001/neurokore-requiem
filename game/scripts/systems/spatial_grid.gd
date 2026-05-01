@@ -11,7 +11,11 @@ const MOVE_THRESHOLD_SQ := 0.25
 
 var _inv_cell_size: float = 1.0 / DEFAULT_CELL_SIZE
 
-# category -> { cell_key: Vector2i -> Array[Node3D] }
+# category -> { cell_key: Vector2i -> { Node3D -> true } }
+# Buckets are dictionaries (used as sets) rather than arrays so unregister()
+# and cell migration in _update_all_positions() remove in O(1) instead of doing
+# a linear scan — at horde scale, every entity that crosses a cell boundary
+# this frame triggers a remove, which adds up fast with array.erase().
 var _grids: Dictionary = {}
 # node -> { category: StringName, cell: Vector2i }
 var _tracked: Dictionary = {}
@@ -56,7 +60,7 @@ func query_radius(origin: Vector3, radius: float, category: StringName) -> Array
 			var key := Vector2i(cx, cz)
 			if not grid.has(key):
 				continue
-			var bucket: Array = grid[key]
+			var bucket: Dictionary = grid[key]
 			for node: Node3D in bucket:
 				if not is_instance_valid(node):
 					continue
@@ -81,7 +85,7 @@ func query_cone(origin: Vector3, aim: Vector3, radius: float, half_cos: float, c
 			var key := Vector2i(cx, cz)
 			if not grid.has(key):
 				continue
-			var bucket: Array = grid[key]
+			var bucket: Dictionary = grid[key]
 			for node: Node3D in bucket:
 				if not is_instance_valid(node):
 					continue
@@ -110,7 +114,7 @@ func query_nearest(origin: Vector3, radius: float, category: StringName) -> Node
 			var key := Vector2i(cx, cz)
 			if not grid.has(key):
 				continue
-			var bucket: Array = grid[key]
+			var bucket: Dictionary = grid[key]
 			for node: Node3D in bucket:
 				if not is_instance_valid(node):
 					continue
@@ -128,19 +132,19 @@ func count(category: StringName) -> int:
 		return 0
 	var total := 0
 	var grid: Dictionary = _grids[category]
-	for bucket: Array in grid.values():
+	for bucket: Dictionary in grid.values():
 		total += bucket.size()
 	return total
 
 # ── Internal ──────────────────────────────────────────────────────────────
 
 func _update_all_positions() -> void:
-	# Iterate a snapshot — keys() can hold freed-object references when callers
-	# queue_free a tracked node without unregister(). Typed iteration over those
-	# would error on the freed-instance cast. Defer erases to after the loop.
-	var keys := _tracked.keys()
+	# Iterate _tracked directly (no .keys() snapshot allocation each frame).
+	# We can read+mutate values in place but must defer key erases to after the
+	# loop — both because Dictionary iteration doesn't tolerate concurrent
+	# erase, and because freed-object keys require deferred cleanup.
 	var dead: Array = []
-	for node in keys:
+	for node in _tracked:
 		if not is_instance_valid(node):
 			dead.append(node)
 			continue
@@ -170,8 +174,8 @@ func _cell_for(pos: Vector3) -> Vector2i:
 func _insert(node: Node3D, category: StringName, cell: Vector2i) -> void:
 	var grid: Dictionary = _grids[category]
 	if not grid.has(cell):
-		grid[cell] = []
-	grid[cell].append(node)
+		grid[cell] = {}
+	grid[cell][node] = true
 
 func _remove(node: Node3D, category: StringName, cell: Vector2i) -> void:
 	if not _grids.has(category):
@@ -179,7 +183,7 @@ func _remove(node: Node3D, category: StringName, cell: Vector2i) -> void:
 	var grid: Dictionary = _grids[category]
 	if not grid.has(cell):
 		return
-	var bucket: Array = grid[cell]
+	var bucket: Dictionary = grid[cell]
 	bucket.erase(node)
 	if bucket.is_empty():
 		grid.erase(cell)

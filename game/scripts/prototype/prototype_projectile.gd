@@ -18,6 +18,7 @@ var source_position: Vector3 = Vector3.ZERO
 var _traveled: float = 0.0
 var _hit: bool = false
 var _connected: bool = false
+var _released: bool = false
 
 func _ready() -> void:
 	_connect_signal()
@@ -36,6 +37,7 @@ func reset() -> void:
 func _pool_release() -> void:
 	_traveled = 0.0
 	_hit = false
+	_released = false
 	monitoring = false
 
 func _physics_process(delta: float) -> void:
@@ -59,8 +61,13 @@ func _on_body_entered(body: Node3D) -> void:
 	_release()
 
 func _release() -> void:
-	monitoring = false
-	EntityPool.release(self)
+	# Called from physics callback contexts (body_entered, _physics_process), so
+	# defer the pool return — EntityPool.release synchronously toggles `monitoring`
+	# and removes this Area3D from the tree, both forbidden during physics.
+	if _released:
+		return
+	_released = true
+	EntityPool.release.call_deferred(self)
 
 func _roll_hit() -> bool:
 	if accuracy >= 1.0:

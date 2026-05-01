@@ -27,6 +27,11 @@ func setup(light: Light3D, tube_mat: StandardMaterial3D) -> void:
 func _physics_process(delta: float) -> void:
 	if _light == null:
 		return
+	# Don't flicker lights the player can't see — ProximityLighting fights us
+	# for `light_energy` writes, and a flicker dip on a dimmed-out light reads
+	# as a stray brightness pop in rooms behind walls or doors.
+	if not ProximityLighting.is_visible(_light):
+		return
 
 	if _flicker_timer > 0.0:
 		_flicker_timer -= delta

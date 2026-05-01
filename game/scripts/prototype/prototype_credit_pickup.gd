@@ -80,4 +80,6 @@ func _collect(player: Node) -> void:
 	if player.has_method(&"add_credits"):
 		player.add_credits(amount)
 	SpatialGrid.unregister(self)
-	EntityPool.release(self)
+	# Deferred — _collect runs from _physics_process, and EntityPool.release
+	# removes a CollisionObject from the tree, which physics forbids mid-step.
+	EntityPool.release.call_deferred(self)

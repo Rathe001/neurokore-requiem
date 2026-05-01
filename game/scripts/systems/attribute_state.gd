@@ -237,9 +237,9 @@ func get_tier_thresholds(stat_id: StringName, class_id: StringName, spec_id: Str
 ## tier 3, the highest-pct stat wins. This makes tier 3 a hard "all-in" choice
 ## rather than a free addition on top of mid-tier perks elsewhere.
 func get_unlocked_tier(stat_id: StringName, class_id: StringName, spec_id: StringName) -> int:
-	var owner := get_tier3_owner(class_id, spec_id)
-	if owner != &"":
-		return TIER_COUNT if stat_id == owner else 0
+	var tier3_owner := get_tier3_owner(class_id, spec_id)
+	if tier3_owner != &"":
+		return TIER_COUNT if stat_id == tier3_owner else 0
 	var pct := get_stat_pct(stat_id)
 	var thresholds := get_tier_thresholds(stat_id, class_id, spec_id)
 	var unlocked := 0
@@ -251,15 +251,15 @@ func get_unlocked_tier(stat_id: StringName, class_id: StringName, spec_id: Strin
 ## Returns the stat_id that owns tier-3 exclusivity (highest-pct stat at or above
 ## its tier-3 threshold), or &"" if no stat has reached tier 3.
 func get_tier3_owner(class_id: StringName, spec_id: StringName) -> StringName:
-	var owner: StringName = &""
-	var owner_pct := 0.0
+	var winner: StringName = &""
+	var winner_pct := 0.0
 	for sid in ROLLABLE_STATS:
 		var pct := get_stat_pct(sid)
 		var thresholds := get_tier_thresholds(sid, class_id, spec_id)
-		if pct >= thresholds[TIER_COUNT - 1] and pct > owner_pct:
-			owner = sid
-			owner_pct = pct
-	return owner
+		if pct >= thresholds[TIER_COUNT - 1] and pct > winner_pct:
+			winner = sid
+			winner_pct = pct
+	return winner
 
 ## Returns the balance tier (0–3) for an origin class (Analog/Cyborg).
 ## Higher = tighter stat balance; perks are maintained up to the returned tier.
@@ -361,14 +361,14 @@ func get_scaling_hint(class_id: StringName, spec_id: StringName) -> String:
 		return "[color=#%s]%s[/color]" % [col.to_html(false), label]
 
 	if spec_id == &"":
-		var team := get_team_stats_for_origin(class_id)
-		var team_names: Array[String] = []
-		for s in team:
-			team_names.append(_colored.call(s))
+		var origin_team := get_team_stats_for_origin(class_id)
+		var origin_team_names: Array[String] = []
+		for s in origin_team:
+			origin_team_names.append(_colored.call(s))
 		var derived_stat: StringName = &"soul" if class_id == &"analog" else &"itf"
 		var derived: String = _colored.call(derived_stat)
 		return "Scales with %s (average of %s). Rewards balanced investment across all three." % [
-			derived, ", ".join(team_names)]
+			derived, ", ".join(origin_team_names)]
 
 	var primary: StringName = get_spec_stat(spec_id)
 	var origin: StringName = get_spec_origin(spec_id)

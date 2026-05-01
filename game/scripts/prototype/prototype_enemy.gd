@@ -399,9 +399,13 @@ func _chase_tick() -> void:
 	var to_player: Vector3 = player.global_position - global_position
 	to_player.y = 0.0
 	var dist := to_player.length()
+	# Single LoS lookup serves both the aggro and attack-initiation checks
+	# below. The damage-time check inside _cast_attack re-queries on purpose,
+	# since it runs after the windup await.
+	var has_los := LosCuller.has_los_to_player(self)
 	# Normal proximity aggro — gated on line of sight so enemies don't wake
 	# through walls.
-	if not _aggroed and dist <= AGGRO_RANGE and LosCuller.has_los_to_player(self):
+	if not _aggroed and dist <= AGGRO_RANGE and has_los:
 		aggro()
 	if not _aggroed or dist < 0.001:
 		velocity.x = 0.0
@@ -409,7 +413,7 @@ func _chase_tick() -> void:
 		return
 	# Aggro'd enemies still chase at all times, but won't start a swing through
 	# a wall — the LoS check on attack initiation prevents through-wall hits.
-	if dist <= ATTACK_RANGE and _attack_cd <= 0.0 and LosCuller.has_los_to_player(self):
+	if dist <= ATTACK_RANGE and _attack_cd <= 0.0 and has_los:
 		_cast_attack(player, to_player / dist)
 		return
 	var dir := to_player / dist
@@ -451,10 +455,12 @@ func _die() -> void:
 	# group/collision teardown still waits for _become_corpse so the death
 	# animation and drops can finish.
 	SpatialGrid.unregister(self)
-	collision_layer = 0
-	collision_mask = 0
+	# Deferred — _die can be reached through projectile body_entered → take_damage,
+	# i.e. mid physics-query flush, where direct collision/layer writes error.
+	set_deferred(&"collision_layer", 0)
+	set_deferred(&"collision_mask", 0)
 	if collision != null:
-		collision.disabled = true
+		collision.set_deferred(&"disabled", true)
 	died.emit()
 	if is_boss:
 		get_tree().call_group(&"boss_listeners", &"on_boss_died", self)

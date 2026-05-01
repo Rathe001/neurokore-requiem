@@ -126,6 +126,8 @@ func _on_input_event(_camera: Node, event: InputEvent, _pos: Vector3, _normal: V
 	if mb == null or mb.button_index != MOUSE_BUTTON_LEFT or not mb.pressed:
 		return
 	for modal in get_tree().get_nodes_in_group(&"ui_modal"):
+		if not is_instance_valid(modal):
+			continue
 		if modal is CanvasItem and (modal as CanvasItem).visible:
 			return
 	if InventoryState.add_to_inventory(item):
