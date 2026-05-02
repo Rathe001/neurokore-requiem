@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="OpticsVariant" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/optics_variant.gd" id="script"]
+
+[resource]
+script = ExtResource("script")
+display_name = "Phased Surveillance Radar"
+glyph = "◎"
+light_type = 2
+light_range = 12.0
+light_energy_min = 0.0
+light_energy_max = 0.0
+light_color = Color(0.5, 1.0, 1.0, 1)

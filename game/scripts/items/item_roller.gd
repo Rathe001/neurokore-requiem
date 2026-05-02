@@ -48,43 +48,26 @@ const WEAPON_BASE_PATHS: Dictionary = {
 	],
 }
 
-# Optics variants. One of these is rolled when main_type == "Optics" so each
-# light item carries the right type, range, energy, and color to actually work
-# when equipped. Probability is uniform — friends-mode demo wants visibility.
-const OPTICS_VARIANTS: Array[Dictionary] = [
-	{
-		"name": "Flashlight",
-		"glyph": "✸",
-		"light_type": Item.LightType.DIRECTIONAL,
-		"range": 18.0,
-		"energy_range": Vector2(7.0, 8.5),
-		"color": Color(1.0, 0.95, 0.85),
-	},
-	{
-		"name": "Lantern",
-		"glyph": "◉",
-		"light_type": Item.LightType.RADIANT,
-		"range": 9.0,
-		"energy_range": Vector2(5.0, 6.5),
-		"color": Color(1.0, 0.85, 0.6),
-	},
-	{
-		"name": "Phased Surveillance Radar",
-		"glyph": "◎",
-		"light_type": Item.LightType.SCANNER,
-		"range": 12.0,
-		"energy_range": Vector2(0.0, 0.0),
-		"color": Color(0.5, 1.0, 1.0),
-	},
-	{
-		"name": "UV Light",
-		"glyph": "❉",
-		"light_type": Item.LightType.UV,
-		"range": 6.0,
-		"energy_range": Vector2(2.0, 2.6),
-		"color": Color(0.6, 0.4, 1.0),
-	},
+# Optics variants — loaded from individual .tres files at _ready into
+# `_optics_variants`. Adding a new optic = author a new .tres in the optics
+# directory and add its path here. Per-variant tunables (range, energy,
+# colour, glyph) live in the editor; this file only handles dispatch.
+const OPTICS_VARIANT_PATHS: Array[String] = [
+	"res://resources/items/optics/flashlight.tres",
+	"res://resources/items/optics/lantern.tres",
+	"res://resources/items/optics/scanner.tres",
+	"res://resources/items/optics/uv_light.tres",
 ]
+var _optics_variants: Array[OpticsVariant] = []
+
+
+func _ready() -> void:
+	for path in OPTICS_VARIANT_PATHS:
+		var v := load(path) as OpticsVariant
+		if v == null:
+			push_warning("[ItemRoller] Optics variant at %s isn't an OpticsVariant; skipping." % path)
+			continue
+		_optics_variants.append(v)
 
 func roll(main_type: String, item_level: int, rarity: StringName, rng: RandomNumberGenerator) -> Item:
 	var item := Item.new()
@@ -238,26 +221,25 @@ func _apply_weapon_base_direct(item: Item, base: WeaponBase, rng: RandomNumberGe
 	item.weapon_range = rng.randf_range(base.weapon_range_range.x, base.weapon_range_range.y)
 
 func _apply_optics_variant(item: Item, main_type: String, rng: RandomNumberGenerator) -> void:
-	if main_type != "Optics":
+	if main_type != "Optics" or _optics_variants.is_empty():
 		return
-	var variant: Dictionary = OPTICS_VARIANTS[rng.randi_range(0, OPTICS_VARIANTS.size() - 1)]
+	var variant := _optics_variants[rng.randi_range(0, _optics_variants.size() - 1)]
 	_assign_optics_variant(item, variant, rng)
 
-func _assign_optics_variant(item: Item, variant: Dictionary, rng: RandomNumberGenerator) -> void:
-	item.light_type = variant["light_type"] as Item.LightType
-	item.light_range = variant["range"]
-	var energy_range: Vector2 = variant["energy_range"]
-	item.light_energy = rng.randf_range(energy_range.x, energy_range.y)
-	item.light_color = variant["color"]
-	item.sub_type = variant["name"]
-	item.glyph = variant["glyph"]
+func _assign_optics_variant(item: Item, variant: OpticsVariant, rng: RandomNumberGenerator) -> void:
+	item.light_type = variant.light_type
+	item.light_range = variant.light_range
+	item.light_energy = rng.randf_range(variant.light_energy_min, variant.light_energy_max)
+	item.light_color = variant.light_color
+	item.sub_type = variant.display_name
+	item.glyph = variant.glyph
 
 # Returns one Optics item per declared variant (Flashlight, Lantern, Scanner,
 # UV) at the given item level. Used by the starter chest so the player can
 # sample every light type without depending on a random roll.
 func roll_one_per_optics_variant(item_level: int, rng: RandomNumberGenerator) -> Array[Item]:
 	var out: Array[Item] = []
-	for variant: Dictionary in OPTICS_VARIANTS:
+	for variant in _optics_variants:
 		var item := Item.new()
 		item.main_type = "Optics"
 		item.kind = SlotRegistry.slot_for_type("Optics")

@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="OpticsVariant" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/optics_variant.gd" id="script"]
+
+[resource]
+script = ExtResource("script")
+display_name = "Flashlight"
+glyph = "✸"
+light_type = 0
+light_range = 18.0
+light_energy_min = 7.0
+light_energy_max = 8.5
+light_color = Color(1.0, 0.95, 0.85, 1)
