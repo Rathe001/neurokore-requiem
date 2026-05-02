@@ -5,7 +5,14 @@ extends Node
 # Listens to PlayerState tier signals and recomputes the active perk set on
 # any change. Aggregates effect magnitudes additively for runtime queries.
 #
-# Effect kinds (extend as new perks are designed):
+# Perk ladders are authored as .tres files at LADDER_DIR/{stat_id}.tres
+# (one per AttributeState.ROLLABLE_STATS entry). Adding a new tier perk is a
+# resource edit in the editor — no code changes here. Schema lives in
+# scripts/perks/{perk_ladder, perk, perk_effect}.gd.
+#
+# Effect kinds — keep this list in sync with what consumers read via
+# get_aggregate(kind). Adding a new effect kind requires a consumer that
+# knows what to do with it; the aggregate dict accepts arbitrary keys.
 #   damage_mult                   — % bonus damage (additive across perks)
 #   max_health_pct                — % bonus to max HP
 #   move_speed_pct                — % bonus move speed
@@ -20,58 +27,39 @@ extends Node
 # Perks for higher tiers stack additively on top of lower tiers — reaching
 # tier 3 means tiers 1..3 are all active simultaneously.
 
-signal perk_gained(perk: Dictionary)
-signal perk_lost(perk: Dictionary)
+signal perk_gained(perk: Perk)
+signal perk_lost(perk: Perk)
 signal perks_changed
 
-# Per-stat tier perk ladders, indexed 0 = tier 1.
-# Each perk: { id, label, description, effects: [{kind, magnitude}, ...] }
-const STAT_PERKS: Dictionary = {
-	&"dev": [
-		{
-			"id": &"dev_t1",
-			"label": "Erratic Strikes",
-			"description": "8% chance to strike twice.",
-			"effects": [{"kind": &"multistrike_double_chance", "magnitude": 0.08}],
-		},
-		{
-			"id": &"dev_t2",
-			"label": "Frenzied Strikes",
-			"description": "Additional 10% chance to strike twice; 5% chance to strike thrice.",
-			"effects": [
-				{"kind": &"multistrike_double_chance", "magnitude": 0.10},
-				{"kind": &"multistrike_triple_chance", "magnitude": 0.05},
-			],
-		},
-		{
-			"id": &"dev_t3",
-			"label": "Unbound Frenzy",
-			"description": "Additional 7% chance to strike twice; additional 7% chance to strike thrice.",
-			"effects": [
-				{"kind": &"multistrike_double_chance", "magnitude": 0.07},
-				{"kind": &"multistrike_triple_chance", "magnitude": 0.07},
-			],
-		},
-	],
-	# Other stat ladders pending design — see attribute-system.md "Specialized
-	# Class Tier Perks" table. Target T3 effective DPS ≈ 1.45×, expressed
-	# through each class's flavor lever (crit, cooldowns, conditional damage).
-	&"ort": [],
-	&"opt": [],
-	&"ing": [],
-	&"cla": [],
-	&"amb": [],
-}
+const LADDER_DIR := "res://resources/perks/"
 
-var _active_perks: Array[Dictionary] = []
+# stat_id (StringName) → PerkLadder. Built once on _ready by scanning
+# LADDER_DIR for {stat_id}.tres. Stats with no ladder file load to null and
+# the recompute loop skips them silently.
+var _ladders: Dictionary = {}
+var _active_perks: Array[Perk] = []
 var _aggregates: Dictionary = {}
 var _initialized: bool = false
 
 func _ready() -> void:
+	_load_ladders()
 	PlayerState.tier_changed.connect(_on_tier_changed)
 	PlayerState.class_changed.connect(_on_player_changed)
 	PlayerState.spec_changed.connect(_on_player_changed)
 	_recompute()
+
+
+func _load_ladders() -> void:
+	for stat_id: StringName in AttributeState.ROLLABLE_STATS:
+		var path := "%s%s.tres" % [LADDER_DIR, stat_id]
+		if not ResourceLoader.exists(path):
+			continue
+		var ladder := load(path) as PerkLadder
+		if ladder == null:
+			push_warning("[PerkState] Found %s but it isn't a PerkLadder; skipping." % path)
+			continue
+		_ladders[stat_id] = ladder
+
 
 func _on_tier_changed(_stat: StringName, _old: int, _new: int) -> void:
 	_recompute()
@@ -81,22 +69,24 @@ func _on_player_changed(_id: StringName) -> void:
 
 func _recompute() -> void:
 	var old := _active_perks
-	var new_active: Array[Dictionary] = []
+	var new_active: Array[Perk] = []
 	var new_aggregates: Dictionary = {}
 
 	if PlayerState.class_id != &"" and PlayerState.spec_id != &"":
-		for stat_id in AttributeState.ROLLABLE_STATS:
-			var ladder: Array = STAT_PERKS.get(stat_id, [])
-			if ladder.is_empty():
+		for stat_id: StringName in AttributeState.ROLLABLE_STATS:
+			var ladder: PerkLadder = _ladders.get(stat_id)
+			if ladder == null or ladder.perks.is_empty():
 				continue
 			var tier := AttributeState.get_unlocked_tier(stat_id, PlayerState.class_id, PlayerState.spec_id)
-			for i in mini(tier, ladder.size()):
-				var perk: Dictionary = ladder[i]
+			for i in mini(tier, ladder.perks.size()):
+				var perk: Perk = ladder.perks[i]
+				if perk == null:
+					continue
 				new_active.append(perk)
-				for effect: Dictionary in perk.get("effects", []):
-					var k: StringName = effect.get("kind", &"")
-					var m: float = float(effect.get("magnitude", 0.0))
-					new_aggregates[k] = float(new_aggregates.get(k, 0.0)) + m
+				for effect in perk.effects:
+					if effect == null:
+						continue
+					new_aggregates[effect.kind] = float(new_aggregates.get(effect.kind, 0.0)) + effect.magnitude
 
 	_active_perks = new_active
 	_aggregates = new_aggregates
@@ -104,25 +94,25 @@ func _recompute() -> void:
 	# Suppress signals on the very first compute so initial perks don't fire
 	# tier-up banners at game start.
 	if _initialized:
-		for perk: Dictionary in new_active:
+		for perk in new_active:
 			if not _has_perk(old, perk.id):
 				perk_gained.emit(perk)
-		for perk: Dictionary in old:
+		for perk in old:
 			if not _has_perk(new_active, perk.id):
 				perk_lost.emit(perk)
 	_initialized = true
 	perks_changed.emit()
 
-func _has_perk(list: Array, id: StringName) -> bool:
-	for p: Dictionary in list:
-		if p.get("id", &"") == id:
+func _has_perk(list: Array[Perk], id: StringName) -> bool:
+	for p in list:
+		if p != null and p.id == id:
 			return true
 	return false
 
 func get_aggregate(kind: StringName) -> float:
 	return _aggregates.get(kind, 0.0)
 
-func get_active_perks() -> Array[Dictionary]:
+func get_active_perks() -> Array[Perk]:
 	return _active_perks
 
 # Rolls a multistrike for an attack. Returns total hit count: 1, 2, or 3.

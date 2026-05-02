@@ -311,7 +311,16 @@ func _dict_to_affix(d: Dictionary, kind: ItemAffix.Kind) -> ItemAffix:
 	a.label = d.get("label", "")
 	a.kind = kind
 	a.item_types = Array(d.get("item_types", []), TYPE_STRING, "", null)
-	a.stat_modifiers = d.get("stat_modifiers", {})
+	# Normalise stat_modifier keys to StringName. Dict literals in this file
+	# use plain "string" keys for readability, but downstream readers
+	# (Item.get_modifier, AttributeState, prototype_tooltip) all index by
+	# StringName — and Dictionary treats String and StringName as distinct
+	# keys, so a string-keyed entry would silently never match.
+	var raw: Dictionary = d.get("stat_modifiers", {})
+	var normalised: Dictionary = {}
+	for k in raw:
+		normalised[StringName(k)] = raw[k]
+	a.stat_modifiers = normalised
 	a.min_item_level = d.get("min_item_level", 1)
 	a.weight = d.get("weight", 100)
 	return a

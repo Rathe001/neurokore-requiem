@@ -152,13 +152,31 @@ static var _s_outline_mat_locked: StandardMaterial3D
 @onready var collision: CollisionShape3D = $Collision
 @onready var floor_ring: MeshInstance3D = $FloorRing
 
+# Behaviour states. Mutually exclusive — the enemy is in exactly one at a
+# time. Replaces the previous bag of boolean flags (_aggroed / _casting /
+# _jumping / _returning_to_spawn / _alive) which couldn't express "what's
+# going on right now?" without tedious flag-cross-referencing. Add new
+# behaviours by extending this enum + handling them in _physics_process,
+# not by introducing more flags.
+enum State {
+	IDLE,       # Not aggroed; standing or wandering
+	CHASING,    # Aggroed; pursuing the player via navmesh
+	CASTING,    # Mid attack-windup; locked in place until the swing resolves
+	JUMPING,    # Mid pit-jump impulse; physics-driven until landing
+	RETURNING,  # Leashed; heading back to spawn (5% dmg + CC immune)
+	KNOCKBACK,  # Velocity-controlled by an incoming hit; transitions back to CHASING when the timer drains
+	DEAD,       # Terminal — physics suspended, awaiting cleanup
+}
+
+# `_crouching` stays orthogonal to State — it changes capsule height + speed
+# mult but doesn't change WHAT the enemy is doing. Same for the timers below
+# (_knockback_remain, _jump_t) which support but don't replace the State.
+var _state: State = State.IDLE
 var _health: int
-var _alive: bool = true
 var _knockback_vel: Vector3 = Vector3.ZERO
 var _knockback_remain: float = 0.0
 var _attack_cd: float = 0.0
 var _attack_damage: int = 10
-var _casting: bool = false
 var _want_dir: Vector3 = Vector3.ZERO
 var _player_ref: Node3D
 var _outlined_meshes: Array[MeshInstance3D] = []
@@ -171,18 +189,13 @@ var _hit_flash_tween: Tween
 var _crouching: bool = false
 var _crouch_probe_t: float = 0.0
 var _stand_test_shape: CapsuleShape3D
-var _jumping: bool = false
 var _jump_t: float = 0.0
 var _floor_ring_mat: StandardMaterial3D
-var _aggroed: bool = false
 @onready var _nav_agent: NavigationAgent3D = $NavigationAgent3D
 # Spawn position captured on reset() — enemies leash back to this point
 # when they chase too far. Set whenever the enemy is reused from the pool
 # at a new position.
 var _spawn_position: Vector3 = Vector3.ZERO
-# True while the enemy is walking back to spawn after the leash trips.
-# Ignores the player while returning; flips back to false on arrival.
-var _returning_to_spawn: bool = false
 
 func _ready() -> void:
 	_init_enemy()
@@ -203,11 +216,9 @@ func _init_enemy() -> void:
 		_hit_tween = null
 	_apply_level_stats()
 	_health = max_health
-	_alive = true
+	_state = State.IDLE
 	_knockback_remain = 0.0
 	_attack_cd = 0.0
-	_casting = false
-	_aggroed = false
 	_want_dir = Vector3.ZERO
 	_player_ref = null
 	set_physics_process(true)
@@ -233,7 +244,6 @@ func _init_enemy() -> void:
 	# Stagger probes across the population so we don't shape-cast for every
 	# enemy on the same physics tick.
 	_crouch_probe_t = randf() * CROUCH_PROBE_INTERVAL
-	_jumping = false
 	_jump_t = 0.0
 	# Connect once — signal stays connected across pool cycles.
 	if _nav_agent != null and not _nav_agent.link_reached.is_connected(_on_link_reached):
@@ -312,7 +322,6 @@ func reset() -> void:
 	# capturing here gives us the correct spawn point even when the enemy
 	# is reused from the pool at a new location.
 	_spawn_position = global_position
-	_returning_to_spawn = false
 
 func _setup_hover() -> void:
 	if _s_outline_mat == null:
@@ -355,7 +364,7 @@ func _refresh_outline() -> void:
 			mi.material_overlay = mat
 
 func _on_mouse_entered() -> void:
-	if not _alive:
+	if not _is_alive():
 		return
 	_hovered = true
 	_refresh_outline()
@@ -374,15 +383,15 @@ func set_tooltip_locked(on: bool) -> void:
 	_refresh_outline()
 
 func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_strength: float = 0.0, multistrike: int = 1, is_crit: bool = false) -> void:
-	if not _alive:
+	if not _is_alive():
 		return
 	if DebugState.config != null and DebugState.config.one_shot_enemies:
 		amount = max(amount, max_health)
-	# Enemies walking back to spawn after the leash trip take ~5% damage
-	# and ignore knockback/CC. Without this, the player can kite an enemy
-	# out of its territory and snipe it on the walk back; with it, the
-	# return is functionally a "give up + reset" rather than a free kill.
-	var returning := _returning_to_spawn
+	# Returning enemies (leash tripped) take ~5% damage and skip CC. Without
+	# this the player can kite an enemy out of its territory and snipe it on
+	# the walk back. The leash should read as "give up + reset", not a free
+	# kill window.
+	var returning := _state == State.RETURNING
 	if returning:
 		amount = maxi(1, int(round(float(amount) * RETURNING_DAMAGE_MULT)))
 	_health -= amount
@@ -395,18 +404,36 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 		if dir.length_squared() > 0.0001:
 			_knockback_vel = dir.normalized() * knockback_strength
 			_knockback_remain = KNOCKBACK_DURATION
-	# Re-aggro on hit unless we're already on the way back — getting
-	# nicked while disengaging shouldn't pull the enemy back toward the
-	# player; that would defeat the leash.
-	if not _aggroed and not returning:
+			# Knockback preempts whatever we were doing (chase, casting,
+			# jumping). The casting await checks _state on resume and bails.
+			_change_state(State.KNOCKBACK)
+	# Re-aggro on hit unless we're disengaging — getting nicked while heading
+	# back shouldn't yank the enemy toward the player; that defeats the leash.
+	if _state == State.IDLE:
 		aggro()
 	_play_hit_squash()
 	_hit_flash_tween = HitFlash.play(self, visual, _hit_flash_tween)
 	if _health <= 0:
 		_die()
 
+## Helper — DEAD is the only state in which the enemy should ignore inputs
+## (damage, animation triggers, hover). All other states are "alive enough."
+func _is_alive() -> bool:
+	return _state != State.DEAD
+
+
+## Single point of state transitions. Currently a thin setter; entry/exit
+## hooks (e.g. clearing horizontal velocity on enter-CASTING, releasing the
+## hit-tween on enter-DEAD) live at the call sites for now. If hook count
+## grows beyond a couple per state, switch to a dispatch table here.
+func _change_state(new_state: State) -> void:
+	if _state == new_state:
+		return
+	_state = new_state
+
+
 func _play_hit_squash() -> void:
-	if visual == null or not _alive:
+	if visual == null or not _is_alive():
 		return
 	if _hit_tween != null and _hit_tween.is_valid():
 		_hit_tween.kill()
@@ -421,11 +448,11 @@ func _update_health_bar() -> void:
 	if health_bar == null:
 		return
 	var ratio := clampf(float(_health) / float(max_health), 0.0, 1.0)
-	health_bar.visible = _alive and ratio < 1.0
+	health_bar.visible = _is_alive() and ratio < 1.0
 	health_bar.set_instance_shader_parameter(&"fill_ratio", ratio)
 
 func _physics_process(delta: float) -> void:
-	if not _alive:
+	if _state == State.DEAD:
 		return
 	_attack_cd = maxf(0.0, _attack_cd - delta)
 
@@ -434,31 +461,33 @@ func _physics_process(delta: float) -> void:
 		_crouch_probe_t = CROUCH_PROBE_INTERVAL
 		_update_crouch_state()
 
-	# Floor-snap is suppressed while _jumping so the takeoff impulse set by
+	# Floor-snap is suppressed during JUMPING so the takeoff impulse set by
 	# _start_jump (which runs from the agent's link_reached signal AFTER our
 	# physics_process this frame) survives into the next frame's gravity
 	# pass instead of being zeroed by is_on_floor().
-	if _jumping or not is_on_floor():
+	if _state == State.JUMPING or not is_on_floor():
 		velocity.y -= GRAVITY * delta
 	else:
 		velocity.y = 0.0
 
-	if _knockback_remain > 0.0:
-		# Quadratic ease-out: full velocity at the moment of impact, near-zero
-		# by the end of the window — replaces the previous hard-stop bounce.
-		var t: float = _knockback_remain / KNOCKBACK_DURATION
-		var falloff: float = t * t
-		velocity.x = _knockback_vel.x * falloff
-		velocity.z = _knockback_vel.z * falloff
-		_knockback_remain -= delta
-		_want_dir = Vector3.ZERO
-	elif _casting:
-		velocity.x = 0.0
-		velocity.z = 0.0
-	elif _jumping:
-		_tick_jump(delta)
-	else:
-		_chase_tick()
+	# State dispatch — exactly one branch runs each tick. Add new behaviours
+	# by extending the State enum and adding a branch here, not by sneaking
+	# in another flag check.
+	match _state:
+		State.KNOCKBACK:
+			_tick_knockback(delta)
+		State.CASTING:
+			# Held in place by the windup; _cast_attack's await transitions
+			# us back to CHASING when the swing resolves.
+			velocity.x = 0.0
+			velocity.z = 0.0
+		State.JUMPING:
+			_tick_jump(delta)
+		State.IDLE, State.CHASING, State.RETURNING:
+			# All three share the chase-tick logic — it inspects state and
+			# routes between them (proximity aggro, leash trip, return arrival).
+			_chase_tick()
+
 	# Capture wished horizontal motion before slide consumes it (see StepUp).
 	var wish_horiz := Vector3(velocity.x, 0.0, velocity.z)
 	move_and_slide()
@@ -467,19 +496,40 @@ func _physics_process(delta: float) -> void:
 	# expect them to (decorative crates, etc.) — still enough for pit fences.
 	StepUp.try(self, wish_horiz, 0.3, delta)
 
-	if _alive and not _casting and _knockback_remain <= 0.0:
+	# Animation update — skip while the enemy is locked into a windup pose
+	# or being shoved (the squash/cast clips own those frames).
+	if _state != State.CASTING and _state != State.KNOCKBACK:
 		if _want_dir.length_squared() > 0.01:
 			_play_anim(ANIM_RUN)
 			_face_direction(_want_dir)
 		else:
 			_play_anim(ANIM_IDLE)
 
-## Force this enemy into aggro state and alert nearby enemies.
+
+# Quadratic ease-out: full impulse at the moment of impact, near-zero by the
+# end of the window. When the timer drains, hand control back to the chase
+# tick — knockback always comes from take_damage which already aggro'd us.
+func _tick_knockback(delta: float) -> void:
+	var t: float = _knockback_remain / KNOCKBACK_DURATION
+	var falloff: float = t * t
+	velocity.x = _knockback_vel.x * falloff
+	velocity.z = _knockback_vel.z * falloff
+	_knockback_remain -= delta
+	_want_dir = Vector3.ZERO
+	if _knockback_remain <= 0.0:
+		_change_state(State.CHASING)
+
+## Force this enemy into aggro and alert nearby enemies. No-op if we're
+## already engaged or already returning (aggro shouldn't pull a leashed
+## enemy back into the fight — KEEP_CHASE_PLAYER_RANGE_SQ in _chase_tick
+## handles re-engagement when the player closes during a return).
 ## depth caps the cascade so aggro doesn't chain across the entire level.
 func aggro(depth: int = 0) -> void:
-	if _aggroed:
+	if _state == State.CHASING or _state == State.CASTING or _state == State.JUMPING:
 		return
-	_aggroed = true
+	if _state == State.RETURNING or _state == State.DEAD:
+		return
+	_change_state(State.CHASING)
 	if depth >= MAX_AGGRO_CASCADE:
 		return
 	for enode: Node3D in SpatialGrid.query_radius(global_position, GROUP_AGGRO_RANGE, &"enemies"):
@@ -488,6 +538,10 @@ func aggro(depth: int = 0) -> void:
 		if enode.has_method(&"aggro"):
 			enode.aggro(depth + 1)
 
+
+# Drives IDLE / CHASING / RETURNING — _physics_process routes all three
+# here. Each branch may transition between them; CASTING and JUMPING are
+# entered from CHASING via _cast_attack / _on_link_reached.
 func _chase_tick() -> void:
 	_want_dir = Vector3.ZERO
 	if _player_ref == null or not is_instance_valid(_player_ref):
@@ -498,43 +552,25 @@ func _chase_tick() -> void:
 		velocity.z = 0.0
 		return
 
-	# Leash check — once we've chased too far from spawn, disengage and head
-	# back. Prevents whole-level chase chains and the "lure into a pit" trick.
-	# Suppressed while the player is still close enough to be actively fighting
-	# us — leashing mid-fight reads as the enemy giving up for no reason.
+	# Leash logic — runs even in IDLE (so an idle enemy at edge of leash
+	# range can't be tricked into RETURNING). Player-close suppression keeps
+	# the leash from tripping mid-fight; player-close re-engage prevents the
+	# leashed enemy from getting a free walk past the player.
 	var spawn_dist_sq := global_position.distance_squared_to(_spawn_position)
 	var player_dist_sq := global_position.distance_squared_to(player.global_position)
 	var player_close := player_dist_sq <= KEEP_CHASE_PLAYER_RANGE_SQ
-	if _aggroed and spawn_dist_sq > MAX_CHASE_FROM_SPAWN_SQ and not player_close:
-		_aggroed = false
-		_returning_to_spawn = true
-	# Re-aggro mid-return if the player closes back in — otherwise an enemy
-	# half-way back to spawn gets a free walk past the player.
-	if _returning_to_spawn and player_close:
-		_returning_to_spawn = false
-		_aggroed = true
+	if _state == State.CHASING and spawn_dist_sq > MAX_CHASE_FROM_SPAWN_SQ and not player_close:
+		_change_state(State.RETURNING)
+	elif _state == State.RETURNING and player_close:
+		_change_state(State.CHASING)
 
-	if _returning_to_spawn:
-		if spawn_dist_sq <= RETURN_THRESHOLD_SQ:
-			_returning_to_spawn = false
-			velocity.x = 0.0
-			velocity.z = 0.0
-			return
-		var to_spawn := _spawn_position - global_position
-		to_spawn.y = 0.0
-		var sd := to_spawn.length()
-		if sd < 0.001:
-			_returning_to_spawn = false
-			velocity.x = 0.0
-			velocity.z = 0.0
-			return
-		var spawn_dir := to_spawn / sd
-		_want_dir = spawn_dir
-		var return_speed := CHASE_SPEED * (CROUCH_SPEED_MULT if _crouching else 1.0)
-		velocity.x = spawn_dir.x * return_speed
-		velocity.z = spawn_dir.z * return_speed
+	if _state == State.RETURNING:
+		_tick_return(spawn_dist_sq)
 		return
 
+	# IDLE & CHASING share the proximity-aggro check — an IDLE enemy that
+	# the player walks toward should wake up the same way a previously-engaged
+	# one would re-engage.
 	var to_player: Vector3 = player.global_position - global_position
 	to_player.y = 0.0
 	var dist := to_player.length()
@@ -542,15 +578,15 @@ func _chase_tick() -> void:
 	# below. The damage-time check inside _cast_attack re-queries on purpose,
 	# since it runs after the windup await.
 	var has_los := LosCuller.has_los_to_player(self)
-	# Normal proximity aggro — gated on line of sight so enemies don't wake
-	# through walls.
-	if not _aggroed and dist <= AGGRO_RANGE and has_los:
+	if _state == State.IDLE and dist <= AGGRO_RANGE and has_los:
 		aggro()
-	if not _aggroed or dist < 0.001:
+
+	if _state != State.CHASING or dist < 0.001:
 		velocity.x = 0.0
 		velocity.z = 0.0
 		return
-	# Aggro'd enemies still chase at all times, but won't start a swing through
+
+	# Aggro'd enemies chase at all times, but won't start a swing through
 	# a wall — the LoS check on attack initiation prevents through-wall hits.
 	if dist <= ATTACK_RANGE and _attack_cd <= 0.0 and has_los:
 		_cast_attack(player, to_player / dist)
@@ -574,6 +610,28 @@ func _chase_tick() -> void:
 	var chase_speed := CHASE_SPEED * (CROUCH_SPEED_MULT if _crouching else 1.0)
 	velocity.x = dir.x * chase_speed
 	velocity.z = dir.z * chase_speed
+
+
+# Walks the enemy back to its spawn position. Transitions to IDLE on arrival.
+func _tick_return(spawn_dist_sq: float) -> void:
+	if spawn_dist_sq <= RETURN_THRESHOLD_SQ:
+		_change_state(State.IDLE)
+		velocity.x = 0.0
+		velocity.z = 0.0
+		return
+	var to_spawn := _spawn_position - global_position
+	to_spawn.y = 0.0
+	var sd := to_spawn.length()
+	if sd < 0.001:
+		_change_state(State.IDLE)
+		velocity.x = 0.0
+		velocity.z = 0.0
+		return
+	var spawn_dir := to_spawn / sd
+	_want_dir = spawn_dir
+	var return_speed := CHASE_SPEED * (CROUCH_SPEED_MULT if _crouching else 1.0)
+	velocity.x = spawn_dir.x * return_speed
+	velocity.z = spawn_dir.z * return_speed
 
 # Shape-cast a stand-height capsule overhead. If anything's there we can't
 # stand — drop into crouch. The probe runs on CROUCH_PROBE_INTERVAL cadence
@@ -606,10 +664,11 @@ func _set_crouch(value: bool) -> void:
 
 
 # Fires when the navmesh routes us across a NavigationLink3D — pit_builder
-# places one between every adjacent pillar pair. We ignore links while
-# crouching (no jumping under low ceilings) or already mid-air.
+# places one between every adjacent pillar pair. Only a CHASING enemy on the
+# floor can launch; crouched / mid-jump / casting / returning agents skip
+# the link (the navmesh will replan once they're free).
 func _on_link_reached(details: Dictionary) -> void:
-	if not _alive or _jumping or _crouching:
+	if _state != State.CHASING or _crouching:
 		return
 	if not is_on_floor():
 		return
@@ -637,7 +696,7 @@ func _start_jump(target: Vector3) -> void:
 	var vv := 0.5 * GRAVITY * JUMP_AIRTIME
 	velocity = horiz_dir * vh
 	velocity.y = vv
-	_jumping = true
+	_change_state(State.JUMPING)
 	_jump_t = 0.0
 	_face_direction(horiz_dir)
 
@@ -647,11 +706,11 @@ func _tick_jump(delta: float) -> void:
 	# Velocity persists from the takeoff impulse; gravity (applied earlier
 	# this frame) handles the vertical arc. We only need to detect landing.
 	if _jump_t >= JUMP_LANDING_GRACE and is_on_floor():
-		_jumping = false
 		_jump_t = 0.0
+		_change_state(State.CHASING)
 
 func _cast_attack(player: Node3D, aim: Vector3) -> void:
-	_casting = true
+	_change_state(State.CASTING)
 	_attack_cd = ATTACK_COOLDOWN
 	velocity.x = 0.0
 	velocity.z = 0.0
@@ -659,8 +718,13 @@ func _cast_attack(player: Node3D, aim: Vector3) -> void:
 	_play_anim(ANIM_ATTACK, 1.2)
 	PrototypeAttackIndicator.spawn_cone(self, aim, ATTACK_RANGE, ATTACK_CONE_DEG, ATTACK_WINDUP)
 	await get_tree().create_timer(ATTACK_WINDUP).timeout
-	_casting = false
-	if not _alive or not is_instance_valid(player):
+	# Bail if anything preempted us during the windup (knockback, death,
+	# leash). The state-machine transition is the source of truth — don't
+	# reach back into _state here to "fix" it.
+	if _state != State.CASTING:
+		return
+	_change_state(State.CHASING)
+	if not is_instance_valid(player):
 		return
 	var to_p: Vector3 = player.global_position - global_position
 	to_p.y = 0.0
@@ -678,7 +742,7 @@ func _cast_attack(player: Node3D, aim: Vector3) -> void:
 		player.take_damage(_attack_damage, global_position, ATTACK_KNOCKBACK)
 
 func _die() -> void:
-	_alive = false
+	_change_state(State.DEAD)
 	# Drop out of the spatial grid immediately so AoE/cone queries during the
 	# DEATH_HOLD window stop "hitting" the corpse-in-progress. The actual
 	# group/collision teardown still waits for _become_corpse so the death

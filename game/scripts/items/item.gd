@@ -18,9 +18,6 @@ enum LightType { DIRECTIONAL, RADIANT, SCANNER, UV }
 @export var light_range: float = 0.0
 @export var light_color: Color = Color(1, 1, 1, 1)
 
-@export_group("Container")
-@export var inventory_bonus: int = 0
-
 @export_group("Combat")
 @export var two_handed: bool = false
 @export var fire_skill: Skill
@@ -39,6 +36,18 @@ enum LightType { DIRECTIONAL, RADIANT, SCANNER, UV }
 @export var utility_slots: int = 0
 
 @export_group("Stats")
-## Flat stat bonuses applied when this item is equipped.
-## Keys match AttributeState rollable stat IDs: ort, ing, amb, dev, opt, cla.
+## Flat stat / modifier bonuses applied when this item is equipped.
+## Keys are StringName — both AttributeState rollable stats (&"ort", &"ing",
+## &"amb", &"dev", &"opt", &"cla") AND non-stat modifiers (&"inventory_bonus",
+## &"damage_reduction", &"toxic_resistance", &"range_bonus", future ammo /
+## magazine / augment-slot bonuses) live in this single dict. Affix table
+## entries MUST use StringName keys (the &"" prefix); plain string keys hash
+## differently and silently fail to match reads.
 @export var stat_modifiers: Dictionary = {}
+
+
+## Read a modifier with a fallback. Single accessor for typed reads from
+## stat_modifiers — saves the every-caller `int(item.stat_modifiers.get(...))`
+## boilerplate and centralises the dict-key contract.
+func get_modifier(key: StringName, fallback: int = 0) -> int:
+	return int(stat_modifiers.get(key, fallback))

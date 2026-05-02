@@ -1,0 +1,61 @@
+[gd_resource type="Resource" script_class="PerkLadder" load_steps=11 format=3]
+
+; Forged (dev) tier perks. T1 lays down a small multistrike floor; T2 raises
+; both double + introduces triple; T3 layers more on top so the Forged
+; signature playstyle (chaotic burst windows) intensifies as investment
+; deepens. Magnitudes target a ~1.45× effective DPS at T3 — see
+; docs/design/attribute-system.md "Specialized Class Tier Perks".
+
+[ext_resource type="Script" path="res://scripts/perks/perk.gd" id="perk_script"]
+[ext_resource type="Script" path="res://scripts/perks/perk_effect.gd" id="effect_script"]
+[ext_resource type="Script" path="res://scripts/perks/perk_ladder.gd" id="ladder_script"]
+
+[sub_resource type="Resource" id="effect_dev_t1_double"]
+script = ExtResource("effect_script")
+kind = &"multistrike_double_chance"
+magnitude = 0.08
+
+[sub_resource type="Resource" id="perk_dev_t1"]
+script = ExtResource("perk_script")
+id = &"dev_t1"
+label = "Erratic Strikes"
+description = "8% chance to strike twice."
+effects = [SubResource("effect_dev_t1_double")]
+
+[sub_resource type="Resource" id="effect_dev_t2_double"]
+script = ExtResource("effect_script")
+kind = &"multistrike_double_chance"
+magnitude = 0.10
+
+[sub_resource type="Resource" id="effect_dev_t2_triple"]
+script = ExtResource("effect_script")
+kind = &"multistrike_triple_chance"
+magnitude = 0.05
+
+[sub_resource type="Resource" id="perk_dev_t2"]
+script = ExtResource("perk_script")
+id = &"dev_t2"
+label = "Frenzied Strikes"
+description = "Additional 10% chance to strike twice; 5% chance to strike thrice."
+effects = [SubResource("effect_dev_t2_double"), SubResource("effect_dev_t2_triple")]
+
+[sub_resource type="Resource" id="effect_dev_t3_double"]
+script = ExtResource("effect_script")
+kind = &"multistrike_double_chance"
+magnitude = 0.07
+
+[sub_resource type="Resource" id="effect_dev_t3_triple"]
+script = ExtResource("effect_script")
+kind = &"multistrike_triple_chance"
+magnitude = 0.07
+
+[sub_resource type="Resource" id="perk_dev_t3"]
+script = ExtResource("perk_script")
+id = &"dev_t3"
+label = "Unbound Frenzy"
+description = "Additional 7% chance to strike twice; additional 7% chance to strike thrice."
+effects = [SubResource("effect_dev_t3_double"), SubResource("effect_dev_t3_triple")]
+
+[resource]
+script = ExtResource("ladder_script")
+perks = [SubResource("perk_dev_t1"), SubResource("perk_dev_t2"), SubResource("perk_dev_t3")]

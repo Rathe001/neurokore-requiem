@@ -13,26 +13,6 @@ extends Node
 const ILVL_EARLY_MAX: int = 33
 const ILVL_MID_MAX: int = 66
 
-const MAIN_TYPES: Array[String] = [
-	"1H Weapon", "2H Weapon", "Offhand",
-	"Head Armor", "Chest Armor", "Gloves", "Boots",
-	"Belt", "Mainboard", "Backpack", "Optics",
-]
-
-const TYPE_TO_SLOT: Dictionary = {
-	"1H Weapon":   &"weapon",
-	"2H Weapon":   &"weapon",
-	"Offhand":     &"offhand",
-	"Head Armor":  &"head",
-	"Chest Armor": &"chest",
-	"Gloves":      &"gloves",
-	"Boots":       &"boots",
-	"Belt":        &"belt",
-	"Mainboard":   &"mainboard",
-	"Backpack":    &"backpack",
-	"Optics":      &"optics",
-}
-
 const RARITY_WEIGHTS: Dictionary = {
 	&"common": 60,
 	&"magic":  25,
@@ -54,19 +34,6 @@ const RARITY_COLOR: Dictionary = {
 	&"unique": Color(0.75, 0.50, 0.25),
 }
 
-const TYPE_GLYPH: Dictionary = {
-	"1H Weapon":   "†",
-	"2H Weapon":   "‡",
-	"Offhand":     "◊",
-	"Head Armor":  "▲",
-	"Chest Armor": "▣",
-	"Gloves":      "Ψ",
-	"Boots":       "⌐",
-	"Belt":        "═",
-	"Mainboard":   "⌬",
-	"Backpack":    "▤",
-	"Optics":      "✦",
-}
 
 # Registry of weapon bases keyed by main_type. The roller picks one at random
 # when generating a weapon, then rolls each stat range into the Item instance.
@@ -122,10 +89,10 @@ const OPTICS_VARIANTS: Array[Dictionary] = [
 func roll(main_type: String, item_level: int, rarity: StringName, rng: RandomNumberGenerator) -> Item:
 	var item := Item.new()
 	item.main_type = main_type
-	item.kind = TYPE_TO_SLOT.get(main_type, &"")
+	item.kind = SlotRegistry.slot_for_type(main_type)
 	item.rarity = rarity
 	item.id = StringName("rolled_%d_%d" % [item_level, rng.randi()])
-	item.glyph = TYPE_GLYPH.get(main_type, "?")
+	item.glyph = SlotRegistry.glyph_for_type(main_type)
 	item.glyph_color = RARITY_COLOR.get(rarity, Color.WHITE)
 	item.stat_modifiers = {}
 
@@ -134,9 +101,9 @@ func roll(main_type: String, item_level: int, rarity: StringName, rng: RandomNum
 	# Backpacks always grant their base bag bonus regardless of affix roll —
 	# without this floor a "Backpack" item could roll with zero slots when
 	# none of its prefixes happen to be inventory_bonus, which makes the
-	# pickup useless. Affixes can still ADD slots on top via stat_modifiers.
+	# pickup useless. Affixes layer on top via stat_modifiers[&"inventory_bonus"].
 	if main_type == "Backpack":
-		item.inventory_bonus = 8
+		item.stat_modifiers[&"inventory_bonus"] = 8
 
 	_apply_weapon_base(item, main_type, rng)
 	_apply_optics_variant(item, main_type, rng)
@@ -167,10 +134,10 @@ func roll_from_base(base: WeaponBase, item_level: int, rarity: StringName, rng: 
 	var main_type := "2H Weapon" if base.two_handed else "1H Weapon"
 	var item := Item.new()
 	item.main_type = main_type
-	item.kind = TYPE_TO_SLOT.get(main_type, &"")
+	item.kind = SlotRegistry.slot_for_type(main_type)
 	item.rarity = rarity
 	item.id = StringName("rolled_%d_%d" % [item_level, rng.randi()])
-	item.glyph = TYPE_GLYPH.get(main_type, "?")
+	item.glyph = SlotRegistry.glyph_for_type(main_type)
 	item.glyph_color = RARITY_COLOR.get(rarity, Color.WHITE)
 	item.stat_modifiers = {}
 	if base.two_handed:
@@ -198,7 +165,8 @@ func roll_from_base(base: WeaponBase, item_level: int, rarity: StringName, rng: 
 
 func roll_random(item_level: int, rng: RandomNumberGenerator) -> Item:
 	var rarity := _roll_rarity(rng)
-	var main_type: String = MAIN_TYPES[rng.randi_range(0, MAIN_TYPES.size() - 1)]
+	var pool := SlotRegistry.MAIN_TYPES
+	var main_type: String = pool[rng.randi_range(0, pool.size() - 1)]
 	return roll(main_type, item_level, rarity, rng)
 
 func _class_slot_count(item_level: int, rng: RandomNumberGenerator) -> int:
@@ -257,7 +225,7 @@ func _apply_weapon_base_direct(item: Item, base: WeaponBase, rng: RandomNumberGe
 	item.fire_skill = base.fire_skill
 	item.alt_fire_skill = base.alt_fire_skill
 	var main_type := "2H Weapon" if base.two_handed else "1H Weapon"
-	if item.glyph == TYPE_GLYPH.get(main_type, "?") and base.glyph != "":
+	if item.glyph == SlotRegistry.glyph_for_type(main_type) and base.glyph != "":
 		item.glyph = base.glyph
 	# Damage roll: ensure max >= min so combat damage rolls aren't inverted.
 	var dmin := int(round(rng.randf_range(base.damage_min_range.x, base.damage_min_range.y)))
@@ -292,7 +260,7 @@ func roll_one_per_optics_variant(item_level: int, rng: RandomNumberGenerator) ->
 	for variant: Dictionary in OPTICS_VARIANTS:
 		var item := Item.new()
 		item.main_type = "Optics"
-		item.kind = TYPE_TO_SLOT.get("Optics", &"")
+		item.kind = SlotRegistry.slot_for_type("Optics")
 		item.rarity = &"common"
 		item.id = StringName("starter_optics_%d_%d" % [item_level, rng.randi()])
 		item.glyph_color = RARITY_COLOR.get(&"common", Color.WHITE)

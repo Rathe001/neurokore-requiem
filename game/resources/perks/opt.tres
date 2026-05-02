@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="PerkLadder" load_steps=2 format=3]
+
+; Automaton (opt) tier perks — pending design. Target T3 effective DPS
+; ~1.45×; flavor lever is drone summons (3 / 6 / 9 drones across tiers per
+; the design note). Add three Perk subresources to `perks` and reload.
+
+[ext_resource type="Script" path="res://scripts/perks/perk_ladder.gd" id="ladder_script"]
+
+[resource]
+script = ExtResource("ladder_script")
+perks = []

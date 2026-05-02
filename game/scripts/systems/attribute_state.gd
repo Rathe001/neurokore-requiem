@@ -53,15 +53,25 @@ const ROLLABLE_STATS: Array[StringName] = [&"ort", &"ing", &"amb", &"dev", &"opt
 const ANALOG_TEAM_STATS: Array[StringName] = [&"ort", &"ing", &"amb"]
 const CYBORG_TEAM_STATS: Array[StringName] = [&"dev", &"opt", &"cla"]
 
-# All specialized class definitions in one place — avoids sync bugs when adding classes.
-# Keys: spec_id → { stat: primary_stat, origin: origin_id }
+# All specialized class definitions in one place — avoids sync bugs when
+# adding classes. Add presentational fields here too (glyph for placeholder
+# portraits, i18n keys for label + backstory) so spec_select / character
+# panels read from a single source instead of carrying parallel dicts.
 const CLASS_DEFINITIONS: Dictionary = {
-	&"count":  {&"stat": &"ort", &"origin": &"analog"},
-	&"survivalist": {&"stat": &"ing", &"origin": &"analog"},
-	&"enculted":   {&"stat": &"amb", &"origin": &"analog"},
-	&"forged":     {&"stat": &"dev", &"origin": &"cyborg"},
-	&"automaton":  {&"stat": &"opt", &"origin": &"cyborg"},
-	&"polymath":   {&"stat": &"cla", &"origin": &"cyborg"},
+	&"count":       {&"stat": &"ort", &"origin": &"analog", &"glyph": "G", &"label_key": &"STARTUP_PICK_ANALOG_COUNT", &"backstory_key": &"STARTUP_BACKSTORY_COUNT"},
+	&"survivalist": {&"stat": &"ing", &"origin": &"analog", &"glyph": "S", &"label_key": &"STARTUP_PICK_ANALOG_SURVIVALIST", &"backstory_key": &"STARTUP_BACKSTORY_SURVIVALIST"},
+	&"enculted":    {&"stat": &"amb", &"origin": &"analog", &"glyph": "E", &"label_key": &"STARTUP_PICK_ANALOG_ENCULTED",    &"backstory_key": &"STARTUP_BACKSTORY_ENCULTED"},
+	&"forged":      {&"stat": &"dev", &"origin": &"cyborg", &"glyph": "F", &"label_key": &"STARTUP_PICK_CYBORG_FORGED",      &"backstory_key": &"STARTUP_BACKSTORY_FORGED"},
+	&"automaton":   {&"stat": &"opt", &"origin": &"cyborg", &"glyph": "A", &"label_key": &"STARTUP_PICK_CYBORG_AUTOMATON",   &"backstory_key": &"STARTUP_BACKSTORY_AUTOMATON"},
+	&"polymath":    {&"stat": &"cla", &"origin": &"cyborg", &"glyph": "P", &"label_key": &"STARTUP_PICK_CYBORG_POLYMATH",    &"backstory_key": &"STARTUP_BACKSTORY_POLYMATH"},
+}
+
+# The two origin classes — same shape as CLASS_DEFINITIONS but no `stat` (origin
+# classes use derived Soul/Interface, not a primary rolled stat). UI iterates
+# this when offering origin selection (character creation, spec overlay).
+const ORIGIN_DEFINITIONS: Dictionary = {
+	&"analog": {&"glyph": "H", &"label_key": &"STARTUP_PICK_ANALOG", &"backstory_key": &"STARTUP_BACKSTORY_ANALOG"},
+	&"cyborg": {&"glyph": "C", &"label_key": &"STARTUP_PICK_CYBORG", &"backstory_key": &"STARTUP_BACKSTORY_CYBORG"},
 }
 
 # Direct nemesis pairs — positional opposites across the two origins (flavor + UI distinction only).

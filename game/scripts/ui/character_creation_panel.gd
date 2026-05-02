@@ -174,9 +174,9 @@ func _build_class_cards() -> void:
 	# in-game via SpecSelectOverlay after the player completes a level.
 	# Compact pick cards here; SpecSelectOverlay uses the rich
 	# ClassCardBuilder layout for the spec choice in-game.
-	for class_id: StringName in [&"analog", &"cyborg"]:
+	for class_id: StringName in AttributeState.ORIGIN_DEFINITIONS:
 		var accent := UIThemeState.get_palette_for(class_id, &"").accent
-		var label := SpecSelectOverlay.get_spec_label(class_id)
+		var label := SpecSelectOverlay.get_class_label(class_id)
 		var card := _make_pick_card(label, "", accent, CLASS_CARD_SIZE)
 		var cid := class_id  # capture by value
 		card.pressed.connect(func() -> void: _on_class_selected(cid))
@@ -293,11 +293,11 @@ func _class_entry_for_origin(origin: StringName) -> Dictionary:
 	return {
 		"class_id": origin,
 		"spec_id": &"",
-		"label_key": SpecSelectOverlay.get_spec_label(origin),
-		"glyph": SpecSelectOverlay.SPEC_GLYPHS.get(origin, "?"),
+		"label_key": SpecSelectOverlay.get_class_label(origin),
+		"glyph": SpecSelectOverlay.get_class_glyph(origin),
 		"stat": stat_key,
 		"opposes": opposes_key,
-		"backstory": SpecSelectOverlay.SPEC_BACKSTORIES.get(origin, ""),
+		"backstory": SpecSelectOverlay.get_class_backstory(origin),
 	}
 
 

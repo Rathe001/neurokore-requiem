@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="PerkLadder" load_steps=2 format=3]
+
+; Count / Countess (ort) tier perks — pending design. Target T3 effective
+; DPS ~1.45×; flavor lever is composed control (precision, denial, status
+; effects). Add three Perk subresources to `perks` and reload the game.
+
+[ext_resource type="Script" path="res://scripts/perks/perk_ladder.gd" id="ladder_script"]
+
+[resource]
+script = ExtResource("ladder_script")
+perks = []

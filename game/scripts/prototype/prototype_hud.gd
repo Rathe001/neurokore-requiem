@@ -346,8 +346,8 @@ func _on_credits_changed(total: int) -> void:
 	recent_loot_label.visible = false
 	recent_loot_label.text = ""
 
-func _on_perk_gained(perk: Dictionary) -> void:
-	_show_banner("%s — %s" % [perk.get("label", ""), perk.get("description", "")], 3.0)
+func _on_perk_gained(perk: Perk) -> void:
+	_show_banner("%s — %s" % [perk.label, perk.description], 3.0)
 
 func _show_banner(text: String, duration: float) -> void:
 	_banner_token += 1

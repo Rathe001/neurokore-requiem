@@ -319,12 +319,20 @@ func _build_stats_text(item: Item) -> String:
 		lines.append("%s: %d m" % [tr("ITEM_STATS_LIGHT_RANGE"), int(item.light_range)])
 		lines.append("%s: %d" % [tr("ITEM_STATS_LIGHT_ENERGY"), int(item.light_energy)])
 	# Container / belt
-	if item.kind == &"backpack" and item.inventory_bonus > 0:
-		lines.append("+%d %s" % [item.inventory_bonus, tr("ITEM_STATS_INVENTORY_BONUS")])
+	var inv_bonus := item.get_modifier(&"inventory_bonus")
+	if item.kind == &"backpack" and inv_bonus > 0:
+		lines.append("+%d %s" % [inv_bonus, tr("ITEM_STATS_INVENTORY_BONUS")])
 	if item.kind == &"belt" and item.utility_slots > 0:
 		lines.append("+%d %s" % [item.utility_slots, tr("ITEM_STATS_UTILITY_SLOTS")])
-	# Attribute modifiers
+	# Attribute modifiers — only the rollable class stats render here. The
+	# other keys in stat_modifiers (inventory_bonus, damage_reduction,
+	# fire_damage_bonus, etc.) are non-stat modifiers; each gets its own
+	# display rule above (or none yet, if the system that consumes them
+	# isn't shipped). Letting them through this loop produces wrong colours
+	# (relationship lookup falls through to "opposing") and ugly labels.
 	for stat_id: StringName in item.stat_modifiers:
+		if not stat_id in AttributeState.ROLLABLE_STATS:
+			continue
 		var amount: int = int(item.stat_modifiers[stat_id])
 		var color := _stat_rel_color(stat_id)
 		var hex := "#%s" % color.to_html(false)

@@ -5,10 +5,10 @@ signal inventory_changed(index: int)
 signal capacity_changed
 signal items_overflowed(overflow: Array[Item])
 
-# Bag economy: player starts with 8 slots; equipping a backpack adds another
-# 8 (set on the rolled Item's inventory_bonus by ItemRoller). MAX is the hard
-# ceiling future drop affixes (currently inventory_bonus on backpacks only)
-# can reach with affix rolls layered on top.
+# Bag economy: player starts with 8 slots. The equipped backpack contributes
+# its `stat_modifiers[&"inventory_bonus"]` (rolled at 8 by ItemRoller, plus
+# any affix rolls that touch the same key). MAX is the hard ceiling for the
+# combined sum.
 const BASE_INVENTORY_SIZE := 8
 const MAX_INVENTORY_SIZE := 40
 const MAX_UTILITY_SLOTS := 4
@@ -100,9 +100,7 @@ func set_inventory_item(index: int, item: Item) -> void:
 
 func get_inventory_capacity() -> int:
 	var pack: Item = equipment.get(&"backpack", null)
-	var bonus := 0
-	if pack != null:
-		bonus = pack.inventory_bonus
+	var bonus := 0 if pack == null else pack.get_modifier(&"inventory_bonus")
 	return min(BASE_INVENTORY_SIZE + bonus, MAX_INVENTORY_SIZE)
 
 func get_utility_capacity() -> int:
@@ -123,7 +121,7 @@ func _make_starter_offhand() -> Item:
 	item.id = &"starter_offhand"
 	item.kind = &"offhand"
 	item.main_type = "Offhand"
-	item.glyph = ItemRoller.TYPE_GLYPH.get("Offhand", "?")
+	item.glyph = SlotRegistry.glyph_for_type("Offhand")
 	item.glyph_color = ItemRoller.RARITY_COLOR.get(&"common", Color.WHITE)
 	item.rarity = &"common"
 	item.name_key = "Starter Offhand"

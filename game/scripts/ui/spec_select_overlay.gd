@@ -11,37 +11,33 @@ const BG_COLOR := Color(0.02, 0.02, 0.04, 0.92)
 const CARD_COL_GAP := 12.0
 const CARD_ROW_GAP := 6.0
 
-const SPEC_GLYPHS: Dictionary = {
-	&"analog": "H", &"cyborg": "C",
-	&"count": "G", &"survivalist": "S", &"enculted": "E",
-	&"forged": "F", &"automaton": "A", &"polymath": "P",
-}
 
-const SPEC_BACKSTORIES: Dictionary = {
-	&"analog": "STARTUP_BACKSTORY_ANALOG",
-	&"cyborg": "STARTUP_BACKSTORY_CYBORG",
-	&"count": "STARTUP_BACKSTORY_COUNT",
-	&"survivalist": "STARTUP_BACKSTORY_SURVIVALIST",
-	&"enculted": "STARTUP_BACKSTORY_ENCULTED",
-	&"forged": "STARTUP_BACKSTORY_FORGED",
-	&"automaton": "STARTUP_BACKSTORY_AUTOMATON",
-	&"polymath": "STARTUP_BACKSTORY_POLYMATH",
-}
-
-const SPEC_LABELS: Dictionary = {
-	&"analog": "STARTUP_PICK_ANALOG",
-	&"cyborg": "STARTUP_PICK_CYBORG",
-	&"survivalist": "STARTUP_PICK_ANALOG_SURVIVALIST",
-	&"enculted": "STARTUP_PICK_ANALOG_ENCULTED",
-	&"forged": "STARTUP_PICK_CYBORG_FORGED",
-	&"automaton": "STARTUP_PICK_CYBORG_AUTOMATON",
-	&"polymath": "STARTUP_PICK_CYBORG_POLYMATH",
-}
-
-static func get_spec_label(spec_id: StringName) -> String:
-	if spec_id == &"count":
+# Class label resolver. Reads from AttributeState.CLASS_DEFINITIONS /
+# ORIGIN_DEFINITIONS so adding a class is one edit (the metadata dict),
+# not three (label + glyph + backstory in parallel UI tables). Count
+# remains the only gendered exception.
+static func get_class_label(class_or_spec_id: StringName) -> String:
+	if class_or_spec_id == &"count":
 		return "STARTUP_PICK_ANALOG_COUNTESS" if PlayerState.gender == &"female" else "STARTUP_PICK_ANALOG_COUNT"
-	return SPEC_LABELS.get(spec_id, "")
+	if AttributeState.CLASS_DEFINITIONS.has(class_or_spec_id):
+		return AttributeState.CLASS_DEFINITIONS[class_or_spec_id].get(&"label_key", "")
+	if AttributeState.ORIGIN_DEFINITIONS.has(class_or_spec_id):
+		return AttributeState.ORIGIN_DEFINITIONS[class_or_spec_id].get(&"label_key", "")
+	return ""
+
+static func get_class_glyph(class_or_spec_id: StringName) -> String:
+	if AttributeState.CLASS_DEFINITIONS.has(class_or_spec_id):
+		return AttributeState.CLASS_DEFINITIONS[class_or_spec_id].get(&"glyph", "?")
+	if AttributeState.ORIGIN_DEFINITIONS.has(class_or_spec_id):
+		return AttributeState.ORIGIN_DEFINITIONS[class_or_spec_id].get(&"glyph", "?")
+	return "?"
+
+static func get_class_backstory(class_or_spec_id: StringName) -> String:
+	if AttributeState.CLASS_DEFINITIONS.has(class_or_spec_id):
+		return AttributeState.CLASS_DEFINITIONS[class_or_spec_id].get(&"backstory_key", "")
+	if AttributeState.ORIGIN_DEFINITIONS.has(class_or_spec_id):
+		return AttributeState.ORIGIN_DEFINITIONS[class_or_spec_id].get(&"backstory_key", "")
+	return ""
 
 var _root: Control
 
@@ -140,11 +136,11 @@ func _make_origin_entry(origin: StringName) -> Dictionary:
 	return {
 		"class_id": origin,
 		"spec_id": &"",
-		"label_key": get_spec_label(origin),
-		"glyph": SPEC_GLYPHS.get(origin, "?"),
+		"label_key": get_class_label(origin),
+		"glyph": get_class_glyph(origin),
 		"stat": stat_key,
 		"opposes": opposes_key,
-		"backstory": SPEC_BACKSTORIES.get(origin, ""),
+		"backstory": get_class_backstory(origin),
 	}
 
 func _make_spec_entry(origin: StringName, spec_id: StringName) -> Dictionary:
@@ -153,11 +149,11 @@ func _make_spec_entry(origin: StringName, spec_id: StringName) -> Dictionary:
 	return {
 		"class_id": origin,
 		"spec_id": spec_id,
-		"label_key": get_spec_label(spec_id),
-		"glyph": SPEC_GLYPHS.get(spec_id, "?"),
+		"label_key": get_class_label(spec_id),
+		"glyph": get_class_glyph(spec_id),
 		"stat": AttributeState.STAT_I18N.get(stat, ""),
 		"opposes": AttributeState.STAT_I18N.get(nemesis, ""),
-		"backstory": SPEC_BACKSTORIES.get(spec_id, ""),
+		"backstory": get_class_backstory(spec_id),
 	}
 
 func _on_pick(cid: StringName, sid: StringName) -> void:
