@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="RoomDef" load_steps=3 format=3]
+
+; Bottomless abyss variant — 12x6 with a deep void floor (10m shaft, no
+; bottom mesh, no light). Three pillars across with the same 2.75m gaps
+; as proto_pit_linear so the jump rhythm is identical, but the visual
+; signal is "you fall into darkness forever" instead of green ooze.
+; Pillars get amber marker lights since there's no ambient pit glow.
+
+[ext_resource type="Script" path="res://scripts/level/room_def.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/level/lights/fluorescent_white.tres" id="light"]
+
+[resource]
+script = ExtResource("1")
+id = &"proto_pit_bottomless"
+size = Vector2(12, 6)
+openings = [3, 2]
+opening_width = 4.0
+light_color = ExtResource("light")
+pit_floor = true
+bottomless_pit = true
+pit_margin = 0.0
+pillars = [Vector2(-5.25, 0), Vector2(0, 0), Vector2(5.25, 0)]
+pillar_size = Vector2(1.5, 1.5)

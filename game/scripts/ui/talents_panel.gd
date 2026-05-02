@@ -522,7 +522,14 @@ func _on_summary_bar_input(event: InputEvent) -> void:
 	var unlocked: int = AttributeState.get_unlocked_tier(stat_id, PlayerState.class_id, PlayerState.spec_id)
 	var thresholds: Array[float] = AttributeState.get_tier_thresholds(stat_id, PlayerState.class_id, PlayerState.spec_id)
 	var tier_text: String = "%s unlocked" % AttributeState.TIER_ROMAN[unlocked - 1] if unlocked > 0 else "no tier unlocked"
-	var next_text: String = "%s at %d%%" % [AttributeState.TIER_ROMAN[unlocked], int(thresholds[unlocked] * 100)] if unlocked < AttributeState.TIER_COUNT else "maxed"
+	var next_text: String
+	if unlocked >= AttributeState.TIER_COUNT:
+		next_text = "maxed"
+	elif thresholds[unlocked] > 1.0:
+		# Sentinel threshold (origin classes' T3) — tier is structurally unreachable.
+		next_text = "%s unavailable" % AttributeState.TIER_ROMAN[unlocked]
+	else:
+		next_text = "%s at %d%%" % [AttributeState.TIER_ROMAN[unlocked], int(thresholds[unlocked] * 100)]
 	get_tree().call_group(&"interactable_tooltip", &"show_text",
 		"%s  %d%%\n%s · next: %s" % [stat_name, int(pct * 100), tier_text, next_text])
 
@@ -535,9 +542,13 @@ func _on_node_hovered(stat_id: StringName, tier: int, node_idx: int) -> void:
 	var body: String
 	if is_locked:
 		var thresholds := AttributeState.get_tier_thresholds(stat_id, PlayerState.class_id, PlayerState.spec_id)
-		var needed_pct := int(thresholds[tier] * 100)
-		title += "  ·  Locked (%d%%)" % needed_pct
-		body = "Reach %d%% %s allocation to unlock this tier." % [needed_pct, stat_name]
+		if thresholds[tier] > 1.0:
+			title += "  ·  Unavailable"
+			body = "%s perks at this tier are unavailable to your class." % stat_name
+		else:
+			var needed_pct := int(thresholds[tier] * 100)
+			title += "  ·  Locked (%d%%)" % needed_pct
+			body = "Reach %d%% %s allocation to unlock this tier." % [needed_pct, stat_name]
 	else:
 		body = "Node effect TBD."
 	get_tree().call_group(&"interactable_tooltip", &"show_talent_node", title, body)

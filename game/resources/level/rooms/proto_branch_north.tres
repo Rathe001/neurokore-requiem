@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="RoomDef" load_steps=3 format=3]
+
+; Single-NORTH-opening dead-end. Sits south of a t_south junction, accessed
+; via a south-bound corridor. A switch slot lands here when the generator
+; emits a SwitchDoorPuzzle (added at runtime as RoomNode.additional_slots
+; — not declared on the template itself, so the same RoomDef is reusable
+; in puzzle-free contexts).
+
+[ext_resource type="Script" path="res://scripts/level/room_def.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/level/lights/fluorescent_white.tres" id="light"]
+
+[resource]
+script = ExtResource("1")
+id = &"proto_branch_north"
+size = Vector2(6, 6)
+openings = [0]
+opening_width = 4.0
+light_color = ExtResource("light")
+enemy_count = 2

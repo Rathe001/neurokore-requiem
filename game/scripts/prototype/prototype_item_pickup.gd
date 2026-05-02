@@ -7,8 +7,6 @@ const SETTLED_HEIGHT := 0.35
 const BOB_HEIGHT := 0.10
 const BOB_SPEED := 2.2
 const SPIN_SPEED := 0.8
-const HALO_PULSE_SPEED := 1.6
-const HALO_PULSE_RANGE := 0.10
 
 var item: Item = null
 
@@ -21,8 +19,7 @@ var _velocity: Vector3 = Vector3.ZERO
 var _popping: bool = true
 var _bob_phase: float = 0.0
 var _object_y: float = 0.0
-var _halo_mat: StandardMaterial3D
-var _halo_base_energy: float = 0.0
+var _name_label: Label3D = null
 
 func configure(p_item: Item) -> void:
 	item = p_item
@@ -32,9 +29,15 @@ func _ready() -> void:
 	SpatialGrid.register(self, &"pickups")
 	_object_y = _object.position.y
 	_bob_phase = randf() * TAU
+	# Halo + beam dropped — they're noisy at scale (every loot drop in a
+	# generated level adds another pulsing rim/light beam). Replaced by a
+	# billboarded name label so the player can read what's on the floor at
+	# a glance, rarity-tinted so colour still telegraphs value.
+	_halo.visible = false
+	_beam.visible = false
 	if item != null:
 		_object.add_child(ItemVisuals.build(item))
-		_apply_rarity_visuals(item.glyph_color, item.rarity)
+		_build_name_label(item)
 	var angle := randf() * TAU
 	var speed_factor := randf_range(0.7, 1.1)
 	_velocity = Vector3(
@@ -46,39 +49,27 @@ func _ready() -> void:
 	_area.mouse_exited.connect(_on_hover_exit)
 	_area.input_event.connect(_on_input_event)
 
-func _apply_rarity_visuals(color: Color, rarity: StringName) -> void:
-	_halo_base_energy = _halo_energy_for(rarity)
-	_halo_mat = StandardMaterial3D.new()
-	_halo_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_halo_mat.albedo_color = Color(color.r, color.g, color.b, 0.85)
-	_halo_mat.emission_enabled = true
-	_halo_mat.emission = color
-	_halo_mat.emission_energy_multiplier = _halo_base_energy
-	_halo_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_halo_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	_halo.material_override = _halo_mat
 
-	if rarity == &"rare" or rarity == &"unique":
-		_beam.visible = true
-		var beam_mat := StandardMaterial3D.new()
-		beam_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		var alpha: float = 0.32 if rarity == &"unique" else 0.20
-		beam_mat.albedo_color = Color(color.r, color.g, color.b, alpha)
-		beam_mat.emission_enabled = true
-		beam_mat.emission = color
-		beam_mat.emission_energy_multiplier = 1.8 if rarity == &"unique" else 1.3
-		beam_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		beam_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-		_beam.material_override = beam_mat
-	else:
-		_beam.visible = false
+func _build_name_label(p_item: Item) -> void:
+	_name_label = Label3D.new()
+	_name_label.text = tr(p_item.name_key) if p_item.name_key != "" else "Item"
+	_name_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_name_label.no_depth_test = true
+	_name_label.fixed_size = true
+	# fixed_size scales by pixel_size; small footprint so the label hovers
+	# unobtrusively above the loot. Previous values were sized for a
+	# headline, not a label.
+	_name_label.pixel_size = 0.0011
+	_name_label.font_size = 20
+	# Thick fully-opaque black outline so the rarity-coloured text reads
+	# legibly against light corridors AND dark rooms without a backplate.
+	_name_label.outline_size = 12
+	_name_label.modulate = p_item.glyph_color
+	_name_label.outline_modulate = Color(0, 0, 0, 1.0)
+	_name_label.position = Vector3(0, 0.9, 0)
+	_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	add_child(_name_label)
 
-func _halo_energy_for(rarity: StringName) -> float:
-	match rarity:
-		&"unique": return 3.0
-		&"rare":   return 2.4
-		&"magic":  return 1.8
-		_:         return 1.4
 
 func _physics_process(delta: float) -> void:
 	if _popping:
@@ -104,20 +95,22 @@ func _physics_process(delta: float) -> void:
 	_bob_phase += delta
 	_object.position.y = _object_y + sin(_bob_phase * BOB_SPEED) * BOB_HEIGHT
 	_object.rotation.y = _bob_phase * SPIN_SPEED
-	if _halo_mat != null:
-		var pulse := 1.0 + sin(_bob_phase * HALO_PULSE_SPEED) * HALO_PULSE_RANGE
-		_halo_mat.emission_energy_multiplier = _halo_base_energy * pulse
 
 func _on_hover_enter() -> void:
 	add_to_group(&"hovered_clickable")
 	add_to_group(&"tooltip_target")
 	if item != null:
 		get_tree().call_group(&"interactable_tooltip", &"show_item", item)
+	if _name_label != null:
+		# Brighter on hover so the player sees what they're targeting.
+		_name_label.modulate = Color(1.0, 1.0, 1.0, 1.0)
 
 func _on_hover_exit() -> void:
 	remove_from_group(&"hovered_clickable")
 	remove_from_group(&"tooltip_target")
 	get_tree().call_group(&"interactable_tooltip", &"hide_tooltip")
+	if _name_label != null and item != null:
+		_name_label.modulate = item.glyph_color
 
 func _on_input_event(_camera: Node, event: InputEvent, _pos: Vector3, _normal: Vector3, _idx: int) -> void:
 	if _popping:

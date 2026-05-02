@@ -10,6 +10,16 @@ class_name LevelTheme
 # corridor falls back to the primary wall/floor shader.
 @export var wall_shader_alt: Shader
 @export var floor_shader_alt: Shader
+# Shader parameter overrides applied when materialising the ShaderMaterial
+# for each shader slot. Keyed by uniform name → value (Color, Vector3, etc.
+# matching the shader's uniform type). Lets multiple themes share one
+# shader with different colour palettes — e.g. amber_theme overrides
+# tech_wall_riveted's base_color to rust/orange while dim_theme keeps
+# the cool grey defaults.
+@export var wall_shader_params: Dictionary = {}
+@export var floor_shader_params: Dictionary = {}
+@export var wall_shader_alt_params: Dictionary = {}
+@export var floor_shader_alt_params: Dictionary = {}
 
 @export_group("Wall Material")
 @export var wall_color: Color = Color(0.2, 0.21, 0.24, 1)
@@ -26,7 +36,7 @@ class_name LevelTheme
 @export var fps_fog_color: Color = Color(0.002, 0.003, 0.006)
 
 @export_group("Pit")
-@export var pit_depth: float = 3.0
+@export var pit_depth: float = 5.0
 @export var pit_ooze_color: Color = Color(0.15, 0.85, 0.2, 1.0)
 @export var pit_ooze_energy: float = 2.5
 

@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="RoomDef" load_steps=3 format=3]
+
+; Very large linear-role room — 16x12 with 4 architectural pillars
+; arranged at the inner corners of a 4-pillar formation. Wide-open
+; combat space; player has to navigate around the columns. 4 enemies
+; spread across the volume make it feel populated.
+
+[ext_resource type="Script" path="res://scripts/level/room_def.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/level/lights/fluorescent_white.tres" id="light"]
+
+[resource]
+script = ExtResource("1")
+id = &"proto_great_hall"
+size = Vector2(16, 12)
+openings = [3, 2]
+opening_width = 4.0
+light_color = ExtResource("light")
+enemy_count = 4
+decorative_pillars = [Vector2(-4, -2), Vector2(4, -2), Vector2(-4, 2), Vector2(4, 2)]
+decorative_pillar_size = Vector2(1.2, 1.2)

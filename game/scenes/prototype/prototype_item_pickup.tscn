@@ -2,8 +2,11 @@
 
 [ext_resource type="Script" path="res://scripts/prototype/prototype_item_pickup.gd" id="script_item_pickup"]
 
-[sub_resource type="SphereShape3D" id="shape_pickup"]
-radius = 0.5
+; Tall box covering both the floor item (~y=0.35) and the floating name
+; label (~y=0.9). Top-down clicks on the label hit the box too, so the
+; player can hover/click either the item or its name to pick it up.
+[sub_resource type="BoxShape3D" id="shape_pickup"]
+size = Vector3(1.2, 1.6, 1.2)
 
 [sub_resource type="TorusMesh" id="halo_mesh"]
 inner_radius = 0.30
@@ -34,11 +37,15 @@ mesh = SubResource("beam_mesh")
 cast_shadow = 0
 visible = false
 
+; Tilted 30° on X so the item's profile faces the camera instead of just
+; its top face — readable silhouette at a glance. The script spins the
+; node on Y at runtime; that spin compounds with the X tilt so different
+; facets rotate into view over the bob cycle.
 [node name="Object" type="Node3D" parent="Visual"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
+transform = Transform3D(1, 0, 0, 0, 0.8660254, 0.5, 0, -0.5, 0.8660254, 0, 0.5, 0)
 
 [node name="PickupArea" type="Area3D" parent="."]
-position = Vector3(0, 0.5, 0)
+position = Vector3(0, 0.8, 0)
 collision_layer = 8
 collision_mask = 0
 

@@ -73,6 +73,24 @@ func _get_tooltip_text() -> String:
 		return "%s (Locked — %d / %d)" % [display_name, done, unlocks_required]
 	return "%s (Locked)" % display_name
 
+# Configure lock state at level build time. Sets the public fields AND the
+# internal counters/snapshot that reset_state() restores from, so puzzles can
+# wire a door post-_ready without having to poke private state. Called by
+# the puzzle layer (e.g. SwitchDoorPuzzle); designer-set values via
+# RoomDef.locked_doors / unlock_required_doors take effect via the
+# DoorBuilder before _ready instead.
+func setup_lock(unlocks: int, lock: bool, on_boss: bool = false) -> void:
+	unlocks_required = maxi(1, unlocks)
+	locked = lock
+	_initial_locked = lock
+	_unlocks_remaining = unlocks_required
+	if on_boss:
+		unlock_on_boss = true
+		if not is_in_group(&"boss_listeners"):
+			add_to_group(&"boss_listeners")
+	_refresh_tint()
+
+
 # Restore initial open/locked state on level reset.
 func reset_state() -> void:
 	if _tween != null and _tween.is_valid():
@@ -114,6 +132,10 @@ func toggle() -> void:
 
 func interact(_user: Node) -> void:
 	if locked:
+		# Surface a hint via the same tooltip channel the exit pad uses for
+		# its locked state. Without this the click silently no-ops and the
+		# player thinks the click missed.
+		get_tree().call_group(&"interactable_tooltip", &"show_text", tr(&"DOOR_LOCKED"))
 		return
 	toggle()
 

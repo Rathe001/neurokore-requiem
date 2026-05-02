@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="LevelLayout" load_steps=4 format=3]
+
+; LevelLayout wrapper around graph_demo.tres. Drop-in replacement for
+; prototype_layout.tres on the LevelBuilder node — switch the `layout`
+; export to this file to see the solver place the three rooms.
+
+[ext_resource type="Script" path="res://scripts/level/level_layout.gd" id="script_layout"]
+[ext_resource type="Resource" path="res://resources/level/themes/tech_theme.tres" id="theme"]
+[ext_resource type="Resource" path="res://resources/level/layouts/graph_demo.tres" id="graph"]
+
+[resource]
+script = ExtResource("script_layout")
+theme = ExtResource("theme")
+ground_size = Vector2(60, 30)
+graph = ExtResource("graph")

@@ -20,7 +20,7 @@ anchor_left = 0.5
 anchor_right = 0.5
 anchor_top = 1.0
 anchor_bottom = 1.0
-offset_left = -236.0
+offset_left = -270.0
 offset_top = -98.0
 offset_right = -180.0
 offset_bottom = -8.0
@@ -40,14 +40,96 @@ border_color = Color(0.3, 0.5, 0.7, 0.7)
 border_width = 1.0
 editor_only = false
 
-[node name="AvatarLabel" type="Label" parent="Root/AvatarPanel"]
+[node name="AvatarImage" type="TextureRect" parent="Root/AvatarPanel"]
 unique_name_in_owner = true
 anchor_right = 1.0
 anchor_bottom = 1.0
-theme_override_font_sizes/font_size = 22
-text = "Lv 1"
+offset_left = 3.0
+offset_top = 3.0
+offset_right = -3.0
+offset_bottom = -3.0
+expand_mode = 1
+stretch_mode = 6
+mouse_filter = 2
+
+[node name="AvatarPlaceholder" type="Label" parent="Root/AvatarPanel"]
+unique_name_in_owner = true
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 3.0
+offset_top = 3.0
+offset_right = -3.0
+offset_bottom = -3.0
+theme_override_font_sizes/font_size = 36
+text = "?"
 horizontal_alignment = 1
 vertical_alignment = 1
+visible = false
+mouse_filter = 2
+
+; Floats a "+N cr" tally over the avatar's bottom-left while loot is rolling
+; in. Accumulates pickups within a 5s rolling window so big drops show as a
+; single total. Hidden by default.
+[node name="RecentLootLabel" type="Label" parent="Root/AvatarPanel"]
+unique_name_in_owner = true
+anchor_left = 0.0
+anchor_right = 0.0
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 4.0
+offset_right = 70.0
+offset_top = -32.0
+offset_bottom = -18.0
+theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(1.0, 0.85, 0.25, 1.0)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 4
+text = ""
+horizontal_alignment = 0
+vertical_alignment = 1
+visible = false
+mouse_filter = 2
+
+[node name="LevelBg" type="ColorRect" parent="Root/AvatarPanel"]
+anchor_left = 0.0
+anchor_right = 1.0
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 3.0
+offset_right = -3.0
+offset_top = -17.0
+offset_bottom = -3.0
+color = Color(0.0, 0.0, 0.0, 0.6)
+mouse_filter = 2
+
+[node name="LevelLabel" type="Label" parent="Root/AvatarPanel"]
+unique_name_in_owner = true
+anchor_left = 0.0
+anchor_right = 0.0
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 5.0
+offset_right = 40.0
+offset_top = -17.0
+offset_bottom = -3.0
+theme_override_font_sizes/font_size = 9
+text = "Lvl. 1"
+horizontal_alignment = 0
+vertical_alignment = 1
+
+[node name="TierBadges" type="HBoxContainer" parent="Root/AvatarPanel"]
+unique_name_in_owner = true
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = -52.0
+offset_right = -5.0
+offset_top = -17.0
+offset_bottom = -3.0
+alignment = 2
+theme_override_constants/separation = 2
+mouse_filter = 2
 
 [node name="HudPanel" type="Control" parent="Root"]
 anchor_left = 0.5

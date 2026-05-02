@@ -6,7 +6,7 @@ extends StaticBody3D
 # loop can restore initial state. Subclasses provide the outline source mesh,
 # tooltip text, and any reset behavior.
 
-const OUTLINE_GROW := 0.04
+const OUTLINE_GROW := 0.06
 
 @export var display_name: String = ""
 
@@ -41,7 +41,6 @@ func _build_outline(src: MeshInstance3D) -> void:
 	_outline.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var st := SurfaceTool.new()
 	st.create_from(src.mesh, 0)
-	st.generate_normals(true)
 	_outline.mesh = st.commit()
 	var m := StandardMaterial3D.new()
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED

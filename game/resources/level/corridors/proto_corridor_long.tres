@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="CorridorDef" load_steps=3 format=3]
+
+; Stretch corridor — 8m long with denser fluorescents. Adds traversal
+; pacing variety vs. the standard short connector.
+
+[ext_resource type="Script" path="res://scripts/level/corridor_def.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/level/lights/fluorescent_white.tres" id="light"]
+
+[resource]
+script = ExtResource("1")
+width = 4.0
+length = 8.0
+light_color = ExtResource("light")
+light_interval = 4.0

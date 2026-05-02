@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="RoomDef" load_steps=3 format=3]
+
+; Grid cell with all four openings — interior cell with neighbors on
+; every side. Picks up 2 enemies since it's the most exposed cell.
+
+[ext_resource type="Script" path="res://scripts/level/room_def.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/level/lights/fluorescent_white.tres" id="light"]
+
+[resource]
+script = ExtResource("1")
+id = &"proto_grid_cross"
+size = Vector2(8, 8)
+openings = [0, 1, 2, 3]
+opening_width = 4.0
+light_color = ExtResource("light")
+enemy_count = 2

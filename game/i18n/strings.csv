@@ -3,6 +3,7 @@ COMMON_NEW_GAME,New Game
 COMMON_OPTIONS,Options
 COMMON_QUIT,Quit
 COMMON_BACK,Back
+COMMON_START,Start
 COMMON_RESUME,Resume
 COMMON_SETTINGS,Settings
 COMMON_QUIT_TO_DESKTOP,Quit to Desktop
@@ -23,6 +24,11 @@ SPEC_CYBORG_AUTOMATON,Automaton
 SPEC_CYBORG_POLYMATH,Polymath
 STARTUP_TITLE,Choose Your Class
 STARTUP_TITLE_SPEC,Choose Your Specialization
+SPEC_TIER_NOTE,"Each class has passive perks tied to its main stat. [b]Specialized classes[/b] start at Tier I and can climb to Tier III, while still investing in others (3-1-1 or 3-2-0). [b]Origin classes[/b] (Analog / Cyborg) cap at Tier II but can hold it across multiple perks at once (2-2-1)."
+STARTUP_TITLE_ORIGIN,Choose Your Origin
+STARTUP_TITLE_AVATAR,Choose Your Avatar
+STARTUP_TITLE_NAME,Choose Your Name
+STARTUP_PLACEHOLDER_NAME,Enter your name…
 STARTUP_TITLE_GENDER,Choose Your Identity
 STARTUP_GENDER_MALE,Male
 STARTUP_GENDER_FEMALE,Female
@@ -136,10 +142,11 @@ HUD_HOTKEY_HINTS,WASD Move · LMB Fire · RMB Skill · Space Jump · Ctrl Crouch
 EXIT_TOOLTIP_LOCKED,Exit (Locked — defeat the boss)
 EXIT_TOOLTIP_UNLOCKED,Exit (Reset Level)
 HUD_BANNER_LEVEL_RESET,New Game +%d
+DOOR_LOCKED,It's locked
 HUD_BANNER_DIED,You died
 HUD_BANNER_NO_LIGHT,I wish I had a light...
 HUD_LEVEL_UP_FORMAT,You are now level %d! Press N to view talents
-HUD_LEVEL_FORMAT,Lv %d
+HUD_LEVEL_FORMAT,Lvl. %d
 HUD_XP_FORMAT,%d / %d XP
 HUD_CREDITS_FORMAT,%d cr
 HUD_DEBUG_OVERLAY_FORMAT,"FPS: %d  (%.1f ms)\nEnemies: %d\nCorpses: %d\nPickups: %d\nStructures: %d\nTotal nodes: %d"

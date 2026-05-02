@@ -35,7 +35,45 @@ const CHASE_SPEED := 3.2
 const AGGRO_RANGE := 10.0
 const GROUP_AGGRO_RANGE := 8.0
 const ATTACK_RANGE := 2.2
+# Leash distance — once the enemy strays this far from its spawn while
+# chasing, it disengages and walks back to spawn. Prevents whole-level
+# chases (and the "lure them into a pit" exploit). Squared for the cheap
+# distance check inside _chase_tick.
+const MAX_CHASE_FROM_SPAWN_SQ := 225.0  # 15.0 * 15.0
+const RETURN_THRESHOLD_SQ := 1.0  # 1.0 * 1.0 — within 1m of spawn = arrived
+# If the player is within this distance when the leash trips (or while we're
+# returning), don't disengage. Stops the leash from triggering on a kited
+# enemy that the player is still actively engaging — the leash is for "I
+# walked away," not "I'm fighting you across a doorway."
+const KEEP_CHASE_PLAYER_RANGE_SQ := 144.0  # 12.0 * 12.0
+# Returning enemies take this fraction of damage (5% — effectively immune)
+# and skip knockback entirely. Stops the player from kiting an enemy past
+# its leash and then sniping it on the walk back.
+const RETURNING_DAMAGE_MULT := 0.05
 const ATTACK_COOLDOWN := 1.6
+
+# Crouch: shrinks the capsule when an overhead probe finds a low ceiling
+# (crouch corridors). Restores when overhead clears. The navmesh is baked
+# at agent_height=0.9 so pathfinding routes through the same tunnels that
+# require the crouch — keep these in sync if either changes.
+const STAND_HEIGHT := 1.7
+const CROUCH_HEIGHT := 1.0
+const CAPSULE_BOTTOM_Y := -0.05  # keeps the capsule bottom at floor level (matches authored stand transform)
+const CROUCH_SPEED_MULT := 0.6
+# Probe overhead at this cadence — every-frame casts at horde scale add up.
+# Each enemy gets a randomised initial offset so the population doesn't
+# spike on a single tick.
+const CROUCH_PROBE_INTERVAL := 0.25
+
+# Pit-pillar jump: triggered when the navmesh routes the enemy onto a
+# NavigationLink3D (placed by pit_builder between adjacent pillars). The
+# enemy launches with an impulse that arcs to the link's exit; gravity
+# carries them down. JUMP_MISS_CHANCE is rolled per leap — a missed jump
+# horizontally undershoots so the enemy lands short and falls into the pit.
+const JUMP_AIRTIME := 0.7
+const JUMP_MISS_CHANCE := 0.18
+const JUMP_MISS_DIST_FACTOR := 0.55  # how far the missed jump reaches (start → 55% toward target)
+const JUMP_LANDING_GRACE := 0.18  # require this much airtime before is_on_floor() can end the jump (avoids takeoff-frame false landings)
 
 # Per-level stat ranges, indexed [1..MAX_LEVEL]. Index 0 is unused (no level 0).
 # Tuned so L1 sits near the previous fixed values (40 HP / 10 dmg) and each
@@ -129,8 +167,22 @@ var _hovered: bool = false
 # Locked overrides hovered: red persists past mouse-exit until LMB release.
 var _tooltip_locked: bool = false
 var _hit_tween: Tween
+var _hit_flash_tween: Tween
+var _crouching: bool = false
+var _crouch_probe_t: float = 0.0
+var _stand_test_shape: CapsuleShape3D
+var _jumping: bool = false
+var _jump_t: float = 0.0
 var _floor_ring_mat: StandardMaterial3D
 var _aggroed: bool = false
+@onready var _nav_agent: NavigationAgent3D = $NavigationAgent3D
+# Spawn position captured on reset() — enemies leash back to this point
+# when they chase too far. Set whenever the enemy is reused from the pool
+# at a new position.
+var _spawn_position: Vector3 = Vector3.ZERO
+# True while the enemy is walking back to spawn after the leash trips.
+# Ignores the player while returning; flips back to false on arrival.
+var _returning_to_spawn: bool = false
 
 func _ready() -> void:
 	_init_enemy()
@@ -170,6 +222,22 @@ func _init_enemy() -> void:
 	_play_anim(ANIM_IDLE)
 	if health_bar != null:
 		health_bar.visible = false
+	if _stand_test_shape == null:
+		_stand_test_shape = CapsuleShape3D.new()
+		_stand_test_shape.radius = 0.55
+		_stand_test_shape.height = STAND_HEIGHT
+	# Reset crouch on pool re-acquire — pool returned us mid-tunnel, capsule
+	# might still be shrunk from prior owner.
+	if _crouching:
+		_set_crouch(false)
+	# Stagger probes across the population so we don't shape-cast for every
+	# enemy on the same physics tick.
+	_crouch_probe_t = randf() * CROUCH_PROBE_INTERVAL
+	_jumping = false
+	_jump_t = 0.0
+	# Connect once — signal stays connected across pool cycles.
+	if _nav_agent != null and not _nav_agent.link_reached.is_connected(_on_link_reached):
+		_nav_agent.link_reached.connect(_on_link_reached)
 
 ## Roll level (if not pre-set) and derive HP, damage, and floor-ring tint.
 ## Spawners that want a fixed level (e.g. boss) set `level` before reset() runs;
@@ -240,6 +308,11 @@ func _pool_release() -> void:
 func reset() -> void:
 	remove_from_group(&"corpses")
 	_init_enemy()
+	# EnemySpawner sets global_position right before calling reset(), so
+	# capturing here gives us the correct spawn point even when the enemy
+	# is reused from the pool at a new location.
+	_spawn_position = global_position
+	_returning_to_spawn = false
 
 func _setup_hover() -> void:
 	if _s_outline_mat == null:
@@ -305,19 +378,30 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 		return
 	if DebugState.config != null and DebugState.config.one_shot_enemies:
 		amount = max(amount, max_health)
+	# Enemies walking back to spawn after the leash trip take ~5% damage
+	# and ignore knockback/CC. Without this, the player can kite an enemy
+	# out of its territory and snipe it on the walk back; with it, the
+	# return is functionally a "give up + reset" rather than a free kill.
+	var returning := _returning_to_spawn
+	if returning:
+		amount = maxi(1, int(round(float(amount) * RETURNING_DAMAGE_MULT)))
 	_health -= amount
 	_update_health_bar()
 	var head := global_position + Vector3(0.0, 1.8, 0.0)
 	DamageNumber.spawn(get_parent(), head, amount, multistrike, is_crit)
-	if knockback_strength > 0.0:
+	if knockback_strength > 0.0 and not returning:
 		var dir := global_position - knockback_from
 		dir.y = 0.0
 		if dir.length_squared() > 0.0001:
 			_knockback_vel = dir.normalized() * knockback_strength
 			_knockback_remain = KNOCKBACK_DURATION
-	if not _aggroed:
+	# Re-aggro on hit unless we're already on the way back — getting
+	# nicked while disengaging shouldn't pull the enemy back toward the
+	# player; that would defeat the leash.
+	if not _aggroed and not returning:
 		aggro()
 	_play_hit_squash()
+	_hit_flash_tween = HitFlash.play(self, visual, _hit_flash_tween)
 	if _health <= 0:
 		_die()
 
@@ -345,10 +429,19 @@ func _physics_process(delta: float) -> void:
 		return
 	_attack_cd = maxf(0.0, _attack_cd - delta)
 
-	if is_on_floor():
-		velocity.y = 0.0
-	else:
+	_crouch_probe_t -= delta
+	if _crouch_probe_t <= 0.0:
+		_crouch_probe_t = CROUCH_PROBE_INTERVAL
+		_update_crouch_state()
+
+	# Floor-snap is suppressed while _jumping so the takeoff impulse set by
+	# _start_jump (which runs from the agent's link_reached signal AFTER our
+	# physics_process this frame) survives into the next frame's gravity
+	# pass instead of being zeroed by is_on_floor().
+	if _jumping or not is_on_floor():
 		velocity.y -= GRAVITY * delta
+	else:
+		velocity.y = 0.0
 
 	if _knockback_remain > 0.0:
 		# Quadratic ease-out: full velocity at the moment of impact, near-zero
@@ -362,6 +455,8 @@ func _physics_process(delta: float) -> void:
 	elif _casting:
 		velocity.x = 0.0
 		velocity.z = 0.0
+	elif _jumping:
+		_tick_jump(delta)
 	else:
 		_chase_tick()
 	# Capture wished horizontal motion before slide consumes it (see StepUp).
@@ -402,6 +497,44 @@ func _chase_tick() -> void:
 		velocity.x = 0.0
 		velocity.z = 0.0
 		return
+
+	# Leash check — once we've chased too far from spawn, disengage and head
+	# back. Prevents whole-level chase chains and the "lure into a pit" trick.
+	# Suppressed while the player is still close enough to be actively fighting
+	# us — leashing mid-fight reads as the enemy giving up for no reason.
+	var spawn_dist_sq := global_position.distance_squared_to(_spawn_position)
+	var player_dist_sq := global_position.distance_squared_to(player.global_position)
+	var player_close := player_dist_sq <= KEEP_CHASE_PLAYER_RANGE_SQ
+	if _aggroed and spawn_dist_sq > MAX_CHASE_FROM_SPAWN_SQ and not player_close:
+		_aggroed = false
+		_returning_to_spawn = true
+	# Re-aggro mid-return if the player closes back in — otherwise an enemy
+	# half-way back to spawn gets a free walk past the player.
+	if _returning_to_spawn and player_close:
+		_returning_to_spawn = false
+		_aggroed = true
+
+	if _returning_to_spawn:
+		if spawn_dist_sq <= RETURN_THRESHOLD_SQ:
+			_returning_to_spawn = false
+			velocity.x = 0.0
+			velocity.z = 0.0
+			return
+		var to_spawn := _spawn_position - global_position
+		to_spawn.y = 0.0
+		var sd := to_spawn.length()
+		if sd < 0.001:
+			_returning_to_spawn = false
+			velocity.x = 0.0
+			velocity.z = 0.0
+			return
+		var spawn_dir := to_spawn / sd
+		_want_dir = spawn_dir
+		var return_speed := CHASE_SPEED * (CROUCH_SPEED_MULT if _crouching else 1.0)
+		velocity.x = spawn_dir.x * return_speed
+		velocity.z = spawn_dir.z * return_speed
+		return
+
 	var to_player: Vector3 = player.global_position - global_position
 	to_player.y = 0.0
 	var dist := to_player.length()
@@ -422,10 +555,100 @@ func _chase_tick() -> void:
 	if dist <= ATTACK_RANGE and _attack_cd <= 0.0 and has_los:
 		_cast_attack(player, to_player / dist)
 		return
+
+	# Pathfind via NavigationAgent — routes around walls and pit edges
+	# instead of charging straight at the player. Falls back to direct
+	# vector chase when no nav agent (legacy scene), no map (navmesh
+	# bake hasn't finished yet), or the agent is already on top of the
+	# player.
 	var dir := to_player / dist
+	if _nav_agent != null and _nav_agent.get_navigation_map().is_valid():
+		_nav_agent.target_position = player.global_position
+		if not _nav_agent.is_navigation_finished():
+			var next_pos := _nav_agent.get_next_path_position()
+			var nav_dir := next_pos - global_position
+			nav_dir.y = 0.0
+			if nav_dir.length_squared() > 0.0001:
+				dir = nav_dir.normalized()
 	_want_dir = dir
-	velocity.x = dir.x * CHASE_SPEED
-	velocity.z = dir.z * CHASE_SPEED
+	var chase_speed := CHASE_SPEED * (CROUCH_SPEED_MULT if _crouching else 1.0)
+	velocity.x = dir.x * chase_speed
+	velocity.z = dir.z * chase_speed
+
+# Shape-cast a stand-height capsule overhead. If anything's there we can't
+# stand — drop into crouch. The probe runs on CROUCH_PROBE_INTERVAL cadence
+# and self-excludes so the cast doesn't trip on this body's own collider.
+func _update_crouch_state() -> void:
+	if _stand_test_shape == null:
+		return
+	var space := get_world_3d().direct_space_state
+	if space == null:
+		return
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = _stand_test_shape
+	query.collision_mask = 1  # World layer — walls, ceilings, floors
+	query.exclude = [get_rid()]
+	query.transform = Transform3D(Basis.IDENTITY,
+		global_position + Vector3(0.0, STAND_HEIGHT * 0.5 + CAPSULE_BOTTOM_Y, 0.0))
+	var blocked := not space.intersect_shape(query, 1).is_empty()
+	if blocked != _crouching:
+		_set_crouch(blocked)
+
+func _set_crouch(value: bool) -> void:
+	_crouching = value
+	if collision == null:
+		return
+	var shape := collision.shape as CapsuleShape3D
+	if shape == null:
+		return
+	shape.height = CROUCH_HEIGHT if value else STAND_HEIGHT
+	collision.position.y = shape.height * 0.5 + CAPSULE_BOTTOM_Y
+
+
+# Fires when the navmesh routes us across a NavigationLink3D — pit_builder
+# places one between every adjacent pillar pair. We ignore links while
+# crouching (no jumping under low ceilings) or already mid-air.
+func _on_link_reached(details: Dictionary) -> void:
+	if not _alive or _jumping or _crouching:
+		return
+	if not is_on_floor():
+		return
+	var exit_pos: Vector3 = details.get(&"link_exit_position", Vector3.ZERO)
+	if exit_pos == Vector3.ZERO:
+		return
+	_start_jump(exit_pos)
+
+
+# Launch impulse toward the link exit. Roll for a miss — failed jumps
+# undershoot horizontally so the enemy lands short of the next pillar and
+# falls into the pit (the per-pit kill area handles the cleanup).
+func _start_jump(target: Vector3) -> void:
+	var horiz := Vector3(target.x - global_position.x, 0.0, target.z - global_position.z)
+	var horiz_dist := horiz.length()
+	if horiz_dist < 0.001:
+		return
+	var horiz_dir := horiz / horiz_dist
+	var miss := randf() < JUMP_MISS_CHANCE
+	var reach_factor := JUMP_MISS_DIST_FACTOR if miss else 1.0
+	# Solve for the velocity that covers `horiz_dist * reach_factor` over
+	# JUMP_AIRTIME under our GRAVITY. Vertical impulse balances airtime so
+	# the enemy peaks mid-flight regardless of horizontal distance.
+	var vh := (horiz_dist * reach_factor) / JUMP_AIRTIME
+	var vv := 0.5 * GRAVITY * JUMP_AIRTIME
+	velocity = horiz_dir * vh
+	velocity.y = vv
+	_jumping = true
+	_jump_t = 0.0
+	_face_direction(horiz_dir)
+
+
+func _tick_jump(delta: float) -> void:
+	_jump_t += delta
+	# Velocity persists from the takeoff impulse; gravity (applied earlier
+	# this frame) handles the vertical arc. We only need to detect landing.
+	if _jump_t >= JUMP_LANDING_GRACE and is_on_floor():
+		_jumping = false
+		_jump_t = 0.0
 
 func _cast_attack(player: Node3D, aim: Vector3) -> void:
 	_casting = true

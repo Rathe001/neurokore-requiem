@@ -54,7 +54,8 @@
       "Bash(tasklist)",
       "Bash(taskkill /F /PID 47304)",
       "PowerShell(Stop-Process *)",
-      "Bash(xargs -I {} sh -c 'echo \"{}\"; sed -n \"$\\(echo {} | cut -d: -f1\\),+5p\" \"C:\\\\Users\\\\josh\\\\Projects\\\\neurokore-requiem\\\\game\\\\scripts\\\\prototype\\\\prototype_player.gd\"')"
+      "Bash(xargs -I {} sh -c 'echo \"{}\"; sed -n \"$\\(echo {} | cut -d: -f1\\),+5p\" \"C:\\\\Users\\\\josh\\\\Projects\\\\neurokore-requiem\\\\game\\\\scripts\\\\prototype\\\\prototype_player.gd\"')",
+      "Bash(grep -E \"\\\\.\\(tscn|tres\\)$\")"
     ]
   }
 }

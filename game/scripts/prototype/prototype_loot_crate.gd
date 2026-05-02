@@ -12,6 +12,10 @@ const COLOR_OPENED := Color(0.35, 0.35, 0.35, 1.0)
 @export var random_item_count: int = 3
 ## Weapon base resource paths to roll as test items. Overrides random_item_count.
 @export var test_weapon_base_paths: Array[String] = []
+## When true, spawns one of each Optics variant (Flashlight, Lantern, Scanner,
+## UV) in addition to whatever else the crate would drop. For the starter
+## chest so the player can sample every light type up front.
+@export var include_all_optics: bool = false
 
 @onready var mesh: MeshInstance3D = $Mesh
 @onready var lid: MeshInstance3D = $Lid
@@ -70,6 +74,12 @@ func interact(_user: Node) -> void:
 		for _i in random_item_count:
 			items.append(ItemRoller.roll_random(ilvl, rng))
 
+	if include_all_optics:
+		var optics_rng := RandomNumberGenerator.new()
+		optics_rng.randomize()
+		var ilvl_optics := maxi(1, PlayerState.level)
+		items.append_array(ItemRoller.roll_one_per_optics_variant(ilvl_optics, optics_rng))
+
 	var parent := get_parent()
 	if parent == null:
 		return
@@ -79,7 +89,12 @@ func interact(_user: Node) -> void:
 		parent.add_child(pickup)
 		pickup.global_position = global_position + Vector3(0.0, 1.5, 0.0)
 
-	# Become inert after opening.
+	# Become inert after opening — drop out of mouse picking, the spatial
+	# grid (no more proximity-interact triggers), and any active hover/
+	# tooltip state. Without input_ray_pickable=false the cursor keeps
+	# highlighting an empty crate, which the player reads as "still has
+	# something" until they've clicked enough to confirm.
+	input_ray_pickable = false
 	SpatialGrid.unregister(self)
 	if _outline != null:
 		_outline.visible = false

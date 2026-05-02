@@ -143,3 +143,8 @@ func _register(node: Node) -> void:
 		var light := node as Light3D
 		if not _baselines.has(light):
 			_baselines[light] = light.light_energy
+			# Pre-dim to the occluded floor so newly-spawned lights don't render
+			# at full baseline for the one frame before _process runs its first
+			# proximity check. Without this, every light flashes bright on level
+			# load, exposing the entire level for ~0.5s while the lerp settles.
+			light.light_energy = light.light_energy * OCCLUDED_DIM_FACTOR

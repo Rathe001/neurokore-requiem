@@ -11,6 +11,13 @@ enum Axis { X, Z }
 @export var light_color: LightColor
 @export var light_interval: float = 0.0
 
+@export_group("Theming")
+## Optional theme override for this corridor. Same semantics as
+## RoomDef.theme_override — swap on, build, swap off. Use to bridge two
+## differently-themed rooms with a transition corridor, or to give a
+## corridor its own distinct look.
+@export var theme_override: LevelTheme
+
 @export_group("Enemies")
 @export var enemy_count: int = 0
 @export var enemy_scene: PackedScene

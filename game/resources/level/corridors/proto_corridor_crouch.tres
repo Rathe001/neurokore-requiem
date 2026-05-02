@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="CorridorDef" load_steps=3 format=3]
+
+; Crouch tunnel — 1.4m ceiling forces the player to hold Ctrl and crawl
+; through. WallBuilder builds a thin collision slab at the ceiling height
+; that blocks standing-up bodies; player auto-uncrouches when Ctrl is
+; released, but the stand-test ray sees the slab and refuses, so the
+; player stays crouched while inside. Length 6m so it reads as a real
+; tunnel, not just a ducked-head moment.
+
+[ext_resource type="Script" path="res://scripts/level/corridor_def.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/level/lights/dim.tres" id="light"]
+
+[resource]
+script = ExtResource("1")
+width = 4.0
+length = 6.0
+light_color = ExtResource("light")
+light_interval = 3.0
+ceiling_height = 1.4

@@ -12,8 +12,8 @@ const EQUIP_GAP := 4.0
 const EQUIP_COLS := 3
 const EQUIP_ROWS := 3
 const UTIL_SLOTS := 4
-const INV_SLOT_SIZE := Vector2(34.0, 34.0)
-const INV_GAP := 3.0
+const INV_SLOT_SIZE := Vector2(26.0, 26.0)
+const INV_GAP := 2.0
 const INV_COLS := 8
 
 const BACKDROP_COLOR := Color(0.0, 0.0, 0.0, 0.55)
@@ -304,7 +304,10 @@ func _build_character_sheet(parent: Control) -> void:
 	stats.size = STATS_SIZE
 	stats.add_theme_constant_override(&"separation", 2)
 	parent.add_child(stats)
-	stats.add_child(_make_stat_row("CHARACTER_PANEL_NAME", "CHARACTER_PANEL_OPERATOR"))
+	# Use the player's chosen name from character creation; fall back to the
+	# generic "Operator" label only when the prototype scene bypasses creation.
+	var name_text: String = PlayerState.player_name if not PlayerState.player_name.is_empty() else tr("CHARACTER_PANEL_OPERATOR")
+	stats.add_child(_make_stat_row("CHARACTER_PANEL_NAME", name_text))
 	stats.add_child(_make_stat_row("CHARACTER_PANEL_CLASS", _class_label()))
 	stats.add_child(_make_stat_row("CHARACTER_PANEL_LEVEL", "1"))
 	_hp_label = _make_stat_value("— / —")
@@ -562,7 +565,14 @@ func _on_alloc_bar_input(event: InputEvent) -> void:
 	var unlocked: int = AttributeState.get_unlocked_tier(stat_id, PlayerState.class_id, PlayerState.spec_id)
 	var thresholds: Array[float] = AttributeState.get_tier_thresholds(stat_id, PlayerState.class_id, PlayerState.spec_id)
 	var tier_text: String = "Tier %s unlocked" % AttributeState.TIER_ROMAN[unlocked - 1] if unlocked > 0 else "no tier unlocked"
-	var next_text: String = "Tier %s at %d%%" % [AttributeState.TIER_ROMAN[unlocked], int(thresholds[unlocked] * 100)] if unlocked < AttributeState.TIER_COUNT else "maxed"
+	var next_text: String
+	if unlocked >= AttributeState.TIER_COUNT:
+		next_text = "maxed"
+	elif thresholds[unlocked] > 1.0:
+		# Origin classes can't reach T3 — sentinel threshold flags it as unreachable.
+		next_text = "Tier %s unavailable" % AttributeState.TIER_ROMAN[unlocked]
+	else:
+		next_text = "Tier %s at %d%%" % [AttributeState.TIER_ROMAN[unlocked], int(thresholds[unlocked] * 100)]
 	get_tree().call_group(&"interactable_tooltip", &"show_text",
 		"%s  %d%%\n%s · next: %s" % [stat_name, int(pct * 100), tier_text, next_text])
 

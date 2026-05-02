@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="LevelLayout" load_steps=4 format=3]
+
+; LevelLayout wrapper for test_level_graph.tres. Used by level_shell.tscn.
+
+[ext_resource type="Script" path="res://scripts/level/level_layout.gd" id="script_layout"]
+[ext_resource type="Resource" path="res://resources/level/themes/tech_theme.tres" id="theme"]
+[ext_resource type="Resource" path="res://resources/level/layouts/test_level_graph.tres" id="graph"]
+
+[resource]
+script = ExtResource("script_layout")
+theme = ExtResource("theme")
+ground_size = Vector2(60, 30)
+graph = ExtResource("graph")

@@ -1,0 +1,141 @@
+[gd_resource type="Resource" script_class="LevelLayout" load_steps=40 format=3]
+
+; ══════════════════════════════════════════════════════════════════════════════
+; PROCGEN DEMO — BranchingGenerator builds a 5-8 room east-going chain with
+; T-junctions and 1-3 room dead-end branches. Final connection is locked
+; behind a SwitchDoorPuzzle whose switches sit in the branch terminators;
+; each branch entrance is independently lockable behind a ClearRoomPuzzle on
+; the junction. Boss arena uses the amber theme to mark the end.
+;
+; The corridor pool gives connection variety (short/long/dim); the linear
+; template pool mixes plain, pit-jump, and wide rooms so the chain doesn't
+; visually repeat. Reseed the generator's `seed` to reroll.
+; ══════════════════════════════════════════════════════════════════════════════
+
+[ext_resource type="Script" path="res://scripts/level/level_layout.gd" id="script_layout"]
+[ext_resource type="Script" path="res://scripts/level/procgen/branching_generator.gd" id="script_branching"]
+[ext_resource type="Script" path="res://scripts/level/procgen/room_template.gd" id="script_template"]
+[ext_resource type="Resource" path="res://resources/level/themes/tech_theme.tres" id="theme"]
+[ext_resource type="Resource" path="res://resources/level/themes/amber_theme.tres" id="theme_amber"]
+[ext_resource type="Resource" path="res://resources/level/themes/dim_theme.tres" id="theme_dim"]
+[ext_resource type="Resource" path="res://resources/level/rooms/proto_start_room.tres" id="room_start"]
+[ext_resource type="Resource" path="res://resources/level/rooms/proto_linear_room.tres" id="room_linear"]
+[ext_resource type="Resource" path="res://resources/level/rooms/proto_pit_linear.tres" id="room_pit_linear"]
+[ext_resource type="Resource" path="res://resources/level/rooms/proto_wide_linear.tres" id="room_wide_linear"]
+[ext_resource type="Resource" path="res://resources/level/rooms/proto_great_hall.tres" id="room_great_hall"]
+[ext_resource type="Resource" path="res://resources/level/rooms/proto_pit_chasm.tres" id="room_pit_chasm"]
+[ext_resource type="Resource" path="res://resources/level/rooms/proto_spike_chamber.tres" id="room_spike_chamber"]
+[ext_resource type="Resource" path="res://resources/level/rooms/proto_pit_bottomless.tres" id="room_pit_bottomless"]
+[ext_resource type="Resource" path="res://resources/level/rooms/proto_end_room.tres" id="room_end"]
+[ext_resource type="Resource" path="res://resources/level/rooms/proto_junction_t_south.tres" id="room_t_south"]
+[ext_resource type="Resource" path="res://resources/level/rooms/proto_junction_t_north.tres" id="room_t_north"]
+[ext_resource type="Resource" path="res://resources/level/rooms/proto_branch_north.tres" id="room_branch_n"]
+[ext_resource type="Resource" path="res://resources/level/rooms/proto_branch_south.tres" id="room_branch_s"]
+[ext_resource type="Resource" path="res://resources/level/rooms/proto_branch_linear_ns.tres" id="room_branch_linear"]
+[ext_resource type="Resource" path="res://resources/level/corridors/proto_corridor_standard.tres" id="corr_std"]
+[ext_resource type="Resource" path="res://resources/level/corridors/proto_corridor_long.tres" id="corr_long"]
+[ext_resource type="Resource" path="res://resources/level/corridors/proto_corridor_dim.tres" id="corr_dim"]
+[ext_resource type="Resource" path="res://resources/level/corridors/proto_corridor_crouch.tres" id="corr_crouch"]
+
+[sub_resource type="Resource" id="template_start"]
+script = ExtResource("script_template")
+room = ExtResource("room_start")
+role = &"start"
+
+[sub_resource type="Resource" id="template_linear"]
+script = ExtResource("script_template")
+room = ExtResource("room_linear")
+role = &"linear"
+weight = 1.0
+
+[sub_resource type="Resource" id="template_pit_linear"]
+script = ExtResource("script_template")
+room = ExtResource("room_pit_linear")
+role = &"linear"
+weight = 0.7
+
+[sub_resource type="Resource" id="template_wide_linear"]
+script = ExtResource("script_template")
+room = ExtResource("room_wide_linear")
+role = &"linear"
+weight = 0.8
+
+[sub_resource type="Resource" id="template_great_hall"]
+script = ExtResource("script_template")
+room = ExtResource("room_great_hall")
+role = &"linear"
+weight = 0.4
+
+[sub_resource type="Resource" id="template_pit_chasm"]
+script = ExtResource("script_template")
+room = ExtResource("room_pit_chasm")
+role = &"linear"
+weight = 0.4
+
+[sub_resource type="Resource" id="template_spike_chamber"]
+script = ExtResource("script_template")
+room = ExtResource("room_spike_chamber")
+role = &"linear"
+weight = 0.3
+
+[sub_resource type="Resource" id="template_pit_bottomless"]
+script = ExtResource("script_template")
+room = ExtResource("room_pit_bottomless")
+role = &"linear"
+weight = 0.35
+
+[sub_resource type="Resource" id="template_end"]
+script = ExtResource("script_template")
+room = ExtResource("room_end")
+role = &"end"
+
+[sub_resource type="Resource" id="template_t_south"]
+script = ExtResource("script_template")
+room = ExtResource("room_t_south")
+role = &"junction_t_south"
+
+[sub_resource type="Resource" id="template_t_north"]
+script = ExtResource("script_template")
+room = ExtResource("room_t_north")
+role = &"junction_t_north"
+
+[sub_resource type="Resource" id="template_branch_n"]
+script = ExtResource("script_template")
+room = ExtResource("room_branch_n")
+role = &"branch_north"
+
+[sub_resource type="Resource" id="template_branch_s"]
+script = ExtResource("script_template")
+room = ExtResource("room_branch_s")
+role = &"branch_south"
+
+[sub_resource type="Resource" id="template_branch_linear"]
+script = ExtResource("script_template")
+room = ExtResource("room_branch_linear")
+role = &"branch_linear_ns"
+
+[sub_resource type="Resource" id="generator"]
+script = ExtResource("script_branching")
+seed = 42
+templates = [SubResource("template_start"), SubResource("template_linear"), SubResource("template_pit_linear"), SubResource("template_wide_linear"), SubResource("template_great_hall"), SubResource("template_pit_chasm"), SubResource("template_spike_chamber"), SubResource("template_pit_bottomless"), SubResource("template_end"), SubResource("template_t_south"), SubResource("template_t_north"), SubResource("template_branch_n"), SubResource("template_branch_s"), SubResource("template_branch_linear")]
+corridor_pool = [ExtResource("corr_std"), ExtResource("corr_long"), ExtResource("corr_dim"), ExtResource("corr_crouch")]
+min_length = 5
+max_length = 8
+branch_chance = 0.45
+min_branch_depth = 1
+max_branch_depth = 3
+anchor_position = Vector3(0, 0, 0)
+emit_switch_puzzle = true
+place_loot_at_branches = true
+lock_branch_with_clear_chance = 0.5
+end_theme = ExtResource("theme_amber")
+chain_themes = [ExtResource("theme_dim")]
+boss_arena_minions = 2
+packed_room_chance = 0.25
+packed_room_extra_enemies = 2
+
+[resource]
+script = ExtResource("script_layout")
+theme = ExtResource("theme")
+ground_size = Vector2(160, 60)
+generator = SubResource("generator")

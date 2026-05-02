@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="RoomDef" load_steps=3 format=3]
+
+; Single-SOUTH-opening dead-end. Mirror of proto_branch_north — sits
+; north of a t_north junction.
+
+[ext_resource type="Script" path="res://scripts/level/room_def.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/level/lights/fluorescent_white.tres" id="light"]
+
+[resource]
+script = ExtResource("1")
+id = &"proto_branch_south"
+size = Vector2(6, 6)
+openings = [1]
+opening_width = 4.0
+light_color = ExtResource("light")
+enemy_count = 2

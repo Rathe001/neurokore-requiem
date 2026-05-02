@@ -26,6 +26,25 @@ const TALENT_POINTS_PER_LEVEL := 1
 var class_id: StringName = &""
 var spec_id: StringName = &""
 var gender: StringName = &"male"
+## Selected avatar index (1..5). 0 means none chosen — HUD falls back to
+## a text-only level display.
+var avatar_id: int = 0
+## Player-entered display name. Empty = no name shown in HUD.
+var player_name: String = ""
+
+
+# Loads the portrait matching the current class/gender/avatar_id selection.
+# Returns null when any are unset, so the HUD can fall back gracefully for
+# the legacy prototype scene (which bypasses character creation).
+func avatar_texture() -> Texture2D:
+	if avatar_id < 1 or avatar_id > 5:
+		return null
+	if class_id != &"analog" and class_id != &"cyborg":
+		return null
+	if gender != &"male" and gender != &"female":
+		return null
+	var path := "res://assets/ui/avatars/%s_%s%d.png" % [gender, class_id, avatar_id]
+	return load(path) as Texture2D
 
 ## Total talent points granted by leveling. +1 per level-up; starts at 0.
 var talent_points_total: int = 0

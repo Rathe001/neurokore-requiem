@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="RoomDef" load_steps=3 format=3]
+
+; Wider linear-role chain room — 10x8 with two enemies. Adds size +
+; encounter-density variety vs. the default 8x8 single-enemy linear.
+
+[ext_resource type="Script" path="res://scripts/level/room_def.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/level/lights/fluorescent_white.tres" id="light"]
+
+[resource]
+script = ExtResource("1")
+id = &"proto_wide_linear"
+size = Vector2(10, 8)
+openings = [3, 2]
+opening_width = 4.0
+light_color = ExtResource("light")
+enemy_count = 2

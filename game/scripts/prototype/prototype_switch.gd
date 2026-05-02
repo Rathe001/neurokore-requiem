@@ -5,6 +5,11 @@ enum Action { TOGGLE, OPEN, CLOSE, UNLOCK }
 
 const COLOR_ACTIVE := Color(0.35, 0.95, 1.0, 1.0)
 const COLOR_USED := Color(0.4, 0.5, 0.55, 1.0)
+# Hover-state emission boost for the lamp. The shared outline halo is small
+# at this scale (0.4 × 1.4 × 0.6 housing) and reads poorly against dark
+# walls, so the lamp itself flares to signal hover.
+const LAMP_EMISSION_IDLE := 4.0
+const LAMP_EMISSION_HOVER := 12.0
 
 @export var target_door: NodePath
 @export var action: Action = Action.TOGGLE
@@ -19,10 +24,20 @@ func _ready() -> void:
 	_mat = StandardMaterial3D.new()
 	_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	_mat.emission_enabled = true
-	_mat.emission_energy_multiplier = 4.0
+	_mat.emission_energy_multiplier = LAMP_EMISSION_IDLE
 	lamp.material_override = _mat
 	super._ready()
 	_refresh_lamp()
+
+func _on_mouse_entered() -> void:
+	super._on_mouse_entered()
+	if _mat != null and not _used:
+		_mat.emission_energy_multiplier = LAMP_EMISSION_HOVER
+
+func _on_mouse_exited() -> void:
+	super._on_mouse_exited()
+	if _mat != null:
+		_mat.emission_energy_multiplier = LAMP_EMISSION_IDLE
 
 func _get_outline_source() -> MeshInstance3D:
 	return mesh

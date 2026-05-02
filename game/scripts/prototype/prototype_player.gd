@@ -14,7 +14,7 @@ const ITEM_PICKUP_SCENE: PackedScene = preload("res://scenes/prototype/prototype
 const KNOCKBACK_DURATION := 0.22
 const DEATH_HOLD := 0.9
 const RESPAWN_DELAY := 1.0
-const INTERACT_RANGE_SQ := 6.25
+const INTERACT_RANGE_SQ := 4.0  # 2.0m — player must stand close to interact
 const PLAYER_WORLD_POS_PARAM := &"player_world_pos"
 
 const SKILL_INPUTS: Array[StringName] = [
@@ -123,6 +123,7 @@ var _resource_current: float = 0.0
 var _resource_last_int: int = 0
 var _credits: int = 0
 var _death_tween: Tween
+var _hit_flash_tween: Tween
 var _spawn_position: Vector3 = Vector3.ZERO
 var _equipped_light: Light3D
 var _scanner_active: bool = false
@@ -254,6 +255,7 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 		return
 	_health = max(_health - amount, 0)
 	health_changed.emit(_health, max_health)
+	_hit_flash_tween = HitFlash.play(self, visual, _hit_flash_tween)
 	if knockback_strength > 0.0:
 		var dir := global_position - knockback_from
 		dir.y = 0.0
@@ -689,6 +691,15 @@ func _die() -> void:
 	await get_tree().create_timer(RESPAWN_DELAY).timeout
 	respawn()
 
+# Update both the player's current position and the respawn anchor used by
+# respawn() / NG+. Called by PrototypeRoot._move_player_to_spawn() after the
+# level builder has placed a player_spawn marker — without this, the player
+# would respawn at its scene-defined transform after death.
+func set_spawn_position(pos: Vector3) -> void:
+	_spawn_position = pos
+	global_position = pos
+
+
 func respawn() -> void:
 	if _death_tween != null and _death_tween.is_valid():
 		_death_tween.kill()
@@ -859,9 +870,9 @@ func _apply_light_item() -> void:
 	match item.light_type:
 		Item.LightType.DIRECTIONAL:
 			var spot := SpotLight3D.new()
-			spot.spot_angle = 20.0
-			spot.spot_attenuation = 1.4
-			spot.spot_angle_attenuation = 0.8
+			spot.spot_angle = 28.0  # wider beam — easier to navigate dark rooms
+			spot.spot_attenuation = 1.2
+			spot.spot_angle_attenuation = 0.7
 			spot.shadow_enabled = true
 			spot.shadow_bias = 0.02
 			spot.shadow_normal_bias = 0.3

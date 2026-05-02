@@ -9,6 +9,8 @@ const COLLECT_RADIUS := 0.6
 const MAGNET_SPEED := 9.0
 const SPIN_SPEED := 2.5
 
+const CREDIT_COLOR := Color(1.0, 0.85, 0.25)
+
 @export var amount: int = 1
 
 @onready var visual: Node3D = $Visual
@@ -16,6 +18,7 @@ const SPIN_SPEED := 2.5
 var _velocity: Vector3 = Vector3.ZERO
 var _popping: bool = true
 var _player_ref: Node3D
+var _amount_label: Label3D = null
 
 func _ready() -> void:
 	_init_pickup()
@@ -24,7 +27,30 @@ func _init_pickup() -> void:
 	add_to_group(&"pickups")
 	SpatialGrid.register(self, &"pickups")
 	_player_ref = get_tree().get_first_node_in_group(&"player") as Node3D
+	_ensure_amount_label()
 	_randomize_pop()
+
+
+# Build (or refresh) the floating "<N> cr" label. Lives once per pickup
+# instance — pooled credits hit reset() with a new amount, so the text
+# needs re-syncing on each acquire.
+func _ensure_amount_label() -> void:
+	if _amount_label == null:
+		_amount_label = Label3D.new()
+		_amount_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		_amount_label.no_depth_test = true
+		_amount_label.fixed_size = true
+		_amount_label.pixel_size = 0.0011
+		_amount_label.font_size = 20
+		# Thick fully-opaque outline matching item pickup labels — keeps the
+		# gold "N cr" readable on any background without a backplate.
+		_amount_label.outline_size = 12
+		_amount_label.modulate = CREDIT_COLOR
+		_amount_label.outline_modulate = Color(0, 0, 0, 1.0)
+		_amount_label.position = Vector3(0, 0.9, 0)
+		_amount_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		add_child(_amount_label)
+	_amount_label.text = "%d cr" % amount
 
 func _randomize_pop() -> void:
 	_popping = true

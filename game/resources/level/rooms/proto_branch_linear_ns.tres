@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="RoomDef" load_steps=3 format=3]
+
+; Through-traffic branch room — NORTH + SOUTH openings. Used by
+; BranchingGenerator as an interior step in multi-room branches; the
+; deepest room in a branch is still a single-opening terminator
+; (proto_branch_north / proto_branch_south).
+
+[ext_resource type="Script" path="res://scripts/level/room_def.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/level/lights/fluorescent_white.tres" id="light"]
+
+[resource]
+script = ExtResource("1")
+id = &"proto_branch_linear_ns"
+size = Vector2(6, 6)
+openings = [0, 1]
+opening_width = 4.0
+light_color = ExtResource("light")
+enemy_count = 1

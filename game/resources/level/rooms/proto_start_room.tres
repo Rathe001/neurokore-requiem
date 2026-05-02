@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="RoomDef" load_steps=5 format=3]
+
+; Reusable start-room template — single EAST opening so it terminates a
+; chain on the west side. Carries a player_spawn marker slot so the level
+; builder knows where to place the player (instead of relying on a fixed
+; transform in the level shell scene). RoomDef.id is the *template* name;
+; per-instance ids come from the generator's RoomNode.id.
+
+[ext_resource type="Script" path="res://scripts/level/room_def.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/level/interactable_slot.gd" id="2"]
+[ext_resource type="Resource" path="res://resources/level/lights/fluorescent_white.tres" id="light"]
+[ext_resource type="PackedScene" path="res://scenes/prototype/prototype_player_spawn.tscn" id="player_spawn"]
+
+[sub_resource type="Resource" id="slot_player_spawn"]
+script = ExtResource("2")
+id = &"player_spawn"
+scene = ExtResource("player_spawn")
+offset = Vector3(0, 0, 0)
+
+[resource]
+script = ExtResource("1")
+id = &"proto_start_room"
+size = Vector2(8, 8)
+openings = [2]
+opening_width = 4.0
+light_color = ExtResource("light")
+slots = [SubResource("slot_player_spawn")]

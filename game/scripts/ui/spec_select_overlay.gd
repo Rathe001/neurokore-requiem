@@ -78,6 +78,26 @@ func _build_ui(origin: StringName) -> void:
 	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(title)
 
+	# Tier-rules note: explains the perk-tier ceiling/floor difference between
+	# specialized and origin classes so the player understands what "picking a
+	# specialization" actually trades off before they commit.
+	var note := RichTextLabel.new()
+	note.bbcode_enabled = true
+	note.text = TranslationServer.translate("SPEC_TIER_NOTE")
+	note.fit_content = true
+	note.scroll_active = false
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	note.add_theme_font_size_override(&"normal_font_size", 11)
+	note.add_theme_color_override(&"default_color", Color(0.85, 0.9, 1.0, 0.7))
+	note.anchor_left = 0.5
+	note.anchor_right = 0.5
+	note.offset_left = -360.0
+	note.offset_right = 360.0
+	note.offset_top = 104.0
+	note.offset_bottom = 160.0
+	note.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_root.add_child(note)
+
 	# Build the list of choices: origin class + 3 specs
 	var picks: Array[Dictionary] = []
 	picks.append(_make_origin_entry(origin))

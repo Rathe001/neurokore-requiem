@@ -112,7 +112,12 @@ func _spawn_projectile(skill: Skill, aim: Vector3, eff_range: float, weapon: Ite
 		proj.damage_min = skill.damage
 		proj.damage_max = skill.damage
 	proj.damage_mult = AttributeState.get_player_damage_mult(PlayerState.class_id, PlayerState.spec_id)
-	var spawn_pos := _host.global_position + aim.normalized() * 0.5 + Vector3(0.0, 1.0, 0.0)
+	# Spawn at the player's position (slightly elevated). Spawning ahead of
+	# the player would skip enemies standing right next to us. Player
+	# collision_layer doesn't match the projectile mask so no self-hit;
+	# the projectile sweeps forward and catches close-range targets via
+	# PrototypeProjectile._check_initial_overlaps().
+	var spawn_pos := _host.global_position + Vector3(0.0, 1.0, 0.0)
 	_host.get_parent().add_child(proj)
 	proj.global_position = spawn_pos
 	proj.monitoring = true

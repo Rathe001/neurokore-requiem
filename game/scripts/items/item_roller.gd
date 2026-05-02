@@ -48,10 +48,10 @@ const RARITY_SUFFIX_COUNT: Dictionary = {
 }
 
 const RARITY_COLOR: Dictionary = {
-	&"common": Color(0.75, 0.75, 0.75),
-	&"magic":  Color(0.30, 0.55, 1.00),
-	&"rare":   Color(1.00, 0.85, 0.30),
-	&"unique": Color(0.85, 0.45, 1.00),
+	&"common": Color(1.00, 1.00, 1.00),
+	&"magic":  Color(0.35, 0.55, 1.00),
+	&"rare":   Color(0.70, 0.30, 1.00),
+	&"unique": Color(0.75, 0.50, 0.25),
 }
 
 const TYPE_GLYPH: Dictionary = {
@@ -89,16 +89,16 @@ const OPTICS_VARIANTS: Array[Dictionary] = [
 		"name": "Flashlight",
 		"glyph": "✸",
 		"light_type": Item.LightType.DIRECTIONAL,
-		"range": 12.0,
-		"energy_range": Vector2(2.0, 3.0),
+		"range": 18.0,
+		"energy_range": Vector2(7.0, 8.5),
 		"color": Color(1.0, 0.95, 0.85),
 	},
 	{
 		"name": "Lantern",
 		"glyph": "◉",
 		"light_type": Item.LightType.RADIANT,
-		"range": 6.0,
-		"energy_range": Vector2(1.5, 2.2),
+		"range": 9.0,
+		"energy_range": Vector2(5.0, 6.5),
 		"color": Color(1.0, 0.85, 0.6),
 	},
 	{
@@ -113,8 +113,8 @@ const OPTICS_VARIANTS: Array[Dictionary] = [
 		"name": "UV Light",
 		"glyph": "❉",
 		"light_type": Item.LightType.UV,
-		"range": 5.0,
-		"energy_range": Vector2(1.2, 1.8),
+		"range": 6.0,
+		"energy_range": Vector2(2.0, 2.6),
 		"color": Color(0.6, 0.4, 1.0),
 	},
 ]
@@ -131,6 +131,12 @@ func roll(main_type: String, item_level: int, rarity: StringName, rng: RandomNum
 
 	if main_type == "2H Weapon":
 		item.two_handed = true
+	# Backpacks always grant their base bag bonus regardless of affix roll —
+	# without this floor a "Backpack" item could roll with zero slots when
+	# none of its prefixes happen to be inventory_bonus, which makes the
+	# pickup useless. Affixes can still ADD slots on top via stat_modifiers.
+	if main_type == "Backpack":
+		item.inventory_bonus = 8
 
 	_apply_weapon_base(item, main_type, rng)
 	_apply_optics_variant(item, main_type, rng)
@@ -267,6 +273,9 @@ func _apply_optics_variant(item: Item, main_type: String, rng: RandomNumberGener
 	if main_type != "Optics":
 		return
 	var variant: Dictionary = OPTICS_VARIANTS[rng.randi_range(0, OPTICS_VARIANTS.size() - 1)]
+	_assign_optics_variant(item, variant, rng)
+
+func _assign_optics_variant(item: Item, variant: Dictionary, rng: RandomNumberGenerator) -> void:
 	item.light_type = variant["light_type"] as Item.LightType
 	item.light_range = variant["range"]
 	var energy_range: Vector2 = variant["energy_range"]
@@ -274,6 +283,24 @@ func _apply_optics_variant(item: Item, main_type: String, rng: RandomNumberGener
 	item.light_color = variant["color"]
 	item.sub_type = variant["name"]
 	item.glyph = variant["glyph"]
+
+# Returns one Optics item per declared variant (Flashlight, Lantern, Scanner,
+# UV) at the given item level. Used by the starter chest so the player can
+# sample every light type without depending on a random roll.
+func roll_one_per_optics_variant(item_level: int, rng: RandomNumberGenerator) -> Array[Item]:
+	var out: Array[Item] = []
+	for variant: Dictionary in OPTICS_VARIANTS:
+		var item := Item.new()
+		item.main_type = "Optics"
+		item.kind = TYPE_TO_SLOT.get("Optics", &"")
+		item.rarity = &"common"
+		item.id = StringName("starter_optics_%d_%d" % [item_level, rng.randi()])
+		item.glyph_color = RARITY_COLOR.get(&"common", Color.WHITE)
+		item.stat_modifiers = {}
+		_assign_optics_variant(item, variant, rng)
+		item.name_key = _build_name("Optics", item.sub_type, [] as Array[String])
+		out.append(item)
+	return out
 
 func _build_name(main_type: String, sub_type: String, affix_labels: Array[String]) -> String:
 	# Sub-type (e.g. "Flashlight" for Optics) is more descriptive than the

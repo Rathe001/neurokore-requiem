@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="RoomDef" load_steps=3 format=3]
+
+; Lethal linear pit variant — 12x6 with spike floor (visual "you do NOT
+; want to fall in here" signal vs. the standard ooze-glow pit). 4 pillars
+; with 2m edge-to-edge gaps — slightly tighter than pit_linear so the
+; lethal variant feels stiffer without being unfair. Outer pillars flush
+; with the walls; two inner pillars at ±1.75. The spike floor punishes
+; the player for missing — kill is identical to ooze pits, the visual
+; sells it.
+
+[ext_resource type="Script" path="res://scripts/level/room_def.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/level/lights/fluorescent_white.tres" id="light"]
+
+[resource]
+script = ExtResource("1")
+id = &"proto_spike_chamber"
+size = Vector2(12, 6)
+openings = [3, 2]
+opening_width = 4.0
+light_color = ExtResource("light")
+pit_floor = true
+spike_pit = true
+pit_margin = 0.0
+pillars = [Vector2(-5.25, 0), Vector2(-1.75, 0), Vector2(1.75, 0), Vector2(5.25, 0)]
+pillar_size = Vector2(1.5, 1.5)

@@ -25,10 +25,29 @@ func _ready() -> void:
 	get_viewport().physics_object_picking = true
 	EntityPool.warmup(ENEMY_SCENE, SPAWN_BATCH)
 	_wire_switches()
+	_move_player_to_spawn()
 	if DebugState.config != null and DebugState.config.disable_enemies:
 		_clear_enemies()
 	elif spawn_boss_on_ready:
 		_spawn_boss()
+
+
+# If the level placed a PrototypePlayerSpawn marker (via a player_spawn slot
+# on a RoomDef), move the player to it. Levels without a marker keep the
+# player at its scene-defined transform — preserves the prototype scene's
+# fixed (0,0,-4) spawn while letting graph- and generator-driven levels
+# decide their own spawn position.
+func _move_player_to_spawn() -> void:
+	var marker := get_tree().get_first_node_in_group(&"player_spawn") as Node3D
+	if marker == null:
+		return
+	var player := get_tree().get_first_node_in_group(&"player") as Node3D
+	if player == null:
+		return
+	if player.has_method(&"set_spawn_position"):
+		player.set_spawn_position(marker.global_position)
+	else:
+		player.global_position = marker.global_position
 
 func _wire_switches() -> void:
 	var builder := get_node_or_null("LevelBuilder") as LevelBuilder
@@ -105,22 +124,35 @@ func _clear_pickups() -> void:
 		p.queue_free()
 
 # Group dispatch from PrototypeExit.interact() once the boss is dead and the
-# player steps on the unlocked exit pad. Wipes the field, re-rolls every spawn
-# at the player's current level (±1), respawns the boss, and snaps the player
-# back to the start. PlayerState (level/XP) and InventoryState carry over.
+# player steps on the unlocked exit pad. Two paths depending on whether the
+# layout is generator-driven:
+#   - Generator (procgen): tear down everything, reroll seed, regenerate.
+#     Player walks into a fresh layout each NG+. Player position resets via
+#     the new spawn marker the rebuild places.
+#   - Legacy (hand-authored pieces[]): in-place reset — respawn enemies at
+#     scaled level, reset interactable states, keep geometry. Same level.
+# PlayerState (level/XP) and InventoryState carry over either way.
 func reset_level() -> void:
 	_clear_enemies()
 	_clear_corpses()
 	_clear_pickups()
 	var builder := get_node_or_null("LevelBuilder") as LevelBuilder
-	if builder != null:
+	if builder != null and builder.layout != null and builder.layout.generator != null:
+		# Procgen path: fresh layout per NG+. randi() may rarely be 0; the
+		# generator falls back to wall-clock time in that case, so it's fine.
+		await builder.rebuild(randi())
+		# The freshly-built level placed a new player_spawn marker; teleport
+		# the player there (and update their post-death respawn anchor).
+		_move_player_to_spawn()
+	elif builder != null:
+		# Legacy in-place reset.
 		builder.respawn_enemies(PlayerState.level)
-	if spawn_boss_on_ready:
-		_spawn_boss()
-	# Doors close + re-lock, switches clear, exit re-locks. Each interactable
-	# joins "resettable" via HoverableInteractable._ready and provides its own
-	# reset_state() override.
-	get_tree().call_group(&"resettable", &"reset_state")
+		if spawn_boss_on_ready:
+			_spawn_boss()
+		# Doors close + re-lock, switches clear, exit re-locks. Each interactable
+		# joins "resettable" via HoverableInteractable._ready and provides its own
+		# reset_state() override. Skipped on rebuild — those nodes were freed.
+		get_tree().call_group(&"resettable", &"reset_state")
 
 	# First completion: let the player choose a specialization before continuing.
 	if PlayerState.new_game_plus == 0:

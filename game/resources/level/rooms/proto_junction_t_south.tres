@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="RoomDef" load_steps=3 format=3]
+
+; T-junction with the perpendicular branch pointing south. Used by
+; BranchingGenerator as a chain step that dangles a 1-room branch off
+; the SOUTH opening. WEST + EAST handle through-traffic; SOUTH leads
+; to a branch_north room.
+
+[ext_resource type="Script" path="res://scripts/level/room_def.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/level/lights/fluorescent_white.tres" id="light"]
+
+[resource]
+script = ExtResource("1")
+id = &"proto_junction_t_south"
+size = Vector2(8, 8)
+openings = [1, 2, 3]
+opening_width = 4.0
+light_color = ExtResource("light")
+enemy_count = 1

@@ -1,0 +1,110 @@
+[gd_resource type="Resource" script_class="LevelGraph" load_steps=17 format=3]
+
+; ══════════════════════════════════════════════════════════════════════════════
+; GRAPH DEMO — three rooms in a line, connected by two corridors.
+;
+;   [Lobby 8x8] ──corridor 4m── [Hub 6x6] ──corridor 4m── [Vault 6x6]
+;     anchor                                                  loot
+;
+; Lobby is the anchor at world origin. Hub and Vault positions are derived by
+; GraphSolver from the connections. Walls referenced by integer enum value:
+;   NORTH=0, SOUTH=1, EAST=2, WEST=3.
+; ══════════════════════════════════════════════════════════════════════════════
+
+[ext_resource type="Script" path="res://scripts/level/graph/level_graph.gd" id="script_graph"]
+[ext_resource type="Script" path="res://scripts/level/graph/room_node.gd" id="script_node"]
+[ext_resource type="Script" path="res://scripts/level/graph/connection.gd" id="script_conn"]
+[ext_resource type="Script" path="res://scripts/level/room_def.gd" id="script_room"]
+[ext_resource type="Script" path="res://scripts/level/corridor_def.gd" id="script_corridor"]
+[ext_resource type="Resource" path="res://resources/level/lights/fluorescent_white.tres" id="light_fluoro"]
+
+; ── Rooms ────────────────────────────────────────────────────────────────────
+
+[sub_resource type="Resource" id="room_lobby"]
+script = ExtResource("script_room")
+id = &"lobby"
+size = Vector2(8, 8)
+openings = [2]
+opening_width = 4.0
+light_color = ExtResource("light_fluoro")
+
+[sub_resource type="Resource" id="room_hub"]
+script = ExtResource("script_room")
+id = &"hub"
+size = Vector2(6, 6)
+openings = [2, 3]
+opening_width = 4.0
+light_color = ExtResource("light_fluoro")
+enemy_count = 2
+
+[sub_resource type="Resource" id="room_vault"]
+script = ExtResource("script_room")
+id = &"vault"
+size = Vector2(6, 6)
+openings = [3]
+opening_width = 4.0
+light_color = ExtResource("light_fluoro")
+enemy_count = 1
+
+; ── Corridors ────────────────────────────────────────────────────────────────
+; Axis is left at default (0/X) — GraphSolver overrides it from the wall pair.
+
+[sub_resource type="Resource" id="corr_lobby_hub"]
+script = ExtResource("script_corridor")
+width = 4.0
+length = 4.0
+light_color = ExtResource("light_fluoro")
+light_interval = 4.0
+
+[sub_resource type="Resource" id="corr_hub_vault"]
+script = ExtResource("script_corridor")
+width = 4.0
+length = 4.0
+light_color = ExtResource("light_fluoro")
+light_interval = 4.0
+
+; ── Room nodes ───────────────────────────────────────────────────────────────
+
+[sub_resource type="Resource" id="node_lobby"]
+script = ExtResource("script_node")
+id = &"lobby"
+room = SubResource("room_lobby")
+; Anchor placed at the prototype scene's player spawn (0, 0, -4) so the
+; player wakes up inside the lobby. Hub and Vault positions derive from here.
+position = Vector3(0, 0, -4)
+
+[sub_resource type="Resource" id="node_hub"]
+script = ExtResource("script_node")
+id = &"hub"
+room = SubResource("room_hub")
+
+[sub_resource type="Resource" id="node_vault"]
+script = ExtResource("script_node")
+id = &"vault"
+room = SubResource("room_vault")
+
+; ── Connections ──────────────────────────────────────────────────────────────
+
+[sub_resource type="Resource" id="conn_lobby_hub"]
+script = ExtResource("script_conn")
+from_room = &"lobby"
+from_wall = 2
+to_room = &"hub"
+to_wall = 3
+corridor = SubResource("corr_lobby_hub")
+
+[sub_resource type="Resource" id="conn_hub_vault"]
+script = ExtResource("script_conn")
+from_room = &"hub"
+from_wall = 2
+to_room = &"vault"
+to_wall = 3
+corridor = SubResource("corr_hub_vault")
+
+; ── Graph root ───────────────────────────────────────────────────────────────
+
+[resource]
+script = ExtResource("script_graph")
+anchor_id = &"lobby"
+rooms = [SubResource("node_lobby"), SubResource("node_hub"), SubResource("node_vault")]
+connections = [SubResource("conn_lobby_hub"), SubResource("conn_hub_vault")]

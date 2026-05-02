@@ -108,24 +108,15 @@ func _physics_process(_delta: float) -> void:
 				enemy_los = space.intersect_ray(_query).is_empty()
 			_set_target(enemy, enemy_los)
 		index += 1
-	# Pickups — dynamic during pop, static once settled. Same staggered pass.
-	index = 0
+	# Pickups are intentionally NOT LoS-culled — loot should always be visible
+	# so players can see what's in a level even before clearing it. We still
+	# track them in _target_los so the visibility fade in _process picks up
+	# any newly-spawned pickup as visible.
 	for p in get_tree().get_nodes_in_group(&"pickups"):
 		var pickup := p as Node3D
 		if pickup == null:
 			continue
-		var first_seen := not _target_los.has(pickup)
-		if first_seen or (index + stagger) % STAGGER_GROUPS == 0:
-			var pickup_los: bool
-			if pickup.global_position.distance_squared_to(player_pos) > MAX_DIST_SQ:
-				pickup_los = false
-			else:
-				_query.exclude = []
-				_query.from = pickup_from
-				_query.to = Vector3(pickup.global_position.x, pickup_from.y, pickup.global_position.z)
-				pickup_los = space.intersect_ray(_query).is_empty()
-			_set_target(pickup, pickup_los)
-		index += 1
+		_set_target(pickup, true)
 	# Corpses — static after the death-hold transition. Same low-ray sample as
 	# pickups (corpses lie on the floor) and same cell-cached cadence as the
 	# other static targets — re-raycast only when the player crosses a cell.
@@ -145,6 +136,26 @@ func _physics_process(_delta: float) -> void:
 			_query.to = Vector3(corpse.global_position.x, pickup_from.y, corpse.global_position.z)
 			corpse_los = space.intersect_ray(_query).is_empty()
 		_set_target(corpse, corpse_los)
+	# Static glows — emissive meshes that aren't proper Light3Ds (pit ooze, etc).
+	# ProximityLighting only dims OmniLight3D/SpotLight3D, so emissive surfaces
+	# stay bright through walls without this. Same low-ray + cell-cache cadence
+	# as corpses since they're tied to floor-level features.
+	for s in get_tree().get_nodes_in_group(&"static_glows"):
+		var glow := s as Node3D
+		if glow == null:
+			continue
+		var glow_first := not _target_los.has(glow)
+		if not (cell_changed or glow_first):
+			continue
+		var glow_los: bool
+		if glow.global_position.distance_squared_to(player_pos) > MAX_DIST_SQ:
+			glow_los = false
+		else:
+			_query.exclude = []
+			_query.from = pickup_from
+			_query.to = Vector3(glow.global_position.x, pickup_from.y, glow.global_position.z)
+			glow_los = space.intersect_ray(_query).is_empty()
+		_set_target(glow, glow_los)
 	# Interactibles — static (doors, switches, crates). Re-raycast only when the
 	# player crosses a cell boundary, since neither side is moving otherwise.
 	for i in get_tree().get_nodes_in_group(&"interactables"):
@@ -164,8 +175,60 @@ func _physics_process(_delta: float) -> void:
 		else:
 			_query.exclude = [body.get_rid()]
 			_query.from = from
-			_query.to = Vector3(body.global_position.x, from.y, body.global_position.z)
-			body_los = space.intersect_ray(_query).is_empty()
+			if body is PrototypeDoor:
+				# Doors sit flush in the wall plane with jambs flanking them
+				# on the same World layer. Aiming at the door's centre lets
+				# an off-axis ray clip a jamb before reaching the excluded
+				# door, falsely reporting occluded. We offset the test point
+				# along the door's local X (wall normal) by 0.6m onto the
+				# player's side of the wall — that always lands ~0.4m past
+				# the wall surface regardless of approach angle, where a
+				# fixed offset along the player-direction would stay inside
+				# the wall at glancing angles.
+				#
+				# We also test two endpoints offset along the door's local Z
+				# (along the door width) at ±1.5m. A single central ray can
+				# still clip a jamb corner at glancing angles even when the
+				# door itself is plainly visible; if any of the three
+				# endpoints clears, the door is considered visible.
+				var wall_normal := body.global_transform.basis.x
+				var door_along := body.global_transform.basis.z
+				var to_player := player_pos - body.global_position
+				var side: float = signf(to_player.dot(wall_normal))
+				if side == 0.0:
+					side = 1.0
+				var base := body.global_position + wall_normal * (side * 0.6)
+				var endpoints: Array[Vector3] = [
+					base,
+					base + door_along * 1.5,
+					base - door_along * 1.5,
+				]
+				body_los = false
+				for ep: Vector3 in endpoints:
+					_query.to = Vector3(ep.x, from.y, ep.z)
+					if space.intersect_ray(_query).is_empty():
+						body_los = true
+						break
+			else:
+				var to_player_xz := Vector3(
+					player_pos.x - body.global_position.x,
+					0.0,
+					player_pos.z - body.global_position.z,
+				)
+				if to_player_xz.length_squared() > 0.0001:
+					to_player_xz = to_player_xz.normalized() * 0.6
+				var target_pos := body.global_position + to_player_xz
+				_query.to = Vector3(target_pos.x, from.y, target_pos.z)
+				body_los = space.intersect_ray(_query).is_empty()
+				# Fallback: if the offset-point ray failed, try the body's
+				# centre directly. The body's RID is excluded, so a clear ray
+				# to centre means nothing else on the World layer sits
+				# between player and body. Catches cases where the offset
+				# point lands inside another collider while the body itself
+				# is visible.
+				if not body_los:
+					_query.to = Vector3(body.global_position.x, from.y, body.global_position.z)
+					body_los = space.intersect_ray(_query).is_empty()
 		_set_target(body, body_los)
 
 func _process(delta: float) -> void:

@@ -1,0 +1,186 @@
+[gd_resource type="Resource" script_class="LevelGraph" load_steps=32 format=3]
+
+; ══════════════════════════════════════════════════════════════════════════════
+; TEST LEVEL — exercises graph + slots + puzzles end-to-end.
+;
+;   [Spawn Lobby 8x8] ─east 4m─ [Switch Hub 8x8] ─east 4m (locked door)─ [Vault 6x6]
+;     anchor (0,0,0)               sw_main slot              loot slot
+;                                       │
+;                                  south 4m
+;                                       │
+;                                 [Switch Annex 4x4]
+;                                     sw_aux slot
+;
+; Multi-switch puzzle: both switches must be hit to unlock the Hub→Vault door.
+; LogPuzzle attached to verify the custom-puzzle dispatch path.
+;
+; Wall enum: NORTH=0, SOUTH=1, EAST=2, WEST=3.
+; ══════════════════════════════════════════════════════════════════════════════
+
+[ext_resource type="Script" path="res://scripts/level/graph/level_graph.gd" id="script_graph"]
+[ext_resource type="Script" path="res://scripts/level/graph/room_node.gd" id="script_node"]
+[ext_resource type="Script" path="res://scripts/level/graph/connection.gd" id="script_conn"]
+[ext_resource type="Script" path="res://scripts/level/room_def.gd" id="script_room"]
+[ext_resource type="Script" path="res://scripts/level/corridor_def.gd" id="script_corridor"]
+[ext_resource type="Script" path="res://scripts/level/interactable_slot.gd" id="script_slot"]
+[ext_resource type="Script" path="res://scripts/level/puzzle/switch_door_puzzle.gd" id="script_switchdoor"]
+[ext_resource type="Script" path="res://scripts/level/puzzle/log_puzzle.gd" id="script_log"]
+[ext_resource type="Resource" path="res://resources/level/lights/fluorescent_white.tres" id="light_fluoro"]
+[ext_resource type="PackedScene" path="res://scenes/prototype/prototype_switch.tscn" id="scene_switch"]
+[ext_resource type="PackedScene" path="res://scenes/prototype/prototype_loot_crate.tscn" id="scene_loot_crate"]
+[ext_resource type="Resource" path="res://resources/level/themes/amber_theme.tres" id="theme_amber"]
+
+; ── Slots ────────────────────────────────────────────────────────────────────
+
+[sub_resource type="Resource" id="slot_hub_switch"]
+script = ExtResource("script_slot")
+id = &"sw_main"
+scene = ExtResource("scene_switch")
+offset = Vector3(-2, 0.7, 0)
+
+[sub_resource type="Resource" id="slot_annex_switch"]
+script = ExtResource("script_slot")
+id = &"sw_aux"
+scene = ExtResource("scene_switch")
+offset = Vector3(0, 0.7, 0)
+
+[sub_resource type="Resource" id="slot_vault_loot"]
+script = ExtResource("script_slot")
+id = &"loot"
+scene = ExtResource("scene_loot_crate")
+offset = Vector3(0, 0.3, 0)
+
+; ── Rooms ────────────────────────────────────────────────────────────────────
+
+[sub_resource type="Resource" id="room_lobby"]
+script = ExtResource("script_room")
+id = &"spawn_lobby"
+size = Vector2(8, 8)
+openings = [2]
+opening_width = 4.0
+light_color = ExtResource("light_fluoro")
+
+[sub_resource type="Resource" id="room_hub"]
+script = ExtResource("script_room")
+id = &"switch_hub"
+size = Vector2(8, 8)
+openings = [1, 2, 3]
+opening_width = 4.0
+light_color = ExtResource("light_fluoro")
+slots = [SubResource("slot_hub_switch")]
+door_openings = [2]
+
+[sub_resource type="Resource" id="room_annex"]
+script = ExtResource("script_room")
+id = &"switch_annex"
+size = Vector2(4, 4)
+openings = [0]
+opening_width = 4.0
+light_color = ExtResource("light_fluoro")
+slots = [SubResource("slot_annex_switch")]
+
+[sub_resource type="Resource" id="room_vault"]
+script = ExtResource("script_room")
+id = &"vault"
+size = Vector2(6, 6)
+openings = [3]
+opening_width = 4.0
+light_color = ExtResource("light_fluoro")
+slots = [SubResource("slot_vault_loot")]
+theme_override = ExtResource("theme_amber")
+
+; ── Corridors ────────────────────────────────────────────────────────────────
+
+[sub_resource type="Resource" id="corr_lobby_hub"]
+script = ExtResource("script_corridor")
+width = 4.0
+length = 4.0
+light_color = ExtResource("light_fluoro")
+light_interval = 4.0
+
+[sub_resource type="Resource" id="corr_hub_vault"]
+script = ExtResource("script_corridor")
+width = 4.0
+length = 4.0
+light_color = ExtResource("light_fluoro")
+light_interval = 4.0
+
+[sub_resource type="Resource" id="corr_hub_annex"]
+script = ExtResource("script_corridor")
+width = 4.0
+length = 4.0
+light_color = ExtResource("light_fluoro")
+light_interval = 4.0
+
+; ── Room nodes ───────────────────────────────────────────────────────────────
+
+[sub_resource type="Resource" id="node_lobby"]
+script = ExtResource("script_node")
+id = &"spawn_lobby"
+room = SubResource("room_lobby")
+position = Vector3(0, 0, 0)
+
+[sub_resource type="Resource" id="node_hub"]
+script = ExtResource("script_node")
+id = &"switch_hub"
+room = SubResource("room_hub")
+
+[sub_resource type="Resource" id="node_annex"]
+script = ExtResource("script_node")
+id = &"switch_annex"
+room = SubResource("room_annex")
+
+[sub_resource type="Resource" id="node_vault"]
+script = ExtResource("script_node")
+id = &"vault"
+room = SubResource("room_vault")
+
+; ── Connections (id is what puzzles reference) ───────────────────────────────
+
+[sub_resource type="Resource" id="conn_lobby_hub"]
+script = ExtResource("script_conn")
+id = &"conn_lobby_hub"
+from_room = &"spawn_lobby"
+from_wall = 2
+to_room = &"switch_hub"
+to_wall = 3
+corridor = SubResource("corr_lobby_hub")
+
+[sub_resource type="Resource" id="conn_hub_vault"]
+script = ExtResource("script_conn")
+id = &"conn_hub_vault"
+from_room = &"switch_hub"
+from_wall = 2
+to_room = &"vault"
+to_wall = 3
+corridor = SubResource("corr_hub_vault")
+
+[sub_resource type="Resource" id="conn_hub_annex"]
+script = ExtResource("script_conn")
+id = &"conn_hub_annex"
+from_room = &"switch_hub"
+from_wall = 1
+to_room = &"switch_annex"
+to_wall = 0
+corridor = SubResource("corr_hub_annex")
+
+; ── Puzzles ──────────────────────────────────────────────────────────────────
+
+[sub_resource type="Resource" id="puzzle_switches"]
+script = ExtResource("script_switchdoor")
+switch_slot_ids = [&"switch_hub.sw_main", &"switch_annex.sw_aux"]
+door_connection_id = &"conn_hub_vault"
+required_count = 0
+
+[sub_resource type="Resource" id="puzzle_log"]
+script = ExtResource("script_log")
+message = "Test level puzzle dispatch confirmed."
+
+; ── Graph root ───────────────────────────────────────────────────────────────
+
+[resource]
+script = ExtResource("script_graph")
+anchor_id = &"spawn_lobby"
+rooms = [SubResource("node_lobby"), SubResource("node_hub"), SubResource("node_annex"), SubResource("node_vault")]
+connections = [SubResource("conn_lobby_hub"), SubResource("conn_hub_vault"), SubResource("conn_hub_annex")]
+puzzles = [SubResource("puzzle_switches"), SubResource("puzzle_log")]

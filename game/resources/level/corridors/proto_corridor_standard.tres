@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="CorridorDef" load_steps=3 format=3]
+
+; Default 4m-wide × 4m-long connector, fluorescent-white. The pool's
+; "neutral" entry — keep its width matching opening_width on the rooms it
+; connects.
+
+[ext_resource type="Script" path="res://scripts/level/corridor_def.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/level/lights/fluorescent_white.tres" id="light"]
+
+[resource]
+script = ExtResource("1")
+width = 4.0
+length = 4.0
+light_color = ExtResource("light")
+light_interval = 4.0

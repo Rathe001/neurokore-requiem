@@ -5,8 +5,8 @@
 [ext_resource type="Shader" path="res://scripts/prototype/health_bar.gdshader" id="shader_health_bar"]
 
 [sub_resource type="CapsuleShape3D" id="shape_enemy"]
-radius = 0.4
-height = 1.6
+radius = 0.6
+height = 1.7
 
 [sub_resource type="StandardMaterial3D" id="mat_ring_enemy"]
 albedo_color = Color(0, 0, 0, 0)
@@ -53,3 +53,11 @@ shape = SubResource("shape_enemy")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.2, 0)
 visible = false
 mesh = SubResource("mesh_health_bar")
+
+[node name="NavigationAgent3D" type="NavigationAgent3D" parent="."]
+radius = 0.6
+height = 1.7
+path_desired_distance = 0.6
+target_desired_distance = 1.5
+path_max_distance = 5.0
+avoidance_enabled = false

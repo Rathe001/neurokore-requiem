@@ -1,0 +1,41 @@
+[gd_resource type="Resource" script_class="LevelTheme" load_steps=4 format=3]
+
+; Industrial-cladding theme for the chain's middle section. Uses the
+; riveted/grate shader pair (the same shaders tech_theme assigns to its
+; corridor variants) so the dim rooms read as utility/maintenance
+; cladding — visibly textured, distinctly different from tech_theme's
+; clean wall panels in the lobby. Geometry constants match tech_theme so
+; per-piece swaps share the wall mesh cache.
+
+[ext_resource type="Script" path="res://scripts/level/level_theme.gd" id="1"]
+[ext_resource type="Shader" path="res://scripts/prototype/tech_wall_riveted.gdshader" id="wall_shader"]
+[ext_resource type="Shader" path="res://scripts/prototype/tech_floor_grate.gdshader" id="floor_shader"]
+
+[resource]
+script = ExtResource("1")
+fps_fog_density = 0.35
+fps_fog_color = Color(0.005, 0.005, 0.006, 1)
+wall_height = 4.5
+wall_thickness = 0.4
+wall_shader = ExtResource("wall_shader")
+floor_shader = ExtResource("floor_shader")
+; Cooler, slightly bluer than tech corridor cladding so the dim chain
+; rooms read as distinct from the corridor connecting them.
+wall_shader_params = {"base_color": Color(0.10, 0.13, 0.18, 1.0), "seam_color": Color(0.04, 0.05, 0.09, 1.0), "rivet_color": Color(0.06, 0.08, 0.12, 1.0), "accent_color": Color(0.08, 0.10, 0.14, 1.0)}
+floor_shader_params = {"base_color": Color(0.06, 0.08, 0.12, 1.0), "seam_color": Color(0.03, 0.04, 0.06, 1.0), "tread_color": Color(0.10, 0.12, 0.16, 1.0)}
+wall_color = Color(0.16, 0.17, 0.18, 1)
+wall_metallic = 0.2
+wall_roughness = 0.75
+floor_color = Color(0.18, 0.19, 0.20, 1)
+floor_metallic = 0.15
+floor_roughness = 0.85
+pit_depth = 5.0
+; Ooze stays green across themes — it's a chemical-hazard identity, not a
+; palette variant. amber_theme intentionally swaps it for molten amber as a
+; boss-zone read; dim_theme has no such reason, so use the default.
+fluorescent_housing_size = Vector3(1.2, 0.25, 0.1)
+fluorescent_tube_size = Vector3(1.05, 0.12, 0.03)
+fluorescent_housing_color = Color(0.10, 0.11, 0.12, 1)
+fluorescent_housing_metallic = 0.5
+fluorescent_housing_roughness = 0.5
+fluorescent_emission_multiplier = 36.0

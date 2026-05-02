@@ -85,14 +85,24 @@ const RELATIONSHIP_COLORS: Dictionary = {
 }
 
 # Tier unlock thresholds (3 tiers): stat's share of total rollable stats.
-# Primary unlocks easily — class identity is immediate. Team requires moderate
-# investment. Opposing demands heavy commitment. Thresholds are set so that
-# unlocking 4+ class trees simultaneously is mathematically impossible
-# (12+25+25+40 = 102% > 100%), enforcing a natural 3-tree cap.
+#
+# Specialized classes (auto-granted T1 of their primary perk regardless of
+# allocation; can chase T3 of own + supplementary perks of others — 3-1-1 or
+# 3-2-0 are the reachable patterns):
+#   TIERS_OWN      — own primary stat
+#   TIERS_TEAM     — same-origin team stats
+#   TIERS_OPPOSING — opposite-origin stats (kept hard for build flavour)
+#
+# Origin classes (Analog / Cyborg) trade T3 ceiling for breadth: lower team
+# thresholds + a hard T2 cap let them spread to 2-2-1 across all three of
+# their origin's stats. The T3 entry in TIERS_TEAM_ORIGIN is set to 1.01
+# (>100% = unreachable by construction) so the cap falls out naturally
+# without special-casing it inside get_unlocked_tier.
 # See docs/design/attribute-system.md § Breakpoints.
-const TIERS_OWN:      Array[float] = [0.12, 0.25, 0.40]
-const TIERS_TEAM:     Array[float] = [0.25, 0.40, 0.55]
-const TIERS_OPPOSING: Array[float] = [0.40, 0.55, 0.70]
+const TIERS_OWN:         Array[float] = [0.12, 0.25, 0.40]
+const TIERS_TEAM:        Array[float] = [0.25, 0.40, 0.55]
+const TIERS_OPPOSING:    Array[float] = [0.40, 0.55, 0.70]
+const TIERS_TEAM_ORIGIN: Array[float] = [0.20, 0.35, 1.01]
 
 # Talent tree node dimensions — 8 nodes per tier means 24 per class tree.
 # With 20 talent points, even a fully committed build can't fill one tree.
@@ -224,7 +234,16 @@ func get_stat_relationship(stat_id: StringName, class_id: StringName, spec_id: S
 	return &"team" if stat_id in get_team_stats_for_origin(class_id) else &"opposing"
 
 ## Returns the threshold array for unlocking each tier of a stat's tree.
+## Origin classes get a separate, lower team-stat table with the T3 slot
+## sentinel'd to >100% so they can never unlock T3.
 func get_tier_thresholds(stat_id: StringName, class_id: StringName, spec_id: StringName) -> Array[float]:
+	if spec_id == &"":
+		# Origin: no primary stat. Team stats use the breadth-friendly origin
+		# table; opposing stats stay on the standard hard table so cross-origin
+		# investment is still expensive.
+		if stat_id in get_team_stats_for_origin(class_id):
+			return TIERS_TEAM_ORIGIN
+		return TIERS_OPPOSING
 	match get_stat_relationship(stat_id, class_id, spec_id):
 		&"primary": return TIERS_OWN
 		&"team":    return TIERS_TEAM
@@ -232,34 +251,21 @@ func get_tier_thresholds(stat_id: StringName, class_id: StringName, spec_id: Str
 
 ## Returns the currently unlocked tier (0–3) for a stat tree given class context.
 ##
-## Tier 3 is exclusive: if any stat reaches its tier-3 threshold, ALL other stats
-## return 0 and only the tier-3 owner keeps its perks. When multiple stats meet
-## tier 3, the highest-pct stat wins. This makes tier 3 a hard "all-in" choice
-## rather than a free addition on top of mid-tier perks elsewhere.
+## Tiers stack additively across the budget — reaching T3 in one tree no longer
+## zeroes the others, so specialized classes can land 3-1-1 or 3-2-0 patterns.
+## Specialized classes are auto-granted T1 of their primary perk so class
+## identity reads even before any stat investment. Origin classes are capped
+## at T2 implicitly via the unreachable T3 threshold in TIERS_TEAM_ORIGIN.
 func get_unlocked_tier(stat_id: StringName, class_id: StringName, spec_id: StringName) -> int:
-	var tier3_owner := get_tier3_owner(class_id, spec_id)
-	if tier3_owner != &"":
-		return TIER_COUNT if stat_id == tier3_owner else 0
 	var pct := get_stat_pct(stat_id)
 	var thresholds := get_tier_thresholds(stat_id, class_id, spec_id)
 	var unlocked := 0
 	for i in TIER_COUNT:
 		if pct >= thresholds[i]:
 			unlocked = i + 1
+	if spec_id != &"" and stat_id == get_spec_stat(spec_id):
+		unlocked = maxi(unlocked, 1)
 	return unlocked
-
-## Returns the stat_id that owns tier-3 exclusivity (highest-pct stat at or above
-## its tier-3 threshold), or &"" if no stat has reached tier 3.
-func get_tier3_owner(class_id: StringName, spec_id: StringName) -> StringName:
-	var winner: StringName = &""
-	var winner_pct := 0.0
-	for sid in ROLLABLE_STATS:
-		var pct := get_stat_pct(sid)
-		var thresholds := get_tier_thresholds(sid, class_id, spec_id)
-		if pct >= thresholds[TIER_COUNT - 1] and pct > winner_pct:
-			winner = sid
-			winner_pct = pct
-	return winner
 
 ## Returns the balance tier (0–3) for an origin class (Analog/Cyborg).
 ## Higher = tighter stat balance; perks are maintained up to the returned tier.

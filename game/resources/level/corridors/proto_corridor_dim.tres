@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="CorridorDef" load_steps=3 format=3]
+
+; Dimly-lit 6m corridor — sparse fluorescent intervals + a low-intensity
+; light_color. Reads as a transitional/ominous stretch when picked from
+; the corridor pool.
+
+[ext_resource type="Script" path="res://scripts/level/corridor_def.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/level/lights/dim.tres" id="light"]
+
+[resource]
+script = ExtResource("1")
+width = 4.0
+length = 6.0
+light_color = ExtResource("light")
+light_interval = 6.0

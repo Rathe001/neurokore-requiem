@@ -177,7 +177,13 @@ func _insert(node: Node3D, category: StringName, cell: Vector2i) -> void:
 		grid[cell] = {}
 	grid[cell][node] = true
 
-func _remove(node: Node3D, category: StringName, cell: Vector2i) -> void:
+# `node` is intentionally untyped — it may be a freed object when called
+# from the dead-cleanup path in _update_all_positions. A typed Node3D
+# parameter triggers Godot's strict type check on freed instances and
+# crashes with "Object-derived class (previously freed) is not a subclass
+# of the expected argument class". The freed reference is still a valid
+# Dictionary key for erase(), which is all we need.
+func _remove(node, category: StringName, cell: Vector2i) -> void:
 	if not _grids.has(category):
 		return
 	var grid: Dictionary = _grids[category]

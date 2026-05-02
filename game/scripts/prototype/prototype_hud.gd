@@ -4,8 +4,17 @@ class_name PrototypeHud
 const HP_BAR_WIDTH := 156.0
 const RESOURCE_BAR_WIDTH := 156.0
 const LOW_HP_RATIO := 0.35
+# Rolling window for the avatar loot tally — pickups within this many seconds
+# of each other accumulate; the running total clears once nothing's been
+# picked up for the full window.
+const LOOT_TALLY_WINDOW := 5.0
 
-const SLOT_LABELS: Array[String] = ["LMB", "RMB", "1", "2", "3", "4", "Q", "E"]
+# Visual order on the bar: number/letter slots first (1-E), then LMB/RMB on
+# the right side, with the F/^ flashlight & crouch indicators trailing.
+# SLOT_TO_SKILL_INDEX maps each visual slot to the skill index that
+# resolve_skill() expects (0=LMB, 1=RMB, 2-7=skills[0..5] for keys 1,2,3,4,Q,E).
+const SLOT_LABELS: Array[String] = ["1", "2", "3", "4", "Q", "E", "LMB", "RMB"]
+const SLOT_TO_SKILL_INDEX: Array[int] = [2, 3, 4, 5, 6, 7, 0, 1]
 const DEBUG_OVERLAY_INTERVAL := 0.1
 
 @onready var root: Control = $Root
@@ -23,7 +32,11 @@ const DEBUG_OVERLAY_INTERVAL := 0.1
 @onready var resource_frame: NinePatchRect = %ResourceFrame
 @onready var avatar_bg: ColorRect = %AvatarBackground
 @onready var avatar_border: ReferenceRect = %AvatarBorder
-@onready var avatar_label: Label = %AvatarLabel
+@onready var avatar_image: TextureRect = %AvatarImage
+@onready var avatar_placeholder: Label = %AvatarPlaceholder
+@onready var level_label: Label = %LevelLabel
+@onready var tier_badges: HBoxContainer = %TierBadges
+@onready var recent_loot_label: Label = %RecentLootLabel
 @onready var flashlight_bg: ColorRect = %FBg
 @onready var flashlight_border: ReferenceRect = %FBorder
 @onready var crouch_bg: ColorRect = %CBg
@@ -43,15 +56,27 @@ var _debug_overlay_accum: float = 0.0
 var _state_flashlight: bool = false
 var _state_crouch: bool = false
 var _minimap: Minimap
+# Loot tally state: signal carries the running total, not the delta, so we
+# diff it against the last seen value to derive each pickup amount.
+var _last_credits_seen: int = 0
+var _loot_tally: int = 0
+var _loot_tally_token: int = 0
 
 func _ready() -> void:
 	add_to_group(&"hud")
 	_apply_theme()
-	_update_avatar_label()
+	_update_avatar_panel()
 	_repaint_xp(PlayerState.xp, PlayerState.xp_to_next)
 	UIThemeState.changed.connect(_apply_theme)
-	PlayerState.level_changed.connect(func(_n: int, _o: int) -> void: _update_avatar_label())
+	PlayerState.level_changed.connect(func(_n: int, _o: int) -> void: _update_avatar_panel())
 	PlayerState.xp_changed.connect(_repaint_xp)
+	# Tier badges follow class identity AND stat investment — repaint on any
+	# of the four signals that can shift unlocked tiers (gear swap → stats,
+	# tier threshold cross, character creation/respec → class/spec).
+	AttributeState.stats_changed.connect(_update_tier_badges)
+	PlayerState.tier_changed.connect(func(_s: StringName, _o: int, _n: int) -> void: _update_tier_badges())
+	PlayerState.class_changed.connect(func(_id: StringName) -> void: _update_tier_badges())
+	PlayerState.spec_changed.connect(func(_id: StringName) -> void: _update_tier_badges())
 	var player := get_tree().get_first_node_in_group(&"player")
 	if player == null:
 		push_warning("[prototype_hud] no player in group")
@@ -70,6 +95,9 @@ func _ready() -> void:
 		player.crouch_changed.connect(_on_crouch_changed)
 	if player.has_signal(&"light_changed"):
 		player.light_changed.connect(_on_light_changed)
+	if player.has_signal(&"credits_changed"):
+		_last_credits_seen = int(player.get_credits()) if player.has_method(&"get_credits") else 0
+		player.credits_changed.connect(_on_credits_changed)
 	PerkState.perk_gained.connect(_on_perk_gained)
 	_on_health_changed(_max_health, _max_health)
 	_bind_skill_slots(player)
@@ -90,7 +118,8 @@ func _apply_theme() -> void:
 	var accent_dark := Color(p.accent.r * 0.15, p.accent.g * 0.15, p.accent.b * 0.15, 0.95)
 	avatar_bg.color = accent_dark
 	avatar_border.border_color = Color(p.accent.r, p.accent.g, p.accent.b, 0.65)
-	avatar_label.add_theme_color_override(&"font_color", p.accent)
+	level_label.add_theme_color_override(&"font_color", p.accent)
+	avatar_placeholder.add_theme_color_override(&"font_color", Color(p.accent.r, p.accent.g, p.accent.b, 0.4))
 	debug_bg.color = Color(p.panel_bg.r, p.panel_bg.g, p.panel_bg.b, 0.75)
 	_apply_frame(hp_frame, hp_border, p.hp_bar_frame, p.frame_patch_margin)
 	_apply_frame(resource_frame, resource_border, p.resource_bar_frame, p.frame_patch_margin)
@@ -121,8 +150,45 @@ func _apply_indicator(bg: ColorRect, border: ReferenceRect, active: bool) -> voi
 		bg.color = p.slot_bg
 		border.border_color = Color(p.slot_border.r, p.slot_border.g, p.slot_border.b, 0.5)
 
-func _update_avatar_label() -> void:
-	avatar_label.text = tr("HUD_LEVEL_FORMAT") % PlayerState.level
+func _update_avatar_panel() -> void:
+	# Image: PlayerState.avatar_texture() returns null when character creation
+	# was bypassed (legacy prototype scene). The placeholder "?" fills the
+	# square so the panel stays balanced; the level label below still works.
+	var tex := PlayerState.avatar_texture()
+	if tex != null:
+		avatar_image.texture = tex
+		avatar_image.visible = true
+		avatar_placeholder.visible = false
+	else:
+		avatar_image.texture = null
+		avatar_image.visible = false
+		avatar_placeholder.visible = true
+	level_label.text = tr("HUD_LEVEL_FORMAT") % PlayerState.level
+	_update_tier_badges()
+
+func _update_tier_badges() -> void:
+	if tier_badges == null:
+		return
+	for child in tier_badges.get_children():
+		child.queue_free()
+	# Iterate ROLLABLE_STATS so badge order stays stable regardless of which
+	# tiers are currently unlocked — moving badges around as tiers change
+	# would make them hard to read at a glance.
+	for stat_id in AttributeState.ROLLABLE_STATS:
+		var tier := AttributeState.get_unlocked_tier(stat_id, PlayerState.class_id, PlayerState.spec_id)
+		if tier <= 0:
+			continue
+		var badge := Label.new()
+		badge.text = AttributeState.TIER_ROMAN[tier - 1]
+		badge.add_theme_font_size_override(&"font_size", 9)
+		badge.add_theme_color_override(&"font_color", AttributeState.STAT_COLORS[stat_id])
+		# Black outline so the colored numerals stay readable against the
+		# dark LevelBg strip without depending on the underlying contrast.
+		badge.add_theme_color_override(&"font_outline_color", Color(0, 0, 0, 1))
+		badge.add_theme_constant_override(&"outline_size", 2)
+		badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		badge.tooltip_text = "%s %s" % [tr(AttributeState.STAT_I18N[stat_id]), AttributeState.TIER_ROMAN[tier - 1]]
+		tier_badges.add_child(badge)
 
 func _repaint_xp(current: int, to_next: int) -> void:
 	if xp_fill == null:
@@ -186,7 +252,28 @@ func _bind_skill_slots(player: Node) -> void:
 		var slot := skill_bar.get_node_or_null("Slot%d" % i) as SkillSlot
 		if slot == null:
 			continue
-		var skill: Skill = player.resolve_skill(i) if player.has_method(&"resolve_skill") else (skills[i] if i < skills.size() else null)
+		var skill_idx: int = SLOT_TO_SKILL_INDEX[i]
+		var skill: Skill = player.resolve_skill(skill_idx) if player.has_method(&"resolve_skill") else (skills[skill_idx] if skill_idx < skills.size() else null)
+		slot.bind(player, skill, SLOT_LABELS[i])
+	# LMB / RMB skills come from the equipped weapon + offhand. Re-bind on
+	# equipment changes so swapping weapons updates the cooldown overlay
+	# (without this, the slot keeps polling the previous weapon's skill
+	# and shows nothing for the new one).
+	if not InventoryState.equipment_changed.is_connected(_on_equipment_changed):
+		InventoryState.equipment_changed.connect(_on_equipment_changed.bind(player))
+
+
+func _on_equipment_changed(slot_name: StringName, player: Node) -> void:
+	if slot_name != &"weapon" and slot_name != &"offhand":
+		return
+	# Only rebind LMB (visual slot 6) and RMB (visual slot 7) — the rest
+	# of the bar pulls from player.skills which doesn't change at runtime.
+	for i in [6, 7]:
+		var slot := skill_bar.get_node_or_null("Slot%d" % i) as SkillSlot
+		if slot == null:
+			continue
+		var skill_idx: int = SLOT_TO_SKILL_INDEX[i]
+		var skill: Skill = player.resolve_skill(skill_idx) if player.has_method(&"resolve_skill") else null
 		slot.bind(player, skill, SLOT_LABELS[i])
 
 func _bind_resource_pool(player: Node) -> void:
@@ -235,6 +322,29 @@ func _on_player_died() -> void:
 
 func _on_notification_requested(text: String) -> void:
 	_show_banner(text, 2.5)
+
+func _on_credits_changed(total: int) -> void:
+	# credits_changed carries the running total — diff against the previous
+	# value to recover each pickup's delta. A negative delta (spend) just
+	# resyncs the baseline without touching the tally.
+	var delta := total - _last_credits_seen
+	_last_credits_seen = total
+	if delta <= 0:
+		return
+	_loot_tally += delta
+	recent_loot_label.text = "+%d cr" % _loot_tally
+	recent_loot_label.visible = true
+	# Token-based debounce — every new pickup invalidates the prior timer so
+	# the window restarts from zero. After LOOT_TALLY_WINDOW seconds with no
+	# fresh pickup, the latest token survives the await and clears the tally.
+	_loot_tally_token += 1
+	var token := _loot_tally_token
+	await get_tree().create_timer(LOOT_TALLY_WINDOW).timeout
+	if token != _loot_tally_token:
+		return
+	_loot_tally = 0
+	recent_loot_label.visible = false
+	recent_loot_label.text = ""
 
 func _on_perk_gained(perk: Dictionary) -> void:
 	_show_banner("%s — %s" % [perk.get("label", ""), perk.get("description", "")], 3.0)

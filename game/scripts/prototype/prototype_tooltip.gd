@@ -126,8 +126,11 @@ func _input(event: InputEvent) -> void:
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_LEFT:
 			if mb.pressed:
-				# Only park when clicking on a 3D-anchored target (enemies, interactables).
-				if not _lmb_held and visible and _anchor_target != null:
+				# Only park when clicking on an enemy. Interactables (doors,
+				# switches, crates) shouldn't lock the tooltip — clicking them
+				# triggers an action, not a sustained inspection.
+				if not _lmb_held and visible and _anchor_target != null \
+						and _anchor_target.is_in_group(&"enemies"):
 					_lmb_held = true
 					_park_to_top_center()
 					_lock_target()

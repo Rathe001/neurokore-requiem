@@ -33,6 +33,24 @@ func reset() -> void:
 	_hit = false
 	set_physics_process(true)
 	_connect_signal()
+	# body_entered only fires when a body crosses INTO the area on a later
+	# physics frame; if an enemy is already overlapping at spawn (close-
+	# range fire), the signal never triggers. Defer a sweep over current
+	# overlaps so we catch those.
+	call_deferred(&"_check_initial_overlaps")
+
+
+func _check_initial_overlaps() -> void:
+	if _hit or not is_inside_tree():
+		return
+	for body in get_overlapping_bodies():
+		if body == null or not is_instance_valid(body):
+			continue
+		if body.is_in_group(&"player"):
+			continue
+		if body.is_in_group(&"enemies"):
+			_on_body_entered(body)
+			return
 
 func _pool_release() -> void:
 	_traveled = 0.0

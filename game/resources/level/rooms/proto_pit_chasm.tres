@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="RoomDef" load_steps=3 format=3]
+
+; Wider linear pit room — 14x6 with 4 pillars across the chasm. Outer
+; pillars sit flush with the W and E walls at the openings (player steps
+; straight from corridor onto entry pillar). Two inner pillars at ±2 give
+; 2.5-2.75m edge-to-edge jumps — same comfortable distance as pit_linear,
+; just in a longer room (more total jumps to cross).
+
+[ext_resource type="Script" path="res://scripts/level/room_def.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/level/lights/fluorescent_white.tres" id="light"]
+
+[resource]
+script = ExtResource("1")
+id = &"proto_pit_chasm"
+size = Vector2(14, 6)
+openings = [3, 2]
+opening_width = 4.0
+light_color = ExtResource("light")
+pit_floor = true
+pit_margin = 0.0
+pillars = [Vector2(-6.25, 0), Vector2(-2, 0), Vector2(2, 0), Vector2(6.25, 0)]
+pillar_size = Vector2(1.5, 1.5)
