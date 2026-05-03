@@ -116,6 +116,17 @@ func can_accept_item(item: Item) -> bool:
 		return false
 	if role == Role.EQUIPMENT and slot_id == &"offhand" and InventoryState.is_two_handed_equipped():
 		return false
+	# Forged Amalgamation extra weapon slots: 1H only, and only when the
+	# perk has unlocked the slot. Mirroring the rules in
+	# InventoryState.set_equipped — rejecting here too means a failed
+	# drop returns the item to its source instead of vanishing (the click-
+	# to-place path in CharacterPanel clears the held item after _assign
+	# succeeds, so a silent set_equipped no-op would lose it).
+	if role == Role.EQUIPMENT and SlotRegistry.is_extra_weapon_slot(slot_id):
+		if item.two_handed:
+			return false
+		if not InventoryState.is_extra_weapon_slot_unlocked(slot_id):
+			return false
 	return true
 
 func _refresh() -> void:
@@ -192,9 +203,10 @@ func _can_drop_data(_pos: Vector2, data: Variant) -> bool:
 	var source = data.get("source") as ItemSlot
 	if incoming == null or source == self:
 		return false
-	if role == Role.EQUIPMENT and incoming.kind != accepts_kind:
-		return false
-	if role == Role.EQUIPMENT and slot_id == &"offhand" and InventoryState.is_two_handed_equipped():
+	# Same per-slot acceptance rules as can_accept_item (kept in sync —
+	# native drag-drop uses _can_drop_data; click-to-place uses
+	# can_accept_item; both must reject identically or items get lost).
+	if not can_accept_item(incoming):
 		return false
 	var my_prev := current_item()
 	if my_prev != null and source.role == Role.EQUIPMENT and my_prev.kind != source.accepts_kind:
