@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="EnemyClass" load_steps=2 format=3]
+
+; Default melee profile — mirrors the pre-EnemyClass constants exactly so
+; assigning this to existing enemies is a no-op behaviourally. Use as the
+; starting point for variant melee enemies (heavy / fast / brawler) by
+; tweaking attack_range, attack_cooldown, attack_damage_mult, etc.
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_class.gd" id="script"]
+
+[resource]
+script = ExtResource("script")
+id = &"basic_melee"
+label = "Basic Melee"
+attack_mode = 0
+attack_range = 2.2
+attack_cooldown = 1.6
+attack_windup = 0.4
+attack_damage_mult = 1.0
+melee_cone_deg = 80.0
+melee_knockback = 5.0
+support_role = 0

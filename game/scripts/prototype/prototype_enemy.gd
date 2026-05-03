@@ -34,7 +34,14 @@ const GRAVITY := 22.0
 const CHASE_SPEED := 3.2
 const AGGRO_RANGE := 10.0
 const GROUP_AGGRO_RANGE := 8.0
-const ATTACK_RANGE := 2.2
+# Default attack params — used when `enemy_class` is null. Once every enemy
+# scene has an EnemyClass assigned, these become unused and can be deleted.
+# Until then they preserve current behaviour for unconfigured spawns.
+const DEFAULT_ATTACK_RANGE := 2.2
+const DEFAULT_ATTACK_COOLDOWN := 1.6
+const DEFAULT_ATTACK_WINDUP := 0.4
+const DEFAULT_ATTACK_CONE_DEG := 80.0
+const DEFAULT_ATTACK_KNOCKBACK := 5.0
 # Leash distance — once the enemy strays this far from its spawn while
 # chasing, it disengages and walks back to spawn. Prevents whole-level
 # chases (and the "lure them into a pit" exploit). Squared for the cheap
@@ -50,7 +57,6 @@ const KEEP_CHASE_PLAYER_RANGE_SQ := 144.0  # 12.0 * 12.0
 # and skip knockback entirely. Stops the player from kiting an enemy past
 # its leash and then sniping it on the walk back.
 const RETURNING_DAMAGE_MULT := 0.05
-const ATTACK_COOLDOWN := 1.6
 
 # Crouch: shrinks the capsule when an overhead probe finds a low ceiling
 # (crouch corridors). Restores when overhead clears. The navmesh is baked
@@ -108,9 +114,6 @@ const BOSS_HP_MULT := 3.0
 const BOSS_DAMAGE_MULT := 1.5
 const BOSS_VISUAL_SCALE := 1.6
 const BOSS_RING_EMISSION := Color(1.0, 0.05, 0.05)
-const ATTACK_WINDUP := 0.4
-const ATTACK_CONE_DEG := 80.0
-const ATTACK_KNOCKBACK := 5.0
 const MAX_AGGRO_CASCADE := 2
 
 const ANIM_IDLE: Array[StringName] = [&"Idle_Normal", &"Idle", &"IDLE_NORMAL"]
@@ -158,6 +161,13 @@ static var _s_outline_mat_locked: StandardMaterial3D
 ## enemy in walking-only zones.
 @export var can_crouch: bool = true
 @export var can_jump: bool = true
+
+## Behaviour profile — attack mode (melee / ranged), per-class attack tuning,
+## and optional support overlay (heal / damage-buff aura). When null the
+## enemy falls back to the DEFAULT_ATTACK_* constants and pure melee. Assign
+## an EnemyClass .tres to differentiate enemy archetypes without touching
+## this script.
+@export var enemy_class: EnemyClass
 
 @onready var visual: Node3D = $Visual
 @onready var anim_player: AnimationPlayer = $Visual/Character/AnimationPlayer
@@ -436,6 +446,26 @@ func _is_alive() -> bool:
 	return _state != State.DEAD
 
 
+# Per-class attack-param accessors. Each falls back to a DEFAULT_* constant
+# when no EnemyClass is assigned, so unconfigured enemy scenes keep their
+# pre-EnemyClass behaviour. Once every enemy has a class .tres, the
+# fallbacks (and the DEFAULT_* consts) can be deleted.
+func _attack_range() -> float:
+	return enemy_class.attack_range if enemy_class != null else DEFAULT_ATTACK_RANGE
+
+func _attack_cooldown() -> float:
+	return enemy_class.attack_cooldown if enemy_class != null else DEFAULT_ATTACK_COOLDOWN
+
+func _attack_windup() -> float:
+	return enemy_class.attack_windup if enemy_class != null else DEFAULT_ATTACK_WINDUP
+
+func _melee_cone_deg() -> float:
+	return enemy_class.melee_cone_deg if enemy_class != null else DEFAULT_ATTACK_CONE_DEG
+
+func _melee_knockback() -> float:
+	return enemy_class.melee_knockback if enemy_class != null else DEFAULT_ATTACK_KNOCKBACK
+
+
 ## Single point of state transitions. Currently a thin setter; entry/exit
 ## hooks (e.g. clearing horizontal velocity on enter-CASTING, releasing the
 ## hit-tween on enter-DEAD) live at the call sites for now. If hook count
@@ -611,7 +641,7 @@ func _chase_tick() -> void:
 
 	# Aggro'd enemies chase at all times, but won't start a swing through
 	# a wall — the LoS check on attack initiation prevents through-wall hits.
-	if dist <= ATTACK_RANGE and _attack_cd <= 0.0 and has_los:
+	if dist <= _attack_range() and _attack_cd <= 0.0 and has_los:
 		_cast_attack(player, to_player / dist)
 		return
 
@@ -739,13 +769,16 @@ func _tick_jump(delta: float) -> void:
 
 func _cast_attack(player: Node3D, aim: Vector3) -> void:
 	_change_state(State.CASTING)
-	_attack_cd = ATTACK_COOLDOWN
+	_attack_cd = _attack_cooldown()
 	velocity.x = 0.0
 	velocity.z = 0.0
 	_face_direction(aim)
 	_play_anim(ANIM_ATTACK, 1.2)
-	PrototypeAttackIndicator.spawn_cone(self, aim, ATTACK_RANGE, ATTACK_CONE_DEG, ATTACK_WINDUP)
-	await get_tree().create_timer(ATTACK_WINDUP).timeout
+	var range_now := _attack_range()
+	var cone_now := _melee_cone_deg()
+	var windup_now := _attack_windup()
+	PrototypeAttackIndicator.spawn_cone(self, aim, range_now, cone_now, windup_now)
+	await get_tree().create_timer(windup_now).timeout
 	# Bail if anything preempted us during the windup (knockback, death,
 	# leash). The state-machine transition is the source of truth — don't
 	# reach back into _state here to "fix" it.
@@ -757,9 +790,9 @@ func _cast_attack(player: Node3D, aim: Vector3) -> void:
 	var to_p: Vector3 = player.global_position - global_position
 	to_p.y = 0.0
 	var dist := to_p.length()
-	if dist > ATTACK_RANGE or dist < 0.001:
+	if dist > range_now or dist < 0.001:
 		return
-	var half_cos := cos(deg_to_rad(ATTACK_CONE_DEG * 0.5))
+	var half_cos := cos(deg_to_rad(cone_now * 0.5))
 	if aim.dot(to_p / dist) < half_cos:
 		return
 	# Re-check LoS at the moment of damage so a player who ducked behind a
@@ -767,7 +800,8 @@ func _cast_attack(player: Node3D, aim: Vector3) -> void:
 	if not LosCuller.has_los_to_player(self):
 		return
 	if player.has_method(&"take_damage"):
-		player.take_damage(_attack_damage, global_position, ATTACK_KNOCKBACK)
+		var dmg := int(round(float(_attack_damage) * (enemy_class.attack_damage_mult if enemy_class != null else 1.0)))
+		player.take_damage(dmg, global_position, _melee_knockback())
 
 func _die() -> void:
 	_change_state(State.DEAD)

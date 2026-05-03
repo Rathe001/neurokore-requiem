@@ -1,8 +1,9 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://scripts/prototype/prototype_enemy.gd" id="script_enemy"]
 [ext_resource type="PackedScene" path="res://art/3d/characters/quaternius/UAL1_Standard.glb" id="char_model"]
 [ext_resource type="Shader" path="res://scripts/prototype/health_bar.gdshader" id="shader_health_bar"]
+[ext_resource type="Resource" path="res://resources/enemies/classes/basic_melee.tres" id="class_basic_melee"]
 
 [sub_resource type="CapsuleShape3D" id="shape_enemy"]
 radius = 0.6
@@ -35,6 +36,7 @@ size = Vector2(1.0, 0.16)
 
 [node name="PrototypeEnemy" type="CharacterBody3D"]
 script = ExtResource("script_enemy")
+enemy_class = ExtResource("class_basic_melee")
 
 [node name="Visual" type="Node3D" parent="."]
 
