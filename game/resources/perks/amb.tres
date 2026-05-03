@@ -1,11 +1,83 @@
-[gd_resource type="Resource" script_class="PerkLadder" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="PerkLadder" load_steps=11 format=3]
 
-; Enculted (amb) tier perks — pending design. Target T3 effective DPS ~1.45×;
-; flavor lever is corruption / sacrifice (HP-cost burst, soul drain, summons).
-; Add three Perk subresources to `perks` and reload the game.
+; Enculted (amb) tier perks — Doomsayer.
+;
+; The player constantly emits an aura with linear distance falloff. Each
+; second, every enemy inside the aura rolls against (base_pct × falloff)
+; — on a hit, ONE of {stun, charm, weaken} is applied at random. Closer
+; enemies get hit more often (chance scales with proximity to player);
+; enemies at the edge basically don't proc.
+;
+; Charm semantics differ from stun/weaken: stun + weaken expire on a
+; timer, but charm persists until the player dies OR a new charm bumps
+; this one out. The player keeps a FIFO list of charmed enemies; when a
+; new charm proc lands and the list is at cap, the oldest is released.
+; Cap = doomsayer_max_charms aggregate (totals 1 / 2 / 3 across tiers).
+;
+; Tier deltas (additive aggregates):
+;   T1 grants +5% proc + 1 charm slot   →  5%, 1 max charm
+;   T2 grants +5% proc + 1 charm slot   → 10%, 2 max charms
+;   T3 grants +10% proc + 1 charm slot  → 20%, 3 max charms
+;
+; PrototypePlayer ticks the aura on DOOMSAYER_TICK_INTERVAL and owns the
+; charm list (apply_charm / release_charm on the enemy side just toggle
+; state). Affliction handlers + state live on PrototypeEnemy.
 
+[ext_resource type="Script" path="res://scripts/perks/perk.gd" id="perk_script"]
+[ext_resource type="Script" path="res://scripts/perks/perk_effect.gd" id="effect_script"]
 [ext_resource type="Script" path="res://scripts/perks/perk_ladder.gd" id="ladder_script"]
+
+[sub_resource type="Resource" id="effect_amb_t1_proc"]
+script = ExtResource("effect_script")
+kind = &"doomsayer_proc_pct"
+magnitude = 5.0
+
+[sub_resource type="Resource" id="effect_amb_t1_charms"]
+script = ExtResource("effect_script")
+kind = &"doomsayer_max_charms"
+magnitude = 1.0
+
+[sub_resource type="Resource" id="perk_amb_t1"]
+script = ExtResource("perk_script")
+id = &"amb_t1"
+label = "Doomsayer I"
+description = "An aura of dread surrounds you. Each second, nearby enemies have a 5% chance to be stunned, charmed, or weakened. Up to 1 charm at a time."
+effects = [SubResource("effect_amb_t1_proc"), SubResource("effect_amb_t1_charms")]
+
+[sub_resource type="Resource" id="effect_amb_t2_proc"]
+script = ExtResource("effect_script")
+kind = &"doomsayer_proc_pct"
+magnitude = 5.0
+
+[sub_resource type="Resource" id="effect_amb_t2_charms"]
+script = ExtResource("effect_script")
+kind = &"doomsayer_max_charms"
+magnitude = 1.0
+
+[sub_resource type="Resource" id="perk_amb_t2"]
+script = ExtResource("perk_script")
+id = &"amb_t2"
+label = "Doomsayer II"
+description = "The aura tightens. 10% chance per second; up to 2 charms at a time."
+effects = [SubResource("effect_amb_t2_proc"), SubResource("effect_amb_t2_charms")]
+
+[sub_resource type="Resource" id="effect_amb_t3_proc"]
+script = ExtResource("effect_script")
+kind = &"doomsayer_proc_pct"
+magnitude = 10.0
+
+[sub_resource type="Resource" id="effect_amb_t3_charms"]
+script = ExtResource("effect_script")
+kind = &"doomsayer_max_charms"
+magnitude = 1.0
+
+[sub_resource type="Resource" id="perk_amb_t3"]
+script = ExtResource("perk_script")
+id = &"amb_t3"
+label = "Doomsayer III"
+description = "20% chance per second; up to 3 charms at a time. Walking apocalypse — the herd unravels around you."
+effects = [SubResource("effect_amb_t3_proc"), SubResource("effect_amb_t3_charms")]
 
 [resource]
 script = ExtResource("ladder_script")
-perks = []
+perks = [SubResource("perk_amb_t1"), SubResource("perk_amb_t2"), SubResource("perk_amb_t3")]

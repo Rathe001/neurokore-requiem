@@ -1,11 +1,62 @@
-[gd_resource type="Resource" script_class="PerkLadder" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="PerkLadder" load_steps=8 format=3]
 
-; Automaton (opt) tier perks — pending design. Target T3 effective DPS
-; ~1.45×; flavor lever is drone summons (3 / 6 / 9 drones across tiers per
-; the design note). Add three Perk subresources to `perks` and reload.
+; Automaton (opt) tier perks — Drone Swarm.
+;
+; Each tier raises the active drone count orbiting the player. Drones are
+; untargetable (no CollisionShape), pick targets via SpatialGrid, fire
+; projectiles on a cooldown, and orbit at fixed radius/speed. Damage
+; scales with main stat (Optimization) via get_player_damage_mult so
+; investing Optimization for tier unlocks ALSO heavies up each drone shot.
+;
+; Tier deltas (additive aggregate; totals 2 / 3 / 5):
+;   T1 grants +2  → 2 drones
+;   T2 grants +1  → 3 drones
+;   T3 grants +2  → 5 drones
+;
+; Future hook: chips equipped in the Mainboard slot modify drone
+; behaviour / damage type (e.g. fire/cryo conversion, orbit speed,
+; targeting bias). Deferred — drones currently use hardcoded stats.
 
+[ext_resource type="Script" path="res://scripts/perks/perk.gd" id="perk_script"]
+[ext_resource type="Script" path="res://scripts/perks/perk_effect.gd" id="effect_script"]
 [ext_resource type="Script" path="res://scripts/perks/perk_ladder.gd" id="ladder_script"]
+
+[sub_resource type="Resource" id="effect_opt_t1_drone"]
+script = ExtResource("effect_script")
+kind = &"automaton_drones"
+magnitude = 2.0
+
+[sub_resource type="Resource" id="perk_opt_t1"]
+script = ExtResource("perk_script")
+id = &"opt_t1"
+label = "Drone Swarm I"
+description = "Two untargetable drones orbit you, auto-firing on nearby enemies."
+effects = [SubResource("effect_opt_t1_drone")]
+
+[sub_resource type="Resource" id="effect_opt_t2_drone"]
+script = ExtResource("effect_script")
+kind = &"automaton_drones"
+magnitude = 1.0
+
+[sub_resource type="Resource" id="perk_opt_t2"]
+script = ExtResource("perk_script")
+id = &"opt_t2"
+label = "Drone Swarm II"
+description = "Three drones. The orbit thickens."
+effects = [SubResource("effect_opt_t2_drone")]
+
+[sub_resource type="Resource" id="effect_opt_t3_drone"]
+script = ExtResource("effect_script")
+kind = &"automaton_drones"
+magnitude = 2.0
+
+[sub_resource type="Resource" id="perk_opt_t3"]
+script = ExtResource("perk_script")
+id = &"opt_t3"
+label = "Drone Swarm III"
+description = "Five drones. The lattice is yours; the room is theirs."
+effects = [SubResource("effect_opt_t3_drone")]
 
 [resource]
 script = ExtResource("ladder_script")
-perks = []
+perks = [SubResource("perk_opt_t1"), SubResource("perk_opt_t2"), SubResource("perk_opt_t3")]

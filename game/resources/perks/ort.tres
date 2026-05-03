@@ -2,12 +2,13 @@
 
 ; Count / Countess (ort) tier perks — Exile.
 ;
-; Each enemy you hit is cursed for EXILE_CURSE_DURATION seconds. While
-; cursed, that enemy takes +X% damage from any source. When the curse
-; expires (or the cursed enemy isn't killed first), the player auto-fires
-; a hitscan that deals MASSIVE damage if it lands. Curses refresh on
-; subsequent hits — a tagged enemy stays tagged as long as you're chipping
-; at them.
+; The first hit on an enemy applies a curse for EXILE_CURSE_DURATION
+; seconds. While cursed, that enemy takes +X% damage from any source.
+; Subsequent hits inside the active window do NOT refresh the timer —
+; the duration is fixed from the moment of application, so the player
+; has to commit damage inside it. When the timer expires on a still-
+; alive target, the player auto-fires a fixed massive hitscan (not tied
+; to any equipped weapon — works barehanded / mid-reload).
 ;
 ; Tier deltas (additive aggregate; totals 10 / 20 / 40):
 ;   T1 grants +10
@@ -31,7 +32,7 @@ magnitude = 10.0
 script = ExtResource("perk_script")
 id = &"ort_t1"
 label = "Exile I"
-description = "Hits curse the target for several seconds. Cursed enemies take +10% damage; when the curse expires, you auto-fire a massive shot."
+description = "Hits curse the target for several seconds. Cursed enemies take +10% damage; if the curse runs out, you auto-fire a massive shot at them."
 effects = [SubResource("effect_ort_t1_curse")]
 
 [sub_resource type="Resource" id="effect_ort_t2_curse"]

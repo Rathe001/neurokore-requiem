@@ -17,24 +17,20 @@ Specialized classes trade that flexibility for depth. They scale primarily off o
 
 ## Resource System
 
-Each class has **one unique resource** that encapsulates the energy they would expend in the real world. Resources are class-specific and mechanically distinct.
+Each class has **one unique resource** capturing the energy they expend. Resources are class-specific and mechanically distinct.
 
-| Class | Resource | Description |
-|---|---|---|
-| Analog | TBD | Generalist — should capture the unaugmented analog experience |
-| Cyborg | TBD | Generalist — should capture the augmented machine experience |
-| Survivalist | Adrenaline | Builds under pressure, decays when safe |
-| Count / Countess | Composure | Maintained through controlled play, breaks under panic |
-| Enculted | TBD | Rethinking — should align with ambition-as-power fantasy |
-| Forged | Power Grid | Power budget — manage what's active simultaneously |
-| Automaton | Bandwidth | Caps how many drones/scripts run simultaneously |
-| Polymath | TBD | Rethinking — was Memory/CPU dual axis, may simplify to one resource |
+| Class | Resource |
+|---|---|
+| Analog / Cyborg | TBD (origin generalists — design pending) |
+| Survivalist | **Adrenaline** — builds under pressure, decays when safe |
+| Count / Countess | **Composure** — maintained through controlled play, breaks under panic |
+| Forged | **Power Grid** — budget for what's active simultaneously |
+| Automaton | **Bandwidth** — caps active drones/scripts |
+| Enculted / Polymath | TBD (rethinking — see per-class docs) |
 
 ## Stat Identity & Tier Perks
 
-Attribute distribution drives **tier perks** — mechanical rewards that unlock at stat breakpoints and are lost if the breakpoint is no longer met. Gear swaps have real consequences. Each class has unique perks; origin classes are rewarded for balance. Character appearance transforms dynamically to reflect stat identity.
-
-See [Attribute System — Stat Identity](../design/attribute-system.md#stat-identity--tier-perks--visual-metamorphosis) for full details on breakpoints, cross-class perk unlocking, visual metamorphosis, and NPC identity reactions.
+Attribute distribution drives **tier perks** that unlock at stat breakpoints and are lost when gear drops you below. All six specialist perks ship: Exile (Count), Amalgamation (Forged), Drone Swarm (Automaton), IED (Survivalist), Telekinesis (Polymath), Doomsayer (Enculted) — see each class doc and the [tier perks table](../design/attribute-system.md#specialized-class-tier-perks).
 
 ## Character Creation
 

@@ -225,6 +225,7 @@ enum State {
 	JUMPING,    # Mid pit-jump impulse; physics-driven until landing
 	RETURNING,  # Leashed; heading back to spawn (5% dmg + CC immune)
 	KNOCKBACK,  # Velocity-controlled by an incoming hit; transitions back to CHASING when the timer drains
+	STUNNED,    # Doomsayer stun — frozen in place; transitions back to IDLE when the timer drains
 	DEAD,       # Terminal — physics suspended, awaiting cleanup
 }
 
@@ -259,15 +260,29 @@ var _jump_cooldown_remain: float = 0.0
 var _support_tick_t: float = 0.0
 var _damage_buff_mult: float = 0.0
 var _damage_buff_remain: float = 0.0
-# Count Exile curse state. Refreshed on every player hit while the perk
-# is active; ticks down each frame; on expire the enemy calls back to
-# PlayerCombat.fire_exile_shot for the massive auto-shot. _curse_marker
-# is a cheap floating glyph above the head — visible while cursed,
-# hidden otherwise. Stored as percentages (10 / 20 / 40) to match the
-# perk magnitude convention.
+# Count Exile curse state. Set ONCE on the first hit while the perk is
+# active — subsequent hits don't refresh the timer (the player has to
+# commit damage inside the fixed window). Ticks down each frame; on
+# expire the enemy calls back to PlayerCombat.fire_exile_shot for the
+# massive auto-shot. _curse_marker is a cheap floating glyph above the
+# head — visible while cursed, hidden otherwise. Stored as percentages
+# (10 / 20 / 40) to match the perk magnitude convention.
 var _curse_remain: float = 0.0
 var _curse_damage_pct: float = 0.0
 var _curse_marker: Label3D = null
+# Enculted Doomsayer afflictions. STUN moves the enemy into State.STUNNED
+# (frozen); CHARM repoints the chase target at the nearest other enemy
+# without changing State (the existing chase logic does the work via the
+# _effective_target() helper); WEAKEN compounds into _outgoing_damage_mult.
+# Stun + weaken are timer-driven (independent — an enemy can be stunned
+# AND weakened); charm is BOOLEAN — held by PrototypePlayer's FIFO charm
+# list, released only when the player dies or a new charm bumps it out.
+var _stun_remain: float = 0.0
+var _charmed: bool = false
+var _charm_target: Node3D = null
+var _weaken_remain: float = 0.0
+var _weaken_mult: float = 0.0  # 0..1 fractional reduction (0.5 = -50% damage)
+var _affliction_marker: Label3D = null
 var _floor_ring_mat: StandardMaterial3D
 @onready var _nav_agent: NavigationAgent3D = $NavigationAgent3D
 # Spawn position captured on reset() — enemies leash back to this point
@@ -329,6 +344,12 @@ func _init_enemy() -> void:
 	_curse_remain = 0.0
 	_curse_damage_pct = 0.0
 	_clear_curse_marker()
+	_stun_remain = 0.0
+	_charmed = false
+	_charm_target = null
+	_weaken_remain = 0.0
+	_weaken_mult = 0.0
+	_clear_affliction_marker()
 	# Stagger the first support tick by a random fraction of the interval —
 	# without this every support enemy in a room emits in lockstep on the
 	# same physics frame, spiking the SpatialGrid query cost.
@@ -675,46 +696,52 @@ func apply_damage_buff(magnitude: float, duration: float) -> void:
 
 
 ## Final damage multiplier for an outgoing attack — base class mult
-## (configured per archetype) compounded with active support-aura buff.
+## (configured per archetype) compounded with active support-aura buff and
+## the Doomsayer weaken debuff. Order is buff-then-weaken so a buffed
+## enemy doesn't evade the weakening, and a weakened enemy that picks up
+## a buff doesn't suddenly wash out the debuff.
 func _outgoing_damage_mult() -> float:
 	var class_mult := enemy_class.attack_damage_mult if enemy_class != null else 1.0
-	return class_mult * (1.0 + _damage_buff_mult)
+	return class_mult * (1.0 + _damage_buff_mult) * (1.0 - _weaken_mult)
 
 
-## Apply or refresh the Count Exile curse. New hits while already cursed
-## reset the timer to the new duration and take the max damage_pct (a
-## lower-tier overlap from a respec mid-fight shouldn't downgrade the
-## curse). Skip on dead enemies — corpses don't carry tags.
+## Apply the Count Exile curse. ONLY takes effect when the enemy isn't
+## already cursed — subsequent hits inside the active window are silently
+## ignored, by design (the duration is fixed from first application so the
+## player has to commit damage inside it; refreshing on every hit would
+## let an aggressive player keep an enemy permanently tagged for free).
+## After the curse expires, the next hit re-arms it. Skip on dead enemies
+## — corpses don't carry tags.
 func apply_curse(damage_pct: float, duration: float) -> void:
 	if not _is_alive() or damage_pct <= 0.0 or duration <= 0.0:
 		return
-	if damage_pct > _curse_damage_pct:
-		_curse_damage_pct = damage_pct
-	if duration > _curse_remain:
-		_curse_remain = duration
+	if _curse_remain > 0.0:
+		return
+	_curse_damage_pct = damage_pct
+	_curse_remain = duration
 	_show_curse_marker()
 
 
-# Tick the curse timer; on expire, fire the auto-shot back at the player
-# AND clear local state. The shot has to come from the PLAYER (it's their
-# perk firing), so we look them up via the &"player" group rather than
-# storing a reference (which would persist across pool cycles).
+# Tick the curse timer; on expire, fire the player's auto-shot at this
+# enemy and clear local curse state. The shot is fired by PlayerCombat so
+# the damage / VFX live with the player-side combat code; we just provide
+# the trigger and the target reference.
 func _tick_curse(delta: float) -> void:
 	if _curse_remain <= 0.0:
 		return
 	_curse_remain -= delta
 	if _curse_remain > 0.0:
 		return
-	var was_pct := _curse_damage_pct
 	_curse_damage_pct = 0.0
 	_curse_remain = 0.0
 	_clear_curse_marker()
-	if was_pct <= 0.0:
-		return
-	var player := get_tree().get_first_node_in_group(&"player")
+	# Fire the expire shot through the player. _player_ref might still be
+	# null if we were cursed before ever being aggro'd (rare — would require
+	# a remote AoE hit) — fall back to a group lookup in that case.
+	var player: Node3D = _player_ref
 	if player == null or not is_instance_valid(player):
-		return
-	if player.has_method(&"fire_exile_shot"):
+		player = get_tree().get_first_node_in_group(&"player") as Node3D
+	if player != null and player.has_method(&"fire_exile_shot"):
 		player.fire_exile_shot(self)
 
 
@@ -743,6 +770,188 @@ func _clear_curse_marker() -> void:
 	if _curse_marker != null and is_instance_valid(_curse_marker):
 		_curse_marker.queue_free()
 	_curse_marker = null
+
+
+# ---------------------------------------------------------------------------
+# Enculted Doomsayer afflictions — stun / charm (mind-control) / weaken
+# ---------------------------------------------------------------------------
+
+## Frozen in place for `duration`. Interrupts whatever the enemy was doing
+## (chase, mid-cast, return) by switching to State.STUNNED — the cast's
+## post-windup _state check bails on its own. Refreshes to the longer of
+## current vs new so a fresh proc never shortens an active stun. RETURNING
+## enemies (leashed) ignore — leash is treated as CC immune.
+func apply_stun(duration: float) -> void:
+	if not _is_alive() or duration <= 0.0:
+		return
+	if _state == State.RETURNING or _state == State.JUMPING:
+		return
+	if duration > _stun_remain:
+		_stun_remain = duration
+	_change_state(State.STUNNED)
+	velocity = Vector3.ZERO
+	_show_affliction_marker("✱", Color(0.55, 0.7, 1.0, 1.0))
+
+
+## Mind-control: the enemy chases / attacks the nearest other enemy
+## instead of the player. Persistent — does NOT expire on a timer. The
+## player owns the charm list (FIFO-capped via doomsayer_max_charms) and
+## calls release_charm when the cap evicts this enemy or the player dies.
+## Returns false when the application failed (no other enemy in range,
+## or the enemy is leashed/dead) so the caller can skip adding to the
+## charm list. Returns true on a successful charm.
+func apply_charm() -> bool:
+	if not _is_alive():
+		return false
+	if _state == State.RETURNING:
+		return false
+	if _charmed:
+		# Already charmed — caller shouldn't double-add. Returning false so
+		# the player's FIFO list doesn't gain a duplicate entry.
+		return false
+	_charm_target = _pick_nearest_other_enemy()
+	if _charm_target == null:
+		# Out of fight — no victim available. Don't flip _charmed so the
+		# proc isn't "wasted" silently from the player's POV (the slot
+		# stays open for the next enemy that does have neighbours).
+		return false
+	_charmed = true
+	# A stunned enemy snapping out of stun should still resume mind-control;
+	# don't override an active stun's State here.
+	if _state != State.STUNNED:
+		_change_state(State.CHASING)
+	_show_affliction_marker("♥", Color(1.0, 0.4, 0.7, 1.0))
+	return true
+
+
+## Release a charm previously applied via apply_charm. Called by the
+## player when the FIFO cap evicts this enemy, when the player dies, or
+## when this enemy is otherwise removed from the charm list. Safe to call
+## on an already-released enemy.
+func release_charm() -> void:
+	if not _charmed:
+		return
+	_charmed = false
+	_charm_target = null
+	# Marker may stay if other afflictions are still active; the next
+	# _tick_afflictions cycle clears it once everything is gone.
+	if _stun_remain <= 0.0 and _weaken_remain <= 0.0:
+		_clear_affliction_marker()
+
+
+## Reduce outgoing damage by `magnitude` (0..1) for `duration` seconds.
+## Compounds into _outgoing_damage_mult so a buffed + weakened enemy nets
+## out correctly. Take the max magnitude on overlap (a fresh weak proc
+## doesn't downgrade a strong active one) and the longer duration.
+func apply_weaken(magnitude: float, duration: float) -> void:
+	if not _is_alive() or duration <= 0.0 or magnitude <= 0.0:
+		return
+	if magnitude > _weaken_mult:
+		_weaken_mult = clampf(magnitude, 0.0, 1.0)
+	if duration > _weaken_remain:
+		_weaken_remain = duration
+	_show_affliction_marker("↓", Color(0.7, 0.7, 0.7, 1.0))
+
+
+# Tick stun + weaken timers. Charm has no timer — it's released externally
+# by the player when capped out or on player death (see release_charm).
+# Stun expiry transitions back to IDLE so the next physics frame re-
+# evaluates aggro normally. Weaken expiry resets the mult.
+func _tick_afflictions(delta: float) -> void:
+	if _stun_remain > 0.0:
+		_stun_remain -= delta
+		if _stun_remain <= 0.0:
+			_stun_remain = 0.0
+			# Only flip out of STUNNED if we're still in it — knockback or
+			# death may have already moved us out.
+			if _state == State.STUNNED:
+				_change_state(State.IDLE)
+	# Re-pick the charm target if the cached one died — the enemy shouldn't
+	# stand around with a stale reference. Done every tick (cheap) rather
+	# than wired through a signal because charm targets are short-lived
+	# and signals add lifetime-management overhead.
+	if _charmed and (_charm_target == null or not _is_target_alive(_charm_target)):
+		_charm_target = _pick_nearest_other_enemy()
+		# No victim available anymore — release the charm so the player's
+		# slot opens up. release_charm is reentrant-safe.
+		if _charm_target == null:
+			release_charm()
+	if _weaken_remain > 0.0:
+		_weaken_remain -= delta
+		if _weaken_remain <= 0.0:
+			_weaken_remain = 0.0
+			_weaken_mult = 0.0
+	# Clear the marker once nothing is afflicting us. Cheap to recreate on
+	# the next proc; saves us tracking which affliction the marker belongs
+	# to when overlapping effects clear at different times.
+	if _stun_remain <= 0.0 and not _charmed and _weaken_remain <= 0.0:
+		_clear_affliction_marker()
+
+
+# Returns the closest LIVE enemy other than self, or null if none in
+# AGGRO_RANGE. Used by charm to pick a victim for the mind-controlled
+# enemy to chase / attack.
+func _pick_nearest_other_enemy() -> Node3D:
+	var best: Node3D = null
+	var best_d2 := AGGRO_RANGE * AGGRO_RANGE
+	for n in SpatialGrid.query_radius(global_position, AGGRO_RANGE, &"enemies"):
+		if n == self or not (n is Node3D) or not is_instance_valid(n):
+			continue
+		if not _is_target_alive(n):
+			continue
+		var d2 := global_position.distance_squared_to((n as Node3D).global_position)
+		if d2 < best_d2:
+			best_d2 = d2
+			best = n
+	return best
+
+
+# True when `target` is non-null, in-tree, has take_damage, and (for
+# PrototypeEnemy) is alive. Player passes the take_damage check too so
+# this works for both the normal target and the charm target.
+func _is_target_alive(target: Node) -> bool:
+	if target == null or not is_instance_valid(target):
+		return false
+	if target is PrototypeEnemy:
+		return (target as PrototypeEnemy)._is_alive()
+	return target.has_method(&"take_damage")
+
+
+# Chase / attack target. Charm takes precedence; otherwise the player.
+# Returning null means "no valid target" — caller halts.
+func _effective_target() -> Node3D:
+	if _charmed and _is_target_alive(_charm_target):
+		return _charm_target
+	return _player_ref
+
+
+# Floating glyph above the head, similar to the curse marker but for
+# Doomsayer afflictions. Re-used across the three effect types — calling
+# again with a different glyph just replaces the label so a stunned-then-
+# weakened enemy reads the latest application.
+func _show_affliction_marker(glyph: String, color: Color) -> void:
+	_clear_affliction_marker()
+	var lbl := Label3D.new()
+	lbl.text = glyph
+	lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	lbl.no_depth_test = true
+	lbl.fixed_size = true
+	lbl.pixel_size = 0.0014
+	lbl.font_size = 32
+	lbl.outline_size = 8
+	lbl.modulate = color
+	lbl.outline_modulate = Color(0.05, 0.0, 0.1, 1.0)
+	# Stack just above the curse marker so an enemy that's both cursed and
+	# afflicted shows both glyphs without overlap.
+	lbl.position = Vector3(0.0, 2.7, 0.0)
+	add_child(lbl)
+	_affliction_marker = lbl
+
+
+func _clear_affliction_marker() -> void:
+	if _affliction_marker != null and is_instance_valid(_affliction_marker):
+		_affliction_marker.queue_free()
+	_affliction_marker = null
 
 
 ## Single point of state transitions. Currently a thin setter; entry/exit
@@ -793,6 +1002,7 @@ func _physics_process(delta: float) -> void:
 			_support_tick_t = enemy_class.support_interval
 			_emit_support()
 	_tick_curse(delta)
+	_tick_afflictions(delta)
 
 	# Floor-snap is suppressed during JUMPING so the takeoff impulse set by
 	# _start_jump (which runs from the agent's link_reached signal AFTER our
@@ -816,6 +1026,12 @@ func _physics_process(delta: float) -> void:
 			velocity.z = 0.0
 		State.JUMPING:
 			_tick_jump(delta)
+		State.STUNNED:
+			# Frozen — no movement, no aim. _tick_afflictions transitions us
+			# back to IDLE when the stun timer drains.
+			velocity.x = 0.0
+			velocity.z = 0.0
+			_want_dir = Vector3.ZERO
 		State.IDLE, State.CHASING, State.RETURNING:
 			# All three share the chase-tick logic — it inspects state and
 			# routes between them (proximity aggro, leash trip, return arrival).
@@ -838,6 +1054,11 @@ func _physics_process(delta: float) -> void:
 			pass
 		State.JUMPING:
 			_play_anim(ANIM_JUMP)
+		State.STUNNED:
+			# Idle clip while frozen — no rigs have a dedicated stun pose,
+			# and freezing on the current frame would lock unnatural mid-
+			# motion poses (mid-stride, mid-attack windup).
+			_play_anim(ANIM_IDLE)
 		_:
 			if _crouching:
 				_play_anim(ANIM_CROUCH_RUN if moving else ANIM_CROUCH_IDLE)
@@ -892,6 +1113,14 @@ func _chase_tick() -> void:
 		velocity.x = 0.0
 		velocity.z = 0.0
 		return
+	# Doomsayer charm: while active the enemy chases / attacks `target`
+	# (nearest other enemy) instead of the player. Leash + auto-aggro still
+	# read player position so the charmed enemy can't be lured past the
+	# leash and the player de-engaging from a charmed enemy still works
+	# normally once the timer drains.
+	var target: Node3D = _effective_target()
+	if target == null:
+		target = player
 
 	# Leash logic — runs even in IDLE (so an idle enemy at edge of leash
 	# range can't be tricked into RETURNING). Player-close suppression keeps
@@ -912,15 +1141,24 @@ func _chase_tick() -> void:
 	# IDLE & CHASING share the proximity-aggro check — an IDLE enemy that
 	# the player walks toward should wake up the same way a previously-engaged
 	# one would re-engage.
-	var to_player: Vector3 = player.global_position - global_position
-	to_player.y = 0.0
-	var dist := to_player.length()
+	var to_target: Vector3 = target.global_position - global_position
+	to_target.y = 0.0
+	var dist := to_target.length()
 	# Single LoS lookup serves both the aggro and attack-initiation checks
 	# below. The damage-time check inside _cast_attack re-queries on purpose,
-	# since it runs after the windup await.
-	var has_los := LosCuller.has_los_to_player(self)
-	if _state == State.IDLE and dist <= AGGRO_RANGE and has_los:
+	# since it runs after the windup await. While charmed, skip the gate —
+	# we don't have a cached LoS to the charm target and a temporary debuff
+	# isn't worth a per-frame raycast.
+	var charmed := target != player
+	var has_los := true if charmed else LosCuller.has_los_to_player(self)
+	if not charmed and _state == State.IDLE and dist <= AGGRO_RANGE and has_los:
 		aggro()
+	elif charmed and _state == State.IDLE:
+		# Charm during IDLE (or right after a stun ended) — flip into
+		# CHASING directly without going through the aggro cascade so the
+		# charmed enemy doesn't accidentally rope its allies into chasing
+		# itself via the proximity wake.
+		_change_state(State.CHASING)
 
 	if _state != State.CHASING or dist < 0.001:
 		velocity.x = 0.0
@@ -930,17 +1168,20 @@ func _chase_tick() -> void:
 	# Ranged enemies kite to ~ranged_kite_distance: too close → backpedal,
 	# in band → hold + fire when ready, too far → chase. Melee enemies skip
 	# this branch and fall through to the close-and-swing path below.
-	if _is_ranged():
+	# Charmed enemies always melee (see _cast_attack), so they bypass kite
+	# too — otherwise they'd backpedal from the very target they're charmed
+	# to attack.
+	if _is_ranged() and not charmed:
 		var kite := _ranged_kite_distance()
 		if dist <= _attack_range() and _attack_cd <= 0.0 and has_los:
-			_cast_attack(player, to_player / dist)
+			_cast_attack(target, to_target / dist)
 			return
 		if dist < kite * 0.7:
 			# Backpedal — direct vector, slower than chase. We don't pathfind
 			# the retreat because navmesh wants to hug walls; a noisy bumpy
 			# straight-line retreat reads as "skittish ranged enemy" and is
 			# fine. Bumping into walls is the player's intended advantage.
-			var away := -to_player / dist
+			var away := -to_target / dist
 			_want_dir = away
 			var back_speed := CHASE_SPEED * 0.55 * (CROUCH_SPEED_MULT if _crouching else 1.0) * _affix_move_speed_mult()
 			velocity.x = away.x * back_speed
@@ -954,20 +1195,20 @@ func _chase_tick() -> void:
 			return
 		# else: too far, fall through to navmesh chase below
 
-	# Aggro'd melee chase the player. Won't start a swing through a wall —
+	# Aggro'd melee chase the target. Won't start a swing through a wall —
 	# the LoS check on attack initiation prevents through-wall hits.
 	elif dist <= _attack_range() and _attack_cd <= 0.0 and has_los:
-		_cast_attack(player, to_player / dist)
+		_cast_attack(target, to_target / dist)
 		return
 
 	# Pathfind via NavigationAgent — routes around walls and pit edges
-	# instead of charging straight at the player. Falls back to direct
+	# instead of charging straight at the target. Falls back to direct
 	# vector chase when no nav agent (legacy scene), no map (navmesh
 	# bake hasn't finished yet), or the agent is already on top of the
-	# player.
-	var dir := to_player / dist
+	# target.
+	var dir := to_target / dist
 	if _nav_agent != null and _nav_agent.get_navigation_map().is_valid():
-		_nav_agent.target_position = player.global_position
+		_nav_agent.target_position = target.global_position
 		if not _nav_agent.is_navigation_finished():
 			var next_pos := _nav_agent.get_next_path_position()
 			var nav_dir := next_pos - global_position
@@ -1103,7 +1344,11 @@ func _tick_jump(delta: float) -> void:
 		_change_state(State.CHASING)
 
 func _cast_attack(player: Node3D, aim: Vector3) -> void:
-	if _is_ranged():
+	# Charmed enemies always melee — even ranged classes. Their projectiles
+	# are coded against the player layer/group; firing them at another enemy
+	# would either no-op or self-hit. Melee resolves cleanly via the
+	# target's take_damage regardless of who's holding the leash.
+	if _is_ranged() and not _charmed:
 		_cast_ranged_attack(player, aim)
 	else:
 		_cast_melee_attack(player, aim)
@@ -1138,8 +1383,10 @@ func _cast_melee_attack(player: Node3D, aim: Vector3) -> void:
 	if aim.dot(to_p / dist) < half_cos:
 		return
 	# Re-check LoS at the moment of damage so a player who ducked behind a
-	# wall during the windup doesn't get hit through it.
-	if not LosCuller.has_los_to_player(self):
+	# wall during the windup doesn't get hit through it. Skip for non-player
+	# targets — LosCuller only caches player LoS, and charm-target swings
+	# don't need stealth-vs-walls correctness in the prototype.
+	if player is PrototypePlayer and not LosCuller.has_los_to_player(self):
 		return
 	if player.has_method(&"take_damage"):
 		var dmg := int(round(float(_attack_damage) * _outgoing_damage_mult()))

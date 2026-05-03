@@ -1,0 +1,163 @@
+class_name PrototypeDrone
+extends CharacterBody3D
+
+# Untargetable hover drone for the Automaton Drone Swarm perk. Each drone
+# instance wanders semi-randomly around the player and fires on enemies in
+# range. The player spawns / despawns them via _reconcile_drones based on
+# the `automaton_drones` perk aggregate.
+#
+# Movement is wander-toward-random-offset, NOT a fixed orbit. Orbit drones
+# in tight rooms would fight wall geometry every loop ("drone stuck on the
+# corner of the doorway while you walk past"); wander lets them cluster
+# loosely near the player and slide along walls naturally via
+# move_and_slide. Each drone re-rolls a new offset (bearing + radius +
+# height) every RETARGET_INTERVAL_* seconds and lerps toward it.
+#
+# Layer setup (.tscn): collision_layer = 0, collision_mask = 1. Drone is
+# undetectable to enemies / player / pickups, but world walls (layer 1)
+# block it — so the swarm can't shoot through walls. No CollisionObject
+# damage path exists either — drones have no take_damage, so the design
+# intent ("untargetable, cannot die") still holds.
+#
+# Stats are hardcoded for now. Future Mainboard chip equipment will modify
+# these (wander_radius, fire_cooldown, projectile damage type, etc.) — the
+# extension point is reading from InventoryState.get_equipped(&"mainboard")
+# inside _refresh_chip_modifiers (TBD).
+
+const PROJECTILE_SCENE: PackedScene = preload("res://scenes/prototype/prototype_projectile.tscn")
+
+# Wander volume around the player. MIN keeps drones from bunching at the
+# player's center; MAX keeps the swarm visibly close in dense fights.
+const HOVER_RADIUS_MIN := 1.4
+const HOVER_RADIUS_MAX := 3.6
+const HOVER_HEIGHT_MIN := 1.1
+const HOVER_HEIGHT_MAX := 2.2
+# Re-roll the wander target on this random cadence — staggered per drone
+# so the swarm doesn't all flick to new offsets on the same frame.
+const RETARGET_INTERVAL_MIN := 0.7
+const RETARGET_INTERVAL_MAX := 2.0
+# Movement caps. FOLLOW_GAIN scales the seek vector into a velocity; clamp
+# at MAX_SPEED so a drone that fell behind doesn't snap-teleport when it
+# catches up to a sprinting player.
+const FOLLOW_GAIN := 4.5
+const MAX_SPEED := 7.0
+# Bobbing adds a per-drone vertical sine on top of the wander target —
+# small but breaks the "all drones drift in straight lines" feel.
+const BOB_AMPLITUDE := 0.10
+const BOB_SPEED := 2.4
+
+const ATTACK_RANGE := 9.0
+const FIRE_COOLDOWN := 1.4
+const PROJECTILE_SPEED := 22.0
+const PROJECTILE_BASE_DAMAGE := 8
+
+var _player: Node3D = null
+var _wander_offset: Vector3 = Vector3.ZERO
+var _retarget_t: float = 0.0
+var _bob_phase: float = 0.0
+var _fire_cd: float = 0.0
+
+
+# Extra args (orbit_index / orbit_total) kept for call-site compatibility
+# with the old orbit version — they're unused by the wander behaviour but
+# letting them through keeps PrototypePlayer._reconcile_drones from caring
+# which movement model is current.
+func setup(player: Node3D, _orbit_index: int = 0, _orbit_total: int = 1) -> void:
+	_player = player
+	# Per-drone phase + initial wander target so the swarm doesn't visibly
+	# converge on the same point for the first second after spawn.
+	_bob_phase = randf() * TAU
+	_pick_new_target()
+	# Half-elapsed initial cooldown so the first shot lands quickly when
+	# the perk first unlocks — feels responsive.
+	_fire_cd = FIRE_COOLDOWN * 0.5
+	# Drop the drone next to the player so the first move_and_slide doesn't
+	# yank from the scene-defined origin (could collide with a wall on the
+	# way over). Caller may override this immediately, which is fine.
+	if is_inside_tree():
+		global_position = player.global_position + _wander_offset
+
+
+func _physics_process(delta: float) -> void:
+	if _player == null or not is_instance_valid(_player):
+		return
+	_retarget_t -= delta
+	if _retarget_t <= 0.0:
+		_pick_new_target()
+	_bob_phase += BOB_SPEED * delta
+	# Hover target = player position + random offset + tiny vertical bob.
+	# Bob is added to the target (not the velocity) so move_and_slide can
+	# project against walls cleanly without fighting an axis we modulated.
+	var target := _player.global_position + _wander_offset
+	target.y += sin(_bob_phase) * BOB_AMPLITUDE
+	var to_target := target - global_position
+	velocity = to_target * FOLLOW_GAIN
+	if velocity.length() > MAX_SPEED:
+		velocity = velocity.normalized() * MAX_SPEED
+	# move_and_slide handles wall sliding via collision_mask = 1, so a
+	# drone targeting an offset behind a wall slides along the wall toward
+	# the nearest reachable point instead of pushing into it.
+	move_and_slide()
+	_fire_cd -= delta
+	if _fire_cd <= 0.0:
+		if _try_fire():
+			_fire_cd = FIRE_COOLDOWN
+		else:
+			# No target — re-check on a short cadence rather than waiting a
+			# full FIRE_COOLDOWN so the drone reacts quickly when an enemy
+			# walks into range.
+			_fire_cd = 0.25
+
+
+# Roll a fresh hover offset around the player. Random bearing / radius /
+# height every time; drones don't try to space themselves apart, since
+# the random offsets naturally desync after a few retargets.
+func _pick_new_target() -> void:
+	var bearing := randf() * TAU
+	var radius := randf_range(HOVER_RADIUS_MIN, HOVER_RADIUS_MAX)
+	var height := randf_range(HOVER_HEIGHT_MIN, HOVER_HEIGHT_MAX)
+	_wander_offset = Vector3(cos(bearing) * radius, height, sin(bearing) * radius)
+	_retarget_t = randf_range(RETARGET_INTERVAL_MIN, RETARGET_INTERVAL_MAX)
+
+
+# Pick the nearest enemy within ATTACK_RANGE and spawn a projectile aimed
+# at chest height. Returns true when a shot was fired so the caller can
+# refresh the cooldown only on a real fire.
+func _try_fire() -> bool:
+	var best: Node3D = null
+	var best_dist_sq := ATTACK_RANGE * ATTACK_RANGE
+	for n in SpatialGrid.query_radius(global_position, ATTACK_RANGE, &"enemies"):
+		if not (n is Node3D) or not is_instance_valid(n):
+			continue
+		if not n.has_method(&"take_damage"):
+			continue
+		var d2 := global_position.distance_squared_to(n.global_position)
+		if d2 < best_dist_sq:
+			best_dist_sq = d2
+			best = n
+	if best == null:
+		return false
+	var origin := global_position
+	var aim_to := best.global_position + Vector3(0.0, 0.9, 0.0) - origin
+	if aim_to.length_squared() < 0.0001:
+		return false
+	var proj: PrototypeProjectile = EntityPool.acquire(PROJECTILE_SCENE)
+	proj.target_group = &"enemies"
+	proj.direction = aim_to.normalized()
+	proj.speed = PROJECTILE_SPEED
+	proj.max_range = ATTACK_RANGE + 2.0
+	proj.knockback_strength = 0.0
+	proj.source_position = global_position
+	# Damage scales with the player's main stat — Optimization for
+	# Automaton — so investing in the perk's stat heavies up the drones.
+	var dmg := int(round(float(PROJECTILE_BASE_DAMAGE) * AttributeState.get_player_damage_mult(PlayerState.class_id, PlayerState.spec_id)))
+	proj.damage_min = dmg
+	proj.damage_max = dmg
+	proj.damage_mult = 1.0
+	proj.accuracy = 1.0
+	proj.crit_chance = 0.0
+	get_parent().add_child(proj)
+	proj.global_position = origin
+	proj.monitoring = true
+	proj.reset()
+	return true

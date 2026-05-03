@@ -1,11 +1,62 @@
-[gd_resource type="Resource" script_class="PerkLadder" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="PerkLadder" load_steps=8 format=3]
 
-; Survivalist (ing) tier perks — pending design. Target T3 effective DPS
-; ~1.45×; flavor lever is improvisation (ammo gen, scavenging, environmental
-; damage). Add three Perk subresources to `perks` and reload the game.
+; Survivalist (ing) tier perks — Improvised Explosive Device.
+;
+; Every LMB attack, the player tosses a trap at the cursor. The trap
+; lasts IED_TRAP_LIFETIME seconds or detonates when an enemy enters its
+; proximity radius (whichever first). At most N traps can be active at
+; once — when at cap, the oldest is silently retired to make room for
+; the new one (FIFO).
+;
+; Tier deltas (additive aggregate; totals 1 / 2 / 3):
+;   T1 grants +1
+;   T2 grants +1
+;   T3 grants +1
+;
+; Trap damage scales with main stat (Ingenuity for Survivalist) via
+; AttributeState.get_player_damage_mult, so investing Ingenuity for tier
+; unlocks ALSO heavies up each detonation.
 
+[ext_resource type="Script" path="res://scripts/perks/perk.gd" id="perk_script"]
+[ext_resource type="Script" path="res://scripts/perks/perk_effect.gd" id="effect_script"]
 [ext_resource type="Script" path="res://scripts/perks/perk_ladder.gd" id="ladder_script"]
+
+[sub_resource type="Resource" id="effect_ing_t1_ied"]
+script = ExtResource("effect_script")
+kind = &"ied_max_traps"
+magnitude = 1.0
+
+[sub_resource type="Resource" id="perk_ing_t1"]
+script = ExtResource("perk_script")
+id = &"ing_t1"
+label = "Improvised Explosive Device I"
+description = "Each attack, you toss a proximity trap at your cursor. Up to 1 active at a time."
+effects = [SubResource("effect_ing_t1_ied")]
+
+[sub_resource type="Resource" id="effect_ing_t2_ied"]
+script = ExtResource("effect_script")
+kind = &"ied_max_traps"
+magnitude = 1.0
+
+[sub_resource type="Resource" id="perk_ing_t2"]
+script = ExtResource("perk_script")
+id = &"ing_t2"
+label = "Improvised Explosive Device II"
+description = "Up to 2 traps active. Keep them coming — keep them moving."
+effects = [SubResource("effect_ing_t2_ied")]
+
+[sub_resource type="Resource" id="effect_ing_t3_ied"]
+script = ExtResource("effect_script")
+kind = &"ied_max_traps"
+magnitude = 1.0
+
+[sub_resource type="Resource" id="perk_ing_t3"]
+script = ExtResource("perk_script")
+id = &"ing_t3"
+label = "Improvised Explosive Device III"
+description = "Up to 3 traps active. Minefield rules — the floor is the kill."
+effects = [SubResource("effect_ing_t3_ied")]
 
 [resource]
 script = ExtResource("ladder_script")
-perks = []
+perks = [SubResource("perk_ing_t1"), SubResource("perk_ing_t2"), SubResource("perk_ing_t3")]

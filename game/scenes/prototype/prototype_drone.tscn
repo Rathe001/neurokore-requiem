@@ -1,0 +1,50 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/prototype/prototype_drone.gd" id="script_drone"]
+
+[sub_resource type="SphereMesh" id="mesh_drone"]
+radius = 0.18
+height = 0.36
+radial_segments = 12
+rings = 6
+
+[sub_resource type="SphereShape3D" id="shape_drone"]
+radius = 0.22
+
+[sub_resource type="StandardMaterial3D" id="mat_drone"]
+shading_mode = 0
+albedo_color = Color(0.55, 0.78, 0.85, 1)
+emission_enabled = true
+emission = Color(0.55, 0.78, 0.85, 1)
+emission_energy_multiplier = 4.0
+
+; Untargetable hover drone for the Automaton Drone Swarm perk.
+;
+; CharacterBody3D + collision_layer = 0 / collision_mask = 1 lets the drone
+; collide with WORLD geometry (walls, doors) without being detectable by
+; enemies, the player, or any other body that scans layers. Untargetable
+; per the perk description, but still constrained by walls so it doesn't
+; clip through corridors and shoot from outside the room.
+[node name="PrototypeDrone" type="CharacterBody3D"]
+collision_layer = 0
+collision_mask = 1
+script = ExtResource("script_drone")
+
+[node name="Mesh" type="MeshInstance3D" parent="."]
+mesh = SubResource("mesh_drone")
+material_override = SubResource("mat_drone")
+cast_shadow = 0
+
+[node name="Collision" type="CollisionShape3D" parent="."]
+shape = SubResource("shape_drone")
+
+; Small ProximityLighting-aware glow so the drone visibly lights nearby
+; surfaces as it hovers. Shadow off because the drone meshes are tiny and
+; constantly moving — shadow updates would be expensive at 5 drones.
+[node name="Glow" type="OmniLight3D" parent="."]
+light_color = Color(0.55, 0.78, 0.85, 1)
+light_energy = 1.4
+omni_range = 3.5
+omni_attenuation = 2.0
+shadow_enabled = false
+light_volumetric_fog_energy = 0.0

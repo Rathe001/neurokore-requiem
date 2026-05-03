@@ -229,7 +229,7 @@ These are illustrative — the full affix table will be built when the stat syst
 
 ### Class Attribute Stats on Items
 
-Items can roll bonuses to the six rollable class attribute stats — Orthodoxy, Ambition, Deviation, Optimization, Indulgence, Clarity — as a **separate slot system** independent of the prefix/suffix affix budget. The number of class stat slots an item may carry is gated by item level:
+Items can roll bonuses to the six rollable class attribute stats — Orthodoxy, Ambition, Deviation, Optimization, Ingenuity, Clarity — as a **separate slot system** independent of the prefix/suffix affix budget. The number of class stat slots an item may carry is gated by item level:
 
 | Item Level Range | Class Stat Slots | Game Phase |
 |---|---|---|

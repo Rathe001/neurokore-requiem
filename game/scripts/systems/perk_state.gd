@@ -43,6 +43,35 @@ extends Node
 #                                   curse expire the enemy calls back to
 #                                   PlayerCombat.fire_exile_shot() for the
 #                                   massive auto-shot.
+#   automaton_drones              — +N orbiting drones (Automaton Drone Swarm).
+#                                   PrototypePlayer reconciles the drone
+#                                   pool to match the aggregate on every
+#                                   perks_changed (and on death/respawn).
+#                                   Each drone runs its own orbit + target +
+#                                   fire loop; future Mainboard chips will
+#                                   modify their behaviour.
+#   doomsayer_proc_pct            — % chance per second for an enemy in the
+#                                   aura to be afflicted (Enculted Doomsayer).
+#                                   PrototypePlayer ticks the aura on a fixed
+#                                   cadence; each enemy in radius rolls with
+#                                   linear distance falloff, and on a hit
+#                                   gets one of stun / mind-control / weaken
+#                                   applied via PrototypeEnemy.apply_*.
+#   doomsayer_max_charms          — Cap on simultaneously-charmed enemies
+#                                   (Enculted Doomsayer charm slot). Charm
+#                                   doesn't expire on a timer like stun /
+#                                   weaken do — it persists until the player
+#                                   dies or a NEW charm bumps the oldest
+#                                   out (FIFO). PrototypePlayer owns the
+#                                   list; release_charm on the enemy side
+#                                   just clears state.
+#   ied_max_traps                 — +N max active IED traps (Survivalist
+#                                   Improvised Explosive Device). PrototypePlayer
+#                                   tosses a trap at the cursor on every LMB
+#                                   attack; when at cap, the oldest trap is
+#                                   despawned to make room. Traps last 15s
+#                                   or detonate when an enemy enters
+#                                   their proximity radius.
 #
 # Perks for higher tiers stack additively on top of lower tiers — reaching
 # tier 3 means tiers 1..3 are all active simultaneously.

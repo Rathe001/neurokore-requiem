@@ -1,0 +1,49 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/prototype/prototype_trap.gd" id="script_trap"]
+
+[sub_resource type="SphereShape3D" id="shape_trap"]
+radius = 1.6
+
+[sub_resource type="CylinderMesh" id="mesh_trap"]
+top_radius = 0.18
+bottom_radius = 0.22
+height = 0.12
+radial_segments = 12
+
+[sub_resource type="StandardMaterial3D" id="mat_trap"]
+shading_mode = 0
+albedo_color = Color(1.0, 0.35, 0.18, 1.0)
+emission_enabled = true
+emission = Color(1.0, 0.4, 0.18, 1.0)
+emission_energy_multiplier = 5.0
+
+; Survivalist Improvised Explosive Device. Area3D with a proximity sphere
+; — collision_layer = 0 (untargetable), collision_mask = 2 so only enemies
+; trigger it. The script auto-detonates on enemy entry or after the
+; lifetime timer drains.
+[node name="PrototypeTrap" type="Area3D"]
+collision_layer = 0
+collision_mask = 2
+monitoring = true
+monitorable = false
+script = ExtResource("script_trap")
+
+[node name="Trigger" type="CollisionShape3D" parent="."]
+shape = SubResource("shape_trap")
+
+[node name="Mesh" type="MeshInstance3D" parent="."]
+mesh = SubResource("mesh_trap")
+material_override = SubResource("mat_trap")
+cast_shadow = 0
+
+; Small warning glow — the player should be able to read trap positions
+; at a glance. Shadow off because traps are throwaway visuals; baking
+; shadows for a 15s entity is wasted budget.
+[node name="Glow" type="OmniLight3D" parent="."]
+light_color = Color(1.0, 0.4, 0.18, 1.0)
+light_energy = 1.6
+omni_range = 3.0
+omni_attenuation = 2.0
+shadow_enabled = false
+light_volumetric_fog_energy = 0.0

@@ -125,6 +125,10 @@ var _credits: int = 0
 var _death_tween: Tween
 var _hit_flash_tween: Tween
 var _telekinesis_t: float = 0.0
+var _doomsayer_t: float = 0.0
+var _drones: Array[PrototypeDrone] = []
+var _ied_traps: Array[PrototypeTrap] = []
+var _charmed_enemies: Array[PrototypeEnemy] = []
 var _spawn_position: Vector3 = Vector3.ZERO
 var _equipped_light: Light3D
 var _scanner_active: bool = false
@@ -187,6 +191,14 @@ func _ready() -> void:
 	spec_id = PlayerState.spec_id
 	PlayerState.leveled_up.connect(_on_player_leveled_up)
 	AttributeState.stats_changed.connect(_recompute_stat_bonuses)
+	# Reconcile the Automaton drone pool whenever the perk aggregate
+	# could change — perk recompute (gear swap, tier crossing) and
+	# class/spec swap. Death/respawn paths also call _reconcile_drones
+	# directly so dying despawns the swarm. Initial bootstrap call
+	# happens in _ready_post_setup below; PerkState._ready may have
+	# already fired its first perks_changed before our connect lands.
+	PerkState.perks_changed.connect(_reconcile_drones)
+	PerkState.perks_changed.connect(_reconcile_charms)
 	_base_max_health = max_health
 	if resource_pool != null:
 		_base_resource_max = resource_pool.max_value
@@ -217,6 +229,14 @@ func _ready() -> void:
 	_stand_test_shape.radius = 0.4
 	_stand_test_shape.height = STAND_HEIGHT
 	_build_stat_vfx()
+	# Initial drone reconcile — PerkState may have already fired its first
+	# perks_changed before our connect landed (autoload-vs-scene order),
+	# so seed the drone pool here.
+	_reconcile_drones()
+	# Charm list is empty at boot but call the reconcile anyway so the
+	# wiring matches the drone pattern (and a respec at the title screen
+	# that drops the cap before any procs land doesn't get a free turn).
+	_reconcile_charms()
 
 func _build_stat_vfx() -> void:
 	if _base_mat == null or visual == null:
@@ -360,6 +380,7 @@ func _physics_process(delta: float) -> void:
 	_combat.tick_cooldowns(delta)
 	_tick_resource_regen(delta)
 	_tick_telekinesis(delta)
+	_tick_doomsayer(delta)
 
 	var on_floor := is_on_floor()
 
@@ -650,6 +671,42 @@ const TELEKINESIS_BOLT_STAGGER := 0.1
 const TELEKINESIS_HEAD_OFFSET := Vector3(0.0, 0.55, 0.0)  # added to chest base (1.0) so beam emerges at head height
 const TELEKINESIS_MAX_BOLTS := 8  # safety cap for future stacking sources
 
+## Enculted Doomsayer aura — every DOOMSAYER_TICK_INTERVAL seconds, every
+## enemy within DOOMSAYER_AURA_RADIUS rolls against the perk's per-second
+## chance scaled by linear distance falloff. On a hit, ONE of three
+## afflictions is applied at random — stun (frozen), charm (mind-control:
+## attacks the nearest other enemy), or weaken (outgoing damage halved).
+## Stun + weaken expire on a timer; charm is persistent — held in
+## _charmed_enemies (FIFO-capped by doomsayer_max_charms aggregate),
+## released only when the player dies or a new charm bumps it out.
+## Effect handlers + state live on PrototypeEnemy.
+const DOOMSAYER_AURA_RADIUS := 9.0
+const DOOMSAYER_TICK_INTERVAL := 1.0
+const DOOMSAYER_STUN_DURATION := 1.6
+const DOOMSAYER_WEAKEN_DURATION := 4.0
+const DOOMSAYER_WEAKEN_MAGNITUDE := 0.5  # halves outgoing damage while active
+const DOOMSAYER_MAX_CHARMS_CAP := 8      # safety ceiling for the charm list, well above current T3 (3)
+
+## Survivalist IED — every LMB attack tosses a trap at the cursor while
+## the perk is active. The active set is FIFO-capped at the perk
+## aggregate; a trap detonates when an enemy enters its proximity radius
+## or after IED_LIFETIME seconds of idle. Damage scales with main stat
+## (Ingenuity), captured by the trap on spawn so respec mid-trap-life
+## doesn't change its yield.
+const IED_TRAP_SCENE: PackedScene = preload("res://scenes/prototype/prototype_trap.tscn")
+const IED_MAX_TRAPS_CAP := 8
+
+## Automaton Drone Swarm — N hover drones spawned from the
+## `automaton_drones` perk aggregate. Drones are children of the player's
+## parent so they keep world-space transforms (their own CharacterBody3D
+## move_and_slide owns the position; parenting under the player would
+## fight that with the player's transform). They look the player up via
+## setup(). _reconcile_drones runs on perks_changed and on death/respawn
+## to add or remove drones to match the aggregate; it clamps against
+## AUTOMATON_MAX_DRONES as a safety ceiling.
+const DRONE_SCENE: PackedScene = preload("res://scenes/prototype/prototype_drone.tscn")
+const AUTOMATON_MAX_DRONES := 8
+
 
 # LMB attack path. Iterates every active weapon slot (main + Amalgamation
 # extras), fires each whose slot cooldown is ready, and staggers their
@@ -745,6 +802,11 @@ func _cast_lmb_combat() -> void:
 
 	_face_direction(aim)
 	_play_anim(ANIM_ATTACK, 1.4)
+	# Survivalist IED — drop a trap at the cursor every LMB. No-op when
+	# the perk isn't active. Placed here (not inside the per-slot loop) so
+	# a Forged-Amalgamation 4-arm volley still tosses ONE trap per click,
+	# not four.
+	_toss_ied_trap()
 	# Block input until the LAST staggered fire resolves — otherwise the
 	# player could re-click before the volley completes and the per-slot
 	# cooldown gate becomes the only thing preventing double-firing of
@@ -884,6 +946,219 @@ func _fire_telekinesis_bolt() -> void:
 	# Visual: radial pulse at the slam point so the AoE landing reads.
 	PrototypeAttackIndicator.spawn_hit_radial(slam_target, TELEKINESIS_AOE_RADIUS)
 
+
+# Enculted Doomsayer aura tick. Reads the perk aggregate (% chance per
+# second to proc) and rolls per enemy in radius, scaled by linear distance
+# falloff (full at center, zero at the edge). On a hit, picks one of three
+# afflictions uniformly and calls the matching apply_* on the enemy. The
+# aura runs on a fixed cadence rather than per-frame so the chance value
+# in the perk description ("X per second") is the literal probability —
+# not "X per frame" which would scale with framerate.
+func _tick_doomsayer(delta: float) -> void:
+	if not _alive:
+		return
+	var pct: float = PerkState.get_aggregate(&"doomsayer_proc_pct")
+	if pct <= 0.0:
+		return
+	_doomsayer_t -= delta
+	if _doomsayer_t > 0.0:
+		return
+	_doomsayer_t = DOOMSAYER_TICK_INTERVAL
+	var base_chance := pct * 0.01
+	for n in SpatialGrid.query_radius(global_position, DOOMSAYER_AURA_RADIUS, &"enemies"):
+		if not (n is Node3D) or not is_instance_valid(n):
+			continue
+		var dist := global_position.distance_to(n.global_position)
+		var falloff := clampf(1.0 - dist / DOOMSAYER_AURA_RADIUS, 0.0, 1.0)
+		if randf() >= base_chance * falloff:
+			continue
+		_apply_doomsayer_affliction(n)
+
+
+# Pick one of stun / charm / weaken uniformly and apply it. Each effect
+# is a no-op if the enemy doesn't expose the matching method, so this is
+# safe to call on any &"enemies" group member regardless of script.
+# Charm routes through a helper that owns the FIFO cap.
+func _apply_doomsayer_affliction(enemy: Node3D) -> void:
+	match randi() % 3:
+		0:
+			if enemy.has_method(&"apply_stun"):
+				enemy.apply_stun(DOOMSAYER_STUN_DURATION)
+		1:
+			_apply_doomsayer_charm(enemy)
+		_:
+			if enemy.has_method(&"apply_weaken"):
+				enemy.apply_weaken(DOOMSAYER_WEAKEN_MAGNITUDE, DOOMSAYER_WEAKEN_DURATION)
+
+
+# Charm path. Reads the max-charm aggregate (1/2/3 from the perk ladder)
+# and FIFO-evicts the oldest charm when at cap so the new one fits. The
+# enemy-side apply_charm returns true only when the charm actually took —
+# we only add to the list on a real success so a wasted proc (e.g. a
+# leashed enemy or no nearby ally to target) doesn't burn a slot.
+func _apply_doomsayer_charm(enemy: Node3D) -> void:
+	if not (enemy is PrototypeEnemy):
+		return
+	var pe: PrototypeEnemy = enemy
+	if not enemy.has_method(&"apply_charm"):
+		return
+	# Prune dead / corpse'd entries before checking cap. A charmed enemy
+	# that died still occupies a slot until we sweep it here.
+	var live: Array[PrototypeEnemy] = []
+	for e in _charmed_enemies:
+		if e != null and is_instance_valid(e) and e.is_in_group(&"enemies"):
+			live.append(e)
+		elif e != null and is_instance_valid(e):
+			# Dead or corpse'd — release defensively in case the entry's
+			# state is somehow still _charmed (shouldn't happen via the
+			# normal death path but cheap insurance).
+			e.release_charm()
+	_charmed_enemies = live
+	if _charmed_enemies.has(pe):
+		# Already on the list — don't double-add.
+		return
+	var max_charms := mini(int(round(PerkState.get_aggregate(&"doomsayer_max_charms"))), DOOMSAYER_MAX_CHARMS_CAP)
+	if max_charms <= 0:
+		return
+	if not pe.apply_charm():
+		return
+	# Eviction window — only enter the loop if the new charm landed (so a
+	# failed apply doesn't cost an existing charm its slot).
+	while _charmed_enemies.size() >= max_charms:
+		var oldest: PrototypeEnemy = _charmed_enemies.pop_front()
+		if oldest != null and is_instance_valid(oldest):
+			oldest.release_charm()
+	_charmed_enemies.append(pe)
+
+
+# Release every active charm. Called from _die so charms don't persist
+# across the player's death — design says "until the player dies." On
+# respawn the list is empty and refills naturally as the aura procs.
+func _clear_charms() -> void:
+	for e in _charmed_enemies:
+		if e != null and is_instance_valid(e):
+			e.release_charm()
+	_charmed_enemies.clear()
+
+
+# Trim the charm list down to the current cap. Called on perks_changed
+# (gear / tier crossing / class swap / respec) so a tier downgrade or
+# class swap doesn't leave above-cap charms hanging until the next proc
+# lazily evicts them. Mirrors the drone reconcile pattern. Always FIFO-
+# evicts from the front so the player's freshest charm wins.
+func _reconcile_charms() -> void:
+	# Prune freed / dead / corpse'd entries first so the cap math is honest.
+	var live: Array[PrototypeEnemy] = []
+	for e in _charmed_enemies:
+		if e != null and is_instance_valid(e) and e.is_in_group(&"enemies"):
+			live.append(e)
+		elif e != null and is_instance_valid(e):
+			e.release_charm()
+	_charmed_enemies = live
+	# When dead, target is zero — _die clears immediately, this just
+	# protects against a perk recompute landing during the death-hold.
+	var target := 0
+	if _alive:
+		target = mini(int(round(PerkState.get_aggregate(&"doomsayer_max_charms"))), DOOMSAYER_MAX_CHARMS_CAP)
+	while _charmed_enemies.size() > target:
+		var oldest: PrototypeEnemy = _charmed_enemies.pop_front()
+		if oldest != null and is_instance_valid(oldest):
+			oldest.release_charm()
+
+
+# Toss an IED trap at the cursor's world position. Called from the LMB
+# combat path after weapons fire — no-op when the perk isn't unlocked or
+# the cursor projection failed (off-screen / camera missing). Active set
+# is FIFO-capped: at the cap, the oldest trap is force-detonated cheaply
+# (queue_free without explosion) so the new one can take its place — the
+# perk is "max N traps active," not "lose all your DPS while at cap."
+func _toss_ied_trap() -> void:
+	if not _alive:
+		return
+	var max_traps := mini(int(round(PerkState.get_aggregate(&"ied_max_traps"))), IED_MAX_TRAPS_CAP)
+	if max_traps <= 0:
+		return
+	var cursor_offset := _cursor_offset()
+	if cursor_offset.length_squared() < 0.0001:
+		return
+	# Prune any traps that detonated themselves before computing the cap —
+	# otherwise a trap that exploded last frame still counts toward the
+	# cap on this frame's toss and the player loses a slot to a ghost.
+	var live: Array[PrototypeTrap] = []
+	for t in _ied_traps:
+		if t != null and is_instance_valid(t):
+			live.append(t)
+	_ied_traps = live
+	while _ied_traps.size() >= max_traps:
+		var oldest: PrototypeTrap = _ied_traps.pop_front()
+		if oldest != null and is_instance_valid(oldest):
+			oldest.queue_free()
+	var trap: PrototypeTrap = IED_TRAP_SCENE.instantiate()
+	get_parent().add_child(trap)
+	# Snap to player Y so traps sit on the floor regardless of cursor
+	# projection altitude. _cursor_offset already projects against the
+	# player's Y plane, so adding it gives the cursor's world position at
+	# floor level.
+	trap.global_position = global_position + cursor_offset
+	_ied_traps.append(trap)
+
+
+# Reconcile the active drone count with the perk aggregate. Called on
+# perks_changed (gear / tier crossing / class swap) and on death/respawn.
+# Spawns missing drones up to the target count; despawns extras off the
+# end (drones are interchangeable — orbit_index gets reassigned to keep
+# the swarm visually evenly spaced after a despawn). Drone parents are
+# the player's parent (the world root) so they don't ride the player's
+# own _process and jitter against the camera.
+func _reconcile_drones() -> void:
+	# Prune any drones that were freed externally before computing target.
+	var live: Array[PrototypeDrone] = []
+	for d in _drones:
+		if d != null and is_instance_valid(d):
+			live.append(d)
+	_drones = live
+	# When dead, target is zero — _die clears immediately, this just
+	# protects against a perk recompute landing during the death-hold.
+	var target := 0
+	if _alive:
+		target = mini(int(round(PerkState.get_aggregate(&"automaton_drones"))), AUTOMATON_MAX_DRONES)
+	# Despawn extras from the end. Existing drones keep their wander state
+	# across reconciles — we don't re-call setup() on survivors, since that
+	# would re-roll their offsets and reset cooldowns every perk recompute.
+	while _drones.size() > target:
+		var d: PrototypeDrone = _drones.pop_back()
+		if d != null and is_instance_valid(d):
+			d.queue_free()
+	# Spawn any missing drones. Parent to world root so they don't stack-
+	# transform with the player (the drone's CharacterBody3D owns its own
+	# world-space position via move_and_slide).
+	var parent := get_parent()
+	while _drones.size() < target and parent != null:
+		var d := DRONE_SCENE.instantiate() as PrototypeDrone
+		if d == null:
+			break
+		parent.add_child(d)
+		# Spawn at the player so the wander seek doesn't yank from world
+		# origin on the first physics tick.
+		d.global_position = global_position + Vector3(0.0, 1.6, 0.0)
+		d.setup(self)
+		_drones.append(d)
+
+
+func _clear_drones() -> void:
+	for d in _drones:
+		if d != null and is_instance_valid(d):
+			d.queue_free()
+	_drones.clear()
+
+
+func _clear_ied_traps() -> void:
+	for t in _ied_traps:
+		if t != null and is_instance_valid(t):
+			t.queue_free()
+	_ied_traps.clear()
+
+
 func _spend_resource(amount: int) -> void:
 	if resource_pool == null:
 		return
@@ -910,9 +1185,26 @@ func get_credits() -> int:
 func get_cooldown_ratio(skill: Skill) -> float:
 	return _combat.get_cooldown_ratio(skill)
 
+# Public entry for the Count Exile expire callback. PrototypeEnemy._tick_curse
+# calls this when the curse timer drains; we forward to PlayerCombat where
+# the shot's damage / VFX live. Thin proxy so the enemy doesn't reach into
+# the player's private _combat field.
+func fire_exile_shot(target: Node3D) -> void:
+	_combat.fire_exile_shot(target)
+
 func _die() -> void:
 	_alive = false
 	died.emit()
+	# Drop the drone swarm — they shouldn't keep firing while the player
+	# is in death-hold. Respawn re-spawns them via _reconcile_drones.
+	_clear_drones()
+	# Same for IED traps — leftover traps in the world after death feels
+	# wrong; they re-populate naturally on the next attack post-respawn.
+	_clear_ied_traps()
+	# Doomsayer charms release on player death — the design pins charm
+	# lifetime to "until you die or a new charm bumps you out." Without
+	# this, post-respawn the player would inherit the pre-death charms.
+	_clear_charms()
 	var played := _play_anim(ANIM_DEATH, 1.0)
 	if not played and anim_player != null:
 		anim_player.pause()
@@ -944,6 +1236,8 @@ func respawn() -> void:
 	_health = max_health
 	_alive = true
 	_combat.clear_cooldowns()
+	# Re-spawn the drone swarm now that the player is back in play.
+	_reconcile_drones()
 	if visual != null:
 		visual.scale = Vector3.ONE
 	if resource_pool != null:

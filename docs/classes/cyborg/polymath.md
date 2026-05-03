@@ -4,11 +4,6 @@
 
 **Attribute:** Clarity — mental precision and cognitive reach. Opposes Ambition. See [Attribute System](../../design/attribute-system.md).
 
-**Tier perks:** TBD. See [Stat Identity](../../design/attribute-system.md#stat-identity--tier-perks--visual-metamorphosis).
+**Tier perks — Telekinesis.** Every 6 seconds, **1 / 2 / 4** psionic bolts emit from the player's head. Each bolt grabs a random nearby enemy and slams it into another for AoE damage. If only one enemy is in range, the bolt grabs scrap instead — single-target +50% damage, no AoE.
 
-**Resource:** TBD — rethinking. Was Memory/CPU dual axis, may simplify to one resource. Original concept below for reference:
-
-!!! note "Original resource concept (under review)"
-    - **Memory:** how many abilities are loaded at once. Swapping loadouts is the strategic layer.
-    - **CPU:** determines cast speed, cooldown, and the complexity of spells you can execute. Higher CPU unlocks higher-tier abilities.
-    - **Fragmentation:** memory degrades mid-combat over time, making abilities unreliable until a defrag is performed. Fits the body-horror tone.
+**Resource:** TBD — Memory/CPU dual-axis concept backburned; likely to simplify to one resource.

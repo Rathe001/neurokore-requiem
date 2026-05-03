@@ -4,7 +4,7 @@
 
 **Attribute:** Orthodoxy — discipline, principle, and refusal to compromise. Opposes Deviation. See [Attribute System](../../design/attribute-system.md).
 
-**Tier perks:** TBD. See [Stat Identity](../../design/attribute-system.md#stat-identity--tier-perks--visual-metamorphosis).
+**Tier perks — Exile.** Hits curse the target for several seconds. Cursed enemies take **+10% / +20% / +40%** damage from any source. Duration is fixed (subsequent hits don't refresh) — kill them inside the window or the curse silently expires and you auto-fire one massive shot at them.
 
 **Resource: Composure** — maintained through deliberate, controlled play. Breaks under panic, chaos, or sustained damage. High skill ceiling for staying calm under fire.
 

@@ -1,17 +1,12 @@
 # Attribute System
 
-> Status: Core system implemented. Stat tracking, tier unlocking, talent panel UI, and character panel allocation bar are working. Tier perk mechanics, team stat scaling multipliers, visual metamorphosis, and NPC reactions are still TBD.
+> Status: Core system + all six specialist tier perks implemented (Exile, Amalgamation, Drone Swarm, IED, Telekinesis, Doomsayer). Origin-class tier perks, team stat scaling multipliers, visual metamorphosis, and NPC reactions are still TBD.
 
 ## Core Philosophy
 
-- **Class = verbs** (what you can do). Classes define your mechanics, resource system, and playstyle loop.
-- **Attributes = modifiers** (how you do it). Stats shape behavior, efficiency, and expression — they do not gate access to abilities.
-- **Baseline identity is guaranteed.** Every class retains its core mechanics regardless of stat distribution. Off-stat builds distort your playstyle, they do not replace it.
-
-The system is designed to support:
-- **Specialization** — stacking your primary stat for peak efficiency
-- **Hybridization** — investing in team stats for broad synergy
-- **Off-path experimentation** — engaging opposing stats for friction-based builds with unique payoffs
+- **Class = verbs**, **attributes = modifiers**. Stats shape *how* you do things; classes define *what* you can do. Stats never gate access to abilities.
+- **Baseline identity is guaranteed.** Off-stat builds distort your playstyle — they don't replace it.
+- Supports specialization (stack primary), hybridization (team stats), and off-path experimentation (opposing stats with friction).
 
 ---
 
@@ -281,14 +276,16 @@ With 20 points at level 100, a fully committed build can't fill even one class t
 
 ### Specialized Class Tier Perks
 
-| Stat | Class | Tier 1 | Tier 2 | Tier 3 |
-|---|---|---|---|---|
-| Orthodoxy | Count | TBD | TBD | TBD |
-| Deviation | Forged | Erratic Strikes (8% double) | Frenzied Strikes (+10% double, 5% triple) | Unbound Frenzy (+7% double, +7% triple) |
-| Optimization | Automaton | TBD | Additional drone | TBD |
-| Ingenuity | Survivalist | TBD | TBD | TBD |
-| Clarity | Polymath | TBD | TBD | TBD |
-| Ambition | Enculted | Tier 1 curse | TBD | TBD |
+All six are implemented. Aggregates are additive across tiers (see `game/resources/perks/{stat}.tres` for authoring).
+
+| Stat | Class | Perk | T1 → T2 → T3 |
+|---|---|---|---|
+| Orthodoxy | Count | **Exile** — hits curse target; +X% damage taken; auto-shot on expire | +10% → +20% → +40% |
+| Deviation | Forged | **Amalgamation** — extra arm slots; LMB fires every weapon | +1 → +2 → +3 weapon slots |
+| Optimization | Automaton | **Drone Swarm** — wandering hover drones auto-fire on enemies | 2 → 3 → 5 drones |
+| Ingenuity | Survivalist | **Improvised Explosive Device** — toss prox trap on every LMB | 1 → 2 → 3 max active traps |
+| Clarity | Polymath | **Telekinesis** — periodic psionic bolts grab + slam enemies | 1 → 2 → 4 bolts per trigger |
+| Ambition | Enculted | **Doomsayer** — aura procs stun / charm / weaken on enemies | 5% → 10% → 20% per second; charms 1 → 2 → 3 |
 
 **Gear swap confirmation:** When equipping an item would cross a breakpoint, a confirmation dialog shows exactly what changes. This is behind a Help Tooltips toggle for players who prefer to manage it themselves.
 
@@ -409,7 +406,6 @@ Key NPCs (reps, vendors, bosses, gate encounters) can react to the player's domi
 - **Team node specific bonuses** — what do tiers 1/2/3 actually grant?
 - **Team node keystone** — what is the tier 3 high-investment reward?
 - **Class-specific stat functions** for Orthodoxy, Optimization, Ingenuity, Clarity, Ambition.
-- **Tier perks** for most classes — see tier perk table above.
 - **Origin class tier perks** — what does balanced Analog/Cyborg actually unlock?
 - **Talent point cadence** — currently 1 per level (code: `TALENT_POINTS_PER_LEVEL`). At level 100 that's ~100 points, well above the 20-point budget intended for meaningful scarcity. Needs tuning.
 - **Node prerequisites** — do higher-tier nodes require specific lower-tier nodes, or just tier access?
