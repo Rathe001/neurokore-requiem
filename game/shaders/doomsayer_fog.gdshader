@@ -19,12 +19,12 @@ uniform float drift_speed : hint_range(-1.0, 1.0) = 0.18;
 // volume instead of a chaotic cloud.
 uniform float noise_scale : hint_range(0.1, 4.0) = 0.35;
 // Higher core_softness = denser concentration in the centre, longer
-// transparent tail at the edges. The front-facing fragments (NORMAL
-// pointing at camera) are dense; the silhouette edges fade to nothing
-// well before the geometric sphere edge. core_softness >= 3 hides the
-// hard sphere outline by making the outer ~40% of radius effectively
-// transparent.
-uniform float core_softness : hint_range(0.5, 6.0) = 3.5;
+// transparent tail at the edges. With a small visible sphere this is
+// pushed high (8+) so the visible mass collapses to a tight glowing
+// core right at the player — reads as "energy radiating from the
+// body" rather than "player inside a bubble." Almost everything
+// outside the inner 25% of radius is below visibility.
+uniform float core_softness : hint_range(0.5, 16.0) = 9.0;
 // Soft-particles depth fade — fragments within this many world units
 // of opaque scene geometry get faded out. Helps smooth where the
 // sphere touches the floor / nearby objects.
@@ -115,11 +115,12 @@ void fragment() {
 
 	float alpha = clamp(core * n * intensity * depth_fade, 0.0, 1.0);
 
-	// Mild self-glow keeps the fog visible at the silhouette where
-	// the OmniLight wash doesn't hit. Small enough that wall clipping
-	// (which works via the OmniLight's shadows on world surfaces) is
-	// still the dominant visual cue.
+	// Strong emission gives the "radiating energy" feel — the visible
+	// core glows brightly, then drops off fast. The OmniLight handles
+	// the wider purple wash on world surfaces (with proper wall
+	// shadows); this mesh just provides the glowing body the player
+	// can see has energy bleeding off it.
 	ALBEDO = fog_color.rgb;
-	EMISSION = fog_color.rgb * alpha * 0.4;
+	EMISSION = fog_color.rgb * alpha * 1.4;
 	ALPHA = alpha * fog_color.a;
 }
