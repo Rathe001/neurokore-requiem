@@ -226,6 +226,7 @@ enum State {
 	RETURNING,  # Leashed; heading back to spawn (5% dmg + CC immune)
 	KNOCKBACK,  # Velocity-controlled by an incoming hit; transitions back to CHASING when the timer drains
 	STUNNED,    # Doomsayer stun — frozen in place; transitions back to IDLE when the timer drains
+	GRABBED,    # Telekinesis lift — global_position controlled externally by the TelekinesisGrab tween, no gravity, no AI
 	DEAD,       # Terminal — physics suspended, awaiting cleanup
 }
 
@@ -839,6 +840,32 @@ func release_charm() -> void:
 		_clear_affliction_marker()
 
 
+## Polymath Telekinesis grab — flips the enemy into State.GRABBED so the
+## TelekinesisGrab tween can own its global_position (lift then slam)
+## without the AI / gravity fighting back. Returns false when the enemy
+## can't be grabbed (dead, leashed, or already grabbed) so the caller
+## can pick a different target.
+func apply_grab() -> bool:
+	if not _is_alive():
+		return false
+	if _state == State.RETURNING or _state == State.GRABBED:
+		return false
+	_change_state(State.GRABBED)
+	velocity = Vector3.ZERO
+	return true
+
+
+## Release a Telekinesis grab. Called by the TelekinesisGrab on slam-
+## landing or when the grab is cancelled (target died mid-lift). Safe
+## to call on an already-released enemy.
+func release_grab() -> void:
+	if _state != State.GRABBED:
+		return
+	# IDLE so the next chase tick re-evaluates aggro normally — the
+	# slam itself usually re-aggros via take_damage anyway.
+	_change_state(State.IDLE)
+
+
 ## Reduce outgoing damage by `magnitude` (0..1) for `duration` seconds.
 ## Compounds into _outgoing_damage_mult so a buffed + weakened enemy nets
 ## out correctly. Take the max magnitude on overlap (a fresh weak proc
@@ -1007,8 +1034,11 @@ func _physics_process(delta: float) -> void:
 	# Floor-snap is suppressed during JUMPING so the takeoff impulse set by
 	# _start_jump (which runs from the agent's link_reached signal AFTER our
 	# physics_process this frame) survives into the next frame's gravity
-	# pass instead of being zeroed by is_on_floor().
-	if _state == State.JUMPING or not is_on_floor():
+	# pass instead of being zeroed by is_on_floor(). GRABBED also skips
+	# gravity — global_position.y is owned by the TelekinesisGrab tween.
+	if _state == State.GRABBED:
+		velocity = Vector3.ZERO
+	elif _state == State.JUMPING or not is_on_floor():
 		velocity.y -= GRAVITY * delta
 	else:
 		velocity.y = 0.0
@@ -1032,6 +1062,12 @@ func _physics_process(delta: float) -> void:
 			velocity.x = 0.0
 			velocity.z = 0.0
 			_want_dir = Vector3.ZERO
+		State.GRABBED:
+			# Lifted by Telekinesis — TelekinesisGrab owns global_position.
+			# Skip move_and_slide and AI entirely; release_grab() is what
+			# returns us to IDLE.
+			_want_dir = Vector3.ZERO
+			return
 		State.IDLE, State.CHASING, State.RETURNING:
 			# All three share the chase-tick logic — it inspects state and
 			# routes between them (proximity aggro, leash trip, return arrival).
@@ -1054,10 +1090,10 @@ func _physics_process(delta: float) -> void:
 			pass
 		State.JUMPING:
 			_play_anim(ANIM_JUMP)
-		State.STUNNED:
-			# Idle clip while frozen — no rigs have a dedicated stun pose,
-			# and freezing on the current frame would lock unnatural mid-
-			# motion poses (mid-stride, mid-attack windup).
+		State.STUNNED, State.GRABBED:
+			# Idle clip while frozen / lifted — no rigs have a dedicated
+			# stun or grab pose. Freezing on the current frame would lock
+			# unnatural mid-motion poses (mid-stride, mid-attack windup).
 			_play_anim(ANIM_IDLE)
 		_:
 			if _crouching:

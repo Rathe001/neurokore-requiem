@@ -4,9 +4,10 @@
 ;
 ; Each tier raises the bolt count fired per Telekinesis trigger. The
 ; player's head pulses every TELEKINESIS_INTERVAL seconds (PrototypePlayer)
-; and emits N bolts; each grabs a random nearby enemy and slams them into
-; another nearby enemy for AoE damage. With only one nearby enemy, the
-; bolt grabs scrap instead — single-target, +50% damage, no AoE.
+; and emits N thin beams; each anchors on a distinct nearby enemy. Over
+; 2s the target lifts into the air, then slams back to the floor for
+; direct + radial AoE damage. Bolts within the same trigger pick distinct
+; targets when possible (no double-grabbing the same enemy four times).
 ;
 ; Tier counts (additive aggregate):
 ;   T1 grants +1 → total 1 bolt per trigger
@@ -15,7 +16,7 @@
 ;
 ; Bolt damage scales with main stat (Clarity for Polymath) via
 ; AttributeState.get_player_damage_mult, so investing in Clarity for tier
-; unlocks ALSO makes each bolt hit harder.
+; unlocks ALSO makes each lift-slam hit harder.
 
 [ext_resource type="Script" path="res://scripts/perks/perk.gd" id="perk_script"]
 [ext_resource type="Script" path="res://scripts/perks/perk_effect.gd" id="effect_script"]
@@ -30,7 +31,7 @@ magnitude = 1.0
 script = ExtResource("perk_script")
 id = &"cla_t1"
 label = "Telekinesis I"
-description = "Occasionally, a psionic bolt erupts from your head and slams a nearby enemy into another for AoE damage."
+description = "Occasionally, a thin psionic beam from your head lifts a nearby enemy and slams it to the ground for AoE damage."
 effects = [SubResource("effect_cla_t1_bolt")]
 
 [sub_resource type="Resource" id="effect_cla_t2_bolt"]
@@ -42,7 +43,7 @@ magnitude = 1.0
 script = ExtResource("perk_script")
 id = &"cla_t2"
 label = "Telekinesis II"
-description = "Two psionic bolts per trigger."
+description = "Two psionic bolts per trigger — two enemies lifted and slammed in parallel."
 effects = [SubResource("effect_cla_t2_bolt")]
 
 [sub_resource type="Resource" id="effect_cla_t3_bolt"]
@@ -54,7 +55,7 @@ magnitude = 2.0
 script = ExtResource("perk_script")
 id = &"cla_t3"
 label = "Telekinesis III"
-description = "Four psionic bolts per trigger. The room becomes a lattice of crashing bodies."
+description = "Four psionic bolts per trigger. The room becomes a lattice of lifted, crashing bodies."
 effects = [SubResource("effect_cla_t3_bolt")]
 
 [resource]

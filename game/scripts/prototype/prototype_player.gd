@@ -664,19 +664,19 @@ const ARM_OFFSET_VERTICAL := 1.0
 
 ## Polymath Telekinesis — auto-fires every TELEKINESIS_INTERVAL seconds when
 ## PerkState.get_aggregate(&"telekinesis_bolts") > 0. N bolts per trigger
-## (sourced from the aggregate, capped sensibly). Each bolt grabs a random
-## enemy in TELEKINESIS_RANGE and slams them into another enemy for AoE
-## damage; if only one is in range, the bolt grabs scrap and deals
-## TELEKINESIS_SCRAP_BONUS extra to that single target with no AoE. Damage
-## scales with the player's class damage multiplier (Clarity for Polymath).
+## (sourced from the aggregate, capped sensibly). Each bolt picks one
+## enemy in TELEKINESIS_RANGE — bolts within the same trigger pick distinct
+## targets when possible — and spawns a TelekinesisGrab on it. The grab
+## lifts the enemy over 2s, slams it back to the ground, and deals direct
+## + radial AoE damage on impact. Damage scales with main stat (Clarity
+## for Polymath); the BASE value is intentionally low because the
+## multiplier scales aggressively with stat investment (a T3 Polymath
+## has ~10×).
 const TELEKINESIS_INTERVAL := 6.0
 const TELEKINESIS_RANGE := 12.0
-const TELEKINESIS_AOE_RADIUS := 2.5
-const TELEKINESIS_BASE_DAMAGE := 25
-const TELEKINESIS_SCRAP_BONUS := 1.5
-const TELEKINESIS_BOLT_STAGGER := 0.1
-const TELEKINESIS_HEAD_OFFSET := Vector3(0.0, 0.55, 0.0)  # added to chest base (1.0) so beam emerges at head height
-const TELEKINESIS_MAX_BOLTS := 8  # safety cap for future stacking sources
+const TELEKINESIS_BASE_DAMAGE := 8     # was 25 — was one-shotting at high stat investment
+const TELEKINESIS_BOLT_STAGGER := 0.12
+const TELEKINESIS_MAX_BOLTS := 8       # safety cap for future stacking sources
 
 ## Enculted Doomsayer aura — every DOOMSAYER_TICK_INTERVAL seconds, every
 ## enemy within DOOMSAYER_AURA_RADIUS rolls against the perk's per-second
@@ -908,9 +908,11 @@ func _tick_resource_regen(delta: float) -> void:
 	_emit_resource_if_changed()
 
 
-# Polymath Telekinesis tick. Reads the perk aggregate every frame; when the
-# cooldown elapses, fires N bolts staggered by TELEKINESIS_BOLT_STAGGER so
-# a T3 4-bolt trigger reads as a sequence not one chord.
+# Polymath Telekinesis tick. Reads the perk aggregate every frame; when
+# the cooldown elapses, picks distinct targets up-front and fires staggered
+# bolts so a T3 4-bolt trigger reads as a sequence, not one chord. Targets
+# are bound by closure to each scheduled callback so a fresh enemy walking
+# in mid-stagger doesn't get pulled into a later bolt.
 func _tick_telekinesis(delta: float) -> void:
 	if not _alive:
 		return
@@ -921,55 +923,47 @@ func _tick_telekinesis(delta: float) -> void:
 	if _telekinesis_t > 0.0:
 		return
 	_telekinesis_t = TELEKINESIS_INTERVAL
-	for i in bolts:
-		if i == 0:
-			_fire_telekinesis_bolt()
-		else:
-			get_tree().create_timer(TELEKINESIS_BOLT_STAGGER * float(i)).timeout.connect(_fire_telekinesis_bolt, CONNECT_ONE_SHOT)
-
-
-func _fire_telekinesis_bolt() -> void:
-	if not _alive:
+	var targets := _pick_telekinesis_targets(bolts)
+	if targets.is_empty():
 		return
-	var enemies: Array[Node3D] = []
-	for n in SpatialGrid.query_radius(global_position, TELEKINESIS_RANGE, &"enemies"):
-		if n is Node3D and is_instance_valid(n):
-			enemies.append(n)
-	if enemies.is_empty():
-		return
-	var grabbed: Node3D = enemies[randi() % enemies.size()]
-	var slam_target: Node3D = null
-	# First non-grabbed enemy serves as the slam destination. The rolls
-	# are uncorrelated — the player can read the bolt as "snake from me to
-	# enemy A to enemy B" and intuit AoE landing at B.
-	for n in enemies:
-		if n != grabbed:
-			slam_target = n
-			break
 	var dmg := int(round(float(TELEKINESIS_BASE_DAMAGE) * AttributeState.get_player_damage_mult(class_id, spec_id)))
-	# Beam from head to grabbed enemy. Direction + length recomputed because
-	# grabbed enemy might be at any height; spawn_beam handles the rotation.
-	var head_pos := global_position + Vector3(0.0, 1.0, 0.0) + TELEKINESIS_HEAD_OFFSET
-	var to_grabbed := grabbed.global_position + Vector3(0.0, 0.9, 0.0) - head_pos
-	var grabbed_dist := to_grabbed.length()
-	if grabbed_dist > 0.001:
-		PrototypeAttackIndicator.spawn_beam(self, to_grabbed.normalized(), grabbed_dist, TELEKINESIS_HEAD_OFFSET)
-	if slam_target == null:
-		# Solo: scrap snatch — bonus damage, no AoE.
-		if grabbed.has_method(&"take_damage"):
-			grabbed.take_damage(int(round(float(dmg) * TELEKINESIS_SCRAP_BONUS)), global_position, 0.0)
-		return
-	# Slam: damage to grabbed + AoE around slam_target.
-	if grabbed.has_method(&"take_damage"):
-		grabbed.take_damage(dmg, global_position, 0.0)
-	for n in SpatialGrid.query_radius(slam_target.global_position, TELEKINESIS_AOE_RADIUS, &"enemies"):
+	for i in targets.size():
+		var captured_target: Node3D = targets[i]
+		if i == 0:
+			_spawn_telekinesis_grab(captured_target, dmg)
+		else:
+			get_tree().create_timer(TELEKINESIS_BOLT_STAGGER * float(i)).timeout.connect(
+				func() -> void: _spawn_telekinesis_grab(captured_target, dmg),
+				CONNECT_ONE_SHOT)
+
+
+# Pick up to `count` distinct enemies in TELEKINESIS_RANGE, shuffled.
+# Returning fewer than `count` is fine — the extra bolts just don't
+# fire (better than re-grabbing the same enemy four times). Filters
+# out anything already in State.GRABBED so a previous trigger's lingering
+# grab doesn't get hijacked.
+func _pick_telekinesis_targets(count: int) -> Array[Node3D]:
+	var pool: Array[Node3D] = []
+	for n in SpatialGrid.query_radius(global_position, TELEKINESIS_RANGE, &"enemies"):
 		if not (n is Node3D) or not is_instance_valid(n):
 			continue
-		if not n.has_method(&"take_damage"):
+		if not n.has_method(&"apply_grab"):
 			continue
-		n.take_damage(dmg, slam_target.global_position, 0.0)
-	# Visual: radial pulse at the slam point so the AoE landing reads.
-	PrototypeAttackIndicator.spawn_hit_radial(slam_target, TELEKINESIS_AOE_RADIUS)
+		pool.append(n)
+	if pool.is_empty():
+		return []
+	pool.shuffle()
+	if pool.size() <= count:
+		return pool
+	return pool.slice(0, count)
+
+
+func _spawn_telekinesis_grab(target: Node3D, dmg: int) -> void:
+	if not _alive or target == null or not is_instance_valid(target):
+		return
+	var grab := TelekinesisGrab.new()
+	grab.setup(self, target, dmg)
+	get_parent().add_child(grab)
 
 
 # Enculted Doomsayer aura tick. Reads the perk aggregate (% chance per

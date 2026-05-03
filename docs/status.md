@@ -21,7 +21,7 @@ Godot 4 + GDScript, Forward+ renderer. Fixed-camera low-poly 3D with PBR + reali
 ### Combat
 - **Player combat component** — `PlayerCombat` child node owns damage resolution (cone / AoE / projectile / hitscan), damage rolling, crits, cooldown tracking
 - **Ranged weapons** — `PROJECTILE` and `HITSCAN` targeting modes; projectile nodes travel straight, self-destruct on hit / range; hitscan uses ray + narrow cone query clipped to wall distance; line telegraphs for both
-- **All six specialist tier perks shipped** — Exile (Count), Amalgamation (Forged, with per-arm spawn offsets + dynamic stagger), Drone Swarm (Automaton, wandering hover drones with wall collision), IED (Survivalist, proximity traps tossed at cursor), Telekinesis (Polymath, grab-and-slam bolts), Doomsayer (Enculted, aura proccing stun / charm / weaken with persistent FIFO charm cap). See [tier perk table](design/attribute-system.md#specialized-class-tier-perks).
+- **All six specialist tier perks shipped** — Exile (Count), Amalgamation (Forged, with per-arm spawn offsets + dynamic stagger), Drone Swarm (Automaton, wandering hover drones with wall collision), IED (Survivalist, proximity traps tossed at cursor), Telekinesis (Polymath, thin beams that lift enemies and slam them for AoE), Doomsayer (Enculted, aura proccing stun / charm / weaken with persistent FIFO charm cap). See [tier perk table](design/attribute-system.md#specialized-class-tier-perks).
 
 ### Stats & UI
 - **Attribute system** — 6 rollable stats (ORT/ING/AMB/DEV/OPT/CLA); Soul/Interface derived from origin kore-stat averages; tier thresholds per relationship type (primary / kore / opposing); tier-crossing signals; contribution-weighted stat scaling drives HP and resource maxes (primary 1.0x, kore 0.25x, opposing 0.10x)
