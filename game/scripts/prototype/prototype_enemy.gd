@@ -350,6 +350,7 @@ func _init_enemy() -> void:
 	_charm_target = null
 	_weaken_remain = 0.0
 	_weaken_mult = 0.0
+	_loose_running = false
 	_clear_affliction_marker()
 	# Stagger the first support tick by a random fraction of the interval —
 	# without this every support enemy in a room emits in lockstep on the
@@ -825,8 +826,11 @@ const _LAYER_PLAYER := 4
 # bit, which means pets can move through enemy crowds freely; they're
 # still in the &"enemies" group so target queries find them as normal.
 const _LAYER_CHARMED_ALLY := 16
-const _DEFAULT_ENEMY_MASK := _LAYER_WORLD | _LAYER_ENEMY | _LAYER_PLAYER  # 7
-const _CHARMED_PET_MASK := _LAYER_WORLD | _LAYER_ENEMY                   # 3 (no player bit)
+const _DEFAULT_ENEMY_MASK := _LAYER_WORLD | _LAYER_ENEMY | _LAYER_PLAYER             # 7
+# Pets collide with world, hostile enemies, AND other pets (layer 16) —
+# but NOT the player. Including the ally bit means two pets can't stand
+# on top of each other; they push apart naturally via move_and_slide.
+const _CHARMED_PET_MASK := _LAYER_WORLD | _LAYER_ENEMY | _LAYER_CHARMED_ALLY         # 19
 
 
 func apply_charm() -> bool:
@@ -876,6 +880,7 @@ func release_charm() -> void:
 		return
 	_charmed = false
 	_charm_target = null
+	_loose_running = false
 	# Restore the default collision layer + mask so the released enemy
 	# behaves like a normal hostile again (player + enemies collide
 	# with it, projectiles target it).
@@ -1353,6 +1358,18 @@ func _chase_tick() -> void:
 const _FOLLOW_DISTANCE_TARGET := 3.0
 const _FOLLOW_DISTANCE_TOLERANCE := 1.0
 const _FOLLOW_TELEPORT_DISTANCE := 25.0
+# Spring follow tuning. Speed scales with the distance excess past
+# _FOLLOW_DISTANCE_TARGET so the pet ramps in/out of motion smoothly
+# instead of binary-snapping start/stop at the band edge — the
+# previous step-function caused the run animation to flicker as the
+# pet crossed the threshold every other frame. Hysteresis on the
+# moving flag prevents the residual flicker right at the speed
+# threshold (start running at >=_LOOSE_RUN_START_SPEED, stop running
+# below _LOOSE_RUN_STOP_SPEED — different values create the deadband).
+const _FOLLOW_SPRING_GAIN := 5.0
+const _LOOSE_RUN_START_SPEED := 1.0
+const _LOOSE_RUN_STOP_SPEED := 0.3
+var _loose_running: bool = false
 
 
 # Base movement speed before crouch / affix / per-tick modifiers. For
@@ -1377,25 +1394,32 @@ func _follow_player_loose(player: Node3D) -> void:
 		_want_dir = Vector3.ZERO
 		velocity.x = 0.0
 		velocity.z = 0.0
+		_loose_running = false
 		return
 	var dir := to_player / dist
-	_face_direction(dir)
-	if dist > _FOLLOW_DISTANCE_TARGET + _FOLLOW_DISTANCE_TOLERANCE:
-		# Too far — close the gap at a casual jog.
-		_want_dir = dir
-		# Slightly faster than the base so the pet can catch up after
-		# being separated — pure 1.0× base would mean the pet can never
-		# close a gap once the player starts running.
-		var follow_speed := _movement_speed_base() * 1.2 * (CROUCH_SPEED_MULT if _crouching else 1.0) * _affix_move_speed_mult()
-		velocity.x = dir.x * follow_speed
-		velocity.z = dir.z * follow_speed
+	# Spring-style speed scaling — pet accelerates when it falls
+	# behind, decelerates as it returns to the comfort band. Negative
+	# excess (already inside the band) clamps to 0; pet doesn't
+	# back off when too close.
+	var max_speed := _movement_speed_base() * 1.2 * (CROUCH_SPEED_MULT if _crouching else 1.0) * _affix_move_speed_mult()
+	var excess := dist - _FOLLOW_DISTANCE_TARGET
+	var speed := clampf(excess * _FOLLOW_SPRING_GAIN, 0.0, max_speed)
+	velocity.x = dir.x * speed
+	velocity.z = dir.z * speed
+	# Hysteresis on the run/idle flag so the animation doesn't strobe
+	# at the exact speed threshold — start running once we cross the
+	# higher threshold, only stop once we drop below the lower one.
+	if _loose_running:
+		if speed < _LOOSE_RUN_STOP_SPEED:
+			_loose_running = false
 	else:
-		# Inside the comfortable follow band — stop and wait. Backing
-		# off when too close would feel skittish; the pet should stand
-		# its ground next to the player.
+		if speed > _LOOSE_RUN_START_SPEED:
+			_loose_running = true
+	if _loose_running:
+		_want_dir = dir
+		_face_direction(dir)
+	else:
 		_want_dir = Vector3.ZERO
-		velocity.x = 0.0
-		velocity.z = 0.0
 
 
 # Walks the enemy back to its spawn position. Transitions to IDLE on arrival.
