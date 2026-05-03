@@ -906,16 +906,14 @@ func _tick_afflictions(delta: float) -> void:
 			# death may have already moved us out.
 			if _state == State.STUNNED:
 				_change_state(State.IDLE)
-	# Re-pick the charm target if the cached one died — the enemy shouldn't
-	# stand around with a stale reference. Done every tick (cheap) rather
-	# than wired through a signal because charm targets are short-lived
-	# and signals add lifetime-management overhead.
+	# Re-pick the charm target every tick when the cached one died or
+	# was never set. Done per-tick (cheap) rather than via signal because
+	# charm targets are short-lived. When no enemy is in range, leave
+	# _charm_target null — the chase tick falls back to "follow player
+	# loosely" rather than releasing the charm. Pets persist until killed
+	# by other enemies.
 	if _charmed and (_charm_target == null or not _is_target_alive(_charm_target)):
 		_charm_target = _pick_nearest_other_enemy()
-		# No victim available anymore — release the charm so the player's
-		# slot opens up. release_charm is reentrant-safe.
-		if _charm_target == null:
-			release_charm()
 	if _weaken_remain > 0.0:
 		_weaken_remain -= delta
 		if _weaken_remain <= 0.0:
@@ -928,9 +926,10 @@ func _tick_afflictions(delta: float) -> void:
 		_clear_affliction_marker()
 
 
-# Returns the closest LIVE enemy other than self, or null if none in
-# AGGRO_RANGE. Used by charm to pick a victim for the mind-controlled
-# enemy to chase / attack.
+# Returns the closest LIVE non-friendly enemy other than self, or null
+# if none in AGGRO_RANGE. Used by charm to pick a victim for the mind-
+# controlled enemy to attack. Player-friendly (other charmed) enemies
+# are skipped — pets shouldn't attack each other.
 func _pick_nearest_other_enemy() -> Node3D:
 	var best: Node3D = null
 	var best_d2 := AGGRO_RANGE * AGGRO_RANGE
@@ -938,6 +937,10 @@ func _pick_nearest_other_enemy() -> Node3D:
 		if n == self or not (n is Node3D) or not is_instance_valid(n):
 			continue
 		if not _is_target_alive(n):
+			continue
+		# Skip allies — both my own player-friendly state (irrelevant
+		# since I'm doing the picking) and any other charmed pet in range.
+		if n is PrototypeEnemy and (n as PrototypeEnemy).is_player_friendly():
 			continue
 		var d2 := global_position.distance_squared_to((n as Node3D).global_position)
 		if d2 < best_d2:
@@ -1187,6 +1190,36 @@ func _chase_tick() -> void:
 		_tick_return(spawn_dist_sq)
 		return
 
+	# Anti-leash teleport for charmed pets — snap to the player when
+	# we've drifted too far (lured by a target across the map, lost
+	# behind unwalkable geometry, etc.). Generous distance because the
+	# pet has its own AI and should normally keep up. Drones use ~6m;
+	# pets are big-bodied with pathfinding so they get more rope.
+	if _charmed and player_dist_sq > _FOLLOW_TELEPORT_DISTANCE * _FOLLOW_TELEPORT_DISTANCE:
+		var snap_pos := player.global_position
+		var bearing := randf() * TAU
+		snap_pos.x += cos(bearing) * _FOLLOW_DISTANCE_TARGET
+		snap_pos.z += sin(bearing) * _FOLLOW_DISTANCE_TARGET
+		global_position = snap_pos
+		velocity = Vector3.ZERO
+		_want_dir = Vector3.ZERO
+		# Re-pick a target after teleport — the old one may now be far
+		# enough that following it would just trigger another teleport.
+		_charm_target = _pick_nearest_other_enemy()
+		return
+
+	# Charmed pet with no live enemy target falls back to "loosely follow
+	# player" — wander near them, don't attack, don't aggro. _tick_afflictions
+	# re-picks _charm_target each tick, so as soon as a real enemy walks
+	# into AGGRO_RANGE the pet switches to that target on the next chase
+	# tick. Until then this branch keeps them alive and visible without
+	# them attacking the player or each other.
+	if _charmed and (_charm_target == null or not _is_target_alive(_charm_target)):
+		if _state == State.IDLE:
+			_change_state(State.CHASING)
+		_follow_player_loose(player)
+		return
+
 	# IDLE & CHASING share the proximity-aggro check — an IDLE enemy that
 	# the player walks toward should wake up the same way a previously-engaged
 	# one would re-engage.
@@ -1268,6 +1301,52 @@ func _chase_tick() -> void:
 	var chase_speed := CHASE_SPEED * (CROUCH_SPEED_MULT if _crouching else 1.0) * _affix_move_speed_mult()
 	velocity.x = dir.x * chase_speed
 	velocity.z = dir.z * chase_speed
+
+
+# Charmed pet idle behaviour — wander loosely around the player when no
+# enemy target is in range. The pet stays in CHASING state but doesn't
+# attack and doesn't aggro. Movement holds a comfortable follow distance:
+# move toward the player when too far, stop when close, no backpedal.
+# _tick_afflictions re-picks _charm_target each tick, so as soon as a
+# real enemy walks into AGGRO_RANGE the pet switches over.
+#
+# Anti-leashing: if the player walks far enough away that the pet would
+# get hopelessly stuck behind walls / nav obstacles, snap the pet to the
+# player. Distance is far higher than drones (which use ~6m) because the
+# pet has its own AI / pathfinding that should usually keep up — the
+# teleport is a hard fallback for genuinely lost pets, not the primary
+# follow mechanism.
+const _FOLLOW_DISTANCE_TARGET := 3.0
+const _FOLLOW_DISTANCE_TOLERANCE := 1.0
+const _FOLLOW_SPEED_MULT := 0.7
+const _FOLLOW_TELEPORT_DISTANCE := 25.0
+func _follow_player_loose(player: Node3D) -> void:
+	# Anti-leash teleport runs in _chase_tick before this branch, so by
+	# the time we get here the pet is guaranteed to be within
+	# _FOLLOW_TELEPORT_DISTANCE of the player.
+	var to_player := player.global_position - global_position
+	to_player.y = 0.0
+	var dist := to_player.length()
+	if dist < 0.001:
+		_want_dir = Vector3.ZERO
+		velocity.x = 0.0
+		velocity.z = 0.0
+		return
+	var dir := to_player / dist
+	_face_direction(dir)
+	if dist > _FOLLOW_DISTANCE_TARGET + _FOLLOW_DISTANCE_TOLERANCE:
+		# Too far — close the gap at a casual jog.
+		_want_dir = dir
+		var follow_speed := CHASE_SPEED * _FOLLOW_SPEED_MULT * (CROUCH_SPEED_MULT if _crouching else 1.0) * _affix_move_speed_mult()
+		velocity.x = dir.x * follow_speed
+		velocity.z = dir.z * follow_speed
+	else:
+		# Inside the comfortable follow band — stop and wait. Backing
+		# off when too close would feel skittish; the pet should stand
+		# its ground next to the player.
+		_want_dir = Vector3.ZERO
+		velocity.x = 0.0
+		velocity.z = 0.0
 
 
 # Walks the enemy back to its spawn position. Transitions to IDLE on arrival.

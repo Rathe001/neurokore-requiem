@@ -98,6 +98,11 @@ func _ready() -> void:
 		player.crouch_changed.connect(_on_crouch_changed)
 	if player.has_signal(&"light_changed"):
 		player.light_changed.connect(_on_light_changed)
+	# Charm count drives the live "current/max" text on the AMB buff
+	# entry. Cheaper to rebuild the bar than to reach in and surgically
+	# patch one Label — the bar has at most ~6 entries.
+	if player.has_signal(&"charm_count_changed"):
+		player.charm_count_changed.connect(func(_c: int, _m: int) -> void: _update_buffs_bar())
 	if player.has_signal(&"credits_changed"):
 		_last_credits_seen = int(player.get_credits()) if player.has_method(&"get_credits") else 0
 		player.credits_changed.connect(_on_credits_changed)
@@ -174,7 +179,7 @@ func _update_avatar_panel() -> void:
 # Iterates ROLLABLE_STATS for stable left-to-right order regardless of
 # which tiers happen to be unlocked — so newly-acquired perks slot into
 # their fixed position rather than shuffling existing entries.
-const _BUFF_ENTRY_SIZE := Vector2(28.0, 28.0)
+const _BUFF_ENTRY_SIZE := Vector2(14.0, 14.0)
 func _update_buffs_bar() -> void:
 	if buff_entries == null:
 		return
@@ -216,14 +221,23 @@ func _add_buff_entry(stat_id: StringName, tier: int, perk: Perk) -> void:
 	sb.set_corner_radius_all(2)
 	entry.add_theme_stylebox_override(&"panel", sb)
 	entry.mouse_filter = Control.MOUSE_FILTER_STOP
-	# Tier roman numeral centered in the entry — visible read of tier
-	# strength (I/II/III) at a glance.
+	# AMB (Doomsayer) gets a "current/max" charm count instead of the
+	# tier roman — the count is the gameplay-relevant info ("how many
+	# pets do I have right now?"), and roman is still in the tooltip.
+	# Other perks just show the tier roman.
 	var label := Label.new()
-	label.text = AttributeState.TIER_ROMAN[tier - 1]
-	label.add_theme_font_size_override(&"font_size", 12)
+	if stat_id == &"amb":
+		var player := get_tree().get_first_node_in_group(&"player") as PrototypePlayer
+		var current: int = player.get_charm_count() if player != null else 0
+		var max_count: int = player.get_charm_max() if player != null else tier
+		label.text = "%d/%d" % [current, max_count]
+		entry.set_meta(&"is_amb", true)
+	else:
+		label.text = AttributeState.TIER_ROMAN[tier - 1]
+	label.add_theme_font_size_override(&"font_size", 8)
 	label.add_theme_color_override(&"font_color", stat_color)
 	label.add_theme_color_override(&"font_outline_color", Color(0, 0, 0, 1))
-	label.add_theme_constant_override(&"outline_size", 2)
+	label.add_theme_constant_override(&"outline_size", 1)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.anchor_right = 1.0

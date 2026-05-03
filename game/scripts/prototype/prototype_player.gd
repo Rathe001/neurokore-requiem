@@ -8,6 +8,9 @@ signal died
 signal notification_requested(text: String)
 signal crouch_changed(is_crouching: bool)
 signal light_changed(is_on: bool)
+# Fires whenever the count of currently-charmed (Doomsayer) enemies
+# changes. HUD listens to update the per-perk badge count.
+signal charm_count_changed(current: int, max_value: int)
 
 const ITEM_PICKUP_SCENE: PackedScene = preload("res://scenes/prototype/prototype_item_pickup.tscn")
 
@@ -1042,12 +1045,30 @@ func _tick_doomsayer(delta: float) -> void:
 	if charm_candidate != null and charm_capacity > 0:
 		if charm_candidate.apply_charm():
 			_charmed_enemies.append(charm_candidate)
+			_emit_charm_count_changed()
+
+
+# Public accessors for the buff bar. Charm count is the live size of
+# the active list; max is the per-tier doomsayer_max_charms aggregate.
+func get_charm_count() -> int:
+	return _charmed_enemies.size()
+
+
+func get_charm_max() -> int:
+	return mini(int(round(PerkState.get_aggregate(&"doomsayer_max_charms"))), DOOMSAYER_MAX_CHARMS_CAP)
+
+
+func _emit_charm_count_changed() -> void:
+	charm_count_changed.emit(_charmed_enemies.size(), get_charm_max())
 
 
 # Compact the charm list — drops freed / dead / corpse'd entries.
 # Called by _tick_doomsayer before computing capacity, and by the
-# external reconcile helpers below.
+# external reconcile helpers below. Emits the charm_count_changed
+# signal when the list size actually shrunk so the HUD count stays
+# in sync as pets die in combat.
 func _prune_charm_list() -> void:
+	var prev_size := _charmed_enemies.size()
 	var live: Array[PrototypeEnemy] = []
 	for e in _charmed_enemies:
 		if e != null and is_instance_valid(e) and e.is_in_group(&"enemies"):
@@ -1057,16 +1078,21 @@ func _prune_charm_list() -> void:
 			# survived a death path that skipped release_grab.
 			e.release_charm()
 	_charmed_enemies = live
+	if _charmed_enemies.size() != prev_size:
+		_emit_charm_count_changed()
 
 
 # Release every active charm. Called from _die so charms don't persist
 # across the player's death — design says "until the player dies." On
 # respawn the list is empty and refills naturally as the aura procs.
 func _clear_charms() -> void:
+	var had_any := not _charmed_enemies.is_empty()
 	for e in _charmed_enemies:
 		if e != null and is_instance_valid(e):
 			e.release_charm()
 	_charmed_enemies.clear()
+	if had_any:
+		_emit_charm_count_changed()
 
 
 # Trim the charm list down to the current cap. Called on perks_changed
@@ -1085,6 +1111,10 @@ func _reconcile_charms() -> void:
 		var oldest: PrototypeEnemy = _charmed_enemies.pop_front()
 		if oldest != null and is_instance_valid(oldest):
 			oldest.release_charm()
+	# Emit even when neither the list size nor the cap changed — keeps
+	# the HUD synced with cap-only updates (e.g. tier crossing that
+	# raises max_charms without immediately filling the new slots).
+	_emit_charm_count_changed()
 
 
 # Update the Doomsayer aura's tier readout. Reads the unlocked AMB tier
