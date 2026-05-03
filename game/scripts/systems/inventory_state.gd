@@ -13,40 +13,6 @@ const BASE_INVENTORY_SIZE := 8
 const MAX_INVENTORY_SIZE := 40
 const MAX_UTILITY_SLOTS := 4
 
-# Tier-3 starter kit: one single-stat item per specialised class. Equip the
-# matching item alone to push that class's primary stat past TIERS_OWN[2]
-# (99% under the simplified breakpoints) → T3 unlocked. The constant is a
-# raw stat amount, NOT a percentage — set deliberately huge so the starter
-# weapon's small random stat rolls don't dilute the primary below 99%
-# (1000 / 1005 = 99.5% even if the starter weapon adds 5 stat points).
-# Equipping more than one starter T3 item simultaneously will push BOTH
-# primaries to ~50% by design — the new threshold model says "all-in or
-# nothing," so testing one class at a time is the intended workflow.
-const T3_STAT_PCT: int = 1000
-
-# Slot per spec class for the starter kit items. Picked so all six can sit
-# in the inventory simultaneously without colliding with each other in the
-# same equipment slot.
-const STARTER_KIT_SLOTS: Dictionary = {
-	&"count":       &"head",
-	&"survivalist": &"chest",
-	&"enculted":    &"gloves",
-	&"forged":      &"boots",
-	&"automaton":   &"belt",
-	&"polymath":    &"offhand",
-}
-
-# Slot-kind → ItemRoller main_type label, used to pick the right glyph for
-# starter-kit items via SlotRegistry.
-const STARTER_SLOT_MAIN_TYPE: Dictionary = {
-	&"head":    "Head Armor",
-	&"chest":   "Chest Armor",
-	&"gloves":  "Gloves",
-	&"boots":   "Boots",
-	&"belt":    "Belt",
-	&"offhand": "Offhand",
-}
-
 var equipment: Dictionary = {}
 var inventory: Array[Item] = []
 
@@ -55,15 +21,11 @@ func _ready() -> void:
 	# never triggers a resize / index reshuffle — `get_inventory_capacity()`
 	# decides how many slots are *visible* to the UI.
 	inventory.resize(MAX_INVENTORY_SIZE)
-	equipment[&"weapon"] = _make_starter_weapon()
-	equipment[&"offhand"] = _make_starter_offhand()
-	# Six T3 starter items — one per spec class — populate the first slots
-	# so playtesting any class can immediately reach T3 (or T2 for origin)
-	# by equipping the matching item.
-	var i := 0
-	for spec_id: StringName in AttributeState.CLASS_DEFINITIONS:
-		inventory[i] = _make_class_tier3_item(spec_id)
-		i += 1
+	# Player starts with NO equipment and an empty inventory. Basic gear is
+	# rolled by the spawn-room starter chest (see prototype_loot_crate.gd
+	# starter_weapon_kit). Removed 2026-05-03 — the prior auto-equipped
+	# weapon + offhand and 6 T3 test items pre-loaded the player and let
+	# them skip the chest entirely.
 	# When the Forged Amalgamation perk gains/loses tiers, the extra weapon
 	# slot count changes — evict items from now-locked slots so a player who
 	# respecs out of the perk doesn't keep silently-equipped weapons.
@@ -214,45 +176,3 @@ func reconcile_extra_weapon_slots() -> void:
 	if not overflow.is_empty():
 		items_overflowed.emit(overflow)
 
-# ── Test items ────────────────────────────────────────────────────────────────
-
-func _make_starter_weapon() -> Item:
-	var rng := RandomNumberGenerator.new()
-	rng.randomize()
-	return ItemRoller.roll("1H Weapon", 1, &"common", rng)
-
-func _make_starter_offhand() -> Item:
-	var item := Item.new()
-	item.id = &"starter_offhand"
-	item.kind = &"offhand"
-	item.main_type = "Offhand"
-	item.glyph = SlotRegistry.glyph_for_type("Offhand")
-	item.glyph_color = ItemRoller.RARITY_COLOR.get(&"common", Color.WHITE)
-	item.rarity = &"common"
-	item.name_key = "Starter Offhand"
-	item.fire_skill = preload("res://resources/skills/aoe_burst.tres")
-	return item
-
-
-## Build one max-tier test item per spec class. Equipping the matching item
-## as the dominant stat source pushes that class's primary stat past the
-## TIERS_OWN[2] (99%) threshold → T3 unlocked. For origin classes the same
-## item lifts the corresponding kore stat past TIERS_KORE_ORIGIN[1] (66%)
-## → T2. Reduces playtest setup from "kill enemies until you roll the right
-## affixes" to "drag this onto the matching slot."
-func _make_class_tier3_item(spec_id: StringName) -> Item:
-	var stat: StringName = AttributeState.CLASS_DEFINITIONS[spec_id][&"stat"]
-	var slot: StringName = STARTER_KIT_SLOTS.get(spec_id, &"head")
-	var main_type: String = STARTER_SLOT_MAIN_TYPE.get(slot, String(slot).capitalize())
-	var short: String = AttributeState.STAT_SHORT.get(stat, "?")
-	var spec_label: String = String(spec_id).capitalize()
-	var item := Item.new()
-	item.id = StringName("starter_t3_%s" % spec_id)
-	item.kind = slot
-	item.main_type = main_type
-	item.glyph = SlotRegistry.glyph_for_type(main_type)
-	item.glyph_color = AttributeState.STAT_COLORS.get(stat, Color.WHITE)
-	item.rarity = &"unique"
-	item.name_key = "%s T3 (%s %d%%)" % [spec_label, short, T3_STAT_PCT]
-	item.stat_modifiers = {stat: T3_STAT_PCT}
-	return item
