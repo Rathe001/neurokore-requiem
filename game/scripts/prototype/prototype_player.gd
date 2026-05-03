@@ -674,7 +674,7 @@ const ARM_OFFSET_VERTICAL := 1.0
 ## has ~10×).
 const TELEKINESIS_INTERVAL := 6.0
 const TELEKINESIS_RANGE := 12.0
-const TELEKINESIS_BASE_DAMAGE := 8     # was 25 — was one-shotting at high stat investment
+const TELEKINESIS_BASE_DAMAGE := 13    # was 8 (which felt weak); 25 was the original one-shot value
 const TELEKINESIS_BOLT_STAGGER := 0.12
 const TELEKINESIS_MAX_BOLTS := 8       # safety cap for future stacking sources
 

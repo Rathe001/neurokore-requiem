@@ -32,7 +32,7 @@ const AOE_RADIUS := 2.6
 const AOE_DAMAGE_FACTOR := 0.6
 const AOE_KNOCKBACK := 5.0
 
-const BEAM_THICKNESS := 0.06
+const BEAM_THICKNESS := 0.025
 const BEAM_COLOR := Color(0.95, 0.85, 1.0, 1.0)  # pale violet — Polymath head energy
 const BEAM_PLAYER_HEAD_OFFSET := Vector3(0.0, 1.55, 0.0)
 const BEAM_TARGET_OFFSET := Vector3(0.0, 0.9, 0.0)  # chest height on the enemy
