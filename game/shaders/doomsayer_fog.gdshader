@@ -25,6 +25,13 @@ uniform float noise_scale : hint_range(0.1, 4.0) = 0.35;
 // inside a bubble." With softness=14 the visible alpha is essentially
 // zero outside the inner ~20% of the geometric radius.
 uniform float core_softness : hint_range(0.5, 24.0) = 14.0;
+// Silhouette discard — fragments where the surface normal is near
+// perpendicular to the view direction (i.e., the silhouette/outline
+// of the geometric sphere) get discarded entirely. Without this, even
+// the tiny alpha at the silhouette + bright emission paints a faint
+// arch outlining the sphere's geometric shape (the "bubble edge"
+// the user kept seeing). Higher value = more aggressive hiding.
+uniform float silhouette_discard : hint_range(0.0, 0.5) = 0.18;
 // Soft-particles depth fade — fragments within this many world units
 // of opaque scene geometry get faded out. Helps smooth where the
 // sphere touches the floor / nearby objects.
@@ -95,10 +102,15 @@ void fragment() {
 	// Core-density term: dense at the centre (where NORMAL points
 	// straight at camera), transparent at silhouette edges. abs() lets
 	// back faces share the same falloff so cull_disabled doesn't show
-	// a hard back-face seam. The visible result is a dense purple core
-	// fading to nothing at the edges — also hides any geometric bleed
-	// past walls because the wall-side silhouette is already invisible.
+	// a hard back-face seam.
 	float facing = abs(dot(NORMAL, VIEW));
+	// Hard cutoff at the silhouette — without this, even a tiny core
+	// value at the geometric edge combined with bright emission paints
+	// a visible arch outlining the sphere's shape. discard ensures the
+	// outline is genuinely invisible regardless of intensity tuning.
+	if (facing < silhouette_discard) {
+		discard;
+	}
 	float core = pow(facing, core_softness);
 
 	// 3D fbm in object space with vertical drift over time. Drifting
@@ -134,8 +146,10 @@ void fragment() {
 	// core glows brightly, then drops off fast. The OmniLight handles
 	// the wider purple wash on world surfaces (with proper wall
 	// shadows); this mesh just provides the glowing body the player
-	// can see has energy bleeding off it.
+	// can see has energy bleeding off it. Emission scaled down a bit
+	// (was 1.4) since the silhouette_discard now hides the outline,
+	// removing the need for emission to mask it via brightness.
 	ALBEDO = fog_color.rgb;
-	EMISSION = fog_color.rgb * alpha * 1.4;
+	EMISSION = fog_color.rgb * alpha * 0.9;
 	ALPHA = alpha * fog_color.a;
 }
