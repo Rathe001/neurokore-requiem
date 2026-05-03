@@ -1,21 +1,33 @@
-[gd_resource type="Resource" script_class="RoomDef" load_steps=5 format=3]
+[gd_resource type="Resource" script_class="RoomDef" load_steps=7 format=3]
 
 ; Reusable start-room template — single EAST opening so it terminates a
 ; chain on the west side. Carries a player_spawn marker slot so the level
 ; builder knows where to place the player (instead of relying on a fixed
 ; transform in the level shell scene). RoomDef.id is the *template* name;
 ; per-instance ids come from the generator's RoomNode.id.
+;
+; Also carries a starter_chest loot crate offset to the south corner.
+; BranchingGenerator wires it to the EAST connection's door via a
+; LootCrateDoorPuzzle so the player has to grab a weapon (one 2H, or one
+; 1H + offhand at common rarity) before they can leave the spawn room.
 
 [ext_resource type="Script" path="res://scripts/level/room_def.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/level/interactable_slot.gd" id="2"]
 [ext_resource type="Resource" path="res://resources/level/lights/fluorescent_white.tres" id="light"]
 [ext_resource type="PackedScene" path="res://scenes/prototype/prototype_player_spawn.tscn" id="player_spawn"]
+[ext_resource type="PackedScene" path="res://scenes/prototype/prototype_loot_crate.tscn" id="loot_crate"]
 
 [sub_resource type="Resource" id="slot_player_spawn"]
 script = ExtResource("2")
 id = &"player_spawn"
 scene = ExtResource("player_spawn")
 offset = Vector3(0, 0, 0)
+
+[sub_resource type="Resource" id="slot_starter_chest"]
+script = ExtResource("2")
+id = &"starter_chest"
+scene = ExtResource("loot_crate")
+offset = Vector3(-2.5, 0.3, 2.5)
 
 [resource]
 script = ExtResource("1")
@@ -24,4 +36,4 @@ size = Vector2(8, 8)
 openings = [2]
 opening_width = 4.0
 light_color = ExtResource("light")
-slots = [SubResource("slot_player_spawn")]
+slots = [SubResource("slot_player_spawn"), SubResource("slot_starter_chest")]

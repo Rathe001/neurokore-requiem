@@ -174,7 +174,14 @@ func generate() -> LevelGraph:
 		c.to_room = current_id
 		c.to_wall = RoomDef.Wall.WEST
 		c.corridor = _pick_corridor(rng, false)
+		# c0 is the start-room → r1 connection; lock it behind the spawn-
+		# room loot chest. The room template carries the chest slot, so
+		# we just need a door here + a puzzle wiring the two.
+		if i == 1:
+			c.has_door = true
 		graph.connections.append(c)
+		if i == 1:
+			_emit_starter_chest_puzzle(graph, c)
 
 		if junction_dir != &"":
 			var junction_wall: RoomDef.Wall
@@ -338,6 +345,17 @@ func _emit_switch_puzzle(graph: LevelGraph, final_c: Connection) -> void:
 	puzzle.switch_slot_ids = switch_slot_ids
 	puzzle.door_connection_id = final_c.id
 	puzzle.required_count = 0  # all
+	graph.puzzles.append(puzzle)
+
+
+# Lock the spawn-room exit behind opening the starter_chest. The chest
+# slot is baked into the start-room template (proto_start_room.tres);
+# the puzzle just wires it to the door + forces the starter weapon kit.
+func _emit_starter_chest_puzzle(graph: LevelGraph, first_c: Connection) -> void:
+	var puzzle := LootCrateDoorPuzzle.new()
+	puzzle.crate_slot_id = StringName("%s.starter_chest" % graph.anchor_id)
+	puzzle.door_connection_id = first_c.id
+	puzzle.force_starter_kit = true
 	graph.puzzles.append(puzzle)
 
 

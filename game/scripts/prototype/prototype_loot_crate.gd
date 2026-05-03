@@ -16,6 +16,16 @@ const COLOR_OPENED := Color(0.35, 0.35, 0.35, 1.0)
 ## UV) in addition to whatever else the crate would drop. For the starter
 ## chest so the player can sample every light type up front.
 @export var include_all_optics: bool = false
+## When true, the crate spits out a starter weapon kit instead of the
+## default item generation: 50/50 chance of (one common 2H weapon) vs
+## (one common 1H weapon + one common offhand). Set by LootCrateDoorPuzzle
+## on the spawn-room chest so the player gets a guaranteed playable
+## weapon set on level start.
+@export var starter_weapon_kit: bool = false
+## Optional door this crate unlocks on first interact — mirrors the
+## PrototypeSwitch.target_door pattern. Set by LootCrateDoorPuzzle, not
+## hand-authored. Empty path = no door wiring (regular loot drop).
+@export var target_door: NodePath
 
 @onready var mesh: MeshInstance3D = $Mesh
 @onready var lid: MeshInstance3D = $Lid
@@ -55,7 +65,19 @@ func interact(_user: Node) -> void:
 		tween.tween_property(lid, "rotation_degrees:x", -110.0, 0.3).set_ease(Tween.EASE_OUT)
 
 	var items: Array[Item] = []
-	if fixed_items.size() > 0:
+	if starter_weapon_kit:
+		var rng := RandomNumberGenerator.new()
+		rng.randomize()
+		var ilvl := maxi(1, PlayerState.level)
+		# 50/50: one 2H, OR one 1H + one offhand. Both branches roll at
+		# common rarity so the player's first kit is functional but
+		# unspectacular — variety / power comes from later drops.
+		if rng.randf() < 0.5:
+			items.append(ItemRoller.roll("2H Weapon", ilvl, &"common", rng))
+		else:
+			items.append(ItemRoller.roll("1H Weapon", ilvl, &"common", rng))
+			items.append(ItemRoller.roll("Offhand", ilvl, &"common", rng))
+	elif fixed_items.size() > 0:
 		items.assign(fixed_items)
 	elif test_weapon_base_paths.size() > 0:
 		var rng := RandomNumberGenerator.new()
@@ -88,6 +110,14 @@ func interact(_user: Node) -> void:
 		pickup.configure(items[i])
 		parent.add_child(pickup)
 		pickup.global_position = global_position + Vector3(0.0, 1.5, 0.0)
+
+	# Trigger any door wired to this crate (LootCrateDoorPuzzle uses this
+	# to gate level progression on a chest open). Mirrors the switch
+	# pattern — single unlock() call, door figures out the rest.
+	if target_door != NodePath():
+		var door := get_node_or_null(target_door) as PrototypeDoor
+		if door != null:
+			door.unlock()
 
 	# Become inert after opening — drop out of mouse picking, the spatial
 	# grid (no more proximity-interact triggers), and any active hover/
