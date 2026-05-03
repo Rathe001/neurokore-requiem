@@ -77,7 +77,11 @@ func _recompute() -> void:
 	var new_active: Array[Perk] = []
 	var new_aggregates: Dictionary = {}
 
-	if PlayerState.class_id != &"" and PlayerState.spec_id != &"":
+	# Origin classes (Analog/Cyborg) also receive perks for tiers they unlock
+	# in their team / opposing stats — capped at T2 / T1 by the threshold
+	# tables. Earlier we required spec_id != "" too, which silently denied
+	# origin classes any perks even after unlocking T2.
+	if PlayerState.class_id != &"":
 		for stat_id: StringName in AttributeState.ROLLABLE_STATS:
 			var ladder: PerkLadder = _ladders.get(stat_id)
 			if ladder == null or ladder.perks.is_empty():
