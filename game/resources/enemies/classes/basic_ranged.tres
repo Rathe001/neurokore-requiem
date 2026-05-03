@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="EnemyClass" load_steps=3 format=3]
+
+; Default ranged profile — kites to ~8m, fires a slow projectile every 2s.
+; Reuses the standard player projectile scene so visual differentiation is
+; still pending; that's a polish pass (red emissive + smaller mesh would
+; read clearly as "incoming enemy fire" vs "your shots").
+;
+; Damage is whatever the enemy's level rolls (LEVEL_DAMAGE_RANGE) modulated
+; by attack_damage_mult — leaving it at 0.85 makes ranged hits hurt slightly
+; less per shot than a melee swing, partly compensating for the safer range.
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_class.gd" id="script"]
+[ext_resource type="PackedScene" path="res://scenes/prototype/prototype_projectile.tscn" id="projectile_scene"]
+
+[resource]
+script = ExtResource("script")
+id = &"basic_ranged"
+label = "Basic Ranged"
+attack_mode = 1
+attack_range = 12.0
+attack_cooldown = 2.0
+attack_windup = 0.55
+attack_damage_mult = 0.85
+projectile_scene = ExtResource("projectile_scene")
+projectile_speed = 18.0
+projectile_max_range = 14.0
+ranged_kite_distance = 8.0
+support_role = 0

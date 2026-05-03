@@ -4,9 +4,11 @@ class_name PrototypeProjectile
 const PROTO_BASE_CRIT_CHANCE: float = 0.15
 const PROTO_BASE_CRIT_MULT: float = 1.5
 # World-layer raycast mask for the per-frame sweep. Walls + structures live
-# on layer 1; enemies (layer 2) keep getting handled by Area3D body_entered
-# so we don't need to ray-test them.
+# on layer 1; targets get handled by Area3D body_entered so we don't need
+# to ray-test them.
 const WORLD_LAYER_MASK := 1
+const ENEMY_LAYER_MASK := 2
+const PLAYER_LAYER_MASK := 4
 
 var direction: Vector3 = Vector3.FORWARD
 var speed: float = 30.0
@@ -18,6 +20,11 @@ var accuracy: float = 1.0
 var crit_chance: float = 0.0
 var knockback_strength: float = 0.0
 var source_position: Vector3 = Vector3.ZERO
+## Group whose members the projectile damages. Anything else on the
+## collision_mask (i.e. walls) just stops the bolt without damage. The
+## spawner sets this to &"enemies" for player-fired bolts and &"player"
+## for enemy-fired bolts; collision_mask is derived in reset() to match.
+var target_group: StringName = &"enemies"
 
 var _traveled: float = 0.0
 var _hit: bool = false
@@ -37,8 +44,13 @@ func reset() -> void:
 	_hit = false
 	set_physics_process(true)
 	_connect_signal()
+	# Set collision_mask for the side this bolt is hitting. World always.
+	# Targets per group: &"enemies" → enemy layer; &"player" → player layer.
+	# Other targets fall back to enemies (current player-fire default).
+	var target_mask := PLAYER_LAYER_MASK if target_group == &"player" else ENEMY_LAYER_MASK
+	collision_mask = WORLD_LAYER_MASK | target_mask
 	# body_entered only fires when a body crosses INTO the area on a later
-	# physics frame; if an enemy is already overlapping at spawn (close-
+	# physics frame; if a target is already overlapping at spawn (close-
 	# range fire), the signal never triggers. Defer a sweep over current
 	# overlaps so we catch those.
 	call_deferred(&"_check_initial_overlaps")
@@ -50,9 +62,7 @@ func _check_initial_overlaps() -> void:
 	for body in get_overlapping_bodies():
 		if body == null or not is_instance_valid(body):
 			continue
-		if body.is_in_group(&"player"):
-			continue
-		if body.is_in_group(&"enemies"):
+		if body.is_in_group(target_group):
 			_on_body_entered(body)
 			return
 
@@ -61,6 +71,10 @@ func _pool_release() -> void:
 	_hit = false
 	_released = false
 	monitoring = false
+	# Reset target_group so a re-acquired bolt doesn't inherit the prior
+	# owner's friendly-fire side. Spawner is expected to set it before
+	# reset(), but the default keeps existing player-fire callers working.
+	target_group = &"enemies"
 
 func _physics_process(delta: float) -> void:
 	var step := speed * delta
@@ -91,14 +105,22 @@ func _physics_process(delta: float) -> void:
 func _on_body_entered(body: Node3D) -> void:
 	if _hit:
 		return
-	if body.is_in_group(&"player"):
-		return
 	_hit = true
-	if body.is_in_group(&"enemies") and body.has_method(&"take_damage"):
+	# In-target-group → roll damage. Anything else (walls, decorative bodies)
+	# just stops the bolt without applying anything. The collision_mask set
+	# in reset() already filters out non-target friendlies, so this branch
+	# is mostly belt-and-braces against future layer changes.
+	if body.is_in_group(target_group) and body.has_method(&"take_damage"):
 		if _roll_hit():
 			var is_crit := _roll_crit()
 			var dmg := _roll_damage(is_crit)
-			body.take_damage(dmg, source_position, knockback_strength, 1, is_crit)
+			# Player and enemy take_damage signatures both accept the same
+			# leading args; player ignores the trailing (multistrike, is_crit)
+			# extras since its signature stops earlier.
+			if target_group == &"player":
+				body.take_damage(dmg, source_position, knockback_strength)
+			else:
+				body.take_damage(dmg, source_position, knockback_strength, 1, is_crit)
 	_release()
 
 func _release() -> void:

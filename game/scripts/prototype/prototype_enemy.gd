@@ -465,6 +465,12 @@ func _melee_cone_deg() -> float:
 func _melee_knockback() -> float:
 	return enemy_class.melee_knockback if enemy_class != null else DEFAULT_ATTACK_KNOCKBACK
 
+func _is_ranged() -> bool:
+	return enemy_class != null and enemy_class.attack_mode == EnemyClass.AttackMode.RANGED
+
+func _ranged_kite_distance() -> float:
+	return enemy_class.ranged_kite_distance if enemy_class != null else 8.0
+
 
 ## Single point of state transitions. Currently a thin setter; entry/exit
 ## hooks (e.g. clearing horizontal velocity on enter-CASTING, releasing the
@@ -639,9 +645,36 @@ func _chase_tick() -> void:
 		velocity.z = 0.0
 		return
 
-	# Aggro'd enemies chase at all times, but won't start a swing through
-	# a wall — the LoS check on attack initiation prevents through-wall hits.
-	if dist <= _attack_range() and _attack_cd <= 0.0 and has_los:
+	# Ranged enemies kite to ~ranged_kite_distance: too close → backpedal,
+	# in band → hold + fire when ready, too far → chase. Melee enemies skip
+	# this branch and fall through to the close-and-swing path below.
+	if _is_ranged():
+		var kite := _ranged_kite_distance()
+		if dist <= _attack_range() and _attack_cd <= 0.0 and has_los:
+			_cast_attack(player, to_player / dist)
+			return
+		if dist < kite * 0.7:
+			# Backpedal — direct vector, slower than chase. We don't pathfind
+			# the retreat because navmesh wants to hug walls; a noisy bumpy
+			# straight-line retreat reads as "skittish ranged enemy" and is
+			# fine. Bumping into walls is the player's intended advantage.
+			var away := -to_player / dist
+			_want_dir = away
+			var back_speed := CHASE_SPEED * 0.55 * (CROUCH_SPEED_MULT if _crouching else 1.0)
+			velocity.x = away.x * back_speed
+			velocity.z = away.z * back_speed
+			return
+		if dist <= kite:
+			# Hold position in the firing band — wait for cooldown / LoS.
+			_want_dir = Vector3.ZERO
+			velocity.x = 0.0
+			velocity.z = 0.0
+			return
+		# else: too far, fall through to navmesh chase below
+
+	# Aggro'd melee chase the player. Won't start a swing through a wall —
+	# the LoS check on attack initiation prevents through-wall hits.
+	elif dist <= _attack_range() and _attack_cd <= 0.0 and has_los:
 		_cast_attack(player, to_player / dist)
 		return
 
@@ -768,6 +801,13 @@ func _tick_jump(delta: float) -> void:
 		_change_state(State.CHASING)
 
 func _cast_attack(player: Node3D, aim: Vector3) -> void:
+	if _is_ranged():
+		_cast_ranged_attack(player, aim)
+	else:
+		_cast_melee_attack(player, aim)
+
+
+func _cast_melee_attack(player: Node3D, aim: Vector3) -> void:
 	_change_state(State.CASTING)
 	_attack_cd = _attack_cooldown()
 	velocity.x = 0.0
@@ -802,6 +842,60 @@ func _cast_attack(player: Node3D, aim: Vector3) -> void:
 	if player.has_method(&"take_damage"):
 		var dmg := int(round(float(_attack_damage) * (enemy_class.attack_damage_mult if enemy_class != null else 1.0)))
 		player.take_damage(dmg, global_position, _melee_knockback())
+
+
+func _cast_ranged_attack(player: Node3D, aim: Vector3) -> void:
+	if enemy_class == null or enemy_class.projectile_scene == null:
+		# Misconfigured: ranged class without a projectile scene. Fall back
+		# to melee so the enemy isn't silently inert.
+		_cast_melee_attack(player, aim)
+		return
+	_change_state(State.CASTING)
+	_attack_cd = _attack_cooldown()
+	velocity.x = 0.0
+	velocity.z = 0.0
+	_face_direction(aim)
+	_play_anim(ANIM_ATTACK, 1.2)
+	var windup_now := _attack_windup()
+	await get_tree().create_timer(windup_now).timeout
+	if _state != State.CASTING:
+		return
+	_change_state(State.CHASING)
+	if not is_instance_valid(player):
+		return
+	if not LosCuller.has_los_to_player(self):
+		return
+	# Re-aim at the player's CURRENT position — they may have strafed during
+	# the windup. Aiming at the stale `aim` vector is the classic "bullet
+	# follows where they used to be" tell.
+	var to_p: Vector3 = player.global_position - global_position
+	to_p.y = 0.0
+	var dist := to_p.length()
+	if dist < 0.001:
+		return
+	_spawn_enemy_projectile(to_p / dist)
+
+
+func _spawn_enemy_projectile(aim: Vector3) -> void:
+	var proj: PrototypeProjectile = EntityPool.acquire(enemy_class.projectile_scene)
+	if proj == null:
+		return
+	proj.target_group = &"player"
+	proj.direction = aim
+	proj.speed = enemy_class.projectile_speed
+	proj.max_range = enemy_class.projectile_max_range
+	proj.knockback_strength = enemy_class.melee_knockback  # reuse the field — enemy projectiles inherit the same impact knockback
+	proj.source_position = global_position
+	var dmg := int(round(float(_attack_damage) * (enemy_class.attack_damage_mult if enemy_class != null else 1.0)))
+	proj.damage_min = dmg
+	proj.damage_max = dmg
+	proj.damage_mult = 1.0
+	proj.accuracy = 1.0
+	proj.crit_chance = 0.0
+	get_parent().add_child(proj)
+	proj.global_position = global_position + Vector3(0.0, 1.4, 0.0)
+	proj.monitoring = true
+	proj.reset()
 
 func _die() -> void:
 	_change_state(State.DEAD)
