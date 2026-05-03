@@ -1,5 +1,7 @@
 # Dialog & UI
 
+> **Status:** Portrait system + class-effect concepts documented below are design-only. UI layout, HUD composition, and inventory design are TBD — to be expanded as implementation begins.
+
 ## Portraits
 
 Animated pixel art portrait busts for NPCs, enemies, and quest-givers — in the style of Bard's Tale 1. Portraits appear during dialog exchanges, quest interactions, and certain boss encounters.
@@ -48,5 +50,3 @@ Enemy portraits follow the same format but use corruption, grotesquery, and fact
 - **Resource indicators** — class-specific and visually distinct from each other. Each class has its own UI concept; see the individual class pages under [Cyborg](../classes/cyborg.md) and [Analog](../classes/human.md).
 - **Light source status** — visible without occupying prime screen real estate. See [Lighting](../world/lighting.md) for the full lighting system and equippable light source design.
 - **Skill tree** — locked and invisible until the first rep encounter. See [Skill Tree](skill-tree.md) for unlock behavior and hotkey layout.
-
-*UI layout, HUD composition, and inventory design are TBD — to be expanded as implementation begins.*

@@ -57,34 +57,12 @@ The door leads out of Earth Facility #723 and into the world above.
 
 ## Zone Registry
 
-*Additional zones to be documented as designed.*
-
-| Zone | Type | Lighting Tier | Status |
+| Zone | Type | Lighting | Status |
 |---|---|---|---|
-| Earth Facility #723 — Augmentation Wing | Cyborg starting zone | Failing | Documented in [Starting Zones](starting-zones.md) |
-| Earth Facility #723 — Detention Wing | Analog starting zone | Failing | Documented in [Starting Zones](starting-zones.md) |
-| Sub-Level Zero | First common zone | Blackout | Above |
-| Abandoned City | Common zone | Dim | Concept only |
-| High-Tech Facility | Common zone | Lit | Concept only |
-| Organic Zone | Common zone | TBD | Concept only |
-| Tech Cave | Common zone | Dim | Concept only |
-
----
-
-## Concept Art
-
-*Placeholder concepts for undocumented zones. Names and details TBD.*
-
-### Abandoned City
-
----
-
-### High-Tech Facility
-
----
-
-### Organic Zone
-
----
-
-### Tech Cave
+| EF-723 Augmentation Wing | Cyborg starting zone | Failing | Documented in [Starting Zones](starting-zones.md) |
+| EF-723 Detention Wing | Analog starting zone | Failing | Documented in [Starting Zones](starting-zones.md) |
+| Sub-Level Zero | First common zone | Blackout | Documented above |
+| Abandoned City | Common zone | Dim | **Concept only — not yet designed** |
+| High-Tech Facility | Common zone | Lit | **Concept only — not yet designed** |
+| Organic Zone | Common zone | TBD | **Concept only — not yet designed** |
+| Tech Cave | Common zone | Dim | **Concept only — not yet designed** |

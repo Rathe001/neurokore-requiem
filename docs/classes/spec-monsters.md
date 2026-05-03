@@ -1,8 +1,10 @@
 # Class-Specific Monster Variants
 
-*This page documents enemy variants as they relate to class identity. For zone-level enemy design and encounter rules, see [Zones](../design/zones.md). For combat feel and density philosophy, see [Combat & Scale](../design/combat.md).*
+> **Status: design only — not yet implemented.** No class-variant enemies ship in the prototype yet. Variants are currently tied to **chosen class**; whether they should also track stat identity is open (see end of doc).
 
-Certain enemies have class-specific variants — different forms of the same base threat that are tuned to the player's class. The world shapes itself around what threatens *you* specifically. These variants may interact directly with the class's resource system (e.g. a Software Bug corrupting Automaton scripts, Nanobytes draining the Forged's Power Grid, an Unbeliever suppressing the Enculted's abilities).
+*Cross-refs: [Zones](../design/zones.md) for zone-level enemy design; [Combat & Scale](../design/combat.md) for density philosophy.*
+
+Certain enemies have class-specific variants — different forms of the same base threat tuned to the player's class. The world shapes itself around what threatens *you*. Variants may interact with the class's resource system (e.g. a Software Bug corrupting Automaton scripts, Nanobytes draining the Forged's Power Grid, an Unbeliever suppressing the Enculted's abilities).
 
 | Origin | Class | Monster Variant | Threat Type |
 |---|---|---|---|
@@ -18,7 +20,7 @@ Certain enemies have class-specific variants — different forms of the same bas
 Class variants **stack** with the standard enemy — both types appear in the same encounter. The base encounter is always the foundation; your class adds a personal layer of threat on top.
 
 !!! question "Open Question: Stat Identity & Monster Variants"
-    Monster variants are currently tied to the player's **chosen class**. As the [stat identity system](../design/attribute-system.md#stat-identity--tier-perks--visual-metamorphosis) evolves, there's design space for variants to also respond to the player's **dominant attribute** — an Analog who has drifted deep into Deviation might start encountering Nanobyte swarms alongside their Analog-origin threats. Whether variants track chosen class, stat identity, or both is TBD.
+    As the [stat identity system](../design/attribute-system.md#stat-identity--tier-perks--visual-metamorphosis) matures, variants could also track **dominant attribute** — an Analog who has drifted deep into Deviation might start encountering Nanobyte swarms alongside their Analog-origin threats. Whether variants track chosen class, stat identity, or both is TBD.
 
 ## Multiplayer Implication
 
