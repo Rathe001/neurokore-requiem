@@ -217,7 +217,7 @@ func _resolve_hitscan(skill: Skill, aim: Vector3, eff_range: float, weapon: Item
 
 func _roll_crit(weapon: Item = null) -> bool:
 	var base_crit := weapon.crit_chance if weapon != null and weapon.crit_chance > 0.0 else PROTO_BASE_CRIT_CHANCE
-	var chance := base_crit + PerkState.get_aggregate(&"crit_chance_pct")
+	var chance := base_crit + Effects.get_aggregate(&"crit_chance_pct")
 	return randf() < chance
 
 func _roll_hit(weapon: Item) -> bool:
@@ -237,7 +237,7 @@ func _roll_skill_damage(skill: Skill, weapon: Item) -> int:
 func _crit_damage(base: int, is_crit: bool) -> int:
 	if not is_crit:
 		return base
-	var mult := PROTO_BASE_CRIT_MULT + PerkState.get_aggregate(&"crit_damage_pct")
+	var mult := PROTO_BASE_CRIT_MULT + Effects.get_aggregate(&"crit_damage_pct")
 	return int(round(float(base) * mult))
 
 # ---------------------------------------------------------------------------
@@ -250,7 +250,7 @@ func _crit_damage(base: int, is_crit: bool) -> int:
 # target was killed by the same hit, OR the target is already cursed (the
 # duration is fixed from first application — see EXILE_CURSE_DURATION).
 func _apply_exile_curse_if_active(enemy: Node) -> void:
-	var pct: float = PerkState.get_aggregate(&"exile_curse_damage_pct")
+	var pct: float = Effects.get_aggregate(&"exile_curse_damage_pct")
 	if pct <= 0.0:
 		return
 	if enemy == null or not is_instance_valid(enemy):

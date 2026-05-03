@@ -2,33 +2,32 @@
 
 ; Enculted (amb) tier perks — Doomsayer.
 ;
-; The player constantly emits an aura with linear distance falloff. On
-; every DOOMSAYER_TICK_INTERVAL (currently 0.4s) the aura does TWO things:
+; The player constantly emits a charm aura. On every DOOMSAYER_TICK_INTERVAL
+; (currently 0.4s) the aura looks for the nearest uncharmed enemy in range:
+; if the controlled-enemy count is below the per-tier cap, that enemy gets
+; charmed. The cap acts as a natural rate-limit — charms keep flowing
+; until full, then stop until a controlled enemy dies. No FIFO eviction.
 ;
-;   1. DAMAGE OVER TIME — every uncharmed enemy in range takes per-tick
-;      damage scaled by 1.0 - (dist / radius). 100% at the player's
-;      centre, 0% at the aura edge. Damage scales with main stat
-;      (Ambition for Enculted) via get_player_damage_mult.
-;
-;   2. CHARM — if the controlled-enemy count is below the per-tier
-;      cap, the closest uncharmed enemy in range gets charmed. The
-;      cap acts as a natural rate-limit: charms keep flowing until
-;      full, then stop until a controlled enemy dies. No FIFO eviction.
+; Damage-over-time is NOT part of this perk anymore — the "Aura of Dread"
+; talent (AMB T1 N0) gates it via TalentState.get_aggregate(
+; &"doomsayer_dot_per_tick"). Players who skip that talent get pure
+; mind-control with no offensive aura.
 ;
 ; Charmed enemies are PLAYER-FRIENDLY — immune to all player-sourced
-; damage and debuffs (Doomsayer DoT, Exile curse, IED traps, Telekinesis,
-; drone fire, weapon hits). They fight for the player until killed by
-; OTHER enemies. Once dead, the slot opens for a new charm.
+; damage and debuffs (Aura of Dread DoT, Exile curse, IED traps,
+; Telekinesis, drone fire, weapon hits). They fight for the player until
+; killed by OTHER enemies. Once dead, the slot opens for a new charm.
+; Bosses, named monsters, and rare-pack members are immune to the charm
+; itself (see PrototypeEnemy.is_charmable).
 ;
 ; Tier deltas (additive aggregates):
 ;   T1 grants +5% damage scale + 1 charm slot   →  5%, 1 max charm
 ;   T2 grants +5% damage scale + 1 charm slot   → 10%, 2 max charms
 ;   T3 grants +10% damage scale + 1 charm slot  → 20%, 3 max charms
 ;
-; The doomsayer_proc_pct aggregate is no longer read by code (DoT
-; values come from DOOMSAYER_DOT_PER_TICK_PER_TIER on PrototypePlayer);
-; kept here as a "this perk unlocked" sentinel until the migration
-; settles. doomsayer_max_charms is still authoritative for the cap.
+; The doomsayer_proc_pct aggregate is no longer read by code; kept as
+; a "this perk unlocked" sentinel. doomsayer_max_charms is authoritative
+; for the cap.
 
 [ext_resource type="Script" path="res://scripts/perks/perk.gd" id="perk_script"]
 [ext_resource type="Script" path="res://scripts/perks/perk_effect.gd" id="effect_script"]
@@ -48,7 +47,7 @@ magnitude = 1.0
 script = ExtResource("perk_script")
 id = &"amb_t1"
 label = "Doomsayer I"
-description = "An aura of dread surrounds you, damaging nearby enemies over time (heaviest at your feet, fading to nothing at the edge). Converts up to 1 follower to your cult — they fight for you until they die."
+description = "A charm aura surrounds you, converting up to 1 follower to your cult — they fight for you until they die. (Allocate the Aura of Dread talent to add damage.)"
 effects = [SubResource("effect_amb_t1_proc"), SubResource("effect_amb_t1_charms")]
 
 [sub_resource type="Resource" id="effect_amb_t2_proc"]
@@ -65,7 +64,7 @@ magnitude = 1.0
 script = ExtResource("perk_script")
 id = &"amb_t2"
 label = "Doomsayer II"
-description = "The aura tightens. Stronger DoT; up to 2 followers converted to your cult."
+description = "The aura tightens. Up to 2 followers converted to your cult."
 effects = [SubResource("effect_amb_t2_proc"), SubResource("effect_amb_t2_charms")]
 
 [sub_resource type="Resource" id="effect_amb_t3_proc"]
@@ -82,7 +81,7 @@ magnitude = 1.0
 script = ExtResource("perk_script")
 id = &"amb_t3"
 label = "Doomsayer III"
-description = "Maximum DoT; up to 3 followers in your cult. Walking apocalypse — the herd unravels around you and joins you."
+description = "Up to 3 followers in your cult. The herd unravels around you and joins you."
 effects = [SubResource("effect_amb_t3_proc"), SubResource("effect_amb_t3_charms")]
 
 [resource]

@@ -132,7 +132,7 @@ func get_utility_capacity() -> int:
 ## Clamped to the registered EXTRA_WEAPON_SLOTS array length so a perk can
 ## never grant more arms than the engine knows how to render.
 func get_extra_weapon_slot_count() -> int:
-	var raw := int(round(PerkState.get_aggregate(&"extra_weapon_slots")))
+	var raw := int(round(Effects.get_aggregate(&"extra_weapon_slots")))
 	return clampi(raw, 0, SlotRegistry.EXTRA_WEAPON_SLOTS.size())
 
 

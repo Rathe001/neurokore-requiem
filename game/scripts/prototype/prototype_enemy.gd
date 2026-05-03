@@ -833,6 +833,14 @@ const _DEFAULT_ENEMY_MASK := _LAYER_WORLD | _LAYER_ENEMY | _LAYER_PLAYER        
 const _CHARMED_PET_MASK := _LAYER_WORLD | _LAYER_ENEMY | _LAYER_CHARMED_ALLY         # 19
 
 
+## True for plain (normal-rarity) enemies that the Doomsayer aura is
+## allowed to convert. Bosses, named monsters, and rare-pack members
+## are immune so bossfights / set-piece encounters can't be trivialised
+## by flipping the headliner to the player's side.
+func is_charmable() -> bool:
+	return not is_boss and named_monster == null and affixes.is_empty()
+
+
 func apply_charm() -> bool:
 	if not _is_alive():
 		return false
@@ -841,6 +849,8 @@ func apply_charm() -> bool:
 	if _charmed:
 		# Already charmed — caller shouldn't double-add. Returning false so
 		# the player's FIFO list doesn't gain a duplicate entry.
+		return false
+	if not is_charmable():
 		return false
 	_charmed = true
 	# Initial target is best-effort. null is fine — _tick_afflictions
@@ -945,14 +955,21 @@ func _tick_afflictions(delta: float) -> void:
 			# death may have already moved us out.
 			if _state == State.STUNNED:
 				_change_state(State.IDLE)
-	# Re-pick the charm target every tick when the cached one died or
-	# was never set. Done per-tick (cheap) rather than via signal because
-	# charm targets are short-lived. When no enemy is in range, leave
-	# _charm_target null — the chase tick falls back to "follow player
-	# loosely" rather than releasing the charm. Pets persist until killed
-	# by other enemies.
-	if _charmed and (_charm_target == null or not _is_target_alive(_charm_target)):
-		_charm_target = _pick_nearest_other_enemy()
+	# Re-pick the charm target every tick when the cached one is dead,
+	# null, OR has become an ally (charmed by the player too). Without
+	# the friendly check, a pet whose target gets charmed mid-fight
+	# would keep attacking it — pet-vs-pet friendly fire. Done per-tick
+	# (cheap) rather than via signal because charm targets are short-
+	# lived. When no enemy is in range, leave _charm_target null — the
+	# chase tick falls back to "follow player loosely" rather than
+	# releasing the charm. Pets persist until killed by other enemies.
+	if _charmed:
+		var needs_repick := _charm_target == null or not _is_target_alive(_charm_target)
+		if not needs_repick and _charm_target is PrototypeEnemy:
+			if (_charm_target as PrototypeEnemy).is_player_friendly():
+				needs_repick = true
+		if needs_repick:
+			_charm_target = _pick_nearest_other_enemy()
 	if _weaken_remain > 0.0:
 		_weaken_remain -= delta
 		if _weaken_remain <= 0.0:
@@ -999,12 +1016,40 @@ func _is_target_alive(target: Node) -> bool:
 	return target.has_method(&"take_damage")
 
 
-# Chase / attack target. Charm takes precedence; otherwise the player.
-# Returning null means "no valid target" — caller halts.
+# Chase / attack target. For charmed pets it's the assigned hostile
+# (set by _pick_nearest_other_enemy). For hostile enemies it's the
+# closest THREAT — player OR any nearby player-friendly pet. Returning
+# null means "no valid target" — caller halts.
 func _effective_target() -> Node3D:
 	if _charmed and _is_target_alive(_charm_target):
 		return _charm_target
-	return _player_ref
+	return _pick_closest_threat()
+
+
+# Hostile-enemy targeting helper — returns whichever of the player or
+# the nearest player-friendly pet is closer. Pets are in the &"enemies"
+# group (so they show up in the spatial query) but are filtered by
+# is_player_friendly to find them. AGGRO_RANGE bound keeps distant
+# pets across the map from being considered.
+func _pick_closest_threat() -> Node3D:
+	var best: Node3D = null
+	var best_d2 := INF
+	if _player_ref != null and is_instance_valid(_player_ref):
+		best = _player_ref
+		best_d2 = global_position.distance_squared_to(_player_ref.global_position)
+	for n in SpatialGrid.query_radius(global_position, AGGRO_RANGE, &"enemies"):
+		if n == self or not (n is PrototypeEnemy) or not is_instance_valid(n):
+			continue
+		var pe: PrototypeEnemy = n
+		if not pe.is_player_friendly():
+			continue
+		if not pe._is_alive():
+			continue
+		var d2 := global_position.distance_squared_to(pe.global_position)
+		if d2 < best_d2:
+			best_d2 = d2
+			best = pe
+	return best
 
 
 # Floating glyph above the head, similar to the curse marker but for

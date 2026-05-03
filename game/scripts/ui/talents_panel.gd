@@ -570,7 +570,15 @@ func _on_node_hovered(stat_id: StringName, tier: int, node_idx: int) -> void:
 	var stat_name: String = tr(key) if key != &"" else (stat_id as String).capitalize()
 	var unlocked := AttributeState.get_unlocked_tier(stat_id, PlayerState.class_id, PlayerState.spec_id)
 	var is_locked := tier >= unlocked
-	var title := "%s %s · Node %d" % [stat_name, AttributeState.TIER_ROMAN[tier], node_idx + 1]
+	# Prefer the registered node's label as the title; fall back to a
+	# coordinate-based heading when no node is defined at this slot yet.
+	var node_def: TalentNode = TalentState.get_node_def(stat_id, tier, node_idx)
+	var heading: String
+	if node_def != null and node_def.label != "":
+		heading = "%s · %s %s" % [node_def.label, stat_name, AttributeState.TIER_ROMAN[tier]]
+	else:
+		heading = "%s %s · Node %d" % [stat_name, AttributeState.TIER_ROMAN[tier], node_idx + 1]
+	var title := heading
 	var body: String
 	if is_locked:
 		var thresholds := AttributeState.get_tier_thresholds(stat_id, PlayerState.class_id, PlayerState.spec_id)
@@ -581,6 +589,8 @@ func _on_node_hovered(stat_id: StringName, tier: int, node_idx: int) -> void:
 			var needed_pct := int(thresholds[tier] * 100)
 			title += "  ·  Locked (%d%%)" % needed_pct
 			body = "Reach %d%% %s allocation to unlock this tier." % [needed_pct, stat_name]
+	elif node_def != null and node_def.description != "":
+		body = node_def.description
 	else:
 		body = "Node effect TBD."
 	get_tree().call_group(&"interactable_tooltip", &"show_talent_node", title, body)

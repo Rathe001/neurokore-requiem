@@ -245,9 +245,12 @@ func _add_buff_entry(stat_id: StringName, tier: int, perk: Perk) -> void:
 	buff_entries.add_child(entry)
 
 
-# Returns [title, body] for the buff tooltip. AMB appends the live
-# charm count ("X/Y followers") so the player can see how many pets
-# they currently have without staring at the bar.
+# Returns [title, body] for the buff tooltip. Body is the perk's
+# authored description followed by a compact bullet list of live
+# mechanical contributors. Line text comes from EffectFormatter so the
+# HUD doesn't have to know about the per-spec mechanics — adding a
+# new effect kind is one place to edit. Built lazily on hover so the
+# numbers reflect current stats / talent allocations.
 func _build_buff_tooltip(stat_id: StringName, tier: int, perk: Perk) -> Array:
 	var title: String
 	var body: String
@@ -259,11 +262,9 @@ func _build_buff_tooltip(stat_id: StringName, tier: int, perk: Perk) -> Array:
 		var stat_name: String = tr(stat_key) if stat_key != &"" else String(stat_id).capitalize()
 		title = "%s  ·  %s" % [stat_name, AttributeState.TIER_ROMAN[tier - 1]]
 		body = "Tier %s perk for this stat — no description available." % AttributeState.TIER_ROMAN[tier - 1]
-	if stat_id == &"amb":
-		var player := get_tree().get_first_node_in_group(&"player") as PrototypePlayer
-		var current: int = player.get_charm_count() if player != null else 0
-		var max_count: int = player.get_charm_max() if player != null else 0
-		body += "\n\n%d/%d followers" % [current, max_count]
+	var player := get_tree().get_first_node_in_group(&"player") as PrototypePlayer
+	for line in EffectFormatter.buff_lines_for_stat(stat_id, player):
+		body += "\n• " + line
 	return [title, body]
 
 func _repaint_xp(current: int, to_next: int) -> void:
@@ -334,23 +335,39 @@ func _bind_skill_slots(player: Node) -> void:
 	# LMB / RMB skills come from the equipped weapon + offhand. Re-bind on
 	# equipment changes so swapping weapons updates the cooldown overlay
 	# (without this, the slot keeps polling the previous weapon's skill
-	# and shows nothing for the new one).
+	# and shows nothing for the new one). Also re-bind the keyboard slots
+	# when a talent grants/revokes an active skill — granted skills win
+	# over the player's @export skills array, so allocating a "Sanctify"
+	# node should immediately swap the icon and cooldown the slot tracks.
 	if not InventoryState.equipment_changed.is_connected(_on_equipment_changed):
 		InventoryState.equipment_changed.connect(_on_equipment_changed.bind(player))
+	if not TalentState.granted_skills_changed.is_connected(_on_granted_skills_changed):
+		TalentState.granted_skills_changed.connect(_on_granted_skills_changed.bind(player))
 
 
 func _on_equipment_changed(slot_name: StringName, player: Node) -> void:
 	if slot_name != &"weapon" and slot_name != &"offhand":
 		return
-	# Only rebind LMB (visual slot 6) and RMB (visual slot 7) — the rest
-	# of the bar pulls from player.skills which doesn't change at runtime.
+	# Only rebind LMB (visual slot 6) and RMB (visual slot 7) — the
+	# keyboard slots aren't touched by equipment changes.
 	for i in [6, 7]:
-		var slot := skill_bar.get_node_or_null("Slot%d" % i) as SkillSlot
-		if slot == null:
-			continue
-		var skill_idx: int = SLOT_TO_SKILL_INDEX[i]
-		var skill: Skill = player.resolve_skill(skill_idx) if player.has_method(&"resolve_skill") else null
-		slot.bind(player, skill, SLOT_LABELS[i])
+		_rebind_slot(i, player)
+
+
+func _on_granted_skills_changed(player: Node) -> void:
+	# Keyboard slots only (0..5 = keys 1,2,3,4,Q,E). LMB/RMB are
+	# weapon-driven and never touched by talent grants.
+	for i in 6:
+		_rebind_slot(i, player)
+
+
+func _rebind_slot(visual_slot: int, player: Node) -> void:
+	var slot := skill_bar.get_node_or_null("Slot%d" % visual_slot) as SkillSlot
+	if slot == null:
+		return
+	var skill_idx: int = SLOT_TO_SKILL_INDEX[visual_slot]
+	var skill: Skill = player.resolve_skill(skill_idx) if player.has_method(&"resolve_skill") else null
+	slot.bind(player, skill, SLOT_LABELS[visual_slot])
 
 func _bind_resource_pool(player: Node) -> void:
 	var pool: ResourcePool = player.resource_pool

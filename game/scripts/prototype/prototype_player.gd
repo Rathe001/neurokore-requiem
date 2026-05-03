@@ -599,6 +599,14 @@ func resolve_skill(index: int) -> Skill:
 			return weapon.alt_fire_skill
 		var offhand: Item = InventoryState.get_equipped(&"offhand")
 		return offhand.fire_skill if offhand != null else null
+	# Hotkey slots (1, 2, 3, 4, Q, E). A talent that has granted a
+	# skill to this slot wins over the player's @export skills array,
+	# so a Sanctify node can replace the default skill_q with its own
+	# active without reauthoring the player scene.
+	var input_action: StringName = SKILL_INPUTS[index]
+	var granted := TalentState.get_granted_skill_for_slot(input_action)
+	if granted != null:
+		return granted
 	var skill_index := index - 2
 	if skill_index < skills.size():
 		return skills[skill_index]
@@ -666,7 +674,7 @@ const ARM_OFFSET_LATERAL := 0.5
 const ARM_OFFSET_VERTICAL := 1.0
 
 ## Polymath Telekinesis — auto-fires every TELEKINESIS_INTERVAL seconds when
-## PerkState.get_aggregate(&"telekinesis_bolts") > 0. N bolts per trigger
+## Effects.get_aggregate(&"telekinesis_bolts") > 0. N bolts per trigger
 ## (sourced from the aggregate, capped sensibly). Each bolt picks one
 ## enemy in TELEKINESIS_RANGE — bolts within the same trigger pick distinct
 ## targets when possible — and spawns a TelekinesisGrab on it. The grab
@@ -681,33 +689,17 @@ const TELEKINESIS_BASE_DAMAGE := 13    # was 8 (which felt weak); 25 was the ori
 const TELEKINESIS_BOLT_STAGGER := 0.12
 const TELEKINESIS_MAX_BOLTS := 8       # safety cap for future stacking sources
 
-## Enculted Doomsayer aura — every DOOMSAYER_TICK_INTERVAL seconds, every
-## enemy within the tier's aura radius rolls against the perk's per-second
-## chance scaled by linear distance falloff. On a hit, ONE of three
-## afflictions is applied at random — stun (frozen), charm (mind-control:
-## attacks the nearest other enemy), or weaken (outgoing damage halved).
-## Stun + weaken expire on a timer; charm is persistent — held in
-## _charmed_enemies (FIFO-capped by doomsayer_max_charms aggregate),
-## released only when the player dies or a new charm bumps it out.
-## Effect handlers + state live on PrototypeEnemy. Aura radius scales
-## per tier so the visible mist sphere (DoomsayerAura.RADIUS_PER_TIER)
-## exactly matches the proc-eligible area — no ambiguous "is this enemy
-## inside the aura?" gap between the visual and the actual range.
+## Enculted Doomsayer aura — every DOOMSAYER_TICK_INTERVAL seconds the
+## aura runs two passes over enemies in radius: a CHARM pass (the perk
+## itself, capped by doomsayer_max_charms) and an optional DAMAGE pass
+## (gated by the "Aura of Dread" talent, magnitude in the
+## doomsayer_dot_per_tick TalentState aggregate). Charm is persistent
+## (held in _charmed_enemies, no timer); DoT applies per-tick scaled by
+## linear distance falloff. Aura radius scales per tier so the visible
+## mist sphere (DoomsayerAura.RADIUS_PER_TIER) exactly matches the
+## proc-eligible area.
 const DOOMSAYER_AURA_RADIUS_PER_TIER: Array[float] = [0.0, 5.0, 7.0, 9.0]
-# Roll cadence for the per-enemy proc check. Lower = more frequent
-# rolls = effectively more procs at the same per-tick chance. Was
-# 1.0s; halved to 0.4s after playtesting found the original cadence
-# read as "almost nothing's happening" even at T3. Per-tick chance
-# stays at the perk magnitude (5/10/20%), so effective per-second
-# proc rate roughly 2.5× the prior values.
 const DOOMSAYER_TICK_INTERVAL := 0.4
-# Per-tier base damage applied to every uncharmed enemy in the aura
-# every tick, scaled by linear distance falloff (1.0 at center, 0.0
-# at radius). Multiplied by main-stat damage_mult (Ambition for
-# Enculted) so investing in the perk's stat ALSO heavies up the DoT.
-# Per-tick × 2.5 ticks/sec gives roughly 10/17.5/30 base DPS at center
-# (more once stat mult kicks in).
-const DOOMSAYER_DOT_PER_TICK_PER_TIER: Array[float] = [0.0, 4.0, 7.0, 12.0]
 const DOOMSAYER_MAX_CHARMS_CAP := 8      # safety ceiling for the charm list, well above current T3 (3)
 
 ## Survivalist IED — every LMB attack tosses a trap at the cursor while
@@ -926,7 +918,7 @@ func _tick_resource_regen(delta: float) -> void:
 func _tick_telekinesis(delta: float) -> void:
 	if not _alive:
 		return
-	var bolts := mini(int(round(PerkState.get_aggregate(&"telekinesis_bolts"))), TELEKINESIS_MAX_BOLTS)
+	var bolts := mini(int(round(Effects.get_aggregate(&"telekinesis_bolts"))), TELEKINESIS_MAX_BOLTS)
 	if bolts <= 0:
 		return
 	_telekinesis_t -= delta
@@ -980,15 +972,17 @@ func _spawn_telekinesis_grab(target: Node3D, dmg: int) -> void:
 	get_parent().add_child(grab)
 
 
-# Enculted Doomsayer aura tick. Two effects per tick:
-#   1. DAMAGE OVER TIME — every uncharmed enemy in the aura takes
-#      base_dot × distance_falloff damage. Linear falloff: 100% at
-#      the player's centre, 0% at the aura radius.
-#   2. CHARM — if the charm list is below the per-tier cap, find the
-#      nearest uncharmed enemy in range and charm it. The cap acts as
-#      a natural rate-limit: charms keep flowing until full, then stop
-#      until one of the controlled enemies dies (which makes room).
-# Charmed enemies are immune to both effects (they're allies — see
+# Enculted Doomsayer aura tick. Up to two passes per tick:
+#   1. CHARM (perk) — if the charm list is below the per-tier cap, find
+#      the nearest uncharmed enemy in range and charm it. The cap acts
+#      as a natural rate-limit: charms keep flowing until full, then
+#      stop until one of the controlled enemies dies (which makes room).
+#   2. DAMAGE OVER TIME (talent — Aura of Dread) — every uncharmed enemy
+#      in the aura takes base_dot × distance_falloff damage. Linear
+#      falloff: 100% at the player's centre, 0% at the radius. The
+#      damage pass runs only when the talent is allocated; with no
+#      points spent, the aura is pure mind-control.
+# Charmed enemies are immune to both passes (they're allies — see
 # is_player_friendly() on the enemy side).
 func _tick_doomsayer(delta: float) -> void:
 	if not _alive:
@@ -1003,13 +997,17 @@ func _tick_doomsayer(delta: float) -> void:
 	var radius: float = DOOMSAYER_AURA_RADIUS_PER_TIER[clampi(tier, 0, 3)]
 	if radius <= 0.0:
 		return
-	var dot_per_tick: float = DOOMSAYER_DOT_PER_TICK_PER_TIER[clampi(tier, 0, 3)]
+	# DoT is gated by the "Aura of Dread" talent (AMB T1 N0). Zero with no
+	# allocation = damage loop is skipped entirely; the aura still runs to
+	# do its charm work below. Future DoT-shaping talents (extra ticks,
+	# reduced falloff, etc.) plug into the same TalentState aggregate keys.
+	var dot_per_tick: float = TalentState.get_aggregate(&"doomsayer_dot_per_tick")
 	var dmg_mult := AttributeState.get_player_damage_mult(class_id, spec_id)
 	# Resolve the charm slot situation up-front so we don't redo work
 	# per enemy. apply_charm is best-effort — when at cap we just don't
 	# try (no FIFO eviction; charms hold until the controlled enemy
 	# dies, then a new charm naturally fills the slot).
-	var max_charms := mini(int(round(PerkState.get_aggregate(&"doomsayer_max_charms"))), DOOMSAYER_MAX_CHARMS_CAP)
+	var max_charms := mini(int(round(Effects.get_aggregate(&"doomsayer_max_charms"))), DOOMSAYER_MAX_CHARMS_CAP)
 	_prune_charm_list()
 	var charm_capacity := max_charms - _charmed_enemies.size()
 	# Track the closest charmable candidate as we walk the radius
@@ -1030,14 +1028,15 @@ func _tick_doomsayer(delta: float) -> void:
 		# DoT — round to int for take_damage; falloff scaling can produce
 		# tiny values which would otherwise floor to zero, so we max(1)
 		# anything in range to keep the aura from feeling dead at the edge.
-		if falloff > 0.0 and enemy.has_method(&"take_damage"):
+		# Skip entirely when the talent isn't allocated (dot_per_tick = 0).
+		if dot_per_tick > 0.0 and falloff > 0.0 and enemy.has_method(&"take_damage"):
 			var dmg_f := dot_per_tick * falloff * dmg_mult
 			var dmg := maxi(1, int(round(dmg_f)))
 			enemy.take_damage(dmg, global_position, 0.0)
 		# Charm tracking — only consider candidates if we have capacity,
-		# AND only if apply_charm would succeed (filters out leashed,
-		# already-grabbed, etc.).
-		if charm_capacity > 0:
+		# AND only normal-rarity enemies (bosses / named / rare-pack are
+		# immune; otherwise the closest-elite would block charming forever).
+		if charm_capacity > 0 and enemy.is_charmable():
 			var d2 := global_position.distance_squared_to(enemy.global_position)
 			if d2 < charm_candidate_dist_sq:
 				charm_candidate_dist_sq = d2
@@ -1048,14 +1047,28 @@ func _tick_doomsayer(delta: float) -> void:
 			_emit_charm_count_changed()
 
 
-# Public accessors for the buff bar. Charm count is the live size of
-# the active list; max is the per-tier doomsayer_max_charms aggregate.
+# Public accessors for the buff bar. Live counts of the per-spec
+# entity lists the player owns — charmed pets (AMB), IED traps (ING),
+# orbiting drones (OPT). Max counters are derived from the perk
+# aggregates so the HUD can render "X/Y" without re-reading internals.
 func get_charm_count() -> int:
 	return _charmed_enemies.size()
 
 
 func get_charm_max() -> int:
-	return mini(int(round(PerkState.get_aggregate(&"doomsayer_max_charms"))), DOOMSAYER_MAX_CHARMS_CAP)
+	return mini(int(round(Effects.get_aggregate(&"doomsayer_max_charms"))), DOOMSAYER_MAX_CHARMS_CAP)
+
+
+func get_trap_count() -> int:
+	return _ied_traps.size()
+
+
+func get_trap_max() -> int:
+	return mini(int(round(Effects.get_aggregate(&"ied_max_traps"))), IED_MAX_TRAPS_CAP)
+
+
+func get_drone_count() -> int:
+	return _drones.size()
 
 
 func _emit_charm_count_changed() -> void:
@@ -1106,7 +1119,7 @@ func _reconcile_charms() -> void:
 	# protects against a perk recompute landing during the death-hold.
 	var target := 0
 	if _alive:
-		target = mini(int(round(PerkState.get_aggregate(&"doomsayer_max_charms"))), DOOMSAYER_MAX_CHARMS_CAP)
+		target = mini(int(round(Effects.get_aggregate(&"doomsayer_max_charms"))), DOOMSAYER_MAX_CHARMS_CAP)
 	while _charmed_enemies.size() > target:
 		var oldest: PrototypeEnemy = _charmed_enemies.pop_front()
 		if oldest != null and is_instance_valid(oldest):
@@ -1141,7 +1154,7 @@ func _reconcile_doomsayer_aura() -> void:
 func _toss_ied_trap() -> void:
 	if not _alive:
 		return
-	var max_traps := mini(int(round(PerkState.get_aggregate(&"ied_max_traps"))), IED_MAX_TRAPS_CAP)
+	var max_traps := mini(int(round(Effects.get_aggregate(&"ied_max_traps"))), IED_MAX_TRAPS_CAP)
 	if max_traps <= 0:
 		return
 	var cursor_offset := _cursor_offset()
@@ -1204,7 +1217,7 @@ func _reconcile_drones() -> void:
 	# protects against a perk recompute landing during the death-hold.
 	var target := 0
 	if _alive:
-		target = mini(int(round(PerkState.get_aggregate(&"automaton_drones"))), AUTOMATON_MAX_DRONES)
+		target = mini(int(round(Effects.get_aggregate(&"automaton_drones"))), AUTOMATON_MAX_DRONES)
 	# Despawn extras from the end. Existing drones keep their wander state
 	# across reconciles — we don't re-call setup() on survivors, since that
 	# would re-roll their offsets and reset cooldowns every perk recompute.

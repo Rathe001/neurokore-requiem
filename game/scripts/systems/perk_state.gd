@@ -13,6 +13,12 @@ extends Node
 # Effect kinds — keep this list in sync with what consumers read via
 # get_aggregate(kind). Adding a new effect kind requires a consumer that
 # knows what to do with it; the aggregate dict accepts arbitrary keys.
+#
+# Most consumers should call Effects.get_aggregate(kind) instead of
+# PerkState.get_aggregate(kind) — Effects sums perks AND talents so a
+# talent that buffs an existing kind (e.g. crit_chance_pct) lands on
+# top of the perk's value naturally. Read PerkState directly only when
+# you specifically want to know the perk-only contribution (rare).
 #   damage_mult                   — % bonus damage (additive across perks)
 #   max_health_pct                — % bonus to max HP
 #   move_speed_pct                — % bonus move speed

@@ -9,6 +9,10 @@ const PROTO_BASE_CRIT_MULT: float = 1.5
 const WORLD_LAYER_MASK := 1
 const ENEMY_LAYER_MASK := 2
 const PLAYER_LAYER_MASK := 4
+# Charmed pets sit on this layer (PrototypeEnemy._LAYER_CHARMED_ALLY).
+# Enemy-fired projectiles include this in their mask so they can hit
+# pets the same way they can hit the player.
+const CHARMED_ALLY_LAYER_MASK := 16
 
 var direction: Vector3 = Vector3.FORWARD
 var speed: float = 30.0
@@ -45,9 +49,12 @@ func reset() -> void:
 	set_physics_process(true)
 	_connect_signal()
 	# Set collision_mask for the side this bolt is hitting. World always.
-	# Targets per group: &"enemies" → enemy layer; &"player" → player layer.
-	# Other targets fall back to enemies (current player-fire default).
-	var target_mask := PLAYER_LAYER_MASK if target_group == &"player" else ENEMY_LAYER_MASK
+	# Targets per group: &"enemies" → enemy layer; &"player" → player
+	# AND pet layers (so enemy projectiles can kill the player's pets,
+	# not just whiff through them). Player projectiles continue to hit
+	# only the enemy layer — pets are filtered by the script-level
+	# is_player_friendly check in _on_body_entered.
+	var target_mask := (PLAYER_LAYER_MASK | CHARMED_ALLY_LAYER_MASK) if target_group == &"player" else ENEMY_LAYER_MASK
 	collision_mask = WORLD_LAYER_MASK | target_mask
 	# body_entered only fires when a body crosses INTO the area on a later
 	# physics frame; if a target is already overlapping at spawn (close-
@@ -106,11 +113,14 @@ func _on_body_entered(body: Node3D) -> void:
 	if _hit:
 		return
 	_hit = true
-	# In-target-group → roll damage. Anything else (walls, decorative bodies)
-	# just stops the bolt without applying anything. The collision_mask set
-	# in reset() already filters out non-target friendlies, so this branch
-	# is mostly belt-and-braces against future layer changes.
-	if body.is_in_group(target_group) and body.has_method(&"take_damage"):
+	# Enemy-fired projectiles target the player AND any charmed pets (which
+	# are in the &"enemies" group but flagged player-friendly). Player-fired
+	# projectiles only damage enemies and skip player-friendly ones below.
+	var is_valid_target := body.is_in_group(target_group)
+	if not is_valid_target and target_group == &"player":
+		if body.has_method(&"is_player_friendly") and body.is_player_friendly():
+			is_valid_target = true
+	if is_valid_target and body.has_method(&"take_damage"):
 		# Player-fired projectiles skip player-friendly (charmed) enemies —
 		# no friendly fire from drones, telekinesis bolts, or ranged
 		# weapons. The projectile passes through and continues to the
@@ -145,7 +155,7 @@ const EXILE_CURSE_DURATION: float = 4.0
 
 
 func _apply_exile_curse_if_active(enemy: Node) -> void:
-	var pct: float = PerkState.get_aggregate(&"exile_curse_damage_pct")
+	var pct: float = Effects.get_aggregate(&"exile_curse_damage_pct")
 	if pct <= 0.0:
 		return
 	if enemy.has_method(&"apply_curse"):
@@ -167,13 +177,13 @@ func _roll_hit() -> bool:
 
 func _roll_crit() -> bool:
 	var base := crit_chance if crit_chance > 0.0 else PROTO_BASE_CRIT_CHANCE
-	var chance := base + PerkState.get_aggregate(&"crit_chance_pct")
+	var chance := base + Effects.get_aggregate(&"crit_chance_pct")
 	return randf() < chance
 
 func _roll_damage(is_crit: bool) -> int:
 	var base := randi_range(damage_min, damage_max) if damage_max > 0 else 10
 	var dmg := int(round(float(base) * damage_mult))
 	if is_crit:
-		var mult := PROTO_BASE_CRIT_MULT + PerkState.get_aggregate(&"crit_damage_pct")
+		var mult := PROTO_BASE_CRIT_MULT + Effects.get_aggregate(&"crit_damage_pct")
 		dmg = int(round(float(dmg) * mult))
 	return dmg
