@@ -698,9 +698,13 @@ const DOOMSAYER_AURA_RADIUS_PER_TIER: Array[float] = [0.0, 5.0, 7.0, 9.0]
 # stays at the perk magnitude (5/10/20%), so effective per-second
 # proc rate roughly 2.5× the prior values.
 const DOOMSAYER_TICK_INTERVAL := 0.4
-const DOOMSAYER_STUN_DURATION := 1.6
-const DOOMSAYER_WEAKEN_DURATION := 4.0
-const DOOMSAYER_WEAKEN_MAGNITUDE := 0.5  # halves outgoing damage while active
+# Per-tier base damage applied to every uncharmed enemy in the aura
+# every tick, scaled by linear distance falloff (1.0 at center, 0.0
+# at radius). Multiplied by main-stat damage_mult (Ambition for
+# Enculted) so investing in the perk's stat ALSO heavies up the DoT.
+# Per-tick × 2.5 ticks/sec gives roughly 10/17.5/30 base DPS at center
+# (more once stat mult kicks in).
+const DOOMSAYER_DOT_PER_TICK_PER_TIER: Array[float] = [0.0, 4.0, 7.0, 12.0]
 const DOOMSAYER_MAX_CHARMS_CAP := 8      # safety ceiling for the charm list, well above current T3 (3)
 
 ## Survivalist IED — every LMB attack tosses a trap at the cursor while
@@ -952,6 +956,10 @@ func _pick_telekinesis_targets(count: int) -> Array[Node3D]:
 			continue
 		if not n.has_method(&"apply_grab"):
 			continue
+		# Skip player-friendly (charmed) enemies — Telekinesis lifting
+		# our own allies would be friendly fire.
+		if n.has_method(&"is_player_friendly") and n.is_player_friendly():
+			continue
 		pool.append(n)
 	if pool.is_empty():
 		return []
@@ -969,92 +977,86 @@ func _spawn_telekinesis_grab(target: Node3D, dmg: int) -> void:
 	get_parent().add_child(grab)
 
 
-# Enculted Doomsayer aura tick. Reads the perk aggregate (% chance per
-# second to proc) and rolls per enemy in radius, scaled by linear distance
-# falloff (full at center, zero at the edge). On a hit, picks one of three
-# afflictions uniformly and calls the matching apply_* on the enemy. The
-# aura runs on a fixed cadence rather than per-frame so the chance value
-# in the perk description ("X per second") is the literal probability —
-# not "X per frame" which would scale with framerate.
+# Enculted Doomsayer aura tick. Two effects per tick:
+#   1. DAMAGE OVER TIME — every uncharmed enemy in the aura takes
+#      base_dot × distance_falloff damage. Linear falloff: 100% at
+#      the player's centre, 0% at the aura radius.
+#   2. CHARM — if the charm list is below the per-tier cap, find the
+#      nearest uncharmed enemy in range and charm it. The cap acts as
+#      a natural rate-limit: charms keep flowing until full, then stop
+#      until one of the controlled enemies dies (which makes room).
+# Charmed enemies are immune to both effects (they're allies — see
+# is_player_friendly() on the enemy side).
 func _tick_doomsayer(delta: float) -> void:
 	if not _alive:
 		return
-	var pct: float = PerkState.get_aggregate(&"doomsayer_proc_pct")
-	if pct <= 0.0:
+	var tier := AttributeState.get_unlocked_tier(&"amb", PlayerState.class_id, PlayerState.spec_id)
+	if tier <= 0:
 		return
 	_doomsayer_t -= delta
 	if _doomsayer_t > 0.0:
 		return
 	_doomsayer_t = DOOMSAYER_TICK_INTERVAL
-	var tier := AttributeState.get_unlocked_tier(&"amb", PlayerState.class_id, PlayerState.spec_id)
 	var radius: float = DOOMSAYER_AURA_RADIUS_PER_TIER[clampi(tier, 0, 3)]
 	if radius <= 0.0:
 		return
-	var base_chance := pct * 0.01
+	var dot_per_tick: float = DOOMSAYER_DOT_PER_TICK_PER_TIER[clampi(tier, 0, 3)]
+	var dmg_mult := AttributeState.get_player_damage_mult(class_id, spec_id)
+	# Resolve the charm slot situation up-front so we don't redo work
+	# per enemy. apply_charm is best-effort — when at cap we just don't
+	# try (no FIFO eviction; charms hold until the controlled enemy
+	# dies, then a new charm naturally fills the slot).
+	var max_charms := mini(int(round(PerkState.get_aggregate(&"doomsayer_max_charms"))), DOOMSAYER_MAX_CHARMS_CAP)
+	_prune_charm_list()
+	var charm_capacity := max_charms - _charmed_enemies.size()
+	# Track the closest charmable candidate as we walk the radius
+	# query — committing to it after the loop avoids charming several
+	# enemies per tick (the "should happen much more frequently" feel
+	# is per-tick = ~2.5/sec; one new charm per tick is plenty).
+	var charm_candidate: PrototypeEnemy = null
+	var charm_candidate_dist_sq := INF
 	for n in SpatialGrid.query_radius(global_position, radius, &"enemies"):
-		if not (n is Node3D) or not is_instance_valid(n):
+		if not (n is PrototypeEnemy) or not is_instance_valid(n):
 			continue
-		var dist := global_position.distance_to(n.global_position)
+		var enemy: PrototypeEnemy = n
+		# Skip player-friendly (charmed) enemies — they're our allies.
+		if enemy.is_player_friendly():
+			continue
+		var dist := global_position.distance_to(enemy.global_position)
 		var falloff := clampf(1.0 - dist / radius, 0.0, 1.0)
-		if randf() >= base_chance * falloff:
-			continue
-		_apply_doomsayer_affliction(n)
+		# DoT — round to int for take_damage; falloff scaling can produce
+		# tiny values which would otherwise floor to zero, so we max(1)
+		# anything in range to keep the aura from feeling dead at the edge.
+		if falloff > 0.0 and enemy.has_method(&"take_damage"):
+			var dmg_f := dot_per_tick * falloff * dmg_mult
+			var dmg := maxi(1, int(round(dmg_f)))
+			enemy.take_damage(dmg, global_position, 0.0)
+		# Charm tracking — only consider candidates if we have capacity,
+		# AND only if apply_charm would succeed (filters out leashed,
+		# already-grabbed, etc.).
+		if charm_capacity > 0:
+			var d2 := global_position.distance_squared_to(enemy.global_position)
+			if d2 < charm_candidate_dist_sq:
+				charm_candidate_dist_sq = d2
+				charm_candidate = enemy
+	if charm_candidate != null and charm_capacity > 0:
+		if charm_candidate.apply_charm():
+			_charmed_enemies.append(charm_candidate)
 
 
-# Pick one of stun / charm / weaken uniformly and apply it. Each effect
-# is a no-op if the enemy doesn't expose the matching method, so this is
-# safe to call on any &"enemies" group member regardless of script.
-# Charm routes through a helper that owns the FIFO cap.
-func _apply_doomsayer_affliction(enemy: Node3D) -> void:
-	match randi() % 3:
-		0:
-			if enemy.has_method(&"apply_stun"):
-				enemy.apply_stun(DOOMSAYER_STUN_DURATION)
-		1:
-			_apply_doomsayer_charm(enemy)
-		_:
-			if enemy.has_method(&"apply_weaken"):
-				enemy.apply_weaken(DOOMSAYER_WEAKEN_MAGNITUDE, DOOMSAYER_WEAKEN_DURATION)
-
-
-# Charm path. Reads the max-charm aggregate (1/2/3 from the perk ladder)
-# and FIFO-evicts the oldest charm when at cap so the new one fits. The
-# enemy-side apply_charm returns true only when the charm actually took —
-# we only add to the list on a real success so a wasted proc (e.g. a
-# leashed enemy or no nearby ally to target) doesn't burn a slot.
-func _apply_doomsayer_charm(enemy: Node3D) -> void:
-	if not (enemy is PrototypeEnemy):
-		return
-	var pe: PrototypeEnemy = enemy
-	if not enemy.has_method(&"apply_charm"):
-		return
-	# Prune dead / corpse'd entries before checking cap. A charmed enemy
-	# that died still occupies a slot until we sweep it here.
+# Compact the charm list — drops freed / dead / corpse'd entries.
+# Called by _tick_doomsayer before computing capacity, and by the
+# external reconcile helpers below.
+func _prune_charm_list() -> void:
 	var live: Array[PrototypeEnemy] = []
 	for e in _charmed_enemies:
 		if e != null and is_instance_valid(e) and e.is_in_group(&"enemies"):
 			live.append(e)
 		elif e != null and is_instance_valid(e):
-			# Dead or corpse'd — release defensively in case the entry's
-			# state is somehow still _charmed (shouldn't happen via the
-			# normal death path but cheap insurance).
+			# Defensive release in case the entry's _charmed flag
+			# survived a death path that skipped release_grab.
 			e.release_charm()
 	_charmed_enemies = live
-	if _charmed_enemies.has(pe):
-		# Already on the list — don't double-add.
-		return
-	var max_charms := mini(int(round(PerkState.get_aggregate(&"doomsayer_max_charms"))), DOOMSAYER_MAX_CHARMS_CAP)
-	if max_charms <= 0:
-		return
-	if not pe.apply_charm():
-		return
-	# Eviction window — only enter the loop if the new charm landed (so a
-	# failed apply doesn't cost an existing charm its slot).
-	while _charmed_enemies.size() >= max_charms:
-		var oldest: PrototypeEnemy = _charmed_enemies.pop_front()
-		if oldest != null and is_instance_valid(oldest):
-			oldest.release_charm()
-	_charmed_enemies.append(pe)
 
 
 # Release every active charm. Called from _die so charms don't persist
@@ -1073,14 +1075,7 @@ func _clear_charms() -> void:
 # lazily evicts them. Mirrors the drone reconcile pattern. Always FIFO-
 # evicts from the front so the player's freshest charm wins.
 func _reconcile_charms() -> void:
-	# Prune freed / dead / corpse'd entries first so the cap math is honest.
-	var live: Array[PrototypeEnemy] = []
-	for e in _charmed_enemies:
-		if e != null and is_instance_valid(e) and e.is_in_group(&"enemies"):
-			live.append(e)
-		elif e != null and is_instance_valid(e):
-			e.release_charm()
-	_charmed_enemies = live
+	_prune_charm_list()
 	# When dead, target is zero — _die clears immediately, this just
 	# protects against a perk recompute landing during the death-hold.
 	var target := 0

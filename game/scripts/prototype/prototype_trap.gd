@@ -108,6 +108,10 @@ func _on_body_entered(body: Node) -> void:
 		return
 	if not body.has_method(&"take_damage"):
 		return
+	# Charmed enemies are allies — they shouldn't trigger the trap they
+	# walked over. Skipping here keeps the trap armed for a real enemy.
+	if body.has_method(&"is_player_friendly") and body.is_player_friendly():
+		return
 	_detonate()
 
 
@@ -123,6 +127,9 @@ func _detonate() -> void:
 		if not (n is Node3D) or not is_instance_valid(n):
 			continue
 		if not n.has_method(&"take_damage"):
+			continue
+		# Spare friendly (charmed) enemies caught in the blast radius.
+		if n.has_method(&"is_player_friendly") and n.is_player_friendly():
 			continue
 		n.take_damage(dmg, global_position, KNOCKBACK)
 	queue_free()

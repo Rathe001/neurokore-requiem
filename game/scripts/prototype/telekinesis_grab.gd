@@ -123,6 +123,9 @@ func _apply_impact() -> void:
 			continue
 		if not n.has_method(&"take_damage"):
 			continue
+		# Spare friendly (charmed) enemies caught in the slam radius.
+		if n.has_method(&"is_player_friendly") and n.is_player_friendly():
+			continue
 		n.take_damage(aoe_damage, landing_pos, AOE_KNOCKBACK)
 	queue_free()
 

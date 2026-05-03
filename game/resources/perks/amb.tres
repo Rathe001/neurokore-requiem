@@ -3,26 +3,32 @@
 ; Enculted (amb) tier perks — Doomsayer.
 ;
 ; The player constantly emits an aura with linear distance falloff. On
-; every DOOMSAYER_TICK_INTERVAL (currently 0.4s — multiple rolls per
-; second), each enemy inside the aura rolls against (base_pct × falloff)
-; — on a hit, ONE of {stun, charm, weaken} is applied at random. Closer
-; enemies get hit more often (chance scales with proximity to player);
-; enemies at the edge basically don't proc.
+; every DOOMSAYER_TICK_INTERVAL (currently 0.4s) the aura does TWO things:
 ;
-; Charm semantics differ from stun/weaken: stun + weaken expire on a
-; timer, but charm persists until the player dies OR a new charm bumps
-; this one out. The player keeps a FIFO list of charmed enemies; when a
-; new charm proc lands and the list is at cap, the oldest is released.
-; Cap = doomsayer_max_charms aggregate (totals 1 / 2 / 3 across tiers).
+;   1. DAMAGE OVER TIME — every uncharmed enemy in range takes per-tick
+;      damage scaled by 1.0 - (dist / radius). 100% at the player's
+;      centre, 0% at the aura edge. Damage scales with main stat
+;      (Ambition for Enculted) via get_player_damage_mult.
+;
+;   2. CHARM — if the controlled-enemy count is below the per-tier
+;      cap, the closest uncharmed enemy in range gets charmed. The
+;      cap acts as a natural rate-limit: charms keep flowing until
+;      full, then stop until a controlled enemy dies. No FIFO eviction.
+;
+; Charmed enemies are PLAYER-FRIENDLY — immune to all player-sourced
+; damage and debuffs (Doomsayer DoT, Exile curse, IED traps, Telekinesis,
+; drone fire, weapon hits). They fight for the player until killed by
+; OTHER enemies. Once dead, the slot opens for a new charm.
 ;
 ; Tier deltas (additive aggregates):
-;   T1 grants +5% proc + 1 charm slot   →  5%, 1 max charm
-;   T2 grants +5% proc + 1 charm slot   → 10%, 2 max charms
-;   T3 grants +10% proc + 1 charm slot  → 20%, 3 max charms
+;   T1 grants +5% damage scale + 1 charm slot   →  5%, 1 max charm
+;   T2 grants +5% damage scale + 1 charm slot   → 10%, 2 max charms
+;   T3 grants +10% damage scale + 1 charm slot  → 20%, 3 max charms
 ;
-; PrototypePlayer ticks the aura on DOOMSAYER_TICK_INTERVAL and owns the
-; charm list (apply_charm / release_charm on the enemy side just toggle
-; state). Affliction handlers + state live on PrototypeEnemy.
+; The doomsayer_proc_pct aggregate is no longer read by code (DoT
+; values come from DOOMSAYER_DOT_PER_TICK_PER_TIER on PrototypePlayer);
+; kept here as a "this perk unlocked" sentinel until the migration
+; settles. doomsayer_max_charms is still authoritative for the cap.
 
 [ext_resource type="Script" path="res://scripts/perks/perk.gd" id="perk_script"]
 [ext_resource type="Script" path="res://scripts/perks/perk_effect.gd" id="effect_script"]
@@ -42,7 +48,7 @@ magnitude = 1.0
 script = ExtResource("perk_script")
 id = &"amb_t1"
 label = "Doomsayer I"
-description = "An aura of dread surrounds you. Multiple rolls per second on nearby enemies — 5% chance per roll to stun, charm, or weaken. Up to 1 charm at a time."
+description = "An aura of dread surrounds you. Damages nearby enemies over time (heaviest at your feet, fading to nothing at the edge). Charms 1 enemy at a time — they fight for you until killed."
 effects = [SubResource("effect_amb_t1_proc"), SubResource("effect_amb_t1_charms")]
 
 [sub_resource type="Resource" id="effect_amb_t2_proc"]
@@ -59,7 +65,7 @@ magnitude = 1.0
 script = ExtResource("perk_script")
 id = &"amb_t2"
 label = "Doomsayer II"
-description = "The aura tightens. 10% per roll; up to 2 charms at a time."
+description = "The aura tightens. Stronger DoT; up to 2 charmed enemies fighting for you."
 effects = [SubResource("effect_amb_t2_proc"), SubResource("effect_amb_t2_charms")]
 
 [sub_resource type="Resource" id="effect_amb_t3_proc"]
@@ -76,7 +82,7 @@ magnitude = 1.0
 script = ExtResource("perk_script")
 id = &"amb_t3"
 label = "Doomsayer III"
-description = "20% per roll; up to 3 charms at a time. Walking apocalypse — the herd unravels around you."
+description = "Maximum DoT, up to 3 charmed enemies fighting for you. Walking apocalypse — the herd unravels around you."
 effects = [SubResource("effect_amb_t3_proc"), SubResource("effect_amb_t3_charms")]
 
 [resource]

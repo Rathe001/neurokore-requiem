@@ -111,6 +111,14 @@ func _on_body_entered(body: Node3D) -> void:
 	# in reset() already filters out non-target friendlies, so this branch
 	# is mostly belt-and-braces against future layer changes.
 	if body.is_in_group(target_group) and body.has_method(&"take_damage"):
+		# Player-fired projectiles skip player-friendly (charmed) enemies —
+		# no friendly fire from drones, telekinesis bolts, or ranged
+		# weapons. The projectile passes through and continues to the
+		# next valid target, but since we already set _hit=true above, we
+		# just _release() instead.
+		if target_group == &"enemies" and body.has_method(&"is_player_friendly") and body.is_player_friendly():
+			_release()
+			return
 		if _roll_hit():
 			var is_crit := _roll_crit()
 			var dmg := _roll_damage(is_crit)

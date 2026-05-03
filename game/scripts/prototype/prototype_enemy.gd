@@ -716,11 +716,24 @@ func _outgoing_damage_mult() -> float:
 func apply_curse(damage_pct: float, duration: float) -> void:
 	if not _is_alive() or damage_pct <= 0.0 or duration <= 0.0:
 		return
+	# Player-friendly (charmed) enemies are immune to player-sourced
+	# debuffs — Exile included. They're fighting for us; cursing them
+	# would be friendly fire.
+	if is_player_friendly():
+		return
 	if _curse_remain > 0.0:
 		return
 	_curse_damage_pct = damage_pct
 	_curse_remain = duration
 	_show_curse_marker()
+
+
+# True when this enemy is currently controlled by the player (charmed
+# via Doomsayer). The player's damage paths and debuffs check this and
+# skip affected enemies — charmed enemies fight for the player, so
+# player attacks would be friendly fire.
+func is_player_friendly() -> bool:
+	return _charmed
 
 
 # Tick the curse timer; on expire, fire the player's auto-shot at this

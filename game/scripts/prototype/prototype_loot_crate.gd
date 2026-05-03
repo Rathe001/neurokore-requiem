@@ -20,8 +20,35 @@ const COLOR_OPENED := Color(0.35, 0.35, 0.35, 1.0)
 ## default item generation: 50/50 chance of (one common 2H weapon) vs
 ## (one common 1H weapon + one common offhand). Set by LootCrateDoorPuzzle
 ## on the spawn-room chest so the player gets a guaranteed playable
-## weapon set on level start.
+## weapon set on level start. ALSO drops one max-tier stat-stick test
+## item per spec class (temporary playtest convenience — equipping the
+## matching item alone pushes that class's primary stat past T3).
 @export var starter_weapon_kit: bool = false
+
+# Stat-stick magnitude for the T3 test items. Set huge so the starter
+# weapon's small random rolls don't dilute the primary below 99% (the
+# T3 threshold) — see project memory note `project_kore_terminology`
+# / the prior _make_class_tier3_item helper that lived in
+# inventory_state.gd before being removed when the player started empty.
+const _STARTER_T3_STAT_AMOUNT: int = 1000
+# Slot per spec class for the T3 stat-stick — picked so all six items
+# can sit in inventory without colliding on equip.
+const _STARTER_T3_KIT_SLOTS: Dictionary = {
+	&"count":       &"head",
+	&"survivalist": &"chest",
+	&"enculted":    &"gloves",
+	&"forged":      &"boots",
+	&"automaton":   &"belt",
+	&"polymath":    &"offhand",
+}
+const _STARTER_T3_SLOT_MAIN_TYPE: Dictionary = {
+	&"head":    "Head Armor",
+	&"chest":   "Chest Armor",
+	&"gloves":  "Gloves",
+	&"boots":   "Boots",
+	&"belt":    "Belt",
+	&"offhand": "Offhand",
+}
 ## Optional door this crate unlocks on first interact — mirrors the
 ## PrototypeSwitch.target_door pattern. Set by LootCrateDoorPuzzle, not
 ## hand-authored. Empty path = no door wiring (regular loot drop).
@@ -77,6 +104,14 @@ func interact(_user: Node) -> void:
 		else:
 			items.append(ItemRoller.roll("1H Weapon", ilvl, &"common", rng))
 			items.append(ItemRoller.roll("Offhand", ilvl, &"common", rng))
+		# Playtest convenience — six max-tier stat-stick items (one per
+		# spec class). Equipping the matching item alone pushes that
+		# class's primary past TIERS_OWN[2] (99%) → T3 unlocked. Removed
+		# from the starting inventory when the player started empty;
+		# re-added here so the player still has a fast path to
+		# perk-tier playtesting without skipping the chest.
+		for spec_id: StringName in AttributeState.CLASS_DEFINITIONS:
+			items.append(_make_starter_t3_item(spec_id))
 	elif fixed_items.size() > 0:
 		items.assign(fixed_items)
 	elif test_weapon_base_paths.size() > 0:
@@ -135,3 +170,27 @@ func interact(_user: Node) -> void:
 func _apply_color(c: Color) -> void:
 	_mat.albedo_color = c
 	_mat.emission = c
+
+
+# Build one max-tier stat-stick item for the given spec class. Equipping
+# it alone pushes that class's primary stat past TIERS_OWN[2] (99% under
+# the simplified breakpoints) → T3 unlocked. For origin classes, the
+# matching team-stat item lifts the corresponding kore stat past T2.
+# Mirror of the helper that lived in inventory_state.gd before the
+# player started empty.
+func _make_starter_t3_item(spec_id: StringName) -> Item:
+	var stat: StringName = AttributeState.CLASS_DEFINITIONS[spec_id][&"stat"]
+	var slot: StringName = _STARTER_T3_KIT_SLOTS.get(spec_id, &"head")
+	var main_type: String = _STARTER_T3_SLOT_MAIN_TYPE.get(slot, String(slot).capitalize())
+	var short: String = AttributeState.STAT_SHORT.get(stat, "?")
+	var spec_label: String = String(spec_id).capitalize()
+	var item := Item.new()
+	item.id = StringName("starter_t3_%s" % spec_id)
+	item.kind = slot
+	item.main_type = main_type
+	item.glyph = SlotRegistry.glyph_for_type(main_type)
+	item.glyph_color = AttributeState.STAT_COLORS.get(stat, Color.WHITE)
+	item.rarity = &"unique"
+	item.name_key = "%s T3 (%s %d%%)" % [spec_label, short, _STARTER_T3_STAT_AMOUNT]
+	item.stat_modifiers = {stat: _STARTER_T3_STAT_AMOUNT}
+	return item
