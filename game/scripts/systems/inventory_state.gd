@@ -13,6 +13,36 @@ const BASE_INVENTORY_SIZE := 8
 const MAX_INVENTORY_SIZE := 40
 const MAX_UTILITY_SLOTS := 4
 
+# Tier-3 starter kit: one single-stat item per specialised class. Equip the
+# matching item alone (or as the dominant stat source) to push that class's
+# primary stat past TIERS_OWN[2] (40%) → T3 unlocked. For origin classes,
+# equipping the right team-stat item unlocks T2 of that team perk. Restored
+# 2026-05-02 because the items make perk-tier playtesting much faster.
+const T3_STAT_PCT: int = 40
+
+# Slot per spec class for the starter kit items. Picked so all six can sit
+# in the inventory simultaneously without colliding with each other in the
+# same equipment slot.
+const STARTER_KIT_SLOTS: Dictionary = {
+	&"count":       &"head",
+	&"survivalist": &"chest",
+	&"enculted":    &"gloves",
+	&"forged":      &"boots",
+	&"automaton":   &"belt",
+	&"polymath":    &"offhand",
+}
+
+# Slot-kind → ItemRoller main_type label, used to pick the right glyph for
+# starter-kit items via SlotRegistry.
+const STARTER_SLOT_MAIN_TYPE: Dictionary = {
+	&"head":    "Head Armor",
+	&"chest":   "Chest Armor",
+	&"gloves":  "Gloves",
+	&"boots":   "Boots",
+	&"belt":    "Belt",
+	&"offhand": "Offhand",
+}
+
 var equipment: Dictionary = {}
 var inventory: Array[Item] = []
 
@@ -23,6 +53,13 @@ func _ready() -> void:
 	inventory.resize(MAX_INVENTORY_SIZE)
 	equipment[&"weapon"] = _make_starter_weapon()
 	equipment[&"offhand"] = _make_starter_offhand()
+	# Six T3 starter items — one per spec class — populate the first slots
+	# so playtesting any class can immediately reach T3 (or T2 for origin)
+	# by equipping the matching item.
+	var i := 0
+	for spec_id: StringName in AttributeState.CLASS_DEFINITIONS:
+		inventory[i] = _make_class_tier3_item(spec_id)
+		i += 1
 	# When the Forged Amalgamation perk gains/loses tiers, the extra weapon
 	# slot count changes — evict items from now-locked slots so a player who
 	# respecs out of the perk doesn't keep silently-equipped weapons.
@@ -190,4 +227,28 @@ func _make_starter_offhand() -> Item:
 	item.rarity = &"common"
 	item.name_key = "Starter Offhand"
 	item.fire_skill = preload("res://resources/skills/aoe_burst.tres")
+	return item
+
+
+## Build one max-tier test item per spec class. Equipping the matching item
+## as the dominant stat source pushes that class's primary stat past the
+## TIERS_OWN[2] (40%) threshold → T3 unlocked. For origin classes the same
+## item lifts the corresponding team stat past TIERS_TEAM_ORIGIN[1] (35%)
+## → T2. Reduces playtest setup from "kill enemies until you roll the right
+## affixes" to "drag this onto the matching slot."
+func _make_class_tier3_item(spec_id: StringName) -> Item:
+	var stat: StringName = AttributeState.CLASS_DEFINITIONS[spec_id][&"stat"]
+	var slot: StringName = STARTER_KIT_SLOTS.get(spec_id, &"head")
+	var main_type: String = STARTER_SLOT_MAIN_TYPE.get(slot, String(slot).capitalize())
+	var short: String = AttributeState.STAT_SHORT.get(stat, "?")
+	var spec_label: String = String(spec_id).capitalize()
+	var item := Item.new()
+	item.id = StringName("starter_t3_%s" % spec_id)
+	item.kind = slot
+	item.main_type = main_type
+	item.glyph = SlotRegistry.glyph_for_type(main_type)
+	item.glyph_color = AttributeState.STAT_COLORS.get(stat, Color.WHITE)
+	item.rarity = &"unique"
+	item.name_key = "%s T3 (%s %d%%)" % [spec_label, short, T3_STAT_PCT]
+	item.stat_modifiers = {stat: T3_STAT_PCT}
 	return item
