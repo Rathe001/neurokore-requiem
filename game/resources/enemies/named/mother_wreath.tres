@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="NamedMonster" load_steps=5 format=3]
+
+; Mother Wreath — vampiric field medic. The most dangerous combination on
+; paper: HP-leech effect + AoE heal aura on a 3s tick means anything this
+; named touches recovers fast. Low damage on her own swings (medic, not
+; brawler) — kill her allies first to deny the heals, OR burst her down.
+; Higher min_level than the other two — she's a late-game escalation.
+
+[ext_resource type="Script" path="res://scripts/enemies/named_monster.gd" id="script"]
+[ext_resource type="Resource" path="res://resources/enemies/classes/melee_healer.tres" id="class_melee_healer"]
+[ext_resource type="Resource" path="res://resources/enemies/affixes/vampiric.tres" id="affix_vampiric"]
+[ext_resource type="Resource" path="res://resources/enemies/affixes/tough.tres" id="affix_tough"]
+
+[resource]
+script = ExtResource("script")
+id = &"mother_wreath"
+display_name = "Mother Wreath"
+enemy_class = ExtResource("class_melee_healer")
+affixes = [ExtResource("affix_vampiric"), ExtResource("affix_tough")]
+health_mult = 1.8
+damage_mult = 1.0
+visual_scale = 1.35
+ring_tint = Color(0.55, 0.05, 0.45, 1.0)
+weight = 70
+min_level = 3
+guaranteed_drop_rarity = &"rare"

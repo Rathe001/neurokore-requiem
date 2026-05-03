@@ -30,6 +30,12 @@ const PACK_MIN_COMPANIONS := 2
 const PACK_MAX_COMPANIONS := 4
 const PACK_COMPANION_RADIUS := 2.5
 
+# Named-monster tuning. Per spawn point — preempts the pack roll, so a hit
+# spawns ONE solo named encounter (no companions). At 0.5%, a 200-enemy
+# session sees ~1 named on average; high enough to feel like a discovery
+# without being routine.
+const NAMED_CHANCE := 0.005
+
 
 static func spawn_in_bounds(ctx: LevelBuildContext, piece: LevelPiece, center: Vector3, hx: float, hz: float, count: int, scene: PackedScene, level_range: Vector2i = Vector2i.ZERO) -> void:
 	if scene == null:
@@ -55,10 +61,22 @@ static func _roll_level(level_range: Vector2i) -> int:
 	return randi_range(level_range.x, level_range.y)
 
 
-# Returns the number of enemies actually spawned (1 for solo, N for a pack).
-# Caller uses this to decrement the piece's enemy budget so a packed spawn
-# doesn't also count as one slot.
+# Returns the number of enemies actually spawned (1 for solo / named,
+# N for a pack). Caller uses this to decrement the piece's enemy budget
+# so a packed spawn doesn't also count as one slot.
 static func _spawn_with_pack_chance(ctx: LevelBuildContext, pos: Vector3, hx: float, hz: float, scene: PackedScene, level_override: int, room_center: Vector3 = Vector3.ZERO) -> int:
+	# Named-monster roll runs first and preempts everything else. Failure
+	# falls through to the pack roll.
+	if randf() < NAMED_CHANCE:
+		var named_rng := RandomNumberGenerator.new()
+		named_rng.randomize()
+		var lvl := level_override if level_override > 0 else 1
+		var named := NamedMonsterTable.roll_random(lvl, named_rng)
+		if named != null:
+			_spawn(ctx, pos, scene, level_override, [], named)
+			return 1
+		# Named pool empty for this level — fall through to the regular
+		# pack/solo path so we don't waste the slot.
 	if randf() >= PACK_CHANCE:
 		_spawn(ctx, pos, scene, level_override, [])
 		return 1
@@ -91,17 +109,20 @@ static func _spawn_with_pack_chance(ctx: LevelBuildContext, pos: Vector3, hx: fl
 	return companion_total
 
 
-static func _spawn(ctx: LevelBuildContext, pos: Vector3, scene: PackedScene, level_override: int = 0, affixes: Array[MonsterAffix] = []) -> void:
+static func _spawn(ctx: LevelBuildContext, pos: Vector3, scene: PackedScene, level_override: int = 0, affixes: Array[MonsterAffix] = [], named: NamedMonster = null) -> void:
 	var enemy := EntityPool.acquire(scene)
 	ctx.root.add_child(enemy)
 	enemy.global_position = pos
 	if level_override > 0 and "level" in enemy:
 		enemy.level = level_override
-	# Set affixes BEFORE reset() so _apply_level_stats sees them when it
-	# multiplies the rolled HP / damage. An empty list is the explicit
-	# "no modifiers — non-pack solo spawn" signal that wipes the prior
-	# pool occupant's affix list.
+	# Set affixes + named BEFORE reset() so _apply_level_stats sees them
+	# when it multiplies the rolled HP / damage and applies identity. Both
+	# fields are explicitly set on every spawn (named=null + affixes=[] for
+	# vanilla) so a pool-recycled body never inherits the previous
+	# occupant's modifiers.
 	if "affixes" in enemy:
 		enemy.affixes = affixes
+	if "named_monster" in enemy:
+		enemy.named_monster = named
 	if enemy.has_method(&"reset"):
 		enemy.reset()

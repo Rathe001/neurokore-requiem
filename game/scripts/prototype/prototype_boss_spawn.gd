@@ -29,10 +29,13 @@ func _spawn() -> void:
 		boss.is_boss = true
 	if "display_name" in boss:
 		boss.display_name = display_name
-	# Clear any affixes the pool occupant carried over — bosses get their
-	# stat boosts from is_boss, not from rare-pack modifiers.
+	# Clear any affixes / named identity the pool occupant carried over —
+	# bosses get their stat boosts from is_boss, not from rare-pack
+	# modifiers or named-encounter overrides.
 	if "affixes" in boss:
 		boss.affixes = []
+	if "named_monster" in boss:
+		boss.named_monster = null
 	get_parent().add_child(boss)
 	boss.global_position = global_position
 	if boss.has_method(&"reset"):

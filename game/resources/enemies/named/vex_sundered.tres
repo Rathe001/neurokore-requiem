@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="NamedMonster" load_steps=5 format=3]
+
+; Vex, the Sundered — fast ranged buffer with extra firepower. Hits twice
+; as fast as a normal Tactical Officer and pulses bigger damage buffs to
+; whatever's standing in front of it. Player should silence-and-burst this
+; first if it's surrounded by allies, otherwise the pack chip damage
+; compounds quickly.
+
+[ext_resource type="Script" path="res://scripts/enemies/named_monster.gd" id="script"]
+[ext_resource type="Resource" path="res://resources/enemies/classes/ranged_buffer.tres" id="class_ranged_buffer"]
+[ext_resource type="Resource" path="res://resources/enemies/affixes/frenzied.tres" id="affix_frenzied"]
+[ext_resource type="Resource" path="res://resources/enemies/affixes/jagged.tres" id="affix_jagged"]
+
+[resource]
+script = ExtResource("script")
+id = &"vex_sundered"
+display_name = "Vex, the Sundered"
+enemy_class = ExtResource("class_ranged_buffer")
+affixes = [ExtResource("affix_frenzied"), ExtResource("affix_jagged")]
+health_mult = 1.5
+damage_mult = 1.2
+visual_scale = 1.25
+ring_tint = Color(1.0, 0.85, 0.2, 1.0)
+weight = 100
+min_level = 1
+guaranteed_drop_rarity = &"rare"

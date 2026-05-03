@@ -176,6 +176,16 @@ static var _s_outline_mat_locked: StandardMaterial3D
 ## ring_tint overrides the level-based floor-ring color.
 @export var affixes: Array[MonsterAffix] = []
 
+## Optional unique-encounter override. Set by EnemySpawner BEFORE reset()
+## when the named-roll succeeds (preempts the pack roll); also set by
+## explicit per-piece named placements. When non-null:
+##   - display_name, ring_tint, visual_scale, and the extra health/damage
+##     mults all override the trash defaults.
+##   - The named's affix list is copied onto `affixes` so the existing
+##     affix-mult path picks them up.
+##   - The kill drop's rarity is floored at named.guaranteed_drop_rarity.
+@export var named_monster: NamedMonster
+
 @onready var visual: Node3D = $Visual
 @onready var anim_player: AnimationPlayer = $Visual/Character/AnimationPlayer
 @onready var health_bar: MeshInstance3D = $HealthBar
@@ -305,6 +315,17 @@ func _apply_level_stats() -> void:
 	if is_boss:
 		_apply_boss_stats()
 		return
+	# Named monsters carry their own EnemyClass + affix list. Copy both onto
+	# the enemy's runtime fields BEFORE the affix-mult pass so the existing
+	# math + accessors (_attack_range, _attack_cooldown, etc.) pick them up
+	# without a separate "is this named?" branch in every helper. Done here
+	# (not in the spawner) so per-piece hand-placements behave identically
+	# to random-roll spawns.
+	if named_monster != null:
+		if named_monster.enemy_class != null:
+			enemy_class = named_monster.enemy_class
+		if not named_monster.affixes.is_empty():
+			affixes = named_monster.affixes.duplicate()
 	var lv := clampi(level, 0, MAX_LEVEL)
 	if lv <= 0:
 		lv = randi_range(1, MAX_LEVEL)
@@ -323,18 +344,33 @@ func _apply_level_stats() -> void:
 			continue
 		hp_mult *= affix.health_mult
 		dmg_mult *= affix.damage_mult
+	# Named monsters layer their own stat boost on top of affix mults. Same
+	# multiplicative model — if the named author wanted "1.6× HP" that's
+	# the FINAL multiplier on the affix-modified base, not the raw base.
+	if named_monster != null:
+		hp_mult *= named_monster.health_mult
+		dmg_mult *= named_monster.damage_mult
 	max_health = int(round(float(max_health) * hp_mult))
 	_attack_damage = int(round(float(_attack_damage) * dmg_mult))
-	# Affix tint wins over level tint when present — packs need to read as
-	# distinct from across the room. Use the first affix; multi-affix rares
-	# inherit the lead modifier's color (Frenzied + Tough = orange, not
-	# blended-mud).
-	if not affixes.is_empty() and affixes[0] != null:
+	# Tint priority: named ring > first affix > level. Named overrides
+	# everything because the named identity is the headline visual cue.
+	if named_monster != null:
+		_apply_floor_ring_tint_color(named_monster.ring_tint)
+	elif not affixes.is_empty() and affixes[0] != null:
 		_apply_floor_ring_tint_color(affixes[0].ring_tint)
 	else:
 		_apply_floor_ring_tint(lv)
-	# Decorate display name with affix labels: "Frenzied Tough Husk".
-	if not affixes.is_empty():
+	# Visual scale: named > 1.0 boosts the model. Don't scale otherwise (a
+	# multi-affix rare keeps the base size — only named encounters earn the
+	# silhouette change).
+	if named_monster != null and visual != null:
+		visual.scale = Vector3.ONE * named_monster.visual_scale
+	# Display name: named replaces the rolled trash name AND skips affix
+	# label decoration ("Vex, the Sundered" not "Frenzied Jagged Vex…").
+	# Plain rare packs still get affix-prefixed names.
+	if named_monster != null:
+		display_name = named_monster.display_name
+	elif not affixes.is_empty():
 		var parts: Array[String] = []
 		for affix in affixes:
 			if affix != null and affix.label != "":
@@ -1084,16 +1120,30 @@ func _drop_credits() -> void:
 	pickup.reset()
 
 func _drop_item() -> void:
-	var drop_chance := ITEM_DROP_CHANCE_BASE + ITEM_DROP_CHANCE_PER_LEVEL * float(maxi(level - 1, 0))
-	if randf() >= drop_chance:
-		return
+	var named_drop := named_monster != null
+	# Named monsters always drop, at the configured rarity floor. Regular
+	# trash uses the level-scaled chance.
+	if not named_drop:
+		var drop_chance := ITEM_DROP_CHANCE_BASE + ITEM_DROP_CHANCE_PER_LEVEL * float(maxi(level - 1, 0))
+		if randf() >= drop_chance:
+			return
 	var parent := get_parent()
 	if parent == null:
 		return
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
 	var ilvl := maxi(1, PlayerState.level + rng.randi_range(ITEM_DROP_ILVL_OFFSET_MIN, ITEM_DROP_ILVL_OFFSET_MAX))
-	var item := ItemRoller.roll_random(ilvl, rng)
+	var item: Item
+	if named_drop:
+		# Pick a main_type at random + force the rarity to the named's
+		# floor. Treats the floor as "drops AT this rarity" rather than
+		# "rolls at this or higher" — keeps the reward predictable; later
+		# we can layer in chance-of-upgrade-tier on top.
+		var pool := SlotRegistry.MAIN_TYPES
+		var main_type: String = pool[rng.randi_range(0, pool.size() - 1)]
+		item = ItemRoller.roll(main_type, ilvl, named_monster.guaranteed_drop_rarity, rng)
+	else:
+		item = ItemRoller.roll_random(ilvl, rng)
 	var pickup := ITEM_PICKUP_SCENE.instantiate()
 	pickup.configure(item)
 	parent.add_child(pickup)
