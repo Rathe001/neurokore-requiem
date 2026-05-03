@@ -33,7 +33,7 @@ Godot 4 + GDScript, Forward+ renderer. Fixed-camera low-poly 3D with PBR + reali
 ### Level & world
 - **Modular level builder** — per-piece walls, floors, corridors, pits, doors, switches; rooms and corridors instantiated from `RoomDef` / `CorridorDef`
 - **Doors & switches** — slide-open animations, lock state, `interact()`; switches target doors by `NodePath`
-- **Variant wall/floor shaders** — smooth panel walls + flat tile (rooms); riveted panels + diamond tread (corridors). Corridor surfaces sit on a sub-mm Y bias so the room shader wins z-fight at the deliberate geometric overlap. Doors use mesh-local UVs (`tech_door.gdshader`)
+- **Variant wall/floor shaders** — smooth panel walls + flat tile (rooms); riveted panels + diamond tread (corridors). Corridor floor MESHES sit on a sub-mm Y bias so the room shader wins z-fight at the deliberate geometric overlap; collision shapes stay flush so enemies / player don't snag on a step at the seam. Doors use mesh-local UVs (`tech_door.gdshader`)
 - **Wall fade** — walls fade only when between camera and player AND overlapping the player on-screen (view-space test in `tech_wall.gdshader`)
 - **World-space floor tiling** — texture density stays consistent across all floor piece sizes
 - **Reflective floor puddles** — fbm-distorted decal with low-roughness dielectric + ripple normals; deterministic per-room placement

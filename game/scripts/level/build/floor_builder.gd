@@ -10,17 +10,20 @@ class_name FloorBuilder
 
 const FLOOR_OVERLAP := 0.2  ## extends piece floors to cover under walls (= wall_thickness * 0.5)
 const PIT_TRIM_H := 0.12    ## height of raised lip at pit edges
-# Sub-millimetre vertical bias applied to corridor floors so the corridor
-# loses the depth tie wherever it overlaps room geometry under shared walls
-# — invisible at the fixed top-down camera but eliminates flicker.
-const CORRIDOR_FLOOR_Y_BIAS := -0.0015
+# Sub-millimetre vertical bias applied to corridor floor MESHES (not their
+# colliders) so the corridor loses the depth tie wherever it overlaps room
+# geometry under shared walls — invisible at the fixed top-down camera but
+# eliminates flicker. Mirrors the pit-pillar pattern: collision stays at the
+# nominal floor height (y=0) so enemies and the player walk smoothly across
+# the room/corridor seam without a 1.5mm "step down" snagging movement.
+const CORRIDOR_FLOOR_MESH_Y_BIAS := -0.0015
 
 
-static func build_piece_floor(ctx: LevelBuildContext, center: Vector3, size_x: float, size_z: float, mat: Material = null) -> void:
-	build_exact_floor(ctx, center, size_x + FLOOR_OVERLAP * 2.0, size_z + FLOOR_OVERLAP * 2.0, mat)
+static func build_piece_floor(ctx: LevelBuildContext, center: Vector3, size_x: float, size_z: float, mat: Material = null, mesh_y_bias: float = 0.0) -> void:
+	build_exact_floor(ctx, center, size_x + FLOOR_OVERLAP * 2.0, size_z + FLOOR_OVERLAP * 2.0, mat, mesh_y_bias)
 
 
-static func build_exact_floor(ctx: LevelBuildContext, center: Vector3, size_x: float, size_z: float, mat: Material = null) -> void:
+static func build_exact_floor(ctx: LevelBuildContext, center: Vector3, size_x: float, size_z: float, mat: Material = null, mesh_y_bias: float = 0.0) -> void:
 	var mesh := PlaneMesh.new()
 	mesh.size = Vector2(size_x, size_z)
 	var floor_mat := mat if mat != null else ctx.floor_material
@@ -33,6 +36,10 @@ static func build_exact_floor(ctx: LevelBuildContext, center: Vector3, size_x: f
 	var inst := MeshInstance3D.new()
 	inst.name = &"Mesh"
 	inst.mesh = mesh
+	# mesh_y_bias shifts ONLY the visual mesh below the body's transform, so
+	# corridor floors can lose the z-fight without their collision dropping
+	# below the room floor's collision (which would create a step at the seam).
+	inst.position.y = mesh_y_bias
 	body.add_child(inst)
 	var col := CollisionShape3D.new()
 	col.name = &"Collision"
@@ -48,12 +55,14 @@ static func build_corridor_floor(ctx: LevelBuildContext, center: Vector3, cd: Co
 	var along_z := cd.axis == CorridorDef.Axis.Z
 	var sw := cd.width   # perpendicular to travel
 	var sl := cd.length  # along travel axis
-	var floor_center := center + Vector3(0.0, CORRIDOR_FLOOR_Y_BIAS, 0.0)
+	# Pass the un-biased center; the mesh_y_bias arg shifts only the visual,
+	# leaving the collision flush with the adjacent room floor.
+	var bias := CORRIDOR_FLOOR_MESH_Y_BIAS
 
 	if cd.pit_width <= 0.0:
 		var sx := sw if along_z else sl
 		var sz := sl if along_z else sw
-		build_piece_floor(ctx, floor_center, sx, sz, ctx.floor_material_alt)
+		build_piece_floor(ctx, center, sx, sz, ctx.floor_material_alt, bias)
 		return
 
 	# Two floor sections flanking the pit gap (no overlap toward the gap edge).
@@ -63,15 +72,15 @@ static func build_corridor_floor(ctx: LevelBuildContext, center: Vector3, cd: Co
 	var half_gap := cd.pit_width * 0.5
 	var offset := section_len * 0.5 + half_gap
 	if along_z:
-		build_exact_floor(ctx, floor_center + Vector3(0.0, 0.0, -offset), sw, section_len, ctx.floor_material_alt)
-		build_exact_floor(ctx, floor_center + Vector3(0.0, 0.0,  offset), sw, section_len, ctx.floor_material_alt)
+		build_exact_floor(ctx, center + Vector3(0.0, 0.0, -offset), sw, section_len, ctx.floor_material_alt, bias)
+		build_exact_floor(ctx, center + Vector3(0.0, 0.0,  offset), sw, section_len, ctx.floor_material_alt, bias)
 		for s in [-1.0, 1.0]:
 			WallBuilder.create_trim_box(ctx,
 				center + Vector3(0.0, PIT_TRIM_H * 0.5, s * half_gap),
 				sw, PIT_TRIM_H, ctx.theme.wall_thickness, ctx.wall_material_alt)
 	else:
-		build_exact_floor(ctx, floor_center + Vector3(-offset, 0.0, 0.0), section_len, sw, ctx.floor_material_alt)
-		build_exact_floor(ctx, floor_center + Vector3( offset, 0.0, 0.0), section_len, sw, ctx.floor_material_alt)
+		build_exact_floor(ctx, center + Vector3(-offset, 0.0, 0.0), section_len, sw, ctx.floor_material_alt, bias)
+		build_exact_floor(ctx, center + Vector3( offset, 0.0, 0.0), section_len, sw, ctx.floor_material_alt, bias)
 		for s in [-1.0, 1.0]:
 			WallBuilder.create_trim_box(ctx,
 				center + Vector3(s * half_gap, PIT_TRIM_H * 0.5, 0.0),
