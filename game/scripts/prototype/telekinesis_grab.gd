@@ -32,7 +32,7 @@ const AOE_RADIUS := 2.6
 const AOE_DAMAGE_FACTOR := 0.6
 const AOE_KNOCKBACK := 5.0
 
-const BEAM_THICKNESS := 0.04
+const BEAM_THICKNESS := 0.06
 const BEAM_COLOR := Color(0.95, 0.85, 1.0, 1.0)  # pale violet — Polymath head energy
 const BEAM_PLAYER_HEAD_OFFSET := Vector3(0.0, 1.55, 0.0)
 const BEAM_TARGET_OFFSET := Vector3(0.0, 0.9, 0.0)  # chest height on the enemy
@@ -157,35 +157,40 @@ func _is_target_alive() -> bool:
 
 func _build_beam() -> void:
 	_beam_mesh = MeshInstance3D.new()
-	var cyl := CylinderMesh.new()
-	cyl.top_radius = BEAM_THICKNESS
-	cyl.bottom_radius = BEAM_THICKNESS
-	cyl.height = 1.0
-	cyl.radial_segments = 6
+	# BoxMesh with the long axis on Z so look_at can orient the beam
+	# directly: look_at(target) points the node's local -Z at target,
+	# so a Z-elongated box becomes a beam from origin toward target.
+	# CylinderMesh + scaled basis was unreliable here — render order
+	# kept collapsing to a 1-unit stub regardless of the Y scale.
+	var box := BoxMesh.new()
+	box.size = Vector3(BEAM_THICKNESS * 2.0, BEAM_THICKNESS * 2.0, 1.0)
 	var mat := StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.albedo_color = Color(BEAM_COLOR.r, BEAM_COLOR.g, BEAM_COLOR.b, 0.85)
+	mat.albedo_color = Color(BEAM_COLOR.r, BEAM_COLOR.g, BEAM_COLOR.b, 0.9)
 	mat.emission_enabled = true
 	mat.emission = BEAM_COLOR
-	mat.emission_energy_multiplier = 5.0
+	mat.emission_energy_multiplier = 8.0
 	mat.disable_receive_shadows = true
 	# Avoid depth-write so overlapping beams (multi-bolt T3) don't
 	# punch holes in each other.
 	mat.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
-	cyl.material = mat
-	_beam_mesh.mesh = cyl
+	box.material = mat
+	_beam_mesh.mesh = box
 	_beam_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_beam_mesh)
 
 
-# Stretch the cylinder between player-head and target-chest each frame.
-# CylinderMesh's local axis is +Y, so we orient with look_at_from_position
-# pointing the cylinder's UP vector toward the target.
+# Stretch the box between player-head and target-chest each frame.
+# look_at orients local -Z at target, so we just scale Z by the
+# distance to span the gap. midpoint placement means the box extends
+# (dist/2) toward the target and (dist/2) away — total length = dist.
 func _update_beam() -> void:
 	if _player == null or not is_instance_valid(_player):
 		return
 	if _target == null or not is_instance_valid(_target):
+		return
+	if _beam_mesh == null:
 		return
 	var origin: Vector3 = _player.global_position + BEAM_PLAYER_HEAD_OFFSET
 	var target_pos: Vector3 = _target.global_position + BEAM_TARGET_OFFSET
@@ -195,12 +200,14 @@ func _update_beam() -> void:
 		_beam_mesh.visible = false
 		return
 	_beam_mesh.visible = true
-	var midpoint := (origin + target_pos) * 0.5
-	var up := to_target / dist
-	# Build an orthonormal basis with +Y aligned to the beam direction.
-	# Ref vector flips when up is near vertical to avoid the cross
-	# product collapsing to zero.
-	var ref := Vector3.UP if absf(up.dot(Vector3.UP)) < 0.99 else Vector3.RIGHT
-	var x_axis := ref.cross(up).normalized()
-	var z_axis := up.cross(x_axis).normalized()
-	_beam_mesh.global_transform = Transform3D(Basis(x_axis, up, z_axis).scaled(Vector3(1.0, dist, 1.0)), midpoint)
+	# Reset transform first — look_at fails when the resulting basis is
+	# parallel to the prior one, and scale leaks across frames if not
+	# reset. Cheaper than tracking dirty state.
+	_beam_mesh.global_transform = Transform3D(Basis.IDENTITY, (origin + target_pos) * 0.5)
+	# look_at requires a non-parallel up vector. For nearly-vertical
+	# beams (rare during a 2s lift but possible for a tall enemy under
+	# the player), fall back to Vector3.RIGHT.
+	var dir := to_target / dist
+	var up := Vector3.UP if absf(dir.dot(Vector3.UP)) < 0.99 else Vector3.RIGHT
+	_beam_mesh.look_at(target_pos, up)
+	_beam_mesh.scale = Vector3(1.0, 1.0, dist)
