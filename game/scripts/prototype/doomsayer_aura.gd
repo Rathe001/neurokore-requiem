@@ -27,16 +27,17 @@ extends Node3D
 const FOG_SHADER: Shader = preload("res://shaders/doomsayer_fog.gdshader")
 const COLOR := Color(0.78, 0.35, 0.85, 1.0)  # AMB stat color (purple)
 
-# Two-part aura visual. The visible mesh is intentionally SMALL and
-# constant — a tight glowing core right at the player that reads as
-# "radiating energy" rather than a contained bubble. The wide aura
-# range (matching the skill's proc area) is communicated by the
-# OmniLight3D's purple wash on world surfaces, which respects walls
-# via shadow casting. Per-tier scaling drives intensity (energy feels
-# stronger) and light range/energy (wash extends further), but the
-# visible mesh radius stays small so it never reaches walls.
-const SPHERE_RADIUS := 1.6  # constant — small enough to never bleed into walls
-const INTENSITY_PER_TIER: Array[float] = [0.0, 1.4, 2.0, 2.8]
+# Two-part aura visual. The geometric sphere is medium-large but the
+# visible mass collapses to a tight glowing core via the shader's high
+# core_softness — reads as "energy radiating from the body" rather
+# than a contained bubble. Wall containment comes from a combination
+# of: (a) depth_test against world geometry, which clips fragments
+# behind walls, and (b) the shader's void_fade, which discards
+# fragments hovering over open space past room edges. The OmniLight3D
+# adds a coloured wash on nearby world surfaces (walls/floor) for the
+# wider aura impression.
+const RADIUS_PER_TIER: Array[float] = [0.0, 3.5, 4.5, 5.5]
+const INTENSITY_PER_TIER: Array[float] = [0.0, 1.6, 2.4, 3.5]
 const LIGHT_ENERGY_PER_TIER: Array[float] = [0.0, 2.0, 3.5, 5.5]
 # Light range matches the skill's per-tier aura radius so the visible
 # wash on walls/floor exactly traces the proc-eligible area. Read from
@@ -44,10 +45,11 @@ const LIGHT_ENERGY_PER_TIER: Array[float] = [0.0, 2.0, 3.5, 5.5]
 # duplicated here to keep DoomsayerAura standalone.
 const LIGHT_RANGE_PER_TIER: Array[float] = [0.0, 5.0, 7.0, 9.0]
 const ALPHA_PER_TIER: Array[float] = [0.0, 0.9, 1.0, 1.0]
-# Squash factor — the small core ellipsoid hugs the player at mid-body
-# height. Y_OFFSET puts the centre at chest height so the radiating
-# energy feels like it's coming from the player's torso.
-const Y_SQUASH := 0.7
+# Squash factor — flattens the geometric sphere into an ellipsoid that
+# hugs the floor instead of poking above wall tops. With max radius
+# 5.5m and Y_SQUASH 0.45, the top of the sphere is at Y_OFFSET + 2.5 =
+# 3.5m, well under the 4.5m wall height.
+const Y_SQUASH := 0.45
 const Y_OFFSET := 1.0
 
 var _tier: int = 0
@@ -130,11 +132,8 @@ func _apply_tier() -> void:
 	var on := _tier > 0
 	if _sphere != null:
 		_sphere.visible = on
-		# Sphere stays at constant SPHERE_RADIUS across all tiers — the
-		# visible body is the radiating core right at the player; the
-		# wider aura presence is the OmniLight's wash that scales with
-		# tier via light range.
-		_sphere.scale = Vector3(SPHERE_RADIUS, SPHERE_RADIUS * Y_SQUASH, SPHERE_RADIUS) if on else Vector3.ONE
+		var r: float = RADIUS_PER_TIER[_tier]
+		_sphere.scale = Vector3(r, r * Y_SQUASH, r) if on else Vector3.ONE
 		_sphere.position = Vector3(0.0, Y_OFFSET, 0.0) if on else Vector3.ZERO
 	if _material != null:
 		_material.set_shader_parameter(&"fog_color", Color(COLOR.r, COLOR.g, COLOR.b, ALPHA_PER_TIER[_tier]))

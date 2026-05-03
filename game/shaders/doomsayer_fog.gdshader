@@ -19,16 +19,22 @@ uniform float drift_speed : hint_range(-1.0, 1.0) = 0.18;
 // volume instead of a chaotic cloud.
 uniform float noise_scale : hint_range(0.1, 4.0) = 0.35;
 // Higher core_softness = denser concentration in the centre, longer
-// transparent tail at the edges. With a small visible sphere this is
-// pushed high (8+) so the visible mass collapses to a tight glowing
-// core right at the player — reads as "energy radiating from the
-// body" rather than "player inside a bubble." Almost everything
-// outside the inner 25% of radius is below visibility.
-uniform float core_softness : hint_range(0.5, 16.0) = 9.0;
+// transparent tail at the edges. Pushed very high so the visible mass
+// collapses to a tight glowing core inside the geometric sphere —
+// reads as "energy radiating from the body" rather than "player
+// inside a bubble." With softness=14 the visible alpha is essentially
+// zero outside the inner ~20% of the geometric radius.
+uniform float core_softness : hint_range(0.5, 24.0) = 14.0;
 // Soft-particles depth fade — fragments within this many world units
 // of opaque scene geometry get faded out. Helps smooth where the
 // sphere touches the floor / nearby objects.
 uniform float depth_fade_distance : hint_range(0.0, 1.5) = 0.35;
+// Void-clip distance — when the scene depth at a fragment is THIS
+// many world units BEYOND the fragment (i.e., nothing nearby behind
+// it, suggesting a void / off-the-map area), fade to zero. Stops the
+// sphere from rendering over open space past the room boundary.
+uniform float void_clip_distance : hint_range(1.0, 30.0) = 6.0;
+uniform float void_fade_softness : hint_range(0.5, 8.0) = 2.5;
 
 uniform sampler2D depth_sampler : hint_depth_texture, repeat_disable, filter_nearest;
 
@@ -102,8 +108,7 @@ void fragment() {
 	sample_pos.y -= TIME * drift_speed;
 	float n = fbm3(sample_pos);
 
-	// Soft-particles depth fade — keeps the sphere from clipping
-	// hard against the floor / other objects it intersects.
+	// Sample scene depth once and reuse for both fades.
 	float scene_depth = texture(depth_sampler, SCREEN_UV).x;
 	vec3 ndc = vec3(SCREEN_UV * 2.0 - 1.0, scene_depth);
 	vec4 view = INV_PROJECTION_MATRIX * vec4(ndc, 1.0);
@@ -111,9 +116,19 @@ void fragment() {
 	float linear_scene_depth = -view.z;
 	float linear_self_depth = -view_pos.z;
 	float depth_diff = linear_scene_depth - linear_self_depth;
+
+	// Soft-particles depth fade — fragments inside / very close to
+	// opaque geometry fade out so we don't get hard contact lines.
 	float depth_fade = clamp(depth_diff / max(depth_fade_distance, 0.001), 0.0, 1.0);
 
-	float alpha = clamp(core * n * intensity * depth_fade, 0.0, 1.0);
+	// Void clip — when the scene geometry is far BEYOND this fragment
+	// (depth_diff large positive), the fragment is hovering over open
+	// space past the room edge. Fade to zero so the sphere doesn't
+	// bleed past room boundaries / over pits. Smoothstep for a soft
+	// transition rather than a hard cut.
+	float void_fade = 1.0 - smoothstep(void_clip_distance, void_clip_distance + void_fade_softness, depth_diff);
+
+	float alpha = clamp(core * n * intensity * depth_fade * void_fade, 0.0, 1.0);
 
 	// Strong emission gives the "radiating energy" feel — the visible
 	// core glows brightly, then drops off fast. The OmniLight handles
