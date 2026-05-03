@@ -78,6 +78,11 @@ const CROUCH_PROBE_INTERVAL := 0.25
 const CROUCH_PROBE_HEIGHT := STAND_HEIGHT - CROUCH_HEIGHT  # 0.7
 const CROUCH_PROBE_CENTER_Y := CROUCH_HEIGHT + CAPSULE_BOTTOM_Y + CROUCH_PROBE_HEIGHT * 0.5  # 1.30
 const CROUCH_PROBE_RADIUS := 0.5  # < capsule radius (0.6) so a brushed wall doesn't trip the probe
+# Distance ahead of the enemy to also probe — long enough to clear the
+# capsule + a bit of slab so the enemy crouches BEFORE bumping the
+# corridor's low-ceiling block, not after. Tuned for the standard 0.6m
+# capsule radius + 0.4m wall thickness.
+const CROUCH_PROBE_LOOKAHEAD := 1.1
 
 # Pit-pillar jump: triggered when the navmesh routes the enemy onto a
 # NavigationLink3D (placed by pit_builder between adjacent pillars). The
@@ -918,11 +923,25 @@ func _update_crouch_state() -> void:
 	query.shape = _stand_test_shape
 	query.collision_mask = 1  # World layer — walls, ceilings, floors
 	query.exclude = [get_rid()]
-	query.transform = Transform3D(Basis.IDENTITY,
-		global_position + Vector3(0.0, CROUCH_PROBE_CENTER_Y, 0.0))
-	var blocked := not space.intersect_shape(query, 1).is_empty()
+	# Probe at current position first — keeps the crouch active while we're
+	# under a low ceiling.
+	var blocked := _probe_overhead_at(query, global_position, space)
+	# If we're CURRENTLY standing in clear space but moving toward a low
+	# ceiling, also probe a step ahead. Without this, the standing capsule
+	# bumps the slab from outside and never gets close enough for the
+	# current-position probe to trigger — enemies pile up at the entrance
+	# of crouch corridors instead of going through.
+	if not blocked and _want_dir.length_squared() > 0.01:
+		var forward_pos := global_position + _want_dir.normalized() * CROUCH_PROBE_LOOKAHEAD
+		blocked = _probe_overhead_at(query, forward_pos, space)
 	if blocked != _crouching:
 		_set_crouch(blocked)
+
+
+func _probe_overhead_at(query: PhysicsShapeQueryParameters3D, base: Vector3, space: PhysicsDirectSpaceState3D) -> bool:
+	query.transform = Transform3D(Basis.IDENTITY,
+		base + Vector3(0.0, CROUCH_PROBE_CENTER_Y, 0.0))
+	return not space.intersect_shape(query, 1).is_empty()
 
 func _set_crouch(value: bool) -> void:
 	_crouching = value
