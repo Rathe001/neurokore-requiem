@@ -141,6 +141,11 @@ func _clear_pickups() -> void:
 #     scaled level, reset interactable states, keep geometry. Same level.
 # PlayerState (level/XP) and InventoryState carry over either way.
 func reset_level() -> void:
+	# Drop any active tooltip BEFORE freeing the world — otherwise an exit-pad
+	# tooltip (or anything else hovered at the moment of interaction) keeps
+	# showing because mouse_exited doesn't fire reliably when the anchor body
+	# is removed from the tree mid-interaction.
+	get_tree().call_group(&"interactable_tooltip", &"hide_tooltip")
 	_clear_enemies()
 	_clear_corpses()
 	_clear_pickups()

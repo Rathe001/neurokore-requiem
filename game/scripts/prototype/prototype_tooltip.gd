@@ -50,7 +50,15 @@ func _ready() -> void:
 	UIThemeState.changed.connect(_apply_theme)
 
 func _process(_dt: float) -> void:
-	if _anchor_target == null or not is_instance_valid(_anchor_target):
+	# Anchor was freed (level reset, pool release, queue_free) — drop the
+	# stale tooltip rather than leaving it pinned to a dead node. Without
+	# this the exit-pad tooltip persists across NG+ because the pad's
+	# mouse_exited never fires when the body is removed from the tree.
+	if _anchor_target != null and not is_instance_valid(_anchor_target):
+		_anchor_target = null
+		hide_tooltip()
+		return
+	if _anchor_target == null:
 		return
 	if not visible or _lmb_held:
 		return
