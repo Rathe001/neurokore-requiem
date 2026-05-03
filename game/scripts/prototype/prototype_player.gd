@@ -625,6 +625,13 @@ func _is_mouse_over_ui() -> bool:
 ## 0.5 / 0.75; a 0.5s main with 1 extra fires at 0 / 0.25; etc.
 const LMB_MULTI_STAGGER_FALLBACK := 1.0
 
+## Per-arm spawn offsets for Forged Amalgamation extras. weapon_2 fires from
+## the player's right (relative to aim), weapon_3 from the left, weapon_4
+## from above. Magnitudes sized to clear the player capsule visually
+## without throwing trajectories so far that targeting reads as off.
+const ARM_OFFSET_LATERAL := 0.5
+const ARM_OFFSET_VERTICAL := 1.0
+
 
 # LMB attack path. Iterates every active weapon slot (main + Amalgamation
 # extras), fires each whose slot cooldown is ready, and staggers their
@@ -673,6 +680,17 @@ func _cast_lmb_combat() -> void:
 		main_interval = main_item.fire_skill.cooldown / main_atk_spd
 	var stagger: float = main_interval / float(ready_fires.size())
 
+	# Aim-relative axes for per-arm offsets. aim_right is 90° clockwise from
+	# the horizontal aim vector (Vector3.UP cross flat-aim), so an extra
+	# arm's bullets emerge from the player's right relative to the cursor,
+	# not relative to world space.
+	var aim_flat := Vector3(aim.x, 0.0, aim.z)
+	if aim_flat.length_squared() < 0.0001:
+		aim_flat = Vector3.FORWARD
+	else:
+		aim_flat = aim_flat.normalized()
+	var aim_right := aim_flat.cross(Vector3.UP).normalized()
+
 	var max_fire_delay := 0.0
 	for i in ready_fires.size():
 		var f: Dictionary = ready_fires[i]
@@ -692,6 +710,7 @@ func _cast_lmb_combat() -> void:
 		max_fire_delay = maxf(max_fire_delay, fire_delay)
 		var captured_skill := skill
 		var captured_item := item
+		var captured_offset := _arm_offset_for_slot(slot, aim_right)
 		# Schedule the actual hit at fire_delay. Re-aim at lock-on time so a
 		# moving target still gets tracked even though the volley was queued
 		# at LMB-press.
@@ -703,7 +722,7 @@ func _cast_lmb_combat() -> void:
 				var refreshed := _aim_direction()
 				if refreshed != Vector3.ZERO:
 					fire_aim = refreshed
-			_combat.resolve_skill_hit(captured_skill, fire_aim, captured_item)
+			_combat.resolve_skill_hit(captured_skill, fire_aim, captured_item, captured_offset)
 		, CONNECT_ONE_SHOT)
 
 	_face_direction(aim)
@@ -719,6 +738,23 @@ func _cast_lmb_combat() -> void:
 		_attack_aim = aim
 		await get_tree().create_timer(max_fire_delay).timeout
 		_attacking = false
+
+
+# Per-arm world-space offset for the projectile / hitscan source position.
+# weapon (main): no offset — fires from chest.
+# weapon_2:      right of player (relative to aim direction).
+# weapon_3:      left of player.
+# weapon_4:      above the player.
+# Aim_right is the precomputed horizontal "right relative to aim" vector.
+func _arm_offset_for_slot(slot: StringName, aim_right: Vector3) -> Vector3:
+	match slot:
+		&"weapon_2":
+			return aim_right * ARM_OFFSET_LATERAL
+		&"weapon_3":
+			return -aim_right * ARM_OFFSET_LATERAL
+		&"weapon_4":
+			return Vector3(0.0, ARM_OFFSET_VERTICAL, 0.0)
+	return Vector3.ZERO
 
 
 func _cast_skill(skill: Skill) -> void:

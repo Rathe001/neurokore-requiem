@@ -69,7 +69,7 @@ func resolve_skill_source(skill: Skill) -> Item:
 		return offhand
 	return null
 
-func resolve_skill_hit(skill: Skill, aim: Vector3, weapon: Item) -> void:
+func resolve_skill_hit(skill: Skill, aim: Vector3, weapon: Item, source_offset: Vector3 = Vector3.ZERO) -> void:
 	var eff_range := effective_range(skill, weapon)
 	match skill.targeting_mode:
 		Skill.TargetingMode.SINGLE_CONE:
@@ -79,9 +79,9 @@ func resolve_skill_hit(skill: Skill, aim: Vector3, weapon: Item) -> void:
 			PrototypeAttackIndicator.spawn_hit_radial(_host, eff_range)
 			_resolve_aoe(skill, eff_range, weapon)
 		Skill.TargetingMode.PROJECTILE:
-			_spawn_projectile(skill, aim, eff_range, weapon)
+			_spawn_projectile(skill, aim, eff_range, weapon, source_offset)
 		Skill.TargetingMode.HITSCAN:
-			_resolve_hitscan(skill, aim, eff_range, weapon)
+			_resolve_hitscan(skill, aim, eff_range, weapon, source_offset)
 
 # ---------------------------------------------------------------------------
 # Hit patterns
@@ -112,7 +112,7 @@ func _resolve_aoe(skill: Skill, eff_range: float, weapon: Item) -> void:
 			var dmg := _crit_damage(_roll_skill_damage(skill, weapon), is_crit)
 			enode.take_damage(dmg, _host.global_position, skill.knockback, hits, is_crit)
 
-func _spawn_projectile(skill: Skill, aim: Vector3, eff_range: float, weapon: Item) -> void:
+func _spawn_projectile(skill: Skill, aim: Vector3, eff_range: float, weapon: Item, source_offset: Vector3 = Vector3.ZERO) -> void:
 	var proj: PrototypeProjectile = EntityPool.acquire(PROJECTILE_SCENE)
 	proj.direction = aim.normalized()
 	proj.speed = skill.projectile_speed
@@ -128,20 +128,23 @@ func _spawn_projectile(skill: Skill, aim: Vector3, eff_range: float, weapon: Ite
 		proj.damage_min = skill.damage
 		proj.damage_max = skill.damage
 	proj.damage_mult = AttributeState.get_player_damage_mult(PlayerState.class_id, PlayerState.spec_id)
-	# Spawn at the player's position (slightly elevated). Spawning ahead of
-	# the player would skip enemies standing right next to us. Player
-	# collision_layer doesn't match the projectile mask so no self-hit;
-	# the projectile sweeps forward and catches close-range targets via
-	# PrototypeProjectile._check_initial_overlaps().
-	var spawn_pos := _host.global_position + Vector3(0.0, 1.0, 0.0)
+	# Spawn at the player's position (slightly elevated), plus the per-arm
+	# offset for Forged Amalgamation extras (right / left / above). Spawning
+	# ahead of the player would skip enemies standing right next to us;
+	# player collision_layer doesn't match the projectile mask so no self-
+	# hit; the projectile sweeps forward and catches close-range targets
+	# via PrototypeProjectile._check_initial_overlaps().
+	var spawn_pos := _host.global_position + Vector3(0.0, 1.0, 0.0) + source_offset
 	_host.get_parent().add_child(proj)
 	proj.global_position = spawn_pos
 	proj.monitoring = true
 	proj.reset()
 
-func _resolve_hitscan(skill: Skill, aim: Vector3, eff_range: float, weapon: Item) -> void:
+func _resolve_hitscan(skill: Skill, aim: Vector3, eff_range: float, weapon: Item, source_offset: Vector3 = Vector3.ZERO) -> void:
 	var hits := PerkState.roll_multistrike()
-	var origin := _host.global_position + Vector3(0.0, 1.0, 0.0)
+	# Same per-arm offset as projectiles so the beam visibly emanates from
+	# the right / left / above point on Forged Amalgamation extras.
+	var origin := _host.global_position + Vector3(0.0, 1.0, 0.0) + source_offset
 	var aim_norm := aim.normalized()
 	var wall_dist := eff_range
 	var hit_target: Node3D = null
@@ -153,17 +156,20 @@ func _resolve_hitscan(skill: Skill, aim: Vector3, eff_range: float, weapon: Item
 		wall_dist = origin.distance_to(result["position"])
 	var half_cos := cos(deg_to_rad(2.5))
 	var closest_dist := INF
-	for enode: Node3D in SpatialGrid.query_cone(_host.global_position, aim_norm, wall_dist, half_cos, &"enemies"):
+	# Cone query origin matches the visual beam origin so the damage
+	# pattern shifts with the per-arm offset — Forged Amalgamation extras
+	# act as independent firing points, not just visual flair.
+	for enode: Node3D in SpatialGrid.query_cone(origin, aim_norm, wall_dist, half_cos, &"enemies"):
 		if not enode.has_method(&"take_damage"):
 			continue
-		var dist := _host.global_position.distance_squared_to(enode.global_position)
+		var dist := origin.distance_squared_to(enode.global_position)
 		if dist < closest_dist:
 			closest_dist = dist
 			hit_target = enode
 	var beam_end := wall_dist
 	if hit_target != null:
-		beam_end = minf(beam_end, _host.global_position.distance_to(hit_target.global_position))
-	PrototypeAttackIndicator.spawn_beam(_host, aim, beam_end)
+		beam_end = minf(beam_end, origin.distance_to(hit_target.global_position))
+	PrototypeAttackIndicator.spawn_beam(_host, aim, beam_end, source_offset)
 	if hit_target == null:
 		return
 	for _i in hits:

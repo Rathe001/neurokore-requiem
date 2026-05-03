@@ -90,7 +90,7 @@ static func spawn_line(host: Node3D, aim: Vector3, attack_range: float, wind_up:
 const BEAM_RADIUS := 0.04
 const BEAM_FADE := 0.18
 
-static func spawn_beam(host: Node3D, aim: Vector3, length: float) -> void:
+static func spawn_beam(host: Node3D, aim: Vector3, length: float, source_offset: Vector3 = Vector3.ZERO) -> void:
 	var parent: Node = host.get_parent()
 	if parent == null:
 		parent = host
@@ -142,7 +142,10 @@ static func spawn_beam(host: Node3D, aim: Vector3, length: float) -> void:
 	# to align with local -Z (the look_at forward), then offset by half length.
 	var node := Node3D.new()
 	parent.add_child(node)
-	node.global_position = host.global_position + Vector3(0.0, 1.0, 0.0)
+	# source_offset shifts the beam origin (right / left / above) for Forged
+	# Amalgamation extras so the visual emerges from the same point as the
+	# damage origin in PlayerCombat._resolve_hitscan.
+	node.global_position = host.global_position + Vector3(0.0, 1.0, 0.0) + source_offset
 	if aim.length_squared() > 0.0001:
 		node.look_at(node.global_position + aim, Vector3.UP)
 
