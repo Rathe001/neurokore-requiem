@@ -1,11 +1,63 @@
-[gd_resource type="Resource" script_class="PerkLadder" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="PerkLadder" load_steps=8 format=3]
 
-; Count / Countess (ort) tier perks — pending design. Target T3 effective
-; DPS ~1.45×; flavor lever is composed control (precision, denial, status
-; effects). Add three Perk subresources to `perks` and reload the game.
+; Count / Countess (ort) tier perks — Exile.
+;
+; Each enemy you hit is cursed for EXILE_CURSE_DURATION seconds. While
+; cursed, that enemy takes +X% damage from any source. When the curse
+; expires (or the cursed enemy isn't killed first), the player auto-fires
+; a hitscan that deals MASSIVE damage if it lands. Curses refresh on
+; subsequent hits — a tagged enemy stays tagged as long as you're chipping
+; at them.
+;
+; Tier deltas (additive aggregate; totals 10 / 20 / 40):
+;   T1 grants +10
+;   T2 grants +10
+;   T3 grants +20
+;
+; Auto-shot damage scales with main stat (Orthodoxy for Count) via
+; AttributeState.get_player_damage_mult, so investing Orthodoxy for tier
+; unlocks ALSO makes the expire shot hit harder.
 
+[ext_resource type="Script" path="res://scripts/perks/perk.gd" id="perk_script"]
+[ext_resource type="Script" path="res://scripts/perks/perk_effect.gd" id="effect_script"]
 [ext_resource type="Script" path="res://scripts/perks/perk_ladder.gd" id="ladder_script"]
+
+[sub_resource type="Resource" id="effect_ort_t1_curse"]
+script = ExtResource("effect_script")
+kind = &"exile_curse_damage_pct"
+magnitude = 10.0
+
+[sub_resource type="Resource" id="perk_ort_t1"]
+script = ExtResource("perk_script")
+id = &"ort_t1"
+label = "Exile I"
+description = "Hits curse the target for several seconds. Cursed enemies take +10% damage; when the curse expires, you auto-fire a massive shot."
+effects = [SubResource("effect_ort_t1_curse")]
+
+[sub_resource type="Resource" id="effect_ort_t2_curse"]
+script = ExtResource("effect_script")
+kind = &"exile_curse_damage_pct"
+magnitude = 10.0
+
+[sub_resource type="Resource" id="perk_ort_t2"]
+script = ExtResource("perk_script")
+id = &"ort_t2"
+label = "Exile II"
+description = "Cursed enemies take +20% damage."
+effects = [SubResource("effect_ort_t2_curse")]
+
+[sub_resource type="Resource" id="effect_ort_t3_curse"]
+script = ExtResource("effect_script")
+kind = &"exile_curse_damage_pct"
+magnitude = 20.0
+
+[sub_resource type="Resource" id="perk_ort_t3"]
+script = ExtResource("perk_script")
+id = &"ort_t3"
+label = "Exile III"
+description = "Cursed enemies take +40% damage. The expire shot is doctrine made manifest."
+effects = [SubResource("effect_ort_t3_curse")]
 
 [resource]
 script = ExtResource("ladder_script")
-perks = []
+perks = [SubResource("perk_ort_t1"), SubResource("perk_ort_t2"), SubResource("perk_ort_t3")]

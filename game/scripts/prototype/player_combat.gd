@@ -10,6 +10,16 @@ const PROJECTILE_SCENE: PackedScene = preload("res://scenes/prototype/prototype_
 const PROTO_BASE_CRIT_CHANCE: float = 0.15
 const PROTO_BASE_CRIT_MULT: float = 1.5
 
+# Count Exile constants. EXILE_CURSE_DURATION is the medium-long window
+# the curse persists after each hit (refreshed by subsequent hits, so a
+# pressured enemy stays tagged). EXILE_AUTO_SHOT_BASE_DAMAGE is the
+# unmultiplied damage of the auto-shot fired on curse expire — scaled
+# at fire time by AttributeState.get_player_damage_mult so investing
+# Orthodoxy makes the expire shot heavier as well as the curse heavier.
+const EXILE_CURSE_DURATION: float = 4.0
+const EXILE_AUTO_SHOT_BASE_DAMAGE: int = 60
+const EXILE_AUTO_SHOT_RANGE: float = 30.0
+
 var _host: PrototypePlayer
 var _cooldowns: Dictionary = {}
 # Per-equipment-slot cooldowns for the multi-weapon LMB path. Two identical
@@ -99,6 +109,7 @@ func _resolve_cone(skill: Skill, aim: Vector3, eff_range: float, weapon: Item) -
 			var is_crit := _roll_crit(weapon)
 			var dmg := _crit_damage(_roll_skill_damage(skill, weapon), is_crit)
 			enode.take_damage(dmg, _host.global_position, skill.knockback, hits, is_crit)
+		_apply_exile_curse_if_active(enode)
 
 func _resolve_aoe(skill: Skill, eff_range: float, weapon: Item) -> void:
 	var hits := PerkState.roll_multistrike()
@@ -111,6 +122,7 @@ func _resolve_aoe(skill: Skill, eff_range: float, weapon: Item) -> void:
 			var is_crit := _roll_crit(weapon)
 			var dmg := _crit_damage(_roll_skill_damage(skill, weapon), is_crit)
 			enode.take_damage(dmg, _host.global_position, skill.knockback, hits, is_crit)
+		_apply_exile_curse_if_active(enode)
 
 func _spawn_projectile(skill: Skill, aim: Vector3, eff_range: float, weapon: Item, source_offset: Vector3 = Vector3.ZERO) -> void:
 	var proj: PrototypeProjectile = EntityPool.acquire(PROJECTILE_SCENE)
@@ -178,6 +190,7 @@ func _resolve_hitscan(skill: Skill, aim: Vector3, eff_range: float, weapon: Item
 		var is_crit := _roll_crit(weapon)
 		var dmg := _crit_damage(_roll_skill_damage(skill, weapon), is_crit)
 		hit_target.take_damage(dmg, _host.global_position, skill.knockback, hits, is_crit)
+	_apply_exile_curse_if_active(hit_target)
 
 # ---------------------------------------------------------------------------
 # Damage rolling
@@ -207,3 +220,53 @@ func _crit_damage(base: int, is_crit: bool) -> int:
 		return base
 	var mult := PROTO_BASE_CRIT_MULT + PerkState.get_aggregate(&"crit_damage_pct")
 	return int(round(float(base) * mult))
+
+# ---------------------------------------------------------------------------
+# Count Exile — apply curse on hit + auto-fire massive shot on expire
+# ---------------------------------------------------------------------------
+
+# Apply (or refresh) the Exile curse on a freshly-hit enemy. Called by every
+# damage path (cone / aoe / projectile / hitscan) right after take_damage so
+# the perk works regardless of weapon shape. No-op when the perk isn't
+# active or the target was killed by the same hit.
+func _apply_exile_curse_if_active(enemy: Node) -> void:
+	var pct: float = PerkState.get_aggregate(&"exile_curse_damage_pct")
+	if pct <= 0.0:
+		return
+	if enemy == null or not is_instance_valid(enemy):
+		return
+	if enemy.has_method(&"apply_curse"):
+		enemy.apply_curse(pct, EXILE_CURSE_DURATION)
+
+
+# Called by PrototypeEnemy when a curse expires. Fires a hitscan from the
+# player toward the (possibly still-alive) target. If the target is dead /
+# freed, the shot fizzles silently — no fallback target. Damage scales
+# with main stat so investing Orthodoxy heavies up both the curse AND the
+# expire shot.
+func fire_exile_shot(target: Node3D) -> void:
+	if _host == null or target == null or not is_instance_valid(target):
+		return
+	if not target.has_method(&"take_damage"):
+		return
+	var origin := _host.global_position + Vector3(0.0, 1.0, 0.0)
+	var to_target := target.global_position + Vector3(0.0, 0.9, 0.0) - origin
+	var dist := to_target.length()
+	if dist > EXILE_AUTO_SHOT_RANGE:
+		return
+	var aim := to_target.normalized()
+	# LoS check — wall in the way kills the auto-shot before it lands
+	# (matches the "if it hits" wording in the perk description).
+	var space := _host.get_world_3d().direct_space_state
+	var ray_end := origin + aim * dist
+	var query := PhysicsRayQueryParameters3D.create(origin, ray_end, 1)
+	var result := space.intersect_ray(query)
+	if not result.is_empty():
+		# Show the beam to the wall hit so the player sees the failed shot,
+		# then bail without damage.
+		var wall_dist: float = origin.distance_to(result["position"])
+		PrototypeAttackIndicator.spawn_beam(_host, aim, wall_dist)
+		return
+	PrototypeAttackIndicator.spawn_beam(_host, aim, dist)
+	var dmg := int(round(float(EXILE_AUTO_SHOT_BASE_DAMAGE) * AttributeState.get_player_damage_mult(PlayerState.class_id, PlayerState.spec_id)))
+	target.take_damage(dmg, _host.global_position, 0.0, 1, false)

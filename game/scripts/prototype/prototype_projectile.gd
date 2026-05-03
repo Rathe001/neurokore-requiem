@@ -121,7 +121,27 @@ func _on_body_entered(body: Node3D) -> void:
 				body.take_damage(dmg, source_position, knockback_strength)
 			else:
 				body.take_damage(dmg, source_position, knockback_strength, 1, is_crit)
+				# Count Exile — apply curse on player-fired projectile hits
+				# the same way PlayerCombat does for cone/aoe/hitscan paths.
+				# Projectiles run async from PlayerCombat so the perk-aggregate
+				# read happens here at impact.
+				_apply_exile_curse_if_active(body)
 	_release()
+
+
+# Duplicates PlayerCombat.EXILE_CURSE_DURATION rather than reaching across
+# class_names — the projectile doesn't otherwise depend on PlayerCombat
+# and a literal here keeps the projectile self-contained. Keep these in
+# sync if the curse window is ever retuned.
+const EXILE_CURSE_DURATION: float = 4.0
+
+
+func _apply_exile_curse_if_active(enemy: Node) -> void:
+	var pct: float = PerkState.get_aggregate(&"exile_curse_damage_pct")
+	if pct <= 0.0:
+		return
+	if enemy.has_method(&"apply_curse"):
+		enemy.apply_curse(pct, EXILE_CURSE_DURATION)
 
 func _release() -> void:
 	# Called from physics callback contexts (body_entered, _physics_process), so

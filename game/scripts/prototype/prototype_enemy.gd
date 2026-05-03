@@ -259,6 +259,15 @@ var _jump_cooldown_remain: float = 0.0
 var _support_tick_t: float = 0.0
 var _damage_buff_mult: float = 0.0
 var _damage_buff_remain: float = 0.0
+# Count Exile curse state. Refreshed on every player hit while the perk
+# is active; ticks down each frame; on expire the enemy calls back to
+# PlayerCombat.fire_exile_shot for the massive auto-shot. _curse_marker
+# is a cheap floating glyph above the head — visible while cursed,
+# hidden otherwise. Stored as percentages (10 / 20 / 40) to match the
+# perk magnitude convention.
+var _curse_remain: float = 0.0
+var _curse_damage_pct: float = 0.0
+var _curse_marker: Label3D = null
 var _floor_ring_mat: StandardMaterial3D
 @onready var _nav_agent: NavigationAgent3D = $NavigationAgent3D
 # Spawn position captured on reset() — enemies leash back to this point
@@ -317,6 +326,9 @@ func _init_enemy() -> void:
 	_jump_cooldown_remain = 0.0
 	_damage_buff_mult = 0.0
 	_damage_buff_remain = 0.0
+	_curse_remain = 0.0
+	_curse_damage_pct = 0.0
+	_clear_curse_marker()
 	# Stagger the first support tick by a random fraction of the interval —
 	# without this every support enemy in a room emits in lockstep on the
 	# same physics frame, spiking the SpatialGrid query cost.
@@ -532,6 +544,13 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 	var returning := _state == State.RETURNING
 	if returning:
 		amount = maxi(1, int(round(float(amount) * RETURNING_DAMAGE_MULT)))
+	# Count Exile curse — cursed enemies take +X% damage from any source
+	# (the curse is applied by PlayerCombat after the player's hits, but
+	# the modifier applies regardless of who's swinging). Returning-leash
+	# damage reduction takes effect FIRST so a kite-cursed enemy still
+	# enjoys the leash protection.
+	if _curse_damage_pct > 0.0:
+		amount = int(round(float(amount) * (1.0 + _curse_damage_pct * 0.01)))
 	_health -= amount
 	_update_health_bar()
 	var head := global_position + Vector3(0.0, 1.8, 0.0)
@@ -662,6 +681,70 @@ func _outgoing_damage_mult() -> float:
 	return class_mult * (1.0 + _damage_buff_mult)
 
 
+## Apply or refresh the Count Exile curse. New hits while already cursed
+## reset the timer to the new duration and take the max damage_pct (a
+## lower-tier overlap from a respec mid-fight shouldn't downgrade the
+## curse). Skip on dead enemies — corpses don't carry tags.
+func apply_curse(damage_pct: float, duration: float) -> void:
+	if not _is_alive() or damage_pct <= 0.0 or duration <= 0.0:
+		return
+	if damage_pct > _curse_damage_pct:
+		_curse_damage_pct = damage_pct
+	if duration > _curse_remain:
+		_curse_remain = duration
+	_show_curse_marker()
+
+
+# Tick the curse timer; on expire, fire the auto-shot back at the player
+# AND clear local state. The shot has to come from the PLAYER (it's their
+# perk firing), so we look them up via the &"player" group rather than
+# storing a reference (which would persist across pool cycles).
+func _tick_curse(delta: float) -> void:
+	if _curse_remain <= 0.0:
+		return
+	_curse_remain -= delta
+	if _curse_remain > 0.0:
+		return
+	var was_pct := _curse_damage_pct
+	_curse_damage_pct = 0.0
+	_curse_remain = 0.0
+	_clear_curse_marker()
+	if was_pct <= 0.0:
+		return
+	var player := get_tree().get_first_node_in_group(&"player")
+	if player == null or not is_instance_valid(player):
+		return
+	if player.has_method(&"fire_exile_shot"):
+		player.fire_exile_shot(self)
+
+
+# Floating glyph above the head — visible while cursed, freed on expire.
+# Cheap (single Label3D), doesn't conflict with the hit-flash overlay or
+# affix tinting on the floor ring.
+func _show_curse_marker() -> void:
+	if _curse_marker != null and is_instance_valid(_curse_marker):
+		return
+	var lbl := Label3D.new()
+	lbl.text = "✦"
+	lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	lbl.no_depth_test = true
+	lbl.fixed_size = true
+	lbl.pixel_size = 0.0014
+	lbl.font_size = 32
+	lbl.outline_size = 8
+	lbl.modulate = Color(0.95, 0.85, 0.3, 1.0)
+	lbl.outline_modulate = Color(0.05, 0.0, 0.1, 1.0)
+	lbl.position = Vector3(0.0, 2.4, 0.0)
+	add_child(lbl)
+	_curse_marker = lbl
+
+
+func _clear_curse_marker() -> void:
+	if _curse_marker != null and is_instance_valid(_curse_marker):
+		_curse_marker.queue_free()
+	_curse_marker = null
+
+
 ## Single point of state transitions. Currently a thin setter; entry/exit
 ## hooks (e.g. clearing horizontal velocity on enter-CASTING, releasing the
 ## hit-tween on enter-DEAD) live at the call sites for now. If hook count
@@ -709,6 +792,7 @@ func _physics_process(delta: float) -> void:
 		if _support_tick_t <= 0.0:
 			_support_tick_t = enemy_class.support_interval
 			_emit_support()
+	_tick_curse(delta)
 
 	# Floor-snap is suppressed during JUMPING so the takeoff impulse set by
 	# _start_jump (which runs from the agent's link_reached signal AFTER our

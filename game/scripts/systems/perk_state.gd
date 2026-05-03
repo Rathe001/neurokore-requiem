@@ -35,6 +35,14 @@ extends Node
 #                                   slams them into another for AoE damage,
 #                                   or grabs scrap (single-target +50%) if no
 #                                   second enemy is in range.
+#   exile_curse_damage_pct        — +X% damage taken while cursed (Count Exile).
+#                                   PlayerCombat applies the curse via
+#                                   enemy.apply_curse() after every damage
+#                                   path; PrototypeEnemy.take_damage scales
+#                                   incoming damage by (1 + pct/100); on
+#                                   curse expire the enemy calls back to
+#                                   PlayerCombat.fire_exile_shot() for the
+#                                   massive auto-shot.
 #
 # Perks for higher tiers stack additively on top of lower tiers — reaching
 # tier 3 means tiers 1..3 are all active simultaneously.
