@@ -28,6 +28,13 @@ extends Node
 #                                   to gate weapon_2/_3/_4 slots, by CharacterPanel
 #                                   to render those slots, and by PrototypePlayer's
 #                                   LMB combat path to know how many weapons fire.
+#   telekinesis_bolts             — +N psionic bolts per trigger (Polymath
+#                                   Telekinesis). Read by PrototypePlayer's
+#                                   _process_telekinesis on a fixed cadence;
+#                                   each bolt grabs a random nearby enemy and
+#                                   slams them into another for AoE damage,
+#                                   or grabs scrap (single-target +50%) if no
+#                                   second enemy is in range.
 #
 # Perks for higher tiers stack additively on top of lower tiers — reaching
 # tier 3 means tiers 1..3 are all active simultaneously.

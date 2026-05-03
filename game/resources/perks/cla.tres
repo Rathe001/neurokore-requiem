@@ -1,11 +1,62 @@
-[gd_resource type="Resource" script_class="PerkLadder" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="PerkLadder" load_steps=8 format=3]
 
-; Polymath (cla) tier perks — pending design. Target T3 effective DPS ~1.45×;
-; flavor lever is hybrid arcane-cyber synthesis (skill-mod chains, elemental
-; rotation). Add three Perk subresources to `perks` and reload.
+; Polymath (cla) tier perks — Telekinesis.
+;
+; Each tier raises the bolt count fired per Telekinesis trigger. The
+; player's head pulses every TELEKINESIS_INTERVAL seconds (PrototypePlayer)
+; and emits N bolts; each grabs a random nearby enemy and slams them into
+; another nearby enemy for AoE damage. With only one nearby enemy, the
+; bolt grabs scrap instead — single-target, +50% damage, no AoE.
+;
+; Tier counts (additive aggregate):
+;   T1 grants +1 → total 1 bolt per trigger
+;   T2 grants +1 → total 2
+;   T3 grants +2 → total 4
+;
+; Bolt damage scales with main stat (Clarity for Polymath) via
+; AttributeState.get_player_damage_mult, so investing in Clarity for tier
+; unlocks ALSO makes each bolt hit harder.
 
+[ext_resource type="Script" path="res://scripts/perks/perk.gd" id="perk_script"]
+[ext_resource type="Script" path="res://scripts/perks/perk_effect.gd" id="effect_script"]
 [ext_resource type="Script" path="res://scripts/perks/perk_ladder.gd" id="ladder_script"]
+
+[sub_resource type="Resource" id="effect_cla_t1_bolt"]
+script = ExtResource("effect_script")
+kind = &"telekinesis_bolts"
+magnitude = 1.0
+
+[sub_resource type="Resource" id="perk_cla_t1"]
+script = ExtResource("perk_script")
+id = &"cla_t1"
+label = "Telekinesis I"
+description = "Occasionally, a psionic bolt erupts from your head and slams a nearby enemy into another for AoE damage."
+effects = [SubResource("effect_cla_t1_bolt")]
+
+[sub_resource type="Resource" id="effect_cla_t2_bolt"]
+script = ExtResource("effect_script")
+kind = &"telekinesis_bolts"
+magnitude = 1.0
+
+[sub_resource type="Resource" id="perk_cla_t2"]
+script = ExtResource("perk_script")
+id = &"cla_t2"
+label = "Telekinesis II"
+description = "Two psionic bolts per trigger."
+effects = [SubResource("effect_cla_t2_bolt")]
+
+[sub_resource type="Resource" id="effect_cla_t3_bolt"]
+script = ExtResource("effect_script")
+kind = &"telekinesis_bolts"
+magnitude = 2.0
+
+[sub_resource type="Resource" id="perk_cla_t3"]
+script = ExtResource("perk_script")
+id = &"cla_t3"
+label = "Telekinesis III"
+description = "Four psionic bolts per trigger. The room becomes a lattice of crashing bodies."
+effects = [SubResource("effect_cla_t3_bolt")]
 
 [resource]
 script = ExtResource("ladder_script")
-perks = []
+perks = [SubResource("perk_cla_t1"), SubResource("perk_cla_t2"), SubResource("perk_cla_t3")]

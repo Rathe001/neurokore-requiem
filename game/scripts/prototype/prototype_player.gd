@@ -124,6 +124,7 @@ var _resource_last_int: int = 0
 var _credits: int = 0
 var _death_tween: Tween
 var _hit_flash_tween: Tween
+var _telekinesis_t: float = 0.0
 var _spawn_position: Vector3 = Vector3.ZERO
 var _equipped_light: Light3D
 var _scanner_active: bool = false
@@ -358,6 +359,7 @@ func _physics_process(delta: float) -> void:
 	_update_lock_target()
 	_combat.tick_cooldowns(delta)
 	_tick_resource_regen(delta)
+	_tick_telekinesis(delta)
 
 	var on_floor := is_on_floor()
 
@@ -632,6 +634,22 @@ const LMB_MULTI_STAGGER_FALLBACK := 1.0
 const ARM_OFFSET_LATERAL := 0.5
 const ARM_OFFSET_VERTICAL := 1.0
 
+## Polymath Telekinesis — auto-fires every TELEKINESIS_INTERVAL seconds when
+## PerkState.get_aggregate(&"telekinesis_bolts") > 0. N bolts per trigger
+## (sourced from the aggregate, capped sensibly). Each bolt grabs a random
+## enemy in TELEKINESIS_RANGE and slams them into another enemy for AoE
+## damage; if only one is in range, the bolt grabs scrap and deals
+## TELEKINESIS_SCRAP_BONUS extra to that single target with no AoE. Damage
+## scales with the player's class damage multiplier (Clarity for Polymath).
+const TELEKINESIS_INTERVAL := 6.0
+const TELEKINESIS_RANGE := 12.0
+const TELEKINESIS_AOE_RADIUS := 2.5
+const TELEKINESIS_BASE_DAMAGE := 25
+const TELEKINESIS_SCRAP_BONUS := 1.5
+const TELEKINESIS_BOLT_STAGGER := 0.1
+const TELEKINESIS_HEAD_OFFSET := Vector3(0.0, 0.55, 0.0)  # added to chest base (1.0) so beam emerges at head height
+const TELEKINESIS_MAX_BOLTS := 8  # safety cap for future stacking sources
+
 
 # LMB attack path. Iterates every active weapon slot (main + Amalgamation
 # extras), fires each whose slot cooldown is ready, and staggers their
@@ -801,6 +819,70 @@ func _tick_resource_regen(delta: float) -> void:
 		return
 	_resource_current = minf(float(resource_pool.max_value), _resource_current + resource_pool.regen_per_sec * delta)
 	_emit_resource_if_changed()
+
+
+# Polymath Telekinesis tick. Reads the perk aggregate every frame; when the
+# cooldown elapses, fires N bolts staggered by TELEKINESIS_BOLT_STAGGER so
+# a T3 4-bolt trigger reads as a sequence not one chord.
+func _tick_telekinesis(delta: float) -> void:
+	if not _alive:
+		return
+	var bolts := mini(int(round(PerkState.get_aggregate(&"telekinesis_bolts"))), TELEKINESIS_MAX_BOLTS)
+	if bolts <= 0:
+		return
+	_telekinesis_t -= delta
+	if _telekinesis_t > 0.0:
+		return
+	_telekinesis_t = TELEKINESIS_INTERVAL
+	for i in bolts:
+		if i == 0:
+			_fire_telekinesis_bolt()
+		else:
+			get_tree().create_timer(TELEKINESIS_BOLT_STAGGER * float(i)).timeout.connect(_fire_telekinesis_bolt, CONNECT_ONE_SHOT)
+
+
+func _fire_telekinesis_bolt() -> void:
+	if not _alive:
+		return
+	var enemies: Array[Node3D] = []
+	for n in SpatialGrid.query_radius(global_position, TELEKINESIS_RANGE, &"enemies"):
+		if n is Node3D and is_instance_valid(n):
+			enemies.append(n)
+	if enemies.is_empty():
+		return
+	var grabbed: Node3D = enemies[randi() % enemies.size()]
+	var slam_target: Node3D = null
+	# First non-grabbed enemy serves as the slam destination. The rolls
+	# are uncorrelated — the player can read the bolt as "snake from me to
+	# enemy A to enemy B" and intuit AoE landing at B.
+	for n in enemies:
+		if n != grabbed:
+			slam_target = n
+			break
+	var dmg := int(round(float(TELEKINESIS_BASE_DAMAGE) * AttributeState.get_player_damage_mult(class_id, spec_id)))
+	# Beam from head to grabbed enemy. Direction + length recomputed because
+	# grabbed enemy might be at any height; spawn_beam handles the rotation.
+	var head_pos := global_position + Vector3(0.0, 1.0, 0.0) + TELEKINESIS_HEAD_OFFSET
+	var to_grabbed := grabbed.global_position + Vector3(0.0, 0.9, 0.0) - head_pos
+	var grabbed_dist := to_grabbed.length()
+	if grabbed_dist > 0.001:
+		PrototypeAttackIndicator.spawn_beam(self, to_grabbed.normalized(), grabbed_dist, TELEKINESIS_HEAD_OFFSET)
+	if slam_target == null:
+		# Solo: scrap snatch — bonus damage, no AoE.
+		if grabbed.has_method(&"take_damage"):
+			grabbed.take_damage(int(round(float(dmg) * TELEKINESIS_SCRAP_BONUS)), global_position, 0.0)
+		return
+	# Slam: damage to grabbed + AoE around slam_target.
+	if grabbed.has_method(&"take_damage"):
+		grabbed.take_damage(dmg, global_position, 0.0)
+	for n in SpatialGrid.query_radius(slam_target.global_position, TELEKINESIS_AOE_RADIUS, &"enemies"):
+		if not (n is Node3D) or not is_instance_valid(n):
+			continue
+		if not n.has_method(&"take_damage"):
+			continue
+		n.take_damage(dmg, slam_target.global_position, 0.0)
+	# Visual: radial pulse at the slam point so the AoE landing reads.
+	PrototypeAttackIndicator.spawn_hit_radial(slam_target, TELEKINESIS_AOE_RADIUS)
 
 func _spend_resource(amount: int) -> void:
 	if resource_pool == null:
