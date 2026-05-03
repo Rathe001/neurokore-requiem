@@ -48,7 +48,7 @@ magnitude = 1.0
 script = ExtResource("perk_script")
 id = &"amb_t1"
 label = "Doomsayer I"
-description = "An aura of dread surrounds you. Damages nearby enemies over time (heaviest at your feet, fading to nothing at the edge). Charms 1 enemy at a time — they fight for you until killed."
+description = "An aura of dread surrounds you, damaging nearby enemies over time (heaviest at your feet, fading to nothing at the edge). Converts up to 1 follower to your cult — they fight for you until they die."
 effects = [SubResource("effect_amb_t1_proc"), SubResource("effect_amb_t1_charms")]
 
 [sub_resource type="Resource" id="effect_amb_t2_proc"]
@@ -65,7 +65,7 @@ magnitude = 1.0
 script = ExtResource("perk_script")
 id = &"amb_t2"
 label = "Doomsayer II"
-description = "The aura tightens. Stronger DoT; up to 2 charmed enemies fighting for you."
+description = "The aura tightens. Stronger DoT; up to 2 followers converted to your cult."
 effects = [SubResource("effect_amb_t2_proc"), SubResource("effect_amb_t2_charms")]
 
 [sub_resource type="Resource" id="effect_amb_t3_proc"]
@@ -82,7 +82,7 @@ magnitude = 1.0
 script = ExtResource("perk_script")
 id = &"amb_t3"
 label = "Doomsayer III"
-description = "Maximum DoT, up to 3 charmed enemies fighting for you. Walking apocalypse — the herd unravels around you."
+description = "Maximum DoT; up to 3 followers in your cult. Walking apocalypse — the herd unravels around you and joins you."
 effects = [SubResource("effect_amb_t3_proc"), SubResource("effect_amb_t3_charms")]
 
 [resource]

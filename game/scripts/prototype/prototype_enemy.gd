@@ -814,6 +814,21 @@ func apply_stun(duration: float) -> void:
 ## Returns false when the application failed (no other enemy in range,
 ## or the enemy is leashed/dead) so the caller can skip adding to the
 ## charm list. Returns true on a successful charm.
+# Physics layer values (mirrors the project layer scheme — see CLAUDE.md
+# section on collision layers / `docs/status.md` notes).
+const _LAYER_WORLD := 1
+const _LAYER_ENEMY := 2
+const _LAYER_PLAYER := 4
+# Charmed pets move to a dedicated "ally" layer that the player's mask
+# (1|2) does NOT include — so the player passes through pets without
+# getting body-blocked. Other enemies' masks also don't include this
+# bit, which means pets can move through enemy crowds freely; they're
+# still in the &"enemies" group so target queries find them as normal.
+const _LAYER_CHARMED_ALLY := 16
+const _DEFAULT_ENEMY_MASK := _LAYER_WORLD | _LAYER_ENEMY | _LAYER_PLAYER  # 7
+const _CHARMED_PET_MASK := _LAYER_WORLD | _LAYER_ENEMY                   # 3 (no player bit)
+
+
 func apply_charm() -> bool:
 	if not _is_alive():
 		return false
@@ -823,18 +838,32 @@ func apply_charm() -> bool:
 		# Already charmed — caller shouldn't double-add. Returning false so
 		# the player's FIFO list doesn't gain a duplicate entry.
 		return false
-	_charm_target = _pick_nearest_other_enemy()
-	if _charm_target == null:
-		# Out of fight — no victim available. Don't flip _charmed so the
-		# proc isn't "wasted" silently from the player's POV (the slot
-		# stays open for the next enemy that does have neighbours).
-		return false
 	_charmed = true
+	# Initial target is best-effort. null is fine — _tick_afflictions
+	# re-picks every frame and the chase tick falls back to "follow
+	# player loosely" until a real enemy walks into AGGRO_RANGE.
+	_charm_target = _pick_nearest_other_enemy()
 	# A stunned enemy snapping out of stun should still resume mind-control;
 	# don't override an active stun's State here.
 	if _state != State.STUNNED:
 		_change_state(State.CHASING)
 	_show_affliction_marker("♥", Color(1.0, 0.4, 0.7, 1.0))
+	# Pass-through collision with the player. Switching to a dedicated
+	# ally layer means BOTH directions ignore each other (the player's
+	# mask doesn't include this layer either) — pet doesn't push the
+	# player around and the player doesn't bump into the pet. Other
+	# enemies' masks also don't include this bit, so pets glide through
+	# enemy crowds without body-blocking — the trade is that pets can't
+	# physically wall enemies in.
+	collision_layer = _LAYER_CHARMED_ALLY
+	collision_mask = _CHARMED_PET_MASK
+	# Puzzle resolution: clear_room_puzzle.gd one-shot connects to the
+	# `died` signal to count down its kill counter. Emitting on charm
+	# tells those puzzles "this enemy is no longer a threat" so a player
+	# who charms every guard in a room still unlocks the door. The
+	# CONNECT_ONE_SHOT means a later actual death of this pet won't
+	# double-decrement the counter.
+	died.emit()
 	return true
 
 
@@ -847,6 +876,11 @@ func release_charm() -> void:
 		return
 	_charmed = false
 	_charm_target = null
+	# Restore the default collision layer + mask so the released enemy
+	# behaves like a normal hostile again (player + enemies collide
+	# with it, projectiles target it).
+	collision_layer = _LAYER_ENEMY
+	collision_mask = _DEFAULT_ENEMY_MASK
 	# Marker may stay if other afflictions are still active; the next
 	# _tick_afflictions cycle clears it once everything is gone.
 	if _stun_remain <= 0.0 and _weaken_remain <= 0.0:
@@ -1298,7 +1332,7 @@ func _chase_tick() -> void:
 			if nav_dir.length_squared() > 0.0001:
 				dir = nav_dir.normalized()
 	_want_dir = dir
-	var chase_speed := CHASE_SPEED * (CROUCH_SPEED_MULT if _crouching else 1.0) * _affix_move_speed_mult()
+	var chase_speed := _movement_speed_base() * (CROUCH_SPEED_MULT if _crouching else 1.0) * _affix_move_speed_mult()
 	velocity.x = dir.x * chase_speed
 	velocity.z = dir.z * chase_speed
 
@@ -1318,8 +1352,20 @@ func _chase_tick() -> void:
 # follow mechanism.
 const _FOLLOW_DISTANCE_TARGET := 3.0
 const _FOLLOW_DISTANCE_TOLERANCE := 1.0
-const _FOLLOW_SPEED_MULT := 0.7
 const _FOLLOW_TELEPORT_DISTANCE := 25.0
+
+
+# Base movement speed before crouch / affix / per-tick modifiers. For
+# charmed pets this returns the player's current move_speed so they can
+# keep up at run pace. Non-charmed enemies use the normal CHASE_SPEED
+# constant. Called by _chase_tick (chasing an enemy or returning to
+# spawn) and _follow_player_loose (loose pet follow).
+func _movement_speed_base() -> float:
+	if _charmed and _player_ref != null and is_instance_valid(_player_ref) and _player_ref is PrototypePlayer:
+		return (_player_ref as PrototypePlayer).move_speed
+	return CHASE_SPEED
+
+
 func _follow_player_loose(player: Node3D) -> void:
 	# Anti-leash teleport runs in _chase_tick before this branch, so by
 	# the time we get here the pet is guaranteed to be within
@@ -1337,7 +1383,10 @@ func _follow_player_loose(player: Node3D) -> void:
 	if dist > _FOLLOW_DISTANCE_TARGET + _FOLLOW_DISTANCE_TOLERANCE:
 		# Too far — close the gap at a casual jog.
 		_want_dir = dir
-		var follow_speed := CHASE_SPEED * _FOLLOW_SPEED_MULT * (CROUCH_SPEED_MULT if _crouching else 1.0) * _affix_move_speed_mult()
+		# Slightly faster than the base so the pet can catch up after
+		# being separated — pure 1.0× base would mean the pet can never
+		# close a gap once the player starts running.
+		var follow_speed := _movement_speed_base() * 1.2 * (CROUCH_SPEED_MULT if _crouching else 1.0) * _affix_move_speed_mult()
 		velocity.x = dir.x * follow_speed
 		velocity.z = dir.z * follow_speed
 	else:

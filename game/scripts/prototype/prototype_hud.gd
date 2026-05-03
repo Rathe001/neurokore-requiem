@@ -208,34 +208,19 @@ func _update_buffs_bar() -> void:
 
 func _add_buff_entry(stat_id: StringName, tier: int, perk: Perk) -> void:
 	var stat_color: Color = AttributeState.STAT_COLORS.get(stat_id, Color.WHITE)
-	var entry := Panel.new()
+	# No background, no border — entry is just the tier roman painted in
+	# the stat color. Wrapping in a Control so mouse_filter STOP still
+	# catches hover events for the tooltip without a visible panel.
+	var entry := Control.new()
 	entry.custom_minimum_size = _BUFF_ENTRY_SIZE
-	# Per-entry stylebox tinted by the stat color — gives an at-a-glance
-	# class identity read without needing icons. StyleBoxFlat is cheap
-	# and matches the dark-panel + colored-border look used elsewhere
-	# in the HUD.
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(stat_color.r * 0.25, stat_color.g * 0.25, stat_color.b * 0.25, 0.85)
-	sb.border_color = stat_color
-	sb.set_border_width_all(1)
-	sb.set_corner_radius_all(2)
-	entry.add_theme_stylebox_override(&"panel", sb)
 	entry.mouse_filter = Control.MOUSE_FILTER_STOP
-	# AMB (Doomsayer) gets a "current/max" charm count instead of the
-	# tier roman — the count is the gameplay-relevant info ("how many
-	# pets do I have right now?"), and roman is still in the tooltip.
-	# Other perks just show the tier roman.
 	var label := Label.new()
-	if stat_id == &"amb":
-		var player := get_tree().get_first_node_in_group(&"player") as PrototypePlayer
-		var current: int = player.get_charm_count() if player != null else 0
-		var max_count: int = player.get_charm_max() if player != null else tier
-		label.text = "%d/%d" % [current, max_count]
-		entry.set_meta(&"is_amb", true)
-	else:
-		label.text = AttributeState.TIER_ROMAN[tier - 1]
-	label.add_theme_font_size_override(&"font_size", 8)
+	label.text = AttributeState.TIER_ROMAN[tier - 1]
+	label.add_theme_font_size_override(&"font_size", 12)
 	label.add_theme_color_override(&"font_color", stat_color)
+	# Subtle outline so the colored numerals stay readable against any
+	# background the world happens to render behind them. 1px keeps the
+	# small tier text crisp without thickening it.
 	label.add_theme_color_override(&"font_outline_color", Color(0, 0, 0, 1))
 	label.add_theme_constant_override(&"outline_size", 1)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -246,21 +231,40 @@ func _add_buff_entry(stat_id: StringName, tier: int, perk: Perk) -> void:
 	entry.add_child(label)
 	# Hover wires to the existing tooltip system. Captured locals so the
 	# closure doesn't reach into mutable state at fire time.
-	var tooltip_title: String
-	var tooltip_body: String
-	if perk != null:
-		tooltip_title = "%s  ·  %s" % [perk.label, AttributeState.TIER_ROMAN[tier - 1]]
-		tooltip_body = perk.description
-	else:
-		var stat_key: StringName = AttributeState.STAT_I18N.get(stat_id, &"")
-		var stat_name: String = tr(stat_key) if stat_key != &"" else String(stat_id).capitalize()
-		tooltip_title = "%s  ·  %s" % [stat_name, AttributeState.TIER_ROMAN[tier - 1]]
-		tooltip_body = "Tier %s perk for this stat — no description available." % AttributeState.TIER_ROMAN[tier - 1]
+	# Build tooltip lazily at hover time so live state (current charm
+	# count for AMB, etc.) is fresh on each open instead of frozen at
+	# bar-build time.
+	var captured_stat: StringName = stat_id
+	var captured_tier: int = tier
+	var captured_perk: Perk = perk
 	entry.mouse_entered.connect(func() -> void:
-		get_tree().call_group(&"interactable_tooltip", &"show_talent_node", tooltip_title, tooltip_body))
+		var pair := _build_buff_tooltip(captured_stat, captured_tier, captured_perk)
+		get_tree().call_group(&"interactable_tooltip", &"show_talent_node", pair[0], pair[1]))
 	entry.mouse_exited.connect(func() -> void:
 		get_tree().call_group(&"interactable_tooltip", &"hide_tooltip"))
 	buff_entries.add_child(entry)
+
+
+# Returns [title, body] for the buff tooltip. AMB appends the live
+# charm count ("X/Y followers") so the player can see how many pets
+# they currently have without staring at the bar.
+func _build_buff_tooltip(stat_id: StringName, tier: int, perk: Perk) -> Array:
+	var title: String
+	var body: String
+	if perk != null:
+		title = "%s  ·  %s" % [perk.label, AttributeState.TIER_ROMAN[tier - 1]]
+		body = perk.description
+	else:
+		var stat_key: StringName = AttributeState.STAT_I18N.get(stat_id, &"")
+		var stat_name: String = tr(stat_key) if stat_key != &"" else String(stat_id).capitalize()
+		title = "%s  ·  %s" % [stat_name, AttributeState.TIER_ROMAN[tier - 1]]
+		body = "Tier %s perk for this stat — no description available." % AttributeState.TIER_ROMAN[tier - 1]
+	if stat_id == &"amb":
+		var player := get_tree().get_first_node_in_group(&"player") as PrototypePlayer
+		var current: int = player.get_charm_count() if player != null else 0
+		var max_count: int = player.get_charm_max() if player != null else 0
+		body += "\n\n%d/%d followers" % [current, max_count]
+	return [title, body]
 
 func _repaint_xp(current: int, to_next: int) -> void:
 	if xp_fill == null:
