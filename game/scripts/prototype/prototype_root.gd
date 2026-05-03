@@ -101,6 +101,10 @@ func _spawn_wave(count: int) -> void:
 		var enemy := EntityPool.acquire(ENEMY_SCENE)
 		add_child(enemy)
 		enemy.global_position = pos
+		# Wipe any leftover affixes the pool occupant carried — wave spawns
+		# are vanilla trash, not pack-leader rare encounters.
+		if "affixes" in enemy:
+			enemy.affixes = []
 		if enemy.has_method(&"reset"):
 			enemy.reset()
 
@@ -193,6 +197,9 @@ func _spawn_boss() -> void:
 		boss.is_boss = true
 	if "display_name" in boss:
 		boss.display_name = "Pickle"
+	# Wipe any leftover affixes — bosses use is_boss for their stat boost.
+	if "affixes" in boss:
+		boss.affixes = []
 	add_child(boss)
 	boss.global_position = boss_spawn
 	if boss.has_method(&"reset"):

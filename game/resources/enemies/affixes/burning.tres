@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="MonsterAffix" load_steps=2 format=3]
+
+; Burning: more damage + an `ignite` effect tag (reserved for the future
+; status framework — will apply a fire DoT on hit). Visual tell is the
+; orange-red ring; pair with Frenzied for a chip-damage nightmare.
+
+[ext_resource type="Script" path="res://scripts/enemies/monster_affix.gd" id="script"]
+
+[resource]
+script = ExtResource("script")
+id = &"burning"
+label = "Burning"
+health_mult = 1.0
+damage_mult = 1.25
+attack_cooldown_mult = 1.0
+move_speed_mult = 1.0
+ring_tint = Color(1.0, 0.55, 0.1, 1.0)
+weight = 80
+min_level = 2
+effects = [&"ignite"]

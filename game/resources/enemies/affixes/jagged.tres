@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="MonsterAffix" load_steps=2 format=3]
+
+; Jagged: hits harder, swings normal speed. Reads as "spike-armoured
+; brute" — single hits feel dangerous, encourages dodging not tanking.
+; `thorns` effect is reserved for the future damage-type framework.
+
+[ext_resource type="Script" path="res://scripts/enemies/monster_affix.gd" id="script"]
+
+[resource]
+script = ExtResource("script")
+id = &"jagged"
+label = "Jagged"
+health_mult = 1.15
+damage_mult = 1.5
+attack_cooldown_mult = 1.0
+move_speed_mult = 1.0
+ring_tint = Color(0.85, 0.85, 0.95, 1.0)
+weight = 90
+min_level = 2
+effects = [&"thorns"]

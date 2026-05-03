@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="MonsterAffix" load_steps=2 format=3]
+
+; Tough: meatshield. 80% more HP, no other changes — slows the fight,
+; gives the player time to think about positioning vs. burst windows.
+
+[ext_resource type="Script" path="res://scripts/enemies/monster_affix.gd" id="script"]
+
+[resource]
+script = ExtResource("script")
+id = &"tough"
+label = "Tough"
+health_mult = 1.8
+damage_mult = 1.0
+attack_cooldown_mult = 1.0
+move_speed_mult = 1.0
+ring_tint = Color(0.4, 0.55, 0.85, 1.0)
+weight = 100
+min_level = 1
+effects = []

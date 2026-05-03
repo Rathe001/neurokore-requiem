@@ -169,6 +169,13 @@ static var _s_outline_mat_locked: StandardMaterial3D
 ## this script.
 @export var enemy_class: EnemyClass
 
+## Pack-rare modifier list. Set by EnemySpawner before reset() runs when the
+## pack roll succeeds; both the leader and its companions share the same
+## affix list. Empty = a regular trash spawn. Affix multipliers compound
+## onto the rolled level stats inside _apply_level_stats; the first affix's
+## ring_tint overrides the level-based floor-ring color.
+@export var affixes: Array[MonsterAffix] = []
+
 @onready var visual: Node3D = $Visual
 @onready var anim_player: AnimationPlayer = $Visual/Character/AnimationPlayer
 @onready var health_bar: MeshInstance3D = $HealthBar
@@ -306,7 +313,35 @@ func _apply_level_stats() -> void:
 	var dmg_range := LEVEL_DAMAGE_RANGE[lv]
 	max_health = randi_range(hp_range.x, hp_range.y)
 	_attack_damage = randi_range(dmg_range.x, dmg_range.y)
-	_apply_floor_ring_tint(lv)
+	# Compound affix multipliers onto the rolled stats. Storing the per-stat
+	# mult product on the enemy lets _attack_cooldown / _chase_speed use them
+	# at runtime without re-iterating affixes every tick.
+	var hp_mult := 1.0
+	var dmg_mult := 1.0
+	for affix in affixes:
+		if affix == null:
+			continue
+		hp_mult *= affix.health_mult
+		dmg_mult *= affix.damage_mult
+	max_health = int(round(float(max_health) * hp_mult))
+	_attack_damage = int(round(float(_attack_damage) * dmg_mult))
+	# Affix tint wins over level tint when present — packs need to read as
+	# distinct from across the room. Use the first affix; multi-affix rares
+	# inherit the lead modifier's color (Frenzied + Tough = orange, not
+	# blended-mud).
+	if not affixes.is_empty() and affixes[0] != null:
+		_apply_floor_ring_tint_color(affixes[0].ring_tint)
+	else:
+		_apply_floor_ring_tint(lv)
+	# Decorate display name with affix labels: "Frenzied Tough Husk".
+	if not affixes.is_empty():
+		var parts: Array[String] = []
+		for affix in affixes:
+			if affix != null and affix.label != "":
+				parts.append(affix.label)
+		if not parts.is_empty():
+			parts.append(display_name)
+			display_name = " ".join(parts)
 
 func _apply_boss_stats() -> void:
 	level = BOSS_LEVEL
@@ -364,6 +399,11 @@ func reset() -> void:
 	# capturing here gives us the correct spawn point even when the enemy
 	# is reused from the pool at a new location.
 	_spawn_position = global_position
+	# Note: `affixes` is set by the spawner BEFORE reset() in pack-spawn
+	# paths, and cleared (re-set to []) by the spawner for non-pack spawns,
+	# so a pool-recycled body never inherits the previous owner's modifiers.
+	# We don't clear here because the spawner's pre-reset assignment would
+	# be wiped.
 
 func _setup_hover() -> void:
 	if _s_outline_mat == null:
@@ -472,7 +512,8 @@ func _attack_range() -> float:
 	return enemy_class.attack_range if enemy_class != null else DEFAULT_ATTACK_RANGE
 
 func _attack_cooldown() -> float:
-	return enemy_class.attack_cooldown if enemy_class != null else DEFAULT_ATTACK_COOLDOWN
+	var base := enemy_class.attack_cooldown if enemy_class != null else DEFAULT_ATTACK_COOLDOWN
+	return base * _affix_attack_cooldown_mult()
 
 func _attack_windup() -> float:
 	return enemy_class.attack_windup if enemy_class != null else DEFAULT_ATTACK_WINDUP
@@ -488,6 +529,25 @@ func _is_ranged() -> bool:
 
 func _ranged_kite_distance() -> float:
 	return enemy_class.ranged_kite_distance if enemy_class != null else 8.0
+
+
+# Affix-driven runtime multipliers — walked at access rather than cached so
+# future buff overlays (slow, haste status effects) can layer onto the same
+# accessor without a separate refresh pass. At horde scale this is still
+# cheap; the affix list is typically 1-2 entries.
+func _affix_attack_cooldown_mult() -> float:
+	var m := 1.0
+	for affix in affixes:
+		if affix != null:
+			m *= affix.attack_cooldown_mult
+	return m
+
+func _affix_move_speed_mult() -> float:
+	var m := 1.0
+	for affix in affixes:
+		if affix != null:
+			m *= affix.move_speed_mult
+	return m
 
 
 # Run one support tick — query SpatialGrid for nearby allies (including self,
@@ -742,7 +802,7 @@ func _chase_tick() -> void:
 			# fine. Bumping into walls is the player's intended advantage.
 			var away := -to_player / dist
 			_want_dir = away
-			var back_speed := CHASE_SPEED * 0.55 * (CROUCH_SPEED_MULT if _crouching else 1.0)
+			var back_speed := CHASE_SPEED * 0.55 * (CROUCH_SPEED_MULT if _crouching else 1.0) * _affix_move_speed_mult()
 			velocity.x = away.x * back_speed
 			velocity.z = away.z * back_speed
 			return
@@ -775,7 +835,7 @@ func _chase_tick() -> void:
 			if nav_dir.length_squared() > 0.0001:
 				dir = nav_dir.normalized()
 	_want_dir = dir
-	var chase_speed := CHASE_SPEED * (CROUCH_SPEED_MULT if _crouching else 1.0)
+	var chase_speed := CHASE_SPEED * (CROUCH_SPEED_MULT if _crouching else 1.0) * _affix_move_speed_mult()
 	velocity.x = dir.x * chase_speed
 	velocity.z = dir.z * chase_speed
 
@@ -797,7 +857,7 @@ func _tick_return(spawn_dist_sq: float) -> void:
 		return
 	var spawn_dir := to_spawn / sd
 	_want_dir = spawn_dir
-	var return_speed := CHASE_SPEED * (CROUCH_SPEED_MULT if _crouching else 1.0)
+	var return_speed := CHASE_SPEED * (CROUCH_SPEED_MULT if _crouching else 1.0) * _affix_move_speed_mult()
 	velocity.x = spawn_dir.x * return_speed
 	velocity.z = spawn_dir.z * return_speed
 

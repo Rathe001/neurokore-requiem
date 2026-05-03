@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="MonsterAffix" load_steps=2 format=3]
+
+; Vampiric: extra HP and the lifesteal effect tag (inert until the damage-
+; type framework lands). Player should focus these down fast — even when
+; lifesteal is wired up, the affix telegraph (deep red ring) tells them
+; this enemy heals on hit.
+
+[ext_resource type="Script" path="res://scripts/enemies/monster_affix.gd" id="script"]
+
+[resource]
+script = ExtResource("script")
+id = &"vampiric"
+label = "Vampiric"
+health_mult = 1.4
+damage_mult = 1.0
+attack_cooldown_mult = 1.0
+move_speed_mult = 1.0
+ring_tint = Color(0.65, 0.05, 0.1, 1.0)
+weight = 70
+min_level = 3
+effects = [&"lifesteal"]
