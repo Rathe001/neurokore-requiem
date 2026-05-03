@@ -1506,7 +1506,20 @@ func _die() -> void:
 	_drop_item()
 	var played := _play_anim(ANIM_DEATH, 1.0)
 	if not played:
+		# No death clip for this rig — settle it in an idle pose BEFORE
+		# pausing. A bare anim_player.pause() freezes on whatever was
+		# playing (usually RUN, since the enemy was chasing when killed),
+		# which leaves the corpse with limbs splayed mid-stride once the
+		# rotation tween lays it flat. Idle pose looks like a fallen
+		# body. advance(0.0) forces the new clip's first-frame poses to
+		# apply this tick so the subsequent pause catches the idle pose
+		# instead of holding RUN's last frame.
 		if anim_player != null:
+			for idle_name in ANIM_IDLE:
+				if anim_player.has_animation(idle_name):
+					anim_player.play(idle_name)
+					anim_player.advance(0.0)
+					break
 			anim_player.pause()
 		if visual != null:
 			var tween := create_tween()

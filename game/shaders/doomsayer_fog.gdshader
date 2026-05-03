@@ -14,14 +14,17 @@ uniform float intensity : hint_range(0.0, 4.0) = 1.0;
 // 3D noise field drift speed — small values feel like slow vapor.
 uniform float drift_speed : hint_range(-1.0, 1.0) = 0.18;
 // Larger noise_scale = finer detail; smaller = wide soft puffs. Tuned
-// against the sphere radius so a few noise cells fit across the volume.
-uniform float noise_scale : hint_range(0.2, 4.0) = 1.4;
-// Higher core_softness = sharper concentration in the centre. The
-// front-facing fragments (NORMAL pointing at camera) are dense; the
-// silhouette edges fade to transparent. Inverse of the prior fluffy-
-// shell formula — looks like a dense purple core that fades outward
-// into nothing instead of a hollow soap bubble.
-uniform float core_softness : hint_range(0.5, 4.0) = 2.0;
+// for the larger sphere radii (up to 9m at T3) — at this scale a noise
+// cell is ~3m across, so we get a couple of soft puffs per visible
+// volume instead of a chaotic cloud.
+uniform float noise_scale : hint_range(0.1, 4.0) = 0.35;
+// Higher core_softness = denser concentration in the centre, longer
+// transparent tail at the edges. The front-facing fragments (NORMAL
+// pointing at camera) are dense; the silhouette edges fade to nothing
+// well before the geometric sphere edge. core_softness >= 3 hides the
+// hard sphere outline by making the outer ~40% of radius effectively
+// transparent.
+uniform float core_softness : hint_range(0.5, 6.0) = 3.5;
 // Soft-particles depth fade — fragments within this many world units
 // of opaque scene geometry get faded out. Helps smooth where the
 // sphere touches the floor / nearby objects.

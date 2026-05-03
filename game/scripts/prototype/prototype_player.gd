@@ -679,15 +679,18 @@ const TELEKINESIS_BOLT_STAGGER := 0.12
 const TELEKINESIS_MAX_BOLTS := 8       # safety cap for future stacking sources
 
 ## Enculted Doomsayer aura — every DOOMSAYER_TICK_INTERVAL seconds, every
-## enemy within DOOMSAYER_AURA_RADIUS rolls against the perk's per-second
+## enemy within the tier's aura radius rolls against the perk's per-second
 ## chance scaled by linear distance falloff. On a hit, ONE of three
 ## afflictions is applied at random — stun (frozen), charm (mind-control:
 ## attacks the nearest other enemy), or weaken (outgoing damage halved).
 ## Stun + weaken expire on a timer; charm is persistent — held in
 ## _charmed_enemies (FIFO-capped by doomsayer_max_charms aggregate),
 ## released only when the player dies or a new charm bumps it out.
-## Effect handlers + state live on PrototypeEnemy.
-const DOOMSAYER_AURA_RADIUS := 9.0
+## Effect handlers + state live on PrototypeEnemy. Aura radius scales
+## per tier so the visible mist sphere (DoomsayerAura.RADIUS_PER_TIER)
+## exactly matches the proc-eligible area — no ambiguous "is this enemy
+## inside the aura?" gap between the visual and the actual range.
+const DOOMSAYER_AURA_RADIUS_PER_TIER: Array[float] = [0.0, 5.0, 7.0, 9.0]
 # Roll cadence for the per-enemy proc check. Lower = more frequent
 # rolls = effectively more procs at the same per-tick chance. Was
 # 1.0s; halved to 0.4s after playtesting found the original cadence
@@ -983,12 +986,16 @@ func _tick_doomsayer(delta: float) -> void:
 	if _doomsayer_t > 0.0:
 		return
 	_doomsayer_t = DOOMSAYER_TICK_INTERVAL
+	var tier := AttributeState.get_unlocked_tier(&"amb", PlayerState.class_id, PlayerState.spec_id)
+	var radius: float = DOOMSAYER_AURA_RADIUS_PER_TIER[clampi(tier, 0, 3)]
+	if radius <= 0.0:
+		return
 	var base_chance := pct * 0.01
-	for n in SpatialGrid.query_radius(global_position, DOOMSAYER_AURA_RADIUS, &"enemies"):
+	for n in SpatialGrid.query_radius(global_position, radius, &"enemies"):
 		if not (n is Node3D) or not is_instance_valid(n):
 			continue
 		var dist := global_position.distance_to(n.global_position)
-		var falloff := clampf(1.0 - dist / DOOMSAYER_AURA_RADIUS, 0.0, 1.0)
+		var falloff := clampf(1.0 - dist / radius, 0.0, 1.0)
 		if randf() >= base_chance * falloff:
 			continue
 		_apply_doomsayer_affliction(n)

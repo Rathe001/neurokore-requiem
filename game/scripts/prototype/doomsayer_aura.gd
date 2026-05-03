@@ -27,25 +27,22 @@ extends Node3D
 const FOG_SHADER: Shader = preload("res://shaders/doomsayer_fog.gdshader")
 const COLOR := Color(0.78, 0.35, 0.85, 1.0)  # AMB stat color (purple)
 
-# Per-tier visual scaling. T0 hides everything. The shader's intensity
-# uniform + alpha modulate density at the dense core; sphere radius
-# kept small so the visible body stays close to the player and rarely
-# reaches walls. The OmniLight does the wide aura presence (its purple
-# wash on world surfaces respects walls via shadow casting).
-const INTENSITY_PER_TIER: Array[float] = [0.0, 0.85, 1.2, 1.6]
-const RADIUS_PER_TIER: Array[float] = [0.0, 1.4, 1.8, 2.3]
+# Per-tier visual scaling. T0 hides everything. Sphere radius matches
+# the perk's effect range (DOOMSAYER_AURA_RADIUS_PER_TIER on the player)
+# so the visible mist size = the actual proc-eligible area. The high
+# core_softness in the shader (3.5+) means the visible mass concentrates
+# in the inner ~40% of radius and fades to transparent at the silhouette,
+# so a large geometric sphere doesn't read as a solid ball.
+const INTENSITY_PER_TIER: Array[float] = [0.0, 0.7, 1.0, 1.3]
+const RADIUS_PER_TIER: Array[float] = [0.0, 5.0, 7.0, 9.0]
 const LIGHT_ENERGY_PER_TIER: Array[float] = [0.0, 1.6, 2.8, 4.5]
-const LIGHT_RANGE_PER_TIER: Array[float] = [0.0, 4.5, 6.5, 9.0]
+const LIGHT_RANGE_PER_TIER: Array[float] = [0.0, 5.0, 7.0, 9.0]
 const ALPHA_PER_TIER: Array[float] = [0.0, 0.85, 1.0, 1.0]
 # Squash factor — sphere Y scale is RADIUS * Y_SQUASH so the body
-# becomes an ellipsoid hugging the player instead of a tall ball.
-# Wider/flatter shape feels like a fog cloud rather than a beach ball.
-const Y_SQUASH := 0.6
-# Center height of the squashed ellipsoid (mid-body). Combined with
-# the smaller radii above, the sphere stays well below the 4.5m wall
-# tops and rarely extends more than 1-2m past walls in plan view —
-# and where it does, the inverted silhouette hides the bleed by
-# fading the edges to transparent.
+# becomes an ellipsoid hugging the floor instead of a tall ball. With
+# the larger radii (up to 9m) we squash more aggressively so the top
+# stays under the 4.5m walls (9 * 0.4 + 0.9 = 4.5).
+const Y_SQUASH := 0.4
 const Y_OFFSET := 0.9
 
 var _tier: int = 0
