@@ -1,60 +1,61 @@
-[gd_resource type="Resource" script_class="PerkLadder" load_steps=11 format=3]
+[gd_resource type="Resource" script_class="PerkLadder" load_steps=8 format=3]
 
-; Forged (dev) tier perks. T1 lays down a small multistrike floor; T2 raises
-; both double + introduces triple; T3 layers more on top so the Forged
-; signature playstyle (chaotic burst windows) intensifies as investment
-; deepens. Magnitudes target a ~1.45× effective DPS at T3 — see
-; docs/design/attribute-system.md "Specialized Class Tier Perks".
+; Forged (dev) tier perks — Amalgamation.
+;
+; Each tier grows another arm, granting +1 1-handed weapon slot. The slots
+; appear in the Character panel under the standard equipment grid; combat
+; fires each equipped weapon's LMB fire_skill on its own cooldown with a
+; small stagger so the volleys don't read as a single click.
+;
+; Combos enabled:
+;   T1 (1 extra)  — 2H + 1H, dual-1H, 1H + offhand + spare 1H
+;   T2 (2 extras) — 2H + 2x 1H, triple 1H, etc.
+;   T3 (3 extras) — quad 1H, dual 2H (each 2H takes the main weapon slot
+;                   AND consumes one extra arm via inventory rules)
+;
+; The aggregate `extra_weapon_slots` sums across tiers (T3 player has 3
+; extras); SlotRegistry.weapon_2..weapon_4 unlock in order as the count
+; rises. PerkState.get_aggregate(&"extra_weapon_slots") is the runtime read.
 
 [ext_resource type="Script" path="res://scripts/perks/perk.gd" id="perk_script"]
 [ext_resource type="Script" path="res://scripts/perks/perk_effect.gd" id="effect_script"]
 [ext_resource type="Script" path="res://scripts/perks/perk_ladder.gd" id="ladder_script"]
 
-[sub_resource type="Resource" id="effect_dev_t1_double"]
+[sub_resource type="Resource" id="effect_dev_t1_arm"]
 script = ExtResource("effect_script")
-kind = &"multistrike_double_chance"
-magnitude = 0.08
+kind = &"extra_weapon_slots"
+magnitude = 1.0
 
 [sub_resource type="Resource" id="perk_dev_t1"]
 script = ExtResource("perk_script")
 id = &"dev_t1"
-label = "Erratic Strikes"
-description = "8% chance to strike twice."
-effects = [SubResource("effect_dev_t1_double")]
+label = "Amalgamation I"
+description = "Grow an extra arm. +1 one-handed weapon slot."
+effects = [SubResource("effect_dev_t1_arm")]
 
-[sub_resource type="Resource" id="effect_dev_t2_double"]
+[sub_resource type="Resource" id="effect_dev_t2_arm"]
 script = ExtResource("effect_script")
-kind = &"multistrike_double_chance"
-magnitude = 0.10
-
-[sub_resource type="Resource" id="effect_dev_t2_triple"]
-script = ExtResource("effect_script")
-kind = &"multistrike_triple_chance"
-magnitude = 0.05
+kind = &"extra_weapon_slots"
+magnitude = 1.0
 
 [sub_resource type="Resource" id="perk_dev_t2"]
 script = ExtResource("perk_script")
 id = &"dev_t2"
-label = "Frenzied Strikes"
-description = "Additional 10% chance to strike twice; 5% chance to strike thrice."
-effects = [SubResource("effect_dev_t2_double"), SubResource("effect_dev_t2_triple")]
+label = "Amalgamation II"
+description = "Another arm. +1 one-handed weapon slot (2 total extras)."
+effects = [SubResource("effect_dev_t2_arm")]
 
-[sub_resource type="Resource" id="effect_dev_t3_double"]
+[sub_resource type="Resource" id="effect_dev_t3_arm"]
 script = ExtResource("effect_script")
-kind = &"multistrike_double_chance"
-magnitude = 0.07
-
-[sub_resource type="Resource" id="effect_dev_t3_triple"]
-script = ExtResource("effect_script")
-kind = &"multistrike_triple_chance"
-magnitude = 0.07
+kind = &"extra_weapon_slots"
+magnitude = 1.0
 
 [sub_resource type="Resource" id="perk_dev_t3"]
 script = ExtResource("perk_script")
 id = &"dev_t3"
-label = "Unbound Frenzy"
-description = "Additional 7% chance to strike twice; additional 7% chance to strike thrice."
-effects = [SubResource("effect_dev_t3_double"), SubResource("effect_dev_t3_triple")]
+label = "Amalgamation III"
+description = "The final arm. +1 one-handed weapon slot (3 total extras)."
+effects = [SubResource("effect_dev_t3_arm")]
 
 [resource]
 script = ExtResource("ladder_script")

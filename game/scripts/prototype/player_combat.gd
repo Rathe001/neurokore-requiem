@@ -12,6 +12,11 @@ const PROTO_BASE_CRIT_MULT: float = 1.5
 
 var _host: PrototypePlayer
 var _cooldowns: Dictionary = {}
+# Per-equipment-slot cooldowns for the multi-weapon LMB path. Two identical
+# weapons in different slots (Forged Amalgamation) have independent timers
+# because the key is the slot StringName, not the Skill resource. Non-LMB
+# skills still use _cooldowns (keyed by Skill).
+var _slot_cooldowns: Dictionary = {}
 
 func setup(host: PrototypePlayer) -> void:
 	_host = host
@@ -19,6 +24,8 @@ func setup(host: PrototypePlayer) -> void:
 func tick_cooldowns(delta: float) -> void:
 	for skill in _cooldowns.keys():
 		_cooldowns[skill] = maxf(0.0, _cooldowns[skill] - delta)
+	for slot in _slot_cooldowns.keys():
+		_slot_cooldowns[slot] = maxf(0.0, _slot_cooldowns[slot] - delta)
 
 func is_on_cooldown(skill: Skill) -> bool:
 	return _cooldowns.get(skill, 0.0) > 0.0
@@ -32,8 +39,17 @@ func get_cooldown_ratio(skill: Skill) -> float:
 	var remaining: float = _cooldowns.get(skill, 0.0)
 	return clampf(remaining / skill.cooldown, 0.0, 1.0)
 
+func is_slot_on_cooldown(slot: StringName) -> bool:
+	return _slot_cooldowns.get(slot, 0.0) > 0.0
+
+func start_slot_cooldown(slot: StringName, skill: Skill, atk_speed: float) -> void:
+	if skill == null or skill.cooldown <= 0.0:
+		return
+	_slot_cooldowns[slot] = skill.cooldown / atk_speed
+
 func clear_cooldowns() -> void:
 	_cooldowns.clear()
+	_slot_cooldowns.clear()
 
 # ---------------------------------------------------------------------------
 # Skill resolution

@@ -23,6 +23,10 @@ func _ready() -> void:
 	inventory.resize(MAX_INVENTORY_SIZE)
 	equipment[&"weapon"] = _make_starter_weapon()
 	equipment[&"offhand"] = _make_starter_offhand()
+	# When the Forged Amalgamation perk gains/loses tiers, the extra weapon
+	# slot count changes — evict items from now-locked slots so a player who
+	# respecs out of the perk doesn't keep silently-equipped weapons.
+	PerkState.perks_changed.connect(reconcile_extra_weapon_slots)
 
 func get_equipped(slot: StringName) -> Item:
 	return equipment.get(slot, null)
@@ -41,6 +45,16 @@ func set_equipped(slot: StringName, item: Item) -> void:
 	var is_belt := slot == &"belt"
 	var old_inv_cap := get_inventory_capacity() if is_backpack else 0
 	var old_util_cap := get_utility_capacity() if is_belt else 0
+
+	# Extra weapon slots reject 2H weapons (each extra arm wields a 1H per
+	# the Forged Amalgamation design). Silently no-op rather than swap, so
+	# the calling UI doesn't accidentally consume the drag.
+	if item != null and item.two_handed and SlotRegistry.is_extra_weapon_slot(slot):
+		return
+	# Extra weapon slots also need the perk to be unlocked. If a slot is
+	# locked, refuse to equip there.
+	if item != null and SlotRegistry.is_extra_weapon_slot(slot) and not is_extra_weapon_slot_unlocked(slot):
+		return
 
 	if item == null:
 		equipment.erase(slot)
@@ -108,6 +122,56 @@ func get_utility_capacity() -> int:
 	if belt == null:
 		return 0
 	return clamp(belt.utility_slots, 0, MAX_UTILITY_SLOTS)
+
+
+## How many extra 1H weapon slots the player currently has unlocked, sourced
+## from the Forged Amalgamation perk's `extra_weapon_slots` aggregate.
+## Clamped to the registered EXTRA_WEAPON_SLOTS array length so a perk can
+## never grant more arms than the engine knows how to render.
+func get_extra_weapon_slot_count() -> int:
+	var raw := int(round(PerkState.get_aggregate(&"extra_weapon_slots")))
+	return clampi(raw, 0, SlotRegistry.EXTRA_WEAPON_SLOTS.size())
+
+
+## True when the perk has unlocked enough extra arms to use the slot. The
+## extras unlock IN ORDER — weapon_2 with 1 extra, weapon_3 with 2, etc.
+func is_extra_weapon_slot_unlocked(slot: StringName) -> bool:
+	var idx := SlotRegistry.EXTRA_WEAPON_SLOTS.find(slot)
+	if idx < 0:
+		return true  # not an extra slot
+	return idx < get_extra_weapon_slot_count()
+
+
+## Return every currently-equipped weapon slot, in fire-order: main first,
+## then extras up to the perk-unlocked count. Used by the LMB combat path
+## to fan-out the input across all the player's weapons.
+func get_active_weapon_slots() -> Array[StringName]:
+	var out: Array[StringName] = [&"weapon"]
+	var extras := get_extra_weapon_slot_count()
+	for i in extras:
+		out.append(SlotRegistry.EXTRA_WEAPON_SLOTS[i])
+	return out
+
+
+## Empty the extra weapon slots that the player no longer has unlocked
+## (e.g. perk tier dropped due to gear swap). Sends each evicted item to
+## the inventory or the overflow signal.
+func reconcile_extra_weapon_slots() -> void:
+	var unlocked_count := get_extra_weapon_slot_count()
+	var overflow: Array[Item] = []
+	for i in SlotRegistry.EXTRA_WEAPON_SLOTS.size():
+		if i < unlocked_count:
+			continue
+		var slot: StringName = SlotRegistry.EXTRA_WEAPON_SLOTS[i]
+		var displaced: Item = equipment.get(slot, null)
+		if displaced == null:
+			continue
+		equipment.erase(slot)
+		equipment_changed.emit(slot)
+		if not add_to_inventory(displaced):
+			overflow.append(displaced)
+	if not overflow.is_empty():
+		items_overflowed.emit(overflow)
 
 # ── Test items ────────────────────────────────────────────────────────────────
 

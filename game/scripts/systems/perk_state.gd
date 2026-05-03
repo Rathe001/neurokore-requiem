@@ -19,10 +19,15 @@ extends Node
 #   cooldown_reduction_pct        — % cooldown reduction
 #   crit_chance_pct               — % bonus crit chance
 #   crit_damage_pct               — % bonus crit multiplier
-#   multistrike_double_chance     — chance to strike twice (Forged)
-#   multistrike_triple_chance     — chance to strike thrice (Forged)
+#   multistrike_double_chance     — chance to strike twice
+#   multistrike_triple_chance     — chance to strike thrice
 #   low_hp_damage_pct             — % bonus damage when player HP < threshold
 #   target_slowed_damage_pct      — % bonus damage vs slowed/staggered targets
+#   extra_weapon_slots            — +N one-handed weapon slots (Forged Amalgamation).
+#                                   Read by InventoryState.get_extra_weapon_slot_count
+#                                   to gate weapon_2/_3/_4 slots, by CharacterPanel
+#                                   to render those slots, and by PrototypePlayer's
+#                                   LMB combat path to know how many weapons fire.
 #
 # Perks for higher tiers stack additively on top of lower tiers — reaching
 # tier 3 means tiers 1..3 are all active simultaneously.

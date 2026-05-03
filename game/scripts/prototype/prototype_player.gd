@@ -542,6 +542,13 @@ func _handle_skill_input() -> void:
 					_click_consumed = true
 					_interact_with_hovered(hovered)
 				return
+		# LMB fans out across every equipped weapon slot (Forged Amalgamation
+		# adds extras). _cast_lmb_combat handles per-slot cooldowns +
+		# stagger; the single-skill _cast_skill path stays for RMB and the
+		# hotkey skills (1-4 / Q / E).
+		if i == 0:
+			_cast_lmb_combat()
+			return
 		var skill := resolve_skill(i)
 		if skill != null:
 			_cast_skill(skill)
@@ -550,6 +557,9 @@ func _handle_skill_input() -> void:
 func resolve_skill(index: int) -> Skill:
 	var weapon: Item = InventoryState.get_equipped(&"weapon")
 	if index == 0:
+		# LMB binds to the MAIN weapon's fire skill for HUD display. Extra
+		# weapons (Amalgamation) fire alongside it via _cast_lmb_combat,
+		# but the slot icon shows the main weapon's cooldown.
 		return weapon.fire_skill if weapon != null else null
 	elif index == 1:
 		if weapon != null and weapon.two_handed:
@@ -606,6 +616,89 @@ func _is_any_modal_open() -> bool:
 
 func _is_mouse_over_ui() -> bool:
 	return get_viewport().gui_get_hovered_control() != null
+
+## Stagger between sequential weapon fires when multiple weapons are equipped
+## (Forged Amalgamation). Small enough that the volley still reads as one
+## click; large enough that 2-4 weapons feel like distinct strikes rather
+## than one fat hit. Tune in the .gd, not per-weapon.
+const LMB_MULTI_STAGGER := 0.06
+
+
+# LMB attack path. Iterates every active weapon slot (main + Amalgamation
+# extras), fires each whose slot cooldown is ready, and staggers their
+# windups so the volley reads as a sequence not a single click. Each
+# weapon's cooldown is tracked per-slot so two identical weapons don't
+# share a timer; the main weapon also writes the skill-keyed cooldown so
+# the HUD slot icon's progress ring stays accurate for the LMB display.
+func _cast_lmb_combat() -> void:
+	if _attacking:
+		return
+	_interacting = false
+	var aim := _aim_direction()
+	if aim == Vector3.ZERO:
+		return
+	var infinite_resource := DebugState.config != null and DebugState.config.infinite_resource
+
+	var slots := InventoryState.get_active_weapon_slots()
+	var ready_fires: Array[Dictionary] = []
+	for slot in slots:
+		var item: Item = InventoryState.get_equipped(slot)
+		if item == null or item.fire_skill == null:
+			continue
+		var skill: Skill = item.fire_skill
+		if _combat.is_slot_on_cooldown(slot):
+			continue
+		if skill.resource_cost > 0 and not infinite_resource and _resource_current < float(skill.resource_cost):
+			continue
+		ready_fires.append({"slot": slot, "item": item, "skill": skill})
+
+	if ready_fires.is_empty():
+		return
+
+	var min_windup := INF
+	for i in ready_fires.size():
+		var f: Dictionary = ready_fires[i]
+		var skill: Skill = f["skill"]
+		var item: Item = f["item"]
+		var slot: StringName = f["slot"]
+		var atk_spd: float = item.attack_speed if item.attack_speed > 0.0 else 1.0
+		_combat.start_slot_cooldown(slot, skill, atk_spd)
+		# Mirror onto the skill-keyed dict for the MAIN weapon so the HUD's
+		# LMB slot reads cooldown the same way it always has.
+		if slot == &"weapon":
+			_combat.start_cooldown(skill, atk_spd)
+		if skill.resource_cost > 0 and not infinite_resource:
+			_spend_resource(skill.resource_cost)
+		var stagger_delay: float = LMB_MULTI_STAGGER * float(i)
+		var fire_delay: float = stagger_delay + skill.wind_up / atk_spd
+		min_windup = minf(min_windup, fire_delay)
+		var captured_skill := skill
+		var captured_item := item
+		# Schedule the actual hit at fire_delay. Re-aim at lock-on time so a
+		# moving target still gets tracked even though the volley was queued
+		# at LMB-press.
+		get_tree().create_timer(fire_delay).timeout.connect(func() -> void:
+			if not _alive:
+				return
+			var fire_aim := aim
+			if _lock_target != null:
+				var refreshed := _aim_direction()
+				if refreshed != Vector3.ZERO:
+					fire_aim = refreshed
+			_combat.resolve_skill_hit(captured_skill, fire_aim, captured_item)
+		, CONNECT_ONE_SHOT)
+
+	_face_direction(aim)
+	_play_anim(ANIM_ATTACK, 1.4)
+	# Block input only for the SHORTEST windup. Faster weapons can re-fire
+	# while slower ones are still mid-stagger; the slot cooldowns prevent
+	# any one weapon from firing twice within a single attack cycle.
+	if min_windup > 0.0:
+		_attacking = true
+		_attack_aim = aim
+		await get_tree().create_timer(min_windup).timeout
+		_attacking = false
+
 
 func _cast_skill(skill: Skill) -> void:
 	if skill == null or _attacking:

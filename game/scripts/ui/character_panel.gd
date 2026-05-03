@@ -37,6 +37,15 @@ const EQUIP_SLOTS: Array[Dictionary] = [
 	{"row": 2, "col": 2, "label_key": "EQUIP_BOOTS", "id": &"boots", "accepts": &"boots"},
 ]
 
+# Forged Amalgamation perk-gated extra weapon slots. Rendered on row 3 to
+# the right of the standard 3x3 grid; visibility flips when the
+# extra_weapon_slots aggregate changes (PerkState.perks_changed signal).
+const EXTRA_WEAPON_SLOTS_LAYOUT: Array[Dictionary] = [
+	{"row": 3, "col": 0, "label_key": "EQUIP_WEAPON_2", "id": &"weapon_2", "accepts": &"weapon"},
+	{"row": 3, "col": 1, "label_key": "EQUIP_WEAPON_3", "id": &"weapon_3", "accepts": &"weapon"},
+	{"row": 3, "col": 2, "label_key": "EQUIP_WEAPON_4", "id": &"weapon_4", "accepts": &"weapon"},
+]
+
 var _alloc_bar: Control = null
 var _alloc_segments: Array[ColorRect] = []
 var _alloc_labels: Array[Label] = []
@@ -50,6 +59,12 @@ var _credits_label: Label
 var _attr_value_labels: Dictionary = {}
 var _player: Node = null
 var _utility_row: Control = null
+# Per-slot ItemSlot nodes for the Forged Amalgamation extra weapon slots.
+# Built once during _build_layout; visibility is toggled by
+# _refresh_extra_weapon_slot_visibility on perk changes. Order matches
+# SlotRegistry.EXTRA_WEAPON_SLOTS so we can show the first N when N
+# extras are unlocked.
+var _extra_weapon_slots: Array[ItemSlot] = []
 var _utility_slots: Array[ItemSlot] = []
 var _inventory_host: Control = null
 var _inventory_grid: Control = null
@@ -71,7 +86,12 @@ func _ready() -> void:
 	UIThemeState.changed.connect(_on_theme_changed)
 	InventoryState.capacity_changed.connect(_on_capacity_changed)
 	AttributeState.stats_changed.connect(_on_stats_changed)
+	# Forged Amalgamation perk gates the extra weapon slots — toggle their
+	# visibility whenever the perk set recomputes (gear swap, tier change,
+	# class respec).
+	PerkState.perks_changed.connect(_refresh_extra_weapon_slot_visibility)
 	_refresh_utility_visibility()
+	_refresh_extra_weapon_slot_visibility()
 	_rebuild_inventory_grid()
 
 func _process(_delta: float) -> void:
@@ -349,10 +369,46 @@ func _build_character_sheet(parent: Control) -> void:
 		equip.add_child(slot)
 		_all_slots.append(slot)
 
+	# Forged Amalgamation extra weapon slots — built once in row 3, then
+	# shown/hidden by _refresh_extra_weapon_slot_visibility based on the
+	# `extra_weapon_slots` perk aggregate.
+	_extra_weapon_slots.clear()
+	for entry in EXTRA_WEAPON_SLOTS_LAYOUT:
+		var row: int = entry["row"]
+		var col: int = entry["col"]
+		var label_key: String = entry.get("label_key", "")
+		var id: StringName = entry["id"]
+		var accepts: StringName = entry["accepts"]
+		var slot := ItemSlot.new()
+		slot.size = EQUIP_SLOT_SIZE
+		slot.custom_minimum_size = EQUIP_SLOT_SIZE
+		slot.configure_equipment(id, label_key, accepts)
+		slot.position = Vector2(
+			float(col) * (EQUIP_SLOT_SIZE.x + EQUIP_GAP),
+			float(row) * (EQUIP_SLOT_SIZE.y + EQUIP_GAP),
+		)
+		slot.visible = false
+		slot.clicked.connect(_on_slot_clicked)
+		slot.right_clicked.connect(_on_slot_right_clicked)
+		equip.add_child(slot)
+		_all_slots.append(slot)
+		_extra_weapon_slots.append(slot)
+
 	# Utility/bus row must clear the attribute section (header 17px + grid 56px below ATTR_POS.y).
 	var attr_bottom := ATTR_POS.y + 17.0 + 56.0
 	var util_y := maxf(equip.position.y + equip_total_height + 12.0, attr_bottom + 12.0)
 	_build_utility_row(parent, equip.position.x, util_y, equip_total_width)
+
+
+# Show the first N extra weapon slots where N = perk-granted extras.
+# Sized for the equipment block on row 3; the surrounding utility row's
+# Y position was computed before extras were considered, so the row
+# stays put — extras tuck under the standard grid without reflowing the
+# rest of the panel.
+func _refresh_extra_weapon_slot_visibility() -> void:
+	var unlocked := InventoryState.get_extra_weapon_slot_count()
+	for i in _extra_weapon_slots.size():
+		_extra_weapon_slots[i].visible = i < unlocked
 
 func _build_utility_row(parent: Control, equip_x: float, y: float, _equip_width: float) -> void:
 	var util_total_width := float(UTIL_SLOTS) * EQUIP_SLOT_SIZE.x + float(UTIL_SLOTS - 1) * EQUIP_GAP
