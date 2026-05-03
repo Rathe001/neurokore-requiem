@@ -26,8 +26,8 @@ const ANIM_FPS := 18.0  # speed the puff loops at
 # pixel_size 0.018 → ~4.6m visible width). Modulate alpha controls
 # the overall opacity per tier; the OmniLight scales independently to
 # match the skill's per-tier aura radius.
-const PIXEL_SIZE_PER_TIER: Array[float] = [0.0, 0.022, 0.030, 0.040]
-const ALPHA_PER_TIER: Array[float] = [0.0, 0.65, 0.85, 1.0]
+const PIXEL_SIZE_PER_TIER: Array[float] = [0.0, 0.034, 0.046, 0.060]
+const ALPHA_PER_TIER: Array[float] = [0.0, 0.30, 0.40, 0.50]
 const LIGHT_ENERGY_PER_TIER: Array[float] = [0.0, 1.6, 2.8, 4.5]
 const LIGHT_RANGE_PER_TIER: Array[float] = [0.0, 5.0, 7.0, 9.0]
 # Center the sprite at the player's torso so the smoke surrounds the
