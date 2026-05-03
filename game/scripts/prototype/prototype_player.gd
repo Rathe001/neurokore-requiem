@@ -688,7 +688,13 @@ const TELEKINESIS_MAX_BOLTS := 8  # safety cap for future stacking sources
 ## released only when the player dies or a new charm bumps it out.
 ## Effect handlers + state live on PrototypeEnemy.
 const DOOMSAYER_AURA_RADIUS := 9.0
-const DOOMSAYER_TICK_INTERVAL := 1.0
+# Roll cadence for the per-enemy proc check. Lower = more frequent
+# rolls = effectively more procs at the same per-tick chance. Was
+# 1.0s; halved to 0.4s after playtesting found the original cadence
+# read as "almost nothing's happening" even at T3. Per-tick chance
+# stays at the perk magnitude (5/10/20%), so effective per-second
+# proc rate roughly 2.5× the prior values.
+const DOOMSAYER_TICK_INTERVAL := 0.4
 const DOOMSAYER_STUN_DURATION := 1.6
 const DOOMSAYER_WEAKEN_DURATION := 4.0
 const DOOMSAYER_WEAKEN_MAGNITUDE := 0.5  # halves outgoing damage while active

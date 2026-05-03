@@ -2,8 +2,9 @@
 
 ; Enculted (amb) tier perks — Doomsayer.
 ;
-; The player constantly emits an aura with linear distance falloff. Each
-; second, every enemy inside the aura rolls against (base_pct × falloff)
+; The player constantly emits an aura with linear distance falloff. On
+; every DOOMSAYER_TICK_INTERVAL (currently 0.4s — multiple rolls per
+; second), each enemy inside the aura rolls against (base_pct × falloff)
 ; — on a hit, ONE of {stun, charm, weaken} is applied at random. Closer
 ; enemies get hit more often (chance scales with proximity to player);
 ; enemies at the edge basically don't proc.
@@ -41,7 +42,7 @@ magnitude = 1.0
 script = ExtResource("perk_script")
 id = &"amb_t1"
 label = "Doomsayer I"
-description = "An aura of dread surrounds you. Each second, nearby enemies have a 5% chance to be stunned, charmed, or weakened. Up to 1 charm at a time."
+description = "An aura of dread surrounds you. Multiple rolls per second on nearby enemies — 5% chance per roll to stun, charm, or weaken. Up to 1 charm at a time."
 effects = [SubResource("effect_amb_t1_proc"), SubResource("effect_amb_t1_charms")]
 
 [sub_resource type="Resource" id="effect_amb_t2_proc"]
@@ -58,7 +59,7 @@ magnitude = 1.0
 script = ExtResource("perk_script")
 id = &"amb_t2"
 label = "Doomsayer II"
-description = "The aura tightens. 10% chance per second; up to 2 charms at a time."
+description = "The aura tightens. 10% per roll; up to 2 charms at a time."
 effects = [SubResource("effect_amb_t2_proc"), SubResource("effect_amb_t2_charms")]
 
 [sub_resource type="Resource" id="effect_amb_t3_proc"]
@@ -75,7 +76,7 @@ magnitude = 1.0
 script = ExtResource("perk_script")
 id = &"amb_t3"
 label = "Doomsayer III"
-description = "20% chance per second; up to 3 charms at a time. Walking apocalypse — the herd unravels around you."
+description = "20% per roll; up to 3 charms at a time. Walking apocalypse — the herd unravels around you."
 effects = [SubResource("effect_amb_t3_proc"), SubResource("effect_amb_t3_charms")]
 
 [resource]

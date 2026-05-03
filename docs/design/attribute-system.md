@@ -201,7 +201,7 @@ All six are implemented. Aggregates are additive across tiers (see `game/resourc
 | Optimization | Automaton | **Drone Swarm** — wandering hover drones auto-fire on enemies | 2 → 3 → 5 drones |
 | Ingenuity | Survivalist | **Improvised Explosive Device** — toss prox trap on every LMB | 1 → 2 → 3 max active traps |
 | Clarity | Polymath | **Telekinesis** — periodic psionic bolts grab + slam enemies | 1 → 2 → 4 bolts per trigger |
-| Ambition | Enculted | **Doomsayer** — aura procs stun / charm / weaken on enemies | 5% → 10% → 20% per second; charms 1 → 2 → 3 |
+| Ambition | Enculted | **Doomsayer** — aura procs stun / charm / weaken on enemies | 5% → 10% → 20% per roll (multiple rolls/s); charms 1 → 2 → 3 |
 
 **Gear swap confirmation:** When equipping an item would cross a breakpoint, a confirmation dialog shows exactly what changes. This is behind a Help Tooltips toggle for players who prefer to manage it themselves.
 
