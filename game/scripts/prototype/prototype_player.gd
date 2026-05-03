@@ -617,11 +617,13 @@ func _is_any_modal_open() -> bool:
 func _is_mouse_over_ui() -> bool:
 	return get_viewport().gui_get_hovered_control() != null
 
-## Stagger between sequential weapon fires when multiple weapons are equipped
-## (Forged Amalgamation). Small enough that the volley still reads as one
-## click; large enough that 2-4 weapons feel like distinct strikes rather
-## than one fat hit. Tune in the .gd, not per-weapon.
-const LMB_MULTI_STAGGER := 0.06
+## Fallback stagger when there's no main weapon to derive a reference
+## interval from (e.g. main slot empty but extras equipped). Otherwise
+## the per-volley stagger is computed dynamically: main weapon's effective
+## attack interval (cooldown / attack_speed) divided by the number of
+## ready weapons. So a 1s-interval main with 3 extras fires at 0 / 0.25 /
+## 0.5 / 0.75; a 0.5s main with 1 extra fires at 0 / 0.25; etc.
+const LMB_MULTI_STAGGER_FALLBACK := 1.0
 
 
 # LMB attack path. Iterates every active weapon slot (main + Amalgamation
@@ -659,7 +661,19 @@ func _cast_lmb_combat() -> void:
 	if ready_fires.is_empty():
 		return
 
-	var min_windup := INF
+	# Stagger across the MAIN weapon's effective attack interval so a
+	# 1s-interval Forged with 3 extras fires at 0 / 0.25 / 0.5 / 0.75
+	# regardless of each individual weapon's speed. Reads off the equipped
+	# main weapon directly (not ready_fires) so the cadence stays stable
+	# even when main is on cooldown and only extras are ready this volley.
+	var main_interval := LMB_MULTI_STAGGER_FALLBACK
+	var main_item: Item = InventoryState.get_equipped(&"weapon")
+	if main_item != null and main_item.fire_skill != null:
+		var main_atk_spd: float = main_item.attack_speed if main_item.attack_speed > 0.0 else 1.0
+		main_interval = main_item.fire_skill.cooldown / main_atk_spd
+	var stagger: float = main_interval / float(ready_fires.size())
+
+	var max_fire_delay := 0.0
 	for i in ready_fires.size():
 		var f: Dictionary = ready_fires[i]
 		var skill: Skill = f["skill"]
@@ -674,9 +688,8 @@ func _cast_lmb_combat() -> void:
 			_combat.start_cooldown(skill, atk_spd)
 			if skill.resource_cost > 0 and not infinite_resource:
 				_spend_resource(skill.resource_cost)
-		var stagger_delay: float = LMB_MULTI_STAGGER * float(i)
-		var fire_delay: float = stagger_delay + skill.wind_up / atk_spd
-		min_windup = minf(min_windup, fire_delay)
+		var fire_delay: float = float(i) * stagger
+		max_fire_delay = maxf(max_fire_delay, fire_delay)
 		var captured_skill := skill
 		var captured_item := item
 		# Schedule the actual hit at fire_delay. Re-aim at lock-on time so a
@@ -695,13 +708,16 @@ func _cast_lmb_combat() -> void:
 
 	_face_direction(aim)
 	_play_anim(ANIM_ATTACK, 1.4)
-	# Block input only for the SHORTEST windup. Faster weapons can re-fire
-	# while slower ones are still mid-stagger; the slot cooldowns prevent
-	# any one weapon from firing twice within a single attack cycle.
-	if min_windup > 0.0:
+	# Block input until the LAST staggered fire resolves — otherwise the
+	# player could re-click before the volley completes and the per-slot
+	# cooldown gate becomes the only thing preventing double-firing of
+	# the trailing extras. With the new dynamic stagger the volley spans
+	# the main weapon's full effective interval, so this also doubles as
+	# a natural "you committed to this swing" beat before the next press.
+	if max_fire_delay > 0.0:
 		_attacking = true
 		_attack_aim = aim
-		await get_tree().create_timer(min_windup).timeout
+		await get_tree().create_timer(max_fire_delay).timeout
 		_attacking = false
 
 
