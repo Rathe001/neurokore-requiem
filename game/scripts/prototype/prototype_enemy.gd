@@ -74,6 +74,7 @@ const JUMP_AIRTIME := 0.7
 const JUMP_MISS_CHANCE := 0.18
 const JUMP_MISS_DIST_FACTOR := 0.55  # how far the missed jump reaches (start → 55% toward target)
 const JUMP_LANDING_GRACE := 0.18  # require this much airtime before is_on_floor() can end the jump (avoids takeoff-frame false landings)
+const JUMP_COOLDOWN := 0.8        # post-landing lockout — caps jump cadence so a chain of pillars doesn't read as constant hopping
 
 # Per-level stat ranges, indexed [1..MAX_LEVEL]. Index 0 is unused (no level 0).
 # Tuned so L1 sits near the previous fixed values (40 HP / 10 dmg) and each
@@ -115,6 +116,9 @@ const MAX_AGGRO_CASCADE := 2
 const ANIM_IDLE: Array[StringName] = [&"Idle_Normal", &"Idle", &"IDLE_NORMAL"]
 const ANIM_RUN: Array[StringName] = [&"Jog_Fwd", &"Walk_Normal", &"JOG_FWD", &"WALK_NORMAL"]
 const ANIM_ATTACK: Array[StringName] = [&"Sword_Attack", &"Punch_Cross", &"SWORD_ATTACK", &"PUNCH_CROSS"]
+const ANIM_CROUCH_IDLE: Array[StringName] = [&"Crouch_Idle", &"CROUCH_IDLE", &"Crouch", &"CROUCH"]
+const ANIM_CROUCH_RUN: Array[StringName] = [&"Crouch_Walk_Forward", &"Crouch_Walk", &"CROUCH_WALK", &"Crouch_Idle", &"CROUCH_IDLE"]
+const ANIM_JUMP: Array[StringName] = [&"Jump", &"Jump_Start", &"JUMP", &"JUMP_START"]
 const ANIM_DEATH: Array[StringName] = [
 	&"Death_1", &"Death_2", &"Death_A", &"Death_B", &"Death",
 	&"Dying_A", &"Dying_B", &"Die",
@@ -145,6 +149,15 @@ static var _s_outline_mat_locked: StandardMaterial3D
 ## a fixed level above the trash cap, and emit a boss_died group call so the
 ## exit can unlock.
 @export var is_boss: bool = false
+
+## Movement capabilities. Disabled crouching just keeps the capsule standing
+## (the navmesh still bakes at crouch height, so a tall enemy will physically
+## bump low ceilings instead of slipping under). Disabled jumping means
+## NavigationLink3D crossings are silently skipped — the enemy will idle at
+## the link entry, which is fine when the encounter is designed to keep that
+## enemy in walking-only zones.
+@export var can_crouch: bool = true
+@export var can_jump: bool = true
 
 @onready var visual: Node3D = $Visual
 @onready var anim_player: AnimationPlayer = $Visual/Character/AnimationPlayer
@@ -190,6 +203,7 @@ var _crouching: bool = false
 var _crouch_probe_t: float = 0.0
 var _stand_test_shape: CapsuleShape3D
 var _jump_t: float = 0.0
+var _jump_cooldown_remain: float = 0.0
 var _floor_ring_mat: StandardMaterial3D
 @onready var _nav_agent: NavigationAgent3D = $NavigationAgent3D
 # Spawn position captured on reset() — enemies leash back to this point
@@ -460,6 +474,7 @@ func _physics_process(delta: float) -> void:
 	if _crouch_probe_t <= 0.0:
 		_crouch_probe_t = CROUCH_PROBE_INTERVAL
 		_update_crouch_state()
+	_jump_cooldown_remain = maxf(0.0, _jump_cooldown_remain - delta)
 
 	# Floor-snap is suppressed during JUMPING so the takeoff impulse set by
 	# _start_jump (which runs from the agent's link_reached signal AFTER our
@@ -496,14 +511,22 @@ func _physics_process(delta: float) -> void:
 	# expect them to (decorative crates, etc.) — still enough for pit fences.
 	StepUp.try(self, wish_horiz, 0.3, delta)
 
-	# Animation update — skip while the enemy is locked into a windup pose
-	# or being shoved (the squash/cast clips own those frames).
-	if _state != State.CASTING and _state != State.KNOCKBACK:
-		if _want_dir.length_squared() > 0.01:
-			_play_anim(ANIM_RUN)
-			_face_direction(_want_dir)
-		else:
-			_play_anim(ANIM_IDLE)
+	# Animation update — CASTING and KNOCKBACK own their own clips. JUMPING
+	# plays the airborne pose. CROUCHING swaps in the crouch idle/walk pair.
+	# Otherwise we fall back to the standard idle/run.
+	var moving := _want_dir.length_squared() > 0.01
+	match _state:
+		State.CASTING, State.KNOCKBACK:
+			pass
+		State.JUMPING:
+			_play_anim(ANIM_JUMP)
+		_:
+			if _crouching:
+				_play_anim(ANIM_CROUCH_RUN if moving else ANIM_CROUCH_IDLE)
+			else:
+				_play_anim(ANIM_RUN if moving else ANIM_IDLE)
+			if moving:
+				_face_direction(_want_dir)
 
 
 # Quadratic ease-out: full impulse at the moment of impact, near-zero by the
@@ -637,7 +660,7 @@ func _tick_return(spawn_dist_sq: float) -> void:
 # stand — drop into crouch. The probe runs on CROUCH_PROBE_INTERVAL cadence
 # and self-excludes so the cast doesn't trip on this body's own collider.
 func _update_crouch_state() -> void:
-	if _stand_test_shape == null:
+	if not can_crouch or _stand_test_shape == null:
 		return
 	var space := get_world_3d().direct_space_state
 	if space == null:
@@ -669,6 +692,10 @@ func _set_crouch(value: bool) -> void:
 # the link (the navmesh will replan once they're free).
 func _on_link_reached(details: Dictionary) -> void:
 	if _state != State.CHASING or _crouching:
+		return
+	if not can_jump:
+		return
+	if _jump_cooldown_remain > 0.0:
 		return
 	if not is_on_floor():
 		return
@@ -707,6 +734,7 @@ func _tick_jump(delta: float) -> void:
 	# this frame) handles the vertical arc. We only need to detect landing.
 	if _jump_t >= JUMP_LANDING_GRACE and is_on_floor():
 		_jump_t = 0.0
+		_jump_cooldown_remain = JUMP_COOLDOWN
 		_change_state(State.CHASING)
 
 func _cast_attack(player: Node3D, aim: Vector3) -> void:

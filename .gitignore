@@ -4,8 +4,9 @@
 # MkDocs build output
 site/
 
-# Godot exported builds (Steam, etc.)
-build/
+# Godot exported builds (Steam, etc.) — anchored to repo root only,
+# otherwise this swallows source dirs named "build/" like game/scripts/level/build/.
+/build/
 
 # macOS
 .DS_Store

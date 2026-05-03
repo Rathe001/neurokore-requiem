@@ -3,6 +3,10 @@ class_name PrototypeProjectile
 
 const PROTO_BASE_CRIT_CHANCE: float = 0.15
 const PROTO_BASE_CRIT_MULT: float = 1.5
+# World-layer raycast mask for the per-frame sweep. Walls + structures live
+# on layer 1; enemies (layer 2) keep getting handled by Area3D body_entered
+# so we don't need to ray-test them.
+const WORLD_LAYER_MASK := 1
 
 var direction: Vector3 = Vector3.FORWARD
 var speed: float = 30.0
@@ -60,7 +64,26 @@ func _pool_release() -> void:
 
 func _physics_process(delta: float) -> void:
 	var step := speed * delta
-	global_position += direction * step
+	var from := global_position
+	var to := from + direction * step
+	# Sweep raycast against world geometry between this frame's start and
+	# end positions. At speed=30 / 60Hz the bullet moves 0.5m per frame —
+	# more than wall_thickness (0.4m) — so Area3D overlap detection alone
+	# tunnels through thin walls. The ray catches the wall before we set
+	# the new position.
+	var space := get_world_3d().direct_space_state
+	if space != null:
+		var query := PhysicsRayQueryParameters3D.create(from, to, WORLD_LAYER_MASK)
+		query.collide_with_areas = false
+		query.collide_with_bodies = true
+		var hit := space.intersect_ray(query)
+		if not hit.is_empty():
+			global_position = hit.position
+			_traveled += from.distance_to(hit.position)
+			_hit = true
+			_release()
+			return
+	global_position = to
 	_traveled += step
 	if _traveled >= max_range:
 		_release()
