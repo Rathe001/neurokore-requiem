@@ -83,6 +83,13 @@ const CROUCH_PROBE_RADIUS := 0.5  # < capsule radius (0.6) so a brushed wall doe
 # corridor's low-ceiling block, not after. Tuned for the standard 0.6m
 # capsule radius + 0.4m wall thickness.
 const CROUCH_PROBE_LOOKAHEAD := 1.1
+# Low-Y probe used to disambiguate a real low ceiling from a wall / closed
+# door. Walls are full-height colliders so they intersect the probe at any
+# Y; a low-ceiling slab (corridor ceiling at y=1.4-1.5) doesn't extend
+# down to crouch-body height. If the OVERHEAD probe hits but this probe
+# is CLEAR, it's a low ceiling and crouching helps. If both hit, it's a
+# wall and crouching makes the enemy waddle uselessly into it.
+const CROUCH_BODY_PROBE_CENTER_Y := 0.4  # capsule covers y≈0.05-0.75
 
 # Pit-pillar jump: triggered when the navmesh routes the enemy onto a
 # NavigationLink3D (placed by pit_builder between adjacent pillars). The
@@ -923,24 +930,30 @@ func _update_crouch_state() -> void:
 	query.shape = _stand_test_shape
 	query.collision_mask = 1  # World layer — walls, ceilings, floors
 	query.exclude = [get_rid()]
-	# Probe at current position first — keeps the crouch active while we're
-	# under a low ceiling.
-	var blocked := _probe_overhead_at(query, global_position, space)
-	# If we're CURRENTLY standing in clear space but moving toward a low
-	# ceiling, also probe a step ahead. Without this, the standing capsule
-	# bumps the slab from outside and never gets close enough for the
-	# current-position probe to trigger — enemies pile up at the entrance
-	# of crouch corridors instead of going through.
+	# Real low ceiling at the current position keeps us crouched while we're
+	# underneath. Lookahead handles the BEFORE-bumping-the-slab case.
+	var blocked := _is_real_low_ceiling(query, global_position, space)
 	if not blocked and _want_dir.length_squared() > 0.01:
 		var forward_pos := global_position + _want_dir.normalized() * CROUCH_PROBE_LOOKAHEAD
-		blocked = _probe_overhead_at(query, forward_pos, space)
+		blocked = _is_real_low_ceiling(query, forward_pos, space)
 	if blocked != _crouching:
 		_set_crouch(blocked)
 
 
-func _probe_overhead_at(query: PhysicsShapeQueryParameters3D, base: Vector3, space: PhysicsDirectSpaceState3D) -> bool:
-	query.transform = Transform3D(Basis.IDENTITY,
-		base + Vector3(0.0, CROUCH_PROBE_CENTER_Y, 0.0))
+# A position has a "real low ceiling" iff:
+#   - overhead is blocked (something in y≈0.95-1.65)
+#   - body height is clear (nothing in y≈0.05-0.75)
+# Both blocked means a wall / closed door — crouching doesn't help, and
+# committing to the crouch leaves the enemy waddling uselessly into the
+# obstacle (which is what was happening at doorways before this check).
+func _is_real_low_ceiling(query: PhysicsShapeQueryParameters3D, base: Vector3, space: PhysicsDirectSpaceState3D) -> bool:
+	if not _probe_at(query, base, CROUCH_PROBE_CENTER_Y, space):
+		return false
+	return not _probe_at(query, base, CROUCH_BODY_PROBE_CENTER_Y, space)
+
+
+func _probe_at(query: PhysicsShapeQueryParameters3D, base: Vector3, y_center: float, space: PhysicsDirectSpaceState3D) -> bool:
+	query.transform = Transform3D(Basis.IDENTITY, base + Vector3(0.0, y_center, 0.0))
 	return not space.intersect_shape(query, 1).is_empty()
 
 func _set_crouch(value: bool) -> void:

@@ -162,7 +162,15 @@ static func build_low_ceiling(ctx: LevelBuildContext, center: Vector3, cd: Corri
 	body.transform.origin = center + Vector3(0.0, h + 0.05, 0.0)
 	var col := CollisionShape3D.new()
 	col.shape = BoxShape3D.new()
-	(col.shape as BoxShape3D).size = Vector3(sw, 0.1, sl)
+	# Axis-aware collision dims — earlier this was always (sw, 0.1, sl)
+	# regardless of corridor axis, which rotated the slab 90° on X-axis
+	# corridors. Symptom: the invisible ceiling extended perpendicular to
+	# the visible mesh and bled into adjacent rooms (notably reaching
+	# across pit-room edges and trapping enemies / blocking the player
+	# well past where the corridor visually ended).
+	var col_x: float = sw if along_z else sl
+	var col_z: float = sl if along_z else sw
+	(col.shape as BoxShape3D).size = Vector3(col_x, 0.1, col_z)
 	body.add_child(col)
 	ctx.root.add_child(body)
 

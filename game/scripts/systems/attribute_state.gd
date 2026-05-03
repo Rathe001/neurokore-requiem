@@ -137,21 +137,23 @@ const TEAM_NODE_TIER_COUNT := 3
 const TEAM_NODE_NODES_PER_TIER := 4
 const TEAM_NODE_THRESHOLDS: Array[float] = [0.20, 0.35, 0.50]
 
-# Outgoing player damage scales with the class's main stat. 1% per point gives
-# us roughly D2-shaped scaling for the playtest: a fully-geared character lands
-# in the +50–100% range. Tuning lives here so combat balance stays in one file.
+# ── Main-stat scaling (HP / Resource / Damage) ───────────────────────────────
+# The player's "main stat" — the spec's primary stat for specialised classes,
+# the origin's derived stat (Soul / Interface) for origin classes — is the
+# ONLY stat that directly grants HP / resource / damage bonuses. Secondary
+# stat investments are for unlocking perk tiers via the % allocation system,
+# not for stat-stick stacking. Origin classes still get their derived stat
+# scaling from their team stats via Soul/Interface = avg(team), so spreading
+# investment across team stats DOES contribute to HP/resource — just
+# averaged through the derived stat instead of weighted.
+#
+# 1% damage per main-stat point gives roughly D2-shaped scaling: a fully-
+# geared character lands in the +50–100% range.
 const DAMAGE_PER_MAIN_STAT_PCT: float = 0.01
 
-# ── HP / Resource scaling from stats ─────────────────────────────────────────
-# Contribution weights per stat relationship when computing HP and resource
-# bonuses. Primary stat contributes most; opposing stat is heavily penalised.
-const STAT_WEIGHT_PRIMARY:  float = 1.0
-const STAT_WEIGHT_TEAM:     float = 0.25
-const STAT_WEIGHT_OPPOSING: float = 0.10
-
-# How many bonus HP / resource-max each weighted stat point grants.
-const HP_PER_WEIGHTED_STAT: float = 2.0
-const RESOURCE_PER_WEIGHTED_STAT: float = 1.0
+# How many bonus HP / resource-max each main-stat point grants.
+const HP_PER_MAIN_STAT: float = 2.0
+const RESOURCE_PER_MAIN_STAT: float = 1.0
 
 # ── Stat values ───────────────────────────────────────────────────────────────
 
@@ -388,45 +390,40 @@ func get_scaling_hint(class_id: StringName, spec_id: StringName) -> String:
 			origin_team_names.append(_colored.call(s))
 		var derived_stat: StringName = &"soul" if class_id == &"analog" else &"itf"
 		var derived: String = _colored.call(derived_stat)
-		return "Scales with %s (average of %s). Rewards balanced investment across all three." % [
+		return "HP, resource, and damage scale with %s (average of %s). Other stats unlock perk tiers." % [
 			derived, ", ".join(origin_team_names)]
 
 	var primary: StringName = get_spec_stat(spec_id)
 	var origin: StringName = get_spec_origin(spec_id)
 	var team := get_team_stats_for_origin(origin)
-	var nemesis: StringName = NEMESIS_STAT.get(primary, &"")
 
 	var team_names: Array[String] = []
 	for s in team:
 		if s != primary:
 			team_names.append(_colored.call(s))
 
-	return "Scales with %s. Benefits from %s. Weak against %s." % [
-		_colored.call(primary), " and ".join(team_names), _colored.call(nemesis)]
+	return "HP, resource, and damage scale with %s. Same-origin stats (%s) unlock supplementary perks." % [
+		_colored.call(primary), " and ".join(team_names)]
 
-## Returns the contribution-weighted sum of all rollable stats for the given
-## class context. Primary stat counts fully, team stats partially, opposing
-## stats minimally. Used to derive bonus HP and resource pool size.
-func get_weighted_stat_total(class_id: StringName, spec_id: StringName) -> float:
-	var total := 0.0
-	for stat_id in ROLLABLE_STATS:
-		var value := float(get_stat(stat_id))
-		if value <= 0.0:
-			continue
-		var rel := get_stat_relationship(stat_id, class_id, spec_id)
-		match rel:
-			&"primary": total += value * STAT_WEIGHT_PRIMARY
-			&"team":    total += value * STAT_WEIGHT_TEAM
-			_:          total += value * STAT_WEIGHT_OPPOSING
-	return total
+## Value of the player's main stat — the spec's primary stat for specialised
+## classes, the origin's derived Soul/Interface for origin classes (which is
+## the average of the origin's three team stats, so spreading investment
+## across team stats DOES contribute to the main stat — just averaged).
+## Drives bonus HP, resource, and damage. Secondary stat investments matter
+## only for unlocking perk tiers via the % allocation system.
+func get_main_stat_value(class_id: StringName, spec_id: StringName) -> int:
+	var stat_id := get_class_main_stat_id(class_id, spec_id)
+	if stat_id == &"":
+		return 0
+	return get_stat(stat_id)
 
-## Bonus HP granted by current stats for the given class context.
+## Bonus HP granted by the player's main stat for the given class context.
 func get_stat_bonus_hp(class_id: StringName, spec_id: StringName) -> int:
-	return int(get_weighted_stat_total(class_id, spec_id) * HP_PER_WEIGHTED_STAT)
+	return int(float(get_main_stat_value(class_id, spec_id)) * HP_PER_MAIN_STAT)
 
-## Bonus resource-pool max granted by current stats for the given class context.
+## Bonus resource-pool max granted by the player's main stat for the given class context.
 func get_stat_bonus_resource(class_id: StringName, spec_id: StringName) -> int:
-	return int(get_weighted_stat_total(class_id, spec_id) * RESOURCE_PER_WEIGHTED_STAT)
+	return int(float(get_main_stat_value(class_id, spec_id)) * RESOURCE_PER_MAIN_STAT)
 
 func _avg3(a: int, b: int, c: int) -> int:
 	return int(round((a + b + c) / 3.0))
