@@ -1,12 +1,14 @@
 # Attribute System
 
-> Status: Core system + all six specialist tier perks implemented (Exile, Amalgamation, Drone Swarm, IED, Telekinesis, Doomsayer). Origin-class tier perks, team stat scaling multipliers, visual metamorphosis, and NPC reactions are still TBD.
+> Status: Core system + all six specialist tier perks implemented (Exile, Amalgamation, Drone Swarm, IED, Telekinesis, Doomsayer). Origin-class tier perks, kore stat scaling multipliers, visual metamorphosis, and NPC reactions are still TBD.
 
 ## Core Philosophy
 
 - **Class = verbs**, **attributes = modifiers**. Stats shape *how* you do things; classes define *what* you can do. Stats never gate access to abilities.
 - **Baseline identity is guaranteed.** Off-stat builds distort your playstyle — they don't replace it.
-- Supports specialization (stack primary), hybridization (team stats), and off-path experimentation (opposing stats with friction).
+- Supports specialization (stack primary), hybridization (kore stats), and off-path experimentation (opposing stats with friction).
+
+> **Kore.** Stats sharing your origin are your **kore** — the Analog kore is ORT/ING/AMB; the Cyborg kore is DEV/OPT/CLA. Named for the game's title (Neurokore). Stats from the opposite kore are "opposing" and create distortion.
 
 ---
 
@@ -64,14 +66,14 @@ The base stat color is identity (always visible). A **relationship overlay** (ri
 | Relationship | Overlay | Meaning |
 |---|---|---|
 | Primary (own class) | Bright green | Full efficiency |
-| Team (same origin) | Dark green | Partial scaling |
+| Kore (same origin) | Dark green | Partial scaling |
 | Opposing (other origin) | Red | Interference + distortion |
 
 Origin classes use balance-state coloring instead: green (stable) / yellow (drifting near threshold) / red (about to lose origin perks).
 
 ### Soul & Interface — Derived Stats
 
-Calculated from the average of the character's three team stats — never rolled directly. They represent identity coherence, not raw power.
+Calculated from the average of the character's three kore stats — never rolled directly. They represent identity coherence, not raw power.
 
 - **Soul** (Analog) = avg(Orthodoxy, Ingenuity, Ambition) → stability / sustain / momentum
 - **Interface** (Cyborg) = avg(Deviation, Optimization, Clarity) → speed / responsiveness / cooldown smoothing
@@ -85,10 +87,10 @@ Each stat falls into one of **three categories** relative to a player's class. A
 | Relationship | Who | Scaling | Specialist Tiers | Origin Tiers |
 |---|---|---|---|---|
 | **Primary** | Own class stat | Full (1x) | T1=33%, T2=66%, T3=99% | n/a (origins have no primary) |
-| **Team** | Other two stats from same origin | Partial (~0.25x) | T1=33%, T2=66%, T3=— | T1=33%, T2=66%, T3=— |
+| **Kore** | Other two stats from same origin | Partial (~0.25x) | T1=33%, T2=66%, T3=— | T1=33%, T2=66%, T3=— |
 | **Opposing** | All three stats from other origin | Interference + distortion | T1=—, T2=—, T3=— | T1=33%, T2=—, T3=— |
 
-> T3 for team / opposing is unreachable in practice — getting one stat to 66% leaves only 34% for everything else. Specialists are sentinel-locked out of opposing trees entirely; origins can dabble into opposing T1 (≥33%). The "—" entries are sentinel thresholds (>1.0) in code.
+> T3 for kore / opposing is unreachable in practice — getting one stat to 66% leaves only 34% for everything else. Specialists are sentinel-locked out of opposing trees entirely; origins can dabble into opposing T1 (≥33%). The "—" entries are sentinel thresholds (>1.0) in code.
 
 ### Opposing Stats — Resistance Model
 
@@ -96,17 +98,17 @@ Opposing stats don't apply a flat negative — they use a resistance model: **ef
 
 **Goal: friction, not failure.** A character heavily invested in opposing stats plays a harder, distorted version of their class — not a broken one.
 
-### Team Stat Scaling — Skill Tree Mechanic
+### Kore Stat Scaling — Skill Tree Mechanic
 
-By default, the team stat contribution scales off the **lowest** of the three team stats. This forces balanced gearing across all three.
+By default, the kore stat contribution scales off the **lowest** of the three kore stats. This forces balanced gearing across all three.
 
 Skill tree nodes can change this calculation:
 
 | Node | Scales Off | Gearing Effect |
 |---|---|---|
-| (default) | Lowest of 3 team stats | Must balance all three — every item matters |
-| Balanced | Average of 3 team stats | Tolerates some lopsidedness |
-| Focused | Highest of 3 team stats | Go all-in on main stat, ignore the others |
+| (default) | Lowest of 3 kore stats | Must balance all three — every item matters |
+| Balanced | Average of 3 kore stats | Tolerates some lopsidedness |
+| Focused | Highest of 3 kore stats | Go all-in on main stat, ignore the others |
 
 Each option completely reframes what "good gear" means for the same class. Origin classes (Analog/Cyborg) always use the average — this mechanic is for specialized classes only.
 
@@ -116,14 +118,14 @@ Each option completely reframes what "good gear" means for the same class. Origi
 
 Origin classes are casual-friendly: broad, forgiving scaling and lower variance.
 
-- Scaling: average of 3 team stats → feeds Soul / Interface
+- Scaling: average of 3 kore stats → feeds Soul / Interface
 - Opposing stats reduce efficiency (30-50%) but don't distort
 - No specialized mechanics inherited — gains are blended and generalized
 - Misaligned gearing (heavy opposing investment) stays functional, just suboptimal
 
 ### Origin Tier Perks (Balance-Gated)
 
-Origin perks reward staying balanced — single rule: no stat may meet or exceed the cap. Same rule applies to team and opposing alike. Specific perks TBD.
+Origin perks reward staying balanced — single rule: no stat may meet or exceed the cap. Same rule applies to kore and opposing alike. Specific perks TBD.
 
 | Tier | Cap | Vibe |
 |---|---|---|
@@ -137,7 +139,7 @@ An origin class that starts pushing a single stat loses origin perks but begins 
 
 ## Item Stat Budget
 
-Items roll a fixed total stat budget distributed across attributes. The *distribution* matters as much as the total — a hybrid roll can outvalue a clean one depending on which team-stat-scaling node you've taken. Full item rules in [item-architecture.md](item-architecture.md).
+Items roll a fixed total stat budget distributed across attributes. The *distribution* matters as much as the total — a hybrid roll can outvalue a clean one depending on which kore-stat-scaling node you've taken. Full item rules in [item-architecture.md](item-architecture.md).
 
 ### Discovery Moments
 
@@ -171,14 +173,14 @@ Three tiers drive everything: talent tree access, tier perks, VFX metamorphosis,
 Reachable specialist patterns are exactly three:
 
 - **3-only** (99% in one stat) — pure specialist, true all-in
-- **2-1-0** (66% main + 33% in one team stat) — moderate hybrid, two perk ladders
-- **1-1-1** (33% × 3) — wide spread across own + both teams; no apex
+- **2-1-0** (66% main + 33% in one kore stat) — moderate hybrid, two perk ladders
+- **1-1-1** (33% × 3) — wide spread across own + both kore stats; no apex
 
 T3 is "all-in" by design — getting one stat to 99% leaves only 1% for everything else. Tier access tracks live with gear: dropping below a threshold locks the tier and deactivates its nodes (points stay allocated, reactivate when threshold returns).
 
 **Cross-class access for origins:** Origin classes (Analog/Cyborg) can dabble in opposing-origin tier perks at T1 only (≥33%). An Analog with 33%+ Optimization unlocks Drone Swarm I (2 drones). Specialists cannot reach opposing perks at all — those thresholds are sentinel-locked.
 
-> **Code source of truth:** `TIERS_OWN`, `TIERS_TEAM_SPEC`, `TIERS_OPPOSING_SPEC`, `TIERS_TEAM_ORIGIN`, `TIERS_OPPOSING_ORIGIN`, and `ORIGIN_TIER_CAPS` in `attribute_state.gd`. Sentinel value `1.01` marks unreachable tiers.
+> **Code source of truth:** `TIERS_OWN`, `TIERS_KORE_SPEC`, `TIERS_OPPOSING_SPEC`, `TIERS_KORE_ORIGIN`, `TIERS_OPPOSING_ORIGIN`, and `ORIGIN_TIER_CAPS` in `attribute_state.gd`. Sentinel value `1.01` marks unreachable tiers.
 
 ### Talent Points
 
@@ -205,19 +207,19 @@ All six are implemented. Aggregates are additive across tiers (see `game/resourc
 
 ---
 
-## Team Nodes
+## Kore Nodes
 
-A separate, smaller talent tree (3 tiers × 4 nodes) that rewards **synergy across all three team stats** rather than depth in any single one. Provides QoL, consistency, and flow enhancements — never class-specific mechanics.
+A separate, smaller talent tree (3 tiers × 4 nodes) that rewards **synergy across all three kore stats** rather than depth in any single one. Provides QoL, consistency, and flow enhancements — never class-specific mechanics.
 
-Tier access is gated by the *combined sum* of the three team stats:
+Tier access is gated by the *combined sum* of the three kore stats:
 
-| Tier | Combined Team Stat |
+| Tier | Combined Kore Stat |
 |---|---|
 | 1 | 20% |
 | 2 | 35% |
 | 3 | 50% |
 
-Strong early, plateaus hard. T3 is demanding (~30% per team stat) and the payoff is broad but not identity-defining. An optional **keystone** at very high investment is design space (TBD). Code source of truth: `TEAM_NODE_THRESHOLDS` in `attribute_state.gd`.
+Strong early, plateaus hard. T3 is demanding (~17% per kore stat) and the payoff is broad but not identity-defining. An optional **keystone** at very high investment is design space (TBD). Code source of truth: `KORE_NODE_THRESHOLDS` in `attribute_state.gd`.
 
 ---
 
@@ -284,18 +286,18 @@ Key NPCs (reps, vendors, bosses, gate encounters) can react to the player's domi
 
 ## Implemented
 
-- HP and resource pool max scale with contribution-weighted stat totals (primary 1.0x, team 0.25x, opposing 0.10x). Current values scale proportionally on gear swap. Code: `AttributeState.get_stat_bonus_hp()` / `get_stat_bonus_resource()`.
+- HP and resource pool max scale with contribution-weighted stat totals (primary 1.0x, kore 0.25x, opposing 0.10x). Current values scale proportionally on gear swap. Code: `AttributeState.get_stat_bonus_hp()` / `get_stat_bonus_resource()`.
 - Resource bars unlock per-class once that class's tier 1 is met (max 3 bars active).
 - All six specialist tier perks (see table above).
 
 ## Open Questions
 
-- **Tuning:** team stat scaling multiplier (~0.25x placeholder); tier breakpoints (need playtest); talent point cadence (currently 1/level → far above the ~20-point intended budget at L100).
+- **Tuning:** kore stat scaling multiplier (~0.25x placeholder); tier breakpoints (need playtest); talent point cadence (currently 1/level → far above the ~20-point intended budget at L100).
 - **Origin class tier perks** — what do balanced Analog / Cyborg unlock?
 - **Class-specific stat functions** beyond damage scaling (Orthodoxy, Optimization, Ingenuity, Clarity, Ambition all marked TBD).
 - **Opposing stat distortion specifics** — what literally distorts for each class? Needs per-class design.
 - **Soul / Interface governance** — beyond being derived: candidates include willpower / resilience for Soul, precision / cooldown reduction for Interface.
-- **Team nodes** — tier 1/2/3 specific bonuses; the optional keystone.
+- **Kore nodes** — tier 1/2/3 specific bonuses; the optional keystone.
 - **Node prerequisites** — tier-only access, or specific intra-tier dependencies?
 - **Visual metamorphosis art pipeline** — mesh kits, shader channels, VFX layers per class.
 - **Relationship overlay placement** — which UI surfaces (tooltips, stat bars, talents, sheet) get the overlay rings.

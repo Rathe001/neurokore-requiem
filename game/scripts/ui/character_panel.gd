@@ -517,8 +517,8 @@ func _build_alloc_bar(parent: Control) -> void:
 	_alloc_bar.gui_input.connect(_on_alloc_bar_input)
 	parent.add_child(_alloc_bar)
 
-	var rollable: Array[StringName] = AttributeState.ANALOG_TEAM_STATS.duplicate()
-	rollable.append_array(AttributeState.CYBORG_TEAM_STATS)
+	var rollable: Array[StringName] = AttributeState.ANALOG_KORE_STATS.duplicate()
+	rollable.append_array(AttributeState.CYBORG_KORE_STATS)
 	for _stat in rollable:
 		var lbl := Label.new()
 		lbl.theme_type_variation = &"SmallLabel"
@@ -545,9 +545,9 @@ func _repaint_alloc_bar() -> void:
 	for pct: float in pcts.values():
 		total += pct
 
-	# Sort: primary → team → opp_team → opposing (same priority as talents panel)
-	var rollable: Array[StringName] = AttributeState.ANALOG_TEAM_STATS.duplicate()
-	rollable.append_array(AttributeState.CYBORG_TEAM_STATS)
+	# Sort: primary → kore → opp_kore → opposing (same priority as talents panel)
+	var rollable: Array[StringName] = AttributeState.ANALOG_KORE_STATS.duplicate()
+	rollable.append_array(AttributeState.CYBORG_KORE_STATS)
 	var sorted: Array[StringName] = rollable.duplicate()
 	sorted.sort_custom(func(a: StringName, b: StringName) -> bool:
 		return AttributeState.get_stat_rel_priority(a, PlayerState.class_id, PlayerState.spec_id) \
@@ -735,13 +735,13 @@ func _on_attr_row_hovered(stat_id: StringName) -> void:
 			lines.append("  No equipment bonuses")
 	else:
 		# Derived stat (Soul / Interface) — show the average formula.
-		var team: Array[StringName]
+		var kore: Array[StringName]
 		if stat_id == &"soul":
-			team = AttributeState.ANALOG_TEAM_STATS
+			kore = AttributeState.ANALOG_KORE_STATS
 		else:
-			team = AttributeState.CYBORG_TEAM_STATS
+			kore = AttributeState.CYBORG_KORE_STATS
 		var parts: Array[String] = []
-		for s in team:
+		for s in kore:
 			var s_key: StringName = AttributeState.STAT_I18N.get(s, &"")
 			var s_name: String = tr(s_key) if s_key != &"" else String(s).capitalize()
 			parts.append("%s %d" % [s_name, AttributeState.get_stat(s)])

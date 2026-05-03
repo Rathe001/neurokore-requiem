@@ -122,7 +122,7 @@ func _recompute() -> void:
 	var new_aggregates: Dictionary = {}
 
 	# Origin classes (Analog/Cyborg) also receive perks for tiers they unlock
-	# in their team / opposing stats — capped at T2 / T1 by the threshold
+	# in their kore / opposing stats — capped at T2 / T1 by the threshold
 	# tables. Earlier we required spec_id != "" too, which silently denied
 	# origin classes any perks even after unlocking T2.
 	if PlayerState.class_id != &"":

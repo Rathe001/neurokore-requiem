@@ -24,7 +24,7 @@ Godot 4 + GDScript, Forward+ renderer. Fixed-camera low-poly 3D with PBR + reali
 - **All six specialist tier perks shipped** — Exile (Count), Amalgamation (Forged, with per-arm spawn offsets + dynamic stagger), Drone Swarm (Automaton, wandering hover drones with wall collision), IED (Survivalist, proximity traps tossed at cursor), Telekinesis (Polymath, grab-and-slam bolts), Doomsayer (Enculted, aura proccing stun / charm / weaken with persistent FIFO charm cap). See [tier perk table](design/attribute-system.md#specialized-class-tier-perks).
 
 ### Stats & UI
-- **Attribute system** — 6 rollable stats (ORT/ING/AMB/DEV/OPT/CLA); Soul/Interface derived from origin team-stat averages; tier thresholds per relationship type; tier-crossing signals; contribution-weighted stat scaling drives HP and resource maxes (primary 1.0x, team 0.25x, opposing 0.10x)
+- **Attribute system** — 6 rollable stats (ORT/ING/AMB/DEV/OPT/CLA); Soul/Interface derived from origin kore-stat averages; tier thresholds per relationship type (primary / kore / opposing); tier-crossing signals; contribution-weighted stat scaling drives HP and resource maxes (primary 1.0x, kore 0.25x, opposing 0.10x)
 - **Talents panel** (N) — per-class stat rows, 5-tier node grids, tier bars, locked-node preview with unlock %, allocation persists in `PlayerState`
 - **Character panel stat bar** — compact multibar showing stat allocation % with relationship coloring and matching tooltips
 - **Class UI themes** — `UIThemeState.SPEC_THEMES` keyed by class
@@ -79,7 +79,7 @@ Spawning model is **D2-style**, not horde-streaming: enemies are placed at level
 ## Open design areas
 
 - **Tier perk mechanics for origin classes** — Analog/Cyborg balance perks. Specialist perks all ship.
-- **Team stat scaling multipliers** — currently ~0.25x placeholder
+- **Kore stat scaling multipliers** — currently ~0.25x placeholder
 - **Visual metamorphosis** — modular meshes + shader channels per stat
 - **NPC identity reactions** — reps/vendors react to dominant stat identity
 - **Morality system** — [on hold](design/morality-system.md), may resurface as hidden narrative system

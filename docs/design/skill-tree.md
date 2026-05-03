@@ -50,7 +50,7 @@ These nodes allow weapon attacks to remain relevant at all stages of the game ra
 Fire and Alt Fire can also be altered by [gear augments](gear-augmentation.md) — e.g., a laser sight augment adds a targeting beam, a bayonet changes a ranged weapon's melee fallback. Skill tree nodes and augments stack.
 
 !!! note "Skill tree vs. tier perks"
-    Skill tree nodes are a separate system from [stat identity tier perks](attribute-system.md#stat-identity--tier-perks--visual-metamorphosis). Skill tree nodes are unlocked through progression within the chosen class. Tier perks are driven by attribute distribution (gear) and can be gained or lost at any time. The skill tree *does* interact with attributes through the [team stat scaling mechanic](attribute-system.md#team-stat-scaling--skill-tree-mechanic) (lowest/average/highest).
+    Skill tree nodes are a separate system from [stat identity tier perks](attribute-system.md#stat-identity--tier-perks--visual-metamorphosis). Skill tree nodes are unlocked through progression within the chosen class. Tier perks are driven by attribute distribution (gear) and can be gained or lost at any time. The skill tree *does* interact with attributes through the [kore stat scaling mechanic](attribute-system.md#kore-stat-scaling--skill-tree-mechanic) (lowest/average/highest).
 
 ---
 

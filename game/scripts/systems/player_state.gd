@@ -8,7 +8,7 @@ signal spec_changed(spec_id: StringName)
 signal talents_changed
 signal tier_changed(stat_id: StringName, old_tier: int, new_tier: int)
 signal origin_tier_changed(old_tier: int, new_tier: int)
-signal team_nodes_tier_changed(old_tier: int, new_tier: int)
+signal kore_nodes_tier_changed(old_tier: int, new_tier: int)
 signal level_changed(new_level: int, old_level: int)
 signal xp_changed(current_xp: int, xp_to_next: int)
 signal leveled_up(new_level: int, hp_gain: int)
@@ -62,13 +62,13 @@ var new_game_plus: int = 0
 ## Layout: { stat_id: [[bool]*8]*3 } — 3 tiers × 8 nodes each.
 var talent_allocations: Dictionary = {}
 
-## Spent talent points for team nodes.
+## Spent talent points for kore nodes.
 ## Layout: [[bool]*4]*3 — 3 tiers × 4 nodes.
-var team_node_allocations: Array = []
+var kore_node_allocations: Array = []
 
 var _cached_tiers: Dictionary = {}
 var _cached_origin_tier: int = -1
-var _cached_team_nodes_tier: int = -1
+var _cached_kore_nodes_tier: int = -1
 
 func _ready() -> void:
 	AttributeState.stats_changed.connect(_recompute_tiers)
@@ -118,13 +118,13 @@ func set_talent_alloc(stat: StringName, tier: int, node: int, allocated: bool) -
 	talent_allocations[stat][tier][node] = allocated
 	talents_changed.emit()
 
-func set_team_node_alloc(tier: int, node: int, allocated: bool) -> void:
-	if team_node_allocations.is_empty():
+func set_kore_node_alloc(tier: int, node: int, allocated: bool) -> void:
+	if kore_node_allocations.is_empty():
 		var rows: Array = []
-		for _i in AttributeState.TEAM_NODE_TIER_COUNT:
-			rows.append(_make_node_row(AttributeState.TEAM_NODE_NODES_PER_TIER))
-		team_node_allocations = rows
-	team_node_allocations[tier][node] = allocated
+		for _i in AttributeState.KORE_NODE_TIER_COUNT:
+			rows.append(_make_node_row(AttributeState.KORE_NODE_NODES_PER_TIER))
+		kore_node_allocations = rows
+	kore_node_allocations[tier][node] = allocated
 	talents_changed.emit()
 
 static func _make_node_row(count: int) -> Array:
@@ -140,7 +140,7 @@ func get_talent_points_spent() -> int:
 			for allocated in node_row:
 				if allocated:
 					total += 1
-	for tier_row in team_node_allocations:
+	for tier_row in kore_node_allocations:
 		for allocated in tier_row:
 			if allocated:
 				total += 1
@@ -158,15 +158,15 @@ func is_node_active(stat_id: StringName, tier: int, node: int) -> bool:
 		return false
 	return (tier + 1) <= AttributeState.get_unlocked_tier(stat_id, class_id, spec_id)
 
-## True if a team node is allocated AND its tier is currently unlocked by stats.
-func is_team_node_active(tier: int, node: int) -> bool:
-	if team_node_allocations.is_empty() or not team_node_allocations[tier][node]:
+## True if a kore node is allocated AND its tier is currently unlocked by stats.
+func is_kore_node_active(tier: int, node: int) -> bool:
+	if kore_node_allocations.is_empty() or not kore_node_allocations[tier][node]:
 		return false
-	return (tier + 1) <= AttributeState.get_team_nodes_tier(class_id, spec_id)
+	return (tier + 1) <= AttributeState.get_kore_nodes_tier(class_id, spec_id)
 
 func reset_talents() -> void:
 	talent_allocations.clear()
-	team_node_allocations.clear()
+	kore_node_allocations.clear()
 	_reset_tier_cache()
 	talents_changed.emit()
 
@@ -201,7 +201,7 @@ func _do_level_up() -> void:
 func _reset_tier_cache() -> void:
 	_cached_tiers.clear()
 	_cached_origin_tier = -1
-	_cached_team_nodes_tier = -1
+	_cached_kore_nodes_tier = -1
 
 func _recompute_tiers() -> void:
 	if class_id == &"":
@@ -213,10 +213,10 @@ func _recompute_tiers() -> void:
 			tier_changed.emit(stat_id, old_tier, new_tier)
 		_cached_tiers[stat_id] = new_tier
 
-	var new_team_tier := AttributeState.get_team_nodes_tier(class_id, spec_id)
-	if _cached_team_nodes_tier >= 0 and _cached_team_nodes_tier != new_team_tier:
-		team_nodes_tier_changed.emit(_cached_team_nodes_tier, new_team_tier)
-	_cached_team_nodes_tier = new_team_tier
+	var new_kore_tier := AttributeState.get_kore_nodes_tier(class_id, spec_id)
+	if _cached_kore_nodes_tier >= 0 and _cached_kore_nodes_tier != new_kore_tier:
+		kore_nodes_tier_changed.emit(_cached_kore_nodes_tier, new_kore_tier)
+	_cached_kore_nodes_tier = new_kore_tier
 
 	if class_id == &"analog" or class_id == &"cyborg":
 		var new_origin_tier := AttributeState.get_origin_tier(class_id)

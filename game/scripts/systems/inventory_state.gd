@@ -237,7 +237,7 @@ func _make_starter_offhand() -> Item:
 ## Build one max-tier test item per spec class. Equipping the matching item
 ## as the dominant stat source pushes that class's primary stat past the
 ## TIERS_OWN[2] (99%) threshold → T3 unlocked. For origin classes the same
-## item lifts the corresponding team stat past TIERS_TEAM_ORIGIN[1] (66%)
+## item lifts the corresponding kore stat past TIERS_KORE_ORIGIN[1] (66%)
 ## → T2. Reduces playtest setup from "kill enemies until you roll the right
 ## affixes" to "drag this onto the matching slot."
 func _make_class_tier3_item(spec_id: StringName) -> Item:

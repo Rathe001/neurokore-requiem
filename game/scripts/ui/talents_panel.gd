@@ -481,7 +481,7 @@ func _repaint_summary() -> void:
 	for row_def: Dictionary in STAT_ROWS:
 		total += pcts.get(row_def["stat"], 0.0)
 
-	# Sort: primary(green) → team(dim green) → opp-team(yellow) → nemesis(red)
+	# Sort: primary(green) → kore(dim green) → opp-kore(yellow) → nemesis(red)
 	var sorted: Array[StringName] = []
 	for row_def: Dictionary in STAT_ROWS:
 		sorted.append(row_def["stat"] as StringName)
@@ -590,7 +590,7 @@ func _on_node_unhovered() -> void:
 
 
 # Class-aware reason text for an unavailable tier. Reads off the same
-# (origin / specialized) × (own / team / opposing) classification that
+# (origin / specialized) × (own / kore / opposing) classification that
 # AttributeState.get_tier_thresholds branches on, so the wording matches
 # the actual rule that locked the tier.
 func _unavailable_reason(stat_id: StringName, tier: int, stat_name: String) -> String:
@@ -598,17 +598,17 @@ func _unavailable_reason(stat_id: StringName, tier: int, stat_name: String) -> S
 	var spec_id: StringName = PlayerState.spec_id
 	var tier_label := AttributeState.TIER_ROMAN[tier]
 	if spec_id == &"":
-		# Origin class. Team stats cap at T2; opposing cap at T1.
-		if stat_id in AttributeState.get_team_stats_for_origin(class_id):
+		# Origin class. Kore stats cap at T2; opposing cap at T1.
+		if stat_id in AttributeState.get_kore_stats_for_origin(class_id):
 			return "Origin classes cap at Tier II — Tier %s is reserved for specialised classes." % tier_label
-		return "Origin classes can only reach Tier I in opposing-team perks. Pick a specialisation to unlock more."
+		return "Origin classes can only reach Tier I in opposing-kore perks. Pick a specialisation to unlock more."
 	# Specialized class.
 	var rel := AttributeState.get_stat_relationship(stat_id, class_id, spec_id)
 	match rel:
-		&"team":
-			return "Specialised classes cap at Tier II in same-origin team perks — Tier %s is reserved for your primary stat." % tier_label
+		&"kore":
+			return "Specialised classes cap at Tier II in same-origin kore perks — Tier %s is reserved for your primary stat." % tier_label
 		_:
-			return "Specialised classes can't access opposing-team perks. Switch to your origin class to dabble at Tier I."
+			return "Specialised classes can't access opposing-kore perks. Switch to your origin class to dabble at Tier I."
 
 func _paint_row(row: Dictionary, rel_color: Color, unlocked_tier: int) -> void:
 	var fade := ROW_LOCKED_ALPHA if unlocked_tier == 0 else 1.0

@@ -11,9 +11,9 @@
 
 ## Origin vs. Specialized Classes
 
-Origin classes (Analog and Cyborg) are generalists — jack of all trades for their respective path. They are the easiest to understand and the most forgiving to gear. All three of their team's attributes contribute equally to a single derived stat (Soul or Interface).
+Origin classes (Analog and Cyborg) are generalists — jack of all trades for their respective path. They are the easiest to understand and the most forgiving to gear. All three of their **kore** attributes (the three stats native to that origin) contribute equally to a single derived stat (Soul or Interface).
 
-Specialized classes trade that flexibility for depth. They scale primarily off one attribute, get partial benefit from their two team stats, and are actively hurt by their opposing stat. See [Attribute System](../design/attribute-system.md) for full scaling rules.
+Specialized classes trade that flexibility for depth. They scale primarily off one attribute, get partial benefit from their two kore stats, and are actively hurt by their opposing stat. See [Attribute System](../design/attribute-system.md) for full scaling rules.
 
 ## Resource System
 

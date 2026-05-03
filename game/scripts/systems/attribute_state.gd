@@ -2,7 +2,12 @@ extends Node
 
 # Moral attribute stats. See docs/design/attribute-system.md.
 # Rollable stats (ort/ing/amb/dev/opt/cla) are set by equipment + class scaling.
-# Soul and Interface are derived: average of their origin's three team stats.
+# Soul and Interface are derived: average of their origin's three kore stats.
+#
+# "Kore" terminology: stats that share an origin (the Analog kore stats are
+# ORT/ING/AMB; the Cyborg kore stats are DEV/OPT/CLA). Named for the game's
+# title — your character has a "kore," and stats matching it scale you up.
+# Stats from the opposite kore are "opposing" and create distortion.
 
 signal stats_changed
 
@@ -49,9 +54,9 @@ const CYBORG_STATS: Array[StringName] = [&"itf", &"dev", &"opt", &"cla"]
 # Rollable stats (all 6, in fixed order)
 const ROLLABLE_STATS: Array[StringName] = [&"ort", &"ing", &"amb", &"dev", &"opt", &"cla"]
 
-# Team stats per origin
-const ANALOG_TEAM_STATS: Array[StringName] = [&"ort", &"ing", &"amb"]
-const CYBORG_TEAM_STATS: Array[StringName] = [&"dev", &"opt", &"cla"]
+# Kore stats per origin — the three rollable stats native to that origin.
+const ANALOG_KORE_STATS: Array[StringName] = [&"ort", &"ing", &"amb"]
+const CYBORG_KORE_STATS: Array[StringName] = [&"dev", &"opt", &"cla"]
 
 # All specialized class definitions in one place — avoids sync bugs when
 # adding classes. Add presentational fields here too (glyph for placeholder
@@ -86,11 +91,11 @@ const TIER_ROMAN: Array[String] = ["I", "II", "III"]
 const TIER_COUNT := 3
 
 # Relationship accent colors — used by talents panel, tooltip, and any future UI.
-# primary = own class stat, team = same origin, opp_team = opposite origin, opposing = nemesis stat.
+# primary = own class stat, kore = same origin, opp_kore = opposite origin, opposing = nemesis stat.
 const RELATIONSHIP_COLORS: Dictionary = {
 	&"primary":  Color(0.25, 1.0,  0.35, 1.0),
-	&"team":     Color(0.15, 0.38, 0.18, 1.0),
-	&"opp_team": Color(0.95, 0.80, 0.15, 1.0),
+	&"kore":     Color(0.15, 0.38, 0.18, 1.0),
+	&"opp_kore": Color(0.95, 0.80, 0.15, 1.0),
 	&"opposing": Color(0.85, 0.18, 0.18, 1.0),
 }
 
@@ -103,12 +108,12 @@ const RELATIONSHIP_COLORS: Dictionary = {
 #
 # Specialized classes:
 #   TIERS_OWN           — own primary stat (T3 reachable at 99%)
-#   TIERS_TEAM_SPEC     — same-origin team stats (T1/T2 reachable; T3 unreachable
+#   TIERS_KORE_SPEC     — same-origin (kore) stats (T1/T2 reachable; T3 unreachable
 #                         in practice since 66% + 99% own > 100%)
 #   TIERS_OPPOSING_SPEC — opposite-origin stats (UNAVAILABLE — all sentinels)
 #
 # Origin classes (Analog / Cyborg):
-#   TIERS_TEAM_ORIGIN     — own origin's team stats (same 33/66 ladder)
+#   TIERS_KORE_ORIGIN     — own origin's kore stats (same 33/66 ladder)
 #   TIERS_OPPOSING_ORIGIN — opposite-origin stats (T1 dabble at 33%)
 #
 # >100% threshold (e.g. 1.01) is the "structurally unreachable" sentinel —
@@ -117,9 +122,9 @@ const RELATIONSHIP_COLORS: Dictionary = {
 # as "unavailable" with a class-restriction tooltip rather than "locked".
 # See docs/design/attribute-system.md § Breakpoints.
 const TIERS_OWN:               Array[float] = [0.33, 0.66, 0.99]
-const TIERS_TEAM_SPEC:         Array[float] = [0.33, 0.66, 1.01]
+const TIERS_KORE_SPEC:         Array[float] = [0.33, 0.66, 1.01]
 const TIERS_OPPOSING_SPEC:     Array[float] = [1.01, 1.01, 1.01]
-const TIERS_TEAM_ORIGIN:       Array[float] = [0.33, 0.66, 1.01]
+const TIERS_KORE_ORIGIN:       Array[float] = [0.33, 0.66, 1.01]
 const TIERS_OPPOSING_ORIGIN:   Array[float] = [0.33, 1.01, 1.01]
 
 # Talent tree node dimensions — 8 nodes per tier means 24 per class tree.
@@ -127,7 +132,7 @@ const TIERS_OPPOSING_ORIGIN:   Array[float] = [0.33, 1.01, 1.01]
 const TALENT_NODES_PER_TIER := 8
 
 # Origin class balance tier caps. Indexed 1–3. Single "no stat ≥ X" cap
-# per tier — replaces the prior team/opposing split because the simpler
+# per tier — replaces the prior kore/opposing split because the simpler
 # rule reads better and produces the same shape of incentive (don't let
 # any one stat dominate). T3 lands exactly at perfect 33+33+33 balance.
 const ORIGIN_TIER_CAPS: Array[float] = [
@@ -137,10 +142,10 @@ const ORIGIN_TIER_CAPS: Array[float] = [
 	0.33,  # tier 3: no stat ≥ 33% (perfect 1-1-1 spread, exactly at cap)
 ]
 
-# Team nodes: 3-tier tree unlocked by combined team stat share.
-const TEAM_NODE_TIER_COUNT := 3
-const TEAM_NODE_NODES_PER_TIER := 4
-const TEAM_NODE_THRESHOLDS: Array[float] = [0.20, 0.35, 0.50]
+# Kore nodes: 3-tier tree unlocked by combined kore stat share.
+const KORE_NODE_TIER_COUNT := 3
+const KORE_NODE_NODES_PER_TIER := 4
+const KORE_NODE_THRESHOLDS: Array[float] = [0.20, 0.35, 0.50]
 
 # ── Main-stat scaling (HP / Resource / Damage) ───────────────────────────────
 # The player's "main stat" — the spec's primary stat for specialised classes,
@@ -148,8 +153,8 @@ const TEAM_NODE_THRESHOLDS: Array[float] = [0.20, 0.35, 0.50]
 # ONLY stat that directly grants HP / resource / damage bonuses. Secondary
 # stat investments are for unlocking perk tiers via the % allocation system,
 # not for stat-stick stacking. Origin classes still get their derived stat
-# scaling from their team stats via Soul/Interface = avg(team), so spreading
-# investment across team stats DOES contribute to HP/resource — just
+# scaling from their kore stats via Soul/Interface = avg(kore), so spreading
+# investment across kore stats DOES contribute to HP/resource — just
 # averaged through the derived stat instead of weighted.
 #
 # 1% damage per main-stat point gives roughly D2-shaped scaling: a fully-
@@ -245,30 +250,30 @@ func get_all_stat_pcts() -> Dictionary:
 		result[s] = float(get_stat(s)) / maxf(float(total), 1.0)
 	return result
 
-## Returns the relationship of a stat to the given class: &"primary", &"team", or &"opposing".
+## Returns the relationship of a stat to the given class: &"primary", &"kore", or &"opposing".
 func get_stat_relationship(stat_id: StringName, class_id: StringName, spec_id: StringName) -> StringName:
 	if spec_id != &"":
 		if get_spec_stat(spec_id) == stat_id:
 			return &"primary"
-		return &"team" if stat_id in get_team_stats_for_origin(get_spec_origin(spec_id)) else &"opposing"
+		return &"kore" if stat_id in get_kore_stats_for_origin(get_spec_origin(spec_id)) else &"opposing"
 	# Origin class: no primary stat
-	return &"team" if stat_id in get_team_stats_for_origin(class_id) else &"opposing"
+	return &"kore" if stat_id in get_kore_stats_for_origin(class_id) else &"opposing"
 
 ## Returns the threshold array for unlocking each tier of a stat's tree.
-## Branches on (origin vs specialized) × (own / team / opposing). Sentinel
+## Branches on (origin vs specialized) × (own / kore / opposing). Sentinel
 ## thresholds (> 1.0) mark structurally unreachable tiers — UI renders them
 ## as "unavailable" with a class-restriction tooltip.
 func get_tier_thresholds(stat_id: StringName, class_id: StringName, spec_id: StringName) -> Array[float]:
 	if spec_id == &"":
-		# Origin: no primary stat. Own team stats cap at T2; opposing stats
+		# Origin: no primary stat. Own kore stats cap at T2; opposing stats
 		# cap at T1 so cross-aligned dabbling is possible but limited.
-		if stat_id in get_team_stats_for_origin(class_id):
-			return TIERS_TEAM_ORIGIN
+		if stat_id in get_kore_stats_for_origin(class_id):
+			return TIERS_KORE_ORIGIN
 		return TIERS_OPPOSING_ORIGIN
-	# Specialized: own → T3, team → T2, opposing → unavailable.
+	# Specialized: own → T3, kore → T2, opposing → unavailable.
 	match get_stat_relationship(stat_id, class_id, spec_id):
 		&"primary": return TIERS_OWN
-		&"team":    return TIERS_TEAM_SPEC
+		&"kore":    return TIERS_KORE_SPEC
 	return TIERS_OPPOSING_SPEC
 
 ## Returns the currently unlocked tier (0–3) for a stat tree given class context.
@@ -277,7 +282,7 @@ func get_tier_thresholds(stat_id: StringName, class_id: StringName, spec_id: Str
 ## zeroes the others, so specialized classes can land 3-1-1 or 3-2-0 patterns.
 ## Specialized classes are auto-granted T1 of their primary perk so class
 ## identity reads even before any stat investment. Origin classes are capped
-## at T2 implicitly via the unreachable T3 threshold in TIERS_TEAM_ORIGIN.
+## at T2 implicitly via the unreachable T3 threshold in TIERS_KORE_ORIGIN.
 func get_unlocked_tier(stat_id: StringName, class_id: StringName, spec_id: StringName) -> int:
 	var pct := get_stat_pct(stat_id)
 	var thresholds := get_tier_thresholds(stat_id, class_id, spec_id)
@@ -292,9 +297,9 @@ func get_unlocked_tier(stat_id: StringName, class_id: StringName, spec_id: Strin
 ## Returns the balance tier (0–3) for an origin class (Analog/Cyborg).
 ## Higher = tighter stat balance; perks are maintained up to the returned tier.
 ## Single rule: no stat may meet or exceed ORIGIN_TIER_CAPS[tier] — applies
-## uniformly to team and opposing stats (the prior split was complexity for
+## uniformly to kore and opposing stats (the prior split was complexity for
 ## no benefit). class_id is unused now that we don't need to distinguish
-## team from opposing stats — kept in the signature for caller stability.
+## kore from opposing stats — kept in the signature for caller stability.
 func get_origin_tier(_class_id: StringName) -> int:
 	var pcts := get_all_stat_pcts()
 	var max_pct := 0.0
@@ -305,28 +310,28 @@ func get_origin_tier(_class_id: StringName) -> int:
 			return tier
 	return 0
 
-## Returns the unlocked team-nodes tier (0–3) based on combined team stat share.
-func get_team_nodes_tier(class_id: StringName, spec_id: StringName) -> int:
+## Returns the unlocked kore-nodes tier (0–3) based on combined kore stat share.
+func get_kore_nodes_tier(class_id: StringName, spec_id: StringName) -> int:
 	var origin: StringName = get_spec_origin(spec_id) if spec_id != &"" else class_id
-	return get_team_nodes_tier_for_origin(origin)
+	return get_kore_nodes_tier_for_origin(origin)
 
-## Returns the unlocked team-nodes tier (0–3) for a specific origin, regardless of player class.
-func get_team_nodes_tier_for_origin(origin: StringName) -> int:
+## Returns the unlocked kore-nodes tier (0–3) for a specific origin, regardless of player class.
+func get_kore_nodes_tier_for_origin(origin: StringName) -> int:
 	var pcts := get_all_stat_pcts()
 	var combined := 0.0
-	for s in get_team_stats_for_origin(origin):
+	for s in get_kore_stats_for_origin(origin):
 		combined += pcts.get(s, 0.0)
 	var unlocked := 0
-	for i in TEAM_NODE_THRESHOLDS.size():
-		if combined >= TEAM_NODE_THRESHOLDS[i]:
+	for i in KORE_NODE_THRESHOLDS.size():
+		if combined >= KORE_NODE_THRESHOLDS[i]:
 			unlocked = i + 1
 	return unlocked
 
-func get_team_stats_for_origin(origin: StringName) -> Array[StringName]:
-	return ANALOG_TEAM_STATS if origin == &"analog" else CYBORG_TEAM_STATS
+func get_kore_stats_for_origin(origin: StringName) -> Array[StringName]:
+	return ANALOG_KORE_STATS if origin == &"analog" else CYBORG_KORE_STATS
 
 func get_opposing_stats_for_origin(origin: StringName) -> Array[StringName]:
-	return CYBORG_TEAM_STATS if origin == &"analog" else ANALOG_TEAM_STATS
+	return CYBORG_KORE_STATS if origin == &"analog" else ANALOG_KORE_STATS
 
 ## Returns the primary stat for a specialized class, or &"" for origin classes.
 func get_spec_stat(spec_id: StringName) -> StringName:
@@ -357,25 +362,25 @@ func get_player_damage_mult(class_id: StringName, spec_id: StringName) -> float:
 func get_spec_origin(spec_id: StringName) -> StringName:
 	return CLASS_DEFINITIONS.get(spec_id, {}).get(&"origin", &"analog")
 
-## Sort priority for stat relationship: primary(0) > team(1) > opp_team(2) > nemesis(3).
+## Sort priority for stat relationship: primary(0) > kore(1) > opp_kore(2) > nemesis(3).
 ## Used to order segments in summary bars consistently across all UI.
 func get_stat_rel_priority(stat_id: StringName, class_id: StringName, spec_id: StringName) -> int:
 	var rel := get_stat_relationship(stat_id, class_id, spec_id)
 	if rel == &"primary": return 0
-	if rel == &"team":    return 1
+	if rel == &"kore":    return 1
 	var my_stat := get_spec_stat(spec_id)
 	if my_stat != &"" and NEMESIS_STAT.get(my_stat, &"") == stat_id: return 3
 	return 2
 
 ## Returns the RELATIONSHIP_COLORS key for a stat given class context.
-## Distinguishes nemesis (&"opposing") from generic opposing-origin (&"opp_team").
+## Distinguishes nemesis (&"opposing") from generic opposing-origin (&"opp_kore").
 func get_stat_rel_color_key(stat_id: StringName, class_id: StringName, spec_id: StringName) -> StringName:
 	var rel := get_stat_relationship(stat_id, class_id, spec_id)
 	if rel == &"primary": return &"primary"
-	if rel == &"team":    return &"team"
+	if rel == &"kore":    return &"kore"
 	var my_stat := get_spec_stat(spec_id)
 	if my_stat != &"" and NEMESIS_STAT.get(my_stat, &"") == stat_id: return &"opposing"
-	return &"opp_team"
+	return &"opp_kore"
 
 ## Returns a BBCode-formatted scaling hint for a class/spec, used by selection UI.
 ## Stat names are wrapped in [color] tags matching their STAT_COLORS.
@@ -387,31 +392,31 @@ func get_scaling_hint(class_id: StringName, spec_id: StringName) -> String:
 		return "[color=#%s]%s[/color]" % [col.to_html(false), label]
 
 	if spec_id == &"":
-		var origin_team := get_team_stats_for_origin(class_id)
-		var origin_team_names: Array[String] = []
-		for s in origin_team:
-			origin_team_names.append(_colored.call(s))
+		var origin_kore := get_kore_stats_for_origin(class_id)
+		var origin_kore_names: Array[String] = []
+		for s in origin_kore:
+			origin_kore_names.append(_colored.call(s))
 		var derived_stat: StringName = &"soul" if class_id == &"analog" else &"itf"
 		var derived: String = _colored.call(derived_stat)
 		return "HP, resource, and damage scale with %s (average of %s). Other stats unlock perk tiers." % [
-			derived, ", ".join(origin_team_names)]
+			derived, ", ".join(origin_kore_names)]
 
 	var primary: StringName = get_spec_stat(spec_id)
 	var origin: StringName = get_spec_origin(spec_id)
-	var team := get_team_stats_for_origin(origin)
+	var kore := get_kore_stats_for_origin(origin)
 
-	var team_names: Array[String] = []
-	for s in team:
+	var kore_names: Array[String] = []
+	for s in kore:
 		if s != primary:
-			team_names.append(_colored.call(s))
+			kore_names.append(_colored.call(s))
 
 	return "HP, resource, and damage scale with %s. Same-origin stats (%s) unlock supplementary perks." % [
-		_colored.call(primary), " and ".join(team_names)]
+		_colored.call(primary), " and ".join(kore_names)]
 
 ## Value of the player's main stat — the spec's primary stat for specialised
 ## classes, the origin's derived Soul/Interface for origin classes (which is
-## the average of the origin's three team stats, so spreading investment
-## across team stats DOES contribute to the main stat — just averaged).
+## the average of the origin's three kore stats, so spreading investment
+## across kore stats DOES contribute to the main stat — just averaged).
 ## Drives bonus HP, resource, and damage. Secondary stat investments matter
 ## only for unlocking perk tiers via the % allocation system.
 func get_main_stat_value(class_id: StringName, spec_id: StringName) -> int:
