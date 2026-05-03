@@ -751,10 +751,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#team-stat-scaling-skill-tree-mechanic" class="md-nav__link">
+  <a href="#kore-stat-scaling-skill-tree-mechanic" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Team Stat Scaling — Skill Tree Mechanic
+        Kore Stat Scaling — Skill Tree Mechanic
       
     </span>
   </a>
@@ -884,10 +884,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#team-nodes" class="md-nav__link">
+  <a href="#kore-nodes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Team Nodes
+        Kore Nodes
       
     </span>
   </a>
@@ -1903,10 +1903,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#team-stat-scaling-skill-tree-mechanic" class="md-nav__link">
+  <a href="#kore-stat-scaling-skill-tree-mechanic" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Team Stat Scaling — Skill Tree Mechanic
+        Kore Stat Scaling — Skill Tree Mechanic
       
     </span>
   </a>
@@ -2036,10 +2036,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#team-nodes" class="md-nav__link">
+  <a href="#kore-nodes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Team Nodes
+        Kore Nodes
       
     </span>
   </a>
@@ -2145,14 +2145,17 @@
 
 <h1 id="attribute-system">Attribute System<a class="headerlink" href="#attribute-system" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p>Status: Core system + all six specialist tier perks implemented (Exile, Amalgamation, Drone Swarm, IED, Telekinesis, Doomsayer). Origin-class tier perks, team stat scaling multipliers, visual metamorphosis, and NPC reactions are still TBD.</p>
+<p>Status: Core system + all six specialist tier perks implemented (Exile, Amalgamation, Drone Swarm, IED, Telekinesis, Doomsayer). Origin-class tier perks, kore stat scaling multipliers, visual metamorphosis, and NPC reactions are still TBD.</p>
 </blockquote>
 <h2 id="core-philosophy">Core Philosophy<a class="headerlink" href="#core-philosophy" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Class = verbs</strong>, <strong>attributes = modifiers</strong>. Stats shape <em>how</em> you do things; classes define <em>what</em> you can do. Stats never gate access to abilities.</li>
 <li><strong>Baseline identity is guaranteed.</strong> Off-stat builds distort your playstyle — they don't replace it.</li>
-<li>Supports specialization (stack primary), hybridization (team stats), and off-path experimentation (opposing stats with friction).</li>
+<li>Supports specialization (stack primary), hybridization (kore stats), and off-path experimentation (opposing stats with friction).</li>
 </ul>
+<blockquote>
+<p><strong>Kore.</strong> Stats sharing your origin are your <strong>kore</strong> — the Analog kore is ORT/ING/AMB; the Cyborg kore is DEV/OPT/CLA. Named for the game's title (Neurokore). Stats from the opposite kore are "opposing" and create distortion.</p>
+</blockquote>
 <hr />
 <h2 id="the-8-attributes">The 8 Attributes<a class="headerlink" href="#the-8-attributes" title="Permanent link">&para;</a></h2>
 <p>Six <strong>class stats</strong> roll on items. Two <strong>origin stats</strong> are derived, not rolled.</p>
@@ -2344,7 +2347,7 @@
 <td>Full efficiency</td>
 </tr>
 <tr>
-<td>Team (same origin)</td>
+<td>Kore (same origin)</td>
 <td>Dark green</td>
 <td>Partial scaling</td>
 </tr>
@@ -2357,7 +2360,7 @@
 </table>
 <p>Origin classes use balance-state coloring instead: green (stable) / yellow (drifting near threshold) / red (about to lose origin perks).</p>
 <h3 id="soul-interface-derived-stats">Soul &amp; Interface — Derived Stats<a class="headerlink" href="#soul-interface-derived-stats" title="Permanent link">&para;</a></h3>
-<p>Calculated from the average of the character's three team stats — never rolled directly. They represent identity coherence, not raw power.</p>
+<p>Calculated from the average of the character's three kore stats — never rolled directly. They represent identity coherence, not raw power.</p>
 <ul>
 <li><strong>Soul</strong> (Analog) = avg(Orthodoxy, Ingenuity, Ambition) → stability / sustain / momentum</li>
 <li><strong>Interface</strong> (Cyborg) = avg(Deviation, Optimization, Clarity) → speed / responsiveness / cooldown smoothing</li>
@@ -2384,7 +2387,7 @@
 <td>n/a (origins have no primary)</td>
 </tr>
 <tr>
-<td><strong>Team</strong></td>
+<td><strong>Kore</strong></td>
 <td>Other two stats from same origin</td>
 <td>Partial (~0.25x)</td>
 <td>T1=33%, T2=66%, T3=—</td>
@@ -2400,13 +2403,13 @@
 </tbody>
 </table>
 <blockquote>
-<p>T3 for team / opposing is unreachable in practice — getting one stat to 66% leaves only 34% for everything else. Specialists are sentinel-locked out of opposing trees entirely; origins can dabble into opposing T1 (≥33%). The "—" entries are sentinel thresholds (&gt;1.0) in code.</p>
+<p>T3 for kore / opposing is unreachable in practice — getting one stat to 66% leaves only 34% for everything else. Specialists are sentinel-locked out of opposing trees entirely; origins can dabble into opposing T1 (≥33%). The "—" entries are sentinel thresholds (&gt;1.0) in code.</p>
 </blockquote>
 <h3 id="opposing-stats-resistance-model">Opposing Stats — Resistance Model<a class="headerlink" href="#opposing-stats-resistance-model" title="Permanent link">&para;</a></h3>
 <p>Opposing stats don't apply a flat negative — they use a resistance model: <strong>efficiency reduction</strong> (points contribute less), <strong>behavioral distortion</strong> (mechanics warp, not just weaken), <strong>conditional penalties</strong> (situational), and <strong>conversion loss</strong> (partial waste).</p>
 <p><strong>Goal: friction, not failure.</strong> A character heavily invested in opposing stats plays a harder, distorted version of their class — not a broken one.</p>
-<h3 id="team-stat-scaling-skill-tree-mechanic">Team Stat Scaling — Skill Tree Mechanic<a class="headerlink" href="#team-stat-scaling-skill-tree-mechanic" title="Permanent link">&para;</a></h3>
-<p>By default, the team stat contribution scales off the <strong>lowest</strong> of the three team stats. This forces balanced gearing across all three.</p>
+<h3 id="kore-stat-scaling-skill-tree-mechanic">Kore Stat Scaling — Skill Tree Mechanic<a class="headerlink" href="#kore-stat-scaling-skill-tree-mechanic" title="Permanent link">&para;</a></h3>
+<p>By default, the kore stat contribution scales off the <strong>lowest</strong> of the three kore stats. This forces balanced gearing across all three.</p>
 <p>Skill tree nodes can change this calculation:</p>
 <table>
 <thead>
@@ -2419,17 +2422,17 @@
 <tbody>
 <tr>
 <td>(default)</td>
-<td>Lowest of 3 team stats</td>
+<td>Lowest of 3 kore stats</td>
 <td>Must balance all three — every item matters</td>
 </tr>
 <tr>
 <td>Balanced</td>
-<td>Average of 3 team stats</td>
+<td>Average of 3 kore stats</td>
 <td>Tolerates some lopsidedness</td>
 </tr>
 <tr>
 <td>Focused</td>
-<td>Highest of 3 team stats</td>
+<td>Highest of 3 kore stats</td>
 <td>Go all-in on main stat, ignore the others</td>
 </tr>
 </tbody>
@@ -2439,13 +2442,13 @@
 <h2 id="origin-class-scaling-analog-cyborg">Origin Class Scaling (Analog / Cyborg)<a class="headerlink" href="#origin-class-scaling-analog-cyborg" title="Permanent link">&para;</a></h2>
 <p>Origin classes are casual-friendly: broad, forgiving scaling and lower variance.</p>
 <ul>
-<li>Scaling: average of 3 team stats → feeds Soul / Interface</li>
+<li>Scaling: average of 3 kore stats → feeds Soul / Interface</li>
 <li>Opposing stats reduce efficiency (30-50%) but don't distort</li>
 <li>No specialized mechanics inherited — gains are blended and generalized</li>
 <li>Misaligned gearing (heavy opposing investment) stays functional, just suboptimal</li>
 </ul>
 <h3 id="origin-tier-perks-balance-gated">Origin Tier Perks (Balance-Gated)<a class="headerlink" href="#origin-tier-perks-balance-gated" title="Permanent link">&para;</a></h3>
-<p>Origin perks reward staying balanced — single rule: no stat may meet or exceed the cap. Same rule applies to team and opposing alike. Specific perks TBD.</p>
+<p>Origin perks reward staying balanced — single rule: no stat may meet or exceed the cap. Same rule applies to kore and opposing alike. Specific perks TBD.</p>
 <table>
 <thead>
 <tr>
@@ -2475,7 +2478,7 @@
 <p>An origin class that starts pushing a single stat loses origin perks but begins unlocking the matching specialized class's tier perks instead.</p>
 <hr />
 <h2 id="item-stat-budget">Item Stat Budget<a class="headerlink" href="#item-stat-budget" title="Permanent link">&para;</a></h2>
-<p>Items roll a fixed total stat budget distributed across attributes. The <em>distribution</em> matters as much as the total — a hybrid roll can outvalue a clean one depending on which team-stat-scaling node you've taken. Full item rules in <a href="../item-architecture/">item-architecture.md</a>.</p>
+<p>Items roll a fixed total stat budget distributed across attributes. The <em>distribution</em> matters as much as the total — a hybrid roll can outvalue a clean one depending on which kore-stat-scaling node you've taken. Full item rules in <a href="../item-architecture/">item-architecture.md</a>.</p>
 <h3 id="discovery-moments">Discovery Moments<a class="headerlink" href="#discovery-moments" title="Permanent link">&para;</a></h3>
 <p>Items can push players across tier thresholds accidentally — a feature, not a bug. Threshold crossings get VFX + "Tier unlocked" message with immediate highlight of new options. No silent punishment, no unclear impact.</p>
 <hr />
@@ -2537,13 +2540,13 @@
 <p>Reachable specialist patterns are exactly three:</p>
 <ul>
 <li><strong>3-only</strong> (99% in one stat) — pure specialist, true all-in</li>
-<li><strong>2-1-0</strong> (66% main + 33% in one team stat) — moderate hybrid, two perk ladders</li>
-<li><strong>1-1-1</strong> (33% × 3) — wide spread across own + both teams; no apex</li>
+<li><strong>2-1-0</strong> (66% main + 33% in one kore stat) — moderate hybrid, two perk ladders</li>
+<li><strong>1-1-1</strong> (33% × 3) — wide spread across own + both kore stats; no apex</li>
 </ul>
 <p>T3 is "all-in" by design — getting one stat to 99% leaves only 1% for everything else. Tier access tracks live with gear: dropping below a threshold locks the tier and deactivates its nodes (points stay allocated, reactivate when threshold returns).</p>
 <p><strong>Cross-class access for origins:</strong> Origin classes (Analog/Cyborg) can dabble in opposing-origin tier perks at T1 only (≥33%). An Analog with 33%+ Optimization unlocks Drone Swarm I (2 drones). Specialists cannot reach opposing perks at all — those thresholds are sentinel-locked.</p>
 <blockquote>
-<p><strong>Code source of truth:</strong> <code>TIERS_OWN</code>, <code>TIERS_TEAM_SPEC</code>, <code>TIERS_OPPOSING_SPEC</code>, <code>TIERS_TEAM_ORIGIN</code>, <code>TIERS_OPPOSING_ORIGIN</code>, and <code>ORIGIN_TIER_CAPS</code> in <code>attribute_state.gd</code>. Sentinel value <code>1.01</code> marks unreachable tiers.</p>
+<p><strong>Code source of truth:</strong> <code>TIERS_OWN</code>, <code>TIERS_KORE_SPEC</code>, <code>TIERS_OPPOSING_SPEC</code>, <code>TIERS_KORE_ORIGIN</code>, <code>TIERS_OPPOSING_ORIGIN</code>, and <code>ORIGIN_TIER_CAPS</code> in <code>attribute_state.gd</code>. Sentinel value <code>1.01</code> marks unreachable tiers.</p>
 </blockquote>
 <h3 id="talent-points">Talent Points<a class="headerlink" href="#talent-points" title="Permanent link">&para;</a></h3>
 <p>1 point per level (currently — target budget is ~20 at L100; cadence needs tuning). Each class tree is 8 × 3 = 24 nodes (144 total across six trees), so even a fully committed build can't fill one tree. Every tier is a meaningful "which nodes," never "can I even get here."</p>
@@ -2604,14 +2607,14 @@
 </table>
 <p><strong>Gear swap confirmation:</strong> When equipping an item would cross a breakpoint, a confirmation dialog shows exactly what changes. This is behind a Help Tooltips toggle for players who prefer to manage it themselves.</p>
 <hr />
-<h2 id="team-nodes">Team Nodes<a class="headerlink" href="#team-nodes" title="Permanent link">&para;</a></h2>
-<p>A separate, smaller talent tree (3 tiers × 4 nodes) that rewards <strong>synergy across all three team stats</strong> rather than depth in any single one. Provides QoL, consistency, and flow enhancements — never class-specific mechanics.</p>
-<p>Tier access is gated by the <em>combined sum</em> of the three team stats:</p>
+<h2 id="kore-nodes">Kore Nodes<a class="headerlink" href="#kore-nodes" title="Permanent link">&para;</a></h2>
+<p>A separate, smaller talent tree (3 tiers × 4 nodes) that rewards <strong>synergy across all three kore stats</strong> rather than depth in any single one. Provides QoL, consistency, and flow enhancements — never class-specific mechanics.</p>
+<p>Tier access is gated by the <em>combined sum</em> of the three kore stats:</p>
 <table>
 <thead>
 <tr>
 <th>Tier</th>
-<th>Combined Team Stat</th>
+<th>Combined Kore Stat</th>
 </tr>
 </thead>
 <tbody>
@@ -2629,7 +2632,7 @@
 </tr>
 </tbody>
 </table>
-<p>Strong early, plateaus hard. T3 is demanding (~30% per team stat) and the payoff is broad but not identity-defining. An optional <strong>keystone</strong> at very high investment is design space (TBD). Code source of truth: <code>TEAM_NODE_THRESHOLDS</code> in <code>attribute_state.gd</code>.</p>
+<p>Strong early, plateaus hard. T3 is demanding (~17% per kore stat) and the payoff is broad but not identity-defining. An optional <strong>keystone</strong> at very high investment is design space (TBD). Code source of truth: <code>KORE_NODE_THRESHOLDS</code> in <code>attribute_state.gd</code>.</p>
 <hr />
 <h2 id="uniques-design-space">Uniques Design Space<a class="headerlink" href="#uniques-design-space" title="Permanent link">&para;</a></h2>
 <p>Unique items can bend system rules. Types:</p>
@@ -2698,18 +2701,18 @@
 <hr />
 <h2 id="implemented">Implemented<a class="headerlink" href="#implemented" title="Permanent link">&para;</a></h2>
 <ul>
-<li>HP and resource pool max scale with contribution-weighted stat totals (primary 1.0x, team 0.25x, opposing 0.10x). Current values scale proportionally on gear swap. Code: <code>AttributeState.get_stat_bonus_hp()</code> / <code>get_stat_bonus_resource()</code>.</li>
+<li>HP and resource pool max scale with contribution-weighted stat totals (primary 1.0x, kore 0.25x, opposing 0.10x). Current values scale proportionally on gear swap. Code: <code>AttributeState.get_stat_bonus_hp()</code> / <code>get_stat_bonus_resource()</code>.</li>
 <li>Resource bars unlock per-class once that class's tier 1 is met (max 3 bars active).</li>
 <li>All six specialist tier perks (see table above).</li>
 </ul>
 <h2 id="open-questions">Open Questions<a class="headerlink" href="#open-questions" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Tuning:</strong> team stat scaling multiplier (~0.25x placeholder); tier breakpoints (need playtest); talent point cadence (currently 1/level → far above the ~20-point intended budget at L100).</li>
+<li><strong>Tuning:</strong> kore stat scaling multiplier (~0.25x placeholder); tier breakpoints (need playtest); talent point cadence (currently 1/level → far above the ~20-point intended budget at L100).</li>
 <li><strong>Origin class tier perks</strong> — what do balanced Analog / Cyborg unlock?</li>
 <li><strong>Class-specific stat functions</strong> beyond damage scaling (Orthodoxy, Optimization, Ingenuity, Clarity, Ambition all marked TBD).</li>
 <li><strong>Opposing stat distortion specifics</strong> — what literally distorts for each class? Needs per-class design.</li>
 <li><strong>Soul / Interface governance</strong> — beyond being derived: candidates include willpower / resilience for Soul, precision / cooldown reduction for Interface.</li>
-<li><strong>Team nodes</strong> — tier 1/2/3 specific bonuses; the optional keystone.</li>
+<li><strong>Kore nodes</strong> — tier 1/2/3 specific bonuses; the optional keystone.</li>
 <li><strong>Node prerequisites</strong> — tier-only access, or specific intra-tier dependencies?</li>
 <li><strong>Visual metamorphosis art pipeline</strong> — mesh kits, shader channels, VFX layers per class.</li>
 <li><strong>Relationship overlay placement</strong> — which UI surfaces (tooltips, stat bars, talents, sheet) get the overlay rings.</li>
