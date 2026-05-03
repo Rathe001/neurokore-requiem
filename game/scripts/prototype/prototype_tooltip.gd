@@ -10,10 +10,13 @@ const PARK_DURATION := 0.14
 const PARK_TOP_MARGIN := 24.0
 const ANCHOR_OFFSET_Y := -16.0  # tooltip sits this far above target's screen point
 
-var COLOR_PRIMARY:  Color = AttributeState.RELATIONSHIP_COLORS[&"primary"]
-var COLOR_TEAM:     Color = AttributeState.RELATIONSHIP_COLORS[&"team"]
-var COLOR_OPP_TEAM: Color = AttributeState.RELATIONSHIP_COLORS[&"opp_team"]
-var COLOR_OPPOSING: Color = AttributeState.RELATIONSHIP_COLORS[&"opposing"]
+# Stat lines in the tooltip render in their identity color
+# (AttributeState.STAT_COLORS) so a stat reads the SAME everywhere it
+# appears — character panel, talents panel, HUD tier badges. The
+# previous tooltip path used relationship colors (good/bad-for-player
+# tinting) which made Orthodoxy look red on a Cyborg even though it's
+# cream on the character sheet. Relationship signal can come back as
+# a separate icon / +/- background later.
 
 var _bg: PanelContainer
 var _vbox: VBoxContainer
@@ -334,22 +337,11 @@ func _build_stats_text(item: Item) -> String:
 		if not stat_id in AttributeState.ROLLABLE_STATS:
 			continue
 		var amount: int = int(item.stat_modifiers[stat_id])
-		var color := _stat_rel_color(stat_id)
+		var color: Color = AttributeState.STAT_COLORS.get(stat_id, Color.WHITE)
 		var hex := "#%s" % color.to_html(false)
 		var label := _stat_display_name(stat_id)
 		lines.append("[color=%s]+%d %s[/color]" % [hex, amount, label])
 	return "\n".join(lines)
-
-func _stat_rel_color(stat_id: StringName) -> Color:
-	var rel := AttributeState.get_stat_relationship(stat_id, PlayerState.class_id, PlayerState.spec_id)
-	if rel == &"primary":
-		return COLOR_PRIMARY
-	elif rel == &"team":
-		return COLOR_TEAM
-	var my_stat: StringName = AttributeState.get_spec_stat(PlayerState.spec_id)
-	if my_stat != &"" and AttributeState.NEMESIS_STAT.get(my_stat, &"") == stat_id:
-		return COLOR_OPPOSING
-	return COLOR_OPP_TEAM
 
 func _stat_display_name(stat_id: StringName) -> String:
 	var key: StringName = AttributeState.STAT_I18N.get(stat_id, &"")

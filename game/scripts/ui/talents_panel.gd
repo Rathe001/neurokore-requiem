@@ -39,10 +39,12 @@ const NODE_AVAILABLE_ALPHA := 0.25
 const NODE_ALLOCATED_ALPHA := 1.0
 const NODE_GHOST_COLOR := Color(1.0, 1.0, 1.0, 0.04)
 # "Unavailable" = structurally unreachable for the current class (sentinel
-# threshold > 1.0). Distinct red tint so the player learns the class-
-# restriction visually rather than thinking the tier is "just locked".
-const NODE_UNAVAILABLE_COLOR := Color(0.45, 0.18, 0.18, 0.55)
-const TIER_LABEL_UNAVAILABLE_COLOR := Color(0.6, 0.32, 0.32, 0.55)
+# threshold > 1.0). Tier nodes + label fade like the regular preview but
+# get a lock icon overlay on top. The lock makes the restriction explicit
+# without colour-coding the rest of the row red (which was hard to read at
+# a glance and overloaded the alloc-bar's red = "opposing" signal).
+const TIER_LOCK_GLYPH := "🔒"
+const TIER_LOCK_COLOR := Color(1.0, 1.0, 1.0, 0.55)
 const TIER_MARKER_COLOR := Color(1.0, 1.0, 1.0, 0.45)
 const TALENT_POINT_COLOR := Color(0.95, 0.85, 0.4, 1.0)
 const TIER_LABEL_COLOR := Color(1.0, 1.0, 1.0, 0.25)
@@ -281,6 +283,23 @@ func _build_row(row_def: Dictionary, pcts: Dictionary) -> Dictionary:
 			tier_nodes.append(node_rect)
 		node_rects.append(tier_nodes)
 
+	# Lock-icon overlay per tier section. Hidden by default; _paint_row
+	# flips visibility for tiers whose threshold is the unreachable
+	# sentinel. mouse_filter = IGNORE so the underlying node rects still
+	# receive hover events (which deliver the class-restriction tooltip).
+	var tier_locks: Array[Label] = []
+	for _i in TIER_COUNT:
+		var lock_lbl := Label.new()
+		lock_lbl.text = TIER_LOCK_GLYPH
+		lock_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lock_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		lock_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		lock_lbl.add_theme_color_override(&"font_color", TIER_LOCK_COLOR)
+		lock_lbl.z_index = 2
+		lock_lbl.visible = false
+		container.add_child(lock_lbl)
+		tier_locks.append(lock_lbl)
+
 	return {
 		"container":     container,
 		"highlight_bar": highlight_bar,
@@ -290,6 +309,7 @@ func _build_row(row_def: Dictionary, pcts: Dictionary) -> Dictionary:
 		"markers":       markers,
 		"tier_labels":   tier_labels,
 		"node_rects":    node_rects,
+		"tier_locks":    tier_locks,
 		"stat_id":       stat_id,
 		"stat_color":    stat_color,
 		"pct":           pct,
@@ -387,6 +407,7 @@ func _layout_row(row: Dictionary, row_pos: Vector2, row_w: float, bar_w: float, 
 	var intra_gap: float = NODE_GAP + extra_per_intra
 	var tier_w: float = float(NODE_COLS) * node_size.x + float(NODE_COLS - 1) * intra_gap
 
+	var tier_locks: Array = row.get("tier_locks", [])
 	for ti in tier_count:
 		var tier_x: float = local_bar_x + float(ti) * (tier_w + TIER_GAP)
 		tier_labels[ti].position = Vector2(tier_x, 0)
@@ -400,6 +421,12 @@ func _layout_row(row: Dictionary, row_pos: Vector2, row_w: float, bar_w: float, 
 				nodes_y + float(nr) * (node_size.y + NODE_GAP)
 			)
 			(node_rects[ti][j] as ColorRect).size = node_size
+
+		# Lock overlay sits centered over the tier's node grid. _paint_row
+		# decides whether to show it.
+		if ti < tier_locks.size():
+			(tier_locks[ti] as Label).position = Vector2(tier_x, nodes_y)
+			(tier_locks[ti] as Label).size = Vector2(tier_w, node_grid_h)
 
 	# Position tier markers centered in the gap between tier groups.
 	var markers: Array = row["markers"]
@@ -598,29 +625,29 @@ func _paint_row(row: Dictionary, rel_color: Color, unlocked_tier: int) -> void:
 		hbar.visible = is_primary
 		hbar.color = stat_color
 
-	# Pull thresholds once — used by both the tier labels and the node rects
-	# below to flag tiers that are STRUCTURALLY UNAVAILABLE (sentinel >1.0)
-	# vs simply locked-but-reachable.
+	# Pull thresholds once — used to flag tiers that are STRUCTURALLY
+	# UNAVAILABLE (sentinel >1.0) vs simply locked-but-reachable. Unavailable
+	# tiers fade like the regular ghost preview AND get a lock-icon overlay
+	# shown over the tier's node grid; the icon is the explicit cue, the
+	# fade is the gestalt.
 	var stat_id: StringName = row["stat_id"]
 	var thresholds := AttributeState.get_tier_thresholds(stat_id, PlayerState.class_id, PlayerState.spec_id)
 
 	# tier_state = ti - unlocked_tier:
 	#   < 0  → active (tier is unlocked)
-	#   >= 0 → preview (locked, reachable) OR unavailable (sentinel threshold)
+	#   >= 0 → preview (faded). Lock icon distinguishes structurally
+	#           unavailable from merely locked-but-reachable.
 	var tier_labels: Array = row["tier_labels"]
 	for ti in tier_labels.size():
 		var tier_state: int = ti - unlocked_tier
 		var lbl := tier_labels[ti] as Label
+		lbl.visible = true
 		if tier_state < 0:
-			lbl.visible = true
 			lbl.add_theme_color_override(&"font_color", Color.WHITE)
 			lbl.add_theme_constant_override(&"outline_size", 4)
 			lbl.add_theme_color_override(&"font_outline_color", Color.BLACK)
 		else:
-			lbl.visible = true
-			var unavailable := ti < thresholds.size() and thresholds[ti] > 1.0
-			lbl.add_theme_color_override(&"font_color",
-				TIER_LABEL_UNAVAILABLE_COLOR if unavailable else TIER_LABEL_COLOR)
+			lbl.add_theme_color_override(&"font_color", TIER_LABEL_COLOR)
 			lbl.add_theme_constant_override(&"outline_size", 0)
 
 	# Markers sit between sections. Show only within the visible range
@@ -630,18 +657,22 @@ func _paint_row(row: Dictionary, rel_color: Color, unlocked_tier: int) -> void:
 		(markers[mi] as ColorRect).visible = (mi + 1) <= unlocked_tier and mi < markers.size() - 1
 
 	var node_rects: Array = row["node_rects"]
+	var tier_locks: Array = row.get("tier_locks", [])
 	for tier in node_rects.size():
 		var tier_state: int = tier - unlocked_tier
 		var unavailable := tier < thresholds.size() and thresholds[tier] > 1.0
+		# Toggle the lock overlay BEFORE the node loop so a structurally
+		# unavailable tier always shows the icon, even if it happens to
+		# share a state with a reachable-locked tier.
+		if tier < tier_locks.size():
+			(tier_locks[tier] as Label).visible = unavailable
 		for j in NODES_PER_TIER:
 			var rect: ColorRect = node_rects[tier][j]
+			rect.visible = true
+			rect.mouse_filter = Control.MOUSE_FILTER_STOP
 			if tier_state < 0:
 				var is_allocated := PlayerState.is_talent_allocated(row["stat_id"], tier, j)
-				rect.visible = true
-				rect.mouse_filter = Control.MOUSE_FILTER_STOP
 				rect.color = Color(stat_color.r, stat_color.g, stat_color.b,
 					NODE_ALLOCATED_ALPHA if is_allocated else NODE_AVAILABLE_ALPHA)
 			else:
-				rect.visible = true
-				rect.mouse_filter = Control.MOUSE_FILTER_STOP
-				rect.color = NODE_UNAVAILABLE_COLOR if unavailable else NODE_GHOST_COLOR
+				rect.color = NODE_GHOST_COLOR
