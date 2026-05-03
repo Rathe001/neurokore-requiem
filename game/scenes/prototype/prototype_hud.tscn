@@ -117,18 +117,45 @@ text = "Lvl. 1"
 horizontal_alignment = 0
 vertical_alignment = 1
 
-[node name="TierBadges" type="HBoxContainer" parent="Root/AvatarPanel"]
-unique_name_in_owner = true
-anchor_left = 1.0
-anchor_right = 1.0
+; Buffs + active perks strip — sits ABOVE the avatar + skill-bar row.
+; HBoxContainer is populated programmatically by PrototypeHud._update_buffs_bar
+; from PerkState.get_active_perks() (and future buff sources). Each entry
+; is a small colored panel hoverable for a tooltip with the perk's effect.
+[node name="BuffsBar" type="Control" parent="Root"]
+anchor_left = 0.5
+anchor_right = 0.5
 anchor_top = 1.0
 anchor_bottom = 1.0
-offset_left = -52.0
-offset_right = -5.0
-offset_top = -17.0
+offset_left = -270.0
+offset_top = -134.0
+offset_right = 176.0
+offset_bottom = -100.0
+mouse_filter = 2
+
+[node name="BuffsBackground" type="ColorRect" parent="Root/BuffsBar"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.04, 0.05, 0.08, 0.6)
+mouse_filter = 2
+
+[node name="BuffsBorder" type="ReferenceRect" parent="Root/BuffsBar"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+border_color = Color(0.3, 0.5, 0.7, 0.4)
+border_width = 1.0
+editor_only = false
+mouse_filter = 2
+
+[node name="BuffEntries" type="HBoxContainer" parent="Root/BuffsBar"]
+unique_name_in_owner = true
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 4.0
+offset_top = 3.0
+offset_right = -4.0
 offset_bottom = -3.0
-alignment = 2
-theme_override_constants/separation = 2
+alignment = 0
+theme_override_constants/separation = 4
 mouse_filter = 2
 
 [node name="HudPanel" type="Control" parent="Root"]

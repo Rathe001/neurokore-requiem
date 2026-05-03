@@ -35,7 +35,7 @@ const DEBUG_OVERLAY_INTERVAL := 0.1
 @onready var avatar_image: TextureRect = %AvatarImage
 @onready var avatar_placeholder: Label = %AvatarPlaceholder
 @onready var level_label: Label = %LevelLabel
-@onready var tier_badges: HBoxContainer = %TierBadges
+@onready var buff_entries: HBoxContainer = %BuffEntries
 @onready var recent_loot_label: Label = %RecentLootLabel
 @onready var flashlight_bg: ColorRect = %FBg
 @onready var flashlight_border: ReferenceRect = %FBorder
@@ -70,13 +70,16 @@ func _ready() -> void:
 	UIThemeState.changed.connect(_apply_theme)
 	PlayerState.level_changed.connect(func(_n: int, _o: int) -> void: _update_avatar_panel())
 	PlayerState.xp_changed.connect(_repaint_xp)
-	# Tier badges follow class identity AND stat investment — repaint on any
-	# of the four signals that can shift unlocked tiers (gear swap → stats,
-	# tier threshold cross, character creation/respec → class/spec).
-	AttributeState.stats_changed.connect(_update_tier_badges)
-	PlayerState.tier_changed.connect(func(_s: StringName, _o: int, _n: int) -> void: _update_tier_badges())
-	PlayerState.class_changed.connect(func(_id: StringName) -> void: _update_tier_badges())
-	PlayerState.spec_changed.connect(func(_id: StringName) -> void: _update_tier_badges())
+	# Buffs bar repopulates on any of the signals that can shift the active
+	# perk set: gear swap (stats), tier crossing, class/spec change. PerkState
+	# already collapses these into its own perks_changed, but we hook the
+	# upstream signals too so display stays accurate even if PerkState is
+	# briefly out of sync during a recompute cycle.
+	PerkState.perks_changed.connect(_update_buffs_bar)
+	AttributeState.stats_changed.connect(_update_buffs_bar)
+	PlayerState.class_changed.connect(func(_id: StringName) -> void: _update_buffs_bar())
+	PlayerState.spec_changed.connect(func(_id: StringName) -> void: _update_buffs_bar())
+	_update_buffs_bar()
 	var player := get_tree().get_first_node_in_group(&"player")
 	if player == null:
 		push_warning("[prototype_hud] no player in group")
@@ -164,31 +167,86 @@ func _update_avatar_panel() -> void:
 		avatar_image.visible = false
 		avatar_placeholder.visible = true
 	level_label.text = tr("HUD_LEVEL_FORMAT") % PlayerState.level
-	_update_tier_badges()
 
-func _update_tier_badges() -> void:
-	if tier_badges == null:
+
+# Rebuild the buffs / active-perks strip. Each entry is a small colored
+# panel hoverable for a tooltip showing the perk's label + description.
+# Iterates ROLLABLE_STATS for stable left-to-right order regardless of
+# which tiers happen to be unlocked — so newly-acquired perks slot into
+# their fixed position rather than shuffling existing entries.
+const _BUFF_ENTRY_SIZE := Vector2(28.0, 28.0)
+func _update_buffs_bar() -> void:
+	if buff_entries == null:
 		return
-	for child in tier_badges.get_children():
+	for child in buff_entries.get_children():
 		child.queue_free()
-	# Iterate ROLLABLE_STATS so badge order stays stable regardless of which
-	# tiers are currently unlocked — moving badges around as tiers change
-	# would make them hard to read at a glance.
+	if PlayerState.class_id == &"":
+		return
+	# Index active perks by id so we can match a stat tier to its perk
+	# resource (same id convention: "{stat}_t{N}", e.g. "amb_t2").
+	var active_by_id: Dictionary = {}
+	for p in PerkState.get_active_perks():
+		if p != null:
+			active_by_id[p.id] = p
 	for stat_id in AttributeState.ROLLABLE_STATS:
 		var tier := AttributeState.get_unlocked_tier(stat_id, PlayerState.class_id, PlayerState.spec_id)
 		if tier <= 0:
 			continue
-		var badge := Label.new()
-		badge.text = AttributeState.TIER_ROMAN[tier - 1]
-		badge.add_theme_font_size_override(&"font_size", 9)
-		badge.add_theme_color_override(&"font_color", AttributeState.STAT_COLORS[stat_id])
-		# Black outline so the colored numerals stay readable against the
-		# dark LevelBg strip without depending on the underlying contrast.
-		badge.add_theme_color_override(&"font_outline_color", Color(0, 0, 0, 1))
-		badge.add_theme_constant_override(&"outline_size", 2)
-		badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		badge.tooltip_text = "%s %s" % [tr(AttributeState.STAT_I18N[stat_id]), AttributeState.TIER_ROMAN[tier - 1]]
-		tier_badges.add_child(badge)
+		# Try to look up the actual perk resource for this stat+tier so
+		# the tooltip shows the perk's authored label + description.
+		# Falls back to a generic "STAT TIER" label if the ladder
+		# doesn't have a perk for this tier (e.g. unauthored ladders).
+		var perk_id := StringName("%s_t%d" % [String(stat_id), tier])
+		var perk: Perk = active_by_id.get(perk_id)
+		_add_buff_entry(stat_id, tier, perk)
+
+
+func _add_buff_entry(stat_id: StringName, tier: int, perk: Perk) -> void:
+	var stat_color: Color = AttributeState.STAT_COLORS.get(stat_id, Color.WHITE)
+	var entry := Panel.new()
+	entry.custom_minimum_size = _BUFF_ENTRY_SIZE
+	# Per-entry stylebox tinted by the stat color — gives an at-a-glance
+	# class identity read without needing icons. StyleBoxFlat is cheap
+	# and matches the dark-panel + colored-border look used elsewhere
+	# in the HUD.
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(stat_color.r * 0.25, stat_color.g * 0.25, stat_color.b * 0.25, 0.85)
+	sb.border_color = stat_color
+	sb.set_border_width_all(1)
+	sb.set_corner_radius_all(2)
+	entry.add_theme_stylebox_override(&"panel", sb)
+	entry.mouse_filter = Control.MOUSE_FILTER_STOP
+	# Tier roman numeral centered in the entry — visible read of tier
+	# strength (I/II/III) at a glance.
+	var label := Label.new()
+	label.text = AttributeState.TIER_ROMAN[tier - 1]
+	label.add_theme_font_size_override(&"font_size", 12)
+	label.add_theme_color_override(&"font_color", stat_color)
+	label.add_theme_color_override(&"font_outline_color", Color(0, 0, 0, 1))
+	label.add_theme_constant_override(&"outline_size", 2)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.anchor_right = 1.0
+	label.anchor_bottom = 1.0
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	entry.add_child(label)
+	# Hover wires to the existing tooltip system. Captured locals so the
+	# closure doesn't reach into mutable state at fire time.
+	var tooltip_title: String
+	var tooltip_body: String
+	if perk != null:
+		tooltip_title = "%s  ·  %s" % [perk.label, AttributeState.TIER_ROMAN[tier - 1]]
+		tooltip_body = perk.description
+	else:
+		var stat_key: StringName = AttributeState.STAT_I18N.get(stat_id, &"")
+		var stat_name: String = tr(stat_key) if stat_key != &"" else String(stat_id).capitalize()
+		tooltip_title = "%s  ·  %s" % [stat_name, AttributeState.TIER_ROMAN[tier - 1]]
+		tooltip_body = "Tier %s perk for this stat — no description available." % AttributeState.TIER_ROMAN[tier - 1]
+	entry.mouse_entered.connect(func() -> void:
+		get_tree().call_group(&"interactable_tooltip", &"show_talent_node", tooltip_title, tooltip_body))
+	entry.mouse_exited.connect(func() -> void:
+		get_tree().call_group(&"interactable_tooltip", &"hide_tooltip"))
+	buff_entries.add_child(entry)
 
 func _repaint_xp(current: int, to_next: int) -> void:
 	if xp_fill == null:
