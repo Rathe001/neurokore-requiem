@@ -2,16 +2,21 @@
 
 ; Survivalist (ing) tier perks — Improvised Explosive Device.
 ;
-; Every LMB attack, the player tosses a trap at the cursor. The trap
-; lasts IED_TRAP_LIFETIME seconds or detonates when an enemy enters its
-; proximity radius (whichever first). At most N traps can be active at
-; once — when at cap, the oldest is silently retired to make room for
-; the new one (FIFO).
+; Every LMB attack, the player tosses a trap at the cursor (clamped to
+; IED_MAX_PLACEMENT_RANGE — beyond that, the trap snaps to max range
+; along the cursor direction). The trap pulses visibly during an arming
+; window, then waits for an enemy to enter its proximity radius — or
+; expires silently after 15s. At most N traps can be active at once;
+; the oldest is FIFO-evicted when at cap.
 ;
 ; Tier deltas (additive aggregate; totals 1 / 2 / 3):
-;   T1 grants +1
-;   T2 grants +1
-;   T3 grants +1
+;   T1 grants +1   (max 1 trap, ~2.0s arm time)
+;   T2 grants +1   (max 2 traps, ~1.2s arm time)
+;   T3 grants +1   (max 3 traps, ~0.6s arm time)
+;
+; Arm-time scaling lives in PrototypePlayer.IED_ARM_DELAY_BY_TIER —
+; higher tiers feel snappier ("drop and forget"); T1 forces the player
+; to predict where enemies will be.
 ;
 ; Trap damage scales with main stat (Ingenuity for Survivalist) via
 ; AttributeState.get_player_damage_mult, so investing Ingenuity for tier
@@ -30,7 +35,7 @@ magnitude = 1.0
 script = ExtResource("perk_script")
 id = &"ing_t1"
 label = "Improvised Explosive Device I"
-description = "Each attack, you toss a proximity trap at your cursor. Up to 1 active at a time."
+description = "Each attack, you toss a proximity trap at your cursor. Pulses while arming (~2s), then triggers on enemy contact. Up to 1 active at a time."
 effects = [SubResource("effect_ing_t1_ied")]
 
 [sub_resource type="Resource" id="effect_ing_t2_ied"]
@@ -42,7 +47,7 @@ magnitude = 1.0
 script = ExtResource("perk_script")
 id = &"ing_t2"
 label = "Improvised Explosive Device II"
-description = "Up to 2 traps active. Keep them coming — keep them moving."
+description = "Up to 2 traps active, ~1.2s arm time. Keep them coming — keep them moving."
 effects = [SubResource("effect_ing_t2_ied")]
 
 [sub_resource type="Resource" id="effect_ing_t3_ied"]
@@ -54,7 +59,7 @@ magnitude = 1.0
 script = ExtResource("perk_script")
 id = &"ing_t3"
 label = "Improvised Explosive Device III"
-description = "Up to 3 traps active. Minefield rules — the floor is the kill."
+description = "Up to 3 traps active, ~0.6s arm time. Minefield rules — the floor is the kill."
 effects = [SubResource("effect_ing_t3_ied")]
 
 [resource]

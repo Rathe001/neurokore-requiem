@@ -697,11 +697,23 @@ const DOOMSAYER_MAX_CHARMS_CAP := 8      # safety ceiling for the charm list, we
 ## Survivalist IED — every LMB attack tosses a trap at the cursor while
 ## the perk is active. The active set is FIFO-capped at the perk
 ## aggregate; a trap detonates when an enemy enters its proximity radius
-## or after IED_LIFETIME seconds of idle. Damage scales with main stat
-## (Ingenuity), captured by the trap on spawn so respec mid-trap-life
-## doesn't change its yield.
+## or after 15s of idle. Damage scales with main stat (Ingenuity),
+## captured by the trap on spawn so respec mid-trap-life doesn't change
+## its yield. Higher tiers shorten the arming window — the trap pulses
+## visibly during arm and won't detonate until the timer drains.
 const IED_TRAP_SCENE: PackedScene = preload("res://scenes/prototype/prototype_trap.tscn")
 const IED_MAX_TRAPS_CAP := 8
+# Indexed by IED tier (1/2/3 = Survivalist tiers I/II/III). Index 0 is
+# unused (reconciled away by the max_traps gate), but kept for clean
+# indexing without an off-by-one. Tier 1 sits at 2s so the player has to
+# place the trap ahead of an incoming enemy; T3's 0.6s is closer to a
+# "drop and forget" feel as the perk matures.
+const IED_ARM_DELAY_BY_TIER: Array[float] = [0.0, 2.0, 1.2, 0.6]
+# Cap on cursor placement distance from the player. Beyond this, the
+# trap snaps to the max-range point along the cursor direction — keeps
+# the perk from being a long-range artillery spam, and stops the player
+# from baiting through walls they can't see past.
+const IED_MAX_PLACEMENT_RANGE := 8.0
 
 ## Automaton Drone Swarm — N hover drones spawned from the
 ## `automaton_drones` perk aggregate. Drones are children of the player's
@@ -1103,6 +1115,14 @@ func _toss_ied_trap() -> void:
 	var cursor_offset := _cursor_offset()
 	if cursor_offset.length_squared() < 0.0001:
 		return
+	# Clamp cursor offset to the placement range. Aiming past max range
+	# drops the trap at max range along the cursor direction instead of
+	# either failing silently or letting the player place arbitrarily
+	# far. Using length_squared first avoids a sqrt when the offset is
+	# already inside range.
+	var max_sq := IED_MAX_PLACEMENT_RANGE * IED_MAX_PLACEMENT_RANGE
+	if cursor_offset.length_squared() > max_sq:
+		cursor_offset = cursor_offset.normalized() * IED_MAX_PLACEMENT_RANGE
 	# Prune any traps that detonated themselves before computing the cap —
 	# otherwise a trap that exploded last frame still counts toward the
 	# cap on this frame's toss and the player loses a slot to a ghost.
@@ -1115,7 +1135,16 @@ func _toss_ied_trap() -> void:
 		var oldest: PrototypeTrap = _ied_traps.pop_front()
 		if oldest != null and is_instance_valid(oldest):
 			oldest.queue_free()
+	# IED tier drives the arm delay — read the unlocked Ingenuity tier
+	# rather than dividing the aggregate, so spec-primary auto-grant
+	# works for Survivalist (T1 free even at 0% allocation).
+	var tier := AttributeState.get_unlocked_tier(&"ing", PlayerState.class_id, PlayerState.spec_id)
+	var arm_delay: float = IED_ARM_DELAY_BY_TIER[clampi(tier, 1, IED_ARM_DELAY_BY_TIER.size() - 1)]
 	var trap: PrototypeTrap = IED_TRAP_SCENE.instantiate()
+	# Set arm_delay BEFORE add_child so the trap's _ready uses it
+	# (otherwise _ready captures the @export default and we'd have to
+	# re-set _arm_remain after the fact).
+	trap.arm_delay = arm_delay
 	get_parent().add_child(trap)
 	# Snap to player Y so traps sit on the floor regardless of cursor
 	# projection altitude. _cursor_offset already projects against the
