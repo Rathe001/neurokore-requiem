@@ -1640,61 +1640,43 @@
 <p>Origin classes (Analog and Cyborg) are generalists — jack of all trades for their respective path. They are the easiest to understand and the most forgiving to gear. All three of their team's attributes contribute equally to a single derived stat (Soul or Interface).</p>
 <p>Specialized classes trade that flexibility for depth. They scale primarily off one attribute, get partial benefit from their two team stats, and are actively hurt by their opposing stat. See <a href="../../design/attribute-system/">Attribute System</a> for full scaling rules.</p>
 <h2 id="resource-system">Resource System<a class="headerlink" href="#resource-system" title="Permanent link">&para;</a></h2>
-<p>Each class has <strong>one unique resource</strong> that encapsulates the energy they would expend in the real world. Resources are class-specific and mechanically distinct.</p>
+<p>Each class has <strong>one unique resource</strong> capturing the energy they expend. Resources are class-specific and mechanically distinct.</p>
 <table>
 <thead>
 <tr>
 <th>Class</th>
 <th>Resource</th>
-<th>Description</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>Analog</td>
-<td>TBD</td>
-<td>Generalist — should capture the unaugmented analog experience</td>
-</tr>
-<tr>
-<td>Cyborg</td>
-<td>TBD</td>
-<td>Generalist — should capture the augmented machine experience</td>
+<td>Analog / Cyborg</td>
+<td>TBD (origin generalists — design pending)</td>
 </tr>
 <tr>
 <td>Survivalist</td>
-<td>Adrenaline</td>
-<td>Builds under pressure, decays when safe</td>
+<td><strong>Adrenaline</strong> — builds under pressure, decays when safe</td>
 </tr>
 <tr>
 <td>Count / Countess</td>
-<td>Composure</td>
-<td>Maintained through controlled play, breaks under panic</td>
-</tr>
-<tr>
-<td>Enculted</td>
-<td>TBD</td>
-<td>Rethinking — should align with ambition-as-power fantasy</td>
+<td><strong>Composure</strong> — maintained through controlled play, breaks under panic</td>
 </tr>
 <tr>
 <td>Forged</td>
-<td>Power Grid</td>
-<td>Power budget — manage what's active simultaneously</td>
+<td><strong>Power Grid</strong> — budget for what's active simultaneously</td>
 </tr>
 <tr>
 <td>Automaton</td>
-<td>Bandwidth</td>
-<td>Caps how many drones/scripts run simultaneously</td>
+<td><strong>Bandwidth</strong> — caps active drones/scripts</td>
 </tr>
 <tr>
-<td>Polymath</td>
-<td>TBD</td>
-<td>Rethinking — was Memory/CPU dual axis, may simplify to one resource</td>
+<td>Enculted / Polymath</td>
+<td>TBD (rethinking — see per-class docs)</td>
 </tr>
 </tbody>
 </table>
 <h2 id="stat-identity-tier-perks">Stat Identity &amp; Tier Perks<a class="headerlink" href="#stat-identity-tier-perks" title="Permanent link">&para;</a></h2>
-<p>Attribute distribution drives <strong>tier perks</strong> — mechanical rewards that unlock at stat breakpoints and are lost if the breakpoint is no longer met. Gear swaps have real consequences. Each class has unique perks; origin classes are rewarded for balance. Character appearance transforms dynamically to reflect stat identity.</p>
-<p>See <a href="../../design/attribute-system/#stat-identity--tier-perks--visual-metamorphosis">Attribute System — Stat Identity</a> for full details on breakpoints, cross-class perk unlocking, visual metamorphosis, and NPC identity reactions.</p>
+<p>Attribute distribution drives <strong>tier perks</strong> that unlock at stat breakpoints and are lost when gear drops you below. All six specialist perks ship: Exile (Count), Amalgamation (Forged), Drone Swarm (Automaton), IED (Survivalist), Telekinesis (Polymath), Doomsayer (Enculted) — see each class doc and the <a href="../../design/attribute-system/#specialized-class-tier-perks">tier perks table</a>.</p>
 <h2 id="character-creation">Character Creation<a class="headerlink" href="#character-creation" title="Permanent link">&para;</a></h2>
 <p>Players choose male or female at the start. Both are fully supported for all classes. This effectively doubles the required player character models — a scope consideration for production and a factor in tech stack decisions around animation systems.</p>
 

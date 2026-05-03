@@ -1141,24 +1141,6 @@
         
       
       
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Automaton
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
       <a href="./" class="md-nav__link md-nav__link--active">
         
   
@@ -1175,36 +1157,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#drone-types" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Drone Types
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
       
     </li>
   
@@ -1504,25 +1456,6 @@
     
   
   
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#drone-types" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Drone Types
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
 </nav>
                   </div>
                 </div>
@@ -1544,58 +1477,16 @@
 <h1 id="automaton-mid-range">Automaton <em>(mid-range)</em><a class="headerlink" href="#automaton-mid-range" title="Permanent link">&para;</a></h1>
 <p><strong>Fantasy:</strong> command the machine through AI scripting and a fleet of drones. Set conditions, automate responses, build a system that fights alongside you.</p>
 <p><strong>Attribute:</strong> Optimization — precision and efficiency of machine control. Opposes Ingenuity. See <a href="../../../design/attribute-system/">Attribute System</a>.</p>
-<p><strong>Tier perks:</strong> Stacking Optimization unlocks additional drones per tier. See <a href="../../../design/attribute-system/#stat-identity--tier-perks--visual-metamorphosis">Stat Identity</a>.</p>
+<p><strong>Tier perks — Drone Swarm.</strong> <strong>2 / 3 / 5</strong> untargetable hover drones wander semi-randomly near the player and auto-fire on enemies in range. Drones collide with walls (won't shoot through them) but are invulnerable. Damage scales with Optimization. Future Mainboard chips will modify drone behavior.</p>
 <p><strong>Resource: Bandwidth</strong> — caps how many drones/scripts can run simultaneously.</p>
 <ul>
-<li><strong>Drones are the physical expression of scripts</strong> — each script runs on a drone. The drone type determines what the script can do. Losing a drone means losing that script until redeployed.</li>
-<li><strong>Scripts are loot items</strong> — each defines a condition/response pair (e.g. <code>IF surrounded by 3+ enemies → shockwave</code>). Finding a new script reshapes your build.</li>
-<li><strong>Drone chassis and components are also loot</strong> — drone items + script items together define the build. Finding a rare drone blueprint is the equivalent of a D2 runeword enabler.</li>
-<li><strong>Script decay → drone damage</strong> — scripts degrade because drones take damage in combat. You're actively managing a fleet under fire.</li>
-<li><strong>Overflow/crash:</strong> running too many scripts/drones risks cascade failure. High risk, high reward ceiling.</li>
+<li><strong>Drones as script hosts</strong> — each script runs on a drone; drone type defines what scripts it can run. Losing a drone loses that script until redeployed.</li>
+<li><strong>Scripts are loot</strong> — condition/response pairs (e.g. <code>IF surrounded by 3+ → shockwave</code>). Drone chassis are loot too — chassis + script together define the build.</li>
+<li><strong>Overflow/crash:</strong> running too many risks cascade failure. High risk ceiling.</li>
 </ul>
-<h3 id="drone-types">Drone Types<a class="headerlink" href="#drone-types" title="Permanent link">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Drone</th>
-<th>Role</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Combat</td>
-<td>Offensive, prioritize targets</td>
-</tr>
-<tr>
-<td>Swarm</td>
-<td>Large numbers of small, weak micro-drones. Fits end-game horde scale.</td>
-</tr>
-<tr>
-<td>Shield</td>
-<td>Orbit the player and intercept incoming projectiles</td>
-</tr>
-<tr>
-<td>Repair</td>
-<td>Sustain and healing utility</td>
-</tr>
-<tr>
-<td>Recon</td>
-<td>Extend vision range, reveal enemies, mark targets</td>
-</tr>
-<tr>
-<td>EMP/Hack</td>
-<td>Disable enemy augmentations or temporarily take control of enemies</td>
-</tr>
-</tbody>
-</table>
-<div class="admonition question">
-<p class="admonition-title">Open Questions</p>
-<ul>
-<li>Permanent companions vs. deployed/recalled on demand?</li>
-<li>Is there a default starter drone, or is the fleet built entirely through loot?</li>
-<li>Visual style of drones: sleek corporate hardware, cobbled junk drones, or something more organic/grotesque?</li>
-</ul>
-</div>
+<blockquote>
+<p>Drone types (combat / swarm / shield / repair / recon / EMP) are design space — current implementation is one generic combat drone. Drone-type variety is an open question.</p>
+</blockquote>
 
 
 

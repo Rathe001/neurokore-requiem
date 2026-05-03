@@ -2323,18 +2323,14 @@
 
 <h1 id="attribute-system">Attribute System<a class="headerlink" href="#attribute-system" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p>Status: Core system implemented. Stat tracking, tier unlocking, talent panel UI, and character panel allocation bar are working. Tier perk mechanics, team stat scaling multipliers, visual metamorphosis, and NPC reactions are still TBD.</p>
+<p>Status: Core system + all six specialist tier perks implemented (Exile, Amalgamation, Drone Swarm, IED, Telekinesis, Doomsayer). Origin-class tier perks, team stat scaling multipliers, visual metamorphosis, and NPC reactions are still TBD.</p>
 </blockquote>
 <h2 id="core-philosophy">Core Philosophy<a class="headerlink" href="#core-philosophy" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Class = verbs</strong> (what you can do). Classes define your mechanics, resource system, and playstyle loop.</li>
-<li><strong>Attributes = modifiers</strong> (how you do it). Stats shape behavior, efficiency, and expression — they do not gate access to abilities.</li>
-<li><strong>Baseline identity is guaranteed.</strong> Every class retains its core mechanics regardless of stat distribution. Off-stat builds distort your playstyle, they do not replace it.</li>
+<li><strong>Class = verbs</strong>, <strong>attributes = modifiers</strong>. Stats shape <em>how</em> you do things; classes define <em>what</em> you can do. Stats never gate access to abilities.</li>
+<li><strong>Baseline identity is guaranteed.</strong> Off-stat builds distort your playstyle — they don't replace it.</li>
+<li>Supports specialization (stack primary), hybridization (team stats), and off-path experimentation (opposing stats with friction).</li>
 </ul>
-<p>The system is designed to support:
-- <strong>Specialization</strong> — stacking your primary stat for peak efficiency
-- <strong>Hybridization</strong> — investing in team stats for broad synergy
-- <strong>Off-path experimentation</strong> — engaging opposing stats for friction-based builds with unique payoffs</p>
 <hr />
 <h2 id="the-8-attributes">The 8 Attributes<a class="headerlink" href="#the-8-attributes" title="Permanent link">&para;</a></h2>
 <p>Six <strong>class stats</strong> roll on items. Two <strong>origin stats</strong> are derived, not rolled.</p>
@@ -2957,58 +2953,52 @@
 <p><strong>Locked nodes:</strong> If gear drops a stat below a threshold, nodes in that tier become inactive but points remain allocated. Re-gear to reactivate, or reallocate freely.</p>
 <p><strong>Reallocation:</strong> Free at any time. Points are a budget — thresholds are the gate.</p>
 <h3 id="specialized-class-tier-perks">Specialized Class Tier Perks<a class="headerlink" href="#specialized-class-tier-perks" title="Permanent link">&para;</a></h3>
+<p>All six are implemented. Aggregates are additive across tiers (see <code>game/resources/perks/{stat}.tres</code> for authoring).</p>
 <table>
 <thead>
 <tr>
 <th>Stat</th>
 <th>Class</th>
-<th>Tier 1</th>
-<th>Tier 2</th>
-<th>Tier 3</th>
+<th>Perk</th>
+<th>T1 → T2 → T3</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td>Orthodoxy</td>
 <td>Count</td>
-<td>TBD</td>
-<td>TBD</td>
-<td>TBD</td>
+<td><strong>Exile</strong> — hits curse target; +X% damage taken; auto-shot on expire</td>
+<td>+10% → +20% → +40%</td>
 </tr>
 <tr>
 <td>Deviation</td>
 <td>Forged</td>
-<td>Erratic Strikes (8% double)</td>
-<td>Frenzied Strikes (+10% double, 5% triple)</td>
-<td>Unbound Frenzy (+7% double, +7% triple)</td>
+<td><strong>Amalgamation</strong> — extra arm slots; LMB fires every weapon</td>
+<td>+1 → +2 → +3 weapon slots</td>
 </tr>
 <tr>
 <td>Optimization</td>
 <td>Automaton</td>
-<td>TBD</td>
-<td>Additional drone</td>
-<td>TBD</td>
+<td><strong>Drone Swarm</strong> — wandering hover drones auto-fire on enemies</td>
+<td>2 → 3 → 5 drones</td>
 </tr>
 <tr>
 <td>Ingenuity</td>
 <td>Survivalist</td>
-<td>TBD</td>
-<td>TBD</td>
-<td>TBD</td>
+<td><strong>Improvised Explosive Device</strong> — toss prox trap on every LMB</td>
+<td>1 → 2 → 3 max active traps</td>
 </tr>
 <tr>
 <td>Clarity</td>
 <td>Polymath</td>
-<td>TBD</td>
-<td>TBD</td>
-<td>TBD</td>
+<td><strong>Telekinesis</strong> — periodic psionic bolts grab + slam enemies</td>
+<td>1 → 2 → 4 bolts per trigger</td>
 </tr>
 <tr>
 <td>Ambition</td>
 <td>Enculted</td>
-<td>Tier 1 curse</td>
-<td>TBD</td>
-<td>TBD</td>
+<td><strong>Doomsayer</strong> — aura procs stun / charm / weaken on enemies</td>
+<td>5% → 10% → 20% per second; charms 1 → 2 → 3</td>
 </tr>
 </tbody>
 </table>
@@ -3141,7 +3131,6 @@
 <li><strong>Team node specific bonuses</strong> — what do tiers 1/2/3 actually grant?</li>
 <li><strong>Team node keystone</strong> — what is the tier 3 high-investment reward?</li>
 <li><strong>Class-specific stat functions</strong> for Orthodoxy, Optimization, Ingenuity, Clarity, Ambition.</li>
-<li><strong>Tier perks</strong> for most classes — see tier perk table above.</li>
 <li><strong>Origin class tier perks</strong> — what does balanced Analog/Cyborg actually unlock?</li>
 <li><strong>Talent point cadence</strong> — currently 1 per level (code: <code>TALENT_POINTS_PER_LEVEL</code>). At level 100 that's ~100 points, well above the 20-point budget intended for meaningful scarcity. Needs tuning.</li>
 <li><strong>Node prerequisites</strong> — do higher-tier nodes require specific lower-tier nodes, or just tier access?</li>
