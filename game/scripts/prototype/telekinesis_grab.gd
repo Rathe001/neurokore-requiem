@@ -98,18 +98,25 @@ func _apply_impact() -> void:
 		_cancel()
 		return
 	var landing_pos: Vector3 = _target.global_position
+	# Snap THIS node to the landing position BEFORE spawning the radial
+	# indicator — spawn_hit_radial reads host.global_position, so passing
+	# `self` while still at world origin (the bug we were seeing) put
+	# the AoE pulse at the player's feet instead of at the slammed
+	# enemy. Capture the player's position first because we still want
+	# the take_damage knockback origin to point back at the player.
+	var player_pos: Vector3 = _player.global_position
+	global_position = landing_pos
+	PrototypeAttackIndicator.spawn_hit_radial(self, AOE_RADIUS)
 	# Release BEFORE dealing damage so the take_damage knockback can
 	# move the target normally (KNOCKBACK state expects to control
 	# velocity, which GRABBED was suspending).
 	if _target.has_method(&"release_grab"):
 		_target.release_grab()
 	if _target.has_method(&"take_damage"):
-		_target.take_damage(_direct_damage, _player.global_position, 0.0)
-	# Visual radial pulse + AoE damage to neighbours. Radius query uses
-	# the post-slam landing position; the lifted target may have moved
-	# horizontally during the lift if it got grabbed mid-stride.
-	PrototypeAttackIndicator.spawn_hit_radial(self, AOE_RADIUS)
-	global_position = landing_pos
+		_target.take_damage(_direct_damage, player_pos, 0.0)
+	# AoE damage to neighbours. Radius query uses the post-slam landing
+	# position; the lifted target may have moved horizontally during
+	# the lift if it got grabbed mid-stride.
 	var aoe_damage := int(round(float(_direct_damage) * AOE_DAMAGE_FACTOR))
 	for n in SpatialGrid.query_radius(landing_pos, AOE_RADIUS, &"enemies"):
 		if n == _target or not (n is Node3D) or not is_instance_valid(n):
