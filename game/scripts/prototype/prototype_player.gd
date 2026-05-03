@@ -639,6 +639,9 @@ func _cast_lmb_combat() -> void:
 		return
 	var infinite_resource := DebugState.config != null and DebugState.config.infinite_resource
 
+	# Extra Amalgamation arms fire FREE — they don't gate on resource and
+	# don't consume it. Otherwise a 4-arm Forged drains the pool in one
+	# click. Only the main weapon's fire_skill spends resource.
 	var slots := InventoryState.get_active_weapon_slots()
 	var ready_fires: Array[Dictionary] = []
 	for slot in slots:
@@ -648,9 +651,10 @@ func _cast_lmb_combat() -> void:
 		var skill: Skill = item.fire_skill
 		if _combat.is_slot_on_cooldown(slot):
 			continue
-		if skill.resource_cost > 0 and not infinite_resource and _resource_current < float(skill.resource_cost):
+		var is_main := slot == &"weapon"
+		if is_main and skill.resource_cost > 0 and not infinite_resource and _resource_current < float(skill.resource_cost):
 			continue
-		ready_fires.append({"slot": slot, "item": item, "skill": skill})
+		ready_fires.append({"slot": slot, "item": item, "skill": skill, "is_main": is_main})
 
 	if ready_fires.is_empty():
 		return
@@ -661,14 +665,15 @@ func _cast_lmb_combat() -> void:
 		var skill: Skill = f["skill"]
 		var item: Item = f["item"]
 		var slot: StringName = f["slot"]
+		var is_main: bool = f["is_main"]
 		var atk_spd: float = item.attack_speed if item.attack_speed > 0.0 else 1.0
 		_combat.start_slot_cooldown(slot, skill, atk_spd)
 		# Mirror onto the skill-keyed dict for the MAIN weapon so the HUD's
 		# LMB slot reads cooldown the same way it always has.
-		if slot == &"weapon":
+		if is_main:
 			_combat.start_cooldown(skill, atk_spd)
-		if skill.resource_cost > 0 and not infinite_resource:
-			_spend_resource(skill.resource_cost)
+			if skill.resource_cost > 0 and not infinite_resource:
+				_spend_resource(skill.resource_cost)
 		var stagger_delay: float = LMB_MULTI_STAGGER * float(i)
 		var fire_delay: float = stagger_delay + skill.wind_up / atk_spd
 		min_windup = minf(min_windup, fire_delay)
