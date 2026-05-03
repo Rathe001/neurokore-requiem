@@ -2364,7 +2364,7 @@
 </ul>
 <hr />
 <h2 id="attribute-relationships">Attribute Relationships<a class="headerlink" href="#attribute-relationships" title="Permanent link">&para;</a></h2>
-<p>Each stat falls into one of <strong>three categories</strong> relative to a player's class. Tier thresholds vary by category and by whether the player is on a specialized class or an origin class.</p>
+<p>Each stat falls into one of <strong>three categories</strong> relative to a player's class. All tier thresholds are multiples of 33% — every tier costs another third of your stat budget.</p>
 <table>
 <thead>
 <tr>
@@ -2380,27 +2380,27 @@
 <td><strong>Primary</strong></td>
 <td>Own class stat</td>
 <td>Full (1x)</td>
-<td>T1=12%, T2=25%, T3=40%</td>
+<td>T1=33%, T2=66%, T3=99%</td>
 <td>n/a (origins have no primary)</td>
 </tr>
 <tr>
 <td><strong>Team</strong></td>
 <td>Other two stats from same origin</td>
 <td>Partial (~0.25x)</td>
-<td>T1=25%, T2=40%, T3=—</td>
-<td>T1=20%, T2=35%, T3=—</td>
+<td>T1=33%, T2=66%, T3=—</td>
+<td>T1=33%, T2=66%, T3=—</td>
 </tr>
 <tr>
 <td><strong>Opposing</strong></td>
 <td>All three stats from other origin</td>
 <td>Interference + distortion</td>
 <td>T1=—, T2=—, T3=—</td>
-<td>T1=30%, T2=—, T3=—</td>
+<td>T1=33%, T2=—, T3=—</td>
 </tr>
 </tbody>
 </table>
 <blockquote>
-<p>T3 for team / opposing is unreachable by design — specialists max their primary at T3, dabble in team to T2, and can't reach opposing trees at all. Origin classes cap their team at T2 and can dabble in opposing to T1. The "—" entries are sentinel thresholds (&gt;1.0) in code.</p>
+<p>T3 for team / opposing is unreachable in practice — getting one stat to 66% leaves only 34% for everything else. Specialists are sentinel-locked out of opposing trees entirely; origins can dabble into opposing T1 (≥33%). The "—" entries are sentinel thresholds (&gt;1.0) in code.</p>
 </blockquote>
 <h3 id="opposing-stats-resistance-model">Opposing Stats — Resistance Model<a class="headerlink" href="#opposing-stats-resistance-model" title="Permanent link">&para;</a></h3>
 <p>Opposing stats don't apply a flat negative — they use a resistance model: <strong>efficiency reduction</strong> (points contribute less), <strong>behavioral distortion</strong> (mechanics warp, not just weaken), <strong>conditional penalties</strong> (situational), and <strong>conversion loss</strong> (partial waste).</p>
@@ -2445,30 +2445,30 @@
 <li>Misaligned gearing (heavy opposing investment) stays functional, just suboptimal</li>
 </ul>
 <h3 id="origin-tier-perks-balance-gated">Origin Tier Perks (Balance-Gated)<a class="headerlink" href="#origin-tier-perks-balance-gated" title="Permanent link">&para;</a></h3>
-<p>Origin perks reward staying balanced — they're maintained as long as no single stat dominates. Specific perks TBD.</p>
+<p>Origin perks reward staying balanced — single rule: no stat may meet or exceed the cap. Same rule applies to team and opposing alike. Specific perks TBD.</p>
 <table>
 <thead>
 <tr>
 <th>Tier</th>
-<th>Condition</th>
+<th>Cap</th>
 <th>Vibe</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td>1</td>
-<td>No team stat ≥ 55%, no opposing ≥ 45%</td>
+<td>No stat ≥ 66%</td>
 <td>Almost free</td>
 </tr>
 <tr>
 <td>2</td>
-<td>No team stat ≥ 40%, no opposing ≥ 30%</td>
-<td>Intentional balance</td>
+<td>No stat ≥ 50%</td>
+<td>No single stat dominates</td>
 </tr>
 <tr>
 <td>3</td>
-<td>No team stat ≥ 30%, no opposing ≥ 20%</td>
-<td>Tight spread — aspirational</td>
+<td>No stat ≥ 33%</td>
+<td>Perfect 1-1-1 spread, exactly at cap</td>
 </tr>
 </tbody>
 </table>
@@ -2533,18 +2533,17 @@
 <h2 id="stat-identity-tier-perks-visual-metamorphosis">Stat Identity — Tier Perks &amp; Visual Metamorphosis<a class="headerlink" href="#stat-identity-tier-perks-visual-metamorphosis" title="Permanent link">&para;</a></h2>
 <p>As a character's stat distribution shifts, two things happen: they unlock <strong>tier perks</strong> (mechanical rewards) and their <strong>appearance transforms</strong>. Both are driven by the same breakpoints and are always in sync.</p>
 <h3 id="breakpoints-3-tiers">Breakpoints (3 tiers)<a class="headerlink" href="#breakpoints-3-tiers" title="Permanent link">&para;</a></h3>
-<p>Three tiers drive everything: talent tree access, tier perks, VFX metamorphosis, and NPC reactions. Each threshold is the % of total stats a single attribute represents. Full threshold table is in <a href="#attribute-relationships">Attribute Relationships</a> above.</p>
-<p>The math forces meaningful build choices: a specialist's own T3 (40%) plus a team T2 (40%) plus another team T2 (40%) sums to 120% — impossible. So the reachable patterns are roughly:</p>
+<p>Three tiers drive everything: talent tree access, tier perks, VFX metamorphosis, and NPC reactions. Each threshold is a multiple of 33% — every tier costs another third of your budget. Full threshold table is in <a href="#attribute-relationships">Attribute Relationships</a> above.</p>
+<p>Reachable specialist patterns are exactly three:</p>
 <ul>
-<li><strong>3-only</strong> (own T3 + nothing else) — pure specialist, one massive perk ladder</li>
-<li><strong>3-2-0</strong> or <strong>3-1-1</strong> — own T3 plus a team dabble</li>
-<li><strong>2-2-1</strong> — own T2 plus both teams (moderate hybrid)</li>
-<li><strong>1-1-1</strong> — wide spread, no apex</li>
+<li><strong>3-only</strong> (99% in one stat) — pure specialist, true all-in</li>
+<li><strong>2-1-0</strong> (66% main + 33% in one team stat) — moderate hybrid, two perk ladders</li>
+<li><strong>1-1-1</strong> (33% × 3) — wide spread across own + both teams; no apex</li>
 </ul>
-<p>Tier access tracks live with gear: dropping below a threshold locks the tier and deactivates its nodes (points stay allocated, reactivate when threshold returns).</p>
-<p><strong>Cross-class access for origins:</strong> Origin classes (Analog/Cyborg) can dabble in opposing-origin tier perks at T1 only (≥30%). An Analog with 30%+ Optimization unlocks Drone Swarm I (2 drones). Specialists cannot reach opposing perks at all — those thresholds are sentinel-locked.</p>
+<p>T3 is "all-in" by design — getting one stat to 99% leaves only 1% for everything else. Tier access tracks live with gear: dropping below a threshold locks the tier and deactivates its nodes (points stay allocated, reactivate when threshold returns).</p>
+<p><strong>Cross-class access for origins:</strong> Origin classes (Analog/Cyborg) can dabble in opposing-origin tier perks at T1 only (≥33%). An Analog with 33%+ Optimization unlocks Drone Swarm I (2 drones). Specialists cannot reach opposing perks at all — those thresholds are sentinel-locked.</p>
 <blockquote>
-<p><strong>Code source of truth:</strong> <code>TIERS_OWN</code>, <code>TIERS_TEAM_SPEC</code>, <code>TIERS_OPPOSING_SPEC</code>, <code>TIERS_TEAM_ORIGIN</code>, <code>TIERS_OPPOSING_ORIGIN</code> in <code>attribute_state.gd</code>. Sentinel value <code>1.01</code> marks unreachable tiers.</p>
+<p><strong>Code source of truth:</strong> <code>TIERS_OWN</code>, <code>TIERS_TEAM_SPEC</code>, <code>TIERS_OPPOSING_SPEC</code>, <code>TIERS_TEAM_ORIGIN</code>, <code>TIERS_OPPOSING_ORIGIN</code>, and <code>ORIGIN_TIER_CAPS</code> in <code>attribute_state.gd</code>. Sentinel value <code>1.01</code> marks unreachable tiers.</p>
 </blockquote>
 <h3 id="talent-points">Talent Points<a class="headerlink" href="#talent-points" title="Permanent link">&para;</a></h3>
 <p>1 point per level (currently — target budget is ~20 at L100; cadence needs tuning). Each class tree is 8 × 3 = 24 nodes (144 total across six trees), so even a fully committed build can't fill one tree. Every tier is a meaningful "which nodes," never "can I even get here."</p>
