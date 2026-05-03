@@ -103,9 +103,10 @@ func _spawn_wave(count: int) -> void:
 		enemy.global_position = pos
 		# Wipe any leftover affixes / named identity the pool occupant
 		# carried — wave spawns are vanilla trash, not pack leaders or
-		# named encounters.
+		# named encounters. The cast is required: PrototypeEnemy.affixes
+		# is Array[MonsterAffix] and Godot 4 won't auto-coerce `[]`.
 		if "affixes" in enemy:
-			enemy.affixes = []
+			enemy.affixes = [] as Array[MonsterAffix]
 		if "named_monster" in enemy:
 			enemy.named_monster = null
 		if enemy.has_method(&"reset"):
@@ -201,9 +202,10 @@ func _spawn_boss() -> void:
 	if "display_name" in boss:
 		boss.display_name = "Pickle"
 	# Wipe any leftover affixes / named identity — bosses use is_boss for
-	# their stat boost, not pack/named overrides.
+	# their stat boost, not pack/named overrides. Cast required (see boss
+	# spawn comment).
 	if "affixes" in boss:
-		boss.affixes = []
+		boss.affixes = [] as Array[MonsterAffix]
 	if "named_monster" in boss:
 		boss.named_monster = null
 	add_child(boss)

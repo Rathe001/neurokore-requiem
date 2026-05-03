@@ -31,9 +31,11 @@ func _spawn() -> void:
 		boss.display_name = display_name
 	# Clear any affixes / named identity the pool occupant carried over —
 	# bosses get their stat boosts from is_boss, not from rare-pack
-	# modifiers or named-encounter overrides.
+	# modifiers or named-encounter overrides. The empty array needs an
+	# explicit type cast: PrototypeEnemy.affixes is Array[MonsterAffix]
+	# and Godot 4 won't auto-coerce a plain `[]`.
 	if "affixes" in boss:
-		boss.affixes = []
+		boss.affixes = [] as Array[MonsterAffix]
 	if "named_monster" in boss:
 		boss.named_monster = null
 	get_parent().add_child(boss)
