@@ -16,10 +16,12 @@ uniform float drift_speed : hint_range(-1.0, 1.0) = 0.18;
 // Larger noise_scale = finer detail; smaller = wide soft puffs. Tuned
 // against the sphere radius so a few noise cells fit across the volume.
 uniform float noise_scale : hint_range(0.2, 4.0) = 1.4;
-// Higher silhouette_softness = denser at silhouette, more transparent
-// at the centre — the classic "fluffy ball of mist" feel where you can
-// see slightly through the middle.
-uniform float silhouette_softness : hint_range(0.5, 4.0) = 1.6;
+// Higher core_softness = sharper concentration in the centre. The
+// front-facing fragments (NORMAL pointing at camera) are dense; the
+// silhouette edges fade to transparent. Inverse of the prior fluffy-
+// shell formula — looks like a dense purple core that fades outward
+// into nothing instead of a hollow soap bubble.
+uniform float core_softness : hint_range(0.5, 4.0) = 2.0;
 // Soft-particles depth fade — fragments within this many world units
 // of opaque scene geometry get faded out. Helps smooth where the
 // sphere touches the floor / nearby objects.
@@ -81,12 +83,14 @@ void vertex() {
 
 
 void fragment() {
-	// Silhouette term: dense at glancing angles, transparent at the
-	// centre (where NORMAL points straight at camera). abs() lets back
-	// faces share the same falloff so cull_disabled doesn't show a
-	// hard back-face seam.
+	// Core-density term: dense at the centre (where NORMAL points
+	// straight at camera), transparent at silhouette edges. abs() lets
+	// back faces share the same falloff so cull_disabled doesn't show
+	// a hard back-face seam. The visible result is a dense purple core
+	// fading to nothing at the edges — also hides any geometric bleed
+	// past walls because the wall-side silhouette is already invisible.
 	float facing = abs(dot(NORMAL, VIEW));
-	float silhouette = pow(1.0 - facing, silhouette_softness);
+	float core = pow(facing, core_softness);
 
 	// 3D fbm in object space with vertical drift over time. Drifting
 	// only on Y reads as rising vapour; drifting on all axes feels
@@ -106,7 +110,7 @@ void fragment() {
 	float depth_diff = linear_scene_depth - linear_self_depth;
 	float depth_fade = clamp(depth_diff / max(depth_fade_distance, 0.001), 0.0, 1.0);
 
-	float alpha = clamp(silhouette * n * intensity * depth_fade, 0.0, 1.0);
+	float alpha = clamp(core * n * intensity * depth_fade, 0.0, 1.0);
 
 	// Mild self-glow keeps the fog visible at the silhouette where
 	// the OmniLight wash doesn't hit. Small enough that wall clipping

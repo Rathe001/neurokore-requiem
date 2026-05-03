@@ -28,22 +28,25 @@ const FOG_SHADER: Shader = preload("res://shaders/doomsayer_fog.gdshader")
 const COLOR := Color(0.78, 0.35, 0.85, 1.0)  # AMB stat color (purple)
 
 # Per-tier visual scaling. T0 hides everything. The shader's intensity
-# uniform multiplies overall density; sphere scale grows the radius;
-# light energy + range scale together so the wall-wash reads at the
-# same edge as the visible mist body.
-const INTENSITY_PER_TIER: Array[float] = [0.0, 0.55, 0.95, 1.4]
-const RADIUS_PER_TIER: Array[float] = [0.0, 2.5, 3.4, 4.5]
-const LIGHT_ENERGY_PER_TIER: Array[float] = [0.0, 1.4, 2.6, 4.5]
+# uniform + alpha modulate density at the dense core; sphere radius
+# kept small so the visible body stays close to the player and rarely
+# reaches walls. The OmniLight does the wide aura presence (its purple
+# wash on world surfaces respects walls via shadow casting).
+const INTENSITY_PER_TIER: Array[float] = [0.0, 0.85, 1.2, 1.6]
+const RADIUS_PER_TIER: Array[float] = [0.0, 1.4, 1.8, 2.3]
+const LIGHT_ENERGY_PER_TIER: Array[float] = [0.0, 1.6, 2.8, 4.5]
 const LIGHT_RANGE_PER_TIER: Array[float] = [0.0, 4.5, 6.5, 9.0]
-const ALPHA_PER_TIER: Array[float] = [0.0, 0.55, 0.75, 0.95]
+const ALPHA_PER_TIER: Array[float] = [0.0, 0.85, 1.0, 1.0]
 # Squash factor — sphere Y scale is RADIUS * Y_SQUASH so the body
-# becomes an ellipsoid hugging the floor instead of a tall sphere.
-const Y_SQUASH := 0.45
-# Center height of the squashed ellipsoid (knee height on the player).
-# Top of the body sits at Y_OFFSET + radius*Y_SQUASH, which we've tuned
-# to stay under a typical 2m wall top up through T2 and only barely
-# poke above on T3.
-const Y_OFFSET := 0.55
+# becomes an ellipsoid hugging the player instead of a tall ball.
+# Wider/flatter shape feels like a fog cloud rather than a beach ball.
+const Y_SQUASH := 0.6
+# Center height of the squashed ellipsoid (mid-body). Combined with
+# the smaller radii above, the sphere stays well below the 4.5m wall
+# tops and rarely extends more than 1-2m past walls in plan view —
+# and where it does, the inverted silhouette hides the bleed by
+# fading the edges to transparent.
+const Y_OFFSET := 0.9
 
 var _tier: int = 0
 var _sphere: MeshInstance3D
