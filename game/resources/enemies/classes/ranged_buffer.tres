@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="EnemyClass" load_steps=3 format=3]
+
+; Ranged + damage-buff combo. Stays at kite distance and fires bolts, while
+; pulsing a +25% damage buff to any allies (or itself) within 7m every
+; 4 seconds. Player feels the buff via meatier melee swings from the
+; bruisers it's standing behind — kill the buffer first to defang the pack.
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_class.gd" id="script"]
+[ext_resource type="PackedScene" path="res://scenes/prototype/prototype_projectile.tscn" id="projectile_scene"]
+
+[resource]
+script = ExtResource("script")
+id = &"ranged_buffer"
+label = "Tactical Officer"
+attack_mode = 1
+attack_range = 12.0
+attack_cooldown = 2.2
+attack_windup = 0.55
+attack_damage_mult = 0.75
+projectile_scene = ExtResource("projectile_scene")
+projectile_speed = 18.0
+projectile_max_range = 14.0
+ranged_kite_distance = 9.0
+support_role = 2
+support_radius = 7.0
+support_interval = 4.0
+support_magnitude = 0.25

@@ -214,6 +214,14 @@ var _crouch_probe_t: float = 0.0
 var _stand_test_shape: CapsuleShape3D
 var _jump_t: float = 0.0
 var _jump_cooldown_remain: float = 0.0
+# Support overlay state. _support_tick_t counts down to the next emit;
+# _damage_buff_mult / _damage_buff_remain are set by ALLIES' support ticks
+# (HEAL writes to allies' health directly and leaves no state behind).
+# Multiple buffers overlapping take the max magnitude rather than stacking
+# additively, so one strong + one weak doesn't double-up.
+var _support_tick_t: float = 0.0
+var _damage_buff_mult: float = 0.0
+var _damage_buff_remain: float = 0.0
 var _floor_ring_mat: StandardMaterial3D
 @onready var _nav_agent: NavigationAgent3D = $NavigationAgent3D
 # Spawn position captured on reset() — enemies leash back to this point
@@ -269,6 +277,16 @@ func _init_enemy() -> void:
 	# enemy on the same physics tick.
 	_crouch_probe_t = randf() * CROUCH_PROBE_INTERVAL
 	_jump_t = 0.0
+	_jump_cooldown_remain = 0.0
+	_damage_buff_mult = 0.0
+	_damage_buff_remain = 0.0
+	# Stagger the first support tick by a random fraction of the interval —
+	# without this every support enemy in a room emits in lockstep on the
+	# same physics frame, spiking the SpatialGrid query cost.
+	if enemy_class != null and enemy_class.support_role != EnemyClass.SupportRole.NONE:
+		_support_tick_t = randf() * enemy_class.support_interval
+	else:
+		_support_tick_t = 0.0
 	# Connect once — signal stays connected across pool cycles.
 	if _nav_agent != null and not _nav_agent.link_reached.is_connected(_on_link_reached):
 		_nav_agent.link_reached.connect(_on_link_reached)
@@ -472,6 +490,62 @@ func _ranged_kite_distance() -> float:
 	return enemy_class.ranged_kite_distance if enemy_class != null else 8.0
 
 
+# Run one support tick — query SpatialGrid for nearby allies (including self,
+# so a buffer benefits from its own aura) and apply HEAL or DAMAGE_BUFF
+# based on enemy_class.support_role. Buffer lifetime is interval * 1.1 so
+# the next tick refreshes the buff before it expires (small overlap masks
+# the ramp-down between ticks).
+func _emit_support() -> void:
+	if enemy_class == null or enemy_class.support_role == EnemyClass.SupportRole.NONE:
+		return
+	var radius := enemy_class.support_radius
+	var role := enemy_class.support_role
+	var magnitude := enemy_class.support_magnitude
+	var buff_duration := enemy_class.support_interval * 1.1
+	for ally: Node in SpatialGrid.query_radius(global_position, radius, &"enemies"):
+		if ally == null or not is_instance_valid(ally):
+			continue
+		if not (ally is PrototypeEnemy):
+			continue
+		var ae: PrototypeEnemy = ally
+		if not ae._is_alive():
+			continue
+		match role:
+			EnemyClass.SupportRole.HEAL:
+				ae.heal(int(round(float(ae.max_health) * magnitude)))
+			EnemyClass.SupportRole.DAMAGE_BUFF:
+				ae.apply_damage_buff(magnitude, buff_duration)
+
+
+## Restore HP up to max_health. Called by allied support enemies' ticks;
+## a no-op on dead enemies (corpses don't recover).
+func heal(amount: int) -> void:
+	if not _is_alive() or amount <= 0:
+		return
+	_health = mini(_health + amount, max_health)
+	_update_health_bar()
+
+
+## Apply (or refresh) a damage-buff overlay. Multiple buffers overlapping
+## take the max magnitude rather than stacking; duration always extends
+## to the longer of current vs new so a brief weak refresh from one buffer
+## doesn't shorten a stronger pulse from another.
+func apply_damage_buff(magnitude: float, duration: float) -> void:
+	if not _is_alive():
+		return
+	if magnitude > _damage_buff_mult:
+		_damage_buff_mult = magnitude
+	if duration > _damage_buff_remain:
+		_damage_buff_remain = duration
+
+
+## Final damage multiplier for an outgoing attack — base class mult
+## (configured per archetype) compounded with active support-aura buff.
+func _outgoing_damage_mult() -> float:
+	var class_mult := enemy_class.attack_damage_mult if enemy_class != null else 1.0
+	return class_mult * (1.0 + _damage_buff_mult)
+
+
 ## Single point of state transitions. Currently a thin setter; entry/exit
 ## hooks (e.g. clearing horizontal velocity on enter-CASTING, releasing the
 ## hit-tween on enter-DEAD) live at the call sites for now. If hook count
@@ -511,6 +585,14 @@ func _physics_process(delta: float) -> void:
 		_crouch_probe_t = CROUCH_PROBE_INTERVAL
 		_update_crouch_state()
 	_jump_cooldown_remain = maxf(0.0, _jump_cooldown_remain - delta)
+	_damage_buff_remain = maxf(0.0, _damage_buff_remain - delta)
+	if _damage_buff_remain <= 0.0:
+		_damage_buff_mult = 0.0
+	if enemy_class != null and enemy_class.support_role != EnemyClass.SupportRole.NONE:
+		_support_tick_t -= delta
+		if _support_tick_t <= 0.0:
+			_support_tick_t = enemy_class.support_interval
+			_emit_support()
 
 	# Floor-snap is suppressed during JUMPING so the takeoff impulse set by
 	# _start_jump (which runs from the agent's link_reached signal AFTER our
@@ -840,7 +922,7 @@ func _cast_melee_attack(player: Node3D, aim: Vector3) -> void:
 	if not LosCuller.has_los_to_player(self):
 		return
 	if player.has_method(&"take_damage"):
-		var dmg := int(round(float(_attack_damage) * (enemy_class.attack_damage_mult if enemy_class != null else 1.0)))
+		var dmg := int(round(float(_attack_damage) * _outgoing_damage_mult()))
 		player.take_damage(dmg, global_position, _melee_knockback())
 
 
@@ -886,7 +968,7 @@ func _spawn_enemy_projectile(aim: Vector3) -> void:
 	proj.max_range = enemy_class.projectile_max_range
 	proj.knockback_strength = enemy_class.melee_knockback  # reuse the field — enemy projectiles inherit the same impact knockback
 	proj.source_position = global_position
-	var dmg := int(round(float(_attack_damage) * (enemy_class.attack_damage_mult if enemy_class != null else 1.0)))
+	var dmg := int(round(float(_attack_damage) * _outgoing_damage_mult()))
 	proj.damage_min = dmg
 	proj.damage_max = dmg
 	proj.damage_mult = 1.0
