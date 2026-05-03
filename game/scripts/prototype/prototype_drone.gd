@@ -28,8 +28,8 @@ const PROJECTILE_SCENE: PackedScene = preload("res://scenes/prototype/prototype_
 
 # Wander volume around the player. MIN keeps drones from bunching at the
 # player's center; MAX keeps the swarm visibly close in dense fights.
-const HOVER_RADIUS_MIN := 1.4
-const HOVER_RADIUS_MAX := 3.6
+const HOVER_RADIUS_MIN := 1.0
+const HOVER_RADIUS_MAX := 2.6
 const HOVER_HEIGHT_MIN := 1.1
 const HOVER_HEIGHT_MAX := 2.2
 # Re-roll the wander target on this random cadence — staggered per drone
@@ -45,6 +45,12 @@ const MAX_SPEED := 7.0
 # small but breaks the "all drones drift in straight lines" feel.
 const BOB_AMPLITUDE := 0.10
 const BOB_SPEED := 2.4
+# Anti-stuck: when a drone strays past this distance from the player (e.g.
+# trapped behind a wall or a closed door because move_and_slide couldn't
+# find a path back), snap it to the player's position. Generous enough
+# that normal wander + brief separation while the player runs ahead don't
+# trip it; tight enough that a stuck drone catches up within a few steps.
+const TELEPORT_BACK_DISTANCE := 6.0
 
 const ATTACK_RANGE := 9.0
 const FIRE_COOLDOWN := 1.4
@@ -71,15 +77,27 @@ func setup(player: Node3D, _orbit_index: int = 0, _orbit_total: int = 1) -> void
 	# Half-elapsed initial cooldown so the first shot lands quickly when
 	# the perk first unlocks — feels responsive.
 	_fire_cd = FIRE_COOLDOWN * 0.5
-	# Drop the drone next to the player so the first move_and_slide doesn't
-	# yank from the scene-defined origin (could collide with a wall on the
-	# way over). Caller may override this immediately, which is fine.
+	# Snap to the player's position (slightly elevated) at spawn — using the
+	# wander offset here can land the drone outside the room (through walls
+	# / doors), where it gets stuck and silently lost. Letting the wander
+	# seek pull it outward over the next physics frames is safer.
 	if is_inside_tree():
-		global_position = player.global_position + _wander_offset
+		global_position = player.global_position + Vector3(0.0, 1.6, 0.0)
 
 
 func _physics_process(delta: float) -> void:
 	if _player == null or not is_instance_valid(_player):
+		return
+	# Anti-stuck snap: if we're well outside the wander volume from the
+	# player, the drone is almost certainly trapped behind a wall or door
+	# (move_and_slide can't path through level geometry). Teleport home
+	# and re-roll the wander target so we resume a fresh approach. Cheap
+	# distance check, runs every physics tick.
+	var to_player := _player.global_position - global_position
+	if to_player.length_squared() > TELEPORT_BACK_DISTANCE * TELEPORT_BACK_DISTANCE:
+		global_position = _player.global_position + Vector3(0.0, 1.6, 0.0)
+		velocity = Vector3.ZERO
+		_pick_new_target()
 		return
 	_retarget_t -= delta
 	if _retarget_t <= 0.0:

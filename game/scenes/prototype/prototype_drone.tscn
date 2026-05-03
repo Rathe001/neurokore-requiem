@@ -3,13 +3,13 @@
 [ext_resource type="Script" path="res://scripts/prototype/prototype_drone.gd" id="script_drone"]
 
 [sub_resource type="SphereMesh" id="mesh_drone"]
-radius = 0.18
-height = 0.36
+radius = 0.11
+height = 0.22
 radial_segments = 12
 rings = 6
 
 [sub_resource type="SphereShape3D" id="shape_drone"]
-radius = 0.22
+radius = 0.13
 
 [sub_resource type="StandardMaterial3D" id="mat_drone"]
 shading_mode = 0
@@ -43,8 +43,8 @@ shape = SubResource("shape_drone")
 ; constantly moving — shadow updates would be expensive at 5 drones.
 [node name="Glow" type="OmniLight3D" parent="."]
 light_color = Color(0.55, 0.78, 0.85, 1)
-light_energy = 1.4
-omni_range = 3.5
+light_energy = 1.0
+omni_range = 2.4
 omni_attenuation = 2.0
 shadow_enabled = false
 light_volumetric_fog_energy = 0.0
