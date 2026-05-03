@@ -80,15 +80,15 @@ Calculated from the average of the character's three team stats — never rolled
 
 ## Attribute Relationships
 
-Each stat falls into one of **three categories** relative to a player's class. Tier thresholds vary by category and by whether the player is on a specialized class or an origin class.
+Each stat falls into one of **three categories** relative to a player's class. All tier thresholds are multiples of 33% — every tier costs another third of your stat budget.
 
 | Relationship | Who | Scaling | Specialist Tiers | Origin Tiers |
 |---|---|---|---|---|
-| **Primary** | Own class stat | Full (1x) | T1=12%, T2=25%, T3=40% | n/a (origins have no primary) |
-| **Team** | Other two stats from same origin | Partial (~0.25x) | T1=25%, T2=40%, T3=— | T1=20%, T2=35%, T3=— |
-| **Opposing** | All three stats from other origin | Interference + distortion | T1=—, T2=—, T3=— | T1=30%, T2=—, T3=— |
+| **Primary** | Own class stat | Full (1x) | T1=33%, T2=66%, T3=99% | n/a (origins have no primary) |
+| **Team** | Other two stats from same origin | Partial (~0.25x) | T1=33%, T2=66%, T3=— | T1=33%, T2=66%, T3=— |
+| **Opposing** | All three stats from other origin | Interference + distortion | T1=—, T2=—, T3=— | T1=33%, T2=—, T3=— |
 
-> T3 for team / opposing is unreachable by design — specialists max their primary at T3, dabble in team to T2, and can't reach opposing trees at all. Origin classes cap their team at T2 and can dabble in opposing to T1. The "—" entries are sentinel thresholds (>1.0) in code.
+> T3 for team / opposing is unreachable in practice — getting one stat to 66% leaves only 34% for everything else. Specialists are sentinel-locked out of opposing trees entirely; origins can dabble into opposing T1 (≥33%). The "—" entries are sentinel thresholds (>1.0) in code.
 
 ### Opposing Stats — Resistance Model
 
@@ -123,13 +123,13 @@ Origin classes are casual-friendly: broad, forgiving scaling and lower variance.
 
 ### Origin Tier Perks (Balance-Gated)
 
-Origin perks reward staying balanced — they're maintained as long as no single stat dominates. Specific perks TBD.
+Origin perks reward staying balanced — single rule: no stat may meet or exceed the cap. Same rule applies to team and opposing alike. Specific perks TBD.
 
-| Tier | Condition | Vibe |
+| Tier | Cap | Vibe |
 |---|---|---|
-| 1 | No team stat ≥ 55%, no opposing ≥ 45% | Almost free |
-| 2 | No team stat ≥ 40%, no opposing ≥ 30% | Intentional balance |
-| 3 | No team stat ≥ 30%, no opposing ≥ 20% | Tight spread — aspirational |
+| 1 | No stat ≥ 66% | Almost free |
+| 2 | No stat ≥ 50% | No single stat dominates |
+| 3 | No stat ≥ 33% | Perfect 1-1-1 spread, exactly at cap |
 
 An origin class that starts pushing a single stat loses origin perks but begins unlocking the matching specialized class's tier perks instead.
 
@@ -166,20 +166,19 @@ As a character's stat distribution shifts, two things happen: they unlock **tier
 
 ### Breakpoints (3 tiers)
 
-Three tiers drive everything: talent tree access, tier perks, VFX metamorphosis, and NPC reactions. Each threshold is the % of total stats a single attribute represents. Full threshold table is in [Attribute Relationships](#attribute-relationships) above.
+Three tiers drive everything: talent tree access, tier perks, VFX metamorphosis, and NPC reactions. Each threshold is a multiple of 33% — every tier costs another third of your budget. Full threshold table is in [Attribute Relationships](#attribute-relationships) above.
 
-The math forces meaningful build choices: a specialist's own T3 (40%) plus a team T2 (40%) plus another team T2 (40%) sums to 120% — impossible. So the reachable patterns are roughly:
+Reachable specialist patterns are exactly three:
 
-- **3-only** (own T3 + nothing else) — pure specialist, one massive perk ladder
-- **3-2-0** or **3-1-1** — own T3 plus a team dabble
-- **2-2-1** — own T2 plus both teams (moderate hybrid)
-- **1-1-1** — wide spread, no apex
+- **3-only** (99% in one stat) — pure specialist, true all-in
+- **2-1-0** (66% main + 33% in one team stat) — moderate hybrid, two perk ladders
+- **1-1-1** (33% × 3) — wide spread across own + both teams; no apex
 
-Tier access tracks live with gear: dropping below a threshold locks the tier and deactivates its nodes (points stay allocated, reactivate when threshold returns).
+T3 is "all-in" by design — getting one stat to 99% leaves only 1% for everything else. Tier access tracks live with gear: dropping below a threshold locks the tier and deactivates its nodes (points stay allocated, reactivate when threshold returns).
 
-**Cross-class access for origins:** Origin classes (Analog/Cyborg) can dabble in opposing-origin tier perks at T1 only (≥30%). An Analog with 30%+ Optimization unlocks Drone Swarm I (2 drones). Specialists cannot reach opposing perks at all — those thresholds are sentinel-locked.
+**Cross-class access for origins:** Origin classes (Analog/Cyborg) can dabble in opposing-origin tier perks at T1 only (≥33%). An Analog with 33%+ Optimization unlocks Drone Swarm I (2 drones). Specialists cannot reach opposing perks at all — those thresholds are sentinel-locked.
 
-> **Code source of truth:** `TIERS_OWN`, `TIERS_TEAM_SPEC`, `TIERS_OPPOSING_SPEC`, `TIERS_TEAM_ORIGIN`, `TIERS_OPPOSING_ORIGIN` in `attribute_state.gd`. Sentinel value `1.01` marks unreachable tiers.
+> **Code source of truth:** `TIERS_OWN`, `TIERS_TEAM_SPEC`, `TIERS_OPPOSING_SPEC`, `TIERS_TEAM_ORIGIN`, `TIERS_OPPOSING_ORIGIN`, and `ORIGIN_TIER_CAPS` in `attribute_state.gd`. Sentinel value `1.01` marks unreachable tiers.
 
 ### Talent Points
 

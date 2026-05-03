@@ -96,40 +96,45 @@ const RELATIONSHIP_COLORS: Dictionary = {
 
 # Tier unlock thresholds (3 tiers): stat's share of total rollable stats.
 #
+# All thresholds are multiples of 33% — the simplest mental model: every
+# tier costs another third of your stat budget. Reachable patterns are
+# exactly three: 3-only (99% in one stat), 2-1 (66% + 33%), or 1-1-1
+# (33% × 3). T3 is true all-in by design.
+#
 # Specialized classes:
-#   TIERS_OWN           — own primary stat (T3 reachable; class identity)
-#   TIERS_TEAM_SPEC     — same-origin team stats (T2 cap; supplementary perks)
+#   TIERS_OWN           — own primary stat (T3 reachable at 99%)
+#   TIERS_TEAM_SPEC     — same-origin team stats (T1/T2 reachable; T3 unreachable
+#                         in practice since 66% + 99% own > 100%)
 #   TIERS_OPPOSING_SPEC — opposite-origin stats (UNAVAILABLE — all sentinels)
-#   Reachable patterns: 3-1-1 or 3-2-0 across own + the two team stats.
 #
 # Origin classes (Analog / Cyborg):
-#   TIERS_TEAM_ORIGIN     — own origin's team stats (T2 cap)
-#   TIERS_OPPOSING_ORIGIN — opposite-origin stats (T1 cap; cross-aligned dabbling)
-#   Reachable patterns: 2-2-1 across own three; 1 in any opposing.
+#   TIERS_TEAM_ORIGIN     — own origin's team stats (same 33/66 ladder)
+#   TIERS_OPPOSING_ORIGIN — opposite-origin stats (T1 dabble at 33%)
 #
 # >100% threshold (e.g. 1.01) is the "structurally unreachable" sentinel —
 # the get_unlocked_tier loop never satisfies it because no stat can exceed
 # 100% of the total. UI special-cases the sentinel to render those tiers
 # as "unavailable" with a class-restriction tooltip rather than "locked".
 # See docs/design/attribute-system.md § Breakpoints.
-const TIERS_OWN:               Array[float] = [0.12, 0.25, 0.40]
-const TIERS_TEAM_SPEC:         Array[float] = [0.25, 0.40, 1.01]
+const TIERS_OWN:               Array[float] = [0.33, 0.66, 0.99]
+const TIERS_TEAM_SPEC:         Array[float] = [0.33, 0.66, 1.01]
 const TIERS_OPPOSING_SPEC:     Array[float] = [1.01, 1.01, 1.01]
-const TIERS_TEAM_ORIGIN:       Array[float] = [0.20, 0.35, 1.01]
-const TIERS_OPPOSING_ORIGIN:   Array[float] = [0.30, 1.01, 1.01]
+const TIERS_TEAM_ORIGIN:       Array[float] = [0.33, 0.66, 1.01]
+const TIERS_OPPOSING_ORIGIN:   Array[float] = [0.33, 1.01, 1.01]
 
 # Talent tree node dimensions — 8 nodes per tier means 24 per class tree.
 # With 20 talent points, even a fully committed build can't fill one tree.
 const TALENT_NODES_PER_TIER := 8
 
-# Origin class balance tier caps. Indexed 1–3. Each entry is [max_any_team_pct, max_any_opposing_pct].
-# Tier N requires: no team stat >= max_any_team_pct AND no opposing stat >= max_any_opposing_pct.
-# Tier 0 is the fallback (any stat too dominant → all balance perks lost).
-const ORIGIN_TIER_CAPS: Array[Array] = [
-	[],           # index 0 — unused placeholder
-	[0.55, 0.45], # tier 1: almost free
-	[0.40, 0.30], # tier 2: intentional balance
-	[0.30, 0.20], # tier 3: tight spread — aspirational
+# Origin class balance tier caps. Indexed 1–3. Single "no stat ≥ X" cap
+# per tier — replaces the prior team/opposing split because the simpler
+# rule reads better and produces the same shape of incentive (don't let
+# any one stat dominate). T3 lands exactly at perfect 33+33+33 balance.
+const ORIGIN_TIER_CAPS: Array[float] = [
+	0.0,   # index 0 — unused placeholder
+	0.66,  # tier 1: no stat ≥ 66% (almost any non-extreme build)
+	0.50,  # tier 2: no stat ≥ 50% (no single stat dominates)
+	0.33,  # tier 3: no stat ≥ 33% (perfect 1-1-1 spread, exactly at cap)
 ]
 
 # Team nodes: 3-tier tree unlocked by combined team stat share.
@@ -286,19 +291,17 @@ func get_unlocked_tier(stat_id: StringName, class_id: StringName, spec_id: Strin
 
 ## Returns the balance tier (0–3) for an origin class (Analog/Cyborg).
 ## Higher = tighter stat balance; perks are maintained up to the returned tier.
-func get_origin_tier(class_id: StringName) -> int:
+## Single rule: no stat may meet or exceed ORIGIN_TIER_CAPS[tier] — applies
+## uniformly to team and opposing stats (the prior split was complexity for
+## no benefit). class_id is unused now that we don't need to distinguish
+## team from opposing stats — kept in the signature for caller stability.
+func get_origin_tier(_class_id: StringName) -> int:
 	var pcts := get_all_stat_pcts()
-	var team := get_team_stats_for_origin(class_id)
-	var opposing := get_opposing_stats_for_origin(class_id)
-	var max_team := 0.0
-	for s in team:
-		max_team = maxf(max_team, pcts.get(s, 0.0))
-	var max_opp := 0.0
-	for s in opposing:
-		max_opp = maxf(max_opp, pcts.get(s, 0.0))
+	var max_pct := 0.0
+	for s in ROLLABLE_STATS:
+		max_pct = maxf(max_pct, pcts.get(s, 0.0))
 	for tier in range(TIER_COUNT, 0, -1):
-		var caps: Array = ORIGIN_TIER_CAPS[tier]
-		if max_team < caps[0] and max_opp < caps[1]:
+		if max_pct < ORIGIN_TIER_CAPS[tier]:
 			return tier
 	return 0
 

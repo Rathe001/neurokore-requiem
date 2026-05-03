@@ -14,11 +14,15 @@ const MAX_INVENTORY_SIZE := 40
 const MAX_UTILITY_SLOTS := 4
 
 # Tier-3 starter kit: one single-stat item per specialised class. Equip the
-# matching item alone (or as the dominant stat source) to push that class's
-# primary stat past TIERS_OWN[2] (40%) → T3 unlocked. For origin classes,
-# equipping the right team-stat item unlocks T2 of that team perk. Restored
-# 2026-05-02 because the items make perk-tier playtesting much faster.
-const T3_STAT_PCT: int = 40
+# matching item alone to push that class's primary stat past TIERS_OWN[2]
+# (99% under the simplified breakpoints) → T3 unlocked. The constant is a
+# raw stat amount, NOT a percentage — set deliberately huge so the starter
+# weapon's small random stat rolls don't dilute the primary below 99%
+# (1000 / 1005 = 99.5% even if the starter weapon adds 5 stat points).
+# Equipping more than one starter T3 item simultaneously will push BOTH
+# primaries to ~50% by design — the new threshold model says "all-in or
+# nothing," so testing one class at a time is the intended workflow.
+const T3_STAT_PCT: int = 1000
 
 # Slot per spec class for the starter kit items. Picked so all six can sit
 # in the inventory simultaneously without colliding with each other in the
@@ -232,8 +236,8 @@ func _make_starter_offhand() -> Item:
 
 ## Build one max-tier test item per spec class. Equipping the matching item
 ## as the dominant stat source pushes that class's primary stat past the
-## TIERS_OWN[2] (40%) threshold → T3 unlocked. For origin classes the same
-## item lifts the corresponding team stat past TIERS_TEAM_ORIGIN[1] (35%)
+## TIERS_OWN[2] (99%) threshold → T3 unlocked. For origin classes the same
+## item lifts the corresponding team stat past TIERS_TEAM_ORIGIN[1] (66%)
 ## → T2. Reduces playtest setup from "kill enemies until you roll the right
 ## affixes" to "drag this onto the matching slot."
 func _make_class_tier3_item(spec_id: StringName) -> Item:
