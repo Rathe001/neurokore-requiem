@@ -38,6 +38,11 @@ const BAR_BG_COLOR := Color(0.12, 0.12, 0.12, 0.9)
 const NODE_AVAILABLE_ALPHA := 0.25
 const NODE_ALLOCATED_ALPHA := 1.0
 const NODE_GHOST_COLOR := Color(1.0, 1.0, 1.0, 0.04)
+# "Unavailable" = structurally unreachable for the current class (sentinel
+# threshold > 1.0). Distinct red tint so the player learns the class-
+# restriction visually rather than thinking the tier is "just locked".
+const NODE_UNAVAILABLE_COLOR := Color(0.45, 0.18, 0.18, 0.55)
+const TIER_LABEL_UNAVAILABLE_COLOR := Color(0.6, 0.32, 0.32, 0.55)
 const TIER_MARKER_COLOR := Color(1.0, 1.0, 1.0, 0.45)
 const TALENT_POINT_COLOR := Color(0.95, 0.85, 0.4, 1.0)
 const TIER_LABEL_COLOR := Color(1.0, 1.0, 1.0, 0.25)
@@ -544,7 +549,7 @@ func _on_node_hovered(stat_id: StringName, tier: int, node_idx: int) -> void:
 		var thresholds := AttributeState.get_tier_thresholds(stat_id, PlayerState.class_id, PlayerState.spec_id)
 		if thresholds[tier] > 1.0:
 			title += "  ·  Unavailable"
-			body = "%s perks at this tier are unavailable to your class." % stat_name
+			body = _unavailable_reason(stat_id, tier, stat_name)
 		else:
 			var needed_pct := int(thresholds[tier] * 100)
 			title += "  ·  Locked (%d%%)" % needed_pct
@@ -555,6 +560,28 @@ func _on_node_hovered(stat_id: StringName, tier: int, node_idx: int) -> void:
 
 func _on_node_unhovered() -> void:
 	get_tree().call_group(&"interactable_tooltip", &"hide_tooltip")
+
+
+# Class-aware reason text for an unavailable tier. Reads off the same
+# (origin / specialized) × (own / team / opposing) classification that
+# AttributeState.get_tier_thresholds branches on, so the wording matches
+# the actual rule that locked the tier.
+func _unavailable_reason(stat_id: StringName, tier: int, stat_name: String) -> String:
+	var class_id: StringName = PlayerState.class_id
+	var spec_id: StringName = PlayerState.spec_id
+	var tier_label := AttributeState.TIER_ROMAN[tier]
+	if spec_id == &"":
+		# Origin class. Team stats cap at T2; opposing cap at T1.
+		if stat_id in AttributeState.get_team_stats_for_origin(class_id):
+			return "Origin classes cap at Tier II — Tier %s is reserved for specialised classes." % tier_label
+		return "Origin classes can only reach Tier I in opposing-team perks. Pick a specialisation to unlock more."
+	# Specialized class.
+	var rel := AttributeState.get_stat_relationship(stat_id, class_id, spec_id)
+	match rel:
+		&"team":
+			return "Specialised classes cap at Tier II in same-origin team perks — Tier %s is reserved for your primary stat." % tier_label
+		_:
+			return "Specialised classes can't access opposing-team perks. Switch to your origin class to dabble at Tier I."
 
 func _paint_row(row: Dictionary, rel_color: Color, unlocked_tier: int) -> void:
 	var fade := ROW_LOCKED_ALPHA if unlocked_tier == 0 else 1.0
@@ -571,9 +598,15 @@ func _paint_row(row: Dictionary, rel_color: Color, unlocked_tier: int) -> void:
 		hbar.visible = is_primary
 		hbar.color = stat_color
 
+	# Pull thresholds once — used by both the tier labels and the node rects
+	# below to flag tiers that are STRUCTURALLY UNAVAILABLE (sentinel >1.0)
+	# vs simply locked-but-reachable.
+	var stat_id: StringName = row["stat_id"]
+	var thresholds := AttributeState.get_tier_thresholds(stat_id, PlayerState.class_id, PlayerState.spec_id)
+
 	# tier_state = ti - unlocked_tier:
 	#   < 0  → active (tier is unlocked)
-	#   >= 0 → dim ghost preview (always visible so players can see what's ahead)
+	#   >= 0 → preview (locked, reachable) OR unavailable (sentinel threshold)
 	var tier_labels: Array = row["tier_labels"]
 	for ti in tier_labels.size():
 		var tier_state: int = ti - unlocked_tier
@@ -585,7 +618,9 @@ func _paint_row(row: Dictionary, rel_color: Color, unlocked_tier: int) -> void:
 			lbl.add_theme_color_override(&"font_outline_color", Color.BLACK)
 		else:
 			lbl.visible = true
-			lbl.add_theme_color_override(&"font_color", TIER_LABEL_COLOR)
+			var unavailable := ti < thresholds.size() and thresholds[ti] > 1.0
+			lbl.add_theme_color_override(&"font_color",
+				TIER_LABEL_UNAVAILABLE_COLOR if unavailable else TIER_LABEL_COLOR)
 			lbl.add_theme_constant_override(&"outline_size", 0)
 
 	# Markers sit between sections. Show only within the visible range
@@ -597,6 +632,7 @@ func _paint_row(row: Dictionary, rel_color: Color, unlocked_tier: int) -> void:
 	var node_rects: Array = row["node_rects"]
 	for tier in node_rects.size():
 		var tier_state: int = tier - unlocked_tier
+		var unavailable := tier < thresholds.size() and thresholds[tier] > 1.0
 		for j in NODES_PER_TIER:
 			var rect: ColorRect = node_rects[tier][j]
 			if tier_state < 0:
@@ -608,4 +644,4 @@ func _paint_row(row: Dictionary, rel_color: Color, unlocked_tier: int) -> void:
 			else:
 				rect.visible = true
 				rect.mouse_filter = Control.MOUSE_FILTER_STOP
-				rect.color = NODE_GHOST_COLOR
+				rect.color = NODE_UNAVAILABLE_COLOR if unavailable else NODE_GHOST_COLOR

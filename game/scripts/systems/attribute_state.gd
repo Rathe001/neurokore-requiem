@@ -96,23 +96,27 @@ const RELATIONSHIP_COLORS: Dictionary = {
 
 # Tier unlock thresholds (3 tiers): stat's share of total rollable stats.
 #
-# Specialized classes (auto-granted T1 of their primary perk regardless of
-# allocation; can chase T3 of own + supplementary perks of others — 3-1-1 or
-# 3-2-0 are the reachable patterns):
-#   TIERS_OWN      — own primary stat
-#   TIERS_TEAM     — same-origin team stats
-#   TIERS_OPPOSING — opposite-origin stats (kept hard for build flavour)
+# Specialized classes:
+#   TIERS_OWN           — own primary stat (T3 reachable; class identity)
+#   TIERS_TEAM_SPEC     — same-origin team stats (T2 cap; supplementary perks)
+#   TIERS_OPPOSING_SPEC — opposite-origin stats (UNAVAILABLE — all sentinels)
+#   Reachable patterns: 3-1-1 or 3-2-0 across own + the two team stats.
 #
-# Origin classes (Analog / Cyborg) trade T3 ceiling for breadth: lower team
-# thresholds + a hard T2 cap let them spread to 2-2-1 across all three of
-# their origin's stats. The T3 entry in TIERS_TEAM_ORIGIN is set to 1.01
-# (>100% = unreachable by construction) so the cap falls out naturally
-# without special-casing it inside get_unlocked_tier.
+# Origin classes (Analog / Cyborg):
+#   TIERS_TEAM_ORIGIN     — own origin's team stats (T2 cap)
+#   TIERS_OPPOSING_ORIGIN — opposite-origin stats (T1 cap; cross-aligned dabbling)
+#   Reachable patterns: 2-2-1 across own three; 1 in any opposing.
+#
+# >100% threshold (e.g. 1.01) is the "structurally unreachable" sentinel —
+# the get_unlocked_tier loop never satisfies it because no stat can exceed
+# 100% of the total. UI special-cases the sentinel to render those tiers
+# as "unavailable" with a class-restriction tooltip rather than "locked".
 # See docs/design/attribute-system.md § Breakpoints.
-const TIERS_OWN:         Array[float] = [0.12, 0.25, 0.40]
-const TIERS_TEAM:        Array[float] = [0.25, 0.40, 0.55]
-const TIERS_OPPOSING:    Array[float] = [0.40, 0.55, 0.70]
-const TIERS_TEAM_ORIGIN: Array[float] = [0.20, 0.35, 1.01]
+const TIERS_OWN:               Array[float] = [0.12, 0.25, 0.40]
+const TIERS_TEAM_SPEC:         Array[float] = [0.25, 0.40, 1.01]
+const TIERS_OPPOSING_SPEC:     Array[float] = [1.01, 1.01, 1.01]
+const TIERS_TEAM_ORIGIN:       Array[float] = [0.20, 0.35, 1.01]
+const TIERS_OPPOSING_ORIGIN:   Array[float] = [0.30, 1.01, 1.01]
 
 # Talent tree node dimensions — 8 nodes per tier means 24 per class tree.
 # With 20 talent points, even a fully committed build can't fill one tree.
@@ -244,20 +248,21 @@ func get_stat_relationship(stat_id: StringName, class_id: StringName, spec_id: S
 	return &"team" if stat_id in get_team_stats_for_origin(class_id) else &"opposing"
 
 ## Returns the threshold array for unlocking each tier of a stat's tree.
-## Origin classes get a separate, lower team-stat table with the T3 slot
-## sentinel'd to >100% so they can never unlock T3.
+## Branches on (origin vs specialized) × (own / team / opposing). Sentinel
+## thresholds (> 1.0) mark structurally unreachable tiers — UI renders them
+## as "unavailable" with a class-restriction tooltip.
 func get_tier_thresholds(stat_id: StringName, class_id: StringName, spec_id: StringName) -> Array[float]:
 	if spec_id == &"":
-		# Origin: no primary stat. Team stats use the breadth-friendly origin
-		# table; opposing stats stay on the standard hard table so cross-origin
-		# investment is still expensive.
+		# Origin: no primary stat. Own team stats cap at T2; opposing stats
+		# cap at T1 so cross-aligned dabbling is possible but limited.
 		if stat_id in get_team_stats_for_origin(class_id):
 			return TIERS_TEAM_ORIGIN
-		return TIERS_OPPOSING
+		return TIERS_OPPOSING_ORIGIN
+	# Specialized: own → T3, team → T2, opposing → unavailable.
 	match get_stat_relationship(stat_id, class_id, spec_id):
 		&"primary": return TIERS_OWN
-		&"team":    return TIERS_TEAM
-	return TIERS_OPPOSING
+		&"team":    return TIERS_TEAM_SPEC
+	return TIERS_OPPOSING_SPEC
 
 ## Returns the currently unlocked tier (0–3) for a stat tree given class context.
 ##

@@ -70,6 +70,14 @@ const CROUCH_SPEED_MULT := 0.6
 # Each enemy gets a randomised initial offset so the population doesn't
 # spike on a single tick.
 const CROUCH_PROBE_INTERVAL := 0.25
+# The probe capsule covers ONLY the volume that needs to be clear ABOVE
+# the crouch capsule for the enemy to stand — a thin slab from the crouch
+# capsule's top to the would-be stand capsule's top. Probing the whole
+# stand-height capsule (earlier bug) intersected the floor underneath the
+# enemy and reported "blocked" every tick, locking everyone into crouch.
+const CROUCH_PROBE_HEIGHT := STAND_HEIGHT - CROUCH_HEIGHT  # 0.7
+const CROUCH_PROBE_CENTER_Y := CROUCH_HEIGHT + CAPSULE_BOTTOM_Y + CROUCH_PROBE_HEIGHT * 0.5  # 1.30
+const CROUCH_PROBE_RADIUS := 0.5  # < capsule radius (0.6) so a brushed wall doesn't trip the probe
 
 # Pit-pillar jump: triggered when the navmesh routes the enemy onto a
 # NavigationLink3D (placed by pit_builder between adjacent pillars). The
@@ -284,8 +292,8 @@ func _init_enemy() -> void:
 		health_bar.visible = false
 	if _stand_test_shape == null:
 		_stand_test_shape = CapsuleShape3D.new()
-		_stand_test_shape.radius = 0.55
-		_stand_test_shape.height = STAND_HEIGHT
+		_stand_test_shape.radius = CROUCH_PROBE_RADIUS
+		_stand_test_shape.height = CROUCH_PROBE_HEIGHT
 	# Reset crouch on pool re-acquire — pool returned us mid-tunnel, capsule
 	# might still be shrunk from prior owner.
 	if _crouching:
@@ -911,7 +919,7 @@ func _update_crouch_state() -> void:
 	query.collision_mask = 1  # World layer — walls, ceilings, floors
 	query.exclude = [get_rid()]
 	query.transform = Transform3D(Basis.IDENTITY,
-		global_position + Vector3(0.0, STAND_HEIGHT * 0.5 + CAPSULE_BOTTOM_Y, 0.0))
+		global_position + Vector3(0.0, CROUCH_PROBE_CENTER_Y, 0.0))
 	var blocked := not space.intersect_shape(query, 1).is_empty()
 	if blocked != _crouching:
 		_set_crouch(blocked)

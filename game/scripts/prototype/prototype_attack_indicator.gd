@@ -153,11 +153,26 @@ static func spawn_beam(host: Node3D, aim: Vector3, length: float) -> void:
 	node.add_child(core)
 	node.add_child(glow)
 
+	# Point light at the impact end so walls / floors near the hit catch a
+	# brief glow — matches the visual contract the projectile already has
+	# (see prototype_projectile.tscn's Glow OmniLight3D). No shadows because
+	# the beam lives <0.2s; volumetric fog disabled to keep horde-firing cheap.
+	var impact_light := OmniLight3D.new()
+	impact_light.light_color = color
+	impact_light.light_energy = 4.0
+	impact_light.omni_range = 5.0
+	impact_light.omni_attenuation = 2.0
+	impact_light.shadow_enabled = false
+	impact_light.light_volumetric_fog_energy = 0.0
+	impact_light.position = Vector3(0.0, 0.0, -length)
+	node.add_child(impact_light)
+
 	var tween := node.create_tween().set_parallel(true)
 	tween.tween_property(core_mat, "albedo_color:a", 0.0, BEAM_FADE).set_ease(Tween.EASE_IN)
 	tween.tween_property(glow_mat, "albedo_color:a", 0.0, BEAM_FADE).set_ease(Tween.EASE_IN)
 	tween.tween_property(core_mat, "emission_energy_multiplier", 0.0, BEAM_FADE)
 	tween.tween_property(glow_mat, "emission_energy_multiplier", 0.0, BEAM_FADE)
+	tween.tween_property(impact_light, "light_energy", 0.0, BEAM_FADE).set_ease(Tween.EASE_IN)
 	tween.chain().tween_callback(node.queue_free)
 
 static func spawn_hit_cone(host: Node3D, aim: Vector3, attack_range: float, cone_deg: float) -> void:
