@@ -126,6 +126,7 @@ var _death_tween: Tween
 var _hit_flash_tween: Tween
 var _telekinesis_t: float = 0.0
 var _doomsayer_t: float = 0.0
+var _doomsayer_aura: DoomsayerAura = null
 var _drones: Array[PrototypeDrone] = []
 var _ied_traps: Array[PrototypeTrap] = []
 var _charmed_enemies: Array[PrototypeEnemy] = []
@@ -199,6 +200,7 @@ func _ready() -> void:
 	# already fired its first perks_changed before our connect lands.
 	PerkState.perks_changed.connect(_reconcile_drones)
 	PerkState.perks_changed.connect(_reconcile_charms)
+	PerkState.perks_changed.connect(_reconcile_doomsayer_aura)
 	_base_max_health = max_health
 	if resource_pool != null:
 		_base_resource_max = resource_pool.max_value
@@ -237,6 +239,11 @@ func _ready() -> void:
 	# wiring matches the drone pattern (and a respec at the title screen
 	# that drops the cap before any procs land doesn't get a free turn).
 	_reconcile_charms()
+	# Build the Doomsayer miasma aura node and seed its tier from the
+	# current perk state. Same autoload-vs-scene-order safety as drones.
+	_doomsayer_aura = DoomsayerAura.new()
+	add_child(_doomsayer_aura)
+	_reconcile_doomsayer_aura()
 
 func _build_stat_vfx() -> void:
 	if _base_mat == null or visual == null:
@@ -1066,6 +1073,21 @@ func _reconcile_charms() -> void:
 			oldest.release_charm()
 
 
+# Update the Doomsayer aura's tier readout. Reads the unlocked AMB tier
+# directly (rather than dividing the proc aggregate) so the aura visually
+# matches the actual tier the player has — including auto-grant of T1
+# for spec primary stats, which the aggregate alone wouldn't reflect.
+# Force-tier-zero on death so the miasma doesn't keep glowing on the
+# corpse during the respawn delay.
+func _reconcile_doomsayer_aura() -> void:
+	if _doomsayer_aura == null:
+		return
+	var tier := 0
+	if _alive and PlayerState.class_id != &"":
+		tier = AttributeState.get_unlocked_tier(&"amb", PlayerState.class_id, PlayerState.spec_id)
+	_doomsayer_aura.set_tier(tier)
+
+
 # Toss an IED trap at the cursor's world position. Called from the LMB
 # combat path after weapons fire — no-op when the perk isn't unlocked or
 # the cursor projection failed (off-screen / camera missing). Active set
@@ -1205,6 +1227,9 @@ func _die() -> void:
 	# lifetime to "until you die or a new charm bumps you out." Without
 	# this, post-respawn the player would inherit the pre-death charms.
 	_clear_charms()
+	# Hide the miasma aura too — _alive is now false so reconcile reads
+	# tier 0 and switches off particles + light spill.
+	_reconcile_doomsayer_aura()
 	var played := _play_anim(ANIM_DEATH, 1.0)
 	if not played and anim_player != null:
 		anim_player.pause()
@@ -1238,6 +1263,8 @@ func respawn() -> void:
 	_combat.clear_cooldowns()
 	# Re-spawn the drone swarm now that the player is back in play.
 	_reconcile_drones()
+	# Restore the Doomsayer miasma to its current tier.
+	_reconcile_doomsayer_aura()
 	if visual != null:
 		visual.scale = Vector3.ONE
 	if resource_pool != null:
