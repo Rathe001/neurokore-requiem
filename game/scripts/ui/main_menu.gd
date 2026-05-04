@@ -10,7 +10,7 @@ var _settings_panel: SettingsPanel
 func _ready() -> void:
 	visible = false
 	theme = UIThemeState.theme
-	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	mouse_filter = Control.MOUSE_FILTER_STOP
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_to_group(&"ui_modal")
 	_build_main_panel()
@@ -39,6 +39,17 @@ func _build_version_stamp() -> void:
 
 func _on_theme_changed() -> void:
 	theme = UIThemeState.theme
+
+func _gui_input(event: InputEvent) -> void:
+	if not (event is InputEventMouseButton):
+		return
+	var mb := event as InputEventMouseButton
+	if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
+		# Check against whichever sub-panel is currently showing.
+		var active_panel: Control = _settings_panel if _settings_panel.visible else _main_panel
+		if active_panel != null and not active_panel.get_global_rect().has_point(mb.global_position):
+			close_menu()
+			accept_event()
 
 func open_menu() -> void:
 	get_tree().call_group(&"ui_modal", &"close_menu")

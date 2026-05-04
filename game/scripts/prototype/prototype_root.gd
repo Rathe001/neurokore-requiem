@@ -157,6 +157,8 @@ func reset_level() -> void:
 		# The freshly-built level placed a new player_spawn marker; teleport
 		# the player there (and update their post-death respawn anchor).
 		_move_player_to_spawn()
+		# Rebake the minimap so it shows the new level geometry.
+		get_tree().call_group(&"minimap", &"rebake")
 	elif builder != null:
 		# Legacy in-place reset.
 		builder.respawn_enemies(PlayerState.level)

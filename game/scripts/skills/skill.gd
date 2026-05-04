@@ -21,6 +21,13 @@ enum ActiveKind {
 	SHIELD_BUFF,    # click RMB → buff player with N% damage reduction; cooldown after pool drains
 }
 
+enum GrenadeType {
+	FRAG,           # standard AoE + full knockback
+	INCENDIARY,     # reduced knockback + stun; damage over time later
+	CLUSTER,        # smaller primary blast, spawns 3 sub-grenades
+	STUN,           # AoE stagger to all hit enemies
+}
+
 @export var display_name: String = ""
 @export var glyph: String = ""
 @export var damage: int = 10
@@ -55,3 +62,7 @@ enum ActiveKind {
 ## can immediately re-cast. A break (pool drained before expiry) is
 ## what triggers Skill.cooldown.
 @export var duration: float = 120.0
+## GRENADE: explosion radius in world units.
+@export var blast_radius: float = 3.0
+## GRENADE: detonation behaviour subtype.
+@export var grenade_type: GrenadeType = GrenadeType.FRAG

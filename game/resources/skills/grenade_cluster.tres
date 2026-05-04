@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="Skill" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/skills/skill.gd" id="1_skill_script"]
+
+[resource]
+script = ExtResource("1_skill_script")
+display_name = "Cluster Grenade"
+glyph = "◉"
+damage = 0
+skill_range = 0.0
+cooldown = 6.0
+wind_up = 0.0
+resource_cost = 12
+targeting_mode = 0
+cone_deg = 0.0
+knockback = 3.0
+icon_color = Color(0.8, 0.6, 1.0, 1.0)
+active_kind = 2
+blast_radius = 2.5
+grenade_type = 2

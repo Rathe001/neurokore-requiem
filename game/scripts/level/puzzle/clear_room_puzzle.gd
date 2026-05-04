@@ -2,9 +2,14 @@ extends PuzzleDef
 class_name ClearRoomPuzzle
 ## Locks a door behind clearing all enemies inside a target room. At apply
 ## time we snapshot every enemy whose position falls inside the room's
-## AABB and one-shot-connect each of their `died` signals to the door's
-## unlock(). The door is configured with unlocks_required = enemy_count;
-## each kill decrements the counter; the door opens when zero.
+## AABB and connect each of their `died` signals to our unlock handler.
+## The door is configured with unlocks_required = enemy_count; each kill
+## decrements the counter; the door opens when zero.
+##
+## Charm-aware: charming an enemy emits `died`, which counts as a "kill"
+## for the purpose of this puzzle. If the charm is later released (player
+## death, FIFO eviction), the enemy emits `revived` and we re-lock one
+## slot on the door so it stays gated until the enemy actually dies.
 ##
 ## Empty rooms (no enemies inside the AABB) leave the door unlocked from
 ## the start — there's nothing to gate against. Reset hand-off works via
@@ -15,6 +20,10 @@ class_name ClearRoomPuzzle
 @export var door_connection_id: StringName = &""
 
 var _door: PrototypeDoor
+# Track which guards have already been counted (died / charmed) so a
+# guard that was charmed (died emitted) then actually killed doesn't
+# double-decrement the counter. Keyed by instance ID.
+var _counted: Dictionary = {}
 
 
 func apply(ctx: LevelBuildContext, _slots: Dictionary, doors: Dictionary) -> void:
@@ -51,12 +60,28 @@ func apply(ctx: LevelBuildContext, _slots: Dictionary, doors: Dictionary) -> voi
 		_door.setup_lock(1, false, false)
 		return
 
+	_counted.clear()
 	_door.setup_lock(guards.size(), true, false)
 	for e in guards:
 		if e.has_signal(&"died"):
-			e.died.connect(_on_guard_died, CONNECT_ONE_SHOT)
+			e.died.connect(_on_guard_died.bind(e))
+		if e.has_signal(&"revived"):
+			e.revived.connect(_on_guard_revived.bind(e))
 
 
-func _on_guard_died() -> void:
+func _on_guard_died(guard: Node) -> void:
+	var id := guard.get_instance_id()
+	if _counted.has(id):
+		return
+	_counted[id] = true
 	if _door != null and is_instance_valid(_door):
 		_door.unlock()
+
+
+func _on_guard_revived(guard: Node) -> void:
+	var id := guard.get_instance_id()
+	if not _counted.has(id):
+		return
+	_counted.erase(id)
+	if _door != null and is_instance_valid(_door):
+		_door.relock_one()

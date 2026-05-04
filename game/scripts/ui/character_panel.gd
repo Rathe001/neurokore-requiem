@@ -109,10 +109,14 @@ func _on_theme_changed() -> void:
 		_credits_label.add_theme_color_override(&"font_color", p.credits)
 
 func _gui_input(event: InputEvent) -> void:
-	if _held_item != null and event is InputEventMouseButton:
-		var mb := event as InputEventMouseButton
-		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
-			var inside := _panel_node != null and _panel_node.get_global_rect().has_point(mb.global_position)
+	if not (event is InputEventMouseButton):
+		return
+	var mb := event as InputEventMouseButton
+	if not mb.pressed:
+		return
+	var inside := _panel_node != null and _panel_node.get_global_rect().has_point(mb.global_position)
+	if _held_item != null:
+		if mb.button_index == MOUSE_BUTTON_LEFT:
 			if inside:
 				_cancel_held()
 			else:
@@ -120,14 +124,30 @@ func _gui_input(event: InputEvent) -> void:
 				_clear_held()
 				get_tree().call_group(&"world_item_dropper", &"drop_item", item)
 			accept_event()
-		elif mb.pressed and mb.button_index == MOUSE_BUTTON_RIGHT:
+		elif mb.button_index == MOUSE_BUTTON_RIGHT:
 			_cancel_held()
 			accept_event()
+	elif mb.button_index == MOUSE_BUTTON_LEFT and not inside:
+		close_menu()
+		accept_event()
 
 func _unhandled_input(event: InputEvent) -> void:
-	if _held_item != null and event is InputEventMouseButton:
-		var mb := event as InputEventMouseButton
-		if mb.pressed and mb.button_index == MOUSE_BUTTON_RIGHT:
+	if _held_item != null:
+		if event is InputEventMouseButton:
+			var mb := event as InputEventMouseButton
+			if mb.pressed and mb.button_index == MOUSE_BUTTON_RIGHT:
+				_cancel_held()
+				get_viewport().set_input_as_handled()
+				return
+			# Left-click outside the panel drops the item into the world.
+			if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT and not visible:
+				var item := _held_item
+				_clear_held()
+				get_tree().call_group(&"world_item_dropper", &"drop_item", item)
+				get_viewport().set_input_as_handled()
+				return
+		# Escape cancels the held item at any time.
+		if event.is_action_pressed(&"ui_cancel"):
 			_cancel_held()
 			get_viewport().set_input_as_handled()
 			return
@@ -144,9 +164,23 @@ func is_holding_item() -> bool:
 func open_menu() -> void:
 	get_tree().call_group(&"ui_modal", &"close_menu")
 	visible = true
+	# If the player re-opens the panel while still holding an item,
+	# reparent the cursor back so slot placement works normally.
+	if _held_cursor != null and _held_cursor.get_parent() != self:
+		_held_cursor.get_parent().remove_child(_held_cursor)
+		add_child(_held_cursor)
+		_update_slot_highlights()
 
 func close_menu() -> void:
-	_cancel_held()
+	if _held_item != null:
+		# Keep the held item alive — player can drop it into the world
+		# after closing the panel, or press Escape / right-click to cancel.
+		# Reparent the cursor so it stays visible while the panel is hidden.
+		if _held_cursor != null and _held_cursor.get_parent() == self:
+			remove_child(_held_cursor)
+			get_parent().add_child(_held_cursor)
+	else:
+		_cancel_held()
 	visible = false
 
 func _on_slot_clicked(slot: ItemSlot) -> void:
@@ -236,6 +270,8 @@ func _clear_held() -> void:
 		_held_cursor.queue_free()
 		_held_cursor = null
 	_clear_slot_highlights()
+	# Re-show the panel's own content if hidden by close_menu.
+	# Slot highlights were already cleared above.
 
 func _show_held_cursor(item: Item) -> void:
 	if _held_cursor != null:

@@ -46,7 +46,7 @@ func is_extra_weapon_slot(slot: StringName) -> bool:
 const MAIN_TYPES: Array[String] = [
 	"1H Weapon", "2H Weapon",
 	"Head Armor", "Chest Armor", "Gloves", "Boots",
-	"Belt", "Mainboard", "Backpack", "Recon",
+	"Belt", "Mainboard", "Backpack", "Recon", "Grenade",
 ]
 
 # main_type → slot lookup. Both weapon variants resolve to the same slot
@@ -63,6 +63,7 @@ const MAIN_TYPE_TO_SLOT: Dictionary = {
 	"Mainboard":   &"mainboard",
 	"Backpack":    &"backpack",
 	"Recon":       &"recon",
+	"Grenade":     &"offhand",
 }
 
 const MAIN_TYPE_GLYPH: Dictionary = {
@@ -77,6 +78,7 @@ const MAIN_TYPE_GLYPH: Dictionary = {
 	"Mainboard":   "⌬",
 	"Backpack":    "▤",
 	"Recon":       "✦",
+	"Grenade":     "◉",
 }
 
 

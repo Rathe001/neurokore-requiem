@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="Skill" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/skills/skill.gd" id="1_skill_script"]
+
+[resource]
+script = ExtResource("1_skill_script")
+display_name = "Frag Grenade"
+glyph = "◉"
+damage = 0
+skill_range = 0.0
+cooldown = 4.0
+wind_up = 0.0
+resource_cost = 8
+targeting_mode = 0
+cone_deg = 0.0
+knockback = 5.0
+icon_color = Color(1.0, 0.5, 0.2, 1.0)
+active_kind = 2
+blast_radius = 3.5
+grenade_type = 0

@@ -76,6 +76,7 @@ var _bake_right: Vector3 = Vector3.RIGHT
 var _bake_up: Vector3 = Vector3.FORWARD
 
 func _ready() -> void:
+	add_to_group(&"minimap")
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
@@ -109,6 +110,18 @@ func _ready() -> void:
 	_apply_layout()
 
 # ── Bake ──────────────────────────────────────────────────────────────────────
+
+## Public rebake entry point. Called after a level transition so the
+## minimap re-rasterizes the new floor geometry and resets panning.
+func rebake() -> void:
+	# Re-acquire the player ref in case it was recycled.
+	var players := get_tree().get_nodes_in_group(&"player")
+	if not players.is_empty():
+		_player = players[0] as Node3D
+		_radar.set_player(_player)
+	_bake_map()
+	_apply_layout()
+
 
 func _bake_map() -> void:
 	# D2-style abstract bake. Walk the &"minimap_walkable" group (every

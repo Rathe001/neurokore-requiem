@@ -6,17 +6,19 @@
 custom_minimum_size = Vector2(32, 32)
 offset_right = 32.0
 offset_bottom = 32.0
-mouse_filter = 2
+mouse_filter = 0
 script = ExtResource("1_slot_script")
 
 [node name="Background" type="ColorRect" parent="."]
 anchor_right = 1.0
 anchor_bottom = 1.0
+mouse_filter = 2
 color = Color(0.08, 0.08, 0.1, 0.9)
 
 [node name="Border" type="ColorRect" parent="."]
 anchor_right = 1.0
 anchor_bottom = 1.0
+mouse_filter = 2
 color = Color(0.35, 0.4, 0.5, 1)
 
 [node name="Frame" type="NinePatchRect" parent="."]
@@ -32,6 +34,7 @@ offset_right = -1.0
 offset_bottom = -1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
+mouse_filter = 2
 color = Color(0.08, 0.08, 0.1, 1)
 
 [node name="Icon" type="ColorRect" parent="."]
@@ -41,6 +44,7 @@ offset_right = -4.0
 offset_bottom = -4.0
 anchor_right = 1.0
 anchor_bottom = 1.0
+mouse_filter = 2
 color = Color(0.7, 0.9, 1, 1)
 
 [node name="CooldownOverlay" type="ColorRect" parent="."]
@@ -68,6 +72,7 @@ offset_left = -16.0
 offset_top = -12.0
 offset_right = -1.0
 offset_bottom = -1.0
+mouse_filter = 2
 theme_override_font_sizes/font_size = 9
 text = "LMB"
 horizontal_alignment = 2

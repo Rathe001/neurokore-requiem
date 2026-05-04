@@ -48,6 +48,13 @@ const WEAPON_BASE_PATHS: Dictionary = {
 	],
 }
 
+const GRENADE_BASE_PATHS: Array[String] = [
+	"res://resources/items/grenade_bases/frag.tres",
+	"res://resources/items/grenade_bases/incendiary.tres",
+	"res://resources/items/grenade_bases/cluster.tres",
+	"res://resources/items/grenade_bases/stun.tres",
+]
+
 # Optics variants — loaded from individual .tres files at _ready into
 # `_optics_variants`. Adding a new optic = author a new .tres in the optics
 # directory and add its path here. Per-variant tunables (range, energy,
@@ -89,6 +96,7 @@ func roll(main_type: String, item_level: int, rarity: StringName, rng: RandomNum
 		item.stat_modifiers[&"inventory_bonus"] = 8
 
 	_apply_weapon_base(item, main_type, rng)
+	_apply_grenade_base(item, main_type, rng)
 	_apply_optics_variant(item, main_type, rng)
 
 	var affix_labels: Array[String] = []
@@ -151,6 +159,81 @@ func roll_random(item_level: int, rng: RandomNumberGenerator) -> Item:
 	var pool := SlotRegistry.MAIN_TYPES
 	var main_type: String = pool[rng.randi_range(0, pool.size() - 1)]
 	return roll(main_type, item_level, rarity, rng)
+
+
+## Parse a debug loadout string like "Grenade:frag" or "1H Weapon:ranged_1h"
+## and return a rolled Item. Format: "MainType" or "MainType:base_id".
+## Offhand entries with a skill name (e.g. "Offhand:active_shield") load
+## the skill .tres directly and build a hand-constructed offhand.
+func roll_debug_entry(entry: String, item_level: int, rng: RandomNumberGenerator) -> Item:
+	var parts := entry.split(":", true, 1)
+	var main_type := parts[0].strip_edges()
+	var base_id := parts[1].strip_edges() if parts.size() > 1 else ""
+	# Grenade with specific base.
+	if main_type == "Grenade" and base_id != "":
+		for path in GRENADE_BASE_PATHS:
+			var base := load(path) as GrenadeBase
+			if base != null and base.id == StringName(base_id):
+				return _roll_grenade_from_base(base, item_level, rng)
+		push_warning("[ItemRoller] unknown grenade base_id: %s" % base_id)
+		return roll(main_type, item_level, &"common", rng)
+	# Weapon with specific base.
+	if (main_type == "1H Weapon" or main_type == "2H Weapon") and base_id != "":
+		var paths: Array = WEAPON_BASE_PATHS.get(main_type, [])
+		for path: String in paths:
+			var base := load(path) as WeaponBase
+			if base != null and base.id == StringName(base_id):
+				return roll_from_base(base, item_level, &"common", rng)
+		push_warning("[ItemRoller] unknown weapon base_id: %s" % base_id)
+		return roll(main_type, item_level, &"common", rng)
+	# Offhand with a skill name — load the skill .tres directly.
+	if main_type == "Offhand" and base_id != "":
+		var skill_path := "res://resources/skills/%s.tres" % base_id
+		if ResourceLoader.exists(skill_path):
+			var sk := load(skill_path) as Skill
+			if sk != null:
+				return _make_debug_offhand(sk, base_id)
+		push_warning("[ItemRoller] unknown offhand skill: %s" % base_id)
+	# Fallback — roll a random item of this type.
+	return roll(main_type, item_level, &"common", rng)
+
+
+func _roll_grenade_from_base(base: GrenadeBase, item_level: int, rng: RandomNumberGenerator) -> Item:
+	var item := Item.new()
+	item.main_type = "Grenade"
+	item.kind = SlotRegistry.slot_for_type("Grenade")
+	item.rarity = &"common"
+	item.id = StringName("debug_grenade_%d" % rng.randi())
+	item.glyph = SlotRegistry.glyph_for_type("Grenade")
+	item.glyph_color = RARITY_COLOR.get(&"common", Color.WHITE)
+	item.stat_modifiers = {}
+	item.weapon_base_id = base.id
+	item.sub_type = base.display_name
+	item.fire_skill = base.fire_skill
+	if base.glyph != "":
+		item.glyph = base.glyph
+	var dmin := int(round(rng.randf_range(base.damage_min_range.x, base.damage_min_range.y)))
+	var dmax := int(round(rng.randf_range(base.damage_max_range.x, base.damage_max_range.y)))
+	item.damage_min = mini(dmin, dmax)
+	item.damage_max = maxi(dmin, dmax)
+	item.crit_chance = rng.randf_range(base.crit_chance_range.x, base.crit_chance_range.y)
+	item.blast_radius = rng.randf_range(base.blast_radius_range.x, base.blast_radius_range.y)
+	item.name_key = base.display_name
+	return item
+
+
+func _make_debug_offhand(skill: Skill, label: String) -> Item:
+	var item := Item.new()
+	item.id = StringName("debug_offhand_%s" % label)
+	item.kind = &"offhand"
+	item.main_type = "Offhand"
+	item.sub_type = skill.display_name
+	item.glyph = SlotRegistry.glyph_for_type("Offhand")
+	item.glyph_color = Color(0.85, 0.95, 0.85, 1.0)
+	item.rarity = &"common"
+	item.name_key = skill.display_name
+	item.fire_skill = skill
+	return item
 
 func _class_slot_count(item_level: int, rng: RandomNumberGenerator) -> int:
 	if item_level <= ILVL_EARLY_MAX:
@@ -224,6 +307,28 @@ func _apply_weapon_base_direct(item: Item, base: WeaponBase, rng: RandomNumberGe
 	item.crit_chance = rng.randf_range(base.crit_chance_range.x, base.crit_chance_range.y)
 	item.accuracy = rng.randf_range(base.accuracy_range.x, base.accuracy_range.y)
 	item.weapon_range = rng.randf_range(base.weapon_range_range.x, base.weapon_range_range.y)
+
+func _apply_grenade_base(item: Item, main_type: String, rng: RandomNumberGenerator) -> void:
+	if main_type != "Grenade":
+		return
+	if GRENADE_BASE_PATHS.is_empty():
+		return
+	var path: String = GRENADE_BASE_PATHS[rng.randi_range(0, GRENADE_BASE_PATHS.size() - 1)]
+	var base := load(path) as GrenadeBase
+	if base == null:
+		push_warning("[ItemRoller] missing GrenadeBase: %s" % path)
+		return
+	item.weapon_base_id = base.id
+	item.sub_type = base.display_name
+	item.fire_skill = base.fire_skill
+	if base.glyph != "":
+		item.glyph = base.glyph
+	var dmin := int(round(rng.randf_range(base.damage_min_range.x, base.damage_min_range.y)))
+	var dmax := int(round(rng.randf_range(base.damage_max_range.x, base.damage_max_range.y)))
+	item.damage_min = mini(dmin, dmax)
+	item.damage_max = maxi(dmin, dmax)
+	item.crit_chance = rng.randf_range(base.crit_chance_range.x, base.crit_chance_range.y)
+	item.blast_radius = rng.randf_range(base.blast_radius_range.x, base.blast_radius_range.y)
 
 func _apply_optics_variant(item: Item, main_type: String, rng: RandomNumberGenerator) -> void:
 	if main_type != "Recon" or _optics_variants.is_empty():

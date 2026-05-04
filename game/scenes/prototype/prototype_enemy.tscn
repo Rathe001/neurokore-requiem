@@ -13,14 +13,14 @@ height = 1.7
 albedo_color = Color(0, 0, 0, 0)
 emission_enabled = true
 emission = Color(1.0, 0.3, 0.18, 1)
-emission_energy_multiplier = 3.0
+emission_energy_multiplier = 4.0
 shading_mode = 0
 transparency = 1
 
 [sub_resource type="TorusMesh" id="mesh_ring_enemy"]
 material = SubResource("mat_ring_enemy")
-inner_radius = 0.5
-outer_radius = 0.62
+inner_radius = 0.7
+outer_radius = 0.88
 
 [sub_resource type="ShaderMaterial" id="mat_health_bar"]
 render_priority = 10
@@ -44,7 +44,7 @@ enemy_class = ExtResource("class_basic_melee")
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0)
 
 [node name="FloorRing" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.03, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.06, 0)
 mesh = SubResource("mesh_ring_enemy")
 
 [node name="Collision" type="CollisionShape3D" parent="."]

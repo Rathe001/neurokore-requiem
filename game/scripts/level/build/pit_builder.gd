@@ -374,6 +374,7 @@ static func _build_pillar(ctx: LevelBuildContext, top_xz_center: Vector3, size: 
 
 	ctx.root.add_child(body)
 	body.add_to_group(&"structures")
+	body.add_to_group(&"minimap_walkable")
 
 
 # Ceiling-mounted spotlight pointing straight down on each pillar. Reads as

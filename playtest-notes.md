@@ -57,16 +57,42 @@ Especially:
 ## Findings (fill in during playtest)
 
 ### Confirmed working
--
+- First-time tooltip sizing — renders correctly on first hover
+- Item drop from inventory — drag-and-drop onto world works
+- Auto-interact on out-of-range objects — walks to target and triggers
+- Minimap rotation — correct direction (world slides down as player walks forward)
 
 ### Broken
--
+- **[BUG] Charmed enemy stuck hostile** — enemy loses hostile flag but keeps attacking the player. Cannot be killed, blocks door-unlock condition (room never clears). Likely a charmed-pet state that partially reverted.
+- **[BUG] Minimap desyncs on level transition** — after entering a new level, minimap shows stale/wrong geometry. Needs a full rebuild on level change.
+- **[BUG] Inventory drag-drop canceled on panel close** — if the player picks up an item in the inventory panel, closes the panel, then clicks the world, the drop is canceled. Should allow dropping into the world even after the panel closes. Escape key should also cancel the drag at any time.
+- **[BUG] Switches remain hoverable/usable after activation** — used switches should become inert (no hover highlight, no re-trigger), same treatment as corpses.
+- **[BUG] Minimap missing pillars and pits** — geometry for pillars and pits not rendered on the minimap.
 
 ### Feels wrong
--
+- **Enemy damage too high** — shields deplete fast, player still dies very quickly after. Needs a tuning pass (reduce base enemy damage or increase shield pools).
+- **Ranged enemy knockback feels bad** — with current density, constant knockback from ranged attacks makes the player bounce around the screen. Remove knockback from default ranged attacks; reserve it for special skills.
+- **Active Shield feedback unclear** — hard to tell when active shield is protecting you. Proposal: overlay a white bar on top of the HP bar while the full-block shield is active. Keep the border approach for Amp Shield but make it thicker.
+- **Open zones not large enough** — still feel corridory. D2's zones give a sense of being lost and unsure of direction; current arenas don't achieve that yet.
+- **Exit placement too predictable** — large open zones always have the exit in the same spot. Player never has to explore.
+- ~~**All enemies look identical**~~ — fixed: emission-based model tinting now clearly differentiates melee/ranged/support.
 
 ### Surprising / unexpected
--
+- (none beyond the bugs above)
+
+### Fixed this pass
+- **Charmed enemy soft-lock** — root cause: `apply_charm()` consumed the one-shot `died` signal for the door puzzle. When charm was released (player death/FIFO), the enemy's actual death no longer decremented the door counter. Fixed by adding a `revived` signal + `ClearRoomPuzzle` dedup tracking + `PrototypeDoor.relock_one()`.
+- **Minimap desync on level transition** — minimap baked once in `_ready()`, never rebaked. Added `rebake()` method and call from `prototype_root.gd` after level rebuild.
+- **Minimap missing pillars** — pillars weren't in the `minimap_walkable` group. Added `add_to_group(&"minimap_walkable")` to `_build_pillar()`.
+- **Ranged knockback removed** — enemy projectile `knockback_strength` set to 0.0 instead of inheriting melee knockback.
+- **Enemy model tinting** — switched from invisible 25% albedo blend to emission-based tinting (`emission_energy_multiplier = 0.45`) on all mesh surfaces. Floor ring enlarged (0.7/0.88 radii, raised to y=0.06, emission energy 4.0). Melee=red, ranged=blue, support=green now clearly readable.
+- **Active Shield white overlay** — added `_shield_overlay` ColorRect that tracks pool ratio. Amp Shield border thickened to 3px.
+- **Enemy damage reduced ~30%** — L1: 5-8 (was 8-12), L2: 10-14 (was 14-20), L3: 15-21 (was 22-30).
+- **Inventory drag persists after panel close** — held item stays attached to cursor when panel closes. Left-click world drops the item. Escape/right-click cancels. Reopening panel reparents cursor back for slot placement.
+- **Switches already disable after use** — code was already correct (disables picking, unregisters from SpatialGrid, greys out lamp). Visual distinction may need to be more dramatic.
+
+### Not addressed yet (level gen tuning)
+- Open zones too small / exit placement too predictable — requires level generation changes, deferred to next pass.
 
 ---
 

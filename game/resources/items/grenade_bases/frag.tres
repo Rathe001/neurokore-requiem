@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="GrenadeBase" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/grenade_base.gd" id="1_grenade_base"]
+[ext_resource type="Resource" path="res://resources/skills/grenade_frag.tres" id="2_fire_skill"]
+
+[resource]
+script = ExtResource("1_grenade_base")
+id = &"frag"
+display_name = "Frag Grenade"
+glyph = "◉"
+damage_min_range = Vector2(10, 16)
+damage_max_range = Vector2(20, 30)
+blast_radius_range = Vector2(3.0, 4.0)
+crit_chance_range = Vector2(0.06, 0.12)
+fire_skill = ExtResource("2_fire_skill")

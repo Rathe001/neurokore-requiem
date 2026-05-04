@@ -31,7 +31,7 @@ static func buff_lines_for_stat(stat_id: StringName, player: PrototypePlayer) ->
 			if dot > 0.0:
 				var dmg_mult := AttributeState.get_player_damage_mult(PlayerState.class_id, PlayerState.spec_id)
 				var per_tick: float = dot * dmg_mult
-				var dps: int = int(round(per_tick / PrototypePlayer.DOOMSAYER_TICK_INTERVAL))
+				var dps: int = int(round(per_tick / PlayerDoomsayer.DOOMSAYER_TICK_INTERVAL))
 				lines.append("Aura of Dread: %d dps aura" % dps)
 		&"ing":
 			if player != null:

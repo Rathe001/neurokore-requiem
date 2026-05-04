@@ -150,6 +150,18 @@ func unlock() -> void:
 	locked = false
 	_refresh_tint()
 
+
+## Re-increment the lock counter by one. Used by ClearRoomPuzzle when a
+## charmed guard reverts to hostile — the door counted the charm as a
+## "kill" and needs to un-count it. No-op when the door is already
+## physically open (player already walked through).
+func relock_one() -> void:
+	if _open:
+		return
+	_unlocks_remaining += 1
+	locked = true
+	_refresh_tint()
+
 # Group dispatch from PrototypeEnemy._die() when a boss falls. Only doors
 # flagged with unlock_on_boss subscribe.
 func on_boss_died(_boss: Node) -> void:

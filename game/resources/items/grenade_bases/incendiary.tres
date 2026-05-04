@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="GrenadeBase" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/grenade_base.gd" id="1_grenade_base"]
+[ext_resource type="Resource" path="res://resources/skills/grenade_incendiary.tres" id="2_fire_skill"]
+
+[resource]
+script = ExtResource("1_grenade_base")
+id = &"incendiary"
+display_name = "Incendiary Grenade"
+glyph = "◉"
+damage_min_range = Vector2(8, 12)
+damage_max_range = Vector2(16, 24)
+blast_radius_range = Vector2(2.5, 3.5)
+crit_chance_range = Vector2(0.04, 0.08)
+fire_skill = ExtResource("2_fire_skill")

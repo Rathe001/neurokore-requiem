@@ -93,6 +93,16 @@ func _ready() -> void:
 	AttributeState.stats_changed.connect(_on_stats_changed)
 	_build_layout()
 
+func _gui_input(event: InputEvent) -> void:
+	if not (event is InputEventMouseButton):
+		return
+	var mb := event as InputEventMouseButton
+	if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
+		var inside := _panel != null and _panel.get_global_rect().has_point(mb.global_position)
+		if not inside:
+			close_menu()
+			accept_event()
+
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed(&"toggle_talents"):
 		if visible:

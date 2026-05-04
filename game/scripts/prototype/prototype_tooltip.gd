@@ -277,6 +277,24 @@ func show_item(item: Item) -> void:
 
 	_resize_then_show()
 
+func show_skill(skill: Skill, source: Item) -> void:
+	if _lmb_held:
+		return
+	if skill == null:
+		hide_tooltip()
+		return
+	_text_label.visible = false
+	_name_label.text = skill.display_name
+	_name_label.add_theme_color_override(&"font_color", skill.icon_color)
+	_name_label.visible = true
+	_type_label.visible = false
+	_desc_label.visible = false
+	var stats := _build_skill_stats_text(skill, source)
+	_stats_label.text = stats
+	_stats_label.visible = not stats.is_empty()
+	_resize_then_show()
+
+
 func show_talent_node(title: String, body: String) -> void:
 	if _lmb_held:
 		return
@@ -378,9 +396,11 @@ func _build_stats_text(item: Item) -> String:
 				lines.append("Shield Pool: %d" % pool_total)
 				lines.append("Cooldown on Break: %.1fs" % sk.cooldown)
 			Skill.ActiveKind.GRENADE:
-				lines.append("Damage: %d" % sk.damage)
-				lines.append("Range: %.1f m" % sk.skill_range)
+				var radius := item.blast_radius if item.blast_radius > 0.0 else sk.blast_radius
+				lines.append("Blast Radius: %.1f m" % radius)
 				lines.append("Cooldown: %.1fs" % sk.cooldown)
+				if sk.resource_cost > 0:
+					lines.append("Resource Cost: %d" % sk.resource_cost)
 	# Weapon / combat stats
 	if item.damage_max > 0:
 		lines.append("Damage: %d–%d" % [item.damage_min, item.damage_max])
@@ -423,3 +443,71 @@ func _build_stats_text(item: Item) -> String:
 func _stat_display_name(stat_id: StringName) -> String:
 	var key: StringName = AttributeState.STAT_I18N.get(stat_id, &"")
 	return tr(key) if key != &"" else (stat_id as String).capitalize()
+
+
+func _build_skill_stats_text(skill: Skill, source: Item) -> String:
+	var lines: Array[String] = []
+	match skill.active_kind:
+		Skill.ActiveKind.SHIELD_HOLD:
+			var bonus: int = source.get_modifier(&"shield_pool_bonus") if source != null else 0
+			lines.append("Damage Block: 100%")
+			lines.append("Shield Pool: %d" % (skill.shield_pool + bonus))
+			lines.append("Cooldown on Break: %.1fs" % skill.cooldown)
+		Skill.ActiveKind.SHIELD_BUFF:
+			var bonus: int = source.get_modifier(&"shield_pool_bonus") if source != null else 0
+			lines.append("Damage Reduction: %d%%" % int(round(skill.damage_reduction * 100.0)))
+			lines.append("Shield Pool: %d" % (skill.shield_pool + bonus))
+			lines.append("Duration: %ds" % int(round(skill.duration)))
+			lines.append("Cooldown on Break: %.1fs" % skill.cooldown)
+		Skill.ActiveKind.GRENADE:
+			if source != null and source.damage_max > 0:
+				lines.append("Damage: %d–%d" % [source.damage_min, source.damage_max])
+			elif skill.damage > 0:
+				lines.append("Damage: %d" % skill.damage)
+			var radius := source.blast_radius if source != null and source.blast_radius > 0.0 else skill.blast_radius
+			lines.append("Blast Radius: %.1f m" % radius)
+			if source != null and source.crit_chance > 0.0:
+				lines.append("Crit: %d%%" % int(source.crit_chance * 100))
+			if skill.knockback > 0.0:
+				lines.append("Knockback: %.1f" % skill.knockback)
+			lines.append("Cooldown: %.1fs" % skill.cooldown)
+			if skill.resource_cost > 0:
+				lines.append("Resource Cost: %d" % skill.resource_cost)
+			match skill.grenade_type:
+				Skill.GrenadeType.FRAG:
+					lines.append("[color=#ff8844]Frag: standard explosion[/color]")
+				Skill.GrenadeType.INCENDIARY:
+					lines.append("[color=#ff4422]Incendiary: bonus burn damage[/color]")
+				Skill.GrenadeType.CLUSTER:
+					lines.append("[color=#bb88ff]Cluster: splits into 3 sub-grenades[/color]")
+				Skill.GrenadeType.STUN:
+					lines.append("[color=#88aaff]Stun: staggers enemies[/color]")
+		_:
+			# Standard weapon skill (cone, aoe, projectile, hitscan).
+			if source != null and source.damage_max > 0:
+				lines.append("Damage: %d–%d" % [source.damage_min, source.damage_max])
+			elif skill.damage > 0:
+				lines.append("Damage: %d" % skill.damage)
+			if source != null and source.attack_speed != 1.0:
+				lines.append("Speed: %.2f" % source.attack_speed)
+			if source != null and source.crit_chance > 0.0:
+				lines.append("Crit: %d%%" % int(source.crit_chance * 100))
+			if source != null and source.accuracy < 1.0:
+				lines.append("Accuracy: %d%%" % int(source.accuracy * 100))
+			var eff_range := source.weapon_range if source != null and source.weapon_range > 0.0 else skill.skill_range
+			if eff_range > 0.0:
+				lines.append("Range: %.1f m" % eff_range)
+			if skill.cooldown > 0.0:
+				lines.append("Cooldown: %.1fs" % skill.cooldown)
+			if skill.resource_cost > 0:
+				lines.append("Resource Cost: %d" % skill.resource_cost)
+			match skill.targeting_mode:
+				Skill.TargetingMode.SINGLE_CONE:
+					lines.append("Targeting: Cone %d°" % int(skill.cone_deg))
+				Skill.TargetingMode.AOE_RADIAL:
+					lines.append("Targeting: AoE Radial")
+				Skill.TargetingMode.PROJECTILE:
+					lines.append("Targeting: Projectile")
+				Skill.TargetingMode.HITSCAN:
+					lines.append("Targeting: Hitscan")
+	return "\n".join(lines)

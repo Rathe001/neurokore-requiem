@@ -56,7 +56,6 @@ const CROUCH_SPEED_FACTOR := 0.45
 # Movement multiplier while holding the Active Shield (SHIELD_HOLD).
 # 20% — the player is essentially planted; the trade is full damage
 # block + still being able to attack. SHIELD_BUFF doesn't apply.
-const SHIELD_HOLD_SPEED_FACTOR := 0.2
 const STAND_HEIGHT := 1.6
 const CROUCH_HEIGHT := 0.9
 const GRAVITY := 22.0
@@ -129,23 +128,8 @@ var _lock_target: Node3D = null
 # WASD input, target invalidation, or a fresh click on something else.
 var _walk_to_interact_target: Node3D = null
 
-# Active-offhand SHIELD_BUFF state. Toggled on by RMB activation of a
-# shield-generator offhand; absorbs damage_reduction fraction of every
-# incoming hit, debiting the absorbed amount from _shield_buff_pool
-# until the pool drains, then enters cooldown for skill.cooldown
-# seconds. Cleared on offhand unequip.
-var _shield_buff_active: bool = false
-var _shield_buff_pool: int = 0
-var _shield_buff_pool_max: int = 0
-var _shield_buff_reduction: float = 0.0
-var _shield_buff_cooldown_remain: float = 0.0
-var _shield_buff_cooldown_total: float = 0.0
-var _shield_buff_duration_remain: float = 0.0
-# Discriminates the active shield's archetype. SHIELD_BUFF runs the
-# duration-based set-and-forget flow; SHIELD_HOLD watches RMB each
-# tick, drops on release without cooldown, and refreshes the pool
-# only on a press from the broken state.
-var _shield_buff_kind: Skill.ActiveKind = Skill.ActiveKind.NONE
+var _shield: PlayerShield
+var _grenade: PlayerGrenade
 
 ## Called by pickups/interactables to suppress the fire input this frame.
 func consume_click() -> void:
@@ -160,12 +144,10 @@ var _resource_last_int: int = 0
 var _credits: int = 0
 var _death_tween: Tween
 var _hit_flash_tween: Tween
-var _telekinesis_t: float = 0.0
-var _doomsayer_t: float = 0.0
-var _doomsayer_aura: DoomsayerAura = null
-var _drones: Array[PrototypeDrone] = []
-var _ied_traps: Array[PrototypeTrap] = []
-var _charmed_enemies: Array[PrototypeEnemy] = []
+var _telekinesis: PlayerTelekinesis
+var _doomsayer: PlayerDoomsayer
+var _drone_swarm: PlayerDroneSwarm
+var _ied: PlayerIED
 var _spawn_position: Vector3 = Vector3.ZERO
 var _equipped_light: Light3D
 var _scanner_active: bool = false
@@ -199,6 +181,9 @@ func _ready() -> void:
 	_combat = PlayerCombat.new()
 	_combat.setup(self)
 	add_child(_combat)
+	_telekinesis = PlayerTelekinesis.new()
+	_telekinesis.setup(self)
+	add_child(_telekinesis)
 	_camera = get_viewport().get_camera_3d()
 	_fps_camera = Camera3D.new()
 	_fps_camera.position = FPS_HEAD_OFFSET
@@ -228,15 +213,23 @@ func _ready() -> void:
 	spec_id = PlayerState.spec_id
 	PlayerState.leveled_up.connect(_on_player_leveled_up)
 	AttributeState.stats_changed.connect(_recompute_stat_bonuses)
-	# Reconcile the Automaton drone pool whenever the perk aggregate
-	# could change — perk recompute (gear swap, tier crossing) and
-	# class/spec swap. Death/respawn paths also call _reconcile_drones
-	# directly so dying despawns the swarm. Initial bootstrap call
-	# happens in _ready_post_setup below; PerkState._ready may have
-	# already fired its first perks_changed before our connect lands.
-	PerkState.perks_changed.connect(_reconcile_drones)
-	PerkState.perks_changed.connect(_reconcile_charms)
-	PerkState.perks_changed.connect(_reconcile_doomsayer_aura)
+	_drone_swarm = PlayerDroneSwarm.new()
+	_drone_swarm.setup(self)
+	add_child(_drone_swarm)
+	_ied = PlayerIED.new()
+	_ied.setup(self)
+	add_child(_ied)
+	PerkState.perks_changed.connect(_drone_swarm.reconcile)
+	_doomsayer = PlayerDoomsayer.new()
+	_doomsayer.setup(self)
+	add_child(_doomsayer)
+	_shield = PlayerShield.new()
+	_shield.setup(self)
+	add_child(_shield)
+	_grenade = PlayerGrenade.new()
+	_grenade.setup(self)
+	add_child(_grenade)
+	PerkState.perks_changed.connect(_doomsayer.reconcile)
 	_base_max_health = max_health
 	if resource_pool != null:
 		_base_resource_max = resource_pool.max_value
@@ -272,19 +265,7 @@ func _ready() -> void:
 	# the enemy's CROUCH_PROBE_HEIGHT pattern.
 	_stand_test_shape.height = STAND_HEIGHT - CROUCH_HEIGHT
 	_build_stat_vfx()
-	# Initial drone reconcile — PerkState may have already fired its first
-	# perks_changed before our connect landed (autoload-vs-scene order),
-	# so seed the drone pool here.
-	_reconcile_drones()
-	# Charm list is empty at boot but call the reconcile anyway so the
-	# wiring matches the drone pattern (and a respec at the title screen
-	# that drops the cap before any procs land doesn't get a free turn).
-	_reconcile_charms()
-	# Build the Doomsayer miasma aura node and seed its tier from the
-	# current perk state. Same autoload-vs-scene-order safety as drones.
-	_doomsayer_aura = DoomsayerAura.new()
-	add_child(_doomsayer_aura)
-	_reconcile_doomsayer_aura()
+	_drone_swarm.reconcile()
 
 func _build_stat_vfx() -> void:
 	if _base_mat == null or visual == null:
@@ -316,6 +297,33 @@ func _apply_debug_overrides() -> void:
 	if cfg.starting_credits > 0:
 		_credits = cfg.starting_credits
 		credits_changed.emit(_credits)
+	if not cfg.starter_loadout.is_empty():
+		_apply_debug_loadout(cfg.starter_loadout)
+
+
+func _apply_debug_loadout(entries: PackedStringArray) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var ilvl := maxi(1, PlayerState.level)
+	for entry in entries:
+		if entry.strip_edges().is_empty():
+			continue
+		var item: Item = ItemRoller.roll_debug_entry(entry, ilvl, rng)
+		if item == null:
+			continue
+		var slot: StringName = item.kind
+		if slot != &"" and InventoryState.get_equipped(slot) == null:
+			InventoryState.set_equipped(slot, item)
+		else:
+			InventoryState.add_to_inventory(item)
+
+func is_alive() -> bool:
+	return _alive
+
+
+func is_player_friendly(target: Node) -> bool:
+	return _combat.is_player_friendly(target)
+
 
 func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_strength: float = 0.0) -> void:
 	if not _alive:
@@ -323,30 +331,9 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 	if DebugState.config != null and DebugState.config.god_mode:
 		return
 	# Knockback reduction from the active shield. Computed BEFORE the
-	# damage absorption block so a shield that breaks on this very
-	# hit still grants its knockback protection — the player was
-	# shielded when the hit landed. SHIELD_HOLD blocks all knockback
-	# (full guard); SHIELD_BUFF scales it by the same factor as its
-	# damage reduction so the two stay symmetric and the buff feels
-	# weight-consistent (gentler block, gentler stagger).
-	if _shield_buff_active and knockback_strength > 0.0:
-		match _shield_buff_kind:
-			Skill.ActiveKind.SHIELD_HOLD:
-				knockback_strength = 0.0
-			Skill.ActiveKind.SHIELD_BUFF:
-				knockback_strength *= maxf(1.0 - _shield_buff_reduction, 0.0)
-	# Shield buff: absorb a fraction of the incoming hit, debit the
-	# absorbed amount from the pool, and break the shield (start its
-	# cooldown) when the pool drains. The reduced damage continues to
-	# the HP path so the player still takes the unabsorbed portion.
-	if _shield_buff_active and _shield_buff_reduction > 0.0:
-		var absorbed: int = mini(int(ceil(float(amount) * _shield_buff_reduction)), _shield_buff_pool)
-		amount = maxi(amount - absorbed, 0)
-		_shield_buff_pool -= absorbed
-		if _shield_buff_pool <= 0:
-			_break_shield_buff()
-		else:
-			_emit_shield_buff_changed()
+	var shield_result := _shield.absorb_damage(amount, knockback_strength)
+	amount = shield_result.amount
+	knockback_strength = shield_result.knockback
 	_health = max(_health - amount, 0)
 	health_changed.emit(_health, max_health)
 	_hit_flash_tween = HitFlash.play(self, visual, _hit_flash_tween)
@@ -452,9 +439,10 @@ func _physics_process(delta: float) -> void:
 	_update_lock_target()
 	_combat.tick_cooldowns(delta)
 	_tick_resource_regen(delta)
-	_tick_telekinesis(delta)
-	_tick_shield_buff(delta)
-	_tick_doomsayer(delta)
+	_telekinesis.tick(delta)
+	_shield.tick(delta)
+	_doomsayer.tick(delta)
+	_grenade.tick(delta)
 
 	var on_floor := is_on_floor()
 
@@ -509,7 +497,7 @@ func _physics_process(delta: float) -> void:
 			# trade for full damage block is being a near-stationary
 			# target. Buff (SHIELD_BUFF) doesn't slow; it's a passive
 			# 25% reduction that shouldn't impact mobility.
-			var shield_factor: float = SHIELD_HOLD_SPEED_FACTOR if _shield_buff_active and _shield_buff_kind == Skill.ActiveKind.SHIELD_HOLD else 1.0
+			var shield_factor: float = _shield.get_speed_factor()
 			var speed := move_speed * (CROUCH_SPEED_FACTOR if _crouching else 1.0) * (0.5 if _backing else 1.0) * shield_factor
 			var flat := Vector2(velocity.x, velocity.z)
 			var target := Vector2(wish_dir.x, wish_dir.z) * speed
@@ -794,68 +782,6 @@ const LMB_MULTI_STAGGER_FALLBACK := 1.0
 const ARM_OFFSET_LATERAL := 0.5
 const ARM_OFFSET_VERTICAL := 1.0
 
-## Polymath Telekinesis — auto-fires every TELEKINESIS_INTERVAL seconds when
-## Effects.get_aggregate(&"telekinesis_bolts") > 0. N bolts per trigger
-## (sourced from the aggregate, capped sensibly). Each bolt picks one
-## enemy in TELEKINESIS_RANGE — bolts within the same trigger pick distinct
-## targets when possible — and spawns a TelekinesisGrab on it. The grab
-## lifts the enemy over 2s, slams it back to the ground, and deals direct
-## + radial AoE damage on impact. Damage scales with main stat (Clarity
-## for Polymath); the BASE value is intentionally low because the
-## multiplier scales aggressively with stat investment (a T3 Polymath
-## has ~10×).
-const TELEKINESIS_INTERVAL := 6.0
-const TELEKINESIS_RANGE := 12.0
-const TELEKINESIS_BASE_DAMAGE := 13    # was 8 (which felt weak); 25 was the original one-shot value
-const TELEKINESIS_BOLT_STAGGER := 0.12
-const TELEKINESIS_MAX_BOLTS := 8       # safety cap for future stacking sources
-
-## Enculted Doomsayer aura — every DOOMSAYER_TICK_INTERVAL seconds the
-## aura runs two passes over enemies in radius: a CHARM pass (the perk
-## itself, capped by doomsayer_max_charms) and an optional DAMAGE pass
-## (gated by the "Aura of Dread" talent, magnitude in the
-## doomsayer_dot_per_tick TalentState aggregate). Charm is persistent
-## (held in _charmed_enemies, no timer); DoT applies per-tick scaled by
-## linear distance falloff. Aura radius scales per tier so the visible
-## mist sphere (DoomsayerAura.RADIUS_PER_TIER) exactly matches the
-## proc-eligible area.
-const DOOMSAYER_AURA_RADIUS_PER_TIER: Array[float] = [0.0, 5.0, 7.0, 9.0]
-const DOOMSAYER_TICK_INTERVAL := 0.4
-const DOOMSAYER_MAX_CHARMS_CAP := 8      # safety ceiling for the charm list, well above current T3 (3)
-
-## Survivalist IED — every LMB attack tosses a trap at the cursor while
-## the perk is active. The active set is FIFO-capped at the perk
-## aggregate; a trap detonates when an enemy enters its proximity radius
-## or after 15s of idle. Damage scales with main stat (Ingenuity),
-## captured by the trap on spawn so respec mid-trap-life doesn't change
-## its yield. Higher tiers shorten the arming window — the trap pulses
-## visibly during arm and won't detonate until the timer drains.
-const IED_TRAP_SCENE: PackedScene = preload("res://scenes/prototype/prototype_trap.tscn")
-const IED_MAX_TRAPS_CAP := 8
-# Indexed by IED tier (1/2/3 = Survivalist tiers I/II/III). Index 0 is
-# unused (reconciled away by the max_traps gate), but kept for clean
-# indexing without an off-by-one. Tier 1 sits at 2s so the player has to
-# place the trap ahead of an incoming enemy; T3's 0.6s is closer to a
-# "drop and forget" feel as the perk matures.
-const IED_ARM_DELAY_BY_TIER: Array[float] = [0.0, 2.0, 1.2, 0.6]
-# Cap on cursor placement distance from the player. Beyond this, the
-# trap snaps to the max-range point along the cursor direction — keeps
-# the perk from being a long-range artillery spam, and stops the player
-# from baiting through walls they can't see past.
-const IED_MAX_PLACEMENT_RANGE := 8.0
-
-## Automaton Drone Swarm — N hover drones spawned from the
-## `automaton_drones` perk aggregate. Drones are children of the player's
-## parent so they keep world-space transforms (their own CharacterBody3D
-## move_and_slide owns the position; parenting under the player would
-## fight that with the player's transform). They look the player up via
-## setup(). _reconcile_drones runs on perks_changed and on death/respawn
-## to add or remove drones to match the aggregate; it clamps against
-## AUTOMATON_MAX_DRONES as a safety ceiling.
-const DRONE_SCENE: PackedScene = preload("res://scenes/prototype/prototype_drone.tscn")
-const AUTOMATON_MAX_DRONES := 8
-
-
 # LMB attack path. Iterates every active weapon slot (main + Amalgamation
 # extras), fires each whose slot cooldown is ready, and staggers their
 # windups so the volley reads as a sequence not a single click. Each
@@ -950,11 +876,7 @@ func _cast_lmb_combat() -> void:
 
 	_face_direction(aim)
 	_play_anim(ANIM_ATTACK, 1.4)
-	# Survivalist IED — drop a trap at the cursor every LMB. No-op when
-	# the perk isn't active. Placed here (not inside the per-slot loop) so
-	# a Forged-Amalgamation 4-arm volley still tosses ONE trap per click,
-	# not four.
-	_toss_ied_trap()
+	_ied.toss_trap(_cursor_offset())
 	# Block input until the LAST staggered fire resolves — otherwise the
 	# player could re-click before the volley completes and the per-slot
 	# cooldown gate becomes the only thing preventing double-firing of
@@ -992,7 +914,18 @@ func _cast_skill(skill: Skill) -> void:
 	# fire pipeline — they own state machines that don't fit the
 	# one-shot cone/aoe/projectile/hitscan model.
 	if skill.active_kind != Skill.ActiveKind.NONE:
-		_activate_offhand_skill(skill)
+		match skill.active_kind:
+			Skill.ActiveKind.SHIELD_BUFF, Skill.ActiveKind.SHIELD_HOLD:
+				_shield.activate_offhand_skill(skill)
+			Skill.ActiveKind.GRENADE:
+				if _grenade.is_on_cooldown():
+					return
+				var infinite_res := DebugState.config != null and DebugState.config.infinite_resource
+				if skill.resource_cost > 0 and not infinite_res and _resource_current < float(skill.resource_cost):
+					return
+				if skill.resource_cost > 0:
+					_spend_resource(skill.resource_cost)
+				_grenade.activate(skill, _cursor_offset())
 		return
 	_interacting = false
 	if _combat.is_on_cooldown(skill):
@@ -1037,359 +970,28 @@ func _tick_resource_regen(delta: float) -> void:
 	_emit_resource_if_changed()
 
 
-# Polymath Telekinesis tick. Reads the perk aggregate every frame; when
-# the cooldown elapses, picks distinct targets up-front and fires staggered
-# bolts so a T3 4-bolt trigger reads as a sequence, not one chord. Targets
-# are bound by closure to each scheduled callback so a fresh enemy walking
-# in mid-stagger doesn't get pulled into a later bolt.
-func _tick_telekinesis(delta: float) -> void:
-	if not _alive:
-		return
-	var bolts := mini(int(round(Effects.get_aggregate(&"telekinesis_bolts"))), TELEKINESIS_MAX_BOLTS)
-	if bolts <= 0:
-		return
-	_telekinesis_t -= delta
-	if _telekinesis_t > 0.0:
-		return
-	_telekinesis_t = TELEKINESIS_INTERVAL
-	var targets := _pick_telekinesis_targets(bolts)
-	if targets.is_empty():
-		return
-	var dmg := int(round(float(TELEKINESIS_BASE_DAMAGE) * AttributeState.get_player_damage_mult(class_id, spec_id)))
-	for i in targets.size():
-		var captured_target: Node3D = targets[i]
-		if i == 0:
-			_spawn_telekinesis_grab(captured_target, dmg)
-		else:
-			get_tree().create_timer(TELEKINESIS_BOLT_STAGGER * float(i)).timeout.connect(
-				func() -> void: _spawn_telekinesis_grab(captured_target, dmg),
-				CONNECT_ONE_SHOT)
-
-
-# Pick up to `count` distinct enemies in TELEKINESIS_RANGE, shuffled.
-# Returning fewer than `count` is fine — the extra bolts just don't
-# fire (better than re-grabbing the same enemy four times). Filters
-# out anything already in State.GRABBED so a previous trigger's lingering
-# grab doesn't get hijacked.
-func _pick_telekinesis_targets(count: int) -> Array[Node3D]:
-	var pool: Array[Node3D] = []
-	for n in SpatialGrid.query_radius(global_position, TELEKINESIS_RANGE, &"enemies"):
-		if not (n is Node3D) or not is_instance_valid(n):
-			continue
-		if not n.has_method(&"apply_grab"):
-			continue
-		# Skip player-friendly (charmed) enemies — Telekinesis lifting
-		# our own allies would be friendly fire.
-		if n.has_method(&"is_player_friendly") and n.is_player_friendly():
-			continue
-		# Perks respect line-of-sight — can't yank an enemy through a
-		# wall any more than we can charm or DoT one through it.
-		if not LosCuller.has_los_to_player(n):
-			continue
-		pool.append(n)
-	if pool.is_empty():
-		return []
-	pool.shuffle()
-	if pool.size() <= count:
-		return pool
-	return pool.slice(0, count)
-
-
-func _spawn_telekinesis_grab(target: Node3D, dmg: int) -> void:
-	if not _alive or target == null or not is_instance_valid(target):
-		return
-	var grab := TelekinesisGrab.new()
-	grab.setup(self, target, dmg)
-	get_parent().add_child(grab)
-
-
-# Enculted Doomsayer aura tick. Up to two passes per tick:
-#   1. CHARM (perk) — if the charm list is below the per-tier cap, find
-#      the nearest uncharmed enemy in range and charm it. The cap acts
-#      as a natural rate-limit: charms keep flowing until full, then
-#      stop until one of the controlled enemies dies (which makes room).
-#   2. DAMAGE OVER TIME (talent — Aura of Dread) — every uncharmed enemy
-#      in the aura takes base_dot × distance_falloff damage. Linear
-#      falloff: 100% at the player's centre, 0% at the radius. The
-#      damage pass runs only when the talent is allocated; with no
-#      points spent, the aura is pure mind-control.
-# Charmed enemies are immune to both passes (they're allies — see
-# is_player_friendly() on the enemy side).
-func _tick_doomsayer(delta: float) -> void:
-	if not _alive:
-		return
-	var tier := AttributeState.get_unlocked_tier(&"amb", PlayerState.class_id, PlayerState.spec_id)
-	if tier <= 0:
-		return
-	_doomsayer_t -= delta
-	if _doomsayer_t > 0.0:
-		return
-	_doomsayer_t = DOOMSAYER_TICK_INTERVAL
-	var radius: float = DOOMSAYER_AURA_RADIUS_PER_TIER[clampi(tier, 0, 3)]
-	if radius <= 0.0:
-		return
-	# DoT is gated by the "Aura of Dread" talent (AMB T1 N0). Zero with no
-	# allocation = damage loop is skipped entirely; the aura still runs to
-	# do its charm work below. Future DoT-shaping talents (extra ticks,
-	# reduced falloff, etc.) plug into the same TalentState aggregate keys.
-	var dot_per_tick: float = TalentState.get_aggregate(&"doomsayer_dot_per_tick")
-	var dmg_mult := AttributeState.get_player_damage_mult(class_id, spec_id)
-	# Resolve the charm slot situation up-front so we don't redo work
-	# per enemy. apply_charm is best-effort — when at cap we just don't
-	# try (no FIFO eviction; charms hold until the controlled enemy
-	# dies, then a new charm naturally fills the slot).
-	var max_charms := mini(int(round(Effects.get_aggregate(&"doomsayer_max_charms"))), DOOMSAYER_MAX_CHARMS_CAP)
-	_prune_charm_list()
-	var charm_capacity := max_charms - _charmed_enemies.size()
-	# Track the closest charmable candidate as we walk the radius
-	# query — committing to it after the loop avoids charming several
-	# enemies per tick (the "should happen much more frequently" feel
-	# is per-tick = ~2.5/sec; one new charm per tick is plenty).
-	var charm_candidate: PrototypeEnemy = null
-	var charm_candidate_dist_sq := INF
-	for n in SpatialGrid.query_radius(global_position, radius, &"enemies"):
-		if not (n is PrototypeEnemy) or not is_instance_valid(n):
-			continue
-		var enemy: PrototypeEnemy = n
-		# Skip player-friendly (charmed) enemies — they're our allies.
-		if enemy.is_player_friendly():
-			continue
-		# Perk effects respect line-of-sight: an enemy behind a wall
-		# can't be charmed or DoT'd through the geometry. LosCuller is
-		# updated every other physics tick, so up to one frame of
-		# staleness — invisible at the aura's 0.4s cadence.
-		if not LosCuller.has_los_to_player(enemy):
-			continue
-		var dist := global_position.distance_to(enemy.global_position)
-		var falloff := clampf(1.0 - dist / radius, 0.0, 1.0)
-		# DoT — round to int for take_damage; falloff scaling can produce
-		# tiny values which would otherwise floor to zero, so we max(1)
-		# anything in range to keep the aura from feeling dead at the edge.
-		# Skip entirely when the talent isn't allocated (dot_per_tick = 0).
-		if dot_per_tick > 0.0 and falloff > 0.0 and enemy.has_method(&"take_damage"):
-			var dmg_f := dot_per_tick * falloff * dmg_mult
-			var dmg := maxi(1, int(round(dmg_f)))
-			enemy.take_damage(dmg, global_position, 0.0)
-		# Charm tracking — only consider candidates if we have capacity,
-		# AND only normal-rarity enemies (bosses / named / rare-pack are
-		# immune; otherwise the closest-elite would block charming forever).
-		if charm_capacity > 0 and enemy.is_charmable():
-			var d2 := global_position.distance_squared_to(enemy.global_position)
-			if d2 < charm_candidate_dist_sq:
-				charm_candidate_dist_sq = d2
-				charm_candidate = enemy
-	if charm_candidate != null and charm_capacity > 0:
-		if charm_candidate.apply_charm():
-			_charmed_enemies.append(charm_candidate)
-			_emit_charm_count_changed()
-
-
 # Public accessors for the buff bar. Live counts of the per-spec
 # entity lists the player owns — charmed pets (AMB), IED traps (ING),
 # orbiting drones (OPT). Max counters are derived from the perk
 # aggregates so the HUD can render "X/Y" without re-reading internals.
 func get_charm_count() -> int:
-	return _charmed_enemies.size()
+	return _doomsayer.get_charm_count()
 
 
 func get_charm_max() -> int:
-	return mini(int(round(Effects.get_aggregate(&"doomsayer_max_charms"))), DOOMSAYER_MAX_CHARMS_CAP)
+	return _doomsayer.get_charm_max()
 
 
 func get_trap_count() -> int:
-	return _ied_traps.size()
+	return _ied.get_trap_count()
 
 
 func get_trap_max() -> int:
-	return mini(int(round(Effects.get_aggregate(&"ied_max_traps"))), IED_MAX_TRAPS_CAP)
+	return _ied.get_trap_max()
 
 
 func get_drone_count() -> int:
-	return _drones.size()
-
-
-func _emit_charm_count_changed() -> void:
-	charm_count_changed.emit(_charmed_enemies.size(), get_charm_max())
-
-
-# Compact the charm list — drops freed / dead / corpse'd entries.
-# Called by _tick_doomsayer before computing capacity, and by the
-# external reconcile helpers below. Emits the charm_count_changed
-# signal when the list size actually shrunk so the HUD count stays
-# in sync as pets die in combat.
-func _prune_charm_list() -> void:
-	var prev_size := _charmed_enemies.size()
-	var live: Array[PrototypeEnemy] = []
-	for e in _charmed_enemies:
-		if e != null and is_instance_valid(e) and e.is_in_group(&"enemies"):
-			live.append(e)
-		elif e != null and is_instance_valid(e):
-			# Defensive release in case the entry's _charmed flag
-			# survived a death path that skipped release_grab.
-			e.release_charm()
-	_charmed_enemies = live
-	if _charmed_enemies.size() != prev_size:
-		_emit_charm_count_changed()
-
-
-# Release every active charm. Called from _die so charms don't persist
-# across the player's death — design says "until the player dies." On
-# respawn the list is empty and refills naturally as the aura procs.
-func _clear_charms() -> void:
-	var had_any := not _charmed_enemies.is_empty()
-	for e in _charmed_enemies:
-		if e != null and is_instance_valid(e):
-			e.release_charm()
-	_charmed_enemies.clear()
-	if had_any:
-		_emit_charm_count_changed()
-
-
-# Trim the charm list down to the current cap. Called on perks_changed
-# (gear / tier crossing / class swap / respec) so a tier downgrade or
-# class swap doesn't leave above-cap charms hanging until the next proc
-# lazily evicts them. Mirrors the drone reconcile pattern. Always FIFO-
-# evicts from the front so the player's freshest charm wins.
-func _reconcile_charms() -> void:
-	_prune_charm_list()
-	# When dead, target is zero — _die clears immediately, this just
-	# protects against a perk recompute landing during the death-hold.
-	var target := 0
-	if _alive:
-		target = mini(int(round(Effects.get_aggregate(&"doomsayer_max_charms"))), DOOMSAYER_MAX_CHARMS_CAP)
-	while _charmed_enemies.size() > target:
-		var oldest: PrototypeEnemy = _charmed_enemies.pop_front()
-		if oldest != null and is_instance_valid(oldest):
-			oldest.release_charm()
-	# Emit even when neither the list size nor the cap changed — keeps
-	# the HUD synced with cap-only updates (e.g. tier crossing that
-	# raises max_charms without immediately filling the new slots).
-	_emit_charm_count_changed()
-
-
-# Update the Doomsayer aura's tier readout. Reads the unlocked AMB tier
-# directly (rather than dividing the proc aggregate) so the aura visually
-# matches the actual tier the player has — including auto-grant of T1
-# for spec primary stats, which the aggregate alone wouldn't reflect.
-# Force-tier-zero on death so the miasma doesn't keep glowing on the
-# corpse during the respawn delay.
-func _reconcile_doomsayer_aura() -> void:
-	if _doomsayer_aura == null:
-		return
-	var tier := 0
-	if _alive and PlayerState.class_id != &"":
-		tier = AttributeState.get_unlocked_tier(&"amb", PlayerState.class_id, PlayerState.spec_id)
-	_doomsayer_aura.set_tier(tier)
-
-
-# Toss an IED trap at the cursor's world position. Called from the LMB
-# combat path after weapons fire — no-op when the perk isn't unlocked or
-# the cursor projection failed (off-screen / camera missing). Active set
-# is FIFO-capped: at the cap, the oldest trap is force-detonated cheaply
-# (queue_free without explosion) so the new one can take its place — the
-# perk is "max N traps active," not "lose all your DPS while at cap."
-func _toss_ied_trap() -> void:
-	if not _alive:
-		return
-	var max_traps := mini(int(round(Effects.get_aggregate(&"ied_max_traps"))), IED_MAX_TRAPS_CAP)
-	if max_traps <= 0:
-		return
-	var cursor_offset := _cursor_offset()
-	if cursor_offset.length_squared() < 0.0001:
-		return
-	# Clamp cursor offset to the placement range. Aiming past max range
-	# drops the trap at max range along the cursor direction instead of
-	# either failing silently or letting the player place arbitrarily
-	# far. Using length_squared first avoids a sqrt when the offset is
-	# already inside range.
-	var max_sq := IED_MAX_PLACEMENT_RANGE * IED_MAX_PLACEMENT_RANGE
-	if cursor_offset.length_squared() > max_sq:
-		cursor_offset = cursor_offset.normalized() * IED_MAX_PLACEMENT_RANGE
-	# Prune any traps that detonated themselves before computing the cap —
-	# otherwise a trap that exploded last frame still counts toward the
-	# cap on this frame's toss and the player loses a slot to a ghost.
-	var live: Array[PrototypeTrap] = []
-	for t in _ied_traps:
-		if t != null and is_instance_valid(t):
-			live.append(t)
-	_ied_traps = live
-	while _ied_traps.size() >= max_traps:
-		var oldest: PrototypeTrap = _ied_traps.pop_front()
-		if oldest != null and is_instance_valid(oldest):
-			oldest.queue_free()
-	# IED tier drives the arm delay — read the unlocked Ingenuity tier
-	# rather than dividing the aggregate, so spec-primary auto-grant
-	# works for Survivalist (T1 free even at 0% allocation).
-	var tier := AttributeState.get_unlocked_tier(&"ing", PlayerState.class_id, PlayerState.spec_id)
-	var arm_delay: float = IED_ARM_DELAY_BY_TIER[clampi(tier, 1, IED_ARM_DELAY_BY_TIER.size() - 1)]
-	var trap: PrototypeTrap = IED_TRAP_SCENE.instantiate()
-	# Set arm_delay BEFORE add_child so the trap's _ready uses it
-	# (otherwise _ready captures the @export default and we'd have to
-	# re-set _arm_remain after the fact).
-	trap.arm_delay = arm_delay
-	get_parent().add_child(trap)
-	# Snap to player Y so traps sit on the floor regardless of cursor
-	# projection altitude. _cursor_offset already projects against the
-	# player's Y plane, so adding it gives the cursor's world position at
-	# floor level.
-	trap.global_position = global_position + cursor_offset
-	_ied_traps.append(trap)
-
-
-# Reconcile the active drone count with the perk aggregate. Called on
-# perks_changed (gear / tier crossing / class swap) and on death/respawn.
-# Spawns missing drones up to the target count; despawns extras off the
-# end (drones are interchangeable — orbit_index gets reassigned to keep
-# the swarm visually evenly spaced after a despawn). Drone parents are
-# the player's parent (the world root) so they don't ride the player's
-# own _process and jitter against the camera.
-func _reconcile_drones() -> void:
-	# Prune any drones that were freed externally before computing target.
-	var live: Array[PrototypeDrone] = []
-	for d in _drones:
-		if d != null and is_instance_valid(d):
-			live.append(d)
-	_drones = live
-	# When dead, target is zero — _die clears immediately, this just
-	# protects against a perk recompute landing during the death-hold.
-	var target := 0
-	if _alive:
-		target = mini(int(round(Effects.get_aggregate(&"automaton_drones"))), AUTOMATON_MAX_DRONES)
-	# Despawn extras from the end. Existing drones keep their wander state
-	# across reconciles — we don't re-call setup() on survivors, since that
-	# would re-roll their offsets and reset cooldowns every perk recompute.
-	while _drones.size() > target:
-		var d: PrototypeDrone = _drones.pop_back()
-		if d != null and is_instance_valid(d):
-			d.queue_free()
-	# Spawn any missing drones. Parent to world root so they don't stack-
-	# transform with the player (the drone's CharacterBody3D owns its own
-	# world-space position via move_and_slide).
-	var parent := get_parent()
-	while _drones.size() < target and parent != null:
-		var d := DRONE_SCENE.instantiate() as PrototypeDrone
-		if d == null:
-			break
-		parent.add_child(d)
-		# Spawn at the player so the wander seek doesn't yank from world
-		# origin on the first physics tick.
-		d.global_position = global_position + Vector3(0.0, 1.6, 0.0)
-		d.setup(self)
-		_drones.append(d)
-
-
-func _clear_drones() -> void:
-	for d in _drones:
-		if d != null and is_instance_valid(d):
-			d.queue_free()
-	_drones.clear()
-
-
-func _clear_ied_traps() -> void:
-	for t in _ied_traps:
-		if t != null and is_instance_valid(t):
-			t.queue_free()
-	_ied_traps.clear()
+	return _drone_swarm.get_drone_count()
 
 
 func _spend_resource(amount: int) -> void:
@@ -1416,34 +1018,21 @@ func get_credits() -> int:
 	return _credits
 
 func get_cooldown_ratio(skill: Skill) -> float:
-	# Active offhands keep their cooldown on the player (they don't go
-	# through PlayerCombat's per-skill _cooldowns dict). Both SHIELD_BUFF
-	# and SHIELD_HOLD share the same _shield_buff_cooldown_* state, so
-	# route both kinds through the player-side timers.
-	if skill != null and _is_shield_skill(skill):
-		if _shield_buff_cooldown_total <= 0.0:
-			return 0.0
-		return clampf(_shield_buff_cooldown_remain / _shield_buff_cooldown_total, 0.0, 1.0)
+	if skill != null and _shield.is_shield_skill(skill):
+		return _shield.get_cooldown_ratio(skill)
+	if skill != null and _grenade.is_grenade_skill(skill):
+		return _grenade.get_cooldown_ratio(skill)
 	return _combat.get_cooldown_ratio(skill)
 
 
-# Seconds remaining on a skill's cooldown. Used by SkillSlot to render
-# a numeric countdown overlay alongside the existing fill animation.
-# Returns 0.0 when the skill is ready (or no skill / no cooldown).
 func get_cooldown_remain(skill: Skill) -> float:
 	if skill == null:
 		return 0.0
-	if _is_shield_skill(skill):
-		return maxf(_shield_buff_cooldown_remain, 0.0)
+	if _shield.is_shield_skill(skill):
+		return _shield.get_cooldown_remain(skill)
+	if _grenade.is_grenade_skill(skill):
+		return _grenade.get_cooldown_remain(skill)
 	return _combat.get_cooldown_remain(skill)
-
-
-# Helper for the cooldown routing — both shield archetypes share the
-# player-side cooldown machinery (a SHIELD_HOLD that breaks goes on
-# cooldown the same way a SHIELD_BUFF that breaks does). Future
-# active kinds with their own cooldown state add their kind here.
-func _is_shield_skill(skill: Skill) -> bool:
-	return skill.active_kind == Skill.ActiveKind.SHIELD_BUFF or skill.active_kind == Skill.ActiveKind.SHIELD_HOLD
 
 # Public entry for the Count Exile expire callback. PrototypeEnemy._tick_curse
 # calls this when the curse timer drains; we forward to PlayerCombat where
@@ -1455,22 +1044,11 @@ func fire_exile_shot(target: Node3D) -> void:
 func _die() -> void:
 	_alive = false
 	died.emit()
-	# Drop the drone swarm — they shouldn't keep firing while the player
-	# is in death-hold. Respawn re-spawns them via _reconcile_drones.
-	_clear_drones()
-	# Same for IED traps — leftover traps in the world after death feels
-	# wrong; they re-populate naturally on the next attack post-respawn.
-	_clear_ied_traps()
-	# Doomsayer charms release on player death — the design pins charm
-	# lifetime to "until you die or a new charm bumps you out." Without
-	# this, post-respawn the player would inherit the pre-death charms.
-	_clear_charms()
-	# Active offhand state too — no point keeping a buff alive past
-	# death-hold; the player re-presses RMB after respawn to re-activate.
-	_clear_shield_buff()
-	# Hide the miasma aura too — _alive is now false so reconcile reads
-	# tier 0 and switches off particles + light spill.
-	_reconcile_doomsayer_aura()
+	_drone_swarm.cleanup()
+	_ied.cleanup()
+	_doomsayer.cleanup()
+	_shield.cleanup()
+	_grenade.cleanup()
 	var played := _play_anim(ANIM_DEATH, 1.0)
 	if not played and anim_player != null:
 		anim_player.pause()
@@ -1502,10 +1080,8 @@ func respawn() -> void:
 	_health = max_health
 	_alive = true
 	_combat.clear_cooldowns()
-	# Re-spawn the drone swarm now that the player is back in play.
-	_reconcile_drones()
-	# Restore the Doomsayer miasma to its current tier.
-	_reconcile_doomsayer_aura()
+	_drone_swarm.reconcile()
+	_doomsayer.reconcile()
 	if visual != null:
 		visual.scale = Vector3.ONE
 	if resource_pool != null:
@@ -1637,161 +1213,20 @@ func _on_equipment_changed(slot: StringName) -> void:
 		# No stacking: removing the offhand drops every effect it
 		# granted. Re-equipping a different shield offhand requires
 		# the player to re-press RMB to activate.
-		_clear_shield_buff()
+		_shield.cleanup()
 
 func _on_items_overflowed(overflow: Array[Item]) -> void:
 	for displaced_item in overflow:
 		drop_item(displaced_item)
 
 
-# ── Active offhand: SHIELD_BUFF (and forward-facing dispatcher) ──────────────
-
-# Routes an active-kind skill to its handler. SHIELD_BUFF and
-# SHIELD_HOLD share the activation function (they differ in
-# duration vs. hold-release semantics, handled inside). GRENADE
-# is its own branch when implemented.
-func _activate_offhand_skill(skill: Skill) -> void:
-	match skill.active_kind:
-		Skill.ActiveKind.SHIELD_BUFF, Skill.ActiveKind.SHIELD_HOLD:
-			_activate_shield(skill)
-		_:
-			pass
-
-
-# Activate a shield offhand. SHIELD_BUFF: sets duration, locks in
-# damage_reduction, treats activation as "consume the skill" (full
-# pool). SHIELD_HOLD: no duration (held until break or release);
-# 100% reduction; pool refreshes only when activating from a fully
-# broken state (cooldown gates re-pressing during cooldown). Pool
-# persistence across release/press cycles is what stops the SHIELD_HOLD
-# from being refreshed via tap-spam.
-#
-# Pool can be amplified by the offhand item's `shield_pool_bonus`
-# stat modifier (future ItemRoller path).
-func _activate_shield(skill: Skill) -> void:
-	if _shield_buff_active:
-		return
-	if _shield_buff_cooldown_remain > 0.0:
-		return
-	var bonus_pool: int = 0
-	var offhand: Item = InventoryState.get_equipped(&"offhand")
-	if offhand != null:
-		bonus_pool = offhand.get_modifier(&"shield_pool_bonus")
-	var fresh_pool_max := maxi(skill.shield_pool + bonus_pool, 1)
-	var refresh_pool := false
-	if skill.active_kind == Skill.ActiveKind.SHIELD_BUFF:
-		# Buff ALWAYS refreshes — it's a one-shot "cast the buff"
-		# action, not a re-engageable ability.
-		refresh_pool = true
-		_shield_buff_reduction = clampf(skill.damage_reduction, 0.0, 1.0)
-		_shield_buff_duration_remain = maxf(skill.duration, 0.1)
-	else:
-		# Hold: refresh ONLY when starting from a fully broken state
-		# (cooldown blocks re-press during the cooldown window). This
-		# keeps the partial-pool persistence across release/press
-		# cycles within a single shield "lifetime".
-		refresh_pool = _shield_buff_pool <= 0
-		_shield_buff_reduction = 1.0
-		_shield_buff_duration_remain = 0.0
-	if refresh_pool:
-		_shield_buff_pool_max = fresh_pool_max
-		_shield_buff_pool = fresh_pool_max
-	_shield_buff_cooldown_total = maxf(skill.cooldown, 0.1)
-	_shield_buff_kind = skill.active_kind
-	_shield_buff_active = true
-	_emit_shield_buff_changed()
-
-
-# Voluntary HOLD release — drop the shield, keep the pool. Caller is
-# the per-tick input check, not the player. No cooldown applies.
-func _release_shield_hold() -> void:
-	if not _shield_buff_active or _shield_buff_kind != Skill.ActiveKind.SHIELD_HOLD:
-		return
-	_shield_buff_active = false
-	_emit_shield_buff_changed()
-
-
-# Pool drained mid-duration — drop the buff and start the cooldown.
-# Distinct from _expire_shield_buff: a break is a "you got overwhelmed"
-# punishment, an expiry is "your shield ran its course safely".
-func _break_shield_buff() -> void:
-	_shield_buff_active = false
-	_shield_buff_pool = 0
-	_shield_buff_duration_remain = 0.0
-	_shield_buff_cooldown_remain = _shield_buff_cooldown_total
-	_emit_shield_buff_changed()
-
-
-# Duration ran out without the pool draining — drop the buff WITHOUT
-# starting a cooldown. The player can re-cast immediately. This rewards
-# defensive timing (camping the shield somewhere safe) without making
-# the offhand free-spam.
-func _expire_shield_buff() -> void:
-	_shield_buff_active = false
-	_shield_buff_pool = 0
-	_shield_buff_duration_remain = 0.0
-	_emit_shield_buff_changed()
-
-
-# Force-clear shield state (called when the offhand is unequipped or
-# the player dies). Skips cooldown — there's no buff to recover from.
-func _clear_shield_buff() -> void:
-	if not _shield_buff_active and _shield_buff_pool_max == 0 and _shield_buff_cooldown_remain <= 0.0:
-		return
-	_shield_buff_active = false
-	_shield_buff_pool = 0
-	_shield_buff_pool_max = 0
-	_shield_buff_reduction = 0.0
-	_shield_buff_cooldown_remain = 0.0
-	_shield_buff_cooldown_total = 0.0
-	_shield_buff_duration_remain = 0.0
-	_shield_buff_kind = Skill.ActiveKind.NONE
-	_emit_shield_buff_changed()
-
-
-# Tick the active duration (BUFF), the post-break cooldown (both),
-# and the per-frame HOLD release detection. Hooked in
-# _physics_process. Emits on lifecycle transitions (duration expire,
-# cooldown complete, hold release, hold re-press auto-activate) but
-# NOT every frame — that would spam HUD repaints.
-func _tick_shield_buff(delta: float) -> void:
-	if _shield_buff_active:
-		match _shield_buff_kind:
-			Skill.ActiveKind.SHIELD_BUFF:
-				_shield_buff_duration_remain -= delta
-				if _shield_buff_duration_remain <= 0.0:
-					_expire_shield_buff()
-			Skill.ActiveKind.SHIELD_HOLD:
-				if not Input.is_action_pressed(&"alt_fire"):
-					_release_shield_hold()
-	elif _shield_buff_cooldown_remain > 0.0:
-		_shield_buff_cooldown_remain = maxf(0.0, _shield_buff_cooldown_remain - delta)
-		if _shield_buff_cooldown_remain <= 0.0:
-			_emit_shield_buff_changed()
-
-
-func _emit_shield_buff_changed() -> void:
-	shield_buff_changed.emit(_shield_buff_active, _shield_buff_pool, _shield_buff_pool_max, _shield_buff_reduction, _shield_buff_cooldown_remain, _shield_buff_cooldown_total, _shield_buff_duration_remain)
-
-
-# Public read for HUD lookup of the active shield's archetype, so the
-# buff bar entry can differentiate label/tooltip by kind without
-# the HUD pulling raw enum values out of state Dicts.
 func get_shield_buff_kind() -> Skill.ActiveKind:
-	return _shield_buff_kind
+	return _shield.get_shield_buff_kind()
 
 
-# Public read for HUD / tooltip consumers.
 func get_shield_buff_state() -> Dictionary:
-	return {
-		"active": _shield_buff_active,
-		"pool": _shield_buff_pool,
-		"pool_max": _shield_buff_pool_max,
-		"reduction": _shield_buff_reduction,
-		"cooldown_remain": _shield_buff_cooldown_remain,
-		"cooldown_total": _shield_buff_cooldown_total,
-		"duration_remain": _shield_buff_duration_remain,
-	}
+	return _shield.get_shield_buff_state()
+
 
 func drop_item(item: Item) -> void:
 	var parent := get_parent()

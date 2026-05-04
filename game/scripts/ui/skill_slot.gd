@@ -27,6 +27,9 @@ var _cooldown_label: Label = null
 func _ready() -> void:
 	_apply_theme()
 	UIThemeState.changed.connect(_apply_theme)
+	mouse_entered.connect(_on_mouse_entered)
+	mouse_exited.connect(_on_mouse_exited)
+	tree_exiting.connect(_on_mouse_exited)
 	_cooldown_dim = ColorRect.new()
 	_cooldown_dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_cooldown_dim.color = Color(0.0, 0.0, 0.0, 0.65)
@@ -39,9 +42,9 @@ func _ready() -> void:
 	move_child(_cooldown_dim, cooldown_overlay.get_index())
 	_cooldown_label = Label.new()
 	_cooldown_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_cooldown_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_cooldown_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_cooldown_label.add_theme_font_size_override(&"font_size", 13)
+	_cooldown_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_cooldown_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+	_cooldown_label.add_theme_font_size_override(&"font_size", 8)
 	_cooldown_label.add_theme_color_override(&"font_color", Color.WHITE)
 	_cooldown_label.add_theme_color_override(&"font_outline_color", Color(0, 0, 0, 1))
 	_cooldown_label.add_theme_constant_override(&"outline_size", 2)
@@ -105,3 +108,27 @@ func _process(_delta: float) -> void:
 		var remain: float = _player.get_cooldown_remain(_skill)
 		_cooldown_label.text = "%d" % int(ceil(remain)) if remain >= 1.0 else "%.1f" % remain
 		_cooldown_label.visible = true
+
+
+func _on_mouse_entered() -> void:
+	if _skill == null:
+		return
+	var source: Item = _resolve_source_item()
+	get_tree().call_group(&"interactable_tooltip", &"show_skill", _skill, source)
+
+
+func _on_mouse_exited() -> void:
+	if is_inside_tree():
+		get_tree().call_group(&"interactable_tooltip", &"hide_tooltip")
+
+
+func _resolve_source_item() -> Item:
+	var weapon: Item = InventoryState.get_equipped(&"weapon")
+	if weapon != null:
+		if weapon.fire_skill == _skill or weapon.alt_fire_skill == _skill:
+			return weapon
+	var offhand: Item = InventoryState.get_equipped(&"offhand")
+	if offhand != null:
+		if offhand.fire_skill == _skill or offhand.alt_fire_skill == _skill:
+			return offhand
+	return null

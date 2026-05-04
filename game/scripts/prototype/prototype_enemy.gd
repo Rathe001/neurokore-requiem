@@ -2,6 +2,7 @@ extends CharacterBody3D
 class_name PrototypeEnemy
 
 signal died
+signal revived
 
 # Knockback decays quadratically over this window so enemies coast to a stop
 # instead of snapping back to chase mid-shove. Pre-decay this was a hard
@@ -114,9 +115,9 @@ const LEVEL_HP_RANGE: Array[Vector2i] = [
 ]
 const LEVEL_DAMAGE_RANGE: Array[Vector2i] = [
 	Vector2i(0, 0),
-	Vector2i(8, 12),
-	Vector2i(14, 20),
-	Vector2i(22, 30),
+	Vector2i(5, 8),
+	Vector2i(10, 14),
+	Vector2i(15, 21),
 ]
 # Floor-ring emission color per level. Higher levels glow hotter so a player
 # can read threat at a glance from across the room.
@@ -423,12 +424,15 @@ func _apply_level_stats() -> void:
 	# headline visual cue. Otherwise the ring colour communicates the
 	# enemy's COMBAT TYPE — melee / ranged / support — so the player
 	# can read a pack at a glance and pick targets accordingly.
+	var tint_color: Color
 	if named_monster != null:
-		_apply_floor_ring_tint_color(named_monster.ring_tint)
+		tint_color = named_monster.ring_tint
 	elif not affixes.is_empty() and affixes[0] != null:
-		_apply_floor_ring_tint_color(affixes[0].ring_tint)
+		tint_color = affixes[0].ring_tint
 	else:
-		_apply_floor_ring_tint_color(_class_ring_color())
+		tint_color = _class_ring_color()
+	_apply_floor_ring_tint_color(tint_color)
+	_apply_model_tint(tint_color)
 	# Visual scale: named > 1.0 boosts the model. Don't scale otherwise (a
 	# multi-affix rare keeps the base size — only named encounters earn the
 	# silhouette change).
@@ -457,6 +461,7 @@ func _apply_boss_stats() -> void:
 	if visual != null:
 		visual.scale = Vector3.ONE * BOSS_VISUAL_SCALE
 	_apply_floor_ring_tint_color(BOSS_RING_EMISSION)
+	_apply_model_tint(BOSS_RING_EMISSION)
 	add_to_group(&"bosses")
 
 func _roll_display_name() -> void:
@@ -496,14 +501,56 @@ func _apply_floor_ring_tint_color(color: Color) -> void:
 		_floor_ring_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		_floor_ring_mat.albedo_color = Color(0, 0, 0, 0)
 		_floor_ring_mat.emission_enabled = true
-		_floor_ring_mat.emission_energy_multiplier = 3.0
+		_floor_ring_mat.emission_energy_multiplier = 4.0
 	_floor_ring_mat.emission = color
 	floor_ring.material_override = _floor_ring_mat
+
+
+## Adds an emissive glow to every mesh surface in the model so the player can
+## tell melee (warm), ranged (cool), and support (green) enemies apart at a
+## glance. Uses emission rather than albedo tinting because the glb meshes may
+## use texture atlases that wash out a subtle albedo shift.
+func _apply_model_tint(color: Color) -> void:
+	if visual == null:
+		return
+	_tint_recursive(visual, color)
+
+
+func _tint_recursive(node: Node, color: Color) -> void:
+	if node is MeshInstance3D:
+		_tint_mesh(node as MeshInstance3D, color)
+	for child in node.get_children():
+		_tint_recursive(child, color)
+
+
+func _tint_mesh(mesh_inst: MeshInstance3D, color: Color) -> void:
+	var surface_count := mesh_inst.mesh.get_surface_count() if mesh_inst.mesh != null else 0
+	if surface_count == 0:
+		return
+	for i in surface_count:
+		var base_mat := mesh_inst.get_active_material(i)
+		if base_mat is StandardMaterial3D:
+			var mat := (base_mat as StandardMaterial3D).duplicate() as StandardMaterial3D
+			mat.emission_enabled = true
+			mat.emission = color
+			mat.emission_energy_multiplier = 0.45
+			mesh_inst.set_surface_override_material(i, mat)
+		else:
+			# Non-StandardMaterial3D (shader mat, etc.) — create a fresh
+			# override that preserves the base albedo feel with a tinted glow.
+			var mat := StandardMaterial3D.new()
+			mat.emission_enabled = true
+			mat.emission = color
+			mat.emission_energy_multiplier = 0.45
+			mesh_inst.set_surface_override_material(i, mat)
+
 
 ## Called by EntityPool.release() before pooling. Disconnects stale listeners.
 func _pool_release() -> void:
 	for conn in died.get_connections():
 		died.disconnect(conn["callable"])
+	for conn in revived.get_connections():
+		revived.disconnect(conn["callable"])
 	_hovered = false
 	_tooltip_locked = false
 	# Clear level + boss flag so the next reset() re-rolls cleanly. Spawners
@@ -1012,6 +1059,11 @@ func release_charm() -> void:
 		_clear_affliction_marker()
 	_update_health_bar()
 	_refresh_tooltip_if_hovered()
+	# Notify puzzles that this guard is hostile again. ClearRoomPuzzle
+	# counted this enemy as "cleared" when charm emitted died — revived
+	# un-counts it so the door re-locks until the enemy actually dies.
+	if _is_alive():
+		revived.emit()
 
 
 ## Polymath Telekinesis grab — flips the enemy into State.GRABBED so the
@@ -1854,7 +1906,7 @@ func _spawn_enemy_projectile(aim: Vector3) -> void:
 	proj.direction = aim
 	proj.speed = enemy_class.projectile_speed
 	proj.max_range = enemy_class.projectile_max_range
-	proj.knockback_strength = enemy_class.melee_knockback  # reuse the field — enemy projectiles inherit the same impact knockback
+	proj.knockback_strength = 0.0  # no knockback on default ranged attacks — reserve for special skills
 	proj.source_position = global_position
 	var dmg := int(round(float(_attack_damage) * _outgoing_damage_mult()))
 	proj.damage_min = dmg

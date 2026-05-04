@@ -57,6 +57,7 @@ var _banner_token: int = 0
 # active OR on cooldown) and the buff-bar "Shield" entry's tooltip.
 var _shield_state: Dictionary = {"active": false, "pool": 0, "pool_max": 0, "reduction": 0.0, "cooldown_remain": 0.0, "cooldown_total": 0.0, "duration_remain": 0.0}
 var _shield_outline: ReferenceRect = null
+var _shield_overlay: ColorRect = null
 # White → red lerp colours for the HP-bar outline. Above
 # _SHIELD_OUTLINE_RED_THRESHOLD the outline stays full white;
 # below, it lerps toward red so the player can see the shield
@@ -514,6 +515,21 @@ func _build_shield_outline() -> void:
 	_shield_outline.visible = false
 	hp_bg.get_parent().add_child(_shield_outline)
 
+	# White overlay bar — covers the HP fill when SHIELD_HOLD (full block)
+	# is active, signaling "your HP is fully protected." Width tracks the
+	# shield pool ratio so the player sees the absorb pool drain. Sits above
+	# the HP fill in z-order via add_child ordering.
+	_shield_overlay = ColorRect.new()
+	_shield_overlay.color = Color(1.0, 1.0, 1.0, 0.35)
+	_shield_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_shield_overlay.visible = false
+	# Same inset as hp_fill so it layers directly on top.
+	_shield_overlay.offset_left = hp_fill.offset_left
+	_shield_overlay.offset_top = hp_fill.offset_top
+	_shield_overlay.offset_right = hp_fill.offset_right
+	_shield_overlay.offset_bottom = hp_fill.offset_bottom
+	hp_bg.get_parent().add_child(_shield_overlay)
+
 
 func _on_shield_buff_changed(active: bool, pool: int, pool_max: int, reduction: float, cooldown_remain: float, cooldown_total: float, duration_remain: float) -> void:
 	_shield_state = {
@@ -535,6 +551,8 @@ func _on_shield_buff_changed(active: bool, pool: int, pool_max: int, reduction: 
 		# Hidden when no offhand, or just cleared.
 		var show: bool = active or cooldown_remain > 0.0 or hold_ready
 		_shield_outline.visible = show
+		# Thicker border for Amp Shield (partial DR) so it reads at a glance.
+		_shield_outline.border_width = 3.0 if kind == Skill.ActiveKind.SHIELD_BUFF else 2.0
 		if show:
 			if active and pool_max > 0:
 				# Lerp from white to red below the threshold; full white
@@ -550,6 +568,16 @@ func _on_shield_buff_changed(active: bool, pool: int, pool_max: int, reduction: 
 				_shield_outline.border_color = _SHIELD_OUTLINE_HOLD_READY
 			else:
 				_shield_outline.border_color = _SHIELD_OUTLINE_COOLDOWN
+
+	# White overlay for SHIELD_HOLD — covers the HP bar to signal full
+	# protection. Width tracks pool ratio so the bar visually drains.
+	if _shield_overlay != null:
+		var shield_reduction: float = _shield_state.get("reduction", 0.0)
+		var is_hold_active: bool = active and pool_max > 0 and shield_reduction >= 1.0
+		_shield_overlay.visible = is_hold_active
+		if is_hold_active:
+			var pool_ratio := clampf(float(pool) / float(pool_max), 0.0, 1.0)
+			_shield_overlay.offset_right = _shield_overlay.offset_left + HP_BAR_WIDTH * pool_ratio
 	# Buff bar shows the live shield as an entry; rebuild so the tooltip
 	# is current. The bar is at most ~7 entries — cheap.
 	_update_buffs_bar()

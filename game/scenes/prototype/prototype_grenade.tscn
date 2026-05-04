@@ -1,0 +1,45 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/prototype/prototype_grenade.gd" id="script_grenade"]
+
+[sub_resource type="SphereShape3D" id="shape_grenade"]
+radius = 0.15
+
+[sub_resource type="SphereMesh" id="mesh_grenade"]
+radius = 0.12
+height = 0.24
+radial_segments = 8
+rings = 4
+
+[sub_resource type="StandardMaterial3D" id="mat_grenade"]
+shading_mode = 0
+albedo_color = Color(0.6, 0.65, 0.5, 1.0)
+emission_enabled = true
+emission = Color(1.0, 0.6, 0.2, 1.0)
+emission_energy_multiplier = 2.0
+
+; Grenade projectile. Area3D with a tiny collision sphere — collision_layer = 0
+; (untargetable), collision_mask = 0 (detonation is time-based on arc landing,
+; not collision-driven).
+[node name="PrototypeGrenade" type="Area3D"]
+collision_layer = 0
+collision_mask = 0
+monitoring = false
+monitorable = false
+script = ExtResource("script_grenade")
+
+[node name="Shape" type="CollisionShape3D" parent="."]
+shape = SubResource("shape_grenade")
+
+[node name="Mesh" type="MeshInstance3D" parent="."]
+mesh = SubResource("mesh_grenade")
+material_override = SubResource("mat_grenade")
+cast_shadow = 0
+
+[node name="Glow" type="OmniLight3D" parent="."]
+light_color = Color(1.0, 0.6, 0.2, 1.0)
+light_energy = 1.2
+omni_range = 2.0
+omni_attenuation = 2.0
+shadow_enabled = false
+light_volumetric_fog_energy = 0.0

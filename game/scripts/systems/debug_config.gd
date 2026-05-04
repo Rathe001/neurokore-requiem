@@ -9,6 +9,12 @@ extends Resource
 @export var override_start_position: bool = false
 @export var start_position: Vector3 = Vector3.ZERO
 @export var starting_credits: int = 0
+## Items to auto-equip on spawn. Each entry is "MainType" or "MainType:base_id".
+## Examples: "Grenade:frag", "1H Weapon:ranged_1h", "Offhand:active_shield".
+## Rolled at common rarity, item level 1. Equips to the appropriate slot;
+## extras go to inventory. Processed in order — later items of the same
+## slot type overwrite earlier ones in that slot.
+@export var starter_loadout: PackedStringArray = []
 
 @export_group("Player Cheats")
 @export var god_mode: bool = false

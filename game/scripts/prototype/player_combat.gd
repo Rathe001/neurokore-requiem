@@ -114,7 +114,7 @@ func _resolve_cone(skill: Skill, aim: Vector3, eff_range: float, weapon: Item) -
 		# Charmed enemies are fighting for the player — friendly fire from
 		# any player-source attack (cone / aoe / hitscan / projectile / IED /
 		# drones) is blocked by the is_player_friendly check.
-		if _is_player_friendly(enode):
+		if is_player_friendly(enode):
 			continue
 		for _i in hits:
 			if not _roll_hit(weapon):
@@ -129,7 +129,7 @@ func _resolve_aoe(skill: Skill, eff_range: float, weapon: Item) -> void:
 	for enode: Node3D in SpatialGrid.query_radius(_host.global_position, eff_range, &"enemies"):
 		if not enode.has_method(&"take_damage"):
 			continue
-		if _is_player_friendly(enode):
+		if is_player_friendly(enode):
 			continue
 		for _i in hits:
 			if not _roll_hit(weapon):
@@ -144,7 +144,7 @@ func _resolve_aoe(skill: Skill, eff_range: float, weapon: Item) -> void:
 # returning true. Anything that doesn't have the method is treated as
 # a normal target. Centralised so the player-friendly skip rule lives
 # in one place across all damage paths.
-func _is_player_friendly(target: Node) -> bool:
+func is_player_friendly(target: Node) -> bool:
 	return target.has_method(&"is_player_friendly") and target.is_player_friendly()
 
 func _spawn_projectile(skill: Skill, aim: Vector3, eff_range: float, weapon: Item, source_offset: Vector3 = Vector3.ZERO) -> void:
@@ -197,7 +197,7 @@ func _resolve_hitscan(skill: Skill, aim: Vector3, eff_range: float, weapon: Item
 	for enode: Node3D in SpatialGrid.query_cone(origin, aim_norm, wall_dist, half_cos, &"enemies"):
 		if not enode.has_method(&"take_damage"):
 			continue
-		if _is_player_friendly(enode):
+		if is_player_friendly(enode):
 			continue
 		var dist := origin.distance_squared_to(enode.global_position)
 		if dist < closest_dist:
@@ -278,7 +278,7 @@ func fire_exile_shot(target: Node3D) -> void:
 		return
 	# Edge case: enemy was cursed, then became charmed mid-curse. Skip
 	# the auto-shot — friendly fire would land on a now-allied enemy.
-	if _is_player_friendly(target):
+	if is_player_friendly(target):
 		return
 	var origin := _host.global_position + Vector3(0.0, 1.0, 0.0)
 	var aim := target.global_position + Vector3(0.0, 1.0, 0.0) - origin
