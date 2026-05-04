@@ -1543,7 +1543,7 @@
 <li><strong>Gear augmentation:</strong> Equipment can be modified at workbenches (schematics) or on the fly (class skills). Augments add functional and visual changes beyond stat increases. See <a href="../gear-augmentation/">Gear Augmentation</a>.</li>
 </ul>
 <h2 id="targeting-modes">Targeting Modes<a class="headerlink" href="#targeting-modes" title="Permanent link">&para;</a></h2>
-<p>Each skill has a targeting mode that determines how it resolves hits. Modes are defined on the <code>Skill</code> resource.</p>
+<p>Every skill resolves hits through one of four targeting shapes. Each gets a clear ground telegraph so the player can read the threat / opportunity without inspection.</p>
 <table>
 <thead>
 <tr>
@@ -1554,29 +1554,29 @@
 </thead>
 <tbody>
 <tr>
-<td><code>SINGLE_CONE</code></td>
-<td>Spatial query: all enemies in a cone (facing direction, configurable arc). Melee default.</td>
+<td>Cone</td>
+<td>All enemies in a cone in the facing direction. Melee default.</td>
 <td>Cone outline on ground</td>
 </tr>
 <tr>
-<td><code>AOE_RADIAL</code></td>
-<td>Spatial query: all enemies within radius.</td>
+<td>Radial AoE</td>
+<td>All enemies within a radius.</td>
 <td>Circle outline on ground</td>
 </tr>
 <tr>
-<td><code>PROJECTILE</code></td>
-<td>Spawns a projectile node that travels in a straight line. Hits the first enemy on contact, then despawns. Self-destructs at max range.</td>
+<td>Projectile</td>
+<td>A travelling projectile that hits the first enemy on contact and self-destructs at max range.</td>
 <td>Line on ground</td>
 </tr>
 <tr>
-<td><code>HITSCAN</code></td>
-<td>Raycast + narrow cone query clipped to wall distance. Hits the closest enemy along the ray. Beam VFX.</td>
+<td>Hitscan</td>
+<td>Instant ray with a narrow cone clipped to wall distance. Hits the closest enemy along the ray.</td>
 <td>Line on ground + beam flash</td>
 </tr>
 </tbody>
 </table>
-<p>Weapon bases determine which targeting mode their skill uses. Melee weapons use <code>SINGLE_CONE</code> or <code>AOE_RADIAL</code>. Ranged weapons use <code>PROJECTILE</code> or <code>HITSCAN</code>. The targeting mode, damage, range, and cooldown are all properties of the <code>Skill</code> resource attached to the weapon — swapping weapons changes combat behavior entirely.</p>
-<p>Damage resolution for all modes feeds through the same pipeline: accuracy roll → hit/miss → crit roll → base damage roll (weapon or skill) → attribute damage multiplier → crit multiplier. This pipeline lives in the <code>PlayerCombat</code> component.</p>
+<p>Weapon archetype determines which mode its skill uses. Melee weapons use cone or radial AoE. Ranged weapons use projectile or hitscan. Targeting mode, damage, range, and cooldown all live with the skill, so swapping weapons changes combat behavior entirely — a pipe wrench reads completely differently than a shock baton.</p>
+<p>Damage resolution feeds through one shared pipeline regardless of mode: accuracy roll → hit/miss → crit roll → base damage roll → attribute damage multiplier → crit multiplier. Centralised so weapon-affix balancing affects every mode equally.</p>
 
 
 

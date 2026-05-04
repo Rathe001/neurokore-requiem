@@ -1915,52 +1915,73 @@
 <p>Because tier perks can be lost when stats shift (see <a href="../attribute-system/#stat-identity--tier-perks--visual-metamorphosis">stat identity breakpoints</a>), equipping a class-specific weapon is a commitment — if you lose the tier perk, the weapon becomes unusable until the perk is regained. The <a href="../attribute-system/">gear swap confirmation dialog</a> warns the player if a stat change would lock them out of an equipped class-specific weapon.</p>
 <h2 id="offhands">Offhands<a class="headerlink" href="#offhands" title="Permanent link">&para;</a></h2>
 <p>Offhands occupy the offhand slot when using a 1H weapon. Each offhand's <code>fire_skill</code> becomes the player's <strong>Alt Fire</strong>. Offhands are never "just stat sticks" — they always provide an active Alt Fire ability.</p>
+<p>Most offhands fall into one of three archetypes:</p>
+<ul>
+<li><strong>Active hold</strong> — RMB held while the effect is sustained (full block, beam, channel). Strong but committal.</li>
+<li><strong>Toggled buff</strong> — RMB taps to grant a persistent player-side buff with its own pool / duration / cooldown.</li>
+<li><strong>Triggered fire</strong> — RMB fires once per press at the cursor (grenade, sidearm shot).</li>
+</ul>
 <table>
 <thead>
 <tr>
 <th>Offhand</th>
-<th>Alt Fire</th>
+<th>Archetype</th>
+<th>Effect</th>
 <th>Notes</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>Shield Generator</td>
-<td>Energy barrier (brief frontal block)</td>
-<td>Absorbs X damage, then breaks. Cooldown-based.</td>
+<td>Active Shield</td>
+<td>Active hold</td>
+<td>Hold RMB to fully block incoming damage and knockback up to a pool, then breaks</td>
+<td>Movement penalty while held; pool persists across release/press; cooldown only on break</td>
+</tr>
+<tr>
+<td>Amplification Shield</td>
+<td>Toggled buff</td>
+<td>Tap RMB to apply a partial damage + knockback reduction over a long duration</td>
+<td>Pool drains from absorbed damage; cooldown only on break (free re-cast on natural expiry)</td>
 </tr>
 <tr>
 <td>Buckler / Riot Shield</td>
-<td>Shield bash (short-range knockback cone)</td>
+<td>Triggered fire</td>
+<td>Shield bash — short-range knockback cone</td>
 <td>Starter offhand. Melee.</td>
 </tr>
 <tr>
 <td>Grenade</td>
-<td>Throw grenade (AoE at target point)</td>
-<td>Arcing projectile. Elemental variants exist (cryo grenade, frag, incendiary).</td>
+<td>Triggered fire</td>
+<td>Throw grenade at cursor (AoE on impact)</td>
+<td>Arcing projectile with max range. Elemental variants exist (cryo, frag, incendiary).</td>
 </tr>
 <tr>
 <td>Sidearm</td>
-<td>Quick shot</td>
-<td>A secondary 1H ranged weapon used as an offhand. Lower damage than main hand.</td>
+<td>Triggered fire</td>
+<td>Quick shot from a secondary 1H ranged weapon</td>
+<td>Lower damage than main hand.</td>
 </tr>
 <tr>
 <td>Disruptor</td>
+<td>Triggered fire</td>
 <td>EMP pulse (disables mechanical enemies briefly)</td>
 <td>Short range AoE. Especially effective vs. Cyborg-type enemies.</td>
 </tr>
 <tr>
 <td>Stealth Module</td>
-<td>Brief invisibility + movement speed boost</td>
-<td>Cooldown-heavy. Breaks on attack or taking damage.</td>
+<td>Toggled buff</td>
+<td>Brief invisibility + movement speed</td>
+<td>Breaks on attack or taking damage.</td>
 </tr>
 <tr>
 <td>Drone Relay</td>
+<td>Triggered fire</td>
 <td>Command drone to attack (single target)</td>
 <td>Automaton-themed. Offhand version of drone control — one drone instead of a swarm.</td>
 </tr>
 <tr>
 <td>Cursed Totem</td>
+<td>Triggered fire</td>
 <td>Apply curse DoT at range</td>
 <td>Enculted-themed. Weaker than Ancient Text but frees main hand for a generic weapon.</td>
 </tr>

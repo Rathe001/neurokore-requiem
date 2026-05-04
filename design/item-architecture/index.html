@@ -1462,10 +1462,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#equipment-slots-final" class="md-nav__link">
+  <a href="#equipment-slots" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Equipment Slots (Final)
+        Equipment Slots
       
     </span>
   </a>
@@ -1496,76 +1496,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#universal-every-item" class="md-nav__link">
+  <a href="#recon" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Universal (every item)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#weapon-specific" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Weapon-Specific
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#offhand-specific" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Offhand-Specific
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#armor-specific" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Armor-Specific
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#backpack-specific" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Backpack-Specific
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#belt-mainboard-specific" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Belt / Mainboard-Specific
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#optics-specific" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Optics-Specific
+        Recon
       
     </span>
   </a>
@@ -1601,10 +1535,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#prefix-suffix-system" class="md-nav__link">
+  <a href="#rarity-modifier-counts" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Prefix / Suffix System
+        Rarity &amp; Modifier Counts
       
     </span>
   </a>
@@ -1612,10 +1546,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#prefix-suffix-examples" class="md-nav__link">
+  <a href="#affix-flavor" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Prefix / Suffix Examples
+        Affix Flavor
       
     </span>
   </a>
@@ -1627,17 +1561,6 @@
     <span class="md-ellipsis">
       
         Class Attribute Stats on Items
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#combat-affix-pool" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Combat Affix Pool
       
     </span>
   </a>
@@ -1661,10 +1584,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#item-generation-summary" class="md-nav__link">
+  <a href="#item-generation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Item Generation Summary
+        Item Generation
       
     </span>
   </a>
@@ -1703,10 +1626,10 @@
 
 
 <h1 id="item-architecture">Item Architecture<a class="headerlink" href="#item-architecture" title="Permanent link">&para;</a></h1>
-<p>This is the source of truth for how items work. For weapon/offhand/armor specifics see <a href="../equipment/">Equipment</a>. For augments, ammo, and schematics see <a href="../gear-augmentation/">Gear Augmentation</a>.</p>
+<p>The intent layer for how items work. For weapon/offhand/armor identity, see <a href="../equipment/">Equipment</a>. For augments, ammo, and schematics, see <a href="../gear-augmentation/">Gear Augmentation</a>.</p>
 <hr />
 <h2 id="item-hierarchy">Item Hierarchy<a class="headerlink" href="#item-hierarchy" title="Permanent link">&para;</a></h2>
-<p>Every item has a <strong>main type</strong> and a <strong>sub type</strong>.</p>
+<p>Every item has a <strong>main type</strong> (the bucket) and a <strong>sub type</strong> (the specific form). The bucket determines which slot it goes in; the sub type drives flavour, sub-stats, and which affixes can roll on it.</p>
 <table>
 <thead>
 <tr>
@@ -1767,9 +1690,9 @@
 <td>Backpack</td>
 </tr>
 <tr>
-<td>Optics</td>
-<td>Flashlight, Headlamp, Glow Stick, Sensor</td>
-<td>Optics</td>
+<td>Recon</td>
+<td>Flashlight, Lantern, Radar, UV Light</td>
+<td>Recon</td>
 </tr>
 <tr>
 <td>Utility</td>
@@ -1808,10 +1731,10 @@
 </tr>
 </tbody>
 </table>
-<p>The belt grants utility slots; the mainboard grants bus slots. Both work identically to the current system — the expansion item determines how many sub-slots are available.</p>
-<p><strong>Origin-locked:</strong> Belts and utility items can only be equipped by Analog classes. Mainboards and bus items can only be equipped by Cyborg classes. These items still drop for all players (trade value, future multiplayer), but cannot be used by the wrong origin.</p>
+<p>The belt grants utility slots; the mainboard grants bus slots. Both work identically — the expansion item determines how many sub-slots are available.</p>
+<p><strong>Origin-locked.</strong> Belts and utility items can only be equipped by Analog classes. Mainboards and bus items can only be equipped by Cyborg classes. These items still drop for all players (trade value, future multiplayer), but cannot be used by the wrong origin.</p>
 <hr />
-<h2 id="equipment-slots-final">Equipment Slots (Final)<a class="headerlink" href="#equipment-slots-final" title="Permanent link">&para;</a></h2>
+<h2 id="equipment-slots">Equipment Slots<a class="headerlink" href="#equipment-slots" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
@@ -1857,9 +1780,9 @@
 <td>Grants inventory capacity.</td>
 </tr>
 <tr>
-<td>Optics</td>
+<td>Recon</td>
 <td>Yes</td>
-<td>Flashlight, scanner, UV, etc.</td>
+<td>Light sources, scanners, UV — see Recon-specific section.</td>
 </tr>
 <tr>
 <td>Belt</td>
@@ -1896,184 +1819,29 @@
 <div class="admonition question">
 <p class="admonition-title">Open Questions — Weight</p>
 <ul>
-<li>Exact carry threshold formula? (Base + attribute scaling + skill tree bonuses?)</li>
-<li>Is the speed curve linear or stepped (e.g., 10% over = 5% slow, 50% over = 25% slow)?</li>
+<li>What's the right speed-loss curve (linear, stepped, exponential)?</li>
 <li>Should weight affect dodge/roll speed or stamina if those mechanics exist?</li>
 <li>Visual indicator on character sheet for current weight vs. threshold?</li>
 </ul>
 </div>
 <hr />
 <h2 id="item-properties">Item Properties<a class="headerlink" href="#item-properties" title="Permanent link">&para;</a></h2>
-<h3 id="universal-every-item">Universal (every item)<a class="headerlink" href="#universal-every-item" title="Permanent link">&para;</a></h3>
+<p>Each item carries enough state to identify it (id, name, glyph, rarity), gate it (item level, origin lock), and drive its mechanics (damage range for weapons, DR for armor, light type for recon, etc.). The exact field set lives on the <code>Item</code> resource — this doc only covers what <em>kinds</em> of properties exist per category.</p>
+<ul>
+<li><strong>Weapons</strong> carry damage stats, attack speed, accuracy, crit, range, a fire skill, and (for 2H) optionally an alt-fire.</li>
+<li><strong>Offhands</strong> carry a fire skill that becomes the player's RMB. Active offhands (shield, grenade) carry archetype-specific stats — pool, reduction, duration, cooldown.</li>
+<li><strong>Armor</strong> carries damage reduction and optional resistance to a damage type.</li>
+<li><strong>Backpacks</strong> always grant an inventory bonus; rarity layers extra modifiers on top.</li>
+<li><strong>Belt / Mainboard</strong> grant a sub-slot count.</li>
+<li><strong>Recon</strong> items carry a light type, range, energy, and color.</li>
+</ul>
+<p>Augment slots are an additional property gated by item level + rarity (see <a href="#augment-slots">Augment Slots</a> below).</p>
+<h3 id="recon">Recon<a class="headerlink" href="#recon" title="Permanent link">&para;</a></h3>
+<p>Recon items provide visibility in dark zones (see <a href="../../world/lighting/">Lighting</a>). Each recon item has a <strong>type</strong> that determines how it functions.</p>
 <table>
 <thead>
 <tr>
-<th>Property</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>id</code></td>
-<td>Unique identifier</td>
-</tr>
-<tr>
-<td><code>main_type</code></td>
-<td>1H Weapon, 2H Weapon, Offhand, Chest Armor, Optics, Utility, Bus, etc.</td>
-</tr>
-<tr>
-<td><code>sub_type</code></td>
-<td>Pistol, Assault Rifle, Buckler, Plate Rig, Medkit, Tracking Upgrade, etc.</td>
-</tr>
-<tr>
-<td><code>name</code></td>
-<td>Display name (i18n key)</td>
-</tr>
-<tr>
-<td><code>description</code></td>
-<td>Flavor text (i18n key)</td>
-</tr>
-<tr>
-<td><code>rarity</code></td>
-<td>Gray, Green, Blue, Purple, Orange</td>
-</tr>
-<tr>
-<td><code>item_level</code></td>
-<td>Determines stat ranges and augment slot chance</td>
-</tr>
-<tr>
-<td><code>weight</code></td>
-<td>Affects movement speed when equipped</td>
-</tr>
-<tr>
-<td><code>glyph</code></td>
-<td>Inventory display character</td>
-</tr>
-<tr>
-<td><code>glyph_color</code></td>
-<td>Inventory display color</td>
-</tr>
-</tbody>
-</table>
-<h3 id="weapon-specific">Weapon-Specific<a class="headerlink" href="#weapon-specific" title="Permanent link">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Property</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>fire_skill</code></td>
-<td>Skill resource for Fire (all weapons)</td>
-</tr>
-<tr>
-<td><code>alt_fire_skill</code></td>
-<td>Skill resource for Alt Fire (2H only, optional — a sledgehammer has none)</td>
-</tr>
-<tr>
-<td><code>two_handed</code></td>
-<td>Whether this weapon locks the offhand slot</td>
-</tr>
-<tr>
-<td><code>damage_type</code></td>
-<td>Energy, Kinetic, Elemental (cryo/fire/electric/toxic), Melee</td>
-</tr>
-<tr>
-<td><code>magazine_size</code></td>
-<td>Rounds before reload (ranged only, 0 for melee)</td>
-</tr>
-<tr>
-<td><code>reload_time</code></td>
-<td>Seconds to reload (ranged only)</td>
-</tr>
-<tr>
-<td><code>tier_perk_required</code></td>
-<td>Tier perk gate for class-specific weapons (e.g., <code>enculted_1</code>)</td>
-</tr>
-</tbody>
-</table>
-<h3 id="offhand-specific">Offhand-Specific<a class="headerlink" href="#offhand-specific" title="Permanent link">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Property</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>fire_skill</code></td>
-<td>Skill resource — becomes the player's Alt Fire</td>
-</tr>
-<tr>
-<td><code>tier_perk_required</code></td>
-<td>Tier perk gate for class-themed offhands</td>
-</tr>
-</tbody>
-</table>
-<h3 id="armor-specific">Armor-Specific<a class="headerlink" href="#armor-specific" title="Permanent link">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Property</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>damage_reduction</code></td>
-<td>Base DR value</td>
-</tr>
-<tr>
-<td><code>resistance_type</code></td>
-<td>Optional elemental/energy/kinetic resistance</td>
-</tr>
-<tr>
-<td><code>resistance_value</code></td>
-<td>Resistance amount</td>
-</tr>
-</tbody>
-</table>
-<h3 id="backpack-specific">Backpack-Specific<a class="headerlink" href="#backpack-specific" title="Permanent link">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Property</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>inventory_bonus</code></td>
-<td>Extra inventory slots — <strong>always rolls</strong>, never zero. Higher item level = higher potential bonus.</td>
-</tr>
-</tbody>
-</table>
-<p>Backpacks follow the standard rarity system. A gray backpack still grants slots (just fewer). A blue backpack rolls prefix/suffix on top of its slot bonus. An orange legendary backpack might have a unique effect alongside a high fixed slot count.</p>
-<h3 id="belt-mainboard-specific">Belt / Mainboard-Specific<a class="headerlink" href="#belt-mainboard-specific" title="Permanent link">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Property</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>sub_slot_count</code></td>
-<td>Number of utility/bus slots granted</td>
-</tr>
-</tbody>
-</table>
-<h3 id="optics-specific">Optics-Specific<a class="headerlink" href="#optics-specific" title="Permanent link">&para;</a></h3>
-<p>Optics are equippable items that provide visibility in dark zones (see <a href="../../world/lighting/">Lighting</a>). Each optic has a <strong>type</strong> that determines how it functions.</p>
-<table>
-<thead>
-<tr>
-<th>Optics Type</th>
-<th>Enum</th>
+<th>Recon Type</th>
 <th>Behavior</th>
 <th>Use Case</th>
 </tr>
@@ -2081,64 +1849,34 @@
 <tbody>
 <tr>
 <td>Directional</td>
-<td><code>DIRECTIONAL</code></td>
-<td>Narrow directed beam (SpotLight3D) in facing direction</td>
+<td>Narrow directed beam in facing direction</td>
 <td>Default. Good range, limited coverage. Reveals what you're looking at.</td>
 </tr>
 <tr>
 <td>Radiant</td>
-<td><code>RADIANT</code></td>
-<td>360-degree glow (OmniLight3D) around the player</td>
+<td>360-degree glow around the player</td>
 <td>Shorter range, but no blind spots. Good for melee builds that need awareness in all directions.</td>
 </tr>
 <tr>
-<td>Scanner</td>
-<td><code>SCANNER</code></td>
-<td>Radar HUD overlay with rotating sweep; reveals enemy blips through walls</td>
+<td>Scanner / Radar</td>
+<td>HUD overlay with rotating sweep; reveals enemy blips through walls</td>
 <td>Tactical awareness — see threats through cover. Doesn't illuminate the environment. Some enemies may be immune (shielded, cloaked).</td>
 </tr>
 <tr>
 <td>UV</td>
-<td><code>UV</code></td>
 <td>Reveals hidden markings, traps, loot, secret doors</td>
-<td>Exploration tool. Emits a faint purple light but primarily reveals objects in the <code>uv_hidden</code> group.</td>
+<td>Exploration tool. Emits a faint purple light but primarily reveals objects in dedicated UV-hidden groups.</td>
 </tr>
 </tbody>
 </table>
-<table>
-<thead>
-<tr>
-<th>Property</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>light_type</code></td>
-<td><code>DIRECTIONAL</code>, <code>RADIANT</code>, <code>SCANNER</code>, <code>UV</code></td>
-</tr>
-<tr>
-<td><code>light_energy</code></td>
-<td>Brightness / intensity</td>
-</tr>
-<tr>
-<td><code>light_range</code></td>
-<td>How far the light reaches</td>
-</tr>
-<tr>
-<td><code>light_color</code></td>
-<td>Tint of the light</td>
-</tr>
-</tbody>
-</table>
-<p>Optics follow standard rarity and item level. Higher rarity optics have better range, energy, and may roll prefixes/suffixes (e.g., "Focused" prefix = tighter cone + longer range, "of Efficiency" suffix = reduced battery drain if battery becomes a mechanic).</p>
+<p>Recon items follow standard rarity and item level. Higher rarity gets better range / energy and may roll prefixes/suffixes.</p>
 <div class="admonition question">
-<p class="admonition-title">Open Questions — Optics</p>
+<p class="admonition-title">Open Questions — Recon</p>
 <ul>
-<li>Do optics have a battery / fuel resource, or are they always on when equipped?</li>
-<li>Can a player equip multiple optics types and swap between them, or is it one slot?</li>
-<li>Should Scanner/UV be gated by item level, rarity, or tier perk?</li>
-<li>Do Scanner blips persist briefly after toggling off (residual awareness)?</li>
+<li>Battery / fuel resource, or always on when equipped?</li>
+<li>Equip multiple types and swap between them, or one slot?</li>
+<li>Are advanced types (Scanner, UV) gated by item level, rarity, or tier perk?</li>
+<li>Scanner blip persistence after toggling off (residual awareness)?</li>
 <li>Night-vision type (full green-tinted visibility, but blinding if a bright source appears)?</li>
 <li>Scanner immunity flags — which enemy properties block detection (shielded, cloaked, etc.)?</li>
 </ul>
@@ -2153,16 +1891,14 @@
 <li>A small random variance (so drops aren't always exactly the enemy's level)</li>
 </ul>
 <p>Item level determines the stat budget available to the item — higher item level = higher possible stat rolls.</p>
-<h3 id="prefix-suffix-system">Prefix / Suffix System<a class="headerlink" href="#prefix-suffix-system" title="Permanent link">&para;</a></h3>
+<h3 id="rarity-modifier-counts">Rarity &amp; Modifier Counts<a class="headerlink" href="#rarity-modifier-counts" title="Permanent link">&para;</a></h3>
 <p>Items can roll <strong>modifiers</strong> from prefix and suffix pools. Each modifier adds stats (attributes, DR, speed, crit, etc.) from a budget determined by item level.</p>
 <table>
 <thead>
 <tr>
 <th>Rarity</th>
 <th>Color</th>
-<th>Prefix</th>
-<th>Suffix</th>
-<th>Special</th>
+<th>Modifier Density</th>
 <th>Augment Slots</th>
 </tr>
 </thead>
@@ -2170,168 +1906,83 @@
 <tr>
 <td>Common</td>
 <td>Gray</td>
-<td>—</td>
-<td>—</td>
-<td>—</td>
-<td>Very rare (low chance based on item level)</td>
+<td>None</td>
+<td>Very rare</td>
 </tr>
 <tr>
 <td>Uncommon</td>
 <td>Green</td>
-<td>1</td>
-<td>—</td>
-<td>—</td>
+<td>One affix (prefix OR suffix)</td>
 <td>Low chance</td>
 </tr>
 <tr>
 <td>Rare</td>
 <td>Blue</td>
-<td>1</td>
-<td>1</td>
-<td>—</td>
-<td>Moderate chance, can roll 1–2</td>
+<td>Prefix + suffix</td>
+<td>Moderate chance</td>
 </tr>
 <tr>
 <td>Epic</td>
 <td>Purple</td>
-<td>1</td>
-<td>1</td>
-<td>1 unique modifier</td>
-<td>Higher chance, can roll 1–3</td>
+<td>Prefix + suffix + a unique non-stat special modifier</td>
+<td>Higher chance</td>
 </tr>
 <tr>
 <td>Legendary</td>
 <td>Orange</td>
-<td>Hand-crafted</td>
-<td>Hand-crafted</td>
-<td>Hand-crafted</td>
+<td>Hand-crafted; fixed identity</td>
 <td>Fixed (designed per item)</td>
 </tr>
 </tbody>
 </table>
 <ul>
 <li><strong>Prefixes</strong> and <strong>suffixes</strong> draw from pools appropriate to the item's main type and sub type. A weapon prefix pool is different from an armor prefix pool.</li>
-<li><strong>Green</strong> items roll either a prefix OR a suffix (not both).</li>
-<li><strong>Blue</strong> items always roll one prefix AND one suffix.</li>
-<li><strong>Purple</strong> items roll prefix + suffix + a <strong>special modifier</strong> that is non-stat — a unique mechanical effect (e.g., "kills restore 2% HP", "Fire skill has 10% chance to not consume ammo", "enemies killed explode").</li>
-<li><strong>Orange</strong> legendaries are entirely hand-authored. Fixed stats, fixed name, fixed special effects. These are chase items with specific identities — not random rolls.</li>
+<li><strong>Epic special modifiers</strong> are non-stat — a unique mechanical effect (e.g., "kills restore HP", "Fire skill has a chance to not consume ammo", "enemies killed explode"). The exact list grows with the affix table.</li>
+<li><strong>Legendaries</strong> are entirely hand-authored. Fixed stats, fixed name, fixed special effects. These are chase items with specific identities — not random rolls.</li>
 </ul>
-<h3 id="prefix-suffix-examples">Prefix / Suffix Examples<a class="headerlink" href="#prefix-suffix-examples" title="Permanent link">&para;</a></h3>
-<p>These are illustrative — the full affix table will be built when the stat system is implemented.</p>
-<p><strong>Weapon Prefixes:</strong>
-| Prefix | Effect |
-|---|---|
-| Searing | +fire damage |
-| Precise | +crit chance |
-| Brutal | +base damage |
-| Swift | -cooldown on Fire |</p>
-<p><strong>Weapon Suffixes:</strong>
-| Suffix | Effect |
-|---|---|
-| of the Marksman | +range |
-| of Devastation | +knockback |
-| of Efficiency | -resource cost |
-| of the Leech | +lifesteal on hit |</p>
-<p><strong>Armor Prefixes:</strong>
-| Prefix | Effect |
-|---|---|
-| Hardened | +damage reduction |
-| Nimble | +movement speed |
-| Fortified | +max health |</p>
-<p><strong>Armor Suffixes:</strong>
-| Suffix | Effect |
-|---|---|
-| of the Bear | +carry capacity |
-| of Resilience | +elemental resistance |
-| of the Bulwark | +max health |</p>
+<h3 id="affix-flavor">Affix Flavor<a class="headerlink" href="#affix-flavor" title="Permanent link">&para;</a></h3>
+<p>The affix pool is intentionally extensible — we'll keep adding entries as systems come online. A representative sample of what each pool contains:</p>
+<p><strong>Weapon prefixes</strong> — base damage, crit chance, attack speed, elemental damage, hit chance, pierce.
+<strong>Weapon suffixes</strong> — range, knockback, lifesteal, reduced resource cost, cooldown reduction.
+<strong>Armor prefixes</strong> — damage reduction, max health, movement speed, carry capacity.
+<strong>Armor suffixes</strong> — elemental resistance, max health, regen.</p>
+<p>Class attribute stats (Orthodoxy, Ambition, etc.) are <strong>not</strong> in this pool — they roll in the separate class-stat slot system below.</p>
 <h3 id="class-attribute-stats-on-items">Class Attribute Stats on Items<a class="headerlink" href="#class-attribute-stats-on-items" title="Permanent link">&para;</a></h3>
-<p>Items can roll bonuses to the six rollable class attribute stats — Orthodoxy, Ambition, Deviation, Optimization, Ingenuity, Clarity — as a <strong>separate slot system</strong> independent of the prefix/suffix affix budget. The number of class stat slots an item may carry is gated by item level:</p>
-<table>
-<thead>
-<tr>
-<th>Item Level Range</th>
-<th>Class Stat Slots</th>
-<th>Game Phase</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>1 – 33</td>
-<td>1</td>
-<td>Early game</td>
-</tr>
-<tr>
-<td>34 – 66</td>
-<td>1 – 2</td>
-<td>Mid game</td>
-</tr>
-<tr>
-<td>67 – 100</td>
-<td>1 – 3</td>
-<td>Late game</td>
-</tr>
-</tbody>
-</table>
-<p>Class stat slots are <strong>additive</strong> to prefix/suffix slots. A blue mid-game chest could carry 1 prefix + 1 suffix + 1–2 class stat rolls. Combat-side affixes (crit, pierce, attack speed, etc.) live entirely in the prefix/suffix pools and never compete with class identity for budget.</p>
-<p>Tier perks fire on the player's <strong>aggregate</strong> equipped class-stat totals (see <a href="../attribute-system/">Attribute System</a>). Multi-stat late-game items therefore don't inflate tier perk magnitudes — they relax slot economy, letting endgame players trade gear slots for hybrid builds (e.g. three hybrid items reaching T5 Deviation + T3 Orthodoxy instead of needing five Deviation-only items). This is the intended endgame power lever.</p>
+<p>Items can roll bonuses to the six rollable class attribute stats — Orthodoxy, Ambition, Deviation, Optimization, Ingenuity, Clarity — as a <strong>separate slot system</strong> independent of the prefix/suffix affix budget. The number of class stat slots an item may carry is gated by item level: early-game items carry one, late-game items can carry several.</p>
+<p>Class stat slots are <strong>additive</strong> to prefix/suffix slots. A blue mid-game chest could carry one prefix + one suffix + a class stat roll or two. Combat-side affixes (crit, pierce, attack speed, etc.) live entirely in the prefix/suffix pools and never compete with class identity for budget.</p>
+<p>Tier perks fire on the player's <strong>aggregate</strong> equipped class-stat totals (see <a href="../attribute-system/">Attribute System</a>). Multi-stat late-game items therefore don't inflate tier perk magnitudes — they relax slot economy, letting endgame players trade gear slots for hybrid builds (e.g. three hybrid items reaching deep one stat + a meaningful second stat instead of needing five mono-stat items). This is the intended endgame power lever.</p>
 <p>Swapping a piece whose class-stat rolls differ can cross tier thresholds — hence the <a href="../attribute-system/">gear swap confirmation dialog</a>.</p>
-<h3 id="combat-affix-pool">Combat Affix Pool<a class="headerlink" href="#combat-affix-pool" title="Permanent link">&para;</a></h3>
-<p>Combat affixes fill the standard prefix/suffix slots and tune how a build kills. The list is intentionally extensible — more affixes will be added as systems come online. All numerical ranges scale with item level.</p>
-<p><strong>Damage / offense (prefix-leaning):</strong>
-- Base damage bonus
-- Hit chance
-- Crit chance
-- Crit damage
-- Pierce
-- Attack speed
-- Elemental damage (cryo, fire, electric, toxic — see <a href="../equipment/">Equipment</a> damage types)</p>
-<p><strong>Utility / defense (suffix-leaning):</strong>
-- Cooldown reduction
-- Movement speed
-- Lifesteal / leech on hit
-- Resource regen on hit
-- Reduced resource cost
-- Range, knockback (weapon-specific)
-- Damage reduction, elemental resistance (armor-specific)
-- Carry capacity, max health</p>
-<p>The prefix/suffix split is convention; the affix table maps each entry to its pool. Class attribute stats are <strong>not</strong> in this pool — they roll in the separate class-stat slot system above.</p>
 <hr />
 <h2 id="augment-slots">Augment Slots<a class="headerlink" href="#augment-slots" title="Permanent link">&para;</a></h2>
 <p>Augment slots are determined at drop time by <strong>item level</strong> and <strong>rarity</strong>.</p>
 <ul>
 <li>Higher item level = higher chance of rolling augment slots.</li>
 <li>Higher rarity = more potential slots.</li>
-<li>A low-level gray <em>can</em> roll an augment slot, but it's very unlikely.</li>
-<li>Orange legendaries have fixed augment slots designed per item.</li>
+<li>A low-level common <em>can</em> roll an augment slot, but it's very unlikely.</li>
+<li>Legendaries have fixed augment slots designed per item.</li>
 </ul>
 <p><strong>Augments do not scale.</strong> A laser sight is a laser sight — there is no "Laser Sight II". The value of an augment comes from how well it synergizes with the item's rolled stats and the player's build, not from finding a higher-level version. The player sees an item drop and thinks about <em>which</em> augment would make it great, not <em>which level</em> of augment to slot.</p>
 <p>See <a href="../gear-augmentation/">Gear Augmentation</a> for the full augment system (schematics, field augments, ammo types).</p>
 <hr />
-<h2 id="item-generation-summary">Item Generation Summary<a class="headerlink" href="#item-generation-summary" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code>1. Enemy dies → drop roll
-2. Roll item main type + sub type (weighted by enemy type, zone, etc.)
-3. Roll item level (player level, enemy level, variance)
-4. Roll rarity (separate algorithm — MF%, zone modifiers, etc.)
-5. Based on rarity, roll combat affixes (prefix/suffix pool):
-   - Gray:   no affixes
-   - Green:  roll 1 prefix OR 1 suffix
-   - Blue:   roll 1 prefix AND 1 suffix
-   - Purple: roll 1 prefix + 1 suffix + 1 special modifier
-   - Orange: load hand-crafted definition
-6. Roll class attribute stat slots based on item level (additive to affixes):
-   - ilvl 1–33:   1 class stat
-   - ilvl 34–66:  1–2 class stats
-   - ilvl 67–100: 1–3 class stats
-7. Roll values for each affix and class stat (bounded by item level budget)
-8. Roll augment slot count (item level + rarity weighted)
-9. Roll weight (base weight for sub type + variance from modifiers)
-10. Assign item properties → spawn pickup in world
-</code></pre></div>
+<h2 id="item-generation">Item Generation<a class="headerlink" href="#item-generation" title="Permanent link">&para;</a></h2>
+<p>When an enemy dies:</p>
+<ol>
+<li>Roll whether something drops (drop chance).</li>
+<li>Roll the item's main type + sub type (weighted by enemy type, zone, etc.).</li>
+<li>Roll its item level (player level + enemy level + variance).</li>
+<li>Roll its rarity (separate algorithm with magic-find, zone modifiers, etc.).</li>
+<li>Roll combat affixes (prefix/suffix pool) according to rarity.</li>
+<li>Roll class attribute stat slots (additive to affixes).</li>
+<li>Roll values for each affix and class stat (bounded by item level budget).</li>
+<li>Roll augment slot count (item level + rarity weighted).</li>
+<li>Roll weight (base weight for sub type + variance from modifiers).</li>
+<li>Spawn the pickup in the world.</li>
+</ol>
 <div class="admonition question">
 <p class="admonition-title">Open Questions — Item Generation</p>
 <ul>
 <li>Magic find (MF%) stat — does it exist? If so, is it an attribute, gear affix, or both?</li>
-<li>Are there zone-specific drop tables (certain sub types only drop in certain areas)?</li>
+<li>Zone-specific drop tables (certain sub types only drop in certain areas)?</li>
 <li>Can enemies drop items above the player's level (incentivizing punching up)?</li>
 <li>Smart loot (bias toward player's class/build) or fully random?</li>
 <li>Vendor items — do shops use the same generation system with a level/rarity cap?</li>
