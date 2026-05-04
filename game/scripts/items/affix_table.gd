@@ -248,7 +248,7 @@ const SUFFIXES: Array[Dictionary] = [
 	{
 		"id": &"of_focus",
 		"label": "of Focus",
-		"item_types": ["Optics"],
+		"item_types": ["Recon"],
 		"stat_modifiers": { "light_range_bonus": 4 },
 		"min_item_level": 1,
 		"weight": 90,
@@ -256,7 +256,7 @@ const SUFFIXES: Array[Dictionary] = [
 	{
 		"id": &"of_lumens",
 		"label": "of Lumens",
-		"item_types": ["Optics"],
+		"item_types": ["Recon"],
 		"stat_modifiers": { "light_energy_bonus": 20 },
 		"min_item_level": 5,
 		"weight": 70,

@@ -19,7 +19,7 @@ class_name LinearGenerator
 
 func generate() -> LevelGraph:
 	var rng := RandomNumberGenerator.new()
-	rng.seed = seed if seed != 0 else int(Time.get_unix_time_from_system())
+	rng.seed = rng_seed if rng_seed != 0 else int(Time.get_unix_time_from_system())
 
 	var length := rng.randi_range(min_length, max_length)
 	if length < 2:

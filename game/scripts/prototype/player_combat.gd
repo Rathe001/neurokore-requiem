@@ -51,6 +51,12 @@ func get_cooldown_ratio(skill: Skill) -> float:
 	var remaining: float = _cooldowns.get(skill, 0.0)
 	return clampf(remaining / skill.cooldown, 0.0, 1.0)
 
+
+func get_cooldown_remain(skill: Skill) -> float:
+	if skill == null:
+		return 0.0
+	return maxf(_cooldowns.get(skill, 0.0), 0.0)
+
 func is_slot_on_cooldown(slot: StringName) -> bool:
 	return _slot_cooldowns.get(slot, 0.0) > 0.0
 

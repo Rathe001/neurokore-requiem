@@ -2,10 +2,13 @@ shader_type spatial;
 render_mode unshaded, cull_disabled, depth_test_disabled, blend_mix;
 
 uniform vec4 back_color : source_color = vec4(0.12, 0.14, 0.18, 1.0);
-uniform vec4 fill_color : source_color = vec4(1.0, 0.28, 0.32, 1.0);
 uniform vec4 border_color : source_color = vec4(0.02, 0.03, 0.05, 1.0);
 uniform float border_thickness = 0.08;
+// Instance uniforms so each enemy can have its own fill (charmed pets
+// override to green, hostiles use the red default) and fill ratio
+// without needing a separate material per body.
 instance uniform float fill_ratio = 1.0;
+instance uniform vec4 fill_color : source_color = vec4(1.0, 0.28, 0.32, 1.0);
 
 void vertex() {
 	mat4 billboard = VIEW_MATRIX * mat4(

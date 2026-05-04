@@ -68,7 +68,9 @@ func _build_sprite() -> void:
 	_sprite.alpha_cut = SpriteBase3D.ALPHA_CUT_DISABLED
 	_sprite.position = Vector3(0.0, SPRITE_OFFSET_Y, 0.0)
 	_sprite.visible = false
+	@warning_ignore("integer_division")
 	_frame_w = SMOKE_TEXTURE.get_width() / SPRITE_H_FRAMES
+	@warning_ignore("integer_division")
 	_frame_h = SMOKE_TEXTURE.get_height() / SPRITE_V_FRAMES
 	_sprite.region_rect = Rect2(0.0, 0.0, _frame_w, _frame_h)
 	add_child(_sprite)
@@ -98,6 +100,7 @@ func _process(delta: float) -> void:
 	# 49 cells but only the first 46 are painted, so we loop at 46.
 	var frame_idx := int(_anim_t) % TOTAL_FRAMES
 	var fx := frame_idx % SPRITE_H_FRAMES
+	@warning_ignore("integer_division")
 	var fy := frame_idx / SPRITE_H_FRAMES
 	_sprite.region_rect = Rect2(float(fx * _frame_w), float(fy * _frame_h), float(_frame_w), float(_frame_h))
 

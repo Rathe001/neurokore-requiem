@@ -1,0 +1,32 @@
+[gd_resource type="Resource" script_class="Skill" load_steps=2 format=3]
+
+; Active offhand — Active Shield. Hold RMB to block 100% of incoming
+; damage up to shield_pool. Releasing RMB drops the shield WITHOUT
+; cooldown but the pool persists, so partial-pool tap-spam doesn't
+; refresh. Pool resets only on the first activation after the shield
+; has been broken (cooldown gates re-pressing during cooldown).
+;
+; active_kind = SHIELD_HOLD (1 in the enum order).
+; damage_reduction is hard-coded to 1.0 by the player when activating
+; SHIELD_HOLD (full block); the field here is set for clarity but
+; ignored at activation time.
+
+[ext_resource type="Script" path="res://scripts/skills/skill.gd" id="1_skill_script"]
+
+[resource]
+script = ExtResource("1_skill_script")
+display_name = "Active Shield"
+glyph = "B"
+damage = 0
+skill_range = 0.0
+cooldown = 15.0
+wind_up = 0.0
+resource_cost = 0
+targeting_mode = 0
+cone_deg = 0.0
+knockback = 0.0
+icon_color = Color(0.85, 0.95, 0.85, 1.0)
+active_kind = 1
+shield_pool = 50
+damage_reduction = 1.0
+duration = 0.0

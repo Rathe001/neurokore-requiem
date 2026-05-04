@@ -49,6 +49,12 @@ static func build_exact_floor(ctx: LevelBuildContext, center: Vector3, size_x: f
 	body.add_child(col)
 	ctx.root.add_child(body)
 	body.add_to_group(&"structures")
+	# Walked by the minimap baker to rasterize abstract walkable shapes
+	# (D2-style filled-rectangle map) instead of taking a 3D screenshot.
+	# Pit interiors are NOT in this group — those are built by PitBuilder
+	# and aren't safe to walk on. Pillars (jump platforms inside pits)
+	# are also skipped; they're too small to read at minimap scale.
+	body.add_to_group(&"minimap_walkable")
 
 
 static func build_corridor_floor(ctx: LevelBuildContext, center: Vector3, cd: CorridorDef) -> void:

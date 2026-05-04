@@ -27,7 +27,7 @@ const ALLOC_BAR_BG        := Color(0.12, 0.12, 0.12, 0.9)
 
 const EQUIP_SLOTS: Array[Dictionary] = [
 	{"row": 0, "col": 0, "label_key": "EQUIP_HEAD", "id": &"head", "accepts": &"head"},
-	{"row": 0, "col": 1, "label_key": "EQUIP_OPTICS", "id": &"optics", "accepts": &"optics"},
+	{"row": 0, "col": 1, "label_key": "EQUIP_RECON", "id": &"recon", "accepts": &"recon"},
 	{"row": 0, "col": 2, "label_key": "EQUIP_BACKPACK", "id": &"backpack", "accepts": &"backpack"},
 	{"row": 1, "col": 0, "label_key": "EQUIP_WEAPON", "id": &"weapon", "accepts": &"weapon"},
 	{"row": 1, "col": 1, "label_key": "EQUIP_CHEST", "id": &"chest", "accepts": &"chest"},
@@ -270,7 +270,12 @@ func _build_layout() -> void:
 	var backdrop := ColorRect.new()
 	backdrop.color = BACKDROP_COLOR
 	backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+	# IGNORE (not STOP) so clicks outside the inner panel pass through
+	# to CharacterPanel._gui_input and reach the click-to-drop branch.
+	# CharacterPanel itself is MOUSE_FILTER_STOP, so the click is still
+	# absorbed by the modal — it just doesn't get eaten by the backdrop
+	# before our handler sees it.
+	backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(backdrop)
 
 	var panel := Panel.new()

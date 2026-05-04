@@ -1,0 +1,44 @@
+[gd_resource type="Resource" script_class="RoomDef" load_steps=3 format=3]
+
+; Big open arena — 32×24 metres of fightable floor (~768 sqm), targeted
+; at Diablo-2-style "open zone" feel. With the spawner's auto-density
+; (~1 enemy per 24 sqm) this room hosts roughly 32 enemies; combined
+; with the global mixed-pack composition you get melee + ranged +
+; support knots scattered across the floor.
+;
+; Layout notes:
+;   * 8 decorative pillars on a wide ring break sight lines so the room
+;     reads as architecture rather than an empty parking lot, but leave
+;     the centre clear for kiting / pulling.
+;   * Openings on the WEST and EAST walls only — north/south are walls
+;     so the player has a clear "enter / fight / exit" axis. Drop
+;     openings on more sides if you want it to be a hub.
+;   * opening_width 6.0 (vs the typical 4.0) — wider doorways read
+;     better at this scale and let the player flee a fight instead of
+;     getting funneled.
+;
+; To use: drop into a layout as a piece, position with enough clearance
+; for the 32m/24m extents (the half-extents are 16/12, so the centre
+; needs to be at least 17m from any neighbour wall on the X axis and
+; 13m on the Z).
+
+[ext_resource type="Script" path="res://scripts/level/room_def.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/level/lights/fluorescent_white.tres" id="light"]
+
+[resource]
+script = ExtResource("1")
+id = &"proto_open_arena"
+size = Vector2(32, 24)
+openings = [3, 2]
+opening_width = 6.0
+light_color = ExtResource("light")
+enemy_count = 1
+decorative_pillars = [
+	Vector2(-10, -7), Vector2(10, -7),
+	Vector2(-10, 7), Vector2(10, 7),
+	Vector2(0, -7), Vector2(0, 7),
+	Vector2(-13, 0), Vector2(13, 0),
+]
+decorative_pillar_size = Vector2(1.4, 1.4)
+puddle_count = 5
+puddle_size = Vector2(1.2, 2.0)

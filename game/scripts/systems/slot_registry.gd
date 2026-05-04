@@ -19,7 +19,7 @@ extends Node
 # (PerkState.get_aggregate(&"extra_weapon_slots")). Listed here for the
 # canonical-set property; UI hides them when locked.
 const SLOTS: Array[StringName] = [
-	&"head", &"optics", &"backpack",
+	&"head", &"recon", &"backpack",
 	&"weapon", &"chest", &"offhand",
 	&"gloves", &"belt", &"boots",
 	&"mainboard",
@@ -46,7 +46,7 @@ func is_extra_weapon_slot(slot: StringName) -> bool:
 const MAIN_TYPES: Array[String] = [
 	"1H Weapon", "2H Weapon",
 	"Head Armor", "Chest Armor", "Gloves", "Boots",
-	"Belt", "Mainboard", "Backpack", "Optics",
+	"Belt", "Mainboard", "Backpack", "Recon",
 ]
 
 # main_type → slot lookup. Both weapon variants resolve to the same slot
@@ -62,7 +62,7 @@ const MAIN_TYPE_TO_SLOT: Dictionary = {
 	"Belt":        &"belt",
 	"Mainboard":   &"mainboard",
 	"Backpack":    &"backpack",
-	"Optics":      &"optics",
+	"Recon":       &"recon",
 }
 
 const MAIN_TYPE_GLYPH: Dictionary = {
@@ -76,7 +76,7 @@ const MAIN_TYPE_GLYPH: Dictionary = {
 	"Belt":        "═",
 	"Mainboard":   "⌬",
 	"Backpack":    "▤",
-	"Optics":      "✦",
+	"Recon":       "✦",
 }
 
 

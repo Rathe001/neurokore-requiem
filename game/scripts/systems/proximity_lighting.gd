@@ -74,11 +74,17 @@ func _process(delta: float) -> void:
 	for key in _baselines.keys():
 		# Validity check has to come BEFORE the cast — `as Light3D` on a freed
 		# instance triggers "Trying to cast a freed object" before we'd reach
-		# the is_instance_valid branch.
+		# the is_instance_valid branch. Tree check covers the second case
+		# where a light is still valid (not freed) but has been removed from
+		# the tree — accessing global_position then would spam the
+		# "!is_inside_tree()" warning every frame until the next free.
 		if not is_instance_valid(key):
 			to_remove.append(key)
 			continue
 		var light := key as Light3D
+		if not light.is_inside_tree():
+			to_remove.append(key)
+			continue
 		var baseline: float = _baselines[key]
 		var d2: Vector3 = light.global_position - p
 		# Horizontal distance — vertical separation shouldn't dim, since the

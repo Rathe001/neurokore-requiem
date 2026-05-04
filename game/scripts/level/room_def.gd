@@ -23,6 +23,13 @@ enum Wall { NORTH, SOUTH, EAST, WEST }
 @export_group("Enemies")
 @export var enemy_count: int = 0
 @export var enemy_scene: PackedScene
+## Class pool for enemies spawned in this room. When non-empty, the
+## spawner picks one EnemyClass per spawn (solo or pack member) so the
+## room reads as a mixed unit composition — melee + ranged + support
+## within the same pack — instead of a single homogenous archetype
+## inherited from the scene template. Empty falls back to whatever
+## class is set on enemy_scene.
+@export var enemy_classes: Array[EnemyClass] = []
 
 @export_group("Decals")
 # Number of randomly-placed reflective puddles on the room floor. Picked from

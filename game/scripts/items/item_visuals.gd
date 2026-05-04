@@ -24,7 +24,7 @@ static func build(item: Item) -> Node3D:
 		"Belt":        _build_belt(root)
 		"Mainboard":   _build_mainboard(root)
 		"Backpack":    _build_backpack(root)
-		"Optics":      _build_optics(root)
+		"Recon":       _build_optics(root)
 		_:             _build_fallback(root)
 	return root
 

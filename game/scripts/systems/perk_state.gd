@@ -56,21 +56,18 @@ extends Node
 #                                   Each drone runs its own orbit + target +
 #                                   fire loop; future Mainboard chips will
 #                                   modify their behaviour.
-#   doomsayer_proc_pct            — % chance per second for an enemy in the
-#                                   aura to be afflicted (Enculted Doomsayer).
-#                                   PrototypePlayer ticks the aura on a fixed
-#                                   cadence; each enemy in radius rolls with
-#                                   linear distance falloff, and on a hit
-#                                   gets one of stun / mind-control / weaken
-#                                   applied via PrototypeEnemy.apply_*.
 #   doomsayer_max_charms          — Cap on simultaneously-charmed enemies
 #                                   (Enculted Doomsayer charm slot). Charm
-#                                   doesn't expire on a timer like stun /
-#                                   weaken do — it persists until the player
-#                                   dies or a NEW charm bumps the oldest
-#                                   out (FIFO). PrototypePlayer owns the
+#                                   persists until the player dies or the
+#                                   charmed enemy is killed by another
+#                                   enemy. No FIFO eviction; the cap acts
+#                                   as a natural rate-limit on the per-tick
+#                                   charm aura. PrototypePlayer owns the
 #                                   list; release_charm on the enemy side
-#                                   just clears state.
+#                                   just clears state. Damage-over-time
+#                                   for the same aura is talent-driven —
+#                                   see &"doomsayer_dot_per_tick" in
+#                                   talent_state.gd.
 #   ied_max_traps                 — +N max active IED traps (Survivalist
 #                                   Improvised Explosive Device). PrototypePlayer
 #                                   tosses a trap at the cursor on every LMB

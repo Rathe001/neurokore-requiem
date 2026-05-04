@@ -275,8 +275,8 @@ func _refresh() -> void:
 func _update_start_enabled() -> void:
 	if _start_button == null:
 		return
-	var ready := _selected_avatar_id > 0 and not _name_value.strip_edges().is_empty()
-	_start_button.disabled = not ready
+	var is_ready := _selected_avatar_id > 0 and not _name_value.strip_edges().is_empty()
+	_start_button.disabled = not is_ready
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────
@@ -311,9 +311,9 @@ static func _apply_card_selection(box: Container, selected_id) -> void:
 		child.modulate = Color(1.0, 1.0, 1.0, 1.0) if is_selected else Color(0.55, 0.55, 0.6, 1.0)
 
 
-func _make_pick_card(label_key: String, desc_key: String, accent: Color, size: Vector2) -> Button:
+func _make_pick_card(label_key: String, desc_key: String, accent: Color, card_size: Vector2) -> Button:
 	var card := Button.new()
-	card.custom_minimum_size = size
+	card.custom_minimum_size = card_size
 	card.focus_mode = Control.FOCUS_NONE
 
 	var bg_color := Color(accent.r * 0.12, accent.g * 0.12, accent.b * 0.12, 0.92)

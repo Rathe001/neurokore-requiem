@@ -58,6 +58,13 @@ func _ready() -> void:
 	if not _target.has_method(&"apply_grab") or not _target.apply_grab():
 		queue_free()
 		return
+	# Apply a stun for the lift duration so the post-slam release leaves
+	# the enemy stunned for a meaningful follow-up window. Enemy-side
+	# logic pauses the stun countdown while in GRABBED state, so the full
+	# duration carries past the slam instead of ticking down during the
+	# lift.
+	if _target.has_method(&"apply_stun"):
+		_target.apply_stun(LIFT_DURATION)
 	_start_y = _target.global_position.y
 	_build_beam()
 	_update_beam()

@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="Skill" load_steps=2 format=3]
+
+; Active offhand — Shield Generator. RMB activates a 25% damage
+; reduction buff that absorbs up to 200 damage before breaking.
+; cooldown applies AFTER the break, not on activation, so a player
+; who never gets hit can leave the buff up indefinitely.
+;
+; active_kind = SHIELD_BUFF (3 in the enum: NONE, SHIELD_HOLD, GRENADE,
+; SHIELD_BUFF). targeting_mode is unused for active_kind != NONE but
+; left at default since the enum has no NONE member.
+
+[ext_resource type="Script" path="res://scripts/skills/skill.gd" id="1_skill_script"]
+
+[resource]
+script = ExtResource("1_skill_script")
+display_name = "Shield Generator"
+glyph = "S"
+damage = 0
+skill_range = 0.0
+cooldown = 20.0
+wind_up = 0.0
+resource_cost = 0
+targeting_mode = 0
+cone_deg = 0.0
+knockback = 0.0
+icon_color = Color(0.85, 0.92, 1.0, 1.0)
+active_kind = 3
+shield_pool = 25
+damage_reduction = 0.25
+duration = 120.0

@@ -603,7 +603,7 @@ func _on_node_unhovered() -> void:
 # (origin / specialized) × (own / kore / opposing) classification that
 # AttributeState.get_tier_thresholds branches on, so the wording matches
 # the actual rule that locked the tier.
-func _unavailable_reason(stat_id: StringName, tier: int, stat_name: String) -> String:
+func _unavailable_reason(stat_id: StringName, tier: int, _stat_name: String) -> String:
 	var class_id: StringName = PlayerState.class_id
 	var spec_id: StringName = PlayerState.spec_id
 	var tier_label := AttributeState.TIER_ROMAN[tier]

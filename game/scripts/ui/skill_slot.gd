@@ -12,10 +12,42 @@ class_name SkillSlot
 
 var _skill: Skill = null
 var _player: Node = null
+# Built at runtime so the .tscn doesn't need editing. Visible only
+# while the bound skill is on cooldown.
+#   _cooldown_dim   — static full-coverage dim rect under the drain
+#                     overlay, so the icon stays uniformly darkened
+#                     the whole cooldown (otherwise the bottom half
+#                     reads as "ready" once the drain shrinks past
+#                     the timer label, killing readability).
+#   _cooldown_label — centred numeric countdown. Integer seconds for
+#                     cooldowns ≥1s, one decimal below.
+var _cooldown_dim: ColorRect = null
+var _cooldown_label: Label = null
 
 func _ready() -> void:
 	_apply_theme()
 	UIThemeState.changed.connect(_apply_theme)
+	_cooldown_dim = ColorRect.new()
+	_cooldown_dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_cooldown_dim.color = Color(0.0, 0.0, 0.0, 0.65)
+	_cooldown_dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_cooldown_dim.visible = false
+	add_child(_cooldown_dim)
+	# Sit the static dim layer between the icon and the animated drain
+	# overlay so the drain shows on top of (not under) the dim. The
+	# drain overlay was added in the .tscn, so its child index = 5.
+	move_child(_cooldown_dim, cooldown_overlay.get_index())
+	_cooldown_label = Label.new()
+	_cooldown_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_cooldown_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_cooldown_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_cooldown_label.add_theme_font_size_override(&"font_size", 13)
+	_cooldown_label.add_theme_color_override(&"font_color", Color.WHITE)
+	_cooldown_label.add_theme_color_override(&"font_outline_color", Color(0, 0, 0, 1))
+	_cooldown_label.add_theme_constant_override(&"outline_size", 2)
+	_cooldown_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_cooldown_label.visible = false
+	add_child(_cooldown_label)
 
 func _apply_theme() -> void:
 	var p := UIThemeState.palette
@@ -57,6 +89,19 @@ func _process(_delta: float) -> void:
 	var ratio: float = _player.get_cooldown_ratio(_skill)
 	if ratio <= 0.0:
 		cooldown_overlay.visible = false
+		if _cooldown_dim != null:
+			_cooldown_dim.visible = false
+		if _cooldown_label != null:
+			_cooldown_label.visible = false
 		return
 	cooldown_overlay.visible = true
 	cooldown_overlay.offset_top = size.y * (1.0 - ratio)
+	if _cooldown_dim != null:
+		_cooldown_dim.visible = true
+	# Numeric countdown — integer seconds at 1s+ (room for two digits
+	# without overflowing the slot), one decimal below 1s so the
+	# player sees the final tick rather than a flat "0".
+	if _cooldown_label != null and _player.has_method(&"get_cooldown_remain"):
+		var remain: float = _player.get_cooldown_remain(_skill)
+		_cooldown_label.text = "%d" % int(ceil(remain)) if remain >= 1.0 else "%.1f" % remain
+		_cooldown_label.visible = true

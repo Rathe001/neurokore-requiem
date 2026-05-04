@@ -97,7 +97,7 @@ var _branch_terminator_ids: Array[StringName] = []
 
 func generate() -> LevelGraph:
 	var rng := RandomNumberGenerator.new()
-	rng.seed = seed if seed != 0 else int(Time.get_unix_time_from_system())
+	rng.seed = rng_seed if rng_seed != 0 else int(Time.get_unix_time_from_system())
 
 	var length := rng.randi_range(min_length, max_length)
 	if length < 2:
@@ -161,6 +161,7 @@ func generate() -> LevelGraph:
 		# index inside that range = i - 1.
 		if not chain_themes.is_empty():
 			var interior_count := length - 2
+			@warning_ignore("integer_division")
 			var section_idx := (i - 1) * chain_themes.size() / maxi(interior_count, 1)
 			section_idx = clampi(section_idx, 0, chain_themes.size() - 1)
 			node.theme_override = chain_themes[section_idx]

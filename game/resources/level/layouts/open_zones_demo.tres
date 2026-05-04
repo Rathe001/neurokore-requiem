@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="LevelLayout" load_steps=4 format=3]
+
+; LevelLayout wrapper for open_zones_demo_graph.tres. D2-style chain:
+;   start room → 32×24 open arena → 48×32 grand arena.
+;
+; Ground plane is 200×120 because the chain spans ~110m end-to-end and
+; the visible-from-camera ground extent needs to clear that. The
+; canonical prototype_layout uses 120×120; bumping here is mandatory or
+; the arenas float over the void.
+
+[ext_resource type="Script" path="res://scripts/level/level_layout.gd" id="script_layout"]
+[ext_resource type="Resource" path="res://resources/level/themes/tech_theme.tres" id="theme"]
+[ext_resource type="Resource" path="res://resources/level/layouts/open_zones_demo_graph.tres" id="graph"]
+
+[resource]
+script = ExtResource("script_layout")
+theme = ExtResource("theme")
+ground_size = Vector2(200, 120)
+graph = ExtResource("graph")

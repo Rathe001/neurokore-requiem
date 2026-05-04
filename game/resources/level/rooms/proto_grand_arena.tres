@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="RoomDef" load_steps=3 format=3]
+
+; Even bigger sister to proto_open_arena — 48×32 metres of fightable
+; floor (~1500 sqm). Pillar layout pushed wider to keep the silhouette
+; from reading as a rectangle, with a gap-tooth ring of columns near
+; the perimeter and a single landmark cluster off-centre. Targeted
+; enemy density at the 24-sqm baseline is ~64; pack rolls on top.
+;
+; Use this as a "main square" room — the centre of a hub layout, or
+; a climactic clearing right before a boss arena.
+
+[ext_resource type="Script" path="res://scripts/level/room_def.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/level/lights/fluorescent_white.tres" id="light"]
+
+[resource]
+script = ExtResource("1")
+id = &"proto_grand_arena"
+size = Vector2(48, 32)
+openings = [3, 2]
+opening_width = 6.0
+light_color = ExtResource("light")
+enemy_count = 1
+decorative_pillars = [
+	Vector2(-18, -10), Vector2(-9, -12), Vector2(0, -10), Vector2(9, -12), Vector2(18, -10),
+	Vector2(-18, 10), Vector2(-9, 12), Vector2(0, 10), Vector2(9, 12), Vector2(18, 10),
+	Vector2(-21, 0), Vector2(21, 0),
+	Vector2(-4, 0), Vector2(4, 0),
+]
+decorative_pillar_size = Vector2(1.4, 1.4)
+puddle_count = 7
+puddle_size = Vector2(1.3, 2.2)

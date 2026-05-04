@@ -37,7 +37,7 @@ func rebuild(new_seed: int = 0) -> void:
 	# pending-deletion previous nodes (overlap warnings, double-spawned lights).
 	await get_tree().process_frame
 	if new_seed != 0 and layout.generator != null:
-		layout.generator.seed = new_seed
+		layout.generator.rng_seed = new_seed
 	_build_level()
 	_bake_navigation()
 
@@ -174,7 +174,7 @@ func _build_room(piece: LevelPiece) -> void:
 	InteractableBuilder.spawn_slots(_ctx, piece_id, center, rd, piece.additional_slots)
 	# Per-instance count beats template default; -1 sentinel falls back.
 	var enemy_count: int = piece.enemy_count_override if piece.enemy_count_override >= 0 else rd.enemy_count
-	EnemySpawner.spawn_in_bounds(_ctx, piece, center, hx, hz, enemy_count, rd.enemy_scene, piece.enemy_level_range)
+	EnemySpawner.spawn_in_bounds(_ctx, piece, center, hx, hz, enemy_count, rd.enemy_scene, piece.enemy_level_range, rd.enemy_classes)
 
 
 # Per-wall collision bodies and door instances. Wall *visuals* come from the
@@ -236,7 +236,7 @@ func _build_corridor(piece: LevelPiece) -> void:
 	var fog_z := cd.length if cd.axis == CorridorDef.Axis.Z else cd.width
 	LightingBuilder.create_fill_light(_ctx, center, fog_x, fog_z)
 	LightingBuilder.create_fog_volume(_ctx, center, fog_x, fog_z)
-	EnemySpawner.spawn_in_bounds(_ctx, piece, center, hx, hz, cd.enemy_count, cd.enemy_scene)
+	EnemySpawner.spawn_in_bounds(_ctx, piece, center, hx, hz, cd.enemy_count, cd.enemy_scene, Vector2i.ZERO, cd.enemy_classes)
 
 
 # ── Public API ────────────────────────────────────────────────────────────
@@ -262,9 +262,9 @@ func respawn_enemies(center_level: int, spread: int = 1) -> void:
 			var rd := piece.room
 			var hx := rd.size.x * 0.5
 			var hz := rd.size.y * 0.5
-			EnemySpawner.spawn_in_bounds(_ctx, piece, piece.position, hx, hz, rd.enemy_count, rd.enemy_scene, lvl_range)
+			EnemySpawner.spawn_in_bounds(_ctx, piece, piece.position, hx, hz, rd.enemy_count, rd.enemy_scene, lvl_range, rd.enemy_classes)
 		elif piece.corridor != null:
 			var cd := piece.corridor
 			var hx := cd.width * 0.5 if cd.axis == CorridorDef.Axis.Z else cd.length * 0.5
 			var hz := cd.length * 0.5 if cd.axis == CorridorDef.Axis.Z else cd.width * 0.5
-			EnemySpawner.spawn_in_bounds(_ctx, piece, piece.position, hx, hz, cd.enemy_count, cd.enemy_scene, lvl_range)
+			EnemySpawner.spawn_in_bounds(_ctx, piece, piece.position, hx, hz, cd.enemy_count, cd.enemy_scene, lvl_range, cd.enemy_classes)

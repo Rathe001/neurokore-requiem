@@ -248,6 +248,12 @@ var _hovered: bool = false
 var _tooltip_locked: bool = false
 var _hit_tween: Tween
 var _hit_flash_tween: Tween
+# Captured at the end of reset() so the hit-squash tween can return to
+# the right rest pose for bosses + named monsters (which use a non-1.0
+# visual scale). Without this, the tween's ".tween_property(...,
+# Vector3.ONE, ...)" final keyframe stomps the boss size to ONE on the
+# first hit and the boss permanently shrinks.
+var _rest_visual_scale: Vector3 = Vector3.ONE
 var _crouching: bool = false
 var _crouch_probe_t: float = 0.0
 var _stand_test_shape: CapsuleShape3D
@@ -309,6 +315,11 @@ func _init_enemy() -> void:
 		_hit_tween.kill()
 		_hit_tween = null
 	_apply_level_stats()
+	# _apply_level_stats handles boss / named visual scale; capture
+	# whatever it landed on as the rest pose so the hit-squash tween
+	# returns here instead of stomping back to Vector3.ONE.
+	if visual != null:
+		_rest_visual_scale = visual.scale
 	_health = max_health
 	_state = State.IDLE
 	_knockback_remain = 0.0
@@ -316,8 +327,8 @@ func _init_enemy() -> void:
 	_want_dir = Vector3.ZERO
 	_player_ref = null
 	set_physics_process(true)
-	collision_layer = 2
-	collision_mask = 1 | 2 | 4
+	collision_layer = _LAYER_ENEMY
+	collision_mask = _DEFAULT_ENEMY_MASK
 	if collision != null:
 		collision.disabled = false
 	if floor_ring != null:
@@ -407,14 +418,17 @@ func _apply_level_stats() -> void:
 		dmg_mult *= named_monster.damage_mult
 	max_health = int(round(float(max_health) * hp_mult))
 	_attack_damage = int(round(float(_attack_damage) * dmg_mult))
-	# Tint priority: named ring > first affix > level. Named overrides
-	# everything because the named identity is the headline visual cue.
+	# Tint priority: named ring > first affix > class type. Named and
+	# affix override everything because those identities are the
+	# headline visual cue. Otherwise the ring colour communicates the
+	# enemy's COMBAT TYPE — melee / ranged / support — so the player
+	# can read a pack at a glance and pick targets accordingly.
 	if named_monster != null:
 		_apply_floor_ring_tint_color(named_monster.ring_tint)
 	elif not affixes.is_empty() and affixes[0] != null:
 		_apply_floor_ring_tint_color(affixes[0].ring_tint)
 	else:
-		_apply_floor_ring_tint(lv)
+		_apply_floor_ring_tint_color(_class_ring_color())
 	# Visual scale: named > 1.0 boosts the model. Don't scale otherwise (a
 	# multi-affix rare keeps the base size — only named encounters earn the
 	# silhouette change).
@@ -454,6 +468,24 @@ func _roll_display_name() -> void:
 
 func _apply_floor_ring_tint(lv: int) -> void:
 	_apply_floor_ring_tint_color(LEVEL_RING_EMISSION[lv])
+
+
+# Per-class ring tint — communicates combat type at a glance. Support
+# beats attack mode in the precedence so a "melee + healer" reads as
+# support (the rarer / more notable role) rather than blending into a
+# pack of plain melee. Falls back to the level tint when the enemy
+# has no class assigned (legacy spawns / future archetypes).
+const _CLASS_TINT_MELEE := Color(1.0, 0.25, 0.15)
+const _CLASS_TINT_RANGED := Color(0.25, 0.65, 1.0)
+const _CLASS_TINT_SUPPORT := Color(0.25, 1.0, 0.45)
+func _class_ring_color() -> Color:
+	if enemy_class == null:
+		return LEVEL_RING_EMISSION[clampi(level, 0, MAX_LEVEL)]
+	if enemy_class.support_role != EnemyClass.SupportRole.NONE:
+		return _CLASS_TINT_SUPPORT
+	if enemy_class.attack_mode == EnemyClass.AttackMode.RANGED:
+		return _CLASS_TINT_RANGED
+	return _CLASS_TINT_MELEE
 
 func _apply_floor_ring_tint_color(color: Color) -> void:
 	if floor_ring == null:
@@ -542,8 +574,74 @@ func _on_mouse_entered() -> void:
 	_hovered = true
 	_refresh_outline()
 	add_to_group(&"tooltip_target")
-	var label := "%s  %s" % [display_name, tr("HUD_LEVEL_FORMAT") % level]
-	get_tree().call_group(&"interactable_tooltip", &"show_text", label)
+	_push_tooltip()
+
+
+# Build + push the rich tooltip. Title is name + level; body lists the
+# combat type, current HP, and any active buffs/debuffs (curse, stun,
+# weaken, charmed/friendly). Called from mouse-enter and from any
+# state change while hovered (curse applied, stun expired, take_damage)
+# via _refresh_tooltip_if_hovered, so the tooltip stays accurate
+# without needing a re-hover.
+func _push_tooltip() -> void:
+	var title := "%s  %s" % [display_name, tr("HUD_LEVEL_FORMAT") % level]
+	var body := _build_tooltip_body()
+	get_tree().call_group(&"interactable_tooltip", &"show_talent_node", title, body)
+
+
+func _build_tooltip_body() -> String:
+	var lines: Array[String] = []
+	lines.append(_describe_class())
+	lines.append("HP: %d / %d" % [maxi(_health, 0), max_health])
+	# Active buffs / debuffs — only listed when present so a clean
+	# enemy reads short. Order: friendly status first (it's an identity
+	# flag, not a debuff), then time-bound debuffs in expiry order.
+	if _charmed:
+		lines.append("Friendly (charmed)")
+	if _stun_remain > 0.0:
+		lines.append("Stunned · %.1fs" % _stun_remain)
+	if _weaken_remain > 0.0:
+		var pct := int(round(_weaken_mult * 100.0))
+		lines.append("Weakened −%d%% dmg · %.1fs" % [pct, _weaken_remain])
+	if _curse_remain > 0.0 and _curse_damage_pct > 0.0:
+		lines.append("Cursed +%d%% dmg taken · %.1fs" % [int(round(_curse_damage_pct)), _curse_remain])
+	# Affix names — already baked into display_name's prefix, but
+	# spelling them out as a discrete line makes it explicit when an
+	# elite shows up so the player knows what they're up against.
+	if not affixes.is_empty():
+		var labels: Array[String] = []
+		for affix in affixes:
+			if affix != null and affix.label != "":
+				labels.append(affix.label)
+		if not labels.is_empty():
+			lines.append("Affixes: " + ", ".join(labels))
+	return "\n".join(lines)
+
+
+# Single-line "Melee", "Ranged", "Healer", "Buffer", or combinations
+# like "Melee · Healer" when the enemy has both an attack mode and a
+# support role.
+func _describe_class() -> String:
+	if enemy_class == null:
+		return "Unknown type"
+	var attack: String = "Ranged" if enemy_class.attack_mode == EnemyClass.AttackMode.RANGED else "Melee"
+	var support: String = ""
+	match enemy_class.support_role:
+		EnemyClass.SupportRole.HEAL:
+			support = "Healer"
+		EnemyClass.SupportRole.DAMAGE_BUFF:
+			support = "Buffer"
+	if support == "":
+		return attack
+	return "%s · %s" % [attack, support]
+
+
+# Re-push the tooltip if currently hovered, so applied / expired
+# debuffs and HP changes show up live without forcing a re-hover.
+# Cheap when not hovered (single bool check + early return).
+func _refresh_tooltip_if_hovered() -> void:
+	if _hovered or _tooltip_locked:
+		_push_tooltip()
 
 func _on_mouse_exited() -> void:
 	_hovered = false
@@ -727,6 +825,7 @@ func apply_curse(damage_pct: float, duration: float) -> void:
 	_curse_damage_pct = damage_pct
 	_curse_remain = duration
 	_show_curse_marker()
+	_refresh_tooltip_if_hovered()
 
 
 # True when this enemy is currently controlled by the player (charmed
@@ -803,9 +902,17 @@ func apply_stun(duration: float) -> void:
 		return
 	if duration > _stun_remain:
 		_stun_remain = duration
-	_change_state(State.STUNNED)
-	velocity = Vector3.ZERO
+	# Don't yank a Telekinesis-grabbed enemy out of GRABBED — the lift
+	# tween still owns global_position and STUNNED's velocity zero
+	# would conflict with it. The stun timer is preserved (and paused
+	# in _tick_afflictions while GRABBED), so on release_grab the
+	# enemy transitions straight into STUNNED with the full duration
+	# remaining for the post-slam follow-up window.
+	if _state != State.GRABBED:
+		_change_state(State.STUNNED)
+		velocity = Vector3.ZERO
 	_show_affliction_marker("✱", Color(0.55, 0.7, 1.0, 1.0))
+	_refresh_tooltip_if_hovered()
 
 
 ## Mind-control: the enemy chases / attacks the nearest other enemy
@@ -822,11 +929,12 @@ const _LAYER_ENEMY := 2
 const _LAYER_PLAYER := 4
 # Charmed pets move to a dedicated "ally" layer that the player's mask
 # (1|2) does NOT include — so the player passes through pets without
-# getting body-blocked. Other enemies' masks also don't include this
-# bit, which means pets can move through enemy crowds freely; they're
-# still in the &"enemies" group so target queries find them as normal.
+# getting body-blocked. Hostile enemies' mask DOES include this layer
+# (_DEFAULT_ENEMY_MASK below), so a pet and a hostile melee'ing each
+# other body-block each other and stand still while swinging instead
+# of sliding through one another in a tug-of-war.
 const _LAYER_CHARMED_ALLY := 16
-const _DEFAULT_ENEMY_MASK := _LAYER_WORLD | _LAYER_ENEMY | _LAYER_PLAYER             # 7
+const _DEFAULT_ENEMY_MASK := _LAYER_WORLD | _LAYER_ENEMY | _LAYER_PLAYER | _LAYER_CHARMED_ALLY  # 23
 # Pets collide with world, hostile enemies, AND other pets (layer 16) —
 # but NOT the player. Including the ally bit means two pets can't stand
 # on top of each other; they push apart naturally via move_and_slide.
@@ -878,6 +986,8 @@ func apply_charm() -> bool:
 	# CONNECT_ONE_SHOT means a later actual death of this pet won't
 	# double-decrement the counter.
 	died.emit()
+	_update_health_bar()
+	_refresh_tooltip_if_hovered()
 	return true
 
 
@@ -900,6 +1010,8 @@ func release_charm() -> void:
 	# _tick_afflictions cycle clears it once everything is gone.
 	if _stun_remain <= 0.0 and _weaken_remain <= 0.0:
 		_clear_affliction_marker()
+	_update_health_bar()
+	_refresh_tooltip_if_hovered()
 
 
 ## Polymath Telekinesis grab — flips the enemy into State.GRABBED so the
@@ -923,9 +1035,15 @@ func apply_grab() -> bool:
 func release_grab() -> void:
 	if _state != State.GRABBED:
 		return
-	# IDLE so the next chase tick re-evaluates aggro normally — the
-	# slam itself usually re-aggros via take_damage anyway.
-	_change_state(State.IDLE)
+	# Promote into STUNNED if a stun was applied during the lift (the
+	# Telekinesis grab applies one for the lift duration), otherwise
+	# back to IDLE so the next chase tick re-evaluates aggro normally —
+	# the slam itself usually re-aggros via take_damage anyway.
+	if _stun_remain > 0.0:
+		_change_state(State.STUNNED)
+		velocity = Vector3.ZERO
+	else:
+		_change_state(State.IDLE)
 
 
 ## Reduce outgoing damage by `magnitude` (0..1) for `duration` seconds.
@@ -940,6 +1058,7 @@ func apply_weaken(magnitude: float, duration: float) -> void:
 	if duration > _weaken_remain:
 		_weaken_remain = duration
 	_show_affliction_marker("↓", Color(0.7, 0.7, 0.7, 1.0))
+	_refresh_tooltip_if_hovered()
 
 
 # Tick stun + weaken timers. Charm has no timer — it's released externally
@@ -947,7 +1066,11 @@ func apply_weaken(magnitude: float, duration: float) -> void:
 # Stun expiry transitions back to IDLE so the next physics frame re-
 # evaluates aggro normally. Weaken expiry resets the mult.
 func _tick_afflictions(delta: float) -> void:
-	if _stun_remain > 0.0:
+	# Pause the stun countdown while a Telekinesis grab is active —
+	# the enemy is already CC'd by GRABBED, and the stun is meant to
+	# apply post-slam. release_grab promotes us into STUNNED with the
+	# full duration intact.
+	if _stun_remain > 0.0 and _state != State.GRABBED:
 		_stun_remain -= delta
 		if _stun_remain <= 0.0:
 			_stun_remain = 0.0
@@ -1096,12 +1219,24 @@ func _play_hit_squash() -> void:
 		return
 	if _hit_tween != null and _hit_tween.is_valid():
 		_hit_tween.kill()
-	visual.scale = Vector3.ONE
+	# HIT_SQUASH_SCALE is a multiplier on the rest pose, not an absolute
+	# size — multiply componentwise so a 1.5x boss squashes to (1.65,
+	# 1.275, 1.65) instead of being slammed down to (1.10, 0.85, 1.10)
+	# and ending the tween at Vector3.ONE (which permanently shrunk it).
+	var squash := Vector3(
+		_rest_visual_scale.x * HIT_SQUASH_SCALE.x,
+		_rest_visual_scale.y * HIT_SQUASH_SCALE.y,
+		_rest_visual_scale.z * HIT_SQUASH_SCALE.z,
+	)
+	visual.scale = _rest_visual_scale
 	_hit_tween = create_tween()
-	_hit_tween.tween_property(visual, "scale", HIT_SQUASH_SCALE, HIT_SQUASH_IN) \
+	_hit_tween.tween_property(visual, "scale", squash, HIT_SQUASH_IN) \
 		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	_hit_tween.tween_property(visual, "scale", Vector3.ONE, HIT_SQUASH_OUT) \
+	_hit_tween.tween_property(visual, "scale", _rest_visual_scale, HIT_SQUASH_OUT) \
 		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+
+const _HP_BAR_HOSTILE := Color(1.0, 0.28, 0.32, 1.0)
+const _HP_BAR_FRIENDLY := Color(0.30, 1.0, 0.45, 1.0)
 
 func _update_health_bar() -> void:
 	if health_bar == null:
@@ -1109,6 +1244,11 @@ func _update_health_bar() -> void:
 	var ratio := clampf(float(_health) / float(max_health), 0.0, 1.0)
 	health_bar.visible = _is_alive() and ratio < 1.0
 	health_bar.set_instance_shader_parameter(&"fill_ratio", ratio)
+	# Charmed pets fight FOR the player; their bar reads green so the
+	# player can scan a knot of bodies and tell allies from hostiles
+	# without inspecting each one.
+	health_bar.set_instance_shader_parameter(&"fill_color",
+		_HP_BAR_FRIENDLY if _charmed else _HP_BAR_HOSTILE)
 
 func _physics_process(delta: float) -> void:
 	if _state == State.DEAD:
@@ -1215,7 +1355,16 @@ func _tick_knockback(delta: float) -> void:
 	_knockback_remain -= delta
 	_want_dir = Vector3.ZERO
 	if _knockback_remain <= 0.0:
-		_change_state(State.CHASING)
+		# Resume STUNNED if stun time remains — without this a knockback
+		# hit on a stunned enemy permanently transitioned them to CHASING
+		# (the stun timer kept ticking but the state had moved on),
+		# which read in playtest as "stuns are ignored when in attack
+		# range". Knockback still applies to a stunned enemy; the stun
+		# just survives it.
+		if _stun_remain > 0.0:
+			_change_state(State.STUNNED)
+		else:
+			_change_state(State.CHASING)
 
 ## Force this enemy into aggro and alert nearby enemies. No-op if we're
 ## already engaged or already returning (aggro shouldn't pull a leashed
@@ -1349,7 +1498,7 @@ func _chase_tick() -> void:
 			# fine. Bumping into walls is the player's intended advantage.
 			var away := -to_target / dist
 			_want_dir = away
-			var back_speed := CHASE_SPEED * 0.55 * (CROUCH_SPEED_MULT if _crouching else 1.0) * _affix_move_speed_mult()
+			var back_speed := CHASE_SPEED * 0.55 * _crouch_speed_factor() * _affix_move_speed_mult()
 			velocity.x = away.x * back_speed
 			velocity.z = away.z * back_speed
 			return
@@ -1363,8 +1512,19 @@ func _chase_tick() -> void:
 
 	# Aggro'd melee chase the target. Won't start a swing through a wall —
 	# the LoS check on attack initiation prevents through-wall hits.
-	elif dist <= _attack_range() and _attack_cd <= 0.0 and has_los:
-		_cast_attack(target, to_target / dist)
+	# When already in attack range, hold position regardless of cooldown
+	# state. The previous behaviour (fall through to navmesh chase when
+	# in range but on cooldown) read in playtest as a tug-of-war shove
+	# match: pet and hostile both kept pathfinding into each other
+	# between swings instead of standing still and trading blows.
+	elif dist <= _attack_range() and has_los:
+		if _attack_cd <= 0.0:
+			_cast_attack(target, to_target / dist)
+		else:
+			_face_direction(to_target / dist)
+			_want_dir = Vector3.ZERO
+			velocity.x = 0.0
+			velocity.z = 0.0
 		return
 
 	# Pathfind via NavigationAgent — routes around walls and pit edges
@@ -1382,7 +1542,7 @@ func _chase_tick() -> void:
 			if nav_dir.length_squared() > 0.0001:
 				dir = nav_dir.normalized()
 	_want_dir = dir
-	var chase_speed := _movement_speed_base() * (CROUCH_SPEED_MULT if _crouching else 1.0) * _affix_move_speed_mult()
+	var chase_speed := _movement_speed_base() * _crouch_speed_factor() * _affix_move_speed_mult()
 	velocity.x = dir.x * chase_speed
 	velocity.z = dir.z * chase_speed
 
@@ -1428,6 +1588,21 @@ func _movement_speed_base() -> float:
 	return CHASE_SPEED
 
 
+# Crouch speed factor — separate for charmed pets vs. hostiles. Pets
+# borrow the player's CROUCH_SPEED_FACTOR (0.45) so they slow down the
+# same amount as the player they're following, which reads as "the pet
+# is moving with me through the tunnel" rather than overtaking the
+# crouched player at the gentler enemy mult (0.6). Hostiles keep the
+# enemy mult so the player can still kite them through tunnels at a
+# meaningful disadvantage.
+func _crouch_speed_factor() -> float:
+	if not _crouching:
+		return 1.0
+	if _charmed:
+		return PrototypePlayer.CROUCH_SPEED_FACTOR
+	return CROUCH_SPEED_MULT
+
+
 func _follow_player_loose(player: Node3D) -> void:
 	# Anti-leash teleport runs in _chase_tick before this branch, so by
 	# the time we get here the pet is guaranteed to be within
@@ -1446,7 +1621,7 @@ func _follow_player_loose(player: Node3D) -> void:
 	# behind, decelerates as it returns to the comfort band. Negative
 	# excess (already inside the band) clamps to 0; pet doesn't
 	# back off when too close.
-	var max_speed := _movement_speed_base() * 1.2 * (CROUCH_SPEED_MULT if _crouching else 1.0) * _affix_move_speed_mult()
+	var max_speed := _movement_speed_base() * 1.2 * _crouch_speed_factor() * _affix_move_speed_mult()
 	var excess := dist - _FOLLOW_DISTANCE_TARGET
 	var speed := clampf(excess * _FOLLOW_SPRING_GAIN, 0.0, max_speed)
 	velocity.x = dir.x * speed
@@ -1484,7 +1659,7 @@ func _tick_return(spawn_dist_sq: float) -> void:
 		return
 	var spawn_dir := to_spawn / sd
 	_want_dir = spawn_dir
-	var return_speed := CHASE_SPEED * (CROUCH_SPEED_MULT if _crouching else 1.0) * _affix_move_speed_mult()
+	var return_speed := CHASE_SPEED * _crouch_speed_factor() * _affix_move_speed_mult()
 	velocity.x = spawn_dir.x * return_speed
 	velocity.z = spawn_dir.z * return_speed
 
@@ -1716,20 +1891,34 @@ func _die() -> void:
 	_drop_item()
 	var played := _play_anim(ANIM_DEATH, 1.0)
 	if not played:
-		# No death clip for this rig — settle it in an idle pose BEFORE
-		# pausing. A bare anim_player.pause() freezes on whatever was
-		# playing (usually RUN, since the enemy was chasing when killed),
-		# which leaves the corpse with limbs splayed mid-stride once the
-		# rotation tween lays it flat. Idle pose looks like a fallen
-		# body. advance(0.0) forces the new clip's first-frame poses to
-		# apply this tick so the subsequent pause catches the idle pose
-		# instead of holding RUN's last frame.
+		# No death clip for this rig — settle it in a non-stride pose
+		# BEFORE pausing. A bare anim_player.pause() freezes on whatever
+		# was playing (usually RUN, since the enemy was chasing when
+		# killed), which leaves the corpse with limbs splayed mid-stride
+		# once the rotation tween lays it flat. Strategy:
+		#   1. Try to play one of the named idle clips and seek to its
+		#      first frame.
+		#   2. If no named idle exists on this rig, seek the CURRENTLY
+		#      playing clip back to frame 0 — the first frame of a loop
+		#      anim is typically a feet-together neutral pose, much
+		#      closer to "fallen body" than wherever pause caught us
+		#      mid-cycle. Different rigs ship different naming
+		#      conventions for idle (Idle_Normal, Idle_A, Standing,
+		#      etc.); rather than chasing every variant we accept any
+		#      frame-0 pose as "good enough" once we've fallen.
+		# seek(time, update=true) forces the value tracks to apply this
+		# tick — advance(0.0) does NOT (delta=0 doesn't sample tracks),
+		# which is why earlier attempts at this fix silently regressed.
 		if anim_player != null:
+			var settled := false
 			for idle_name in ANIM_IDLE:
 				if anim_player.has_animation(idle_name):
 					anim_player.play(idle_name)
-					anim_player.advance(0.0)
+					anim_player.seek(0.0, true)
+					settled = true
 					break
+			if not settled and anim_player.current_animation != "":
+				anim_player.seek(0.0, true)
 			anim_player.pause()
 		if visual != null:
 			var tween := create_tween()

@@ -21,6 +21,10 @@ enum Axis { X, Z }
 @export_group("Enemies")
 @export var enemy_count: int = 0
 @export var enemy_scene: PackedScene
+## Class pool for enemies spawned in this corridor. Same semantics as
+## RoomDef.enemy_classes — when non-empty, the spawner picks one class
+## per spawn so packs read as a mixed unit composition.
+@export var enemy_classes: Array[EnemyClass] = []
 
 @export_group("Platformer")
 @export var ceiling_height: float = 0.0  ## 0 = theme default; forces a low ceiling when > 0

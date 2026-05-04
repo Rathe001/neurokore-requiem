@@ -52,6 +52,23 @@ const DEBUG_OVERLAY_INTERVAL := 0.1
 var _max_health: int = 1
 var _last_hp_current: int = 0
 var _banner_token: int = 0
+# Shield buff state cache, populated by player's shield_buff_changed
+# signal. Drives the white outline around the HP bar (visible when
+# active OR on cooldown) and the buff-bar "Shield" entry's tooltip.
+var _shield_state: Dictionary = {"active": false, "pool": 0, "pool_max": 0, "reduction": 0.0, "cooldown_remain": 0.0, "cooldown_total": 0.0, "duration_remain": 0.0}
+var _shield_outline: ReferenceRect = null
+# White → red lerp colours for the HP-bar outline. Above
+# _SHIELD_OUTLINE_RED_THRESHOLD the outline stays full white;
+# below, it lerps toward red so the player can see the shield
+# nearing collapse without staring at the buff bar.
+const _SHIELD_OUTLINE_FULL := Color.WHITE
+const _SHIELD_OUTLINE_BREAK := Color(1.0, 0.18, 0.18, 1.0)
+const _SHIELD_OUTLINE_COOLDOWN := Color(1.0, 1.0, 1.0, 0.35)
+# A dim cyan tint for SHIELD_HOLD released-with-pool: communicates
+# "ready to redeploy" without competing visually with the bright
+# active-block colour or the dim white cooldown state.
+const _SHIELD_OUTLINE_HOLD_READY := Color(0.6, 0.85, 1.0, 0.45)
+const _SHIELD_OUTLINE_RED_THRESHOLD := 0.5
 var _debug_overlay_accum: float = 0.0
 var _state_flashlight: bool = false
 var _state_crouch: bool = false
@@ -103,11 +120,14 @@ func _ready() -> void:
 	# patch one Label — the bar has at most ~6 entries.
 	if player.has_signal(&"charm_count_changed"):
 		player.charm_count_changed.connect(func(_c: int, _m: int) -> void: _update_buffs_bar())
+	if player.has_signal(&"shield_buff_changed"):
+		player.shield_buff_changed.connect(_on_shield_buff_changed)
 	if player.has_signal(&"credits_changed"):
 		_last_credits_seen = int(player.get_credits()) if player.has_method(&"get_credits") else 0
 		player.credits_changed.connect(_on_credits_changed)
 	PerkState.perk_gained.connect(_on_perk_gained)
 	_on_health_changed(_max_health, _max_health)
+	_build_shield_outline()
 	_bind_skill_slots(player)
 	_bind_resource_pool(player)
 	_build_minimap(player)
@@ -204,6 +224,13 @@ func _update_buffs_bar() -> void:
 		var perk_id := StringName("%s_t%d" % [String(stat_id), tier])
 		var perk: Perk = active_by_id.get(perk_id)
 		_add_buff_entry(stat_id, tier, perk)
+	# Active offhand: SHIELD_BUFF gets its own buff-bar entry while
+	# active so the player can see the % reduction and the remaining
+	# pool. Cooldown state is communicated via the HP-bar outline
+	# rather than a separate entry — keeps the buff bar focused on
+	# things actively benefitting the player.
+	if _shield_state.get("active", false):
+		_add_shield_buff_entry()
 
 
 func _add_buff_entry(stat_id: StringName, tier: int, perk: Perk) -> void:
@@ -214,6 +241,9 @@ func _add_buff_entry(stat_id: StringName, tier: int, perk: Perk) -> void:
 	var entry := Control.new()
 	entry.custom_minimum_size = _BUFF_ENTRY_SIZE
 	entry.mouse_filter = Control.MOUSE_FILTER_STOP
+	# Tag with stat_id so the perk-pip animation can find this entry's
+	# screen position to land on when a new perk unlocks.
+	entry.set_meta(&"buff_stat_id", stat_id)
 	var label := Label.new()
 	label.text = AttributeState.TIER_ROMAN[tier - 1]
 	label.add_theme_font_size_override(&"font_size", 12)
@@ -240,6 +270,51 @@ func _add_buff_entry(stat_id: StringName, tier: int, perk: Perk) -> void:
 	entry.mouse_entered.connect(func() -> void:
 		var pair := _build_buff_tooltip(captured_stat, captured_tier, captured_perk)
 		get_tree().call_group(&"interactable_tooltip", &"show_talent_node", pair[0], pair[1]))
+	entry.mouse_exited.connect(func() -> void:
+		get_tree().call_group(&"interactable_tooltip", &"hide_tooltip"))
+	buff_entries.add_child(entry)
+
+
+# Buff-bar entry for an active SHIELD_BUFF offhand. Reads from
+# _shield_state — the entry is only added when active, so live values
+# (pool / pool_max / reduction) are guaranteed to be set. Tooltip
+# rebuilds lazily on hover so the pool count stays accurate as the
+# shield absorbs hits between hover-enters.
+func _add_shield_buff_entry() -> void:
+	var entry := Control.new()
+	entry.custom_minimum_size = _BUFF_ENTRY_SIZE
+	entry.mouse_filter = Control.MOUSE_FILTER_STOP
+	entry.set_meta(&"buff_stat_id", &"shield_buff")
+	var label := Label.new()
+	label.text = "S"  # placeholder glyph; could swap for an icon
+	label.add_theme_font_size_override(&"font_size", 12)
+	label.add_theme_color_override(&"font_color", Color.WHITE)
+	label.add_theme_color_override(&"font_outline_color", Color(0, 0, 0, 1))
+	label.add_theme_constant_override(&"outline_size", 1)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.anchor_right = 1.0
+	label.anchor_bottom = 1.0
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	entry.add_child(label)
+	entry.mouse_entered.connect(func() -> void:
+		var pct: int = int(round(float(_shield_state.get("reduction", 0.0)) * 100.0))
+		var pool: int = int(_shield_state.get("pool", 0))
+		var pool_max: int = int(_shield_state.get("pool_max", 0))
+		# Differentiate label/body by archetype. Live kind comes from
+		# the player so swapping offhand mid-hover would reflect
+		# correctly (cleared on unequip via clear_shield_buff anyway).
+		var player := get_tree().get_first_node_in_group(&"player") as PrototypePlayer
+		var kind := player.get_shield_buff_kind() if player != null else Skill.ActiveKind.NONE
+		var title: String
+		var body: String
+		if kind == Skill.ActiveKind.SHIELD_HOLD:
+			title = "Active Shield"
+			body = "Hold RMB to block 100%% of incoming damage.\n• %d / %d shield pool" % [pool, pool_max]
+		else:
+			title = "Shield Generator"
+			body = "Reduces incoming damage by %d%%.\n• %d / %d shield pool" % [pct, pool, pool_max]
+		get_tree().call_group(&"interactable_tooltip", &"show_talent_node", title, body))
 	entry.mouse_exited.connect(func() -> void:
 		get_tree().call_group(&"interactable_tooltip", &"hide_tooltip"))
 	buff_entries.add_child(entry)
@@ -413,6 +488,72 @@ func _on_resource_changed(current: int, max_value: int) -> void:
 func _on_player_died() -> void:
 	_show_banner(tr("HUD_BANNER_DIED"), 2.0)
 
+
+# Build a 1px white outline that tracks the HP bar's frame. Visible
+# whenever the shield buff is active OR on cooldown — the colour
+# difference between active (full white) and cooldown (dim) reads
+# without a label.
+func _build_shield_outline() -> void:
+	if hp_bg == null:
+		return
+	_shield_outline = ReferenceRect.new()
+	_shield_outline.editor_only = false
+	_shield_outline.border_color = Color.WHITE
+	_shield_outline.border_width = 2.0
+	_shield_outline.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Inset 2px on every side so the white shield ring sits INSIDE the
+	# HP container's own 2px blue border. The HP fill is also inset by
+	# 2px (set in the .tscn), so the shield ring layers between them —
+	# the player sees the existing HUD border, then the shield ring,
+	# then the fill, all stacked outward-to-inward.
+	_shield_outline.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_shield_outline.offset_left = 2.0
+	_shield_outline.offset_top = 2.0
+	_shield_outline.offset_right = -2.0
+	_shield_outline.offset_bottom = -2.0
+	_shield_outline.visible = false
+	hp_bg.get_parent().add_child(_shield_outline)
+
+
+func _on_shield_buff_changed(active: bool, pool: int, pool_max: int, reduction: float, cooldown_remain: float, cooldown_total: float, duration_remain: float) -> void:
+	_shield_state = {
+		"active": active,
+		"pool": pool,
+		"pool_max": pool_max,
+		"reduction": reduction,
+		"cooldown_remain": cooldown_remain,
+		"cooldown_total": cooldown_total,
+		"duration_remain": duration_remain,
+	}
+	if _shield_outline != null:
+		var player := get_tree().get_first_node_in_group(&"player") as PrototypePlayer
+		var kind := player.get_shield_buff_kind() if player != null else Skill.ActiveKind.NONE
+		var has_pool: bool = pool > 0 and pool_max > 0
+		var hold_ready: bool = kind == Skill.ActiveKind.SHIELD_HOLD and not active and has_pool and cooldown_remain <= 0.0
+		# Visible when active (white→red as pool depletes), recovering
+		# (dim white), or HOLD-ready-with-partial-pool (dim cyan).
+		# Hidden when no offhand, or just cleared.
+		var show: bool = active or cooldown_remain > 0.0 or hold_ready
+		_shield_outline.visible = show
+		if show:
+			if active and pool_max > 0:
+				# Lerp from white to red below the threshold; full white
+				# above. Pool ratio of 0 = full red (about to break);
+				# ratio at threshold = full white. Linear in between.
+				var ratio: float = clampf(float(pool) / float(pool_max), 0.0, 1.0)
+				if ratio >= _SHIELD_OUTLINE_RED_THRESHOLD:
+					_shield_outline.border_color = _SHIELD_OUTLINE_FULL
+				else:
+					var t: float = 1.0 - (ratio / _SHIELD_OUTLINE_RED_THRESHOLD)
+					_shield_outline.border_color = _SHIELD_OUTLINE_FULL.lerp(_SHIELD_OUTLINE_BREAK, t)
+			elif hold_ready:
+				_shield_outline.border_color = _SHIELD_OUTLINE_HOLD_READY
+			else:
+				_shield_outline.border_color = _SHIELD_OUTLINE_COOLDOWN
+	# Buff bar shows the live shield as an entry; rebuild so the tooltip
+	# is current. The bar is at most ~7 entries — cheap.
+	_update_buffs_bar()
+
 func _on_notification_requested(text: String) -> void:
 	_show_banner(text, 2.5)
 
@@ -440,7 +581,89 @@ func _on_credits_changed(total: int) -> void:
 	recent_loot_label.text = ""
 
 func _on_perk_gained(perk: Perk) -> void:
-	_show_banner("%s — %s" % [perk.label, perk.description], 3.0)
+	# Defer one frame so PerkState.perks_changed → _update_buffs_bar
+	# has a chance to (re)build the entry we want to land on. Without
+	# this, the lookup in _animate_perk_pip can run before the entry
+	# exists and fall through to the centre-screen fallback.
+	call_deferred(&"_animate_perk_pip", perk)
+
+
+# Spawn a large stat-coloured tier roman that flies into the matching
+# buff-bar entry. Replaces the old centre-screen banner — keeps the
+# "you got something" feedback without parking a multi-second wall of
+# text over the action. Total runtime ~1.4s including hold + fade.
+const _PIP_TRAVEL_DURATION := 0.85
+const _PIP_HOLD := 0.25
+const _PIP_FADE := 0.30
+const _PIP_START_FONT_SIZE := 56
+const _PIP_END_FONT_SIZE := 14
+const _PIP_START_OFFSET := Vector2(0.0, -120.0)  # screen-space, relative to viewport center
+
+func _animate_perk_pip(perk: Perk) -> void:
+	if perk == null:
+		return
+	# Parse "amb_t2" → (&"amb", 2). Avoids storing a parallel stat→tier
+	# map; the perk id is canonical here.
+	var id_parts := String(perk.id).split("_t")
+	if id_parts.size() != 2:
+		return
+	var stat_id := StringName(id_parts[0])
+	var tier := int(id_parts[1])
+	if tier <= 0 or tier > AttributeState.TIER_ROMAN.size():
+		return
+	var entry := _buff_entry_for_stat(stat_id)
+	var stat_color: Color = AttributeState.STAT_COLORS.get(stat_id, Color.WHITE)
+	var pip := Label.new()
+	pip.text = AttributeState.TIER_ROMAN[tier - 1]
+	pip.add_theme_font_size_override(&"font_size", _PIP_START_FONT_SIZE)
+	pip.add_theme_color_override(&"font_color", stat_color)
+	pip.add_theme_color_override(&"font_outline_color", Color(0, 0, 0, 1))
+	pip.add_theme_constant_override(&"outline_size", 4)
+	pip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	pip.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	pip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pip.size = Vector2(180.0, 80.0)
+	pip.pivot_offset = pip.size * 0.5
+	root.add_child(pip)
+	var screen := get_viewport().get_visible_rect().size
+	var start_pos := Vector2(screen.x * 0.5, screen.y * 0.5) + _PIP_START_OFFSET - pip.size * 0.5
+	pip.position = start_pos
+	# Target: center of the buff entry (or screen center if no entry yet).
+	var target_pos: Vector2
+	if entry != null:
+		target_pos = entry.global_position + entry.size * 0.5 - pip.size * 0.5
+	else:
+		target_pos = start_pos + Vector2(0.0, 200.0)
+	# Travel + shrink. Scale a Control around its center via pivot_offset
+	# (set above). Position is top-left, so target_pos compensates.
+	var end_scale: float = float(_PIP_END_FONT_SIZE) / float(_PIP_START_FONT_SIZE)
+	var travel := create_tween().set_parallel(true)
+	travel.tween_property(pip, "position", target_pos, _PIP_TRAVEL_DURATION) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	travel.tween_property(pip, "scale", Vector2(end_scale, end_scale), _PIP_TRAVEL_DURATION) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	# Hold + fade + free, sequenced after travel.
+	var fade := create_tween()
+	fade.tween_interval(_PIP_TRAVEL_DURATION + _PIP_HOLD)
+	fade.tween_property(pip, "modulate:a", 0.0, _PIP_FADE)
+	fade.tween_callback(pip.queue_free)
+
+
+func _buff_entry_for_stat(stat_id: StringName) -> Control:
+	if buff_entries == null:
+		return null
+	# _update_buffs_bar uses queue_free on the previous children before
+	# adding fresh ones, so during the first idle frame after a rebuild
+	# both the old and new entry for a stat may exist. Skip the
+	# soon-to-be-freed children so the pip lands on the entry that's
+	# actually going to stay.
+	for child in buff_entries.get_children():
+		if not (child is Control) or child.is_queued_for_deletion():
+			continue
+		if (child as Control).get_meta(&"buff_stat_id", &"") == stat_id:
+			return child as Control
+	return null
+
 
 func _show_banner(text: String, duration: float) -> void:
 	_banner_token += 1

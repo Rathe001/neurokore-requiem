@@ -103,16 +103,16 @@ func _resolve_materials(t: LevelTheme) -> Dictionary:
 	# unless the theme opts in to a variant.
 	var wall_alt: Material = _make_shader_material(t.wall_shader_alt, t.wall_shader_alt_params) if t.wall_shader_alt != null else wall
 	var floor_alt: Material = _make_shader_material(t.floor_shader_alt, t.floor_shader_alt_params) if t.floor_shader_alt != null else floor_m
-	var set := {&"wall": wall, &"floor": floor_m, &"wall_alt": wall_alt, &"floor_alt": floor_alt}
-	_material_cache[t] = set
-	return set
+	var mats := {&"wall": wall, &"floor": floor_m, &"wall_alt": wall_alt, &"floor_alt": floor_alt}
+	_material_cache[t] = mats
+	return mats
 
 
-func _apply_material_set(set: Dictionary) -> void:
-	wall_material = set[&"wall"]
-	floor_material = set[&"floor"]
-	wall_material_alt = set[&"wall_alt"]
-	floor_material_alt = set[&"floor_alt"]
+func _apply_material_set(mats: Dictionary) -> void:
+	wall_material = mats[&"wall"]
+	floor_material = mats[&"floor"]
+	wall_material_alt = mats[&"wall_alt"]
+	floor_material_alt = mats[&"floor_alt"]
 
 
 static func _make_material(shader: Shader, color: Color, metallic: float, roughness: float, shader_params: Dictionary = {}) -> Material:

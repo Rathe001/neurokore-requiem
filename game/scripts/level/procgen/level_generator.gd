@@ -9,7 +9,7 @@ class_name LevelGenerator
 ## from — those are shared resources. Each generated RoomNode holds a
 ## reference (not a copy) to its source RoomDef.
 
-@export var seed: int = 0
+@export var rng_seed: int = 0
 
 
 func generate() -> LevelGraph:

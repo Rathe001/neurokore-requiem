@@ -5,6 +5,7 @@
 [resource]
 script = ExtResource("script")
 display_name = "Flashlight"
+sub_type = "Flashlight"
 glyph = "✸"
 light_type = 0
 light_range = 18.0

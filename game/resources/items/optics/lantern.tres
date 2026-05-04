@@ -5,6 +5,7 @@
 [resource]
 script = ExtResource("script")
 display_name = "Lantern"
+sub_type = "Lantern"
 glyph = "◉"
 light_type = 1
 light_range = 9.0

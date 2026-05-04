@@ -96,14 +96,22 @@ func interact(_user: Node) -> void:
 		var rng := RandomNumberGenerator.new()
 		rng.randomize()
 		var ilvl := maxi(1, PlayerState.level)
+		# Constrain the starter weapon's class-stat slots to the player's
+		# kore stats (Analog or Cyborg, depending on origin). Without this
+		# the rolled common weapon could land a useless opposing-kore stat
+		# slot, which the player has no way to invest into. The roller
+		# defaults to ROLLABLE_STATS when pool is empty, so this only
+		# affects the starter kit, not regular drops.
+		var origin: StringName = AttributeState.get_spec_origin(PlayerState.spec_id) if PlayerState.spec_id != &"" else PlayerState.class_id
+		var kore_stats: Array[StringName] = AttributeState.get_kore_stats_for_origin(origin)
 		# 50/50: one 2H, OR one 1H + one offhand. Both branches roll at
 		# common rarity so the player's first kit is functional but
 		# unspectacular — variety / power comes from later drops.
 		if rng.randf() < 0.5:
-			items.append(ItemRoller.roll("2H Weapon", ilvl, &"common", rng))
+			items.append(ItemRoller.roll("2H Weapon", ilvl, &"common", rng, kore_stats))
 		else:
-			items.append(ItemRoller.roll("1H Weapon", ilvl, &"common", rng))
-			items.append(ItemRoller.roll("Offhand", ilvl, &"common", rng))
+			items.append(ItemRoller.roll("1H Weapon", ilvl, &"common", rng, kore_stats))
+			items.append(ItemRoller.roll("Offhand", ilvl, &"common", rng, kore_stats))
 		# Playtest convenience — six max-tier stat-stick items (one per
 		# spec class). Equipping the matching item alone pushes that
 		# class's primary past TIERS_OWN[2] (99%) → T3 unlocked. Removed
@@ -112,6 +120,12 @@ func interact(_user: Node) -> void:
 		# perk-tier playtesting without skipping the chest.
 		for spec_id: StringName in AttributeState.CLASS_DEFINITIONS:
 			items.append(_make_starter_t3_item(spec_id))
+		# Playtest seed for the active-offhand prototype. One of each
+		# offhand archetype drops from the starter chest so the player
+		# can swap them in to feel the difference. Remove these once
+		# the archetypes are in regular item rolls.
+		items.append(_make_starter_shield_generator())
+		items.append(_make_starter_active_shield())
 	elif fixed_items.size() > 0:
 		items.assign(fixed_items)
 	elif test_weapon_base_paths.size() > 0:
@@ -193,4 +207,40 @@ func _make_starter_t3_item(spec_id: StringName) -> Item:
 	item.rarity = &"unique"
 	item.name_key = "%s T3 (%s %d%%)" % [spec_label, short, _STARTER_T3_STAT_AMOUNT]
 	item.stat_modifiers = {stat: _STARTER_T3_STAT_AMOUNT}
+	return item
+
+
+# Hand-built Shield Generator offhand for playtest. Equip in the
+# offhand slot; RMB activates a 25% damage-reduction buff with a
+# 25-damage absorption pool (level-1 baseline). Remove this helper
+# once active-offhand items roll naturally through ItemRoller.
+func _make_starter_shield_generator() -> Item:
+	var item := Item.new()
+	item.id = &"starter_shield_generator"
+	item.kind = &"offhand"
+	item.main_type = "Offhand"
+	item.sub_type = "Amplification Shield"
+	item.glyph = SlotRegistry.glyph_for_type("Offhand")
+	item.glyph_color = Color(0.85, 0.92, 1.0, 1.0)
+	item.rarity = &"unique"
+	item.name_key = "Shield Generator"
+	item.fire_skill = load("res://resources/skills/shield_generator.tres") as Skill
+	return item
+
+
+# Hand-built Active Shield offhand for playtest. Hold RMB to block
+# 100% of incoming damage up to a 50-damage pool. Releases without
+# cooldown; pool only refreshes after a break (post-cooldown). Same
+# remove-once-rolling caveat as the Shield Generator.
+func _make_starter_active_shield() -> Item:
+	var item := Item.new()
+	item.id = &"starter_active_shield"
+	item.kind = &"offhand"
+	item.main_type = "Offhand"
+	item.sub_type = "Active Shield"
+	item.glyph = SlotRegistry.glyph_for_type("Offhand")
+	item.glyph_color = Color(0.85, 0.95, 0.85, 1.0)
+	item.rarity = &"unique"
+	item.name_key = "Active Shield"
+	item.fire_skill = load("res://resources/skills/active_shield.tres") as Skill
 	return item

@@ -47,15 +47,21 @@ outer_radius = 0.62
 radius = 0.4
 height = 1.6
 
-; agent_height matches the enemy CROUCH_HEIGHT (0.9) so the navmesh routes
+; agent_height matches the enemy CROUCH_HEIGHT (1.0) so the navmesh routes
 ; through low-ceiling crawlspaces. Enemies detect overhead clearance at run
 ; time and shrink their capsule when entering one — without that, a 1.7m
 ; capsule would still bump the ceiling slab even though the navmesh allowed
 ; the path.
+;
+; agent_height and agent_max_climb are deliberately exact multiples of
+; cell_height (0.25). The navmesh baker rounds them to voxel units and
+; warns when the source value isn't aligned — keeping them snapped
+; silences "Property X is ceiled/floored to cell_height voxel units"
+; spam in the editor on every layout build.
 [sub_resource type="NavigationMesh" id="navmesh_level"]
 agent_radius = 0.5
-agent_height = 0.9
-agent_max_climb = 0.4
+agent_height = 1.0
+agent_max_climb = 0.5
 cell_size = 0.25
 cell_height = 0.25
 geometry_parsed_geometry_type = 1

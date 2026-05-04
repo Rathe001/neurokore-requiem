@@ -69,7 +69,7 @@ func _ready() -> void:
 			continue
 		_optics_variants.append(v)
 
-func roll(main_type: String, item_level: int, rarity: StringName, rng: RandomNumberGenerator) -> Item:
+func roll(main_type: String, item_level: int, rarity: StringName, rng: RandomNumberGenerator, class_stat_pool: Array[StringName] = []) -> Item:
 	var item := Item.new()
 	item.main_type = main_type
 	item.kind = SlotRegistry.slot_for_type(main_type)
@@ -106,14 +106,14 @@ func roll(main_type: String, item_level: int, rarity: StringName, rng: RandomNum
 			affix_labels.append(affix.label)
 
 	var slot_count := _class_slot_count(item_level, rng)
-	for s: StringName in _pick_class_stats(slot_count, rng):
+	for s: StringName in _pick_class_stats(slot_count, rng, class_stat_pool):
 		var value := _class_stat_value(item_level, rng)
 		item.stat_modifiers[s] = int(item.stat_modifiers.get(s, 0)) + value
 
 	item.name_key = _build_name(main_type, item.sub_type, affix_labels)
 	return item
 
-func roll_from_base(base: WeaponBase, item_level: int, rarity: StringName, rng: RandomNumberGenerator) -> Item:
+func roll_from_base(base: WeaponBase, item_level: int, rarity: StringName, rng: RandomNumberGenerator, class_stat_pool: Array[StringName] = []) -> Item:
 	var main_type := "2H Weapon" if base.two_handed else "1H Weapon"
 	var item := Item.new()
 	item.main_type = main_type
@@ -140,7 +140,7 @@ func roll_from_base(base: WeaponBase, item_level: int, rarity: StringName, rng: 
 			_apply_affix(item, affix)
 			affix_labels.append(affix.label)
 	var slot_count := _class_slot_count(item_level, rng)
-	for s: StringName in _pick_class_stats(slot_count, rng):
+	for s: StringName in _pick_class_stats(slot_count, rng, class_stat_pool):
 		var value := _class_stat_value(item_level, rng)
 		item.stat_modifiers[s] = int(item.stat_modifiers.get(s, 0)) + value
 	item.name_key = _build_name(main_type, item.sub_type, affix_labels)
@@ -159,9 +159,14 @@ func _class_slot_count(item_level: int, rng: RandomNumberGenerator) -> int:
 		return rng.randi_range(1, 2)
 	return rng.randi_range(1, 3)
 
-func _pick_class_stats(count: int, _rng: RandomNumberGenerator) -> Array[StringName]:
+func _pick_class_stats(count: int, _rng: RandomNumberGenerator, pool_override: Array[StringName] = []) -> Array[StringName]:
+	# Default pool is all rollable stats (any item can roll any class
+	# attribute slot). Callers that want a constrained pool — e.g. the
+	# starter weapon kit constraining to the player's kore stats — pass
+	# pool_override; an empty override falls back to the full pool.
 	var pool: Array[StringName] = []
-	for s: StringName in AttributeState.ROLLABLE_STATS:
+	var source: Array[StringName] = pool_override if not pool_override.is_empty() else AttributeState.ROLLABLE_STATS
+	for s: StringName in source:
 		pool.append(s)
 	pool.shuffle()
 	var picked: Array[StringName] = []
@@ -221,7 +226,7 @@ func _apply_weapon_base_direct(item: Item, base: WeaponBase, rng: RandomNumberGe
 	item.weapon_range = rng.randf_range(base.weapon_range_range.x, base.weapon_range_range.y)
 
 func _apply_optics_variant(item: Item, main_type: String, rng: RandomNumberGenerator) -> void:
-	if main_type != "Optics" or _optics_variants.is_empty():
+	if main_type != "Recon" or _optics_variants.is_empty():
 		return
 	var variant := _optics_variants[rng.randi_range(0, _optics_variants.size() - 1)]
 	_assign_optics_variant(item, variant, rng)
@@ -231,7 +236,10 @@ func _assign_optics_variant(item: Item, variant: OpticsVariant, rng: RandomNumbe
 	item.light_range = variant.light_range
 	item.light_energy = rng.randf_range(variant.light_energy_min, variant.light_energy_max)
 	item.light_color = variant.light_color
-	item.sub_type = variant.display_name
+	# sub_type is the bucket label ("Radar", "Flashlight"); display_name
+	# is the marketing string used in the rolled item name. Fall back to
+	# display_name when sub_type isn't set so legacy variants still render.
+	item.sub_type = variant.sub_type if variant.sub_type != "" else variant.display_name
 	item.glyph = variant.glyph
 
 # Returns one Optics item per declared variant (Flashlight, Lantern, Scanner,
@@ -241,14 +249,14 @@ func roll_one_per_optics_variant(item_level: int, rng: RandomNumberGenerator) ->
 	var out: Array[Item] = []
 	for variant in _optics_variants:
 		var item := Item.new()
-		item.main_type = "Optics"
-		item.kind = SlotRegistry.slot_for_type("Optics")
+		item.main_type = "Recon"
+		item.kind = SlotRegistry.slot_for_type("Recon")
 		item.rarity = &"common"
-		item.id = StringName("starter_optics_%d_%d" % [item_level, rng.randi()])
+		item.id = StringName("starter_recon_%d_%d" % [item_level, rng.randi()])
 		item.glyph_color = RARITY_COLOR.get(&"common", Color.WHITE)
 		item.stat_modifiers = {}
 		_assign_optics_variant(item, variant, rng)
-		item.name_key = _build_name("Optics", item.sub_type, [] as Array[String])
+		item.name_key = _build_name("Recon", item.sub_type, [] as Array[String])
 		out.append(item)
 	return out
 

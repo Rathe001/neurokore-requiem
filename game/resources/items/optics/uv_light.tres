@@ -5,6 +5,7 @@
 [resource]
 script = ExtResource("script")
 display_name = "UV Light"
+sub_type = "UV Light"
 glyph = "❉"
 light_type = 3
 light_range = 6.0

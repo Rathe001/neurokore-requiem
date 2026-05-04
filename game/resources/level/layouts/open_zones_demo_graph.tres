@@ -1,0 +1,102 @@
+[gd_resource type="Resource" script_class="LevelGraph" load_steps=14 format=3]
+
+; ══════════════════════════════════════════════════════════════════════════════
+; OPEN ZONES DEMO — D2-style big arenas for playtesting density,
+; mixed-class packs, and large-room navigation.
+;
+;   [Spawn Lobby (proto_start_room)] ─east 6m corridor (locked)─ [Open Arena 32×24]
+;        anchor (0,0,0)                  starter chest gates here       ~32 mixed
+;                                                                              │
+;                                                                       east 6m corridor
+;                                                                              │
+;                                                              [Grand Arena 48×32]
+;                                                                       ~64 mixed
+;
+; Spawn lobby uses the canonical proto_start_room template so the
+; starter chest and player_spawn slot wire up identically to
+; prototype_layout. LootCrateDoorPuzzle gates the lobby→arena_a door
+; until the chest is opened, same as the canonical level.
+;
+; Wall enum: NORTH=0, SOUTH=1, EAST=2, WEST=3.
+; ══════════════════════════════════════════════════════════════════════════════
+
+[ext_resource type="Script" path="res://scripts/level/graph/level_graph.gd" id="script_graph"]
+[ext_resource type="Script" path="res://scripts/level/graph/room_node.gd" id="script_node"]
+[ext_resource type="Script" path="res://scripts/level/graph/connection.gd" id="script_conn"]
+[ext_resource type="Script" path="res://scripts/level/corridor_def.gd" id="script_corridor"]
+[ext_resource type="Script" path="res://scripts/level/puzzle/loot_crate_door_puzzle.gd" id="script_loot_door"]
+[ext_resource type="Resource" path="res://resources/level/lights/fluorescent_white.tres" id="light_fluoro"]
+[ext_resource type="Resource" path="res://resources/level/rooms/proto_start_room.tres" id="room_lobby"]
+[ext_resource type="Resource" path="res://resources/level/rooms/proto_open_arena.tres" id="room_open_arena"]
+[ext_resource type="Resource" path="res://resources/level/rooms/proto_grand_arena.tres" id="room_grand_arena"]
+
+; ── Corridors ────────────────────────────────────────────────────────────────
+
+[sub_resource type="Resource" id="corr_lobby_arena_a"]
+script = ExtResource("script_corridor")
+width = 6.0
+length = 6.0
+light_color = ExtResource("light_fluoro")
+light_interval = 6.0
+
+[sub_resource type="Resource" id="corr_arena_a_grand"]
+script = ExtResource("script_corridor")
+width = 6.0
+length = 6.0
+light_color = ExtResource("light_fluoro")
+light_interval = 6.0
+
+; ── Room nodes ───────────────────────────────────────────────────────────────
+
+[sub_resource type="Resource" id="node_lobby"]
+script = ExtResource("script_node")
+id = &"spawn_lobby"
+room = ExtResource("room_lobby")
+position = Vector3(0, 0, 0)
+
+[sub_resource type="Resource" id="node_arena_a"]
+script = ExtResource("script_node")
+id = &"arena_a"
+room = ExtResource("room_open_arena")
+
+[sub_resource type="Resource" id="node_grand"]
+script = ExtResource("script_node")
+id = &"grand_arena"
+room = ExtResource("room_grand_arena")
+
+; ── Connections ──────────────────────────────────────────────────────────────
+
+[sub_resource type="Resource" id="conn_lobby_arena_a"]
+script = ExtResource("script_conn")
+id = &"conn_lobby_arena_a"
+from_room = &"spawn_lobby"
+from_wall = 2
+to_room = &"arena_a"
+to_wall = 3
+corridor = SubResource("corr_lobby_arena_a")
+
+[sub_resource type="Resource" id="conn_arena_a_grand"]
+script = ExtResource("script_conn")
+id = &"conn_arena_a_grand"
+from_room = &"arena_a"
+from_wall = 2
+to_room = &"grand_arena"
+to_wall = 3
+corridor = SubResource("corr_arena_a_grand")
+
+; ── Puzzles ──────────────────────────────────────────────────────────────────
+
+[sub_resource type="Resource" id="puzzle_starter_kit"]
+script = ExtResource("script_loot_door")
+crate_slot_id = &"spawn_lobby.starter_chest"
+door_connection_id = &"conn_lobby_arena_a"
+force_starter_kit = true
+
+; ── Graph root ───────────────────────────────────────────────────────────────
+
+[resource]
+script = ExtResource("script_graph")
+anchor_id = &"spawn_lobby"
+rooms = [SubResource("node_lobby"), SubResource("node_arena_a"), SubResource("node_grand")]
+connections = [SubResource("conn_lobby_arena_a"), SubResource("conn_arena_a_grand")]
+puzzles = [SubResource("puzzle_starter_kit")]

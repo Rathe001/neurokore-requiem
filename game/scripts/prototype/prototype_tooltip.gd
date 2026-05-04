@@ -30,6 +30,11 @@ var _stats_label: RichTextLabel
 # content updates, no follow-cursor, no hide on hover-exit. Released →
 # unlocked and dismissed.
 var _lmb_held: bool = false
+# Increments on every show_* call and on hide_tooltip. The deferred
+# resume in _resize_then_show captures the value at call time; if it
+# doesn't match when the await resumes, a fresh show or a hide came in
+# during the layout pass — bail rather than override the new intent.
+var _show_token: int = 0
 var _park_tween: Tween
 # 3D node currently providing the tooltip. While set, the tooltip tracks the
 # target's screen-space position each frame instead of following the mouse.
@@ -98,8 +103,20 @@ func _build_ui() -> void:
 	_desc_label = Label.new()
 	_desc_label.theme_type_variation = &"SmallLabel"
 	_desc_label.add_theme_font_size_override(&"font_size", 7)
+	# Tighten line spacing — default (3) leaves too much vertical air
+	# in multi-line tooltips, especially the buff-bar tooltips with
+	# bullet lists. Down to 0 reads compact without the bullets
+	# touching descenders.
+	_desc_label.add_theme_constant_override(&"line_spacing", 0)
 	_desc_label.mouse_filter = MOUSE_FILTER_IGNORE
 	_desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	# Pin the wrap width up-front. Without this, autowrap labels report
+	# minimum_size as the unwrapped natural width on first layout, which
+	# the PanelContainer then allocates — and the second pass that would
+	# measure wrapped height never fires before the tooltip is shown.
+	# Result: a panel sized for the longest line rendered as a vertical
+	# stack of wrapped lines, leaving huge empty space below.
+	_desc_label.custom_minimum_size = Vector2(CONTENT_MIN_WIDTH, 0.0)
 	_vbox.add_child(_desc_label)
 
 	_stats_label = RichTextLabel.new()
@@ -109,7 +126,9 @@ func _build_ui() -> void:
 	_stats_label.autowrap_mode = TextServer.AUTOWRAP_OFF
 	_stats_label.add_theme_font_size_override(&"normal_font_size", 7)
 	_stats_label.add_theme_font_size_override(&"bold_font_size", 7)
+	_stats_label.add_theme_constant_override(&"line_separation", 0)
 	_stats_label.mouse_filter = MOUSE_FILTER_IGNORE
+	_stats_label.custom_minimum_size = Vector2(CONTENT_MIN_WIDTH, 0.0)
 	_vbox.add_child(_stats_label)
 
 func _apply_theme() -> void:
@@ -230,9 +249,7 @@ func show_text(text: String) -> void:
 	_type_label.visible = false
 	_desc_label.visible = false
 	_stats_label.visible = false
-	_bg.reset_size()
-	_show_now()
-	_position_for_current_source()
+	_resize_then_show()
 
 func show_item(item: Item) -> void:
 	if _lmb_held:
@@ -258,9 +275,7 @@ func show_item(item: Item) -> void:
 	_stats_label.text = stats
 	_stats_label.visible = not stats.is_empty()
 
-	_bg.reset_size()
-	_show_now()
-	_position_for_current_source()
+	_resize_then_show()
 
 func show_talent_node(title: String, body: String) -> void:
 	if _lmb_held:
@@ -273,13 +288,42 @@ func show_talent_node(title: String, body: String) -> void:
 	_desc_label.text = body
 	_desc_label.visible = true
 	_stats_label.visible = false
-	_bg.reset_size()
+	_resize_then_show()
+
+
+# Common tail for every show_* path. Reset the panel size so it tracks
+# the new content, then wait one frame for the container layout pass
+# to settle before reading _bg.size for positioning. Without the await
+# the FIRST show after boot reads the default-allocated panel size
+# (essentially full viewport, since reset_size queued but didn't apply
+# this frame), producing an enormous empty frame stretched along the
+# screen edge for one frame. Keeping visibility off across the await
+# means the user never sees the wrong-size flash.
+func _resize_then_show() -> void:
+	_show_token += 1
+	var token := _show_token
+	visible = false
+	# Collapse first so a previous show's larger size can't survive.
+	# Then assign size from the live combined_minimum_size after each
+	# frame's layout pass — two passes covers the autowrap iterative
+	# settle even with the labels' custom_minimum_size pinning the
+	# wrap width up-front.
+	_bg.size = Vector2.ZERO
+	await get_tree().process_frame
+	if not is_inside_tree() or _lmb_held or token != _show_token:
+		return
+	_bg.size = _bg.get_combined_minimum_size()
+	await get_tree().process_frame
+	if not is_inside_tree() or _lmb_held or token != _show_token:
+		return
+	_bg.size = _bg.get_combined_minimum_size()
 	_show_now()
 	_position_for_current_source()
 
 func hide_tooltip() -> void:
 	if _lmb_held:
 		return
+	_show_token += 1
 	_dismiss()
 	_anchor_target = null
 
@@ -308,10 +352,35 @@ func _build_type_text(item: Item) -> String:
 		return ""
 	if item.sub_type.is_empty():
 		return item.main_type
-	return "%s — %s" % [item.main_type, item.sub_type]
+	return "%s - %s" % [item.main_type, item.sub_type]
 
 func _build_stats_text(item: Item) -> String:
 	var lines: Array[String] = []
+	# Active offhand stats — shield pool, reduction, cooldown, duration.
+	# Different fields are relevant per active_kind so each archetype
+	# gets its own line set; common lines (cooldown, pool) aren't
+	# shared because the fixed-format pattern reads cleaner per item
+	# than a shared header. Pool reads include the offhand's
+	# shield_pool_bonus so the tooltip matches the in-game pool the
+	# player will actually see.
+	if item.fire_skill != null and item.fire_skill.active_kind != Skill.ActiveKind.NONE:
+		var sk: Skill = item.fire_skill
+		var bonus: int = item.get_modifier(&"shield_pool_bonus")
+		var pool_total: int = sk.shield_pool + bonus
+		match sk.active_kind:
+			Skill.ActiveKind.SHIELD_BUFF:
+				lines.append("Damage Reduction: %d%%" % int(round(sk.damage_reduction * 100.0)))
+				lines.append("Shield Pool: %d" % pool_total)
+				lines.append("Duration: %ds" % int(round(sk.duration)))
+				lines.append("Cooldown on Break: %.1fs" % sk.cooldown)
+			Skill.ActiveKind.SHIELD_HOLD:
+				lines.append("Damage Block: 100%")
+				lines.append("Shield Pool: %d" % pool_total)
+				lines.append("Cooldown on Break: %.1fs" % sk.cooldown)
+			Skill.ActiveKind.GRENADE:
+				lines.append("Damage: %d" % sk.damage)
+				lines.append("Range: %.1f m" % sk.skill_range)
+				lines.append("Cooldown: %.1fs" % sk.cooldown)
 	# Weapon / combat stats
 	if item.damage_max > 0:
 		lines.append("Damage: %d–%d" % [item.damage_min, item.damage_max])
@@ -325,8 +394,8 @@ func _build_stats_text(item: Item) -> String:
 		lines.append("Range: %.1f m" % item.weapon_range)
 	if item.two_handed:
 		lines.append("Two-Handed")
-	# Optics
-	if item.kind == &"optics":
+	# Recon (light sources)
+	if item.kind == &"recon":
 		lines.append("%s: %d m" % [tr("ITEM_STATS_LIGHT_RANGE"), int(item.light_range)])
 		lines.append("%s: %d" % [tr("ITEM_STATS_LIGHT_ENERGY"), int(item.light_energy)])
 	# Container / belt

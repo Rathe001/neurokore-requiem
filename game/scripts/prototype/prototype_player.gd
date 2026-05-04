@@ -4,6 +4,11 @@ class_name PrototypePlayer
 signal health_changed(current: int, max_value: int)
 signal resource_changed(current: int, max_value: int)
 signal credits_changed(amount: int)
+# Active-offhand shield buff state. Fires on activate, on each
+# damage hit (pool reduces), on break (active=false), and on
+# unequip (active=false, all zero). HUD listens to draw the
+# white outline around the HP bar and to show the buff bar entry.
+signal shield_buff_changed(active: bool, pool: int, pool_max: int, reduction: float, cooldown_remain: float, cooldown_total: float, duration_remain: float)
 signal died
 signal notification_requested(text: String)
 signal crouch_changed(is_crouching: bool)
@@ -48,6 +53,10 @@ const ANIM_DEATH: Array[StringName] = [
 ]
 
 const CROUCH_SPEED_FACTOR := 0.45
+# Movement multiplier while holding the Active Shield (SHIELD_HOLD).
+# 20% — the player is essentially planted; the trade is full damage
+# block + still being able to attack. SHIELD_BUFF doesn't apply.
+const SHIELD_HOLD_SPEED_FACTOR := 0.2
 const STAND_HEIGHT := 1.6
 const CROUCH_HEIGHT := 0.9
 const GRAVITY := 22.0
@@ -113,6 +122,30 @@ var _click_consumed: bool = false
 # Auto-aim target while LMB is held over an enemy. Cleared on release, on
 # target death/pooling, or in FPS mode. Drives _aim_direction when set.
 var _lock_target: Node3D = null
+# Click-to-walk-to-interact target. Set when the player LMB-clicks an
+# out-of-range hovered interactable; the movement loop synthesises a
+# wish_dir toward this node each tick until INTERACT_RANGE_SQ is met,
+# then fires the interact and clears the target. Cancelled by manual
+# WASD input, target invalidation, or a fresh click on something else.
+var _walk_to_interact_target: Node3D = null
+
+# Active-offhand SHIELD_BUFF state. Toggled on by RMB activation of a
+# shield-generator offhand; absorbs damage_reduction fraction of every
+# incoming hit, debiting the absorbed amount from _shield_buff_pool
+# until the pool drains, then enters cooldown for skill.cooldown
+# seconds. Cleared on offhand unequip.
+var _shield_buff_active: bool = false
+var _shield_buff_pool: int = 0
+var _shield_buff_pool_max: int = 0
+var _shield_buff_reduction: float = 0.0
+var _shield_buff_cooldown_remain: float = 0.0
+var _shield_buff_cooldown_total: float = 0.0
+var _shield_buff_duration_remain: float = 0.0
+# Discriminates the active shield's archetype. SHIELD_BUFF runs the
+# duration-based set-and-forget flow; SHIELD_HOLD watches RMB each
+# tick, drops on release without cooldown, and refreshes the pool
+# only on a press from the broken state.
+var _shield_buff_kind: Skill.ActiveKind = Skill.ActiveKind.NONE
 
 ## Called by pickups/interactables to suppress the fire input this frame.
 func consume_click() -> void:
@@ -232,7 +265,12 @@ func _ready() -> void:
 	_build_crosshair()
 	_stand_test_shape = CapsuleShape3D.new()
 	_stand_test_shape.radius = 0.4
-	_stand_test_shape.height = STAND_HEIGHT
+	# Probe only the slab ABOVE the crouch capsule — the volume that
+	# needs to be clear for the player to stand. Probing the full
+	# stand-height capsule would catch the floor under the player every
+	# tick (bottom hemisphere reaches y=0) and lock crouch on. Mirrors
+	# the enemy's CROUCH_PROBE_HEIGHT pattern.
+	_stand_test_shape.height = STAND_HEIGHT - CROUCH_HEIGHT
 	_build_stat_vfx()
 	# Initial drone reconcile — PerkState may have already fired its first
 	# perks_changed before our connect landed (autoload-vs-scene order),
@@ -284,6 +322,31 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 		return
 	if DebugState.config != null and DebugState.config.god_mode:
 		return
+	# Knockback reduction from the active shield. Computed BEFORE the
+	# damage absorption block so a shield that breaks on this very
+	# hit still grants its knockback protection — the player was
+	# shielded when the hit landed. SHIELD_HOLD blocks all knockback
+	# (full guard); SHIELD_BUFF scales it by the same factor as its
+	# damage reduction so the two stay symmetric and the buff feels
+	# weight-consistent (gentler block, gentler stagger).
+	if _shield_buff_active and knockback_strength > 0.0:
+		match _shield_buff_kind:
+			Skill.ActiveKind.SHIELD_HOLD:
+				knockback_strength = 0.0
+			Skill.ActiveKind.SHIELD_BUFF:
+				knockback_strength *= maxf(1.0 - _shield_buff_reduction, 0.0)
+	# Shield buff: absorb a fraction of the incoming hit, debit the
+	# absorbed amount from the pool, and break the shield (start its
+	# cooldown) when the pool drains. The reduced damage continues to
+	# the HP path so the player still takes the unabsorbed portion.
+	if _shield_buff_active and _shield_buff_reduction > 0.0:
+		var absorbed: int = mini(int(ceil(float(amount) * _shield_buff_reduction)), _shield_buff_pool)
+		amount = maxi(amount - absorbed, 0)
+		_shield_buff_pool -= absorbed
+		if _shield_buff_pool <= 0:
+			_break_shield_buff()
+		else:
+			_emit_shield_buff_changed()
 	_health = max(_health - amount, 0)
 	health_changed.emit(_health, max_health)
 	_hit_flash_tween = HitFlash.play(self, visual, _hit_flash_tween)
@@ -390,6 +453,7 @@ func _physics_process(delta: float) -> void:
 	_combat.tick_cooldowns(delta)
 	_tick_resource_regen(delta)
 	_tick_telekinesis(delta)
+	_tick_shield_buff(delta)
 	_tick_doomsayer(delta)
 
 	var on_floor := is_on_floor()
@@ -427,16 +491,26 @@ func _physics_process(delta: float) -> void:
 		)
 		var wish_dir := Vector3.ZERO
 		if input_vec.length_squared() > 0.0:
+			# Manual WASD cancels auto-walk-to-interact — the player took
+			# direct control.
+			_walk_to_interact_target = null
 			var ref_cam: Camera3D = _fps_camera if _fps_mode else _camera
 			var cam_forward := _flatten(-ref_cam.global_transform.basis.z)
 			var cam_right := _flatten(ref_cam.global_transform.basis.x)
 			wish_dir = (cam_right * input_vec.x - cam_forward * input_vec.y).normalized()
+		elif _walk_to_interact_target != null:
+			wish_dir = _tick_walk_to_interact()
 		_want_dir = wish_dir
 		if _interacting and wish_dir.length_squared() > 0.01:
 			_interacting = false
 		_backing = not _is_airborne and wish_dir.length_squared() > 0.01 and wish_dir.dot(-visual.global_transform.basis.z) < -0.3
 		if not _is_airborne:
-			var speed := move_speed * (CROUCH_SPEED_FACTOR if _crouching else 1.0) * (0.5 if _backing else 1.0)
+			# Active Shield (SHIELD_HOLD) slows the player to 20% — the
+			# trade for full damage block is being a near-stationary
+			# target. Buff (SHIELD_BUFF) doesn't slow; it's a passive
+			# 25% reduction that shouldn't impact mobility.
+			var shield_factor: float = SHIELD_HOLD_SPEED_FACTOR if _shield_buff_active and _shield_buff_kind == Skill.ActiveKind.SHIELD_HOLD else 1.0
+			var speed := move_speed * (CROUCH_SPEED_FACTOR if _crouching else 1.0) * (0.5 if _backing else 1.0) * shield_factor
 			var flat := Vector2(velocity.x, velocity.z)
 			var target := Vector2(wish_dir.x, wish_dir.z) * speed
 			var step := accel * (1.0 if wish_dir.length_squared() > 0.0 else 2.5) * delta
@@ -522,7 +596,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		_try_interact()
 	elif event.is_action_pressed(&"toggle_light"):
-		if InventoryState.get_equipped(&"optics") != null:
+		if InventoryState.get_equipped(&"recon") != null:
 			_light_on = not _light_on
 			light_changed.emit(_light_on)
 			_update_light_visibility()
@@ -571,10 +645,20 @@ func _handle_skill_input() -> void:
 		elif i == 0 and not _fps_mode:
 			var hovered := _hovered_clickable()
 			if hovered != null:
-				if Input.is_action_just_pressed(SKILL_INPUTS[i]):
-					_click_consumed = true
-					_interact_with_hovered(hovered)
-				return
+				if _within_interact_range(hovered):
+					if Input.is_action_just_pressed(SKILL_INPUTS[i]):
+						_click_consumed = true
+						_walk_to_interact_target = null
+						_interact_with_hovered(hovered)
+					return
+				else:
+					# Out of range — start walking to it. Movement loop in
+					# _physics_process synthesises a wish_dir toward this
+					# node each tick until in range, then fires the interact.
+					if Input.is_action_just_pressed(SKILL_INPUTS[i]) and hovered is Node3D:
+						_click_consumed = true
+						_walk_to_interact_target = hovered as Node3D
+					return
 		# LMB fans out across every equipped weapon slot (Forged Amalgamation
 		# adds extras). _cast_lmb_combat handles per-slot cooldowns +
 		# stagger; the single-skill _cast_skill path stays for RMB and the
@@ -622,6 +706,43 @@ func _hovered_clickable() -> Node:
 		if is_instance_valid(node):
 			return node
 	return null
+
+
+# Distance check shared by the click-to-interact path and the cursor
+# affordance. Without this, hovering a chest from across the room and
+# clicking would silently fire the interact() (door unlocks, crate
+# opens) regardless of how far away the player is — the proximity
+# E-key path uses INTERACT_RANGE_SQ; this brings click-on-hover in line.
+# Pickups don't go through this path (they self-handle in
+# prototype_item_pickup._on_input_event), so their walk-to / click-to-
+# loot behaviour is unchanged.
+func _within_interact_range(node: Node) -> bool:
+	if node == null or not (node is Node3D):
+		return false
+	return global_position.distance_squared_to((node as Node3D).global_position) <= INTERACT_RANGE_SQ
+
+
+# Drive auto-walk toward _walk_to_interact_target. Returns the wish_dir
+# the movement loop should use this frame, OR Vector3.ZERO when the
+# target is invalid / in range / already interacted with. Side effects:
+# clears _walk_to_interact_target on completion / invalidation, and
+# fires _interact_with_hovered as soon as the player crosses the
+# INTERACT_RANGE_SQ threshold. WASD cancellation is handled by the
+# caller (movement loop in _physics_process).
+func _tick_walk_to_interact() -> Vector3:
+	var target: Node3D = _walk_to_interact_target
+	if target == null or not is_instance_valid(target) or not target.has_method(&"interact"):
+		_walk_to_interact_target = null
+		return Vector3.ZERO
+	if _within_interact_range(target):
+		_walk_to_interact_target = null
+		_interact_with_hovered(target)
+		return Vector3.ZERO
+	var to_target := target.global_position - global_position
+	to_target.y = 0.0
+	if to_target.length_squared() < 0.0001:
+		return Vector3.ZERO
+	return to_target.normalized()
 
 # Pickups consume their own click via Area3D input_event, so we just suppress
 # the skill cast and let the pickup handle it. Doors / switches need an explicit
@@ -867,6 +988,12 @@ func _arm_offset_for_slot(slot: StringName, aim_right: Vector3) -> Vector3:
 func _cast_skill(skill: Skill) -> void:
 	if skill == null or _attacking:
 		return
+	# Active offhands (shield, grenade, generator) bypass the standard
+	# fire pipeline — they own state machines that don't fit the
+	# one-shot cone/aoe/projectile/hitscan model.
+	if skill.active_kind != Skill.ActiveKind.NONE:
+		_activate_offhand_skill(skill)
+		return
 	_interacting = false
 	if _combat.is_on_cooldown(skill):
 		return
@@ -955,6 +1082,10 @@ func _pick_telekinesis_targets(count: int) -> Array[Node3D]:
 		# our own allies would be friendly fire.
 		if n.has_method(&"is_player_friendly") and n.is_player_friendly():
 			continue
+		# Perks respect line-of-sight — can't yank an enemy through a
+		# wall any more than we can charm or DoT one through it.
+		if not LosCuller.has_los_to_player(n):
+			continue
 		pool.append(n)
 	if pool.is_empty():
 		return []
@@ -1022,6 +1153,12 @@ func _tick_doomsayer(delta: float) -> void:
 		var enemy: PrototypeEnemy = n
 		# Skip player-friendly (charmed) enemies — they're our allies.
 		if enemy.is_player_friendly():
+			continue
+		# Perk effects respect line-of-sight: an enemy behind a wall
+		# can't be charmed or DoT'd through the geometry. LosCuller is
+		# updated every other physics tick, so up to one frame of
+		# staleness — invisible at the aura's 0.4s cadence.
+		if not LosCuller.has_los_to_player(enemy):
 			continue
 		var dist := global_position.distance_to(enemy.global_position)
 		var falloff := clampf(1.0 - dist / radius, 0.0, 1.0)
@@ -1279,7 +1416,34 @@ func get_credits() -> int:
 	return _credits
 
 func get_cooldown_ratio(skill: Skill) -> float:
+	# Active offhands keep their cooldown on the player (they don't go
+	# through PlayerCombat's per-skill _cooldowns dict). Both SHIELD_BUFF
+	# and SHIELD_HOLD share the same _shield_buff_cooldown_* state, so
+	# route both kinds through the player-side timers.
+	if skill != null and _is_shield_skill(skill):
+		if _shield_buff_cooldown_total <= 0.0:
+			return 0.0
+		return clampf(_shield_buff_cooldown_remain / _shield_buff_cooldown_total, 0.0, 1.0)
 	return _combat.get_cooldown_ratio(skill)
+
+
+# Seconds remaining on a skill's cooldown. Used by SkillSlot to render
+# a numeric countdown overlay alongside the existing fill animation.
+# Returns 0.0 when the skill is ready (or no skill / no cooldown).
+func get_cooldown_remain(skill: Skill) -> float:
+	if skill == null:
+		return 0.0
+	if _is_shield_skill(skill):
+		return maxf(_shield_buff_cooldown_remain, 0.0)
+	return _combat.get_cooldown_remain(skill)
+
+
+# Helper for the cooldown routing — both shield archetypes share the
+# player-side cooldown machinery (a SHIELD_HOLD that breaks goes on
+# cooldown the same way a SHIELD_BUFF that breaks does). Future
+# active kinds with their own cooldown state add their kind here.
+func _is_shield_skill(skill: Skill) -> bool:
+	return skill.active_kind == Skill.ActiveKind.SHIELD_BUFF or skill.active_kind == Skill.ActiveKind.SHIELD_HOLD
 
 # Public entry for the Count Exile expire callback. PrototypeEnemy._tick_curse
 # calls this when the curse timer drains; we forward to PlayerCombat where
@@ -1301,6 +1465,9 @@ func _die() -> void:
 	# lifetime to "until you die or a new charm bumps you out." Without
 	# this, post-respawn the player would inherit the pre-death charms.
 	_clear_charms()
+	# Active offhand state too — no point keeping a buff alive past
+	# death-hold; the player re-presses RMB after respawn to re-activate.
+	_clear_shield_buff()
 	# Hide the miasma aura too — _alive is now false so reconcile reads
 	# tier 0 and switches off particles + light spill.
 	_reconcile_doomsayer_aura()
@@ -1461,15 +1628,170 @@ func _build_light_mount() -> void:
 	_apply_light_item()
 
 func _on_equipment_changed(slot: StringName) -> void:
-	if slot == &"optics":
-		_light_on = InventoryState.get_equipped(&"optics") != null
+	if slot == &"recon":
+		_light_on = InventoryState.get_equipped(&"recon") != null
 		_apply_light_item()
 	elif slot == &"weapon":
 		light_changed.emit(_light_on)
+	elif slot == &"offhand":
+		# No stacking: removing the offhand drops every effect it
+		# granted. Re-equipping a different shield offhand requires
+		# the player to re-press RMB to activate.
+		_clear_shield_buff()
 
 func _on_items_overflowed(overflow: Array[Item]) -> void:
 	for displaced_item in overflow:
 		drop_item(displaced_item)
+
+
+# ── Active offhand: SHIELD_BUFF (and forward-facing dispatcher) ──────────────
+
+# Routes an active-kind skill to its handler. SHIELD_BUFF and
+# SHIELD_HOLD share the activation function (they differ in
+# duration vs. hold-release semantics, handled inside). GRENADE
+# is its own branch when implemented.
+func _activate_offhand_skill(skill: Skill) -> void:
+	match skill.active_kind:
+		Skill.ActiveKind.SHIELD_BUFF, Skill.ActiveKind.SHIELD_HOLD:
+			_activate_shield(skill)
+		_:
+			pass
+
+
+# Activate a shield offhand. SHIELD_BUFF: sets duration, locks in
+# damage_reduction, treats activation as "consume the skill" (full
+# pool). SHIELD_HOLD: no duration (held until break or release);
+# 100% reduction; pool refreshes only when activating from a fully
+# broken state (cooldown gates re-pressing during cooldown). Pool
+# persistence across release/press cycles is what stops the SHIELD_HOLD
+# from being refreshed via tap-spam.
+#
+# Pool can be amplified by the offhand item's `shield_pool_bonus`
+# stat modifier (future ItemRoller path).
+func _activate_shield(skill: Skill) -> void:
+	if _shield_buff_active:
+		return
+	if _shield_buff_cooldown_remain > 0.0:
+		return
+	var bonus_pool: int = 0
+	var offhand: Item = InventoryState.get_equipped(&"offhand")
+	if offhand != null:
+		bonus_pool = offhand.get_modifier(&"shield_pool_bonus")
+	var fresh_pool_max := maxi(skill.shield_pool + bonus_pool, 1)
+	var refresh_pool := false
+	if skill.active_kind == Skill.ActiveKind.SHIELD_BUFF:
+		# Buff ALWAYS refreshes — it's a one-shot "cast the buff"
+		# action, not a re-engageable ability.
+		refresh_pool = true
+		_shield_buff_reduction = clampf(skill.damage_reduction, 0.0, 1.0)
+		_shield_buff_duration_remain = maxf(skill.duration, 0.1)
+	else:
+		# Hold: refresh ONLY when starting from a fully broken state
+		# (cooldown blocks re-press during the cooldown window). This
+		# keeps the partial-pool persistence across release/press
+		# cycles within a single shield "lifetime".
+		refresh_pool = _shield_buff_pool <= 0
+		_shield_buff_reduction = 1.0
+		_shield_buff_duration_remain = 0.0
+	if refresh_pool:
+		_shield_buff_pool_max = fresh_pool_max
+		_shield_buff_pool = fresh_pool_max
+	_shield_buff_cooldown_total = maxf(skill.cooldown, 0.1)
+	_shield_buff_kind = skill.active_kind
+	_shield_buff_active = true
+	_emit_shield_buff_changed()
+
+
+# Voluntary HOLD release — drop the shield, keep the pool. Caller is
+# the per-tick input check, not the player. No cooldown applies.
+func _release_shield_hold() -> void:
+	if not _shield_buff_active or _shield_buff_kind != Skill.ActiveKind.SHIELD_HOLD:
+		return
+	_shield_buff_active = false
+	_emit_shield_buff_changed()
+
+
+# Pool drained mid-duration — drop the buff and start the cooldown.
+# Distinct from _expire_shield_buff: a break is a "you got overwhelmed"
+# punishment, an expiry is "your shield ran its course safely".
+func _break_shield_buff() -> void:
+	_shield_buff_active = false
+	_shield_buff_pool = 0
+	_shield_buff_duration_remain = 0.0
+	_shield_buff_cooldown_remain = _shield_buff_cooldown_total
+	_emit_shield_buff_changed()
+
+
+# Duration ran out without the pool draining — drop the buff WITHOUT
+# starting a cooldown. The player can re-cast immediately. This rewards
+# defensive timing (camping the shield somewhere safe) without making
+# the offhand free-spam.
+func _expire_shield_buff() -> void:
+	_shield_buff_active = false
+	_shield_buff_pool = 0
+	_shield_buff_duration_remain = 0.0
+	_emit_shield_buff_changed()
+
+
+# Force-clear shield state (called when the offhand is unequipped or
+# the player dies). Skips cooldown — there's no buff to recover from.
+func _clear_shield_buff() -> void:
+	if not _shield_buff_active and _shield_buff_pool_max == 0 and _shield_buff_cooldown_remain <= 0.0:
+		return
+	_shield_buff_active = false
+	_shield_buff_pool = 0
+	_shield_buff_pool_max = 0
+	_shield_buff_reduction = 0.0
+	_shield_buff_cooldown_remain = 0.0
+	_shield_buff_cooldown_total = 0.0
+	_shield_buff_duration_remain = 0.0
+	_shield_buff_kind = Skill.ActiveKind.NONE
+	_emit_shield_buff_changed()
+
+
+# Tick the active duration (BUFF), the post-break cooldown (both),
+# and the per-frame HOLD release detection. Hooked in
+# _physics_process. Emits on lifecycle transitions (duration expire,
+# cooldown complete, hold release, hold re-press auto-activate) but
+# NOT every frame — that would spam HUD repaints.
+func _tick_shield_buff(delta: float) -> void:
+	if _shield_buff_active:
+		match _shield_buff_kind:
+			Skill.ActiveKind.SHIELD_BUFF:
+				_shield_buff_duration_remain -= delta
+				if _shield_buff_duration_remain <= 0.0:
+					_expire_shield_buff()
+			Skill.ActiveKind.SHIELD_HOLD:
+				if not Input.is_action_pressed(&"alt_fire"):
+					_release_shield_hold()
+	elif _shield_buff_cooldown_remain > 0.0:
+		_shield_buff_cooldown_remain = maxf(0.0, _shield_buff_cooldown_remain - delta)
+		if _shield_buff_cooldown_remain <= 0.0:
+			_emit_shield_buff_changed()
+
+
+func _emit_shield_buff_changed() -> void:
+	shield_buff_changed.emit(_shield_buff_active, _shield_buff_pool, _shield_buff_pool_max, _shield_buff_reduction, _shield_buff_cooldown_remain, _shield_buff_cooldown_total, _shield_buff_duration_remain)
+
+
+# Public read for HUD lookup of the active shield's archetype, so the
+# buff bar entry can differentiate label/tooltip by kind without
+# the HUD pulling raw enum values out of state Dicts.
+func get_shield_buff_kind() -> Skill.ActiveKind:
+	return _shield_buff_kind
+
+
+# Public read for HUD / tooltip consumers.
+func get_shield_buff_state() -> Dictionary:
+	return {
+		"active": _shield_buff_active,
+		"pool": _shield_buff_pool,
+		"pool_max": _shield_buff_pool_max,
+		"reduction": _shield_buff_reduction,
+		"cooldown_remain": _shield_buff_cooldown_remain,
+		"cooldown_total": _shield_buff_cooldown_total,
+		"duration_remain": _shield_buff_duration_remain,
+	}
 
 func drop_item(item: Item) -> void:
 	var parent := get_parent()
@@ -1490,7 +1812,7 @@ func _apply_light_item() -> void:
 	_scanner_active = false
 	_uv_active = false
 
-	var item: Item = InventoryState.get_equipped(&"optics")
+	var item: Item = InventoryState.get_equipped(&"recon")
 	if item == null:
 		return
 
@@ -1555,7 +1877,7 @@ func is_uv_active() -> bool:
 	return _uv_active and _light_on
 
 func get_uv_range() -> float:
-	var item: Item = InventoryState.get_equipped(&"optics")
+	var item: Item = InventoryState.get_equipped(&"recon")
 	if item == null:
 		return 0.0
 	return item.light_range
@@ -1631,8 +1953,18 @@ func _smooth_face(dir: Vector3, turn_rate: float, delta: float) -> void:
 
 func _is_aim_input_held() -> bool:
 	for action in SKILL_INPUTS:
-		if Input.is_action_pressed(action):
-			return true
+		if not Input.is_action_pressed(action):
+			continue
+		# Holding RMB on a SHIELD_HOLD offhand isn't an aim — it's a
+		# passive block. Movement-facing should win so the player
+		# walks normally (just slower) instead of pinning to the
+		# cursor. Same logic would apply to any future "hold to do
+		# something non-aimed" RMB skill.
+		if action == &"alt_fire":
+			var rmb_skill := resolve_skill(1)
+			if rmb_skill != null and rmb_skill.active_kind == Skill.ActiveKind.SHIELD_HOLD:
+				continue
+		return true
 	return false
 
 func _play_anim(candidates: Array[StringName], speed: float = 1.0, blend: float = 0.0) -> bool:
@@ -1742,7 +2074,8 @@ func _update_interact_cursor() -> void:
 	if not _alive or _is_any_modal_open():
 		Input.set_default_cursor_shape(Input.CURSOR_ARROW)
 		return
-	if _hovered_clickable() != null:
+	var hovered := _hovered_clickable()
+	if hovered != null and _within_interact_range(hovered):
 		Input.set_default_cursor_shape(Input.CURSOR_POINTING_HAND)
 	else:
 		Input.set_default_cursor_shape(Input.CURSOR_ARROW)
@@ -1757,8 +2090,20 @@ func _would_hit_ceiling_if_standing() -> bool:
 	var space := get_world_3d().direct_space_state
 	var query := PhysicsShapeQueryParameters3D.new()
 	query.shape = _stand_test_shape
-	query.transform = Transform3D(Basis.IDENTITY, global_position + Vector3(0.0, STAND_HEIGHT * 0.5, 0.0))
+	# Centre the slab probe between the top of the crouch capsule and
+	# the top of the stand capsule, so it covers exactly the headroom
+	# the player needs to clear to stand.
+	var slab_center_y := CROUCH_HEIGHT + (STAND_HEIGHT - CROUCH_HEIGHT) * 0.5
+	query.transform = Transform3D(Basis.IDENTITY, global_position + Vector3(0.0, slab_center_y, 0.0))
 	query.exclude = [get_rid()]
+	# Probe ONLY the world layer — without this the default mask (all
+	# layers) catches charmed pets hugging the player at layer 16, plus
+	# any hostile enemy at layer 2 standing close, and reports "ceiling
+	# blocked" even in a wide-open room. Crouch then locks on until the
+	# offending body wanders away. World-only matches the enemy crouch
+	# probe and is the right semantics: only solid architecture should
+	# prevent standing.
+	query.collision_mask = 1
 	return space.intersect_shape(query, 1).size() > 0
 
 func _set_crouch(value: bool) -> void:

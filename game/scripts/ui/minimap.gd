@@ -19,24 +19,35 @@ const CORNER_SIZE := 170.0
 const CORNER_MARGIN := 12.0
 const FULLSCREEN_FRACTION := 0.6  # fraction of the shorter screen axis
 
-## Camera offset direction matches the main camera (4, 14, 4).
-const CAMERA_DIRECTION := Vector3(4.0, 14.0, 4.0)
-
-## Bake camera settings — captures the entire playable area in one shot.
-## ortho_size must cover the full level diagonal; distance keeps geometry in the
-## near/far range. These are generous defaults; the bake centres on the level
-## builder's ground centre.
-const BAKE_ORTHO_SIZE := 80.0
-const BAKE_DISTANCE := 140.0
+## Bake settings — the minimap renders an abstract D2-style top-down
+## image of walkable area (filled rectangles for each room/corridor
+## floor). ortho_size is computed at bake time from the floor AABB;
+## the floor floors a min for tiny test levels so the map doesn't
+## become a postage stamp, and a margin multiplier so the level isn't
+## pressed against the texture edge.
+const BAKE_ORTHO_SIZE_MIN := 60.0
+const BAKE_ORTHO_MARGIN := 1.4   # multiplier on max(width, depth) of the AABB
 const BAKE_VIEWPORT_SIZE := Vector2i(1024, 1024)
+## Colours for the rasterized map. Floor is a soft cool grey-blue that
+## reads as "passable space" against the void background. Bake background
+## is fully transparent so the parent shader's bg_color shows through.
+const FLOOR_COLOR := Color(0.42, 0.55, 0.68, 0.95)
+const VOID_COLOR := Color(0.0, 0.0, 0.0, 0.0)
 
 ## Runtime view sizes control how much of the baked texture is visible.
 const CORNER_VIEW_SIZE := 30.0   # world-unit radius visible in corner mode
 const FULL_VIEW_SIZE := 80.0     # world-unit radius visible in fullscreen
 
-## Visibility layer for entities to exclude from the minimap.
-const ENTITY_LAYER := 2
-const TERRAIN_ONLY_MASK := 1
+## Rotates the displayed map so it aligns with the iso game camera.
+## -PI/4 (-45°) makes "screen up" point in the world's (-X, -Z)
+## direction — the same direction the player walks when pressing W.
+## The bake itself is top-down (axis-aligned room rectangles for fast
+## rasterization); the rotation is applied in the shader's UV
+## sampling. The radar overlay uses an iso projection basis below
+## that mirrors this so blip positions match the rotated map.
+const MAP_ROTATION_RADIANS := -PI * 0.25
+const ISO_PROJECT_RIGHT := Vector3(0.7071068, 0.0, -0.7071068)  # (1, 0, -1).normalized()
+const ISO_PROJECT_UP := Vector3(-0.7071068, 0.0, -0.7071068)    # (-1, 0, -1).normalized()
 
 const CORNER_OPACITY := 0.92
 const FULLSCREEN_OPACITY := 0.4
@@ -53,21 +64,20 @@ var _mask_material: ShaderMaterial
 var _player_dot: MinimapPlayerDot
 var _radar: ScannerRadar
 var _player: Node3D
-var _cam_dir: Vector3
 
 ## Bake metadata — maps world position to UV coordinates.
 var _bake_center: Vector3 = Vector3.ZERO  # world-space centre of the bake
-var _bake_ortho: float = BAKE_ORTHO_SIZE  # ortho size used during bake
-## Camera basis vectors captured at bake time — used to project world offsets
-## onto the baked image's 2D plane.
-var _bake_right: Vector3
-var _bake_up: Vector3
+var _bake_ortho: float = BAKE_ORTHO_SIZE_MIN  # ortho size used during bake (computed at bake time)
+## Top-down basis vectors used by both the pan transform and the radar
+## overlay's world→map projection. Always (RIGHT, FORWARD) post-rewrite,
+## but kept as fields so the radar's project_right/project_up assignment
+## still works without conditionals.
+var _bake_right: Vector3 = Vector3.RIGHT
+var _bake_up: Vector3 = Vector3.FORWARD
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-
-	_cam_dir = CAMERA_DIRECTION.normalized()
 
 	# TextureRect — will hold the baked texture.
 	_texture_rect = TextureRect.new()
@@ -95,63 +105,73 @@ func _ready() -> void:
 		_player = players[0] as Node3D
 		_radar.set_player(_player)
 
-	_tag_entity_layers()
 	_bake_map()
 	_apply_layout()
 
 # ── Bake ──────────────────────────────────────────────────────────────────────
 
 func _bake_map() -> void:
-	# Compute the AABB centre of all structures to place the bake camera.
-	var structures := get_tree().get_nodes_in_group(&"structures")
-	if not structures.is_empty():
-		var min_pos := Vector3(INF, INF, INF)
-		var max_pos := Vector3(-INF, -INF, -INF)
-		for node in structures:
-			if node is Node3D:
-				var p: Vector3 = (node as Node3D).global_position
-				min_pos = Vector3(minf(min_pos.x, p.x), minf(min_pos.y, p.y), minf(min_pos.z, p.z))
-				max_pos = Vector3(maxf(max_pos.x, p.x), maxf(max_pos.y, p.y), maxf(max_pos.z, p.z))
-		_bake_center = (min_pos + max_pos) * 0.5
-	else:
+	# D2-style abstract bake. Walk the &"minimap_walkable" group (every
+	# floor StaticBody3D registers itself there in floor_builder.gd),
+	# pull each floor's XZ rect from its BoxShape3D collision, and
+	# rasterize the rects onto a flat Image. No SubViewport, no 3D
+	# render pass — just filled rectangles in world coords projected to
+	# pixel coords. Result is a clean walkable shape: floor where you
+	# can stand, transparent void everywhere else. The parent shader's
+	# bg_color paints the void.
+	var rects: Array[Rect2] = []
+	var min_x := INF
+	var max_x := -INF
+	var min_z := INF
+	var max_z := -INF
+	for n in get_tree().get_nodes_in_group(&"minimap_walkable"):
+		var sb := n as Node3D
+		if sb == null:
+			continue
+		var col := sb.get_node_or_null("Collision") as CollisionShape3D
+		if col == null:
+			continue
+		var shape := col.shape as BoxShape3D
+		if shape == null:
+			continue
+		var center_xz := Vector2(sb.global_position.x, sb.global_position.z)
+		var size_xz := Vector2(shape.size.x, shape.size.z)
+		var rect := Rect2(center_xz - size_xz * 0.5, size_xz)
+		rects.append(rect)
+		min_x = minf(min_x, rect.position.x)
+		max_x = maxf(max_x, rect.position.x + rect.size.x)
+		min_z = minf(min_z, rect.position.y)
+		max_z = maxf(max_z, rect.position.y + rect.size.y)
+
+	if rects.is_empty():
 		_bake_center = Vector3.ZERO
+		_bake_ortho = BAKE_ORTHO_SIZE_MIN
+	else:
+		_bake_center = Vector3((min_x + max_x) * 0.5, 0.0, (min_z + max_z) * 0.5)
+		var extent := maxf(max_x - min_x, max_z - min_z)
+		_bake_ortho = maxf(BAKE_ORTHO_SIZE_MIN, extent * BAKE_ORTHO_MARGIN)
 
-	# Create a temporary SubViewport for the one-shot render.
-	var vp := SubViewport.new()
-	vp.world_3d = get_viewport().world_3d
-	vp.size = BAKE_VIEWPORT_SIZE
-	vp.transparent_bg = false
-	vp.render_target_update_mode = SubViewport.UPDATE_ONCE
-	vp.msaa_2d = Viewport.MSAA_DISABLED
-	vp.debug_draw = Viewport.DEBUG_DRAW_UNSHADED
-	add_child(vp)
+	# True top-down basis. World X → image X (right). World Z → image Y
+	# (down). Pan + radar overlay use these via dot product so the
+	# orientation is consistent everywhere.
+	_bake_right = Vector3.RIGHT
+	_bake_up = Vector3.FORWARD  # (0, 0, -1); _world_to_map negates so positive Z → screen Y down
 
-	var cam := Camera3D.new()
-	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
-	cam.size = BAKE_ORTHO_SIZE
-	cam.far = 300.0
-	cam.near = 0.1
-	cam.current = true
-	cam.cull_mask = TERRAIN_ONLY_MASK
-	vp.add_child(cam)
+	var img := Image.create(BAKE_VIEWPORT_SIZE.x, BAKE_VIEWPORT_SIZE.y, false, Image.FORMAT_RGBA8)
+	img.fill(VOID_COLOR)
+	if not rects.is_empty():
+		var px_per_world := float(BAKE_VIEWPORT_SIZE.x) / _bake_ortho
+		var center_px := Vector2(BAKE_VIEWPORT_SIZE) * 0.5
+		var image_bounds := Rect2i(Vector2i.ZERO, BAKE_VIEWPORT_SIZE)
+		for rect in rects:
+			var px_min: Vector2 = center_px + (rect.position - Vector2(_bake_center.x, _bake_center.z)) * px_per_world
+			var px_size: Vector2 = rect.size * px_per_world
+			var px_rect := Rect2i(int(round(px_min.x)), int(round(px_min.y)), int(round(px_size.x)), int(round(px_size.y)))
+			px_rect = px_rect.intersection(image_bounds)
+			if px_rect.size.x > 0 and px_rect.size.y > 0:
+				img.fill_rect(px_rect, FLOOR_COLOR)
 
-	cam.global_position = _bake_center + _cam_dir * BAKE_DISTANCE
-	cam.look_at(_bake_center, Vector3.UP)
-
-	_bake_ortho = BAKE_ORTHO_SIZE
-	_bake_right = cam.global_transform.basis.x
-	_bake_up = cam.global_transform.basis.y
-
-	# Let the viewport render one frame.
-	await RenderingServer.frame_post_draw
-
-	# Capture the rendered image as a persistent ImageTexture.
-	var img := vp.get_texture().get_image()
-	var baked_tex := ImageTexture.create_from_image(img)
-	_texture_rect.texture = baked_tex
-
-	# Clean up the temporary viewport.
-	vp.queue_free()
+	_texture_rect.texture = ImageTexture.create_from_image(img)
 
 # ── Per-frame pan ─────────────────────────────────────────────────────────────
 
@@ -210,37 +230,22 @@ func _apply_layout() -> void:
 			_mask_material.set_shader_parameter(&"opacity", FULLSCREEN_OPACITY)
 			_mask_material.set_shader_parameter(&"bg_color", Color(0.04, 0.05, 0.04, 0.0))
 
+	# Apply iso rotation to the displayed map so it matches the in-game
+	# camera angle. Pan keeps using top-down basis (set on _bake_right /
+	# _bake_up) because the texture is baked top-down — only the
+	# sample-direction rotates inside the shader.
+	_mask_material.set_shader_parameter(&"rotation_radians", MAP_ROTATION_RADIANS)
+
 	var map_r := Rect2(_texture_rect.position, _texture_rect.size)
 	var o := FULLSCREEN_OPACITY if mode == Mode.FULLSCREEN else 1.0
 	_radar.map_rect = map_r
 	_radar.camera_ortho_size = FULL_VIEW_SIZE if mode == Mode.FULLSCREEN else CORNER_VIEW_SIZE
-	_radar.project_right = _bake_right
-	_radar.project_up = _bake_up
+	# Radar projects blips in iso basis so they line up with the rotated
+	# texture. Pan code above uses _bake_right/_bake_up (top-down) for
+	# its own world-to-UV conversion; these are independent.
+	_radar.project_right = ISO_PROJECT_RIGHT
+	_radar.project_up = ISO_PROJECT_UP
 	_radar.opacity = o
 	_player_dot.map_center = map_r.get_center()
 	_player_dot.opacity = o
 
-# ── Entity layer tagging ──────────────────────────────────────────────────────
-
-func _tag_entity_layers() -> void:
-	for group in [&"player", &"enemies", &"pickups", &"corpses"]:
-		for node in get_tree().get_nodes_in_group(group):
-			_add_entity_layer_recursive(node)
-	get_tree().node_added.connect(_on_node_added)
-
-func _on_node_added(node: Node) -> void:
-	if not node is VisualInstance3D:
-		return
-	var parent := node.get_parent()
-	while parent != null:
-		for group in [&"enemies", &"pickups", &"corpses", &"player"]:
-			if parent.is_in_group(group):
-				(node as VisualInstance3D).layers = (1 << (ENTITY_LAYER - 1))
-				return
-		parent = parent.get_parent()
-
-func _add_entity_layer_recursive(node: Node) -> void:
-	if node is VisualInstance3D:
-		(node as VisualInstance3D).layers = (1 << (ENTITY_LAYER - 1))
-	for child in node.get_children():
-		_add_entity_layer_recursive(child)

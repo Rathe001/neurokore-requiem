@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="LevelLayout" load_steps=40 format=3]
+[gd_resource type="Resource" script_class="LevelLayout" load_steps=42 format=3]
 
 ; ══════════════════════════════════════════════════════════════════════════════
 ; PROCGEN DEMO — BranchingGenerator builds a 5-8 room east-going chain with
@@ -23,6 +23,8 @@
 [ext_resource type="Resource" path="res://resources/level/rooms/proto_pit_linear.tres" id="room_pit_linear"]
 [ext_resource type="Resource" path="res://resources/level/rooms/proto_wide_linear.tres" id="room_wide_linear"]
 [ext_resource type="Resource" path="res://resources/level/rooms/proto_great_hall.tres" id="room_great_hall"]
+[ext_resource type="Resource" path="res://resources/level/rooms/proto_open_arena.tres" id="room_open_arena"]
+[ext_resource type="Resource" path="res://resources/level/rooms/proto_grand_arena.tres" id="room_grand_arena"]
 [ext_resource type="Resource" path="res://resources/level/rooms/proto_pit_chasm.tres" id="room_pit_chasm"]
 [ext_resource type="Resource" path="res://resources/level/rooms/proto_spike_chamber.tres" id="room_spike_chamber"]
 [ext_resource type="Resource" path="res://resources/level/rooms/proto_pit_bottomless.tres" id="room_pit_bottomless"]
@@ -48,12 +50,6 @@ room = ExtResource("room_linear")
 role = &"linear"
 weight = 1.0
 
-[sub_resource type="Resource" id="template_pit_linear"]
-script = ExtResource("script_template")
-room = ExtResource("room_pit_linear")
-role = &"linear"
-weight = 0.7
-
 [sub_resource type="Resource" id="template_wide_linear"]
 script = ExtResource("script_template")
 room = ExtResource("room_wide_linear")
@@ -66,23 +62,46 @@ room = ExtResource("room_great_hall")
 role = &"linear"
 weight = 0.4
 
+[sub_resource type="Resource" id="template_open_arena"]
+script = ExtResource("script_template")
+room = ExtResource("room_open_arena")
+role = &"linear"
+weight = 0.5
+
+[sub_resource type="Resource" id="template_grand_arena"]
+script = ExtResource("script_template")
+room = ExtResource("room_grand_arena")
+role = &"linear"
+weight = 0.25
+
+; Pit and spike rooms read as a real hazard — they were appearing in
+; nearly half of all chains at the prior 0.7/0.4/0.3/0.35 weights.
+; Cut hard so they show up as a memorable obstacle, not a constant
+; one. Combined pit weight ~0.4 vs ~3.0 non-pit = ~12% chance per
+; linear slot (one per chain on average at length 7).
+[sub_resource type="Resource" id="template_pit_linear"]
+script = ExtResource("script_template")
+room = ExtResource("room_pit_linear")
+role = &"linear"
+weight = 0.15
+
 [sub_resource type="Resource" id="template_pit_chasm"]
 script = ExtResource("script_template")
 room = ExtResource("room_pit_chasm")
 role = &"linear"
-weight = 0.4
+weight = 0.10
 
 [sub_resource type="Resource" id="template_spike_chamber"]
 script = ExtResource("script_template")
 room = ExtResource("room_spike_chamber")
 role = &"linear"
-weight = 0.3
+weight = 0.08
 
 [sub_resource type="Resource" id="template_pit_bottomless"]
 script = ExtResource("script_template")
 room = ExtResource("room_pit_bottomless")
 role = &"linear"
-weight = 0.35
+weight = 0.08
 
 [sub_resource type="Resource" id="template_end"]
 script = ExtResource("script_template")
@@ -116,9 +135,16 @@ role = &"branch_linear_ns"
 
 [sub_resource type="Resource" id="generator"]
 script = ExtResource("script_branching")
-seed = 42
-templates = [SubResource("template_start"), SubResource("template_linear"), SubResource("template_pit_linear"), SubResource("template_wide_linear"), SubResource("template_great_hall"), SubResource("template_pit_chasm"), SubResource("template_spike_chamber"), SubResource("template_pit_bottomless"), SubResource("template_end"), SubResource("template_t_south"), SubResource("template_t_north"), SubResource("template_branch_n"), SubResource("template_branch_s"), SubResource("template_branch_linear")]
-corridor_pool = [ExtResource("corr_std"), ExtResource("corr_long"), ExtResource("corr_dim"), ExtResource("corr_crouch")]
+rng_seed = 42
+templates = [SubResource("template_start"), SubResource("template_linear"), SubResource("template_pit_linear"), SubResource("template_wide_linear"), SubResource("template_great_hall"), SubResource("template_open_arena"), SubResource("template_grand_arena"), SubResource("template_pit_chasm"), SubResource("template_spike_chamber"), SubResource("template_pit_bottomless"), SubResource("template_end"), SubResource("template_t_south"), SubResource("template_t_north"), SubResource("template_branch_n"), SubResource("template_branch_s"), SubResource("template_branch_linear")]
+; Corridor pool — each non-crouch corridor is duped twice and crouch
+; appears once, so the picker (uniform random) lands on a non-crouch
+; corridor ~6/7 of the time. Crouch tunnels are still in rotation as
+; an occasional surprise rather than a constant 25%-of-corridors
+; obstacle. Same trick as the linear-template weighting above; the
+; corridor picker doesn't honour a `weight` field today, so dupes
+; are how we shape distribution.
+corridor_pool = [ExtResource("corr_std"), ExtResource("corr_std"), ExtResource("corr_long"), ExtResource("corr_long"), ExtResource("corr_dim"), ExtResource("corr_dim"), ExtResource("corr_crouch")]
 min_length = 5
 max_length = 8
 branch_chance = 0.45

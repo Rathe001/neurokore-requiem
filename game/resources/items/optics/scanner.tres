@@ -5,6 +5,7 @@
 [resource]
 script = ExtResource("script")
 display_name = "Phased Surveillance Radar"
+sub_type = "Radar"
 glyph = "◎"
 light_type = 2
 light_range = 12.0

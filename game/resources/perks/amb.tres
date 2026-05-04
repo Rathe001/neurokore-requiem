@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="PerkLadder" load_steps=11 format=3]
+[gd_resource type="Resource" script_class="PerkLadder" load_steps=8 format=3]
 
 ; Enculted (amb) tier perks — Doomsayer.
 ;
@@ -8,8 +8,8 @@
 ; charmed. The cap acts as a natural rate-limit — charms keep flowing
 ; until full, then stop until a controlled enemy dies. No FIFO eviction.
 ;
-; Damage-over-time is NOT part of this perk anymore — the "Aura of Dread"
-; talent (AMB T1 N0) gates it via TalentState.get_aggregate(
+; Damage-over-time is NOT part of this perk — the "Aura of Dread" talent
+; (AMB T1 N0) gates it via TalentState.get_aggregate(
 ; &"doomsayer_dot_per_tick"). Players who skip that talent get pure
 ; mind-control with no offensive aura.
 ;
@@ -21,22 +21,13 @@
 ; itself (see PrototypeEnemy.is_charmable).
 ;
 ; Tier deltas (additive aggregates):
-;   T1 grants +5% damage scale + 1 charm slot   →  5%, 1 max charm
-;   T2 grants +5% damage scale + 1 charm slot   → 10%, 2 max charms
-;   T3 grants +10% damage scale + 1 charm slot  → 20%, 3 max charms
-;
-; The doomsayer_proc_pct aggregate is no longer read by code; kept as
-; a "this perk unlocked" sentinel. doomsayer_max_charms is authoritative
-; for the cap.
+;   T1 grants 1 charm slot   →  1 max charm
+;   T2 grants 1 charm slot   →  2 max charms
+;   T3 grants 1 charm slot   →  3 max charms
 
 [ext_resource type="Script" path="res://scripts/perks/perk.gd" id="perk_script"]
 [ext_resource type="Script" path="res://scripts/perks/perk_effect.gd" id="effect_script"]
 [ext_resource type="Script" path="res://scripts/perks/perk_ladder.gd" id="ladder_script"]
-
-[sub_resource type="Resource" id="effect_amb_t1_proc"]
-script = ExtResource("effect_script")
-kind = &"doomsayer_proc_pct"
-magnitude = 5.0
 
 [sub_resource type="Resource" id="effect_amb_t1_charms"]
 script = ExtResource("effect_script")
@@ -48,12 +39,7 @@ script = ExtResource("perk_script")
 id = &"amb_t1"
 label = "Doomsayer I"
 description = "A charm aura surrounds you, converting up to 1 follower to your cult — they fight for you until they die. (Allocate the Aura of Dread talent to add damage.)"
-effects = [SubResource("effect_amb_t1_proc"), SubResource("effect_amb_t1_charms")]
-
-[sub_resource type="Resource" id="effect_amb_t2_proc"]
-script = ExtResource("effect_script")
-kind = &"doomsayer_proc_pct"
-magnitude = 5.0
+effects = [SubResource("effect_amb_t1_charms")]
 
 [sub_resource type="Resource" id="effect_amb_t2_charms"]
 script = ExtResource("effect_script")
@@ -65,12 +51,7 @@ script = ExtResource("perk_script")
 id = &"amb_t2"
 label = "Doomsayer II"
 description = "The aura tightens. Up to 2 followers converted to your cult."
-effects = [SubResource("effect_amb_t2_proc"), SubResource("effect_amb_t2_charms")]
-
-[sub_resource type="Resource" id="effect_amb_t3_proc"]
-script = ExtResource("effect_script")
-kind = &"doomsayer_proc_pct"
-magnitude = 10.0
+effects = [SubResource("effect_amb_t2_charms")]
 
 [sub_resource type="Resource" id="effect_amb_t3_charms"]
 script = ExtResource("effect_script")
@@ -82,7 +63,7 @@ script = ExtResource("perk_script")
 id = &"amb_t3"
 label = "Doomsayer III"
 description = "Up to 3 followers in your cult. The herd unravels around you and joins you."
-effects = [SubResource("effect_amb_t3_proc"), SubResource("effect_amb_t3_charms")]
+effects = [SubResource("effect_amb_t3_charms")]
 
 [resource]
 script = ExtResource("ladder_script")

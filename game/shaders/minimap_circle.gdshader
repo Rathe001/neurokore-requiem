@@ -13,6 +13,13 @@ uniform float opacity : hint_range(0.0, 1.0) = 1.0;
 // full-map texture is visible inside the circle.
 uniform vec2 uv_offset = vec2(0.0, 0.0);
 uniform float uv_scale = 1.0;
+// Rotates the SAMPLING direction inside the circle. The bake itself
+// is top-down (axis-aligned room rectangles); rotating here lets us
+// display an iso-aligned view (-PI/4 ≈ -45° matches the (4,14,4)
+// game camera) without re-rasterizing. Pan still uses top-down world
+// X/Z axes — the shader rotation only affects how the centered UV
+// fans out around the player.
+uniform float rotation_radians = 0.0;
 
 // Standard Rec. 709 luminance weights.
 const vec3 LUMINANCE_WEIGHTS = vec3(0.299, 0.587, 0.114);
@@ -26,7 +33,14 @@ void fragment() {
 	}
 
 	// Remap UV through offset/scale so we pan across the baked texture.
-	vec2 map_uv = (UV - 0.5) * uv_scale + 0.5 + uv_offset;
+	// Rotate the centered UV first so the visible world is iso-aligned;
+	// uv_offset is added AFTER rotation so the player stays at the
+	// circle's centre regardless of rotation.
+	vec2 centered_uv = UV - 0.5;
+	float rc = cos(rotation_radians);
+	float rs = sin(rotation_radians);
+	vec2 rotated_uv = vec2(rc * centered_uv.x - rs * centered_uv.y, rs * centered_uv.x + rc * centered_uv.y);
+	vec2 map_uv = rotated_uv * uv_scale + 0.5 + uv_offset;
 
 	// Sample the texture at the panned UV. Out-of-bounds shows bg_color.
 	vec4 tex;

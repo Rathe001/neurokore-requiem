@@ -149,6 +149,17 @@ func _try_fire() -> bool:
 			continue
 		if not n.has_method(&"take_damage"):
 			continue
+		# Skip player-friendly (charmed) pets — drones are an extension
+		# of the player and shouldn't waste shots on bolts that the
+		# projectile script will then filter out as friendly fire.
+		if n.has_method(&"is_player_friendly") and n.is_player_friendly():
+			continue
+		# Drones respect line-of-sight from the PLAYER's perspective —
+		# they're an extension of the player, not independent scouts.
+		# An enemy the player can't see can't be targeted by their
+		# drones either, matching the rule for charm / DoT / telekinesis.
+		if not LosCuller.has_los_to_player(n):
+			continue
 		var d2 := global_position.distance_squared_to(n.global_position)
 		if d2 < best_dist_sq:
 			best_dist_sq = d2

@@ -57,7 +57,7 @@ const _UNSET_CELL := Vector2i(-1, -1)
 
 func generate() -> LevelGraph:
 	var rng := RandomNumberGenerator.new()
-	rng.seed = seed if seed != 0 else int(Time.get_unix_time_from_system())
+	rng.seed = rng_seed if rng_seed != 0 else int(Time.get_unix_time_from_system())
 
 	if templates.is_empty():
 		push_error("[GridGenerator] templates is empty.")
