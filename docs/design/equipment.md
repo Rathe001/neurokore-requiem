@@ -88,16 +88,23 @@ Because tier perks can be lost when stats shift (see [stat identity breakpoints]
 
 Offhands occupy the offhand slot when using a 1H weapon. Each offhand's `fire_skill` becomes the player's **Alt Fire**. Offhands are never "just stat sticks" — they always provide an active Alt Fire ability.
 
-| Offhand | Alt Fire | Notes |
-|---|---|---|
-| Shield Generator | Energy barrier (brief frontal block) | Absorbs X damage, then breaks. Cooldown-based. |
-| Buckler / Riot Shield | Shield bash (short-range knockback cone) | Starter offhand. Melee. |
-| Grenade | Throw grenade (AoE at target point) | Arcing projectile. Elemental variants exist (cryo grenade, frag, incendiary). |
-| Sidearm | Quick shot | A secondary 1H ranged weapon used as an offhand. Lower damage than main hand. |
-| Disruptor | EMP pulse (disables mechanical enemies briefly) | Short range AoE. Especially effective vs. Cyborg-type enemies. |
-| Stealth Module | Brief invisibility + movement speed boost | Cooldown-heavy. Breaks on attack or taking damage. |
-| Drone Relay | Command drone to attack (single target) | Automaton-themed. Offhand version of drone control — one drone instead of a swarm. |
-| Cursed Totem | Apply curse DoT at range | Enculted-themed. Weaker than Ancient Text but frees main hand for a generic weapon. |
+Most offhands fall into one of three archetypes:
+
+- **Active hold** — RMB held while the effect is sustained (full block, beam, channel). Strong but committal.
+- **Toggled buff** — RMB taps to grant a persistent player-side buff with its own pool / duration / cooldown.
+- **Triggered fire** — RMB fires once per press at the cursor (grenade, sidearm shot).
+
+| Offhand | Archetype | Effect | Notes |
+|---|---|---|---|
+| Active Shield | Active hold | Hold RMB to fully block incoming damage and knockback up to a pool, then breaks | Movement penalty while held; pool persists across release/press; cooldown only on break |
+| Amplification Shield | Toggled buff | Tap RMB to apply a partial damage + knockback reduction over a long duration | Pool drains from absorbed damage; cooldown only on break (free re-cast on natural expiry) |
+| Buckler / Riot Shield | Triggered fire | Shield bash — short-range knockback cone | Starter offhand. Melee. |
+| Grenade | Triggered fire | Throw grenade at cursor (AoE on impact) | Arcing projectile with max range. Elemental variants exist (cryo, frag, incendiary). |
+| Sidearm | Triggered fire | Quick shot from a secondary 1H ranged weapon | Lower damage than main hand. |
+| Disruptor | Triggered fire | EMP pulse (disables mechanical enemies briefly) | Short range AoE. Especially effective vs. Cyborg-type enemies. |
+| Stealth Module | Toggled buff | Brief invisibility + movement speed | Breaks on attack or taking damage. |
+| Drone Relay | Triggered fire | Command drone to attack (single target) | Automaton-themed. Offhand version of drone control — one drone instead of a swarm. |
+| Cursed Totem | Triggered fire | Apply curse DoT at range | Enculted-themed. Weaker than Ancient Text but frees main hand for a generic weapon. |
 
 ## Armor
 

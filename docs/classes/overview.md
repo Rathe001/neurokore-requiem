@@ -30,7 +30,7 @@ Each class has **one unique resource** capturing the energy they expend. Resourc
 
 ## Stat Identity & Tier Perks
 
-Attribute distribution drives **tier perks** that unlock at stat breakpoints and are lost when gear drops you below. All six specialist perks ship: Exile (Count), Amalgamation (Forged), Drone Swarm (Automaton), IED (Survivalist), Telekinesis (Polymath), Doomsayer (Enculted) — see each class doc and the [tier perks table](../design/attribute-system.md#specialized-class-tier-perks).
+Attribute distribution drives **tier perks** that unlock at stat breakpoints and are lost when gear drops you below. Each specialist class has a signature perk ladder — Exile (Count), Amalgamation (Forged), Drone Swarm (Automaton), IED (Survivalist), Telekinesis (Polymath), Doomsayer (Enculted). See each class doc and the [tier perks table](../design/attribute-system.md#specialized-class-tier-perks).
 
 ## Character Creation
 

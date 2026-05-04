@@ -9,15 +9,15 @@
 
 ## Targeting Modes
 
-Each skill has a targeting mode that determines how it resolves hits. Modes are defined on the `Skill` resource.
+Every skill resolves hits through one of four targeting shapes. Each gets a clear ground telegraph so the player can read the threat / opportunity without inspection.
 
 | Mode | Behavior | Telegraph |
 |---|---|---|
-| `SINGLE_CONE` | Spatial query: all enemies in a cone (facing direction, configurable arc). Melee default. | Cone outline on ground |
-| `AOE_RADIAL` | Spatial query: all enemies within radius. | Circle outline on ground |
-| `PROJECTILE` | Spawns a projectile node that travels in a straight line. Hits the first enemy on contact, then despawns. Self-destructs at max range. | Line on ground |
-| `HITSCAN` | Raycast + narrow cone query clipped to wall distance. Hits the closest enemy along the ray. Beam VFX. | Line on ground + beam flash |
+| Cone | All enemies in a cone in the facing direction. Melee default. | Cone outline on ground |
+| Radial AoE | All enemies within a radius. | Circle outline on ground |
+| Projectile | A travelling projectile that hits the first enemy on contact and self-destructs at max range. | Line on ground |
+| Hitscan | Instant ray with a narrow cone clipped to wall distance. Hits the closest enemy along the ray. | Line on ground + beam flash |
 
-Weapon bases determine which targeting mode their skill uses. Melee weapons use `SINGLE_CONE` or `AOE_RADIAL`. Ranged weapons use `PROJECTILE` or `HITSCAN`. The targeting mode, damage, range, and cooldown are all properties of the `Skill` resource attached to the weapon — swapping weapons changes combat behavior entirely.
+Weapon archetype determines which mode its skill uses. Melee weapons use cone or radial AoE. Ranged weapons use projectile or hitscan. Targeting mode, damage, range, and cooldown all live with the skill, so swapping weapons changes combat behavior entirely — a pipe wrench reads completely differently than a shock baton.
 
-Damage resolution for all modes feeds through the same pipeline: accuracy roll → hit/miss → crit roll → base damage roll (weapon or skill) → attribute damage multiplier → crit multiplier. This pipeline lives in the `PlayerCombat` component.
+Damage resolution feeds through one shared pipeline regardless of mode: accuracy roll → hit/miss → crit roll → base damage roll → attribute damage multiplier → crit multiplier. Centralised so weapon-affix balancing affects every mode equally.

@@ -1,7 +1,5 @@
 # Class-Specific Monster Variants
 
-> **Status: design only — not yet implemented.** No class-variant enemies ship in the prototype yet. Variants are currently tied to **chosen class**; whether they should also track stat identity is open (see end of doc).
-
 *Cross-refs: [Zones](../design/zones.md) for zone-level enemy design; [Combat & Scale](../design/combat.md) for density philosophy.*
 
 Certain enemies have class-specific variants — different forms of the same base threat tuned to the player's class. The world shapes itself around what threatens *you*. Variants may interact with the class's resource system (e.g. a Software Bug corrupting Automaton scripts, Nanobytes draining the Forged's Power Grid, an Unbeliever suppressing the Enculted's abilities).

@@ -1,7 +1,5 @@
 # Attribute System
 
-> Status: Core system + all six specialist tier perks implemented (Exile, Amalgamation, Drone Swarm, IED, Telekinesis, Doomsayer). Origin-class tier perks, kore stat scaling multipliers, visual metamorphosis, and NPC reactions are still TBD.
-
 ## Core Philosophy
 
 - **Class = verbs**, **attributes = modifiers**. Stats shape *how* you do things; classes define *what* you can do. Stats never gate access to abilities.
@@ -31,7 +29,7 @@ Six **class stats** roll on items. Two **origin stats** are derived, not rolled.
 
 ### Gameplay Axes
 
-Each attribute maps to a behavioral axis. These are design intent — mechanical implementations are TBD.
+Each attribute maps to a behavioral axis.
 
 | Stat | Axis |
 |---|---|
@@ -44,20 +42,18 @@ Each attribute maps to a behavioral axis. These are design intent — mechanical
 
 ### Attribute Colors
 
-Each attribute uses the accent color of its class UI theme. These colors appear on item tooltips, stat displays, and anywhere an attribute value is shown.
+Each attribute has an identity colour shared with its class UI theme. The *colour* is the design intent; the precise RGB lives in the theme resources.
 
-| Stat | Short | Color Name | RGB |
-|---|---|---|---|
-| Soul | SOU | Brown | `(0.65, 0.45, 0.25)` |
-| Interface | ITF | Cyan | `(0.3, 0.85, 1.0)` |
-| Orthodoxy | ORT | Ivory | `(0.95, 0.92, 0.8)` |
-| Deviation | DEV | Red | `(0.9, 0.25, 0.2)` |
-| Optimization | OPT | Steel blue | `(0.55, 0.78, 0.85)` |
-| Ingenuity | ING | Olive green | `(0.7, 0.85, 0.35)` |
-| Clarity | CLA | Yellow | `(0.95, 0.9, 0.3)` |
-| Ambition | AMB | Purple | `(0.78, 0.35, 0.85)` |
-
-These match the `accent` field in each class's `UIThemeConfig` resource (`game/resources/ui/theme_*.tres`).
+| Stat | Identity |
+|---|---|
+| Soul | Brown |
+| Interface | Cyan |
+| Orthodoxy | Ivory |
+| Deviation | Red |
+| Optimization | Steel blue |
+| Ingenuity | Olive green |
+| Clarity | Yellow |
+| Ambition | Purple |
 
 ### Relationship Color Overlay
 
@@ -75,22 +71,22 @@ Origin classes use balance-state coloring instead: green (stable) / yellow (drif
 
 Calculated from the average of the character's three kore stats — never rolled directly. They represent identity coherence, not raw power.
 
-- **Soul** (Analog) = avg(Orthodoxy, Ingenuity, Ambition) → stability / sustain / momentum
-- **Interface** (Cyborg) = avg(Deviation, Optimization, Clarity) → speed / responsiveness / cooldown smoothing
+- **Soul** (Analog) — averaged from the three Analog kore stats; vibe is stability / sustain / momentum.
+- **Interface** (Cyborg) — averaged from the three Cyborg kore stats; vibe is speed / responsiveness / cooldown smoothing.
+
+Both stats' load-bearing mechanical role beyond identity is still open design.
 
 ---
 
 ## Attribute Relationships
 
-Each stat falls into one of **three categories** relative to a player's class. All tier thresholds are multiples of 33% — every tier costs another third of your stat budget.
+Each stat falls into one of **three categories** relative to a player's class. Tier thresholds are evenly spaced so each tier costs the same fraction of the player's stat budget — every tier is a real commitment.
 
-| Relationship | Who | Scaling | Specialist Tiers | Origin Tiers |
-|---|---|---|---|---|
-| **Primary** | Own class stat | Full (1x) | T1=33%, T2=66%, T3=99% | n/a (origins have no primary) |
-| **Kore** | Other two stats from same origin | Partial (~0.25x) | T1=33%, T2=66%, T3=— | T1=33%, T2=66%, T3=— |
-| **Opposing** | All three stats from other origin | Interference + distortion | T1=—, T2=—, T3=— | T1=33%, T2=—, T3=— |
-
-> T3 for kore / opposing is unreachable in practice — getting one stat to 66% leaves only 34% for everything else. Specialists are sentinel-locked out of opposing trees entirely; origins can dabble into opposing T1 (≥33%). The "—" entries are sentinel thresholds (>1.0) in code.
+| Relationship | Who | Scaling | Tier reach |
+|---|---|---|---|
+| **Primary** | Own class stat | Full | Specialists reach all three tiers; origins have no primary |
+| **Kore** | Other two stats from same origin | Partial | Both can reach low tiers, but specialists alone push deeper |
+| **Opposing** | All three stats from other origin | Interference + distortion | Origins can dabble at the lowest tier; specialists are locked out entirely |
 
 ### Opposing Stats — Resistance Model
 
@@ -119,19 +115,17 @@ Each option completely reframes what "good gear" means for the same class. Origi
 Origin classes are casual-friendly: broad, forgiving scaling and lower variance.
 
 - Scaling: average of 3 kore stats → feeds Soul / Interface
-- Opposing stats reduce efficiency (30-50%) but don't distort
+- Opposing stats reduce efficiency but don't distort behavior
 - No specialized mechanics inherited — gains are blended and generalized
 - Misaligned gearing (heavy opposing investment) stays functional, just suboptimal
 
 ### Origin Tier Perks (Balance-Gated)
 
-Origin perks reward staying balanced — single rule: no stat may meet or exceed the cap. Same rule applies to kore and opposing alike. Specific perks TBD.
+Origin perks reward staying balanced — single rule: no stat may meet or exceed the cap, applied uniformly across kore and opposing.
 
-| Tier | Cap | Vibe |
-|---|---|---|
-| 1 | No stat ≥ 66% | Almost free |
-| 2 | No stat ≥ 50% | No single stat dominates |
-| 3 | No stat ≥ 33% | Perfect 1-1-1 spread, exactly at cap |
+- Tier 1 — generous cap (most builds qualify).
+- Tier 2 — tighter; no stat dominates.
+- Tier 3 — strict; only the perfect even spread qualifies.
 
 An origin class that starts pushing a single stat loses origin perks but begins unlocking the matching specialized class's tier perks instead.
 
@@ -149,7 +143,7 @@ Items can push players across tier thresholds accidentally — a feature, not a 
 
 ## Class-Specific Stat Functions
 
-Each class's main stat affects damage and has a unique mechanical function tied to class fantasy.
+Each class's main stat scales damage and has a unique mechanical function tied to class fantasy. Most non-damage functions are still TBD.
 
 | Stat | Class | Damage Scaling | Special Function |
 |---|---|---|---|
@@ -168,23 +162,21 @@ As a character's stat distribution shifts, two things happen: they unlock **tier
 
 ### Breakpoints (3 tiers)
 
-Three tiers drive everything: talent tree access, tier perks, VFX metamorphosis, and NPC reactions. Each threshold is a multiple of 33% — every tier costs another third of your budget. Full threshold table is in [Attribute Relationships](#attribute-relationships) above.
+Three tiers drive everything: talent tree access, tier perks, VFX metamorphosis, and NPC reactions. Each threshold costs another even fraction of the player's stat budget — every tier is a meaningful commitment, not a minor checkpoint.
 
 Reachable specialist patterns are exactly three:
 
-- **3-only** (99% in one stat) — pure specialist, true all-in
-- **2-1-0** (66% main + 33% in one kore stat) — moderate hybrid, two perk ladders
-- **1-1-1** (33% × 3) — wide spread across own + both kore stats; no apex
+- **All-in on primary** — pure specialist, true single-axis build.
+- **Primary + one kore** — moderate hybrid, two perk ladders open.
+- **Even spread** — wide across primary + both kore stats; no apex.
 
-T3 is "all-in" by design — getting one stat to 99% leaves only 1% for everything else. Tier access tracks live with gear: dropping below a threshold locks the tier and deactivates its nodes (points stay allocated, reactivate when threshold returns).
+Tier 3 is "all-in" by design — reaching it leaves nothing for any other stat. Tier access tracks live with gear: dropping below a threshold locks the tier and deactivates its nodes (points stay allocated, reactivate when threshold returns).
 
-**Cross-class access for origins:** Origin classes (Analog/Cyborg) can dabble in opposing-origin tier perks at T1 only (≥33%). An Analog with 33%+ Optimization unlocks Drone Swarm I (2 drones). Specialists cannot reach opposing perks at all — those thresholds are sentinel-locked.
-
-> **Code source of truth:** `TIERS_OWN`, `TIERS_KORE_SPEC`, `TIERS_OPPOSING_SPEC`, `TIERS_KORE_ORIGIN`, `TIERS_OPPOSING_ORIGIN`, and `ORIGIN_TIER_CAPS` in `attribute_state.gd`. Sentinel value `1.01` marks unreachable tiers.
+**Cross-class access for origins:** Origin classes (Analog/Cyborg) can dabble in opposing-origin tier perks at Tier 1 only. An Analog with enough Optimization could unlock Drone Swarm I. Specialists cannot reach opposing perks at all.
 
 ### Talent Points
 
-1 point per level (currently — target budget is ~20 at L100; cadence needs tuning). Each class tree is 8 × 3 = 24 nodes (144 total across six trees), so even a fully committed build can't fill one tree. Every tier is a meaningful "which nodes," never "can I even get here."
+One point per level, with a player budget far smaller than the total node count. Each class tree is large enough that even a fully committed build can't fill it — every tier is a meaningful "which nodes," never "can I even get here."
 
 - Nodes cost 1 point each, only purchasable in unlocked tiers
 - Gear-driven tier loss makes nodes dormant — points stay allocated, reactivate when threshold is met again
@@ -192,16 +184,16 @@ T3 is "all-in" by design — getting one stat to 99% leaves only 1% for everythi
 
 ### Specialized Class Tier Perks
 
-All six are implemented. Aggregates are additive across tiers (see `game/resources/perks/{stat}.tres` for authoring).
+Each specialised class has a signature perk ladder named for the class identity. The ladder gates the class's defining mechanic — three tiers of escalation built around one fantasy.
 
-| Stat | Class | Perk | T1 → T2 → T3 |
-|---|---|---|---|
-| Orthodoxy | Count | **Exile** — hits curse target; +X% damage taken; auto-shot on expire | +10% → +20% → +40% |
-| Deviation | Forged | **Amalgamation** — extra arm slots; LMB fires every weapon | +1 → +2 → +3 weapon slots |
-| Optimization | Automaton | **Drone Swarm** — wandering hover drones auto-fire on enemies | 2 → 3 → 5 drones |
-| Ingenuity | Survivalist | **Improvised Explosive Device** — toss prox trap on every LMB | 1 → 2 → 3 max active traps |
-| Clarity | Polymath | **Telekinesis** — periodic psionic beams lift enemies for 2s then slam them for AoE | 1 → 2 → 4 bolts per trigger |
-| Ambition | Enculted | **Doomsayer** — aura procs stun / charm / weaken on enemies | 5% → 10% → 20% per roll (multiple rolls/s); charms 1 → 2 → 3 |
+| Stat | Class | Perk Identity |
+|---|---|---|
+| Orthodoxy | Count | **Exile** — hits curse the target; cursed enemies take amplified damage; on expire the player auto-fires a heavy retribution shot |
+| Deviation | Forged | **Amalgamation** — extra arm slots; LMB fires every equipped weapon |
+| Optimization | Automaton | **Drone Swarm** — orbiting hover drones auto-fire on enemies |
+| Ingenuity | Survivalist | **Improvised Explosive Device** — attacks toss prox traps at the cursor |
+| Clarity | Polymath | **Telekinesis** — periodic psionic beams lift enemies and slam them for AoE |
+| Ambition | Enculted | **Doomsayer** — aura that converts enemies into a player-friendly cult and (with the Aura of Dread talent) damages the rest |
 
 **Gear swap confirmation:** When equipping an item would cross a breakpoint, a confirmation dialog shows exactly what changes. This is behind a Help Tooltips toggle for players who prefer to manage it themselves.
 
@@ -209,17 +201,9 @@ All six are implemented. Aggregates are additive across tiers (see `game/resourc
 
 ## Kore Nodes
 
-A separate, smaller talent tree (3 tiers × 4 nodes) that rewards **synergy across all three kore stats** rather than depth in any single one. Provides QoL, consistency, and flow enhancements — never class-specific mechanics.
+A separate, smaller talent tree (3 tiers) that rewards **synergy across all three kore stats** rather than depth in any single one. Provides QoL, consistency, and flow enhancements — never class-specific mechanics.
 
-Tier access is gated by the *combined sum* of the three kore stats:
-
-| Tier | Combined Kore Stat |
-|---|---|
-| 1 | 20% |
-| 2 | 35% |
-| 3 | 50% |
-
-Strong early, plateaus hard. T3 is demanding (~17% per kore stat) and the payoff is broad but not identity-defining. An optional **keystone** at very high investment is design space (TBD). Code source of truth: `KORE_NODE_THRESHOLDS` in `attribute_state.gd`.
+Tier access is gated by the *combined sum* of the three kore stats. Strong early, plateaus hard. The top tier is demanding and the payoff is broad but not identity-defining. An optional **keystone** at very high investment is design space.
 
 ---
 
@@ -261,7 +245,7 @@ Character appearance is dynamically driven by stat distribution. Each stat contr
 - **Shader blending** driven by stat % (skin pallor, vein visibility, metallic creep, emissive glow)
 - **Particle/VFX layers** scaling with stat % (ambition wisps, electric arcing, heat distortion)
 
-Combo appearances emerge naturally — a character at 45% Ambition and 42% Deviation shows mild ambition effects AND early machine-creep simultaneously. Breakpoint crossings get unique gain/loss VFX (gain plays second on simultaneous swaps).
+Combo appearances emerge naturally — a character partway into Ambition AND Deviation shows mild ambition effects AND early machine-creep simultaneously. Breakpoint crossings get unique gain/loss VFX (gain plays second on simultaneous swaps).
 
 ---
 
@@ -281,23 +265,3 @@ Key NPCs (reps, vendors, bosses, gate encounters) can react to the player's domi
 4. Specialization always wins at extremes
 5. UI must communicate system truth instantly — base color = stat identity, overlay = relationship
 6. Players can experiment without bricking builds — free reallocation, no dead ends
-
----
-
-## Implemented
-
-- HP and resource pool max scale with contribution-weighted stat totals (primary 1.0x, kore 0.25x, opposing 0.10x). Current values scale proportionally on gear swap. Code: `AttributeState.get_stat_bonus_hp()` / `get_stat_bonus_resource()`.
-- Resource bars unlock per-class once that class's tier 1 is met (max 3 bars active).
-- All six specialist tier perks (see table above).
-
-## Open Questions
-
-- **Tuning:** kore stat scaling multiplier (~0.25x placeholder); tier breakpoints (need playtest); talent point cadence (currently 1/level → far above the ~20-point intended budget at L100).
-- **Origin class tier perks** — what do balanced Analog / Cyborg unlock?
-- **Class-specific stat functions** beyond damage scaling (Orthodoxy, Optimization, Ingenuity, Clarity, Ambition all marked TBD).
-- **Opposing stat distortion specifics** — what literally distorts for each class? Needs per-class design.
-- **Soul / Interface governance** — beyond being derived: candidates include willpower / resilience for Soul, precision / cooldown reduction for Interface.
-- **Kore nodes** — tier 1/2/3 specific bonuses; the optional keystone.
-- **Node prerequisites** — tier-only access, or specific intra-tier dependencies?
-- **Visual metamorphosis art pipeline** — mesh kits, shader channels, VFX layers per class.
-- **Relationship overlay placement** — which UI surfaces (tooltips, stat bars, talents, sheet) get the overlay rings.

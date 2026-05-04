@@ -10,9 +10,11 @@
 
 Corridors and rooms can include traversal obstacles that add vertical depth without leaving the fixed-camera ARPG feel:
 
-**Crouch-only zones** — a solid block fills a corridor from `ceiling_height` to `wall_height`, leaving only a small gap at the bottom. Players must hold crouch to pass under; they are locked to crouching while inside (cannot stand even if they release the key). The block uses the wall material so it reads as architecture rather than a floating barrier. Configure via `CorridorDef.ceiling_height`.
+**Crouch-only zones** — a solid block fills a corridor from the ceiling down to a low overhang, leaving only a small gap at the bottom. Players must hold crouch to pass under; they are locked to crouching while inside (cannot stand even if they release the key). The block uses the wall material so it reads as architecture rather than a floating barrier.
 
-**Pits** — a corridor section omits its floor over a configurable width (`CorridorDef.pit_width`). Thin lip trim boxes edge the gap for visual clarity. Players must jump the pit; enemies that walk in fall through to a world-bottom kill zone and die. Configure via `CorridorDef.pit_width`.
+**Pits** — a corridor section omits its floor over a configurable width. Thin lip trim edges the gap for visual clarity. Players must jump the pit; enemies that walk in fall through to a world-bottom kill zone and die.
+
+These elements should be **occasional**, not constant — they're memorable obstacles, not a steady drumbeat. Procgen weights treat them as rare templates.
 
 ---
 

@@ -34,7 +34,7 @@ Pressing **V** toggles between the fixed isometric camera and a first-person cam
 
 Hold **Left Ctrl** to crouch. While crouching:
 
-- Movement speed is reduced (~45% of normal).
+- Movement speed is noticeably reduced.
 - The player's collision capsule shrinks so they can pass through low-ceiling corridors.
 - If inside a crouch-only zone (low ceiling block present), the player is **locked to crouching** and cannot stand even if the key is released — they must leave the zone first.
 - In FPS mode the camera drops to head height for the crouched stance.

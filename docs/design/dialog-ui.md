@@ -1,7 +1,5 @@
 # Dialog & UI
 
-> **Status:** Portrait system + class-effect concepts documented below are design-only. UI layout, HUD composition, and inventory design are TBD — to be expanded as implementation begins.
-
 ## Portraits
 
 Animated pixel art portrait busts for NPCs, enemies, and quest-givers — in the style of Bard's Tale 1. Portraits appear during dialog exchanges, quest interactions, and certain boss encounters.

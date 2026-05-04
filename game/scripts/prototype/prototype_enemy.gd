@@ -1886,6 +1886,17 @@ func _die() -> void:
 	set_physics_process(false)
 	if health_bar != null:
 		health_bar.visible = false
+	# Strip every status-effect visual on death — corpses showing
+	# stun / weaken / charm / curse markers reads as "this enemy is
+	# still a thing", which is misleading. Reset the timer state too
+	# so reset() (pool re-acquire) starts from a clean slate.
+	_clear_affliction_marker()
+	_clear_curse_marker()
+	_stun_remain = 0.0
+	_weaken_remain = 0.0
+	_weaken_mult = 0.0
+	_curse_remain = 0.0
+	_curse_damage_pct = 0.0
 	PlayerState.gain_xp(PlayerState.xp_award_for_enemy(level))
 	_drop_credits()
 	_drop_item()

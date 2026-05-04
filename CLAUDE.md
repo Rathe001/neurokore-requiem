@@ -4,8 +4,11 @@ This file is committed to the repo so context is available on any machine. It is
 
 ## How to Work on This Project
 
-- **Docs are the source of truth.** All game design detail lives in `/docs`. Read the relevant doc before answering questions or making changes.
-- **Keep this file in sync with the docs.** When a docs file changes in a way that affects the high-level summary below (new class, changed mechanic), update this file too. A hook will remind you automatically.
+- **Two sources of truth, with a clear split.**
+  - `/docs` is the **design intent** layer: tone, vision, system shape, identity, design rules. Read it before answering design-shaped questions or proposing changes that affect the game's identity. It is intentionally lossy on numbers and current state.
+  - **Code** is the **implementation** layer: the actual stats, formulas, field names, current behaviour. Read it before answering questions about what the game *currently does*.
+  - When the two diverge, that's a flag to revisit one or the other — not automatically a bug. Sometimes the implementation has moved past the design, sometimes the design has moved past the implementation.
+- **Don't update docs after every implementation tweak.** Docs change when *intent* changes (new class, new system, dropped feature). Tuning a magnitude or renaming a field is a code change only.
 - **CLAUDE.md is a pointer, not a mirror.** Do not duplicate doc content here — just enough to orient and navigate.
 
 ## What This Is
@@ -55,7 +58,7 @@ Full class details:
 - [`docs/design/gear-augmentation.md`](docs/design/gear-augmentation.md) — schematics (workbench), field augments (class skills), ammo types, magazine/reload, augment slots
 - [`docs/design/zones.md`](docs/design/zones.md) — zone design philosophy, Sub-Level Zero, zone registry
 - [`docs/design/dialog-ui.md`](docs/design/dialog-ui.md) — animated portraits, class effects, UI philosophy
-- [`docs/design/attribute-system.md`](docs/design/attribute-system.md) — 8 moral attributes, item stat budgets, class scaling, opposing stats, tier perks, visual metamorphosis, NPC identity reactions, HP/resource stat scaling (implemented)
+- [`docs/design/attribute-system.md`](docs/design/attribute-system.md) — 8 moral attributes, item stat budgets, class scaling, opposing stats, tier perks, visual metamorphosis, NPC identity reactions, HP/resource stat scaling
 - [`docs/design/controls.md`](docs/design/controls.md) — WASD movement, mouse for attacks, controller as future work
 - [`docs/world/lighting.md`](docs/world/lighting.md) — darkness as default, equippable light sources, zone lighting tiers
 - [`docs/design/ui-style-guide.md`](docs/design/ui-style-guide.md) — type scale, tag components, color groups, all 9 class palettes, i18n and theming conventions
@@ -85,4 +88,4 @@ Coding conventions: [`docs/design/coding-conventions.md`](docs/design/coding-con
 
 ## Project Status
 
-- [`docs/status.md`](docs/status.md)
+Early prototype. [`docs/status.md`](docs/status.md) lists the **open design questions** (not implementation status — code is authoritative for that). When you need to know "what currently works," read the code under `game/scripts/` or check `git log`.
