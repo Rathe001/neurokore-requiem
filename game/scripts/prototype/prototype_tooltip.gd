@@ -423,7 +423,11 @@ func _build_stats_text(item: Item) -> String:
 	if item.kind == &"backpack" and inv_bonus > 0:
 		lines.append("+%d %s" % [inv_bonus, tr("ITEM_STATS_INVENTORY_BONUS")])
 	# Generic stat modifiers — display all entries with white color.
+	# Skip inventory_bonus for backpacks since it's shown above with a
+	# dedicated line. Same for light_mod stats on head armor if any overlap.
 	for stat_id: StringName in item.stat_modifiers:
+		if stat_id == &"inventory_bonus" and item.kind == &"backpack":
+			continue
 		var amount: int = int(item.stat_modifiers[stat_id])
 		if amount == 0:
 			continue

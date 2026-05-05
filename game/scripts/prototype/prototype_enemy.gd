@@ -39,7 +39,7 @@ const GROUP_AGGRO_RANGE := 8.0
 # scene has an EnemyClass assigned, these become unused and can be deleted.
 # Until then they preserve current behaviour for unconfigured spawns.
 const DEFAULT_ATTACK_RANGE := 2.2
-const DEFAULT_ATTACK_COOLDOWN := 1.6
+const DEFAULT_ATTACK_COOLDOWN := 2.0
 const DEFAULT_ATTACK_WINDUP := 0.4
 const DEFAULT_ATTACK_CONE_DEG := 80.0
 const DEFAULT_ATTACK_KNOCKBACK := 0.0
@@ -54,6 +54,10 @@ const RETURN_THRESHOLD_SQ := 1.0  # 1.0 * 1.0 — within 1m of spawn = arrived
 # enemy that the player is still actively engaging — the leash is for "I
 # walked away," not "I'm fighting you across a doorway."
 const KEEP_CHASE_PLAYER_RANGE_SQ := 144.0  # 12.0 * 12.0
+# If a returning enemy hasn't made at least this much progress (sq dist
+# change) within RETURN_STUCK_TIMEOUT, teleport it home.
+const RETURN_STUCK_TIMEOUT := 3.0
+const RETURN_STUCK_PROGRESS_SQ := 2.0  # must close 1.4m in 3s or stuck
 # Returning enemies take this fraction of damage (5% — effectively immune)
 # and skip knockback entirely. Stops the player from kiting an enemy past
 # its leash and then sniping it on the walk back.
@@ -115,9 +119,9 @@ const LEVEL_HP_RANGE: Array[Vector2i] = [
 ]
 const LEVEL_DAMAGE_RANGE: Array[Vector2i] = [
 	Vector2i(0, 0),
-	Vector2i(5, 8),
-	Vector2i(10, 14),
-	Vector2i(15, 21),
+	Vector2i(3, 6),
+	Vector2i(7, 10),
+	Vector2i(11, 15),
 ]
 # Floor-ring emission color per level. Higher levels glow hotter so a player
 # can read threat at a glance from across the room.
@@ -309,6 +313,8 @@ var _generation: int = 0
 # when they chase too far. Set whenever the enemy is reused from the pool
 # at a new position.
 var _spawn_position: Vector3 = Vector3.ZERO
+var _return_stuck_timer: float = 0.0
+var _return_last_dist_sq: float = 0.0
 
 func _ready() -> void:
 	_init_enemy()
@@ -1551,6 +1557,8 @@ func _chase_tick() -> void:
 	var player_close := player_dist_sq <= KEEP_CHASE_PLAYER_RANGE_SQ
 	if _state == State.CHASING and spawn_dist_sq > MAX_CHASE_FROM_SPAWN_SQ and not player_close:
 		_change_state(State.RETURNING)
+		_return_stuck_timer = 0.0
+		_return_last_dist_sq = spawn_dist_sq
 	elif _state == State.RETURNING and player_close:
 		_change_state(State.CHASING)
 
@@ -1790,7 +1798,23 @@ func _tick_return(spawn_dist_sq: float) -> void:
 		_change_state(State.IDLE)
 		velocity.x = 0.0
 		velocity.z = 0.0
+		_return_stuck_timer = 0.0
 		return
+	# Stuck detection: if the enemy hasn't closed enough distance toward
+	# spawn within RETURN_STUCK_TIMEOUT, teleport it home. Catches enemies
+	# wedged against nav-mesh edges, doorways, or other geometry.
+	var progress := _return_last_dist_sq - spawn_dist_sq
+	_return_last_dist_sq = spawn_dist_sq
+	if progress < RETURN_STUCK_PROGRESS_SQ * get_physics_process_delta_time():
+		_return_stuck_timer += get_physics_process_delta_time()
+		if _return_stuck_timer >= RETURN_STUCK_TIMEOUT:
+			global_position = _spawn_position
+			velocity = Vector3.ZERO
+			_change_state(State.IDLE)
+			_return_stuck_timer = 0.0
+			return
+	else:
+		_return_stuck_timer = 0.0
 	var to_spawn := _spawn_position - global_position
 	to_spawn.y = 0.0
 	var sd := to_spawn.length()

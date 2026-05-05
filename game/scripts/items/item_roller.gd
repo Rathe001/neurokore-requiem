@@ -331,8 +331,8 @@ func _apply_head_light_mod(item: Item, main_type: String, item_level: int, rng: 
 			chosen = entry
 			break
 	item.light_mod = chosen["mod"] as Item.LightMod
-	item.light_energy = rng.randf_range(0.8, 1.6)
-	item.light_range = rng.randf_range(8.0, 14.0)
+	item.light_energy = rng.randf_range(2.0, 3.5)
+	item.light_range = rng.randf_range(12.0, 18.0)
 	match item.light_mod:
 		Item.LightMod.UV:
 			item.light_color = Color(0.6, 0.2, 1.0)

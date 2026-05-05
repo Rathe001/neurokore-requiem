@@ -177,6 +177,14 @@ var _base_max_health: int = 100
 var _level_hp_bonus: int = 0
 # Base resource pool max before stat bonuses.
 var _base_resource_max: int = 100
+# Gear-aggregated combat bonuses — recomputed on equipment change.
+var _gear_damage_reduction: int = 0
+var _gear_move_speed_bonus: int = 0
+var _gear_base_damage_bonus: int = 0
+var _gear_crit_chance_bonus: float = 0.0
+var _gear_attack_speed_bonus: float = 0.0
+var _gear_hit_chance_bonus: float = 0.0
+var _gear_cooldown_reduction: float = 0.0
 
 func _ready() -> void:
 	_combat = PlayerCombat.new()
@@ -330,6 +338,9 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 		return
 	if DebugState.config != null and DebugState.config.god_mode:
 		return
+	# Flat damage reduction from armor gear bonuses.
+	if _gear_damage_reduction > 0:
+		amount = maxi(1, amount - _gear_damage_reduction)
 	# Knockback reduction from the active shield. Computed BEFORE the
 	var shield_result := _shield.absorb_damage(amount, knockback_strength)
 	amount = shield_result.amount
@@ -385,15 +396,36 @@ func _play_levelup_vfx() -> void:
 	tween.chain().tween_callback(ring.queue_free)
 
 func _recompute_stat_bonuses() -> void:
-	# Aggregate max_health_bonus and max_resource_bonus from all equipped gear.
+	# Aggregate all gear-driven bonuses from every equipped slot.
 	var hp_bonus := 0
 	var res_bonus := 0
+	var dmg_red := 0
+	var move_spd := 0
+	var base_dmg := 0
+	var crit := 0.0
+	var atk_spd := 0.0
+	var hit := 0.0
+	var cdr := 0.0
 	for slot in SlotRegistry.SLOTS:
 		var item: Item = InventoryState.get_equipped(slot)
 		if item == null:
 			continue
 		hp_bonus += item.get_modifier(&"max_health_bonus")
 		res_bonus += item.get_modifier(&"max_resource_bonus")
+		dmg_red += item.get_modifier(&"damage_reduction")
+		move_spd += item.get_modifier(&"move_speed_bonus")
+		base_dmg += item.get_modifier(&"base_damage_bonus")
+		crit += float(item.get_modifier(&"crit_chance_bonus")) * 0.01
+		atk_spd += float(item.get_modifier(&"attack_speed_bonus")) * 0.01
+		hit += float(item.get_modifier(&"hit_chance_bonus")) * 0.01
+		cdr += float(item.get_modifier(&"cooldown_reduction")) * 0.01
+	_gear_damage_reduction = dmg_red
+	_gear_move_speed_bonus = move_spd
+	_gear_base_damage_bonus = base_dmg
+	_gear_crit_chance_bonus = crit
+	_gear_attack_speed_bonus = atk_spd
+	_gear_hit_chance_bonus = hit
+	_gear_cooldown_reduction = cdr
 	var new_max := _base_max_health + _level_hp_bonus + hp_bonus
 	if new_max != max_health:
 		var old_max := max_health
@@ -516,7 +548,8 @@ func _physics_process(delta: float) -> void:
 			# 25% reduction that shouldn't impact mobility.
 			var shield_factor: float = _shield.get_speed_factor()
 			var sprint_factor: float = SPRINT_SPEED_FACTOR if _sprinting else 1.0
-			var speed := move_speed * (CROUCH_SPEED_FACTOR if _crouching else 1.0) * (0.5 if _backing else 1.0) * sprint_factor * shield_factor
+			var gear_speed_factor := 1.0 + float(_gear_move_speed_bonus) * 0.01
+			var speed := move_speed * (CROUCH_SPEED_FACTOR if _crouching else 1.0) * (0.5 if _backing else 1.0) * sprint_factor * shield_factor * gear_speed_factor
 			var flat := Vector2(velocity.x, velocity.z)
 			var target := Vector2(wish_dir.x, wish_dir.z) * speed
 			var step := accel * (1.0 if wish_dir.length_squared() > 0.0 else 2.5) * delta

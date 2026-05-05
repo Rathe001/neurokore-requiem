@@ -43,7 +43,9 @@ func is_on_cooldown(skill: Skill) -> bool:
 	return _cooldowns.get(skill, 0.0) > 0.0
 
 func start_cooldown(skill: Skill, atk_speed: float) -> void:
-	_cooldowns[skill] = skill.cooldown / atk_speed
+	var eff_atk_spd := atk_speed * (1.0 + _host._gear_attack_speed_bonus)
+	var cdr := _host._gear_cooldown_reduction
+	_cooldowns[skill] = skill.cooldown * (1.0 - cdr) / maxf(eff_atk_spd, 0.1)
 
 func get_cooldown_ratio(skill: Skill) -> float:
 	if skill == null or skill.cooldown <= 0.0:
@@ -63,7 +65,9 @@ func is_slot_on_cooldown(slot: StringName) -> bool:
 func start_slot_cooldown(slot: StringName, skill: Skill, atk_speed: float) -> void:
 	if skill == null or skill.cooldown <= 0.0:
 		return
-	_slot_cooldowns[slot] = skill.cooldown / atk_speed
+	var eff_atk_spd := atk_speed * (1.0 + _host._gear_attack_speed_bonus)
+	var cdr := _host._gear_cooldown_reduction
+	_slot_cooldowns[slot] = skill.cooldown * (1.0 - cdr) / maxf(eff_atk_spd, 0.1)
 
 func clear_cooldowns() -> void:
 	_cooldowns.clear()
@@ -168,13 +172,13 @@ func _spawn_projectile(skill: Skill, aim: Vector3, eff_range: float, weapon: Ite
 	proj.knockback_strength = _knockback_for(skill, weapon)
 	proj.source_position = _host.global_position
 	if weapon != null and weapon.damage_max > 0:
-		proj.damage_min = weapon.damage_min
-		proj.damage_max = weapon.damage_max
-		proj.accuracy = weapon.accuracy
-		proj.crit_chance = weapon.crit_chance
+		proj.damage_min = weapon.damage_min + _host._gear_base_damage_bonus
+		proj.damage_max = weapon.damage_max + _host._gear_base_damage_bonus
+		proj.accuracy = weapon.accuracy + _host._gear_hit_chance_bonus
+		proj.crit_chance = weapon.crit_chance + _host._gear_crit_chance_bonus
 	else:
-		proj.damage_min = skill.damage
-		proj.damage_max = skill.damage
+		proj.damage_min = skill.damage + _host._gear_base_damage_bonus
+		proj.damage_max = skill.damage + _host._gear_base_damage_bonus
 	proj.damage_mult = 1.0
 	# Spawn at the player's position (slightly elevated), plus the per-arm
 	# offset for Forged Amalgamation extras (right / left / above). Spawning
@@ -236,13 +240,15 @@ func _resolve_hitscan(skill: Skill, aim: Vector3, eff_range: float, weapon: Item
 
 func _roll_crit(weapon: Item = null) -> bool:
 	var base_crit := weapon.crit_chance if weapon != null and weapon.crit_chance > 0.0 else PROTO_BASE_CRIT_CHANCE
-	var chance := base_crit + Effects.get_aggregate(&"crit_chance_pct")
+	var chance := base_crit + Effects.get_aggregate(&"crit_chance_pct") + _host._gear_crit_chance_bonus
 	return randf() < chance
 
 func _roll_hit(weapon: Item) -> bool:
-	if weapon == null or weapon.accuracy >= 1.0:
+	var acc := weapon.accuracy if weapon != null else 1.0
+	acc += _host._gear_hit_chance_bonus
+	if acc >= 1.0:
 		return true
-	return randf() < weapon.accuracy
+	return randf() < acc
 
 func _roll_skill_damage(skill: Skill, weapon: Item) -> int:
 	var base: int
@@ -250,6 +256,7 @@ func _roll_skill_damage(skill: Skill, weapon: Item) -> int:
 		base = randi_range(weapon.damage_min, weapon.damage_max)
 	else:
 		base = skill.damage
+	base += _host._gear_base_damage_bonus
 	var mult := 1.0
 	return int(round(float(base) * mult))
 

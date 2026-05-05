@@ -107,8 +107,11 @@ func _spawn_cluster_children() -> void:
 		return
 	var base_angle := randf() * TAU
 	for i in CLUSTER_COUNT:
-		var angle := base_angle + float(i) * (TAU / float(CLUSTER_COUNT))
-		var offset := Vector3(cos(angle), 0.0, sin(angle)) * CLUSTER_SPREAD
+		# Jitter angle ±25° and distance ±40% so clusters don't land in a
+		# perfect equilateral triangle.
+		var angle := base_angle + float(i) * (TAU / float(CLUSTER_COUNT)) + randf_range(-0.44, 0.44)
+		var dist := CLUSTER_SPREAD * randf_range(0.6, 1.4)
+		var offset := Vector3(cos(angle), 0.0, sin(angle)) * dist
 		var child := EntityPool.acquire(_GRENADE_SCENE) as PrototypeGrenade
 		child.target_position = global_position + offset
 		child.damage_min = int(round(float(damage_min) * CLUSTER_DAMAGE_SCALE))
