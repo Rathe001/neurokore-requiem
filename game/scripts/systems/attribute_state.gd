@@ -57,6 +57,13 @@ const STAT_TO_CLASS: Dictionary = {
 	&"cla": &"polymath",
 }
 
+# Inverse of STAT_TO_CLASS — resolves a class/spec name back to its legacy
+# 3-letter talent tree ID.
+const CLASS_TO_STAT: Dictionary = {
+	&"count": &"ort", &"survivalist": &"ing", &"enculted": &"amb",
+	&"forged": &"dev", &"automaton": &"opt", &"polymath": &"cla",
+}
+
 ## Returns the origin (&"analog" or &"cyborg") for a specialized class spec_id.
 func get_spec_origin(spec_id: StringName) -> StringName:
 	return CLASS_DEFINITIONS.get(spec_id, {}).get(&"origin", &"analog")

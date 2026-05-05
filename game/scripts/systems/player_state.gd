@@ -145,12 +145,13 @@ func is_talent_allocated(stat: StringName, tier: int, node: int) -> bool:
 	var tiers_data: Array = talent_allocations.get(stat, [])
 	return not tiers_data.is_empty() and tiers_data[tier][node]
 
-## True if a stat tree node is allocated AND its tier is currently unlocked.
+## True if a stat tree node is allocated AND its tier is currently unlocked
+## under the per-tree gating rules (own spec, same-origin, opposing-origin).
 func is_node_active(stat_id: StringName, tier: int, node: int) -> bool:
 	var tiers_data: Array = talent_allocations.get(stat_id, [])
 	if tiers_data.is_empty() or not tiers_data[tier][node]:
 		return false
-	return is_tier_unlocked(tier)
+	return tier < get_unlocked_tier(stat_id)
 
 ## True if a kore node is allocated AND its tier is currently unlocked.
 func is_kore_node_active(tier: int, node: int) -> bool:
@@ -198,9 +199,60 @@ func _reset_tier_cache() -> void:
 	_cached_kore_nodes_tier = -1
 
 ## Placeholder: tier is unlocked if player level / 3 >= tier (0-indexed).
+## Used by is_node_active for backward compat; prefer get_unlocked_tier()
+## for per-tree gating.
 func is_tier_unlocked(tier: int) -> bool:
 	return tier <= level / 3
 
 ## Kore nodes are removed; always returns false for now.
 func is_kore_node_tier_unlocked(_tier: int) -> bool:
+	return false
+
+const TALENT_TIER_COUNT := 5
+## Origin class players can access same-origin trees up to this tier (exclusive).
+const ORIGIN_CLASS_TIER_CAP := 3
+
+## Returns the number of unlocked tiers (exclusive upper bound) for a talent
+## tree identified by its legacy stat_id (&"dev", &"ort", etc.).
+## 0 = fully locked, 5 = all tiers open.
+func get_unlocked_tier(stat_id: StringName) -> int:
+	var tree_class: StringName = AttributeState.STAT_TO_CLASS.get(stat_id, &"")
+	if tree_class == &"":
+		return 0
+	var tree_origin: StringName = AttributeState.get_spec_origin(tree_class)
+	var player_origin: StringName = class_id
+
+	# Opposing origin → fully locked (only accessible via item grants later)
+	if tree_origin != player_origin:
+		return 0
+
+	var level_cap: int = mini(level / 3 + 1, TALENT_TIER_COUNT)
+
+	# Origin class (no spec) → same-origin trees capped at tier 3
+	if spec_id == &"":
+		return mini(level_cap, ORIGIN_CLASS_TIER_CAP)
+
+	# Own spec tree → full level-gated access
+	var own_stat: StringName = AttributeState.CLASS_TO_STAT.get(spec_id, &"")
+	if stat_id == own_stat:
+		return level_cap
+
+	# Same-origin, different spec → requires tier 1+ investment in own spec
+	if _has_own_spec_investment():
+		return level_cap
+	return 0
+
+## True if the player has allocated at least one node at tier 1+ in their
+## own spec tree. This gates access to same-origin off-spec trees.
+func _has_own_spec_investment() -> bool:
+	var own_stat: StringName = AttributeState.CLASS_TO_STAT.get(spec_id, &"")
+	if own_stat == &"":
+		return false
+	var tiers_data: Array = talent_allocations.get(own_stat, [])
+	if tiers_data.is_empty():
+		return false
+	for tier_idx in range(1, tiers_data.size()):
+		for allocated in tiers_data[tier_idx]:
+			if allocated:
+				return true
 	return false

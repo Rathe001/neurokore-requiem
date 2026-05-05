@@ -2,7 +2,8 @@ extends Control
 class_name TalentsPanel
 
 ## Talents panel — 6 class rows. Talent points are stored in PlayerState and
-## persist. Tier unlock gating will be redesigned for the new talent system.
+## persist. Tier gating: own spec first, same-origin after spec investment,
+## opposing origin fully locked.
 
 const TIER_COUNT := 5
 const NODES_PER_TIER := 8
@@ -114,7 +115,11 @@ func _on_node_clicked(event: InputEvent, stat_id: StringName, tier: int, node_id
 		return
 	if (event as InputEventMouseButton).button_index != MOUSE_BUTTON_LEFT:
 		return
-	# TODO: Tier unlock gating will be redesigned for the new talent system.
+	# Tier unlock gating — per-tree rules based on class, spec, and origin.
+	var unlocked := PlayerState.get_unlocked_tier(stat_id)
+	if tier >= unlocked:
+		_show_lock_reason(stat_id, tier)
+		return
 	if PlayerState.is_talent_allocated(stat_id, tier, node_idx):
 		PlayerState.set_talent_alloc(stat_id, tier, node_idx, false)
 	elif PlayerState.get_talent_points_spent() < PlayerState.talent_points_total:
@@ -422,7 +427,8 @@ func _repaint() -> void:
 	]
 	_talent_label.add_theme_color_override(&"font_color", TALENT_POINT_COLOR)
 	for row: Dictionary in _rows:
-		_paint_row(row, _stat_rel_color(row["stat_id"]), TIER_COUNT)
+		var unlocked := PlayerState.get_unlocked_tier(row["stat_id"])
+		_paint_row(row, _stat_rel_color(row["stat_id"]), unlocked)
 
 func _stat_rel_color(_stat_id: StringName) -> Color:
 	return Color.WHITE
@@ -455,8 +461,32 @@ func _unavailable_reason(_stat_id: StringName, tier: int, _stat_name: String) ->
 	var tier_label := AttributeState.TIER_ROMAN[tier]
 	return "Tier %s is currently unavailable." % tier_label
 
+func _show_lock_reason(stat_id: StringName, tier: int) -> void:
+	var tree_class: StringName = AttributeState.STAT_TO_CLASS.get(stat_id, &"")
+	var tree_origin: StringName = AttributeState.get_spec_origin(tree_class) if tree_class != &"" else &""
+	var player_origin: StringName = PlayerState.class_id
+	var tier_label := AttributeState.TIER_ROMAN[tier]
+	var class_name_str: String = (tree_class as String).capitalize()
+	var reason: String
+	if tree_origin != player_origin:
+		reason = "%s talents are locked — opposing origin." % class_name_str
+	elif PlayerState.spec_id != &"" and not PlayerState._has_own_spec_investment():
+		var own_class: StringName = AttributeState.STAT_TO_CLASS.get(
+			AttributeState.CLASS_TO_STAT.get(PlayerState.spec_id, &""), &"")
+		var own_name: String = (own_class as String).capitalize()
+		reason = "Invest in %s Tier II+ to unlock %s talents." % [own_name, class_name_str]
+	else:
+		reason = "Tier %s requires a higher level." % tier_label
+	get_tree().call_group(&"interactable_tooltip", &"show_talent_node", "Locked", reason)
+
 func _paint_row(row: Dictionary, rel_color: Color, unlocked_tier: int) -> void:
-	var fade := ROW_LOCKED_ALPHA if unlocked_tier == 0 else 1.0
+	# Determine if this row belongs to the opposing origin — fully locked
+	# rows get heavier dimming than same-origin locked rows.
+	var stat_id: StringName = row["stat_id"]
+	var tree_class: StringName = AttributeState.STAT_TO_CLASS.get(stat_id, &"")
+	var tree_origin: StringName = AttributeState.get_spec_origin(tree_class) if tree_class != &"" else &""
+	var is_opposing := tree_origin != PlayerState.class_id and PlayerState.class_id != &""
+	var fade := ROW_LOCKED_ALPHA if is_opposing else (ROW_LOCKED_ALPHA if unlocked_tier == 0 else 1.0)
 	(row["container"] as Control).modulate = Color(1.0, 1.0, 1.0, fade)
 	var stat_color: Color = row.get("stat_color", rel_color)
 	row["header"].add_theme_color_override(&"font_color", stat_color)
@@ -468,13 +498,9 @@ func _paint_row(row: Dictionary, rel_color: Color, unlocked_tier: int) -> void:
 		var hbar := row["highlight_bar"] as ColorRect
 		hbar.visible = false
 
-	# All tiers are considered available in the new system (no stat thresholds).
-	var _stat_id: StringName = row["stat_id"]
-
 	# tier_state = ti - unlocked_tier:
 	#   < 0  → active (tier is unlocked)
-	#   >= 0 → preview (faded). Lock icon distinguishes structurally
-	#           unavailable from merely locked-but-reachable.
+	#   >= 0 → preview (faded). Lock icon shows on locked tiers.
 	var tier_labels: Array = row["tier_labels"]
 	for ti in tier_labels.size():
 		var tier_state: int = ti - unlocked_tier
@@ -498,14 +524,20 @@ func _paint_row(row: Dictionary, rel_color: Color, unlocked_tier: int) -> void:
 	var tier_locks: Array = row.get("tier_locks", [])
 	for tier in node_rects.size():
 		var tier_state: int = tier - unlocked_tier
+		# Show lock icon on locked tiers
 		if tier < tier_locks.size():
-			(tier_locks[tier] as Label).visible = false
+			var show_lock := tier_state >= 0
+			(tier_locks[tier] as Label).visible = show_lock
+			if show_lock:
+				var lock_alpha := 0.3 if is_opposing else 0.55
+				(tier_locks[tier] as Label).add_theme_color_override(
+					&"font_color", Color(1.0, 1.0, 1.0, lock_alpha))
 		for j in NODES_PER_TIER:
 			var rect: ColorRect = node_rects[tier][j]
 			rect.visible = true
-			rect.mouse_filter = Control.MOUSE_FILTER_STOP
+			rect.mouse_filter = Control.MOUSE_FILTER_STOP if tier_state < 0 else Control.MOUSE_FILTER_IGNORE
 			if tier_state < 0:
-				var is_allocated := PlayerState.is_talent_allocated(row["stat_id"], tier, j)
+				var is_allocated := PlayerState.is_talent_allocated(stat_id, tier, j)
 				rect.color = Color(stat_color.r, stat_color.g, stat_color.b,
 					NODE_ALLOCATED_ALPHA if is_allocated else NODE_AVAILABLE_ALPHA)
 			else:
