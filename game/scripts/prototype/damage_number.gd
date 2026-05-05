@@ -23,6 +23,7 @@ const SHAKE_CRIT_MULTI: float = 0.10
 
 const COLOR_NORMAL: Color = Color(1.00, 0.95, 0.85, 1.0)
 const COLOR_CRIT: Color = Color(1.00, 0.40, 0.30, 1.0)
+const COLOR_HEAL: Color = Color(0.40, 1.00, 0.55, 1.0)
 const OUTLINE_COLOR: Color = Color(0.05, 0.05, 0.08, 1.0)
 const OUTLINE_SIZE: int = 12
 
@@ -34,16 +35,24 @@ var _elapsed: float = 0.0
 var _tween: Tween
 
 static func spawn(world: Node, pos: Vector3, amount: int, multistrike: int = 1, is_crit: bool = false) -> void:
+	_spawn_internal(world, pos, str(amount) + (" ×%d" % multistrike if multistrike > 1 else ""),
+		_font_for(multistrike, is_crit),
+		COLOR_CRIT if is_crit else COLOR_NORMAL,
+		_shake_for(multistrike, is_crit))
+
+
+static func spawn_heal(world: Node, pos: Vector3, amount: int) -> void:
+	_spawn_internal(world, pos, "+" + str(amount), FONT_NORMAL, COLOR_HEAL, SHAKE_NONE)
+
+
+static func _spawn_internal(world: Node, pos: Vector3, text: String, font_size: int, color: Color, shake: float) -> void:
 	var n: DamageNumber = _acquire()
 	var label := n._label
-	var text := str(amount)
-	if multistrike > 1:
-		text += " ×%d" % multistrike
 	label.text = text
-	label.font_size = _font_for(multistrike, is_crit)
-	label.modulate = COLOR_CRIT if is_crit else COLOR_NORMAL
+	label.font_size = font_size
+	label.modulate = color
 	label.position = Vector3.ZERO
-	n._shake = _shake_for(multistrike, is_crit)
+	n._shake = shake
 	n._elapsed = 0.0
 
 	var current_parent := n.get_parent()

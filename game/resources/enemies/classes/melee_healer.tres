@@ -1,9 +1,10 @@
 [gd_resource type="Resource" script_class="EnemyClass" load_steps=2 format=3]
 
 ; Melee + heal-aura combo. Walks in like a basic_melee bruiser but every
-; 3 seconds tops up nearby allies (and itself) by 8% of their max HP.
-; Player should prioritise these in mixed packs — letting one tick is a
-; hard reset on whatever damage they were chipping at the front line.
+; 8 seconds tops up nearby allies (and itself) by a 25-50% chunk of max HP
+; (rolled per target). Letting a tick land is a heavy reset, so the heal
+; cadence is slow enough that a focused player can burst the medic before
+; the next pulse.
 
 [ext_resource type="Script" path="res://scripts/enemies/enemy_class.gd" id="script"]
 
@@ -17,8 +18,9 @@ attack_cooldown = 1.6
 attack_windup = 0.4
 attack_damage_mult = 0.8
 melee_cone_deg = 80.0
-melee_knockback = 5.0
+melee_knockback = 0.0
 support_role = 1
 support_radius = 6.0
-support_interval = 3.0
-support_magnitude = 0.08
+support_interval = 8.0
+support_magnitude = 0.25
+support_magnitude_max = 0.50

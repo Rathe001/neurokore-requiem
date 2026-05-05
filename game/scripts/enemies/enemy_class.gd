@@ -34,7 +34,10 @@ enum SupportRole {
 
 @export_group("Melee")
 @export var melee_cone_deg: float = 80.0
-@export var melee_knockback: float = 5.0
+## Knockback applied to the player on a successful melee hit. 0 = no shove
+## (the default — knockback is reserved for special enemies, e.g. boss
+## charges, designed-to-stagger archetypes).
+@export var melee_knockback: float = 0.0
 
 @export_group("Ranged")
 ## Spawned via EntityPool when the enemy fires. Must be a PrototypeProjectile
@@ -51,6 +54,10 @@ enum SupportRole {
 @export var support_role: SupportRole = SupportRole.NONE
 @export var support_radius: float = 6.0
 @export var support_interval: float = 3.0
-## HEAL: % of target's max_health restored per tick (0.20 = 20% heal).
-## DAMAGE_BUFF: multiplier applied to allied outgoing damage (0.25 = +25%).
+## HEAL: minimum % of target's max_health restored per tick (0.20 = 20% heal).
+## DAMAGE_BUFF: flat multiplier applied to allied outgoing damage (0.25 = +25%).
 @export var support_magnitude: float = 0.20
+## HEAL only: when > support_magnitude, each tick rolls a fresh magnitude
+## uniformly in [support_magnitude, support_magnitude_max] so heal sizes
+## vary instead of locking to a single percentage.
+@export var support_magnitude_max: float = 0.0

@@ -47,7 +47,10 @@ func _ready() -> void:
 	)
 	_area.mouse_entered.connect(_on_hover_enter)
 	_area.mouse_exited.connect(_on_hover_exit)
-	_area.input_event.connect(_on_input_event)
+	# No direct LMB→pickup handler. The player's _handle_skill_input owns the
+	# pickup-on-click path now: it gates on INTERACT_RANGE and walks to the
+	# pickup if out of range. Without this, clicking a hovered pickup from
+	# across the room would teleport the item into the inventory.
 
 
 func _build_name_label(p_item: Item) -> void:
@@ -112,21 +115,14 @@ func _on_hover_exit() -> void:
 	if _name_label != null and item != null:
 		_name_label.modulate = item.glyph_color
 
-func _on_input_event(_camera: Node, event: InputEvent, _pos: Vector3, _normal: Vector3, _idx: int) -> void:
+## Called by PrototypePlayer._interact_with_hovered after distance gating
+## (and after the walk-to-interact path catches up if the click was made
+## from out of range). Returns silently if the inventory is full so the
+## drop sits on the floor instead of vanishing.
+func interact(_user: Node) -> void:
 	if _popping:
 		return
-	var mb := event as InputEventMouseButton
-	if mb == null or mb.button_index != MOUSE_BUTTON_LEFT or not mb.pressed:
-		return
-	for modal in get_tree().get_nodes_in_group(&"ui_modal"):
-		if not is_instance_valid(modal):
-			continue
-		if modal is CanvasItem and (modal as CanvasItem).visible:
-			return
 	if InventoryState.add_to_inventory(item):
 		get_tree().call_group(&"interactable_tooltip", &"hide_tooltip")
-		var player := get_tree().get_first_node_in_group(&"player")
-		if player != null and player.has_method(&"consume_click"):
-			player.consume_click()
 		SpatialGrid.unregister(self)
 		queue_free()

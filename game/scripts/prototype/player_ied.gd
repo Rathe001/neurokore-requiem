@@ -10,9 +10,15 @@ const IED_TRAP_SCENE: PackedScene = preload("res://scenes/prototype/prototype_tr
 const IED_MAX_TRAPS_CAP := 8
 const IED_ARM_DELAY_BY_TIER: Array[float] = [0.0, 2.0, 1.2, 0.6]
 const IED_MAX_PLACEMENT_RANGE := 8.0
+## Throw cooldown = arm_delay + this buffer. Without a cooldown the player
+## can LMB-spam new traps before the queued ones arm, evicting the oldest
+## from the FIFO and ensuring nothing ever detonates. Buffer is short
+## enough to keep the perk feeling responsive once armed.
+const IED_COOLDOWN_BUFFER := 0.5
 
 var _host: PrototypePlayer
 var _ied_traps: Array[PrototypeTrap] = []
+var _throw_cooldown_remain: float = 0.0
 
 
 func setup(host: PrototypePlayer) -> void:
@@ -29,6 +35,8 @@ func get_trap_max() -> int:
 
 func toss_trap(cursor_offset: Vector3) -> void:
 	if not _host.is_alive():
+		return
+	if _throw_cooldown_remain > 0.0:
 		return
 	var max_traps := mini(int(round(Effects.get_aggregate(&"ied_max_traps"))), IED_MAX_TRAPS_CAP)
 	if max_traps <= 0:
@@ -54,6 +62,12 @@ func toss_trap(cursor_offset: Vector3) -> void:
 	_host.get_parent().add_child(trap)
 	trap.global_position = _host.global_position + cursor_offset
 	_ied_traps.append(trap)
+	_throw_cooldown_remain = arm_delay + IED_COOLDOWN_BUFFER
+
+
+func tick(delta: float) -> void:
+	if _throw_cooldown_remain > 0.0:
+		_throw_cooldown_remain = maxf(0.0, _throw_cooldown_remain - delta)
 
 
 func cleanup() -> void:
@@ -61,3 +75,4 @@ func cleanup() -> void:
 		if t != null and is_instance_valid(t):
 			t.queue_free()
 	_ied_traps.clear()
+	_throw_cooldown_remain = 0.0

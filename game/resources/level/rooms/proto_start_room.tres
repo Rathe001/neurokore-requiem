@@ -21,7 +21,9 @@
 script = ExtResource("2")
 id = &"player_spawn"
 scene = ExtResource("player_spawn")
-offset = Vector3(0, 0, 0)
+; Y=0.5 gives the CharacterBody3D a tiny drop so apply_floor_snap finds the
+; floor on the first physics tick instead of starting suspended.
+offset = Vector3(0, 0.5, 0)
 
 [sub_resource type="Resource" id="slot_starter_chest"]
 script = ExtResource("2")

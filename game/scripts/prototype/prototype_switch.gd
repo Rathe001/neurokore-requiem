@@ -81,20 +81,28 @@ func _mark_used() -> void:
 
 # Used switches drop out of mouse picking, the SpatialGrid interactable index,
 # and any active hover/tooltip state so they read as inert. reset_state() flips
-# this back on for NG+ runs.
+# this back on for NG+ runs. We toggle BOTH input_ray_pickable AND
+# collision_layer because either alone is enough to leak picks in some
+# Godot 4 builds — belt and suspenders.
 func _set_interactive(on: bool) -> void:
 	input_ray_pickable = on
+	collision_layer = 1 if on else 0
 	if on:
+		add_to_group(&"interactables")
 		SpatialGrid.register(self, &"interactables")
 	else:
 		SpatialGrid.unregister(self)
-		if _outline != null:
-			_outline.visible = false
+		remove_from_group(&"interactables")
 		remove_from_group(&"hovered_clickable")
 		remove_from_group(&"tooltip_target")
+		if _outline != null:
+			_outline.visible = false
 		get_tree().call_group(&"interactable_tooltip", &"hide_tooltip")
 
 func _refresh_lamp() -> void:
 	var c := COLOR_USED if _used else COLOR_ACTIVE
 	_mat.albedo_color = c
 	_mat.emission = c
+	# Energy 0 when used reads as a hard "off" state instead of a dim glow
+	# that's easy to miss against bright room lighting.
+	_mat.emission_energy_multiplier = 0.0 if _used else LAMP_EMISSION_IDLE

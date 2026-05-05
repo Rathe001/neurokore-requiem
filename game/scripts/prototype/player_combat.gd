@@ -105,9 +105,21 @@ func resolve_skill_hit(skill: Skill, aim: Vector3, weapon: Item, source_offset: 
 # Hit patterns
 # ---------------------------------------------------------------------------
 
+## Knockback applied per hit. Normal weapon skills carry skill.knockback = 0;
+## the &"knockback_bonus" affix on the firing weapon adds raw push units on
+## top. Special skills (grenades, shield bash) keep their inherent knockback
+## via skill.knockback. No weapon, no skill knockback → no push.
+func _knockback_for(skill: Skill, weapon: Item) -> float:
+	var bonus: float = 0.0
+	if weapon != null:
+		bonus = float(weapon.get_modifier(&"knockback_bonus"))
+	return skill.knockback + bonus
+
+
 func _resolve_cone(skill: Skill, aim: Vector3, eff_range: float, weapon: Item) -> void:
 	var half_cos := cos(deg_to_rad(skill.cone_deg * 0.5))
 	var hits := PerkState.roll_multistrike()
+	var kb := _knockback_for(skill, weapon)
 	for enode: Node3D in SpatialGrid.query_cone(_host.global_position, aim, eff_range, half_cos, &"enemies"):
 		if not enode.has_method(&"take_damage"):
 			continue
@@ -121,11 +133,12 @@ func _resolve_cone(skill: Skill, aim: Vector3, eff_range: float, weapon: Item) -
 				continue
 			var is_crit := _roll_crit(weapon)
 			var dmg := _crit_damage(_roll_skill_damage(skill, weapon), is_crit)
-			enode.take_damage(dmg, _host.global_position, skill.knockback, hits, is_crit)
+			enode.take_damage(dmg, _host.global_position, kb, hits, is_crit)
 		_apply_exile_curse_if_active(enode)
 
 func _resolve_aoe(skill: Skill, eff_range: float, weapon: Item) -> void:
 	var hits := PerkState.roll_multistrike()
+	var kb := _knockback_for(skill, weapon)
 	for enode: Node3D in SpatialGrid.query_radius(_host.global_position, eff_range, &"enemies"):
 		if not enode.has_method(&"take_damage"):
 			continue
@@ -136,7 +149,7 @@ func _resolve_aoe(skill: Skill, eff_range: float, weapon: Item) -> void:
 				continue
 			var is_crit := _roll_crit(weapon)
 			var dmg := _crit_damage(_roll_skill_damage(skill, weapon), is_crit)
-			enode.take_damage(dmg, _host.global_position, skill.knockback, hits, is_crit)
+			enode.take_damage(dmg, _host.global_position, kb, hits, is_crit)
 		_apply_exile_curse_if_active(enode)
 
 
@@ -152,7 +165,7 @@ func _spawn_projectile(skill: Skill, aim: Vector3, eff_range: float, weapon: Ite
 	proj.direction = aim.normalized()
 	proj.speed = skill.projectile_speed
 	proj.max_range = eff_range
-	proj.knockback_strength = skill.knockback
+	proj.knockback_strength = _knockback_for(skill, weapon)
 	proj.source_position = _host.global_position
 	if weapon != null and weapon.damage_max > 0:
 		proj.damage_min = weapon.damage_min
@@ -214,7 +227,7 @@ func _resolve_hitscan(skill: Skill, aim: Vector3, eff_range: float, weapon: Item
 			continue
 		var is_crit := _roll_crit(weapon)
 		var dmg := _crit_damage(_roll_skill_damage(skill, weapon), is_crit)
-		hit_target.take_damage(dmg, _host.global_position, skill.knockback, hits, is_crit)
+		hit_target.take_damage(dmg, _host.global_position, _knockback_for(skill, weapon), hits, is_crit)
 	_apply_exile_curse_if_active(hit_target)
 
 # ---------------------------------------------------------------------------

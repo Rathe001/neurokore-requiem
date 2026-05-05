@@ -13,5 +13,5 @@ wind_up = 0.1
 resource_cost = 8
 targeting_mode = 3
 cone_deg = 0.0
-knockback = 0.5
+knockback = 0.0
 icon_color = Color(0.4, 0.85, 1.0, 1.0)

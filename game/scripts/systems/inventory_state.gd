@@ -58,6 +58,11 @@ func set_equipped(slot: StringName, item: Item) -> void:
 	# locked, refuse to equip there.
 	if item != null and SlotRegistry.is_extra_weapon_slot(slot) and not is_extra_weapon_slot_unlocked(slot):
 		return
+	# Offhand is mutually exclusive with a 2H weapon. ItemSlot.can_accept_item
+	# blocks the drag-into-offhand path; this guards programmatic + quick-equip
+	# callers so the rule holds everywhere.
+	if slot == &"offhand" and item != null and is_two_handed_equipped():
+		return
 
 	if item == null:
 		equipment.erase(slot)

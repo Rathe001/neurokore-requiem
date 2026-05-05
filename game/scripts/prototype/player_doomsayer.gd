@@ -22,7 +22,11 @@ var _charmed_enemies: Array[PrototypeEnemy] = []
 func setup(host: PrototypePlayer) -> void:
 	_host = host
 	_doomsayer_aura = DoomsayerAura.new()
-	add_child(_doomsayer_aura)
+	# Parent the aura to the player (a Node3D) directly. PlayerDoomsayer is
+	# a plain Node — a Node3D child of a non-Node3D parent doesn't inherit
+	# its transform, so adding the aura here would leave it stuck at world
+	# origin (visible as the aura locked to the spawn room).
+	_host.add_child(_doomsayer_aura)
 	reconcile()
 
 

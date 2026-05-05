@@ -58,6 +58,13 @@ const PACK_MIN_COMPANIONS := 2
 const PACK_MAX_COMPANIONS := 4
 const PACK_COMPANION_RADIUS := 2.5
 
+# Per-piece cap on heal-support enemies. Two healers with overlapping
+# radii loop-heal each other (and the rest of the pack) faster than a
+# focused player can burn anyone down — the room becomes unkillable.
+# One healer per room reads as "kill the medic first" priority pick;
+# more reads as a softlock.
+const MAX_HEALERS_PER_PIECE := 1
+
 # Auto-density target — 1 enemy per N square metres of room floor. The
 # spawner bumps a room's effective enemy_count to at least this when the
 # room is big enough, so larger rooms feel populated without having to
@@ -83,12 +90,17 @@ static func spawn_in_bounds(ctx: LevelBuildContext, piece: LevelPiece, center: V
 	if scene == null:
 		scene = ENEMY_SCENE_DEFAULT
 
+	# Per-piece spawn limits, threaded through every _pick_class call below.
+	# Dictionary so the counter mutates by reference across the static call
+	# chain (plain int would copy at every hop).
+	var limits := {"healers_remaining": MAX_HEALERS_PER_PIECE}
+
 	if piece.enemy_positions.size() > 0:
 		# Hand-placed enemy positions skip the area-density bump — those
 		# coordinates are authored for specific events (encounters, ambush
 		# triggers) and adding random extras would muddle the intent.
 		for epos: Vector3 in piece.enemy_positions:
-			_spawn_with_pack_chance(ctx, center + epos, hx, hz, scene, _roll_level(level_range), center, class_pool)
+			_spawn_with_pack_chance(ctx, center + epos, hx, hz, scene, _roll_level(level_range), center, class_pool, limits)
 		return
 
 	# Auto-density: any room that opted in with a positive enemy_count
@@ -105,7 +117,7 @@ static func spawn_in_bounds(ctx: LevelBuildContext, piece: LevelPiece, center: V
 	while spawned < count:
 		var ex := center.x + randf_range(-hx + margin, hx - margin)
 		var ez := center.z + randf_range(-hz + margin, hz - margin)
-		var pack_size := _spawn_with_pack_chance(ctx, Vector3(ex, 0, ez), hx, hz, scene, _roll_level(level_range), center, class_pool)
+		var pack_size := _spawn_with_pack_chance(ctx, Vector3(ex, 0, ez), hx, hz, scene, _roll_level(level_range), center, class_pool, limits)
 		spawned += pack_size
 
 
@@ -122,7 +134,7 @@ static func _roll_level(level_range: Vector2i) -> int:
 # (solo or pack member) draws an EnemyClass from it independently, so
 # a pack reads as melee + ranged + support instead of N copies of the
 # leader's class.
-static func _spawn_with_pack_chance(ctx: LevelBuildContext, pos: Vector3, hx: float, hz: float, scene: PackedScene, level_override: int, room_center: Vector3 = Vector3.ZERO, class_pool: Array[EnemyClass] = []) -> int:
+static func _spawn_with_pack_chance(ctx: LevelBuildContext, pos: Vector3, hx: float, hz: float, scene: PackedScene, level_override: int, room_center: Vector3 = Vector3.ZERO, class_pool: Array[EnemyClass] = [], limits: Dictionary = {}) -> int:
 	# Hoisted so both the named-monster branch and the pack branch share
 	# one definition — declaring `var lvl` in each arm fires the
 	# "declared below in the parent block" GDScript warning.
@@ -140,7 +152,7 @@ static func _spawn_with_pack_chance(ctx: LevelBuildContext, pos: Vector3, hx: fl
 		# Named pool empty for this level — fall through to the regular
 		# pack/solo path so we don't waste the slot.
 	if randf() >= PACK_CHANCE:
-		_spawn(ctx, pos, scene, level_override, [], null, _pick_class(class_pool))
+		_spawn(ctx, pos, scene, level_override, [], null, _pick_class(class_pool, limits))
 		return 1
 	# Pack — roll affix list and companion count, spawn leader + companions
 	# all sharing the same affixes. Each member picks its OWN class from
@@ -153,10 +165,10 @@ static func _spawn_with_pack_chance(ctx: LevelBuildContext, pos: Vector3, hx: fl
 	if affixes.is_empty():
 		# Affix table couldn't satisfy the request — fall back to a solo
 		# spawn so the slot isn't wasted.
-		_spawn(ctx, pos, scene, level_override, [], null, _pick_class(class_pool))
+		_spawn(ctx, pos, scene, level_override, [], null, _pick_class(class_pool, limits))
 		return 1
 	var companion_total := randi_range(PACK_MIN_COMPANIONS, PACK_MAX_COMPANIONS)
-	_spawn(ctx, pos, scene, level_override, affixes, null, _pick_class(class_pool))
+	_spawn(ctx, pos, scene, level_override, affixes, null, _pick_class(class_pool, limits))
 	# Spread companions on a ring around the leader; clamp to the piece
 	# bounds when we know them so a pack near a wall doesn't punch members
 	# into geometry.
@@ -168,7 +180,7 @@ static func _spawn_with_pack_chance(ctx: LevelBuildContext, pos: Vector3, hx: fl
 		if hx > 0.0 and hz > 0.0:
 			cpos.x = clampf(cpos.x, room_center.x - hx + 0.6, room_center.x + hx - 0.6)
 			cpos.z = clampf(cpos.z, room_center.z - hz + 0.6, room_center.z + hz - 0.6)
-		_spawn(ctx, cpos, scene, level_override, affixes, null, _pick_class(class_pool))
+		_spawn(ctx, cpos, scene, level_override, affixes, null, _pick_class(class_pool, limits))
 	return companion_total
 
 
@@ -177,11 +189,31 @@ static func _spawn_with_pack_chance(ctx: LevelBuildContext, pos: Vector3, hx: fl
 # benefits from mixed-class composition without needing every RoomDef
 # to opt in. Returns null only when both pools are empty (in which case
 # the caller leaves the scene's baked-in class alone).
-static func _pick_class(pool: Array[EnemyClass]) -> EnemyClass:
+##
+## `limits.healers_remaining` (when present) caps how many heal-support
+## enemies the caller will accept from this pool. When the cap is hit,
+## healer rolls re-pick from the non-healer subset; the counter ticks
+## down each time a healer is actually emitted.
+static func _pick_class(pool: Array[EnemyClass], limits: Dictionary = {}) -> EnemyClass:
 	var effective := pool if not pool.is_empty() else _get_default_class_pool()
 	if effective.is_empty():
 		return null
-	return effective[randi_range(0, effective.size() - 1)]
+	var pick: EnemyClass = effective[randi_range(0, effective.size() - 1)]
+	if pick != null and pick.support_role == EnemyClass.SupportRole.HEAL and limits.has("healers_remaining"):
+		if int(limits["healers_remaining"]) <= 0:
+			# Cap hit — re-roll from the non-healer subset of the pool.
+			# If the pool is exclusively healers we leave the pick alone
+			# (no fallback class available); the cap silently breaks
+			# rather than spawning nothing.
+			var non_healers: Array[EnemyClass] = []
+			for c: EnemyClass in effective:
+				if c != null and c.support_role != EnemyClass.SupportRole.HEAL:
+					non_healers.append(c)
+			if not non_healers.is_empty():
+				pick = non_healers[randi_range(0, non_healers.size() - 1)]
+		else:
+			limits["healers_remaining"] = int(limits["healers_remaining"]) - 1
+	return pick
 
 
 static func _spawn(ctx: LevelBuildContext, pos: Vector3, scene: PackedScene, level_override: int = 0, affixes: Array[MonsterAffix] = [], named: NamedMonster = null, class_override: EnemyClass = null) -> void:

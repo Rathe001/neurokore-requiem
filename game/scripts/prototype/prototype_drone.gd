@@ -36,6 +36,16 @@ const HOVER_HEIGHT_MAX := 2.2
 # so the swarm doesn't all flick to new offsets on the same frame.
 const RETARGET_INTERVAL_MIN := 0.7
 const RETARGET_INTERVAL_MAX := 2.0
+# Swarm-around-enemy offsets — when a chase target is locked, the drone
+# orbits at this radius from the target rather than the player. Slightly
+# tighter than the wander volume so the swarm reads as "ganging up" on
+# whatever the player is engaging.
+const SWARM_RADIUS_MIN := 1.4
+const SWARM_RADIUS_MAX := 2.4
+# Hard leash from the player. Drones won't push past this distance even
+# if the chase target is out beyond it — they'll hover at the leash edge
+# rather than peel off and chase across the room.
+const SWARM_LEASH_FROM_PLAYER := 5.0
 # Movement caps. FOLLOW_GAIN scales the seek vector into a velocity; clamp
 # at MAX_SPEED so a drone that fell behind doesn't snap-teleport when it
 # catches up to a sprinting player.
@@ -62,6 +72,13 @@ var _wander_offset: Vector3 = Vector3.ZERO
 var _retarget_t: float = 0.0
 var _bob_phase: float = 0.0
 var _fire_cd: float = 0.0
+# Currently-engaged enemy + the drone's preferred angle/radius around it.
+# Bearing/radius are per-drone so multiple drones swarm from different
+# sides instead of overlapping on the same point. Cleared when the target
+# dies, charms, leaves LOS, or strays past leash from the player.
+var _chase_target: Node3D = null
+var _swarm_bearing: float = 0.0
+var _swarm_radius: float = 2.0
 
 
 # Extra args (orbit_index / orbit_total) kept for call-site compatibility
@@ -99,14 +116,22 @@ func _physics_process(delta: float) -> void:
 		velocity = Vector3.ZERO
 		_pick_new_target()
 		return
+	_validate_chase_target()
+	if _chase_target == null:
+		_acquire_chase_target()
 	_retarget_t -= delta
 	if _retarget_t <= 0.0:
 		_pick_new_target()
 	_bob_phase += BOB_SPEED * delta
-	# Hover target = player position + random offset + tiny vertical bob.
-	# Bob is added to the target (not the velocity) so move_and_slide can
-	# project against walls cleanly without fighting an axis we modulated.
-	var target := _player.global_position + _wander_offset
+	# Hover target: swarm around the chase target if we have one, else
+	# wander around the player. Either way the bob is added on top so
+	# move_and_slide projects against walls without fighting a modulated
+	# axis.
+	var target: Vector3
+	if _chase_target != null:
+		target = _swarm_position_for(_chase_target)
+	else:
+		target = _player.global_position + _wander_offset
 	target.y += sin(_bob_phase) * BOB_AMPLITUDE
 	var to_target := target - global_position
 	velocity = to_target * FOLLOW_GAIN
@@ -125,6 +150,76 @@ func _physics_process(delta: float) -> void:
 			# full FIRE_COOLDOWN so the drone reacts quickly when an enemy
 			# walks into range.
 			_fire_cd = 0.25
+
+
+# Compute the swarm hover position around a target enemy. The drone keeps
+# a fixed bearing+radius for the engagement so it stays on "its side" of
+# the enemy instead of orbiting. Result is clamped to SWARM_LEASH_FROM_PLAYER
+# so a target running across the map doesn't drag the drone off the player.
+func _swarm_position_for(target: Node3D) -> Vector3:
+	var hover_y := lerpf(HOVER_HEIGHT_MIN, HOVER_HEIGHT_MAX, 0.5)
+	var around := target.global_position + Vector3(
+		cos(_swarm_bearing) * _swarm_radius,
+		hover_y,
+		sin(_swarm_bearing) * _swarm_radius,
+	)
+	var from_player := around - _player.global_position
+	if from_player.length() > SWARM_LEASH_FROM_PLAYER:
+		around = _player.global_position + from_player.normalized() * SWARM_LEASH_FROM_PLAYER
+	return around
+
+
+# Drop the current chase target if it died, got charmed, lost LOS to the
+# player, or drifted past leash. Leaving stale targets attached makes the
+# drone hover over a corpse or tug at the leash edge.
+func _validate_chase_target() -> void:
+	if _chase_target == null:
+		return
+	if not is_instance_valid(_chase_target):
+		_chase_target = null
+		return
+	if not _chase_target.is_in_group(&"enemies"):
+		_chase_target = null
+		return
+	if _chase_target.has_method(&"is_player_friendly") and _chase_target.is_player_friendly():
+		_chase_target = null
+		return
+	if not LosCuller.has_los_to_player(_chase_target):
+		_chase_target = null
+		return
+	var to_player := _chase_target.global_position - _player.global_position
+	# +2 grace beyond the leash so a target dancing right at the edge
+	# doesn't strobe in/out of the chase state every frame.
+	if to_player.length() > SWARM_LEASH_FROM_PLAYER + 2.0:
+		_chase_target = null
+
+
+# Pick the nearest visible enemy within ATTACK_RANGE that's also inside
+# the player's leash. Roll a fresh swarm bearing/radius per acquisition
+# so two drones engaging the same target won't stack on the same point.
+func _acquire_chase_target() -> void:
+	var best: Node3D = null
+	var best_d2 := ATTACK_RANGE * ATTACK_RANGE
+	var leash_sq := SWARM_LEASH_FROM_PLAYER * SWARM_LEASH_FROM_PLAYER
+	for n in SpatialGrid.query_radius(_player.global_position, ATTACK_RANGE, &"enemies"):
+		if not (n is Node3D) or not is_instance_valid(n):
+			continue
+		if not n.has_method(&"take_damage"):
+			continue
+		if n.has_method(&"is_player_friendly") and n.is_player_friendly():
+			continue
+		if not LosCuller.has_los_to_player(n):
+			continue
+		var d2 := _player.global_position.distance_squared_to(n.global_position)
+		if d2 > leash_sq:
+			continue
+		if d2 < best_d2:
+			best_d2 = d2
+			best = n
+	if best != null:
+		_chase_target = best
+		_swarm_bearing = randf() * TAU
+		_swarm_radius = randf_range(SWARM_RADIUS_MIN, SWARM_RADIUS_MAX)
 
 
 # Roll a fresh hover offset around the player. Random bearing / radius /

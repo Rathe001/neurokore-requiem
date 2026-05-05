@@ -42,7 +42,7 @@ const DEFAULT_ATTACK_RANGE := 2.2
 const DEFAULT_ATTACK_COOLDOWN := 1.6
 const DEFAULT_ATTACK_WINDUP := 0.4
 const DEFAULT_ATTACK_CONE_DEG := 80.0
-const DEFAULT_ATTACK_KNOCKBACK := 5.0
+const DEFAULT_ATTACK_KNOCKBACK := 0.0
 # Leash distance — once the enemy strays this far from its spawn while
 # chasing, it disengages and walks back to spawn. Prevents whole-level
 # chases (and the "lure them into a pit" exploit). Squared for the cheap
@@ -738,6 +738,7 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 		aggro()
 	_play_hit_squash()
 	_hit_flash_tween = HitFlash.play(self, visual, _hit_flash_tween)
+	_refresh_tooltip_if_hovered()
 	if _health <= 0:
 		_die()
 
@@ -804,6 +805,7 @@ func _emit_support() -> void:
 	var radius := enemy_class.support_radius
 	var role := enemy_class.support_role
 	var magnitude := enemy_class.support_magnitude
+	var magnitude_max := enemy_class.support_magnitude_max
 	var buff_duration := enemy_class.support_interval * 1.1
 	for ally: Node in SpatialGrid.query_radius(global_position, radius, &"enemies"):
 		if ally == null or not is_instance_valid(ally):
@@ -815,7 +817,12 @@ func _emit_support() -> void:
 			continue
 		match role:
 			EnemyClass.SupportRole.HEAL:
-				ae.heal(int(round(float(ae.max_health) * magnitude)))
+				# Per-target roll so heal sizes vary across the pack rather
+				# than every ally getting an identical chunk.
+				var pct := magnitude
+				if magnitude_max > magnitude:
+					pct = randf_range(magnitude, magnitude_max)
+				ae.heal(int(round(float(ae.max_health) * pct)))
 			EnemyClass.SupportRole.DAMAGE_BUFF:
 				ae.apply_damage_buff(magnitude, buff_duration)
 
@@ -825,8 +832,15 @@ func _emit_support() -> void:
 func heal(amount: int) -> void:
 	if not _is_alive() or amount <= 0:
 		return
+	var before := _health
 	_health = mini(_health + amount, max_health)
 	_update_health_bar()
+	_refresh_tooltip_if_hovered()
+	var gained := _health - before
+	if gained > 0:
+		_hit_flash_tween = HitFlash.play(self, visual, _hit_flash_tween, HitFlash.HEAL_COLOR)
+		var head := global_position + Vector3(0.0, 1.8, 0.0)
+		DamageNumber.spawn_heal(get_parent(), head, gained)
 
 
 ## Apply (or refresh) a damage-buff overlay. Multiple buffers overlapping

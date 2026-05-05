@@ -443,6 +443,7 @@ func _physics_process(delta: float) -> void:
 	_shield.tick(delta)
 	_doomsayer.tick(delta)
 	_grenade.tick(delta)
+	_ied.tick(delta)
 
 	var on_floor := is_on_floor()
 
@@ -877,16 +878,22 @@ func _cast_lmb_combat() -> void:
 	_face_direction(aim)
 	_play_anim(ANIM_ATTACK, 1.4)
 	_ied.toss_trap(_cursor_offset())
-	# Block input until the LAST staggered fire resolves — otherwise the
-	# player could re-click before the volley completes and the per-slot
-	# cooldown gate becomes the only thing preventing double-firing of
-	# the trailing extras. With the new dynamic stagger the volley spans
-	# the main weapon's full effective interval, so this also doubles as
-	# a natural "you committed to this swing" beat before the next press.
-	if max_fire_delay > 0.0:
+	# Hold the player still for a brief "swing commit" window so a click
+	# reads as a deliberate strike, not a strafe-shot. Two contributors:
+	#   - main weapon's wind_up scaled by its attack_speed (single-arm feel)
+	#   - max_fire_delay across the staggered volley (Amalgamation feel)
+	# Take the max so neither contributor swallows the other; a 4-arm
+	# Forged with a 0.05s wind-up still pauses for the full volley span.
+	var stop_duration := max_fire_delay
+	if main_item != null and main_item.fire_skill != null:
+		var main_wind_up: float = main_item.fire_skill.wind_up
+		if main_wind_up > 0.0:
+			var main_atk_spd_for_stop: float = main_item.attack_speed if main_item.attack_speed > 0.0 else 1.0
+			stop_duration = maxf(stop_duration, main_wind_up / main_atk_spd_for_stop)
+	if stop_duration > 0.0:
 		_attacking = true
 		_attack_aim = aim
-		await get_tree().create_timer(max_fire_delay).timeout
+		await get_tree().create_timer(stop_duration).timeout
 		_attacking = false
 
 
@@ -925,7 +932,10 @@ func _cast_skill(skill: Skill) -> void:
 					return
 				if skill.resource_cost > 0:
 					_spend_resource(skill.resource_cost)
-				_grenade.activate(skill, _cursor_offset())
+				var throw_dir := _cursor_offset()
+				_face_direction(throw_dir)
+				_play_anim(ANIM_ATTACK, 1.4)
+				_grenade.activate(skill, throw_dir)
 		return
 	_interacting = false
 	if _combat.is_on_cooldown(skill):

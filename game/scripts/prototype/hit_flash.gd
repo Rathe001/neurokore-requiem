@@ -6,13 +6,14 @@ class_name HitFlash
 ## single property per mesh.
 
 const FLASH_COLOR := Color(1.0, 0.18, 0.18, 0.7)
+const HEAL_COLOR := Color(0.30, 1.0, 0.45, 0.7)
 const FLASH_DURATION := 0.18
 
 ## Apply the flash to all meshes under `root`, fading to transparent over
 ## FLASH_DURATION. Pass the previous tween (if any) so a fresh hit cancels
 ## a still-fading prior flash cleanly. Returns the new tween so the caller
 ## can store it for the next call. `host` owns the tween lifecycle.
-static func play(host: Node, root: Node3D, prior: Tween = null) -> Tween:
+static func play(host: Node, root: Node3D, prior: Tween = null, color: Color = FLASH_COLOR) -> Tween:
 	if root == null:
 		return null
 	var meshes: Array[MeshInstance3D] = []
@@ -31,7 +32,7 @@ static func play(host: Node, root: Node3D, prior: Tween = null) -> Tween:
 	var overlay := StandardMaterial3D.new()
 	overlay.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	overlay.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	overlay.albedo_color = FLASH_COLOR
+	overlay.albedo_color = color
 	overlay.disable_receive_shadows = true
 	for m in meshes:
 		m.material_overlay = overlay

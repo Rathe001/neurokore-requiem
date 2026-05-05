@@ -229,6 +229,11 @@ func _quick_equip(slot: ItemSlot) -> void:
 	var equip_slot_id := _find_equip_slot_for_kind(item.kind)
 	if equip_slot_id == &"":
 		return
+	# Mirror the rejection rules in InventoryState.set_equipped — checking up
+	# front avoids the "clear inventory slot, set_equipped no-ops, item lost"
+	# trap.
+	if equip_slot_id == &"offhand" and InventoryState.is_two_handed_equipped():
+		return
 	var displaced := InventoryState.get_equipped(equip_slot_id)
 	# Free inventory slot first so set_equipped has room for 2H offhand displacement
 	InventoryState.set_inventory_item(slot.inventory_index, null)
