@@ -523,8 +523,8 @@ func _bind_player() -> void:
 		_player.resource_changed.connect(_on_resource_changed)
 	if _player.has_signal(&"credits_changed"):
 		_player.credits_changed.connect(_on_credits_changed)
-	var max_hp: int = int(_player.max_health)
-	_on_health_changed(max_hp, max_hp)
+	var max_health: int = int(_player.max_health)
+	_on_health_changed(max_health, max_health)
 	var pool = _player.resource_pool
 	if pool != null:
 		_on_resource_changed(pool.start_value, pool.max_value)

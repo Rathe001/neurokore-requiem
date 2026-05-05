@@ -1660,21 +1660,12 @@ func _chase_tick() -> void:
 			return
 		# else: too far, fall through to navmesh chase below
 
-	# Aggro'd melee chase the target. Won't start a swing through a wall —
-	# the LoS check on attack initiation prevents through-wall hits.
-	# When already in attack range, hold position regardless of cooldown
-	# state. The previous behaviour (fall through to navmesh chase when
-	# in range but on cooldown) read in playtest as a tug-of-war shove
-	# match: pet and hostile both kept pathfinding into each other
-	# between swings instead of standing still and trading blows.
-	elif dist <= _attack_range() and has_los:
-		if _attack_cd <= 0.0:
-			_cast_attack(target, to_target / dist)
-		else:
-			_face_direction(to_target / dist)
-			_want_dir = Vector3.ZERO
-			velocity.x = 0.0
-			velocity.z = 0.0
+	# Aggro'd melee: chase until in range with cooldown ready, then swing.
+	# No hold-position on cooldown — the enemy closes to melee distance
+	# and stays on the target. Once the attack starts, the windup commits
+	# regardless of whether the player retreats mid-animation.
+	elif dist <= _attack_range() and _attack_cd <= 0.0 and has_los:
+		_cast_attack(target, to_target / dist)
 		return
 
 	# Pathfind via NavigationAgent — routes around walls and pit edges

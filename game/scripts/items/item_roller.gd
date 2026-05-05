@@ -226,11 +226,11 @@ func _roll_universal_bonuses(item: Item, item_level: int, rarity: StringName, rn
 	if rng.randf() < bonus_chance:
 		var hp := int(round(hp_base + rng.randf_range(-2.0, 2.0)))
 		if hp > 0:
-			item.stat_modifiers[&"max_hp"] = int(item.stat_modifiers.get(&"max_hp", 0)) + hp
+			item.stat_modifiers[&"max_health_bonus"] = int(item.stat_modifiers.get(&"max_health_bonus", 0)) + hp
 	if rng.randf() < bonus_chance:
 		var res := int(round(res_base + rng.randf_range(-1.0, 1.0)))
 		if res > 0:
-			item.stat_modifiers[&"max_resource"] = int(item.stat_modifiers.get(&"max_resource", 0)) + res
+			item.stat_modifiers[&"max_resource_bonus"] = int(item.stat_modifiers.get(&"max_resource_bonus", 0)) + res
 
 
 func _roll_rarity(rng: RandomNumberGenerator) -> StringName:

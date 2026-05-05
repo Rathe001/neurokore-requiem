@@ -39,9 +39,9 @@ enum LightMod { NONE, FLASHLIGHT, RADIANT, SCANNER, UV }
 @export_group("Stats")
 ## Flat stat / modifier bonuses applied when this item is equipped.
 ## Keys are StringName — direct combat bonuses (&"damage_reduction",
-## &"max_hp", &"max_resource", &"movement_speed", &"hit_chance",
-## &"attack_speed_bonus", &"health_regen", &"traction",
-## &"inventory_bonus", &"toxic_resistance", &"range_bonus") live in this
+## &"max_health_bonus", &"max_resource_bonus", &"move_speed_bonus",
+## &"hit_chance_bonus", &"attack_speed_bonus", &"crit_chance_bonus",
+## &"cooldown_reduction", &"inventory_bonus", &"range_bonus") live in this
 ## single dict. Affix table entries MUST use StringName keys (the &"" prefix);
 ## plain string keys hash differently and silently fail to match reads.
 @export var stat_modifiers: Dictionary = {}

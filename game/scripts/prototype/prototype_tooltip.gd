@@ -436,8 +436,39 @@ func _build_stats_text(item: Item) -> String:
 		lines.append("%s%d %s" % [sign, amount, label])
 	return "\n".join(lines)
 
+const _STAT_LABELS: Dictionary = {
+	&"max_health_bonus": "Max Health",
+	&"max_resource_bonus": "Max Resource",
+	&"damage_reduction": "Damage Reduction",
+	&"move_speed_bonus": "Move Speed",
+	&"base_damage_bonus": "Base Damage",
+	&"crit_chance_bonus": "Crit Chance",
+	&"crit_damage_bonus": "Crit Damage",
+	&"attack_speed_bonus": "Attack Speed",
+	&"hit_chance_bonus": "Hit Chance",
+	&"cooldown_reduction": "Cooldown Reduction",
+	&"fire_damage_bonus": "Fire Damage",
+	&"cryo_damage_bonus": "Cryo Damage",
+	&"electric_damage_bonus": "Electric Damage",
+	&"toxic_damage_bonus": "Toxic Damage",
+	&"electric_resistance": "Electric Resistance",
+	&"cryo_resistance": "Cryo Resistance",
+	&"toxic_resistance": "Toxic Resistance",
+	&"elemental_resistance": "Elemental Resistance",
+	&"carry_capacity_bonus": "Carry Capacity",
+	&"inventory_bonus": "Inventory Slots",
+	&"range_bonus": "Range",
+	&"knockback_bonus": "Knockback",
+	&"resource_cost_reduction": "Resource Cost Reduction",
+	&"lifesteal_percent": "Life Steal",
+	&"armor_penetration": "Armor Penetration",
+	&"blast_radius_bonus": "Blast Radius",
+	&"damage_bonus_pct": "Damage",
+	&"resource_on_hit": "Resource On Hit",
+}
+
 func _stat_display_name(stat_id: StringName) -> String:
-	return (stat_id as String).capitalize()
+	return _STAT_LABELS.get(stat_id, (stat_id as String).capitalize())
 
 
 func _build_skill_stats_text(skill: Skill, source: Item) -> String:

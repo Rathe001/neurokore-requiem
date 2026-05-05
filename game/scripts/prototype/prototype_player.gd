@@ -88,6 +88,9 @@ const RUN_ANIM_SPEED_MAX := 1.9
 @onready var _collision: CollisionShape3D = $Collision
 
 const FLASHLIGHT_OFFSET := Vector3(0, 1.4, -0.3)
+## Render layer used by the player visual so equipped lights can exclude
+## it from their shadow_cull_mask (player still lit, just no self-shadow).
+const PLAYER_VISUAL_LAYER := 2
 const FPS_HEAD_OFFSET := Vector3(0.0, 1.55, 0.0)
 const FPS_CROUCH_OFFSET := Vector3(0.0, 0.75, 0.0)
 const FPS_PITCH_LIMIT := 1.4
@@ -238,6 +241,15 @@ func _ready() -> void:
 	_grenade.setup(self)
 	add_child(_grenade)
 	PerkState.perks_changed.connect(_doomsayer.reconcile)
+	# Put player meshes on an extra render layer so equipped lights can
+	# exclude it from shadow casting (no self-shadow under own flashlight).
+	if visual != null:
+		for child in visual.get_children():
+			if child is VisualInstance3D:
+				child.layers |= (1 << (PLAYER_VISUAL_LAYER - 1))
+			for grandchild in child.get_children():
+				if grandchild is VisualInstance3D:
+					grandchild.layers |= (1 << (PLAYER_VISUAL_LAYER - 1))
 	_base_max_health = max_health
 	if resource_pool != null:
 		_base_resource_max = resource_pool.max_value
@@ -1311,9 +1323,9 @@ func _apply_light_item() -> void:
 		light_changed.emit(false)
 		return
 	var spot := SpotLight3D.new()
-	spot.spot_angle = 28.0
-	spot.spot_attenuation = 1.2
-	spot.spot_angle_attenuation = 0.7
+	spot.spot_angle = 50.0
+	spot.spot_attenuation = 1.0
+	spot.spot_angle_attenuation = 0.6
 	spot.shadow_enabled = true
 	spot.shadow_bias = 0.02
 	spot.shadow_normal_bias = 0.3
@@ -1321,6 +1333,9 @@ func _apply_light_item() -> void:
 	spot.light_energy = head.light_energy
 	spot.spot_range = head.light_range
 	match head.light_mod:
+		Item.LightMod.FLASHLIGHT:
+			spot.light_energy *= 1.5
+			spot.spot_range *= 1.2
 		Item.LightMod.RADIANT:
 			spot.spot_angle = 90.0
 			spot.spot_attenuation = 1.6
@@ -1328,6 +1343,10 @@ func _apply_light_item() -> void:
 			spot.spot_angle = 45.0
 		Item.LightMod.SCANNER:
 			spot.spot_angle = 60.0
+	# Keep the player layer in light_cull_mask (player is lit) but remove
+	# it from shadow_caster_mask so the player model doesn't cast a shadow
+	# from their own headlamp.
+	spot.shadow_caster_mask &= ~(1 << (PLAYER_VISUAL_LAYER - 1))
 	spot.position = FLASHLIGHT_OFFSET
 	spot.visible = _light_on
 	_equipped_light = spot

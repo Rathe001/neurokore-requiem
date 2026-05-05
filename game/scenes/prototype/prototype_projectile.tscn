@@ -37,8 +37,8 @@ material_override = SubResource("StandardMaterial3D_1")
 ; and self-shadowing on the projectile mesh looks wrong.
 [node name="Glow" type="OmniLight3D" parent="."]
 light_color = Color(0.4, 0.85, 1.0, 1.0)
-light_energy = 3.0
-omni_range = 5.0
-omni_attenuation = 2.0
+light_energy = 6.0
+omni_range = 8.0
+omni_attenuation = 1.5
 shadow_enabled = false
 light_volumetric_fog_energy = 0.0
