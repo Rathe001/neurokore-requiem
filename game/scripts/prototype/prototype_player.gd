@@ -1024,6 +1024,8 @@ func _cast_skill(skill: Skill) -> void:
 func _tick_resource_regen(delta: float) -> void:
 	if resource_pool == null or resource_pool.regen_per_sec <= 0.0:
 		return
+	if _sprinting:
+		return
 	if _resource_current >= float(resource_pool.max_value):
 		return
 	_resource_current = minf(float(resource_pool.max_value), _resource_current + resource_pool.regen_per_sec * delta)
