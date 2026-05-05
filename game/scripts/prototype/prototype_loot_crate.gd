@@ -12,43 +12,12 @@ const COLOR_OPENED := Color(0.35, 0.35, 0.35, 1.0)
 @export var random_item_count: int = 3
 ## Weapon base resource paths to roll as test items. Overrides random_item_count.
 @export var test_weapon_base_paths: Array[String] = []
-## When true, spawns one of each Optics variant (Flashlight, Lantern, Scanner,
-## UV) in addition to whatever else the crate would drop. For the starter
-## chest so the player can sample every light type up front.
-@export var include_all_optics: bool = false
 ## When true, the crate spits out a starter weapon kit instead of the
 ## default item generation: 50/50 chance of (one common 2H weapon) vs
-## (one common 1H weapon + one common offhand). Set by LootCrateDoorPuzzle
-## on the spawn-room chest so the player gets a guaranteed playable
-## weapon set on level start. ALSO drops one max-tier stat-stick test
-## item per spec class (temporary playtest convenience — equipping the
-## matching item alone pushes that class's primary stat past T3).
+## (one common 1H weapon + one common offhand), plus a head armor with
+## a light mod so the player can navigate dark zones. Set by
+## LootCrateDoorPuzzle on the spawn-room chest.
 @export var starter_weapon_kit: bool = false
-
-# Stat-stick magnitude for the T3 test items. Set huge so the starter
-# weapon's small random rolls don't dilute the primary below 99% (the
-# T3 threshold) — see project memory note `project_kore_terminology`
-# / the prior _make_class_tier3_item helper that lived in
-# inventory_state.gd before being removed when the player started empty.
-const _STARTER_T3_STAT_AMOUNT: int = 1000
-# Slot per spec class for the T3 stat-stick — picked so all six items
-# can sit in inventory without colliding on equip.
-const _STARTER_T3_KIT_SLOTS: Dictionary = {
-	&"count":       &"head",
-	&"survivalist": &"chest",
-	&"enculted":    &"gloves",
-	&"forged":      &"boots",
-	&"automaton":   &"belt",
-	&"polymath":    &"offhand",
-}
-const _STARTER_T3_SLOT_MAIN_TYPE: Dictionary = {
-	&"head":    "Head Armor",
-	&"chest":   "Chest Armor",
-	&"gloves":  "Gloves",
-	&"boots":   "Boots",
-	&"belt":    "Belt",
-	&"offhand": "Offhand",
-}
 ## Optional door this crate unlocks on first interact — mirrors the
 ## PrototypeSwitch.target_door pattern. Set by LootCrateDoorPuzzle, not
 ## hand-authored. Empty path = no door wiring (regular loot drop).
@@ -96,34 +65,18 @@ func interact(_user: Node) -> void:
 		var rng := RandomNumberGenerator.new()
 		rng.randomize()
 		var ilvl := maxi(1, PlayerState.level)
-		# Constrain the starter weapon's class-stat slots to the player's
-		# kore stats (Analog or Cyborg, depending on origin). Without this
-		# the rolled common weapon could land a useless opposing-kore stat
-		# slot, which the player has no way to invest into. The roller
-		# defaults to ROLLABLE_STATS when pool is empty, so this only
-		# affects the starter kit, not regular drops.
-		var origin: StringName = AttributeState.get_spec_origin(PlayerState.spec_id) if PlayerState.spec_id != &"" else PlayerState.class_id
-		var kore_stats: Array[StringName] = AttributeState.get_kore_stats_for_origin(origin)
 		# 50/50: one 2H, OR one 1H + one offhand. Both branches roll at
 		# common rarity so the player's first kit is functional but
 		# unspectacular — variety / power comes from later drops.
 		if rng.randf() < 0.5:
-			items.append(ItemRoller.roll("2H Weapon", ilvl, &"common", rng, kore_stats))
+			items.append(ItemRoller.roll("2H Weapon", ilvl, &"common", rng))
 		else:
-			items.append(ItemRoller.roll("1H Weapon", ilvl, &"common", rng, kore_stats))
-			items.append(ItemRoller.roll("Offhand", ilvl, &"common", rng, kore_stats))
-		# Playtest convenience — six max-tier stat-stick items (one per
-		# spec class). Equipping the matching item alone pushes that
-		# class's primary past TIERS_OWN[2] (99%) → T3 unlocked. Removed
-		# from the starting inventory when the player started empty;
-		# re-added here so the player still has a fast path to
-		# perk-tier playtesting without skipping the chest.
-		for spec_id: StringName in AttributeState.CLASS_DEFINITIONS:
-			items.append(_make_starter_t3_item(spec_id))
-		# Playtest seed for the active-offhand prototype. One of each
-		# offhand archetype drops from the starter chest so the player
-		# can swap them in to feel the difference. Remove these once
-		# the archetypes are in regular item rolls.
+			items.append(ItemRoller.roll("1H Weapon", ilvl, &"common", rng))
+			items.append(ItemRoller.roll("Offhand", ilvl, &"common", rng))
+		# Head armor with a light mod so the player can use F to navigate.
+		items.append(ItemRoller.roll("Head Armor", ilvl, &"common", rng))
+		# One of each offhand archetype for playtest — remove once
+		# active-offhand items roll naturally through ItemRoller.
 		items.append(_make_starter_shield_generator())
 		items.append(_make_starter_active_shield())
 	elif fixed_items.size() > 0:
@@ -144,12 +97,6 @@ func interact(_user: Node) -> void:
 		var ilvl := maxi(1, PlayerState.level)
 		for _i in random_item_count:
 			items.append(ItemRoller.roll_random(ilvl, rng))
-
-	if include_all_optics:
-		var optics_rng := RandomNumberGenerator.new()
-		optics_rng.randomize()
-		var ilvl_optics := maxi(1, PlayerState.level)
-		items.append_array(ItemRoller.roll_one_per_optics_variant(ilvl_optics, optics_rng))
 
 	var parent := get_parent()
 	if parent == null:
@@ -184,30 +131,6 @@ func interact(_user: Node) -> void:
 func _apply_color(c: Color) -> void:
 	_mat.albedo_color = c
 	_mat.emission = c
-
-
-# Build one max-tier stat-stick item for the given spec class. Equipping
-# it alone pushes that class's primary stat past TIERS_OWN[2] (99% under
-# the simplified breakpoints) → T3 unlocked. For origin classes, the
-# matching team-stat item lifts the corresponding kore stat past T2.
-# Mirror of the helper that lived in inventory_state.gd before the
-# player started empty.
-func _make_starter_t3_item(spec_id: StringName) -> Item:
-	var stat: StringName = AttributeState.CLASS_DEFINITIONS[spec_id][&"stat"]
-	var slot: StringName = _STARTER_T3_KIT_SLOTS.get(spec_id, &"head")
-	var main_type: String = _STARTER_T3_SLOT_MAIN_TYPE.get(slot, String(slot).capitalize())
-	var short: String = AttributeState.STAT_SHORT.get(stat, "?")
-	var spec_label: String = String(spec_id).capitalize()
-	var item := Item.new()
-	item.id = StringName("starter_t3_%s" % spec_id)
-	item.kind = slot
-	item.main_type = main_type
-	item.glyph = SlotRegistry.glyph_for_type(main_type)
-	item.glyph_color = AttributeState.STAT_COLORS.get(stat, Color.WHITE)
-	item.rarity = &"unique"
-	item.name_key = "%s T3 (%s %d%%)" % [spec_label, short, _STARTER_T3_STAT_AMOUNT]
-	item.stat_modifiers = {stat: _STARTER_T3_STAT_AMOUNT}
-	return item
 
 
 # Hand-built Shield Generator offhand for playtest. Equip in the

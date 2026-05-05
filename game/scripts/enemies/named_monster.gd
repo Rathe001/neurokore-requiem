@@ -34,6 +34,11 @@ class_name NamedMonster extends Resource
 ## a fire-themed named gets deep red).
 @export var ring_tint: Color = Color(1.0, 0.85, 0.2, 1.0)
 
+@export_group("Skills")
+## Fixed special skills for this named monster. Bypasses the spawner's
+## random skill-count roll — these are assigned directly.
+@export var special_skills: Array[EnemySkill] = []
+
 @export_group("Roll")
 @export var weight: int = 100
 @export var min_level: int = 1

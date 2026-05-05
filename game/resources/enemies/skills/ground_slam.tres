@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="EnemySkill" load_steps=2 format=3]
+
+; Ground Slam — melee AoE centered on self. Long windup (readable indicator)
+; with knockback. Punishes players who stand in the circle; rewards dodging.
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_skill.gd" id="script"]
+
+[resource]
+script = ExtResource("script")
+id = &"ground_slam"
+display_name = "Ground Slam"
+targeting_mode = 1
+damage_mult = 1.5
+skill_range = 3.5
+cooldown = 6.0
+wind_up = 0.8
+priority = 0
+aoe_radius = 3.5
+knockback = 6.0
+min_level = 2
+weight = 100

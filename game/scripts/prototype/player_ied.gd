@@ -55,8 +55,8 @@ func toss_trap(cursor_offset: Vector3) -> void:
 		var oldest: PrototypeTrap = _ied_traps.pop_front()
 		if oldest != null and is_instance_valid(oldest):
 			oldest.queue_free()
-	var tier := AttributeState.get_unlocked_tier(&"ing", PlayerState.class_id, PlayerState.spec_id)
-	var arm_delay: float = IED_ARM_DELAY_BY_TIER[clampi(tier, 1, IED_ARM_DELAY_BY_TIER.size() - 1)]
+	# Use a default arm delay now that stat tiers don't drive it.
+	var arm_delay: float = IED_ARM_DELAY_BY_TIER[1]
 	var trap: PrototypeTrap = IED_TRAP_SCENE.instantiate()
 	trap.arm_delay = arm_delay
 	_host.get_parent().add_child(trap)

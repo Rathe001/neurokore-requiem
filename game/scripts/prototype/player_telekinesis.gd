@@ -34,7 +34,7 @@ func tick(delta: float) -> void:
 	var targets := _pick_targets(bolts)
 	if targets.is_empty():
 		return
-	var dmg := int(round(float(TELEKINESIS_BASE_DAMAGE) * AttributeState.get_player_damage_mult(_host.class_id, _host.spec_id)))
+	var dmg := int(round(float(TELEKINESIS_BASE_DAMAGE) * 1.0))
 	for i in targets.size():
 		var captured_target: Node3D = targets[i]
 		if i == 0:

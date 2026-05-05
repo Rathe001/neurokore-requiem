@@ -1,20 +1,10 @@
 class_name EffectFormatter extends RefCounted
 
-## Renders the per-stat live-effect bullet lines that show up in the
-## buff tooltip (and any future surface that wants to summarise what a
-## perk + its talent stack are actively doing). One place to update
-## when a new effect kind needs a tooltip line — the HUD just calls
-## buff_lines_for_stat and never has to know the spec details.
-##
-## Convention: each match arm produces SHORT lines (one mechanic each).
-## Headline live counter first (X/Y of whatever the spec grants), then
-## stat-scaling or talent-gated effects under it. Lines are skipped
-## when their underlying value is zero so an unallocated talent doesn't
-## leave a stale row.
-##
-## All methods are static; PerkState / TalentState / Effects /
-## InventoryState / SlotRegistry / AttributeState / PlayerState are
-## autoloads so they resolve from any context.
+## Renders per-class live-effect bullet lines for the buff tooltip.
+## stat_id uses the legacy 3-letter tree IDs (ort/ing/amb/dev/opt/cla)
+## that perk .tres files still carry. Each match arm produces short
+## lines — one mechanic each. Lines are skipped when their value is
+## zero so unallocated talents don't leave stale rows.
 
 
 ## Returns the bullet lines (no leading bullet glyph) to render under
@@ -29,7 +19,7 @@ static func buff_lines_for_stat(stat_id: StringName, player: PrototypePlayer) ->
 				lines.append("%d/%d followers" % [player.get_charm_count(), player.get_charm_max()])
 			var dot: float = TalentState.get_aggregate(&"doomsayer_dot_per_tick")
 			if dot > 0.0:
-				var dmg_mult := AttributeState.get_player_damage_mult(PlayerState.class_id, PlayerState.spec_id)
+				var dmg_mult := 1.0  # placeholder — will use gear bonus when implemented
 				var per_tick: float = dot * dmg_mult
 				var dps: int = int(round(per_tick / PlayerDoomsayer.DOOMSAYER_TICK_INTERVAL))
 				lines.append("Aura of Dread: %d dps aura" % dps)

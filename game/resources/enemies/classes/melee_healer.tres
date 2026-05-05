@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="EnemyClass" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="EnemyClass" load_steps=4 format=3]
 
 ; Melee + heal-aura combo. Walks in like a basic_melee bruiser but every
 ; 8 seconds tops up nearby allies (and itself) by a 25-50% chunk of max HP
@@ -7,11 +7,15 @@
 ; the next pulse.
 
 [ext_resource type="Script" path="res://scripts/enemies/enemy_class.gd" id="script"]
+[ext_resource type="Resource" path="res://resources/enemies/skills/basic_melee_attack.tres" id="basic_attack"]
+[ext_resource type="Resource" path="res://resources/enemies/skills/ground_slam.tres" id="ground_slam"]
 
 [resource]
 script = ExtResource("script")
 id = &"melee_healer"
 label = "Field Medic"
+basic_attack = ExtResource("basic_attack")
+skill_pool = [ExtResource("ground_slam")]
 attack_mode = 0
 attack_range = 2.2
 attack_cooldown = 1.6

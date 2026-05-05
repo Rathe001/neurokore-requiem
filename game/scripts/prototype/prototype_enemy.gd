@@ -292,6 +292,18 @@ var _weaken_remain: float = 0.0
 var _weaken_mult: float = 0.0  # 0..1 fractional reduction (0.5 = -50% damage)
 var _affliction_marker: Label3D = null
 var _floor_ring_mat: StandardMaterial3D
+# Skill system state. _special_skills is assigned by the spawner AFTER
+# reset(); _skill_cooldowns tracks independent per-skill cooldown timers.
+# Self-buff state is set by SELF_BUFF skills and ticks down each frame.
+var _special_skills: Array[EnemySkill] = []
+var _skill_cooldowns: Dictionary = {}
+var _self_buff_remain: float = 0.0
+var _self_buff_damage_mult: float = 1.0
+var _self_buff_speed_mult: float = 1.0
+# Generation counter — incremented on every reset(). Post-await code captures
+# the generation before yielding and bails if it changed, preventing stale
+# continuations from executing on a pool-recycled entity.
+var _generation: int = 0
 @onready var _nav_agent: NavigationAgent3D = $NavigationAgent3D
 # Spawn position captured on reset() — enemies leash back to this point
 # when they chase too far. Set whenever the enemy is reused from the pool
@@ -303,6 +315,7 @@ func _ready() -> void:
 	_setup_hover()
 
 func _init_enemy() -> void:
+	_generation += 1
 	add_to_group(&"enemies")
 	SpatialGrid.register(self, &"enemies")
 	if not is_boss:
@@ -364,6 +377,13 @@ func _init_enemy() -> void:
 	_weaken_mult = 0.0
 	_loose_running = false
 	_clear_affliction_marker()
+	_special_skills.clear()
+	_skill_cooldowns.clear()
+	_self_buff_remain = 0.0
+	_self_buff_damage_mult = 1.0
+	_self_buff_speed_mult = 1.0
+	_threat_cache = null
+	_threat_retarget_t = 0.0
 	# Stagger the first support tick by a random fraction of the interval —
 	# without this every support enemy in a room emits in lockstep on the
 	# same physics frame, spiking the SpatialGrid query cost.
@@ -655,6 +675,8 @@ func _build_tooltip_body() -> String:
 	# Affix names — already baked into display_name's prefix, but
 	# spelling them out as a discrete line makes it explicit when an
 	# elite shows up so the player knows what they're up against.
+	if _self_buff_remain > 0.0:
+		lines.append("Enraged · %.1fs" % _self_buff_remain)
 	if not affixes.is_empty():
 		var labels: Array[String] = []
 		for affix in affixes:
@@ -662,6 +684,13 @@ func _build_tooltip_body() -> String:
 				labels.append(affix.label)
 		if not labels.is_empty():
 			lines.append("Affixes: " + ", ".join(labels))
+	if not _special_skills.is_empty():
+		var skill_names: Array[String] = []
+		for sk in _special_skills:
+			if sk != null and sk.display_name != "":
+				skill_names.append(sk.display_name)
+		if not skill_names.is_empty():
+			lines.append("Skills: " + ", ".join(skill_names))
 	return "\n".join(lines)
 
 
@@ -748,24 +777,37 @@ func _is_alive() -> bool:
 	return _state != State.DEAD
 
 
-# Per-class attack-param accessors. Each falls back to a DEFAULT_* constant
-# when no EnemyClass is assigned, so unconfigured enemy scenes keep their
-# pre-EnemyClass behaviour. Once every enemy has a class .tres, the
-# fallbacks (and the DEFAULT_* consts) can be deleted.
+# Per-class attack-param accessors. Precedence: EnemySkill basic_attack →
+# legacy EnemyClass inline fields → DEFAULT_* constants. Once every class
+# has a basic_attack .tres, the legacy fields and DEFAULT_* consts can go.
 func _attack_range() -> float:
+	if enemy_class != null and enemy_class.basic_attack != null:
+		return enemy_class.basic_attack.skill_range
 	return enemy_class.attack_range if enemy_class != null else DEFAULT_ATTACK_RANGE
 
 func _attack_cooldown() -> float:
-	var base := enemy_class.attack_cooldown if enemy_class != null else DEFAULT_ATTACK_COOLDOWN
+	var base: float
+	if enemy_class != null and enemy_class.basic_attack != null:
+		base = enemy_class.basic_attack.cooldown
+	elif enemy_class != null:
+		base = enemy_class.attack_cooldown
+	else:
+		base = DEFAULT_ATTACK_COOLDOWN
 	return base * _affix_attack_cooldown_mult()
 
 func _attack_windup() -> float:
+	if enemy_class != null and enemy_class.basic_attack != null:
+		return enemy_class.basic_attack.wind_up
 	return enemy_class.attack_windup if enemy_class != null else DEFAULT_ATTACK_WINDUP
 
 func _melee_cone_deg() -> float:
+	if enemy_class != null and enemy_class.basic_attack != null:
+		return enemy_class.basic_attack.cone_deg
 	return enemy_class.melee_cone_deg if enemy_class != null else DEFAULT_ATTACK_CONE_DEG
 
 func _melee_knockback() -> float:
+	if enemy_class != null and enemy_class.basic_attack != null:
+		return enemy_class.basic_attack.knockback
 	return enemy_class.melee_knockback if enemy_class != null else DEFAULT_ATTACK_KNOCKBACK
 
 func _is_ranged() -> bool:
@@ -815,6 +857,11 @@ func _emit_support() -> void:
 		var ae: PrototypeEnemy = ally
 		if not ae._is_alive():
 			continue
+		# Charmed support enemies should only buff/heal fellow charmed
+		# allies (or self), not hostile enemies they're betraying.
+		# Non-charmed supports skip charmed targets for symmetry.
+		if _charmed != ae._charmed:
+			continue
 		match role:
 			EnemyClass.SupportRole.HEAL:
 				# Per-target roll so heal sizes vary across the pack rather
@@ -863,7 +910,7 @@ func apply_damage_buff(magnitude: float, duration: float) -> void:
 ## a buff doesn't suddenly wash out the debuff.
 func _outgoing_damage_mult() -> float:
 	var class_mult := enemy_class.attack_damage_mult if enemy_class != null else 1.0
-	return class_mult * (1.0 + _damage_buff_mult) * (1.0 - _weaken_mult)
+	return class_mult * (1.0 + _damage_buff_mult) * _self_buff_damage_mult * (1.0 - _weaken_mult)
 
 
 ## Apply the Count Exile curse. ONLY takes effect when the enemy isn't
@@ -1207,20 +1254,30 @@ func _is_target_alive(target: Node) -> bool:
 
 # Chase / attack target. For charmed pets it's the assigned hostile
 # (set by _pick_nearest_other_enemy). For hostile enemies it's the
-# closest THREAT — player OR any nearby player-friendly pet. Returning
-# null means "no valid target" — caller halts.
+# closest THREAT — player OR any nearby player-friendly pet.
+# The spatial-grid query for pets is throttled to THREAT_RETARGET_INTERVAL
+# to avoid running 100 radius queries per physics frame at horde scale.
+# Between re-queries the cached target is used if still valid.
+const THREAT_RETARGET_INTERVAL := 0.35
+var _threat_cache: Node3D = null
+var _threat_retarget_t: float = 0.0
+
 func _effective_target() -> Node3D:
 	if _charmed and _is_target_alive(_charm_target):
 		return _charm_target
 	return _pick_closest_threat()
 
 
-# Hostile-enemy targeting helper — returns whichever of the player or
-# the nearest player-friendly pet is closer. Pets are in the &"enemies"
-# group (so they show up in the spatial query) but are filtered by
-# is_player_friendly to find them. AGGRO_RANGE bound keeps distant
-# pets across the map from being considered.
 func _pick_closest_threat() -> Node3D:
+	# Fast path: use cached target when valid and retarget timer hasn't fired.
+	if _threat_retarget_t > 0.0 and _threat_cache != null and is_instance_valid(_threat_cache):
+		if _threat_cache is PrototypeEnemy:
+			if (_threat_cache as PrototypeEnemy)._is_alive() and (_threat_cache as PrototypeEnemy).is_player_friendly():
+				return _threat_cache
+		elif _threat_cache.has_method(&"take_damage"):
+			return _threat_cache
+	# Full re-query: find the closest threat (player or charmed pet).
+	_threat_retarget_t = THREAT_RETARGET_INTERVAL
 	var best: Node3D = null
 	var best_d2 := INF
 	if _player_ref != null and is_instance_valid(_player_ref):
@@ -1238,6 +1295,7 @@ func _pick_closest_threat() -> Node3D:
 		if d2 < best_d2:
 			best_d2 = d2
 			best = pe
+	_threat_cache = best
 	return best
 
 
@@ -1320,6 +1378,7 @@ func _physics_process(delta: float) -> void:
 	if _state == State.DEAD:
 		return
 	_attack_cd = maxf(0.0, _attack_cd - delta)
+	_threat_retarget_t = maxf(0.0, _threat_retarget_t - delta)
 
 	_crouch_probe_t -= delta
 	if _crouch_probe_t <= 0.0:
@@ -1334,6 +1393,16 @@ func _physics_process(delta: float) -> void:
 		if _support_tick_t <= 0.0:
 			_support_tick_t = enemy_class.support_interval
 			_emit_support()
+	# Tick per-skill cooldowns.
+	for skill: EnemySkill in _skill_cooldowns:
+		if _skill_cooldowns[skill] > 0.0:
+			_skill_cooldowns[skill] = maxf(0.0, _skill_cooldowns[skill] - delta)
+	# Tick self-buff decay.
+	if _self_buff_remain > 0.0:
+		_self_buff_remain -= delta
+		if _self_buff_remain <= 0.0:
+			_self_buff_damage_mult = 1.0
+			_self_buff_speed_mult = 1.0
 	_tick_curse(delta)
 	_tick_afflictions(delta)
 
@@ -1552,6 +1621,13 @@ func _chase_tick() -> void:
 	# Charmed enemies always melee (see _cast_attack), so they bypass kite
 	# too — otherwise they'd backpedal from the very target they're charmed
 	# to attack.
+	# Special skill check — runs before the basic attack for both melee and
+	# ranged. _pick_skill filters by range, cooldown, and LoS internally.
+	var special := _pick_skill(dist, has_los)
+	if special != null:
+		_cast_skill(target, to_target / dist, special)
+		return
+
 	if _is_ranged() and not charmed:
 		var kite := _ranged_kite_distance()
 		if dist <= _attack_range() and _attack_cd <= 0.0 and has_los:
@@ -1564,7 +1640,7 @@ func _chase_tick() -> void:
 			# fine. Bumping into walls is the player's intended advantage.
 			var away := -to_target / dist
 			_want_dir = away
-			var back_speed := CHASE_SPEED * 0.55 * _crouch_speed_factor() * _affix_move_speed_mult()
+			var back_speed := CHASE_SPEED * 0.55 * _crouch_speed_factor() * _affix_move_speed_mult() * _self_buff_speed_mult
 			velocity.x = away.x * back_speed
 			velocity.z = away.z * back_speed
 			return
@@ -1608,7 +1684,7 @@ func _chase_tick() -> void:
 			if nav_dir.length_squared() > 0.0001:
 				dir = nav_dir.normalized()
 	_want_dir = dir
-	var chase_speed := _movement_speed_base() * _crouch_speed_factor() * _affix_move_speed_mult()
+	var chase_speed := _movement_speed_base() * _crouch_speed_factor() * _affix_move_speed_mult() * _self_buff_speed_mult
 	velocity.x = dir.x * chase_speed
 	velocity.z = dir.z * chase_speed
 
@@ -1830,6 +1906,192 @@ func _tick_jump(delta: float) -> void:
 		_jump_cooldown_remain = JUMP_COOLDOWN
 		_change_state(State.CHASING)
 
+# Pick the highest-priority special skill that's in range and off cooldown.
+# Returns null when no special is ready → caller falls back to basic attack.
+# Charmed enemies skip specials entirely (force melee via _cast_attack).
+func _pick_skill(dist: float, has_los: bool) -> EnemySkill:
+	if _charmed or _special_skills.is_empty():
+		return null
+	for skill: EnemySkill in _special_skills:
+		if skill == null:
+			continue
+		if _skill_cooldowns.get(skill, 0.0) > 0.0:
+			continue
+		if skill.targeting_mode == EnemySkill.TargetingMode.SELF_BUFF:
+			# Self-buff doesn't need range or LoS — just cooldown.
+			if _self_buff_remain <= 0.0:
+				return skill
+			continue
+		if dist > skill.skill_range:
+			continue
+		if not has_los:
+			continue
+		return skill
+	return null
+
+
+# Execute a special skill. Routes by targeting_mode — each branch mirrors
+# the established cast pattern: enter CASTING → indicator → await windup →
+# bail if state changed → resolve damage → back to CHASING.
+func _cast_skill(target: Node3D, aim: Vector3, skill: EnemySkill) -> void:
+	_skill_cooldowns[skill] = skill.cooldown
+	match skill.targeting_mode:
+		EnemySkill.TargetingMode.SINGLE_CONE:
+			_cast_skill_cone(target, aim, skill)
+		EnemySkill.TargetingMode.AOE_RADIAL:
+			_cast_skill_radial(target, skill)
+		EnemySkill.TargetingMode.PROJECTILE:
+			_cast_skill_projectile(target, aim, skill)
+		EnemySkill.TargetingMode.SELF_BUFF:
+			_cast_skill_self_buff(skill)
+
+
+func _cast_skill_cone(target: Node3D, aim: Vector3, skill: EnemySkill) -> void:
+	_change_state(State.CASTING)
+	_attack_cd = _attack_cooldown()
+	velocity.x = 0.0
+	velocity.z = 0.0
+	_face_direction(aim)
+	_play_anim(ANIM_ATTACK, 1.2)
+	PrototypeAttackIndicator.spawn_cone(self, aim, skill.skill_range, skill.cone_deg, skill.wind_up)
+	var gen := _generation
+	await get_tree().create_timer(skill.wind_up).timeout
+	if _generation != gen or _state != State.CASTING:
+		return
+	_change_state(State.CHASING)
+	if not is_instance_valid(target):
+		return
+	var to_p: Vector3 = target.global_position - global_position
+	to_p.y = 0.0
+	var dist := to_p.length()
+	if dist > skill.skill_range or dist < 0.001:
+		return
+	var half_cos := cos(deg_to_rad(skill.cone_deg * 0.5))
+	if aim.dot(to_p / dist) < half_cos:
+		return
+	if target is PrototypePlayer and not LosCuller.has_los_to_player(self):
+		return
+	if target.has_method(&"take_damage"):
+		var dmg := int(round(float(_attack_damage) * skill.damage_mult * _outgoing_damage_mult()))
+		target.take_damage(dmg, global_position, skill.knockback)
+
+
+func _cast_skill_radial(target: Node3D, skill: EnemySkill) -> void:
+	_change_state(State.CASTING)
+	_attack_cd = _attack_cooldown()
+	velocity.x = 0.0
+	velocity.z = 0.0
+	_play_anim(ANIM_ATTACK, 1.0)
+	PrototypeAttackIndicator.spawn_radial(self, skill.aoe_radius, skill.wind_up)
+	var gen := _generation
+	await get_tree().create_timer(skill.wind_up).timeout
+	if _generation != gen or _state != State.CASTING:
+		return
+	_change_state(State.CHASING)
+	# AoE hits everything in radius via SpatialGrid. For enemies, that means
+	# the player (or other enemies if charmed).
+	var target_group: StringName = &"enemies" if _charmed else &"player"
+	for n: Node in SpatialGrid.query_radius(global_position, skill.aoe_radius, target_group):
+		if not is_instance_valid(n) or not (n is Node3D):
+			continue
+		if not n.has_method(&"take_damage"):
+			continue
+		if n == self:
+			continue
+		# Skip player-friendly targets (charmed allies) when we're hostile,
+		# and skip OTHER charmed allies when we're charmed ourselves — a
+		# charmed enemy's AoE should only hit hostiles, not friendly pets.
+		if n.has_method(&"is_player_friendly"):
+			if _charmed and n.is_player_friendly():
+				continue
+			if not _charmed and n.is_player_friendly():
+				continue
+		var dmg := int(round(float(_attack_damage) * skill.damage_mult * _outgoing_damage_mult()))
+		var kb_dir := (n as Node3D).global_position - global_position
+		kb_dir.y = 0.0
+		if kb_dir.length_squared() > 0.001:
+			kb_dir = kb_dir.normalized()
+		n.take_damage(dmg, global_position, skill.knockback)
+
+
+func _cast_skill_projectile(target: Node3D, aim: Vector3, skill: EnemySkill) -> void:
+	_change_state(State.CASTING)
+	_attack_cd = _attack_cooldown()
+	velocity.x = 0.0
+	velocity.z = 0.0
+	_face_direction(aim)
+	_play_anim(ANIM_ATTACK, 1.2)
+	var gen := _generation
+	await get_tree().create_timer(skill.wind_up).timeout
+	if _generation != gen or _state != State.CASTING:
+		return
+	_change_state(State.CHASING)
+	if not is_instance_valid(target):
+		return
+	if not LosCuller.has_los_to_player(self):
+		return
+	# Re-aim at target's current position (they may have strafed during windup).
+	var to_p: Vector3 = target.global_position - global_position
+	to_p.y = 0.0
+	var dist := to_p.length()
+	if dist < 0.001:
+		return
+	var center_aim := to_p / dist
+	if skill.projectile_count <= 1:
+		_spawn_skill_projectile(center_aim, skill)
+	else:
+		# Multi-shot: symmetric spread around center aim.
+		var spread_rad := deg_to_rad(skill.projectile_spread_deg)
+		var count := skill.projectile_count
+		var half := (count - 1) * 0.5
+		for i in count:
+			var offset_angle := (float(i) - half) * spread_rad
+			var rotated_aim := center_aim.rotated(Vector3.UP, offset_angle)
+			_spawn_skill_projectile(rotated_aim, skill)
+
+
+func _spawn_skill_projectile(aim: Vector3, skill: EnemySkill) -> void:
+	if skill.projectile_scene == null:
+		# Fallback: use the class's projectile scene if the skill doesn't have one.
+		if enemy_class != null and enemy_class.projectile_scene != null:
+			_spawn_enemy_projectile(aim)
+		return
+	var proj: PrototypeProjectile = EntityPool.acquire(skill.projectile_scene)
+	if proj == null:
+		return
+	proj.target_group = &"player"
+	proj.direction = aim
+	proj.speed = skill.projectile_speed
+	proj.max_range = skill.projectile_max_range
+	proj.knockback_strength = skill.knockback
+	proj.source_position = global_position
+	var dmg := int(round(float(_attack_damage) * skill.damage_mult * _outgoing_damage_mult()))
+	proj.damage_min = dmg
+	proj.damage_max = dmg
+	proj.damage_mult = 1.0
+	proj.accuracy = 1.0
+	proj.crit_chance = 0.0
+	get_parent().add_child(proj)
+	proj.global_position = global_position + Vector3(0.0, 1.4, 0.0)
+	proj.monitoring = true
+	proj.reset()
+
+
+func _cast_skill_self_buff(skill: EnemySkill) -> void:
+	_change_state(State.CASTING)
+	velocity.x = 0.0
+	velocity.z = 0.0
+	_play_anim(ANIM_ATTACK, 1.0)
+	var gen := _generation
+	await get_tree().create_timer(skill.wind_up).timeout
+	if _generation != gen or _state != State.CASTING:
+		return
+	_change_state(State.CHASING)
+	_self_buff_remain = skill.buff_duration
+	_self_buff_damage_mult = skill.buff_damage_mult
+	_self_buff_speed_mult = skill.buff_speed_mult
+
+
 func _cast_attack(player: Node3D, aim: Vector3) -> void:
 	# Charmed enemies always melee — even ranged classes. Their projectiles
 	# are coded against the player layer/group; firing them at another enemy
@@ -1852,11 +2114,12 @@ func _cast_melee_attack(player: Node3D, aim: Vector3) -> void:
 	var cone_now := _melee_cone_deg()
 	var windup_now := _attack_windup()
 	PrototypeAttackIndicator.spawn_cone(self, aim, range_now, cone_now, windup_now)
+	var gen := _generation
 	await get_tree().create_timer(windup_now).timeout
 	# Bail if anything preempted us during the windup (knockback, death,
-	# leash). The state-machine transition is the source of truth — don't
-	# reach back into _state here to "fix" it.
-	if _state != State.CASTING:
+	# leash, or pool recycle). The generation counter catches pool recycles;
+	# the state check catches in-lifetime preemptions.
+	if _generation != gen or _state != State.CASTING:
 		return
 	_change_state(State.CHASING)
 	if not is_instance_valid(player):
@@ -1893,8 +2156,9 @@ func _cast_ranged_attack(player: Node3D, aim: Vector3) -> void:
 	_face_direction(aim)
 	_play_anim(ANIM_ATTACK, 1.2)
 	var windup_now := _attack_windup()
+	var gen := _generation
 	await get_tree().create_timer(windup_now).timeout
-	if _state != State.CASTING:
+	if _generation != gen or _state != State.CASTING:
 		return
 	_change_state(State.CHASING)
 	if not is_instance_valid(player):
@@ -2000,7 +2264,10 @@ func _die() -> void:
 		if visual != null:
 			var tween := create_tween()
 			tween.tween_property(visual, "rotation:x", deg_to_rad(-75.0), DEATH_FALLBACK_DURATION)
+	var gen := _generation
 	await get_tree().create_timer(DEATH_HOLD).timeout
+	if _generation != gen:
+		return
 	_become_corpse()
 
 func _drop_credits() -> void:

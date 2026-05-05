@@ -1,5 +1,9 @@
 class_name Item extends Resource
 
+## Head armor light mod — determines the flashlight type when this item
+## is equipped in the head slot. NONE means no light source.
+enum LightMod { NONE, FLASHLIGHT, RADIANT, SCANNER, UV }
+
 @export var id: StringName
 @export var name_key: String = ""
 @export var description_key: String = ""
@@ -9,14 +13,6 @@ class_name Item extends Resource
 @export var rarity: StringName = &"common"
 @export var glyph: String = "?"
 @export var glyph_color: Color = Color(1, 1, 1, 1)
-
-enum LightType { DIRECTIONAL, RADIANT, SCANNER, UV }
-
-@export_group("Light")
-@export var light_type: LightType = LightType.DIRECTIONAL
-@export var light_energy: float = 0.0
-@export var light_range: float = 0.0
-@export var light_color: Color = Color(1, 1, 1, 1)
 
 @export_group("Combat")
 @export var two_handed: bool = false
@@ -33,17 +29,21 @@ enum LightType { DIRECTIONAL, RADIANT, SCANNER, UV }
 @export var weapon_range: float = 3.0
 @export var blast_radius: float = 0.0
 
-@export_group("Belt")
-@export var utility_slots: int = 0
+@export_group("Mods")
+## Behavior mod for head armor — determines the player's light source.
+@export var light_mod: LightMod = LightMod.NONE
+@export var light_energy: float = 1.2
+@export var light_range: float = 12.0
+@export var light_color: Color = Color.WHITE
 
 @export_group("Stats")
 ## Flat stat / modifier bonuses applied when this item is equipped.
-## Keys are StringName — both AttributeState rollable stats (&"ort", &"ing",
-## &"amb", &"dev", &"opt", &"cla") AND non-stat modifiers (&"inventory_bonus",
-## &"damage_reduction", &"toxic_resistance", &"range_bonus", future ammo /
-## magazine / augment-slot bonuses) live in this single dict. Affix table
-## entries MUST use StringName keys (the &"" prefix); plain string keys hash
-## differently and silently fail to match reads.
+## Keys are StringName — direct combat bonuses (&"damage_reduction",
+## &"max_hp", &"max_resource", &"movement_speed", &"hit_chance",
+## &"attack_speed_bonus", &"health_regen", &"traction",
+## &"inventory_bonus", &"toxic_resistance", &"range_bonus") live in this
+## single dict. Affix table entries MUST use StringName keys (the &"" prefix);
+## plain string keys hash differently and silently fail to match reads.
 @export var stat_modifiers: Dictionary = {}
 
 

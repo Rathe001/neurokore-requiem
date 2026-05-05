@@ -56,6 +56,23 @@ var _transparency: Dictionary = {}
 var _geom_cache: Dictionary = {}
 var _last_player_cell: Vector2i = _UNSET_CELL
 var _stagger_frame: int = 0
+# Entities whose transparency is actively transitioning (haven't settled at
+# their target yet). _process only iterates this set, not the full _target_los
+# population — at steady state most entities are either fully visible or fully
+# hidden and don't need per-frame lerp updates.
+var _transitioning: Dictionary = {}  # Node3D -> true
+# Periodic stale-entry sweep counter — every STALE_SWEEP_INTERVAL render frames,
+# scan _target_los for invalid / out-of-tree entries that slipped past _process
+# because they were already settled (not in _transitioning).
+const STALE_SWEEP_INTERVAL := 120
+var _sweep_counter: int = 0
+# Cached player reference — refreshed on cell change to avoid per-frame
+# get_nodes_in_group(&"player") allocation.
+var _player_cache: Node3D = null
+# Cached group arrays for categories not tracked by SpatialGrid. Refreshed on
+# cell change — acceptable lag for static/quasi-static entities.
+var _corpses_cache: Array = []
+var _static_glows_cache: Array = []
 
 func _ready() -> void:
 	_query.collision_mask = WORLD_LAYER_MASK
@@ -63,10 +80,13 @@ func _ready() -> void:
 	_query.collide_with_bodies = true
 
 func _physics_process(_delta: float) -> void:
-	var players := get_tree().get_nodes_in_group(&"player")
-	if players.is_empty():
-		return
-	var player := players[0] as Node3D
+	# Refresh player reference on cell change or first frame.
+	if _player_cache == null or not is_instance_valid(_player_cache):
+		var players := get_tree().get_nodes_in_group(&"player")
+		if players.is_empty():
+			return
+		_player_cache = players[0] as Node3D
+	var player := _player_cache
 	if player == null:
 		return
 	var space := player.get_world_3d().direct_space_state
@@ -84,15 +104,28 @@ func _physics_process(_delta: float) -> void:
 	)
 	var cell_changed := player_cell != _last_player_cell
 	_last_player_cell = player_cell
+	# First frame uses _UNSET_CELL so cell_changed is always true on frame 0,
+	# which populates the corpse/static_glow caches immediately.
+
+	if cell_changed:
+		# Re-validate player ref on cell change in case of scene transitions.
+		var p_arr := get_tree().get_nodes_in_group(&"player")
+		if not p_arr.is_empty():
+			_player_cache = p_arr[0] as Node3D
+		# Refresh cached group arrays for categories not in SpatialGrid.
+		_corpses_cache = get_tree().get_nodes_in_group(&"corpses")
+		_static_glows_cache = get_tree().get_nodes_in_group(&"static_glows")
 
 	var stagger := _stagger_frame
 	_stagger_frame = (_stagger_frame + 1) % STAGGER_GROUPS
 
 	# Enemies — dynamic; stagger across STAGGER_GROUPS frames.
+	# Iterate SpatialGrid's flat membership set (no per-frame allocation).
 	# Newly seen enemies (no cache entry) are tested immediately so their target
 	# state is correct from frame 0.
+	var enemy_members: Dictionary = SpatialGrid.get_members(&"enemies")
 	var index := 0
-	for e in get_tree().get_nodes_in_group(&"enemies"):
+	for e in enemy_members:
 		var enemy := e as Node3D
 		if enemy == null:
 			continue
@@ -112,7 +145,9 @@ func _physics_process(_delta: float) -> void:
 	# so players can see what's in a level even before clearing it. We still
 	# track them in _target_los so the visibility fade in _process picks up
 	# any newly-spawned pickup as visible.
-	for p in get_tree().get_nodes_in_group(&"pickups"):
+	# Iterate SpatialGrid's flat membership set (no per-frame allocation).
+	var pickup_members: Dictionary = SpatialGrid.get_members(&"pickups")
+	for p in pickup_members:
 		var pickup := p as Node3D
 		if pickup == null:
 			continue
@@ -120,7 +155,9 @@ func _physics_process(_delta: float) -> void:
 	# Corpses — static after the death-hold transition. Same low-ray sample as
 	# pickups (corpses lie on the floor) and same cell-cached cadence as the
 	# other static targets — re-raycast only when the player crosses a cell.
-	for c in get_tree().get_nodes_in_group(&"corpses"):
+	# Uses cached group array refreshed on cell change (corpses aren't in
+	# SpatialGrid since they're inert post-death entities).
+	for c in _corpses_cache:
 		var corpse := c as Node3D
 		if corpse == null:
 			continue
@@ -140,7 +177,8 @@ func _physics_process(_delta: float) -> void:
 	# ProximityLighting only dims OmniLight3D/SpotLight3D, so emissive surfaces
 	# stay bright through walls without this. Same low-ray + cell-cache cadence
 	# as corpses since they're tied to floor-level features.
-	for s in get_tree().get_nodes_in_group(&"static_glows"):
+	# Uses cached group array refreshed on cell change.
+	for s in _static_glows_cache:
 		var glow := s as Node3D
 		if glow == null:
 			continue
@@ -158,7 +196,9 @@ func _physics_process(_delta: float) -> void:
 		_set_target(glow, glow_los)
 	# Interactibles — static (doors, switches, crates). Re-raycast only when the
 	# player crosses a cell boundary, since neither side is moving otherwise.
-	for i in get_tree().get_nodes_in_group(&"interactables"):
+	# Iterate SpatialGrid's flat membership set (no per-frame allocation).
+	var interactable_members: Dictionary = SpatialGrid.get_members(&"interactables")
+	for i in interactable_members:
 		var body := i as CollisionObject3D
 		if body == null:
 			continue
@@ -236,7 +276,8 @@ func _process(delta: float) -> void:
 	# ~63% of the gap each ~0.08s, masking the binary physics-tick LoS flip.
 	var weight: float = 1.0 - exp(-FADE_RATE * delta)
 	var to_remove: Array = []
-	for key in _target_los:
+	var settled: Array = []
+	for key in _transitioning:
 		if not is_instance_valid(key):
 			to_remove.append(key)
 			continue
@@ -247,7 +288,7 @@ func _process(delta: float) -> void:
 		if not node.is_inside_tree():
 			to_remove.append(key)
 			continue
-		var los: bool = _target_los[key]
+		var los: bool = _target_los.get(key, false)
 		var target_t: float = 0.0 if los else 1.0
 		var current: float = _transparency.get(key, 1.0)
 		current = lerp(current, target_t, weight)
@@ -263,17 +304,45 @@ func _process(delta: float) -> void:
 		for g in geoms:
 			if is_instance_valid(g):
 				(g as GeometryInstance3D).transparency = current
+		# Check if this entity has settled at its target transparency.
+		if los and current < 0.005:
+			settled.append(key)
+		elif not los and current >= HIDE_THRESHOLD:
+			settled.append(key)
 	for k in to_remove:
 		_target_los.erase(k)
 		_transparency.erase(k)
 		_geom_cache.erase(k)
+		_transitioning.erase(k)
+	for k in settled:
+		_transitioning.erase(k)
+	# Periodic stale-entry sweep for entities that became invalid while settled
+	# (not in _transitioning). Runs infrequently — ~2x per second at 60fps.
+	_sweep_counter += 1
+	if _sweep_counter >= STALE_SWEEP_INTERVAL:
+		_sweep_counter = 0
+		var stale: Array = []
+		for key in _target_los:
+			if not is_instance_valid(key):
+				stale.append(key)
+			elif not (key as Node3D).is_inside_tree():
+				stale.append(key)
+		for k in stale:
+			_target_los.erase(k)
+			_transparency.erase(k)
+			_geom_cache.erase(k)
+			_transitioning.erase(k)
 
 func _set_target(node: Node3D, los: bool) -> void:
-	if not _target_los.has(node):
+	var is_new := not _target_los.has(node)
+	if is_new:
 		# Fresh entries fade in from invisible regardless of initial LoS state —
 		# avoids a one-frame flash at full opacity before the first lerp tick.
 		_transparency[node] = 1.0
 		_geom_cache[node] = _collect_geom(node)
+	# Add to transitioning set when LoS state changes or on first see.
+	if is_new or _target_los[node] != los:
+		_transitioning[node] = true
 	_target_los[node] = los
 	# Pickability follows the discrete LoS target, not the lerped alpha. A
 	# faded-but-not-yet-hidden target is still occluded by a wall and clicks

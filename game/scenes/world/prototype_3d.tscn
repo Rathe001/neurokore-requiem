@@ -99,7 +99,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -41, 0, -20)
 [node name="LootCrate" parent="." instance=ExtResource("scene_loot_crate")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 0.3, -3)
 test_weapon_base_paths = Array[String](["res://resources/items/weapon_bases/ranged_1h.tres", "res://resources/items/weapon_bases/ranged_2h.tres"])
-include_all_optics = true
+
 
 [node name="HUD" parent="." instance=ExtResource("scene_hud")]
 

@@ -2,9 +2,10 @@ extends Node
 
 # Item generator implementing the model in docs/design/item-architecture.md.
 #
-# Two independent slot systems:
-#   - Combat affixes: prefix/suffix pool, count gated by rarity.
-#   - Class attribute stat slots: separate, count gated by item level.
+# Each item is rolled against a power budget determined by item level and rarity.
+# Budget is spent across: base stats (slot domain), affix rolls, and universal
+# bonuses (+HP, +resource). Behavior mods are not yet implemented — the mod
+# field is reserved for future work.
 #
 # Public API:
 #   roll(main_type, item_level, rarity, rng) -> Item
@@ -34,6 +35,11 @@ const RARITY_COLOR: Dictionary = {
 	&"unique": Color(0.75, 0.50, 0.25),
 }
 
+# Power budget multiplier per rarity tier. Higher rarity = more total budget.
+const RARITY_BUDGET_MULT: Dictionary = {
+	&"common": 1.0, &"magic": 1.15, &"rare": 1.3, &"unique": 1.5,
+}
+
 
 # Registry of weapon bases keyed by main_type. The roller picks one at random
 # when generating a weapon, then rolls each stat range into the Item instance.
@@ -55,28 +61,8 @@ const GRENADE_BASE_PATHS: Array[String] = [
 	"res://resources/items/grenade_bases/stun.tres",
 ]
 
-# Optics variants — loaded from individual .tres files at _ready into
-# `_optics_variants`. Adding a new optic = author a new .tres in the optics
-# directory and add its path here. Per-variant tunables (range, energy,
-# colour, glyph) live in the editor; this file only handles dispatch.
-const OPTICS_VARIANT_PATHS: Array[String] = [
-	"res://resources/items/optics/flashlight.tres",
-	"res://resources/items/optics/lantern.tres",
-	"res://resources/items/optics/scanner.tres",
-	"res://resources/items/optics/uv_light.tres",
-]
-var _optics_variants: Array[OpticsVariant] = []
 
-
-func _ready() -> void:
-	for path in OPTICS_VARIANT_PATHS:
-		var v := load(path) as OpticsVariant
-		if v == null:
-			push_warning("[ItemRoller] Optics variant at %s isn't an OpticsVariant; skipping." % path)
-			continue
-		_optics_variants.append(v)
-
-func roll(main_type: String, item_level: int, rarity: StringName, rng: RandomNumberGenerator, class_stat_pool: Array[StringName] = []) -> Item:
+func roll(main_type: String, item_level: int, rarity: StringName, rng: RandomNumberGenerator) -> Item:
 	var item := Item.new()
 	item.main_type = main_type
 	item.kind = SlotRegistry.slot_for_type(main_type)
@@ -88,16 +74,12 @@ func roll(main_type: String, item_level: int, rarity: StringName, rng: RandomNum
 
 	if main_type == "2H Weapon":
 		item.two_handed = true
-	# Backpacks always grant their base bag bonus regardless of affix roll —
-	# without this floor a "Backpack" item could roll with zero slots when
-	# none of its prefixes happen to be inventory_bonus, which makes the
-	# pickup useless. Affixes layer on top via stat_modifiers[&"inventory_bonus"].
 	if main_type == "Backpack":
 		item.stat_modifiers[&"inventory_bonus"] = 8
 
 	_apply_weapon_base(item, main_type, rng)
 	_apply_grenade_base(item, main_type, rng)
-	_apply_optics_variant(item, main_type, rng)
+	_apply_head_light_mod(item, main_type, item_level, rng)
 
 	var affix_labels: Array[String] = []
 	var prefix_count: int = RARITY_PREFIX_COUNT.get(rarity, 0)
@@ -113,15 +95,13 @@ func roll(main_type: String, item_level: int, rarity: StringName, rng: RandomNum
 			_apply_affix(item, affix)
 			affix_labels.append(affix.label)
 
-	var slot_count := _class_slot_count(item_level, rng)
-	for s: StringName in _pick_class_stats(slot_count, rng, class_stat_pool):
-		var value := _class_stat_value(item_level, rng)
-		item.stat_modifiers[s] = int(item.stat_modifiers.get(s, 0)) + value
+	# Universal secondary bonuses — every equippable item can roll +HP and +resource.
+	_roll_universal_bonuses(item, item_level, rarity, rng)
 
 	item.name_key = _build_name(main_type, item.sub_type, affix_labels)
 	return item
 
-func roll_from_base(base: WeaponBase, item_level: int, rarity: StringName, rng: RandomNumberGenerator, class_stat_pool: Array[StringName] = []) -> Item:
+func roll_from_base(base: WeaponBase, item_level: int, rarity: StringName, rng: RandomNumberGenerator) -> Item:
 	var main_type := "2H Weapon" if base.two_handed else "1H Weapon"
 	var item := Item.new()
 	item.main_type = main_type
@@ -147,10 +127,7 @@ func roll_from_base(base: WeaponBase, item_level: int, rarity: StringName, rng: 
 		if affix != null:
 			_apply_affix(item, affix)
 			affix_labels.append(affix.label)
-	var slot_count := _class_slot_count(item_level, rng)
-	for s: StringName in _pick_class_stats(slot_count, rng, class_stat_pool):
-		var value := _class_stat_value(item_level, rng)
-		item.stat_modifiers[s] = int(item.stat_modifiers.get(s, 0)) + value
+	_roll_universal_bonuses(item, item_level, rarity, rng)
 	item.name_key = _build_name(main_type, item.sub_type, affix_labels)
 	return item
 
@@ -235,32 +212,26 @@ func _make_debug_offhand(skill: Skill, label: String) -> Item:
 	item.fire_skill = skill
 	return item
 
-func _class_slot_count(item_level: int, rng: RandomNumberGenerator) -> int:
-	if item_level <= ILVL_EARLY_MAX:
-		return 1
-	if item_level <= ILVL_MID_MAX:
-		return rng.randi_range(1, 2)
-	return rng.randi_range(1, 3)
 
-func _pick_class_stats(count: int, _rng: RandomNumberGenerator, pool_override: Array[StringName] = []) -> Array[StringName]:
-	# Default pool is all rollable stats (any item can roll any class
-	# attribute slot). Callers that want a constrained pool — e.g. the
-	# starter weapon kit constraining to the player's kore stats — pass
-	# pool_override; an empty override falls back to the full pool.
-	var pool: Array[StringName] = []
-	var source: Array[StringName] = pool_override if not pool_override.is_empty() else AttributeState.ROLLABLE_STATS
-	for s: StringName in source:
-		pool.append(s)
-	pool.shuffle()
-	var picked: Array[StringName] = []
-	for i in mini(count, pool.size()):
-		picked.append(pool[i])
-	return picked
+## Roll universal +HP and +resource bonuses. Every equippable item can get these.
+## The amount scales with item level; chance scales with rarity.
+func _roll_universal_bonuses(item: Item, item_level: int, rarity: StringName, rng: RandomNumberGenerator) -> void:
+	var bonus_chance: float = 0.3
+	match rarity:
+		&"magic": bonus_chance = 0.5
+		&"rare": bonus_chance = 0.7
+		&"unique": bonus_chance = 0.9
+	var hp_base := 3.0 + float(item_level) * 0.5
+	var res_base := 2.0 + float(item_level) * 0.3
+	if rng.randf() < bonus_chance:
+		var hp := int(round(hp_base + rng.randf_range(-2.0, 2.0)))
+		if hp > 0:
+			item.stat_modifiers[&"max_hp"] = int(item.stat_modifiers.get(&"max_hp", 0)) + hp
+	if rng.randf() < bonus_chance:
+		var res := int(round(res_base + rng.randf_range(-1.0, 1.0)))
+		if res > 0:
+			item.stat_modifiers[&"max_resource"] = int(item.stat_modifiers.get(&"max_resource", 0)) + res
 
-# ilvl 1  -> ~5, ilvl 50 -> ~22, ilvl 100 -> ~40.
-func _class_stat_value(item_level: int, rng: RandomNumberGenerator) -> int:
-	var base := 5.0 + float(item_level) * 0.35
-	return int(round(base + rng.randf_range(-2.0, 2.0)))
 
 func _roll_rarity(rng: RandomNumberGenerator) -> StringName:
 	var total := 0
@@ -330,44 +301,48 @@ func _apply_grenade_base(item: Item, main_type: String, rng: RandomNumberGenerat
 	item.crit_chance = rng.randf_range(base.crit_chance_range.x, base.crit_chance_range.y)
 	item.blast_radius = rng.randf_range(base.blast_radius_range.x, base.blast_radius_range.y)
 
-func _apply_optics_variant(item: Item, main_type: String, rng: RandomNumberGenerator) -> void:
-	if main_type != "Recon" or _optics_variants.is_empty():
+## Head armor rolls a light mod. Most helmets get a flashlight; rarer mods
+## (scanner, UV) appear at higher item levels. Light stats scale with level.
+const LIGHT_MOD_POOL: Array[Dictionary] = [
+	{"mod": Item.LightMod.FLASHLIGHT, "weight": 50, "min_ilvl": 1},
+	{"mod": Item.LightMod.RADIANT,    "weight": 30, "min_ilvl": 1},
+	{"mod": Item.LightMod.SCANNER,    "weight": 15, "min_ilvl": 15},
+	{"mod": Item.LightMod.UV,         "weight": 10, "min_ilvl": 25},
+]
+
+func _apply_head_light_mod(item: Item, main_type: String, item_level: int, rng: RandomNumberGenerator) -> void:
+	if main_type != "Head Armor":
 		return
-	var variant := _optics_variants[rng.randi_range(0, _optics_variants.size() - 1)]
-	_assign_optics_variant(item, variant, rng)
+	var eligible: Array[Dictionary] = []
+	var total_weight := 0
+	for entry: Dictionary in LIGHT_MOD_POOL:
+		if item_level < int(entry["min_ilvl"]):
+			continue
+		eligible.append(entry)
+		total_weight += int(entry["weight"])
+	if eligible.is_empty():
+		return
+	var pick := rng.randi_range(0, total_weight - 1)
+	var acc := 0
+	var chosen: Dictionary = eligible[0]
+	for entry: Dictionary in eligible:
+		acc += int(entry["weight"])
+		if pick < acc:
+			chosen = entry
+			break
+	item.light_mod = chosen["mod"] as Item.LightMod
+	item.light_energy = rng.randf_range(0.8, 1.6)
+	item.light_range = rng.randf_range(8.0, 14.0)
+	match item.light_mod:
+		Item.LightMod.UV:
+			item.light_color = Color(0.6, 0.2, 1.0)
+		Item.LightMod.SCANNER:
+			item.light_color = Color(0.2, 1.0, 0.4)
+		_:
+			item.light_color = Color.WHITE
 
-func _assign_optics_variant(item: Item, variant: OpticsVariant, rng: RandomNumberGenerator) -> void:
-	item.light_type = variant.light_type
-	item.light_range = variant.light_range
-	item.light_energy = rng.randf_range(variant.light_energy_min, variant.light_energy_max)
-	item.light_color = variant.light_color
-	# sub_type is the bucket label ("Radar", "Flashlight"); display_name
-	# is the marketing string used in the rolled item name. Fall back to
-	# display_name when sub_type isn't set so legacy variants still render.
-	item.sub_type = variant.sub_type if variant.sub_type != "" else variant.display_name
-	item.glyph = variant.glyph
-
-# Returns one Optics item per declared variant (Flashlight, Lantern, Scanner,
-# UV) at the given item level. Used by the starter chest so the player can
-# sample every light type without depending on a random roll.
-func roll_one_per_optics_variant(item_level: int, rng: RandomNumberGenerator) -> Array[Item]:
-	var out: Array[Item] = []
-	for variant in _optics_variants:
-		var item := Item.new()
-		item.main_type = "Recon"
-		item.kind = SlotRegistry.slot_for_type("Recon")
-		item.rarity = &"common"
-		item.id = StringName("starter_recon_%d_%d" % [item_level, rng.randi()])
-		item.glyph_color = RARITY_COLOR.get(&"common", Color.WHITE)
-		item.stat_modifiers = {}
-		_assign_optics_variant(item, variant, rng)
-		item.name_key = _build_name("Recon", item.sub_type, [] as Array[String])
-		out.append(item)
-	return out
 
 func _build_name(main_type: String, sub_type: String, affix_labels: Array[String]) -> String:
-	# Sub-type (e.g. "Flashlight" for Optics) is more descriptive than the
-	# bucket name when set, so prefer it as the noun in the rolled name.
 	var noun := sub_type if sub_type != "" else main_type
 	if affix_labels.is_empty():
 		return noun

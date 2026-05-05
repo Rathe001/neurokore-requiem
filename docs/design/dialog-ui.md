@@ -44,7 +44,7 @@ Enemy portraits follow the same format but use corruption, grotesquery, and fact
 
 ## UI Philosophy
 
-- **Stat identity** — the character screen displays a stat distribution visualization showing each attribute's percentage of total stats, current tier perks, and proximity to breakpoints. Recognized stat combinations display a combo description. See [Attribute System — Stat Identity](attribute-system.md#stat-identity--tier-perks--visual-metamorphosis) for full details.
+- **Talent progression** — the character screen displays the player's talent tree, current perk tier, and equipped gear with mod summaries. The focus is on making build identity immediately readable.
 - **Resource indicators** — class-specific and visually distinct from each other. Each class has its own UI concept; see the individual class pages under [Cyborg](../classes/cyborg.md) and [Analog](../classes/human.md).
 - **Light source status** — visible without occupying prime screen real estate. See [Lighting](../world/lighting.md) for the full lighting system and equippable light source design.
 - **Skill tree** — locked and invisible until the first rep encounter. See [Skill Tree](skill-tree.md) for unlock behavior and hotkey layout.

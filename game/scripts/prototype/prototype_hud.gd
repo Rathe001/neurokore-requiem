@@ -94,7 +94,6 @@ func _ready() -> void:
 	# upstream signals too so display stays accurate even if PerkState is
 	# briefly out of sync during a recompute cycle.
 	PerkState.perks_changed.connect(_update_buffs_bar)
-	AttributeState.stats_changed.connect(_update_buffs_bar)
 	PlayerState.class_changed.connect(func(_id: StringName) -> void: _update_buffs_bar())
 	PlayerState.spec_changed.connect(func(_id: StringName) -> void: _update_buffs_bar())
 	_update_buffs_bar()
@@ -197,9 +196,8 @@ func _update_avatar_panel() -> void:
 
 # Rebuild the buffs / active-perks strip. Each entry is a small colored
 # panel hoverable for a tooltip showing the perk's label + description.
-# Iterates ROLLABLE_STATS for stable left-to-right order regardless of
-# which tiers happen to be unlocked — so newly-acquired perks slot into
-# their fixed position rather than shuffling existing entries.
+# Each entry is a small colored panel hoverable for a tooltip showing
+# the perk's label + description.
 const _BUFF_ENTRY_SIZE := Vector2(14.0, 14.0)
 func _update_buffs_bar() -> void:
 	if buff_entries == null:
@@ -208,22 +206,18 @@ func _update_buffs_bar() -> void:
 		child.queue_free()
 	if PlayerState.class_id == &"":
 		return
-	# Index active perks by id so we can match a stat tier to its perk
-	# resource (same id convention: "{stat}_t{N}", e.g. "amb_t2").
-	var active_by_id: Dictionary = {}
-	for p in PerkState.get_active_perks():
-		if p != null:
-			active_by_id[p.id] = p
-	for stat_id in AttributeState.ROLLABLE_STATS:
-		var tier := AttributeState.get_unlocked_tier(stat_id, PlayerState.class_id, PlayerState.spec_id)
+	# Show active perks from PerkState directly.
+	for perk: Perk in PerkState.get_active_perks():
+		if perk == null:
+			continue
+		# Parse perk id "{stat}_t{N}" to extract stat + tier for display.
+		var id_parts := String(perk.id).split("_t")
+		if id_parts.size() != 2:
+			continue
+		var stat_id := StringName(id_parts[0])
+		var tier := int(id_parts[1])
 		if tier <= 0:
 			continue
-		# Try to look up the actual perk resource for this stat+tier so
-		# the tooltip shows the perk's authored label + description.
-		# Falls back to a generic "STAT TIER" label if the ladder
-		# doesn't have a perk for this tier (e.g. unauthored ladders).
-		var perk_id := StringName("%s_t%d" % [String(stat_id), tier])
-		var perk: Perk = active_by_id.get(perk_id)
 		_add_buff_entry(stat_id, tier, perk)
 	# Active offhand: SHIELD_BUFF gets its own buff-bar entry while
 	# active so the player can see the % reduction and the remaining
@@ -235,9 +229,9 @@ func _update_buffs_bar() -> void:
 
 
 func _add_buff_entry(stat_id: StringName, tier: int, perk: Perk) -> void:
-	var stat_color: Color = AttributeState.STAT_COLORS.get(stat_id, Color.WHITE)
+	var stat_color: Color = AttributeState.color_for_id(stat_id)
 	# No background, no border — entry is just the tier roman painted in
-	# the stat color. Wrapping in a Control so mouse_filter STOP still
+	# the class color. Wrapping in a Control so mouse_filter STOP still
 	# catches hover events for the tooltip without a visible panel.
 	var entry := Control.new()
 	entry.custom_minimum_size = _BUFF_ENTRY_SIZE
@@ -334,10 +328,9 @@ func _build_buff_tooltip(stat_id: StringName, tier: int, perk: Perk) -> Array:
 		title = "%s  ·  %s" % [perk.label, AttributeState.TIER_ROMAN[tier - 1]]
 		body = perk.description
 	else:
-		var stat_key: StringName = AttributeState.STAT_I18N.get(stat_id, &"")
-		var stat_name: String = tr(stat_key) if stat_key != &"" else String(stat_id).capitalize()
+		var stat_name: String = String(stat_id).capitalize()
 		title = "%s  ·  %s" % [stat_name, AttributeState.TIER_ROMAN[tier - 1]]
-		body = "Tier %s perk for this stat — no description available." % AttributeState.TIER_ROMAN[tier - 1]
+		body = "Tier %s perk — no description available." % AttributeState.TIER_ROMAN[tier - 1]
 	var player := get_tree().get_first_node_in_group(&"player") as PrototypePlayer
 	for line in EffectFormatter.buff_lines_for_stat(stat_id, player):
 		body += "\n• " + line
@@ -358,6 +351,11 @@ func _on_crouch_changed(is_crouching: bool) -> void:
 func _on_light_changed(is_on: bool) -> void:
 	_state_flashlight = is_on
 	_apply_indicator(flashlight_bg, flashlight_border, _state_flashlight)
+	# Update scanner radar overlay when the light toggles or head item changes.
+	if _minimap != null:
+		var player := get_tree().get_first_node_in_group(&"player")
+		if player != null and player.has_method(&"is_scanner_active"):
+			_minimap.scanner_active = player.is_scanner_active()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not event.is_action_pressed(&"ui_cancel"):
@@ -630,8 +628,7 @@ const _PIP_START_OFFSET := Vector2(0.0, -120.0)  # screen-space, relative to vie
 func _animate_perk_pip(perk: Perk) -> void:
 	if perk == null:
 		return
-	# Parse "amb_t2" → (&"amb", 2). Avoids storing a parallel stat→tier
-	# map; the perk id is canonical here.
+	# Parse "amb_t2" → (&"amb", 2). Legacy 3-letter tree IDs.
 	var id_parts := String(perk.id).split("_t")
 	if id_parts.size() != 2:
 		return
@@ -640,7 +637,7 @@ func _animate_perk_pip(perk: Perk) -> void:
 	if tier <= 0 or tier > AttributeState.TIER_ROMAN.size():
 		return
 	var entry := _buff_entry_for_stat(stat_id)
-	var stat_color: Color = AttributeState.STAT_COLORS.get(stat_id, Color.WHITE)
+	var stat_color: Color = AttributeState.color_for_id(stat_id)
 	var pip := Label.new()
 	pip.text = AttributeState.TIER_ROMAN[tier - 1]
 	pip.add_theme_font_size_override(&"font_size", _PIP_START_FONT_SIZE)

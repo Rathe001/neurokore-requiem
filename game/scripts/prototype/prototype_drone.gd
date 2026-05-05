@@ -19,10 +19,8 @@ extends CharacterBody3D
 # damage path exists either — drones have no take_damage, so the design
 # intent ("untargetable, cannot die") still holds.
 #
-# Stats are hardcoded for now. Future Mainboard chip equipment will modify
-# these (wander_radius, fire_cooldown, projectile damage type, etc.) — the
-# extension point is reading from InventoryState.get_equipped(&"mainboard")
-# inside _refresh_chip_modifiers (TBD).
+# Stats are hardcoded for now. Future gear mods or talent effects could
+# modify these (wander_radius, fire_cooldown, projectile damage type, etc.).
 
 const PROJECTILE_SCENE: PackedScene = preload("res://scenes/prototype/prototype_projectile.tscn")
 
@@ -274,7 +272,7 @@ func _try_fire() -> bool:
 	proj.source_position = global_position
 	# Damage scales with the player's main stat — Optimization for
 	# Automaton — so investing in the perk's stat heavies up the drones.
-	var dmg := int(round(float(PROJECTILE_BASE_DAMAGE) * AttributeState.get_player_damage_mult(PlayerState.class_id, PlayerState.spec_id)))
+	var dmg := int(round(float(PROJECTILE_BASE_DAMAGE) * 1.0))
 	proj.damage_min = dmg
 	proj.damage_max = dmg
 	proj.damage_mult = 1.0

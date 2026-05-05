@@ -240,3 +240,65 @@ static func _spawn(ctx: LevelBuildContext, pos: Vector3, scene: PackedScene, lev
 		enemy.enemy_class = class_override
 	if enemy.has_method(&"reset"):
 		enemy.reset()
+	# Assign special skills AFTER reset() — reset clears _special_skills.
+	# Named monsters use their authored skill list; everyone else rolls
+	# from the class's skill pool based on level and rarity.
+	if "_special_skills" in enemy:
+		if named != null and not named.special_skills.is_empty():
+			enemy._special_skills = named.special_skills.duplicate()
+		else:
+			var ec: EnemyClass = enemy.enemy_class if "enemy_class" in enemy else null
+			if ec != null and not ec.skill_pool.is_empty():
+				var lv: int = enemy.level if "level" in enemy else 1
+				var is_pack := not affixes.is_empty()
+				var count_sk := _roll_skill_count(lv, is_pack, enemy.is_boss if "is_boss" in enemy else false)
+				enemy._special_skills = _pick_skills(ec.skill_pool, count_sk, lv)
+
+
+# Roll how many special skills an enemy gets based on level and spawn type.
+# Higher levels and pack-rares get more specials; bosses always get 2-3.
+static func _roll_skill_count(level: int, is_pack: bool, is_boss: bool) -> int:
+	if is_boss:
+		return randi_range(2, 3)
+	# Level 1 enemies get no specials; L2+ roll 0-1.
+	var base: int = 0 if level <= 1 else randi_range(0, 1)
+	if is_pack:
+		base += 1
+	return base
+
+
+# Pick `count` distinct skills from a pool, weighted and filtered by min_level.
+static func _pick_skills(pool: Array[EnemySkill], count: int, level: int) -> Array[EnemySkill]:
+	if count <= 0 or pool.is_empty():
+		return []
+	# Filter to eligible skills, build weighted candidates.
+	var eligible: Array[EnemySkill] = []
+	var weights: Array[int] = []
+	var total_weight := 0
+	for skill in pool:
+		if skill == null:
+			continue
+		if level < skill.min_level:
+			continue
+		eligible.append(skill)
+		weights.append(skill.weight)
+		total_weight += skill.weight
+	if eligible.is_empty():
+		return []
+	var picked: Array[EnemySkill] = []
+	for _i in mini(count, eligible.size()):
+		if total_weight <= 0:
+			break
+		var roll := randi() % total_weight
+		var cum := 0
+		for j in eligible.size():
+			cum += weights[j]
+			if roll < cum:
+				picked.append(eligible[j])
+				total_weight -= weights[j]
+				eligible.remove_at(j)
+				weights.remove_at(j)
+				break
+	# Sort by priority so _pick_skill iterates in the right order.
+	picked.sort_custom(func(a: EnemySkill, b: EnemySkill) -> bool: return a.priority < b.priority)
+	return picked

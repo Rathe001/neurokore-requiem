@@ -6,9 +6,6 @@ extends Node
 signal class_changed(class_id: StringName)
 signal spec_changed(spec_id: StringName)
 signal talents_changed
-signal tier_changed(stat_id: StringName, old_tier: int, new_tier: int)
-signal origin_tier_changed(old_tier: int, new_tier: int)
-signal kore_nodes_tier_changed(old_tier: int, new_tier: int)
 signal level_changed(new_level: int, old_level: int)
 signal xp_changed(current_xp: int, xp_to_next: int)
 signal leveled_up(new_level: int, hp_gain: int)
@@ -71,7 +68,7 @@ var _cached_origin_tier: int = -1
 var _cached_kore_nodes_tier: int = -1
 
 func _ready() -> void:
-	AttributeState.stats_changed.connect(_recompute_tiers)
+	pass
 
 # ── Class / spec identity ─────────────────────────────────────────────────────
 
@@ -81,7 +78,6 @@ func set_class(id: StringName) -> void:
 	class_id = id
 	spec_id = &""
 	reset_talents()
-	_recompute_tiers()
 	class_changed.emit(class_id)
 	spec_changed.emit(spec_id)
 
@@ -90,7 +86,6 @@ func set_spec(id: StringName) -> void:
 		return
 	spec_id = id
 	_reset_tier_cache()
-	_recompute_tiers()
 	spec_changed.emit(spec_id)
 
 func set_class_and_spec(new_class: StringName, new_spec: StringName) -> void:
@@ -101,7 +96,6 @@ func set_class_and_spec(new_class: StringName, new_spec: StringName) -> void:
 	if class_diff:
 		reset_talents()
 	_reset_tier_cache()
-	_recompute_tiers()
 	if class_diff:
 		class_changed.emit(class_id)
 	if spec_diff:
@@ -112,8 +106,8 @@ func set_class_and_spec(new_class: StringName, new_spec: StringName) -> void:
 func set_talent_alloc(stat: StringName, tier: int, node: int, allocated: bool) -> void:
 	if not talent_allocations.has(stat):
 		var rows: Array = []
-		for _i in AttributeState.TIER_COUNT:
-			rows.append(_make_node_row(AttributeState.TALENT_NODES_PER_TIER))
+		for _i in 5:
+			rows.append(_make_node_row(8))
 		talent_allocations[stat] = rows
 	talent_allocations[stat][tier][node] = allocated
 	talents_changed.emit()
@@ -121,8 +115,8 @@ func set_talent_alloc(stat: StringName, tier: int, node: int, allocated: bool) -
 func set_kore_node_alloc(tier: int, node: int, allocated: bool) -> void:
 	if kore_node_allocations.is_empty():
 		var rows: Array = []
-		for _i in AttributeState.KORE_NODE_TIER_COUNT:
-			rows.append(_make_node_row(AttributeState.KORE_NODE_NODES_PER_TIER))
+		for _i in 3:
+			rows.append(_make_node_row(4))
 		kore_node_allocations = rows
 	kore_node_allocations[tier][node] = allocated
 	talents_changed.emit()
@@ -151,18 +145,18 @@ func is_talent_allocated(stat: StringName, tier: int, node: int) -> bool:
 	var tiers_data: Array = talent_allocations.get(stat, [])
 	return not tiers_data.is_empty() and tiers_data[tier][node]
 
-## True if a stat tree node is allocated AND its tier is currently unlocked by stats.
+## True if a stat tree node is allocated AND its tier is currently unlocked.
 func is_node_active(stat_id: StringName, tier: int, node: int) -> bool:
 	var tiers_data: Array = talent_allocations.get(stat_id, [])
 	if tiers_data.is_empty() or not tiers_data[tier][node]:
 		return false
-	return (tier + 1) <= AttributeState.get_unlocked_tier(stat_id, class_id, spec_id)
+	return is_tier_unlocked(tier)
 
-## True if a kore node is allocated AND its tier is currently unlocked by stats.
+## True if a kore node is allocated AND its tier is currently unlocked.
 func is_kore_node_active(tier: int, node: int) -> bool:
 	if kore_node_allocations.is_empty() or not kore_node_allocations[tier][node]:
 		return false
-	return (tier + 1) <= AttributeState.get_kore_nodes_tier(class_id, spec_id)
+	return is_kore_node_tier_unlocked(tier)
 
 func reset_talents() -> void:
 	talent_allocations.clear()
@@ -203,23 +197,10 @@ func _reset_tier_cache() -> void:
 	_cached_origin_tier = -1
 	_cached_kore_nodes_tier = -1
 
-func _recompute_tiers() -> void:
-	if class_id == &"":
-		return
-	for stat_id in AttributeState.ROLLABLE_STATS:
-		var new_tier := AttributeState.get_unlocked_tier(stat_id, class_id, spec_id)
-		var old_tier: int = _cached_tiers.get(stat_id, -1)
-		if old_tier >= 0 and old_tier != new_tier:
-			tier_changed.emit(stat_id, old_tier, new_tier)
-		_cached_tiers[stat_id] = new_tier
+## Placeholder: tier is unlocked if player level / 3 >= tier (0-indexed).
+func is_tier_unlocked(tier: int) -> bool:
+	return tier <= level / 3
 
-	var new_kore_tier := AttributeState.get_kore_nodes_tier(class_id, spec_id)
-	if _cached_kore_nodes_tier >= 0 and _cached_kore_nodes_tier != new_kore_tier:
-		kore_nodes_tier_changed.emit(_cached_kore_nodes_tier, new_kore_tier)
-	_cached_kore_nodes_tier = new_kore_tier
-
-	if class_id == &"analog" or class_id == &"cyborg":
-		var new_origin_tier := AttributeState.get_origin_tier(class_id)
-		if _cached_origin_tier >= 0 and _cached_origin_tier != new_origin_tier:
-			origin_tier_changed.emit(_cached_origin_tier, new_origin_tier)
-		_cached_origin_tier = new_origin_tier
+## Kore nodes are removed; always returns false for now.
+func is_kore_node_tier_unlocked(_tier: int) -> bool:
+	return false

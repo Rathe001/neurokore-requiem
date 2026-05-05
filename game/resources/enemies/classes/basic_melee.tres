@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="EnemyClass" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="EnemyClass" load_steps=5 format=3]
 
 ; Default melee profile — mirrors the pre-EnemyClass constants exactly so
 ; assigning this to existing enemies is a no-op behaviourally. Use as the
@@ -6,11 +6,16 @@
 ; tweaking attack_range, attack_cooldown, attack_damage_mult, etc.
 
 [ext_resource type="Script" path="res://scripts/enemies/enemy_class.gd" id="script"]
+[ext_resource type="Resource" path="res://resources/enemies/skills/basic_melee_attack.tres" id="basic_attack"]
+[ext_resource type="Resource" path="res://resources/enemies/skills/ground_slam.tres" id="ground_slam"]
+[ext_resource type="Resource" path="res://resources/enemies/skills/enrage.tres" id="enrage"]
 
 [resource]
 script = ExtResource("script")
 id = &"basic_melee"
 label = "Basic Melee"
+basic_attack = ExtResource("basic_attack")
+skill_pool = [ExtResource("ground_slam"), ExtResource("enrage")]
 attack_mode = 0
 attack_range = 2.2
 attack_cooldown = 1.6

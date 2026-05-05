@@ -53,6 +53,8 @@ const ANIM_DEATH: Array[StringName] = [
 ]
 
 const CROUCH_SPEED_FACTOR := 0.45
+const SPRINT_SPEED_FACTOR := 1.6
+const SPRINT_RESOURCE_PER_SEC := 8.0
 # Movement multiplier while holding the Active Shield (SHIELD_HOLD).
 # 20% — the player is essentially planted; the trade is full damage
 # block + still being able to attack. SHIELD_BUFF doesn't apply.
@@ -149,9 +151,7 @@ var _doomsayer: PlayerDoomsayer
 var _drone_swarm: PlayerDroneSwarm
 var _ied: PlayerIED
 var _spawn_position: Vector3 = Vector3.ZERO
-var _equipped_light: Light3D
-var _scanner_active: bool = false
-var _uv_active: bool = false
+var _equipped_light: SpotLight3D
 var _anim_reverse: bool = false
 var _light_on: bool = false
 var _fps_mode: bool = false
@@ -163,6 +163,7 @@ var _modal_nodes: Array[CanvasItem] = []
 var _fps_fill_light: OmniLight3D = null
 var _fade_rect: ColorRect = null
 var _crouching: bool = false
+var _sprinting: bool = false
 var _is_airborne: bool = false
 var _backing: bool = false
 var _interacting: bool = false
@@ -212,7 +213,6 @@ func _ready() -> void:
 	class_id = PlayerState.class_id
 	spec_id = PlayerState.spec_id
 	PlayerState.leveled_up.connect(_on_player_leveled_up)
-	AttributeState.stats_changed.connect(_recompute_stat_bonuses)
 	_drone_swarm = PlayerDroneSwarm.new()
 	_drone_swarm.setup(self)
 	add_child(_drone_swarm)
@@ -385,7 +385,15 @@ func _play_levelup_vfx() -> void:
 	tween.chain().tween_callback(ring.queue_free)
 
 func _recompute_stat_bonuses() -> void:
-	var hp_bonus := AttributeState.get_stat_bonus_hp(class_id, spec_id)
+	# Aggregate max_health_bonus and max_resource_bonus from all equipped gear.
+	var hp_bonus := 0
+	var res_bonus := 0
+	for slot in SlotRegistry.SLOTS:
+		var item: Item = InventoryState.get_equipped(slot)
+		if item == null:
+			continue
+		hp_bonus += item.get_modifier(&"max_health_bonus")
+		res_bonus += item.get_modifier(&"max_resource_bonus")
 	var new_max := _base_max_health + _level_hp_bonus + hp_bonus
 	if new_max != max_health:
 		var old_max := max_health
@@ -397,7 +405,6 @@ func _recompute_stat_bonuses() -> void:
 			_health = clampi(int(round(float(_health) * float(new_max) / float(old_max))), 1, new_max)
 		health_changed.emit(_health, max_health)
 	if resource_pool != null:
-		var res_bonus := AttributeState.get_stat_bonus_resource(class_id, spec_id)
 		var new_res_max := _base_resource_max + res_bonus
 		if new_res_max != resource_pool.max_value:
 			var old_res_max := resource_pool.max_value
@@ -494,12 +501,22 @@ func _physics_process(delta: float) -> void:
 			_interacting = false
 		_backing = not _is_airborne and wish_dir.length_squared() > 0.01 and wish_dir.dot(-visual.global_transform.basis.z) < -0.3
 		if not _is_airborne:
+			# Sprint: hold shift while moving to spend resource for a speed burst.
+			# Can't sprint while crouching, backing, airborne, or out of resource.
+			var wants_sprint := Input.is_action_pressed(&"sprint") and wish_dir.length_squared() > 0.01
+			var infinite_res := DebugState.config != null and DebugState.config.infinite_resource
+			_sprinting = wants_sprint and not _crouching and not _backing and (infinite_res or _resource_current > 0.0)
+			if _sprinting and not infinite_res:
+				var drain := SPRINT_RESOURCE_PER_SEC * delta
+				_resource_current = maxf(0.0, _resource_current - drain)
+				_emit_resource_if_changed()
 			# Active Shield (SHIELD_HOLD) slows the player to 20% — the
 			# trade for full damage block is being a near-stationary
 			# target. Buff (SHIELD_BUFF) doesn't slow; it's a passive
 			# 25% reduction that shouldn't impact mobility.
 			var shield_factor: float = _shield.get_speed_factor()
-			var speed := move_speed * (CROUCH_SPEED_FACTOR if _crouching else 1.0) * (0.5 if _backing else 1.0) * shield_factor
+			var sprint_factor: float = SPRINT_SPEED_FACTOR if _sprinting else 1.0
+			var speed := move_speed * (CROUCH_SPEED_FACTOR if _crouching else 1.0) * (0.5 if _backing else 1.0) * sprint_factor * shield_factor
 			var flat := Vector2(velocity.x, velocity.z)
 			var target := Vector2(wish_dir.x, wish_dir.z) * speed
 			var step := accel * (1.0 if wish_dir.length_squared() > 0.0 else 2.5) * delta
@@ -585,7 +602,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		_try_interact()
 	elif event.is_action_pressed(&"toggle_light"):
-		if InventoryState.get_equipped(&"recon") != null:
+		if _equipped_light != null:
 			_light_on = not _light_on
 			light_changed.emit(_light_on)
 			_update_light_visibility()
@@ -1214,8 +1231,8 @@ func _build_light_mount() -> void:
 	_apply_light_item()
 
 func _on_equipment_changed(slot: StringName) -> void:
-	if slot == &"recon":
-		_light_on = InventoryState.get_equipped(&"recon") != null
+	_recompute_stat_bonuses()
+	if slot == &"head":
 		_apply_light_item()
 	elif slot == &"weapon":
 		light_changed.emit(_light_on)
@@ -1250,90 +1267,47 @@ func drop_item(item: Item) -> void:
 func _apply_light_item() -> void:
 	if visual == null:
 		return
-	# Tear down previous light nodes.
 	if _equipped_light != null:
 		_equipped_light.queue_free()
 		_equipped_light = null
-	_scanner_active = false
-	_uv_active = false
-
-	var item: Item = InventoryState.get_equipped(&"recon")
-	if item == null:
+	var head: Item = InventoryState.get_equipped(&"head")
+	if head == null or head.light_mod == Item.LightMod.NONE:
+		_light_on = false
+		light_changed.emit(false)
 		return
+	var spot := SpotLight3D.new()
+	spot.spot_angle = 28.0
+	spot.spot_attenuation = 1.2
+	spot.spot_angle_attenuation = 0.7
+	spot.shadow_enabled = true
+	spot.shadow_bias = 0.02
+	spot.shadow_normal_bias = 0.3
+	spot.light_color = head.light_color
+	spot.light_energy = head.light_energy
+	spot.spot_range = head.light_range
+	match head.light_mod:
+		Item.LightMod.RADIANT:
+			spot.spot_angle = 90.0
+			spot.spot_attenuation = 1.6
+		Item.LightMod.UV:
+			spot.spot_angle = 45.0
+		Item.LightMod.SCANNER:
+			spot.spot_angle = 60.0
+	spot.position = FLASHLIGHT_OFFSET
+	spot.visible = _light_on
+	_equipped_light = spot
+	visual.add_child(spot)
+	_update_flashlight_pitch(0.0)
+	light_changed.emit(_light_on)
 
-	match item.light_type:
-		Item.LightType.DIRECTIONAL:
-			var spot := SpotLight3D.new()
-			spot.spot_angle = 28.0  # wider beam — easier to navigate dark rooms
-			spot.spot_attenuation = 1.2
-			spot.spot_angle_attenuation = 0.7
-			spot.shadow_enabled = true
-			spot.shadow_bias = 0.02
-			spot.shadow_normal_bias = 0.3
-			spot.light_color = item.light_color
-			spot.light_energy = item.light_energy
-			spot.spot_range = item.light_range
-			spot.position = FLASHLIGHT_OFFSET
-			_equipped_light = spot
-			visual.add_child(spot)
-			_update_flashlight_pitch(0.0)
 
-		Item.LightType.RADIANT:
-			var omni := OmniLight3D.new()
-			omni.omni_range = item.light_range
-			omni.omni_attenuation = 1.4
-			omni.shadow_enabled = true
-			omni.light_color = item.light_color
-			omni.light_energy = item.light_energy
-			omni.position = FLASHLIGHT_OFFSET
-			_equipped_light = omni
-			visual.add_child(omni)
-
-		Item.LightType.SCANNER:
-			_scanner_active = true
-
-		Item.LightType.UV:
-			_uv_active = true
-			# Purple glow — reveals uv_hidden objects.
-			var glow := OmniLight3D.new()
-			glow.omni_range = item.light_range
-			glow.omni_attenuation = 2.0
-			glow.shadow_enabled = false
-			glow.light_color = item.light_color
-			glow.light_energy = item.light_energy
-			glow.position = FLASHLIGHT_OFFSET
-			_equipped_light = glow
-			visual.add_child(glow)
-
-	if _equipped_light != null:
-		_equipped_light.visible = _light_on
-	_notify_hud_scanner()
-
+func is_scanner_active() -> bool:
+	var head: Item = InventoryState.get_equipped(&"head")
+	return head != null and head.light_mod == Item.LightMod.SCANNER and _light_on
 
 func _update_light_visibility() -> void:
 	if _equipped_light != null:
 		_equipped_light.visible = _light_on
-	_notify_hud_scanner()
-
-func is_scanner_active() -> bool:
-	return _scanner_active and _light_on
-
-func is_uv_active() -> bool:
-	return _uv_active and _light_on
-
-func get_uv_range() -> float:
-	var item: Item = InventoryState.get_equipped(&"recon")
-	if item == null:
-		return 0.0
-	return item.light_range
-
-func _notify_hud_scanner() -> void:
-	var hud_node := get_tree().get_first_node_in_group(&"hud")
-	if hud_node == null or not is_instance_valid(hud_node):
-		return
-	var hud := hud_node as PrototypeHud
-	if hud != null:
-		hud.set_scanner_active(_scanner_active and _light_on)
 
 func _update_flashlight_pitch(cursor_distance: float) -> void:
 	if not _equipped_light is SpotLight3D:

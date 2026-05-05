@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="EnemySkill" load_steps=2 format=3]
+
+; Enrage — self-buff that boosts damage and speed for a short window.
+; Brief windup so the player can see the tell; cooldown long enough that
+; the enemy can't chain-enrage but short enough to threaten twice in a
+; prolonged fight.
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_skill.gd" id="script"]
+
+[resource]
+script = ExtResource("script")
+id = &"enrage"
+display_name = "Enrage"
+targeting_mode = 3
+damage_mult = 1.0
+skill_range = 0.0
+cooldown = 12.0
+wind_up = 0.3
+priority = 5
+buff_duration = 5.0
+buff_damage_mult = 1.6
+buff_speed_mult = 1.4
+min_level = 2
+weight = 80

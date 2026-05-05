@@ -34,6 +34,12 @@ static var _line_cache: Dictionary = {}
 static var _bubble_mesh_cache: Dictionary = {}
 static var _cone_dome_cache: Dictionary = {}
 static var _material_template_cache: Dictionary = {}  # Color -> StandardMaterial3D template
+# Beam cylinder mesh caches keyed by length — two radii (core / glow).
+static var _beam_core_mesh_cache: Dictionary = {}
+static var _beam_glow_mesh_cache: Dictionary = {}
+# Beam material templates keyed by Color — duplicated per use for tween animation.
+static var _beam_core_mat_cache: Dictionary = {}
+static var _beam_glow_mat_cache: Dictionary = {}
 
 static func spawn(host: Node3D, skill: Skill, aim: Vector3, attack_range: float = 0.0) -> void:
 	var eff_range := attack_range if attack_range > 0.0 else skill.skill_range
@@ -96,46 +102,16 @@ static func spawn_beam(host: Node3D, aim: Vector3, length: float, source_offset:
 		parent = host
 	var color := _color_for_host(host)
 
-	# Core beam — bright, slightly transparent cylinder.
-	var core_mat := StandardMaterial3D.new()
-	core_mat.albedo_color = Color(color.r, color.g, color.b, 0.95)
-	core_mat.emission_enabled = true
-	core_mat.emission = color
-	core_mat.emission_energy_multiplier = 12.0
-	core_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	core_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	core_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-
-	var core_mesh := CylinderMesh.new()
-	core_mesh.top_radius = BEAM_RADIUS
-	core_mesh.bottom_radius = BEAM_RADIUS
-	core_mesh.height = length
-	core_mesh.radial_segments = 6
-	core_mesh.rings = 1
-
+	# Core beam — bright, slightly transparent cylinder. Mesh cached by length.
+	var core_mat := _beam_core_material(color)
 	var core := MeshInstance3D.new()
-	core.mesh = core_mesh
+	core.mesh = _beam_core_mesh(length)
 	core.material_override = core_mat
 
-	# Outer glow — wider, softer, more transparent.
-	var glow_mat := StandardMaterial3D.new()
-	glow_mat.albedo_color = Color(color.r, color.g, color.b, 0.3)
-	glow_mat.emission_enabled = true
-	glow_mat.emission = color
-	glow_mat.emission_energy_multiplier = 6.0
-	glow_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	glow_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	glow_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-
-	var glow_mesh := CylinderMesh.new()
-	glow_mesh.top_radius = BEAM_RADIUS * 3.0
-	glow_mesh.bottom_radius = BEAM_RADIUS * 3.0
-	glow_mesh.height = length
-	glow_mesh.radial_segments = 6
-	glow_mesh.rings = 1
-
+	# Outer glow — wider, softer, more transparent. Mesh cached by length.
+	var glow_mat := _beam_glow_material(color)
 	var glow := MeshInstance3D.new()
-	glow.mesh = glow_mesh
+	glow.mesh = _beam_glow_mesh(length)
 	glow.material_override = glow_mat
 
 	# Container node — cylinder height runs along local Y, so rotate -90° on X
@@ -340,6 +316,64 @@ static func _bubble_mesh(radius: float) -> SphereMesh:
 	mesh.rings = 12
 	_bubble_mesh_cache[radius] = mesh
 	return mesh
+
+# ── Beam mesh / material caches ──────────────────────────────────────────────
+
+static func _beam_core_mesh(length: float) -> CylinderMesh:
+	var cached: CylinderMesh = _beam_core_mesh_cache.get(length)
+	if cached != null:
+		return cached
+	var m := CylinderMesh.new()
+	m.top_radius = BEAM_RADIUS
+	m.bottom_radius = BEAM_RADIUS
+	m.height = length
+	m.radial_segments = 6
+	m.rings = 1
+	_beam_core_mesh_cache[length] = m
+	return m
+
+static func _beam_glow_mesh(length: float) -> CylinderMesh:
+	var cached: CylinderMesh = _beam_glow_mesh_cache.get(length)
+	if cached != null:
+		return cached
+	var m := CylinderMesh.new()
+	m.top_radius = BEAM_RADIUS * 3.0
+	m.bottom_radius = BEAM_RADIUS * 3.0
+	m.height = length
+	m.radial_segments = 6
+	m.rings = 1
+	_beam_glow_mesh_cache[length] = m
+	return m
+
+static func _beam_core_material(color: Color) -> StandardMaterial3D:
+	var template: StandardMaterial3D = _beam_core_mat_cache.get(color)
+	if template == null:
+		template = StandardMaterial3D.new()
+		template.albedo_color = Color(color.r, color.g, color.b, 0.95)
+		template.emission_enabled = true
+		template.emission = color
+		template.emission_energy_multiplier = 12.0
+		template.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		template.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		template.cull_mode = BaseMaterial3D.CULL_DISABLED
+		_beam_core_mat_cache[color] = template
+	return template.duplicate() as StandardMaterial3D
+
+static func _beam_glow_material(color: Color) -> StandardMaterial3D:
+	var template: StandardMaterial3D = _beam_glow_mat_cache.get(color)
+	if template == null:
+		template = StandardMaterial3D.new()
+		template.albedo_color = Color(color.r, color.g, color.b, 0.3)
+		template.emission_enabled = true
+		template.emission = color
+		template.emission_energy_multiplier = 6.0
+		template.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		template.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		template.cull_mode = BaseMaterial3D.CULL_DISABLED
+		_beam_glow_mat_cache[color] = template
+	return template.duplicate() as StandardMaterial3D
+
+# ── Telegraph material ───────────────────────────────────────────────────────
 
 static func _build_material(color: Color) -> StandardMaterial3D:
 	var template: StandardMaterial3D = _material_template_cache.get(color)

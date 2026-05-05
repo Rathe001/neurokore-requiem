@@ -17,8 +17,8 @@ Certain enemies have class-specific variants — different forms of the same bas
 
 Class variants **stack** with the standard enemy — both types appear in the same encounter. The base encounter is always the foundation; your class adds a personal layer of threat on top.
 
-!!! question "Open Question: Stat Identity & Monster Variants"
-    As the [stat identity system](../design/attribute-system.md#stat-identity--tier-perks--visual-metamorphosis) matures, variants could also track **dominant attribute** — an Analog who has drifted deep into Deviation might start encountering Nanobyte swarms alongside their Analog-origin threats. Whether variants track chosen class, stat identity, or both is TBD.
+!!! question "Open Question: Talent Depth & Monster Variants"
+    As the talent system matures, variants could also track **talent tier depth** — a player who has invested deeply into a specific class tree might start encountering more intense versions of their class variant. Whether variant intensity tracks chosen class only or also talent depth is TBD.
 
 ## Multiplayer Implication
 

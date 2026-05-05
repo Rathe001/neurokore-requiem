@@ -10,13 +10,8 @@ const PARK_DURATION := 0.14
 const PARK_TOP_MARGIN := 24.0
 const ANCHOR_OFFSET_Y := -16.0  # tooltip sits this far above target's screen point
 
-# Stat lines in the tooltip render in their identity color
-# (AttributeState.STAT_COLORS) so a stat reads the SAME everywhere it
-# appears — character panel, talents panel, HUD tier badges. The
-# previous tooltip path used relationship colors (good/bad-for-player
-# tinting) which made Orthodoxy look red on a Cyborg even though it's
-# cream on the character sheet. Relationship signal can come back as
-# a separate icon / +/- background later.
+# Stat modifier lines in the tooltip use generic formatting (white text)
+# now that the old 8-attribute stat system has been removed.
 
 var _bg: PanelContainer
 var _vbox: VBoxContainer
@@ -414,35 +409,31 @@ func _build_stats_text(item: Item) -> String:
 		lines.append("Range: %.1f m" % item.weapon_range)
 	if item.two_handed:
 		lines.append("Two-Handed")
-	# Recon (light sources)
-	if item.kind == &"recon":
-		lines.append("%s: %d m" % [tr("ITEM_STATS_LIGHT_RANGE"), int(item.light_range)])
-		lines.append("%s: %d" % [tr("ITEM_STATS_LIGHT_ENERGY"), int(item.light_energy)])
-	# Container / belt
+	# Head light mod
+	if item.light_mod != Item.LightMod.NONE:
+		var mod_name := "Light"
+		match item.light_mod:
+			Item.LightMod.FLASHLIGHT: mod_name = "Flashlight"
+			Item.LightMod.RADIANT: mod_name = "Radiant Lamp"
+			Item.LightMod.SCANNER: mod_name = "Scanner"
+			Item.LightMod.UV: mod_name = "UV Lamp"
+		lines.append("Mod: %s" % mod_name)
+	# Container
 	var inv_bonus := item.get_modifier(&"inventory_bonus")
 	if item.kind == &"backpack" and inv_bonus > 0:
 		lines.append("+%d %s" % [inv_bonus, tr("ITEM_STATS_INVENTORY_BONUS")])
-	if item.kind == &"belt" and item.utility_slots > 0:
-		lines.append("+%d %s" % [item.utility_slots, tr("ITEM_STATS_UTILITY_SLOTS")])
-	# Attribute modifiers — only the rollable class stats render here. The
-	# other keys in stat_modifiers (inventory_bonus, damage_reduction,
-	# fire_damage_bonus, etc.) are non-stat modifiers; each gets its own
-	# display rule above (or none yet, if the system that consumes them
-	# isn't shipped). Letting them through this loop produces wrong colours
-	# (relationship lookup falls through to "opposing") and ugly labels.
+	# Generic stat modifiers — display all entries with white color.
 	for stat_id: StringName in item.stat_modifiers:
-		if not stat_id in AttributeState.ROLLABLE_STATS:
-			continue
 		var amount: int = int(item.stat_modifiers[stat_id])
-		var color: Color = AttributeState.STAT_COLORS.get(stat_id, Color.WHITE)
-		var hex := "#%s" % color.to_html(false)
+		if amount == 0:
+			continue
 		var label := _stat_display_name(stat_id)
-		lines.append("[color=%s]+%d %s[/color]" % [hex, amount, label])
+		var sign := "+" if amount > 0 else ""
+		lines.append("%s%d %s" % [sign, amount, label])
 	return "\n".join(lines)
 
 func _stat_display_name(stat_id: StringName) -> String:
-	var key: StringName = AttributeState.STAT_I18N.get(stat_id, &"")
-	return tr(key) if key != &"" else (stat_id as String).capitalize()
+	return (stat_id as String).capitalize()
 
 
 func _build_skill_stats_text(skill: Skill, source: Item) -> String:

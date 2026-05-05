@@ -11,18 +11,16 @@ extends Node
 
 # Equipment slot IDs in canonical iteration order. UI grids may impose their
 # own row/column layout (CharacterPanel.EQUIP_SLOTS) but the slot ID set is
-# defined here. `&"mainboard"` sits outside the 9-cell visible grid for now;
-# expanded UIs reference it directly when they need to.
+# defined here.
 #
 # `&"weapon_2"` / `&"weapon_3"` / `&"weapon_4"` are PERK-GATED — they only
 # accept items when the Forged Amalgamation perk grants enough extra arms
 # (PerkState.get_aggregate(&"extra_weapon_slots")). Listed here for the
 # canonical-set property; UI hides them when locked.
 const SLOTS: Array[StringName] = [
-	&"head", &"recon", &"backpack",
-	&"weapon", &"chest", &"offhand",
-	&"gloves", &"belt", &"boots",
-	&"mainboard",
+	&"head", &"chest", &"hands",
+	&"weapon", &"backpack", &"offhand",
+	&"legs", &"feet",
 	&"weapon_2", &"weapon_3", &"weapon_4",
 ]
 
@@ -45,8 +43,8 @@ func is_extra_weapon_slot(slot: StringName) -> bool:
 # variants behind it.
 const MAIN_TYPES: Array[String] = [
 	"1H Weapon", "2H Weapon",
-	"Head Armor", "Chest Armor", "Gloves", "Boots",
-	"Belt", "Mainboard", "Backpack", "Recon", "Grenade",
+	"Head Armor", "Chest Armor", "Gloves", "Leg Armor", "Boots",
+	"Backpack", "Grenade",
 ]
 
 # main_type → slot lookup. Both weapon variants resolve to the same slot
@@ -57,12 +55,10 @@ const MAIN_TYPE_TO_SLOT: Dictionary = {
 	"Offhand":     &"offhand",
 	"Head Armor":  &"head",
 	"Chest Armor": &"chest",
-	"Gloves":      &"gloves",
-	"Boots":       &"boots",
-	"Belt":        &"belt",
-	"Mainboard":   &"mainboard",
+	"Gloves":      &"hands",
+	"Leg Armor":   &"legs",
+	"Boots":       &"feet",
 	"Backpack":    &"backpack",
-	"Recon":       &"recon",
 	"Grenade":     &"offhand",
 }
 
@@ -73,11 +69,9 @@ const MAIN_TYPE_GLYPH: Dictionary = {
 	"Head Armor":  "▲",
 	"Chest Armor": "▣",
 	"Gloves":      "Ψ",
+	"Leg Armor":   "⌠",
 	"Boots":       "⌐",
-	"Belt":        "═",
-	"Mainboard":   "⌬",
 	"Backpack":    "▤",
-	"Recon":       "✦",
 	"Grenade":     "◉",
 }
 

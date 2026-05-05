@@ -157,7 +157,7 @@ The chosen rep accompanies the player into Sub-Level Zero and through the exit. 
 
 - They appear at designated level-up points throughout the game — leveling is not done on the fly
 - They join certain boss encounters where it makes thematic sense
-- Their dialogue reacts to the player's evolving stat identity — they are the character most sensitive to identity drift (see [Attribute System — NPC Identity Reactions](attribute-system.md#npc-identity-reactions))
+- Their dialogue reacts to the player's talent progression and class transformation — they are the character most sensitive to how deep the player has gone
 
 ---
 
@@ -179,7 +179,7 @@ After the battle, they introduce themselves. They are the representative of thos
 
 The difference: the player didn't choose this. They failed to choose anything, and were given something anyway. The mystery rep knows this. They don't mention it — but they know.
 
-**The mystery rep is the morally "good" path.** All six specialized classes represent a compromise. The origin class, under this companion, does not. This is reinforced by the origin class's balanced stat identity — they resist being consumed by any single attribute. See [Attribute System — Origin Class Tier Perks](attribute-system.md#origin-class-tier-perks).
+**The mystery rep is the morally "good" path.** All six specialized classes represent a compromise. The origin class, under this companion, does not. This is reinforced by the origin class's breadth — they have access to all three specialist skill trees at shallow depth rather than one at full depth.
 
 ---
 

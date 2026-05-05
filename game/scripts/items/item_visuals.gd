@@ -20,11 +20,10 @@ static func build(item: Item) -> Node3D:
 		"Head Armor":  _build_helmet(root)
 		"Chest Armor": _build_chest(root)
 		"Gloves":      _build_gloves(root)
+		"Leg Armor":   _build_leg_armor(root)
 		"Boots":       _build_boots(root)
-		"Belt":        _build_belt(root)
-		"Mainboard":   _build_mainboard(root)
 		"Backpack":    _build_backpack(root)
-		"Recon":       _build_optics(root)
+		"Grenade":     _build_grenade(root)
 		_:             _build_fallback(root)
 	return root
 
@@ -190,23 +189,12 @@ static func _build_boots(root: Node3D) -> void:
 		# Buckle.
 		root.add_child(_make_mi(_box(Vector3(0.06, 0.04, 0.04)), _mat_pcb_solder(), Vector3(x, 0.02, 0.10)))
 
-static func _build_belt(root: Node3D) -> void:
-	var ring := TorusMesh.new()
-	ring.inner_radius = 0.20
-	ring.outer_radius = 0.26
-	ring.rings = 32
-	ring.ring_segments = 10
-	root.add_child(_make_mi(ring, _mat_leather(), Vector3.ZERO, Vector3(deg_to_rad(90), 0, 0)))
-	# Buckle.
-	root.add_child(_make_mi(_box(Vector3(0.10, 0.08, 0.04)), _mat_pcb_solder(), Vector3(0, 0, 0.26)))
-
-static func _build_mainboard(root: Node3D) -> void:
-	# PCB plate + a few solder pads + a chip.
-	root.add_child(_make_mi(_box(Vector3(0.42, 0.04, 0.42)), _mat_pcb(), Vector3.ZERO))
-	root.add_child(_make_mi(_box(Vector3(0.18, 0.05, 0.10)), _mat_dark_steel(), Vector3(0, 0.04, 0)))
-	for px in [-0.15, -0.05, 0.05, 0.15]:
-		for pz in [-0.18, 0.18]:
-			root.add_child(_make_mi(_cyl(0.02, 0.012, 8), _mat_pcb_solder(), Vector3(px, 0.03, pz)))
+static func _build_leg_armor(root: Node3D) -> void:
+	# Pair of greaves side by side.
+	for x in [-0.10, 0.10]:
+		root.add_child(_make_mi(_box(Vector3(0.14, 0.34, 0.16)), _mat_plate(), Vector3(x, 0, 0)))
+		root.add_child(_make_mi(_box(Vector3(0.16, 0.06, 0.18)), _mat_dark_steel(), Vector3(x, 0.14, 0)))
+		root.add_child(_make_mi(_box(Vector3(0.16, 0.06, 0.18)), _mat_dark_steel(), Vector3(x, -0.14, 0)))
 
 static func _build_backpack(root: Node3D) -> void:
 	# Main sack + flap + strap.
@@ -215,12 +203,12 @@ static func _build_backpack(root: Node3D) -> void:
 	root.add_child(_make_mi(_box(Vector3(0.06, 0.52, 0.04)), _mat_leather(), Vector3(0.16, 0, -0.14)))
 	root.add_child(_make_mi(_box(Vector3(0.06, 0.52, 0.04)), _mat_leather(), Vector3(-0.16, 0, -0.14)))
 
-static func _build_optics(root: Node3D) -> void:
-	# Lens housing + glowing element.
-	root.add_child(_make_mi(_cyl(0.20, 0.16, 20), _mat_dark_steel(), Vector3.ZERO, Vector3(deg_to_rad(90), 0, 0)))
-	root.add_child(_make_mi(_sphere(0.13), _mat_lens(), Vector3.ZERO))
-	root.add_child(_make_mi(_cyl(0.06, 0.18, 20), _mat_steel(), Vector3(0, 0, 0.10), Vector3(deg_to_rad(90), 0, 0)))
-	root.add_child(_make_mi(_cyl(0.06, 0.18, 20), _mat_steel(), Vector3(0, 0, -0.10), Vector3(deg_to_rad(90), 0, 0)))
+static func _build_grenade(root: Node3D) -> void:
+	# Cylinder body + top cap sphere.
+	root.add_child(_make_mi(_cyl(0.22, 0.10, 12), _mat_dark_steel(), Vector3.ZERO))
+	root.add_child(_make_mi(_sphere(0.10), _mat_dark_steel(), Vector3(0, 0.11, 0)))
+	# Pin ring.
+	root.add_child(_make_mi(_cyl(0.03, 0.05, 8), _mat_pcb_solder(), Vector3(0.08, 0.14, 0)))
 
 static func _build_fallback(root: Node3D) -> void:
 	root.add_child(_make_mi(_box(Vector3(0.30, 0.30, 0.30)), _mat_dark_steel(), Vector3.ZERO))

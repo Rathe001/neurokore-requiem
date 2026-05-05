@@ -50,6 +50,15 @@ enum SupportRole {
 ## triggers a backpedal, farther triggers normal chase.
 @export var ranged_kite_distance: float = 8.0
 
+@export_group("Skills")
+## Basic attack skill — replaces the inline attack params above when set.
+## PrototypeEnemy accessors check this first; null falls back to the legacy
+## fields. Once all classes have a basic_attack, the inline params can go.
+@export var basic_attack: EnemySkill
+## Pool of special skills this class can use. The spawner picks 0-3 from
+## this pool at spawn based on enemy level/rarity.
+@export var skill_pool: Array[EnemySkill] = []
+
 @export_group("Support")
 @export var support_role: SupportRole = SupportRole.NONE
 @export var support_radius: float = 6.0

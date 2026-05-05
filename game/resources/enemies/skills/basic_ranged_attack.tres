@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="EnemySkill" load_steps=3 format=3]
+
+; Default ranged basic attack — mirrors the pre-skill-system inline params
+; on basic_ranged.tres. Damage mult matches the 0.85 "ranged hits hurt
+; slightly less" tuning.
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_skill.gd" id="script"]
+[ext_resource type="PackedScene" path="res://scenes/prototype/prototype_projectile.tscn" id="projectile_scene"]
+
+[resource]
+script = ExtResource("script")
+id = &"basic_ranged_attack"
+display_name = "Ranged Shot"
+targeting_mode = 2
+damage_mult = 0.85
+skill_range = 12.0
+cooldown = 2.0
+wind_up = 0.55
+projectile_scene = ExtResource("projectile_scene")
+projectile_speed = 18.0
+projectile_max_range = 14.0
+projectile_count = 1

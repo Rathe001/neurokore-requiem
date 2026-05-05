@@ -22,6 +22,7 @@ func _ready() -> void:
 	_register_keys(&"interact", [])
 	_register_keys(&"toggle_light", [KEY_F])
 	_register_keys(&"toggle_inventory", [KEY_I, KEY_C])
+	_register_keys(&"sprint", [KEY_SHIFT])
 	_register_keys(&"crouch", [KEY_CTRL])
 	_register_keys(&"jump", [KEY_SPACE])
 	_register_keys(&"toggle_view", [KEY_V])

@@ -11,9 +11,21 @@
 
 ## Origin vs. Specialized Classes
 
-Origin classes (Analog and Cyborg) are generalists — jack of all trades for their respective path. They are the easiest to understand and the most forgiving to gear. All three of their **kore** attributes (the three stats native to that origin) contribute equally to a single derived stat (Soul or Interface).
+Origin classes (Analog and Cyborg) are generalists — jack of all trades for their respective path. They are the easiest to understand and the most forgiving to gear.
 
-Specialized classes trade that flexibility for depth. They scale primarily off one attribute, get partial benefit from their two kore stats, and are actively hurt by their opposing stat. See [Attribute System](../design/attribute-system.md) for full scaling rules.
+Specialized classes trade that flexibility for depth. Each has a unique talent tree with signature perks that define their playstyle. The deeper you invest, the more distinct the class feels — a Tier V specialist plays nothing like the origin class they came from.
+
+## Talent Trees & Perk Tiers
+
+Each class has a talent tree that drives build identity. Progression through the tree unlocks **perk tiers** (I through V) that represent escalating transformation:
+
+- **Tier I–II**: Broadening — picking up tools, exploring the class's kit
+- **Tier III**: Committing — the tree narrows, builds start to specialize
+- **Tier IV–V**: Defining — perks that fundamentally change how the class plays, potentially altering resource mechanics or adding entirely new systems
+
+Each specialist class has a signature perk ladder — Exile (Count), Amalgamation (Forged), Drone Swarm (Automaton), IED (Survivalist), Telekinesis (Polymath), Doomsayer (Enculted). These perks are what *make* the class — they aren't shared or transferable (outside of extremely rare class-granting item mods).
+
+Perk tiers are permanent progression through talent investment, not something that can be lost by swapping gear.
 
 ## Resource System
 
@@ -27,10 +39,6 @@ Each class has **one unique resource** capturing the energy they expend. Resourc
 | Forged | **Power Grid** — budget for what's active simultaneously |
 | Automaton | **Bandwidth** — caps active drones/scripts |
 | Enculted / Polymath | TBD (rethinking — see per-class docs) |
-
-## Stat Identity & Tier Perks
-
-Attribute distribution drives **tier perks** that unlock at stat breakpoints and are lost when gear drops you below. Each specialist class has a signature perk ladder — Exile (Count), Amalgamation (Forged), Drone Swarm (Automaton), IED (Survivalist), Telekinesis (Polymath), Doomsayer (Enculted). See each class doc and the [tier perks table](../design/attribute-system.md#specialized-class-tier-perks).
 
 ## Character Creation
 

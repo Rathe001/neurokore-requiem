@@ -41,18 +41,19 @@ func get_charm_max() -> int:
 func tick(delta: float) -> void:
 	if not _host.is_alive():
 		return
-	var tier := AttributeState.get_unlocked_tier(&"amb", PlayerState.class_id, PlayerState.spec_id)
-	if tier <= 0:
+	var max_charms_agg := Effects.get_aggregate(&"doomsayer_max_charms")
+	if max_charms_agg <= 0.0:
 		return
 	_doomsayer_t -= delta
 	if _doomsayer_t > 0.0:
 		return
 	_doomsayer_t = DOOMSAYER_TICK_INTERVAL
-	var radius: float = DOOMSAYER_AURA_RADIUS_PER_TIER[clampi(tier, 0, 3)]
+	# Use a fixed radius now that stat tiers don't drive it.
+	var radius: float = DOOMSAYER_AURA_RADIUS_PER_TIER[clampi(1, 0, 3)]
 	if radius <= 0.0:
 		return
 	var dot_per_tick: float = TalentState.get_aggregate(&"doomsayer_dot_per_tick")
-	var dmg_mult := AttributeState.get_player_damage_mult(_host.class_id, _host.spec_id)
+	var dmg_mult := 1.0
 	var max_charms := mini(int(round(Effects.get_aggregate(&"doomsayer_max_charms"))), DOOMSAYER_MAX_CHARMS_CAP)
 	_prune_charm_list()
 	var charm_capacity := max_charms - _charmed_enemies.size()
@@ -137,6 +138,6 @@ func _reconcile_aura() -> void:
 	if _doomsayer_aura == null:
 		return
 	var tier := 0
-	if _host.is_alive() and PlayerState.class_id != &"":
-		tier = AttributeState.get_unlocked_tier(&"amb", PlayerState.class_id, PlayerState.spec_id)
+	if _host.is_alive() and Effects.get_aggregate(&"doomsayer_max_charms") > 0.0:
+		tier = 1
 	_doomsayer_aura.set_tier(tier)

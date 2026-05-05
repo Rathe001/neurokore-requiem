@@ -14,6 +14,7 @@ const CLUSTER_SPREAD := 2.5
 const CLUSTER_DAMAGE_SCALE := 0.5
 const ARC_HEIGHT_FACTOR := 0.4
 const CLUSTER_ARC_HEIGHT := 1.2
+const _GRENADE_SCENE: PackedScene = preload("res://scenes/prototype/prototype_grenade.tscn")
 
 var target_position: Vector3
 var damage_min: int = 0
@@ -94,7 +95,10 @@ func _detonate() -> void:
 					n.take_damage(burn, global_position, 0.0, 1, false)
 	if grenade_type == Skill.GrenadeType.CLUSTER and not is_cluster_child:
 		_spawn_cluster_children()
-	queue_free()
+	# Brief delay so the trail particles finish fading before we hide the node.
+	await get_tree().create_timer(0.35).timeout
+	if is_inside_tree():
+		EntityPool.release(self)
 
 
 func _spawn_cluster_children() -> void:
@@ -105,7 +109,7 @@ func _spawn_cluster_children() -> void:
 	for i in CLUSTER_COUNT:
 		var angle := base_angle + float(i) * (TAU / float(CLUSTER_COUNT))
 		var offset := Vector3(cos(angle), 0.0, sin(angle)) * CLUSTER_SPREAD
-		var child := (load("res://scenes/prototype/prototype_grenade.tscn") as PackedScene).instantiate() as PrototypeGrenade
+		var child := EntityPool.acquire(_GRENADE_SCENE) as PrototypeGrenade
 		child.target_position = global_position + offset
 		child.damage_min = int(round(float(damage_min) * CLUSTER_DAMAGE_SCALE))
 		child.damage_max = int(round(float(damage_max) * CLUSTER_DAMAGE_SCALE))
@@ -154,6 +158,18 @@ func _build_trail() -> void:
 	(_trail.draw_pass_1 as SphereMesh).material = draw_mat
 	_trail.emitting = true
 	add_child(_trail)
+
+
+func _pool_release() -> void:
+	_detonated = false
+	_initialized = false
+	_elapsed = 0.0
+	_flight_time = 0.0
+	_arc_height = 0.0
+	is_cluster_child = false
+	throw_speed = THROW_SPEED
+	if _trail != null:
+		_trail.emitting = true
 
 
 func _roll_damage() -> int:

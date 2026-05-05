@@ -51,14 +51,14 @@ Full class details:
 ## Starting Zones & Key Systems
 
 - [`docs/design/starting-zones.md`](docs/design/starting-zones.md) — Earth Facility #723, rep system, class choice boss battle, origin class path
-- [`docs/design/morality-system.md`](docs/design/morality-system.md) — on hold; rep alignments preserved, plane backburnered in favor of stat identity
+- [`docs/design/morality-system.md`](docs/design/morality-system.md) — on hold; may resurface as hidden narrative system
 - [`docs/design/skill-tree.md`](docs/design/skill-tree.md) — Fire/Alt Fire (weapon/offhand), 1H/2H weapons, tutorial progression, starting skills, hotkeys
-- [`docs/design/item-architecture.md`](docs/design/item-architecture.md) — **item system source of truth**: type hierarchy, slots, weight system, prefix/suffix modifiers, rarity tiers, item generation pipeline, augment slot rules
+- [`docs/design/itemization.md`](docs/design/itemization.md) — **itemization design intent**: gear slots, stat domains, behavior mods, power budget, sprint, class interactions, cross-slot synergies
+- [`docs/design/item-architecture.md`](docs/design/item-architecture.md) — item structural layer: type hierarchy, slots, weight system, prefix/suffix modifiers, rarity tiers, item generation pipeline, augment slot rules
 - [`docs/design/equipment.md`](docs/design/equipment.md) — weapon types (energy, kinetic, elemental, melee, class-specific), offhands, armor, damage types
 - [`docs/design/gear-augmentation.md`](docs/design/gear-augmentation.md) — schematics (workbench), field augments (class skills), ammo types, magazine/reload, augment slots
 - [`docs/design/zones.md`](docs/design/zones.md) — zone design philosophy, Sub-Level Zero, zone registry
 - [`docs/design/dialog-ui.md`](docs/design/dialog-ui.md) — animated portraits, class effects, UI philosophy
-- [`docs/design/attribute-system.md`](docs/design/attribute-system.md) — 8 moral attributes, item stat budgets, class scaling, opposing stats, tier perks, visual metamorphosis, NPC identity reactions, HP/resource stat scaling
 - [`docs/design/controls.md`](docs/design/controls.md) — WASD movement, mouse for attacks, controller as future work
 - [`docs/world/lighting.md`](docs/world/lighting.md) — darkness as default, equippable light sources, zone lighting tiers
 - [`docs/design/ui-style-guide.md`](docs/design/ui-style-guide.md) — type scale, tag components, color groups, all 9 class palettes, i18n and theming conventions

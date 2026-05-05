@@ -31,8 +31,8 @@ Styled `PanelContainer` variations for stat indicators. Assign with `container.t
 
 | Variation | Background | Border | Text Color | Usage |
 |---|---|---|---|---|
-| `StatPosTag` | `(0.0, 0.15, 0.05, 0.9)` | `(0.35, 0.9, 0.45, 1.0)` | `(0.35, 0.9, 0.45, 1.0)` | Primary stat (`+Soul`) |
-| `StatNegTag` | `(0.15, 0.0, 0.0, 0.9)` | `(0.9, 0.3, 0.3, 1.0)` | `(0.9, 0.3, 0.3, 0.85)` | Opposing stat (`-Interface`) |
+| `StatPosTag` | `(0.0, 0.15, 0.05, 0.9)` | `(0.35, 0.9, 0.45, 1.0)` | `(0.35, 0.9, 0.45, 1.0)` | Positive bonus (`+Damage`) |
+| `StatNegTag` | `(0.15, 0.0, 0.0, 0.9)` | `(0.9, 0.3, 0.3, 1.0)` | `(0.9, 0.3, 0.3, 0.85)` | Negative tradeoff (`-Inventory`) |
 
 Tag StyleBox content margins: 3px left/right, 0px top/bottom. Labels inside use `StatLabel` variation with a 7px font override and an explicit color override.
 
@@ -80,7 +80,7 @@ Each `UIThemeConfig` resource defines these semantic color fields. Read them via
 
 | Field | RGB |
 |---|---|
-| accent | `(0.65, 0.45, 0.25)` — Brown / SOU |
+| accent | `(0.65, 0.45, 0.25)` — Brown |
 | accent_dim | `(0.42, 0.3, 0.16)` |
 | panel_bg | `(0.08, 0.05, 0.04, 0.92)` |
 | panel_border | `(0.75, 0.45, 0.25, 0.9)` |
@@ -93,7 +93,7 @@ Each `UIThemeConfig` resource defines these semantic color fields. Read them via
 
 | Field | RGB |
 |---|---|
-| accent | `(0.7, 0.85, 0.35)` — Olive green / ING |
+| accent | `(0.7, 0.85, 0.35)` — Olive green |
 | accent_dim | `(0.42, 0.5, 0.22)` |
 | panel_bg | `(0.06, 0.07, 0.04, 0.93)` |
 | panel_border | `(0.55, 0.65, 0.3, 0.9)` |
@@ -106,7 +106,7 @@ Each `UIThemeConfig` resource defines these semantic color fields. Read them via
 
 | Field | RGB |
 |---|---|
-| accent | `(0.95, 0.92, 0.8)` — Ivory / ORT |
+| accent | `(0.95, 0.92, 0.8)` — Ivory |
 | accent_dim | `(0.62, 0.6, 0.52)` |
 | panel_bg | `(0.06, 0.05, 0.05, 0.94)` |
 | panel_border | `(0.85, 0.82, 0.68, 0.9)` |
@@ -119,7 +119,7 @@ Each `UIThemeConfig` resource defines these semantic color fields. Read them via
 
 | Field | RGB |
 |---|---|
-| accent | `(0.78, 0.35, 0.85)` — Purple / AMB |
+| accent | `(0.78, 0.35, 0.85)` — Purple |
 | accent_dim | `(0.45, 0.2, 0.55)` |
 | panel_bg | `(0.06, 0.03, 0.08, 0.94)` |
 | panel_border | `(0.6, 0.25, 0.7, 0.9)` |
@@ -134,7 +134,7 @@ Each `UIThemeConfig` resource defines these semantic color fields. Read them via
 
 | Field | RGB |
 |---|---|
-| accent | `(0.3, 0.85, 1.0)` — Cyan / ITF |
+| accent | `(0.3, 0.85, 1.0)` — Cyan |
 | accent_dim | `(0.2, 0.55, 0.75)` |
 | panel_bg | `(0.02, 0.06, 0.1, 0.92)` |
 | panel_border | `(0.3, 0.75, 1.0, 0.9)` |
@@ -147,7 +147,7 @@ Each `UIThemeConfig` resource defines these semantic color fields. Read them via
 
 | Field | RGB |
 |---|---|
-| accent | `(0.9, 0.25, 0.2)` — Red / DEV |
+| accent | `(0.9, 0.25, 0.2)` — Red |
 | accent_dim | `(0.58, 0.16, 0.13)` |
 | panel_bg | `(0.08, 0.04, 0.03, 0.94)` |
 | panel_border | `(0.85, 0.22, 0.18, 0.9)` |
@@ -160,7 +160,7 @@ Each `UIThemeConfig` resource defines these semantic color fields. Read them via
 
 | Field | RGB |
 |---|---|
-| accent | `(0.55, 0.78, 0.85)` — Steel blue / OPT |
+| accent | `(0.55, 0.78, 0.85)` — Steel blue |
 | accent_dim | `(0.32, 0.48, 0.55)` |
 | panel_bg | `(0.05, 0.07, 0.08, 0.94)` |
 | panel_border | `(0.5, 0.7, 0.78, 0.9)` |
@@ -173,7 +173,7 @@ Each `UIThemeConfig` resource defines these semantic color fields. Read them via
 
 | Field | RGB |
 |---|---|
-| accent | `(0.95, 0.9, 0.3)` — Yellow / CLA |
+| accent | `(0.95, 0.9, 0.3)` — Yellow |
 | accent_dim | `(0.62, 0.58, 0.2)` |
 | panel_bg | `(0.05, 0.04, 0.02, 0.94)` |
 | panel_border | `(0.75, 0.7, 0.25, 0.9)` |
@@ -194,5 +194,5 @@ Each `UIThemeConfig` resource defines these semantic color fields. Read them via
 
 - Never call `add_theme_font_size_override` with a magic number. Use `label.theme_type_variation` for Label subtypes. For widget types (CheckBox, OptionButton), read from `UIThemeState.palette.font_size_*`.
 - Never hardcode palette colors. All colors come from `UIThemeState.palette.*`.
-- Fixed colors (e.g. stat tag green/red, morality dot) are documented above and stay fixed regardless of theme.
+- Fixed colors (e.g. stat tag green/red) are documented above and stay fixed regardless of theme.
 - Panel backgrounds use 0.92–0.96 alpha to keep backgrounds readable over the 3D scene.

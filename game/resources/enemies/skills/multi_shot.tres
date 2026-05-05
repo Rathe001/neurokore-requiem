@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="EnemySkill" load_steps=3 format=3]
+
+; Multi-Shot — fires 3 projectiles in a spread. Harder to dodge than a
+; single bolt; rewards lateral movement. Ranged-class special.
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_skill.gd" id="script"]
+[ext_resource type="PackedScene" path="res://scenes/prototype/prototype_projectile.tscn" id="projectile_scene"]
+
+[resource]
+script = ExtResource("script")
+id = &"multi_shot"
+display_name = "Multi-Shot"
+targeting_mode = 2
+damage_mult = 0.7
+skill_range = 12.0
+cooldown = 5.0
+wind_up = 0.6
+priority = 0
+projectile_scene = ExtResource("projectile_scene")
+projectile_speed = 16.0
+projectile_max_range = 14.0
+projectile_count = 3
+projectile_spread_deg = 12.0
+min_level = 2
+weight = 100

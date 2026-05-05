@@ -1,15 +1,14 @@
 extends Node
 
-# Talent registry + applier. Mirrors PerkState's shape: loads per-stat
+# Talent registry + applier. Mirrors PerkState's shape: loads per-class
 # trees from TREE_DIR on boot, recomputes the active node set + aggregate
 # magnitudes (and granted active-skill bindings) whenever the player's
-# allocations or stat tiers change.
+# allocations or level change.
 #
 # A node is "active" when:
-#   * it exists in the loaded tree at (stat_id, tier, node_idx),
+#   * it exists in the loaded tree at (class_id, tier, node_idx),
 #   * the player has a point allocated to that slot (PlayerState), AND
-#   * the slot's tier is currently unlocked by stat allocation
-#     (AttributeState.get_unlocked_tier).
+#   * the slot's tier is currently unlocked (PlayerState.is_tier_unlocked).
 #
 # What an active node can do (any combination):
 #   1. Contribute magnitudes to one or more effect aggregates via its
@@ -43,8 +42,8 @@ signal granted_skills_changed
 
 const TREE_DIR := "res://resources/talents/"
 
-# stat_id (StringName) → { Vector2i(tier, node_idx) → TalentNode }.
-# Built once on _ready by scanning TREE_DIR. Stats with no tree file
+# class_id (StringName) → { Vector2i(tier, node_idx) → TalentNode }.
+# Built once on _ready by scanning TREE_DIR. Classes with no tree file
 # load to empty entries; the recompute loop skips them silently.
 var _trees: Dictionary = {}
 var _aggregates: Dictionary = {}
@@ -56,15 +55,15 @@ var _granted_skills: Dictionary = {}
 func _ready() -> void:
 	_load_trees()
 	PlayerState.talents_changed.connect(_recompute)
-	PlayerState.tier_changed.connect(_on_tier_changed)
+	PlayerState.level_changed.connect(_on_level_changed)
 	PlayerState.class_changed.connect(_on_player_changed)
 	PlayerState.spec_changed.connect(_on_player_changed)
 	_recompute()
 
 
 func _load_trees() -> void:
-	for stat_id: StringName in AttributeState.ROLLABLE_STATS:
-		var path := "%s%s.tres" % [TREE_DIR, stat_id]
+	for class_id: StringName in AttributeState.CLASS_DEFINITIONS.keys():
+		var path := "%s%s.tres" % [TREE_DIR, class_id]
 		if not ResourceLoader.exists(path):
 			continue
 		var tree := load(path) as TalentTree
@@ -77,13 +76,13 @@ func _load_trees() -> void:
 				continue
 			var key := Vector2i(node.tier, node.node_idx)
 			if index.has(key):
-				push_warning("[TalentState] Duplicate node at (%d, %d) on %s — keeping the first." % [node.tier, node.node_idx, stat_id])
+				push_warning("[TalentState] Duplicate node at (%d, %d) on %s — keeping the first." % [node.tier, node.node_idx, class_id])
 				continue
 			index[key] = node
-		_trees[stat_id] = index
+		_trees[class_id] = index
 
 
-func _on_tier_changed(_stat: StringName, _old: int, _new: int) -> void:
+func _on_level_changed(_new_level: int, _old_level: int) -> void:
 	_recompute()
 
 

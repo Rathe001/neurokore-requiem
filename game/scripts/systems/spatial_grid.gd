@@ -19,6 +19,10 @@ var _inv_cell_size: float = 1.0 / DEFAULT_CELL_SIZE
 var _grids: Dictionary = {}
 # node -> { category: StringName, cell: Vector2i }
 var _tracked: Dictionary = {}
+# category -> { Node3D -> true }  — flat membership set per category so callers
+# (e.g. LosCuller) can iterate all members without the per-frame allocation of
+# get_nodes_in_group().  Updated on register/unregister.
+var _members: Dictionary = {}
 
 func _ready() -> void:
 	set_physics_process(true)
@@ -33,15 +37,21 @@ func register(node: Node3D, category: StringName) -> void:
 		return
 	if not _grids.has(category):
 		_grids[category] = {}
+	if not _members.has(category):
+		_members[category] = {}
 	var cell := _cell_for(node.global_position)
 	_insert(node, category, cell)
 	_tracked[node] = { "category": category, "cell": cell, "last_pos": node.global_position }
+	_members[category][node] = true
 
 func unregister(node: Node3D) -> void:
 	if not _tracked.has(node):
 		return
 	var info: Dictionary = _tracked[node]
 	_remove(node, info["category"], info["cell"])
+	var cat: StringName = info["category"]
+	if _members.has(cat):
+		_members[cat].erase(node)
 	_tracked.erase(node)
 
 # ── Queries ───────────────────────────────────────────────────────────────
@@ -126,6 +136,11 @@ func query_nearest(origin: Vector3, radius: float, category: StringName) -> Node
 					best = node
 	return best
 
+## Returns the flat membership set (Dictionary: Node3D → true) for a category.
+## Callers iterate the keys — no allocation. Do NOT mutate the returned dict.
+func get_members(category: StringName) -> Dictionary:
+	return _members.get(category, {})
+
 ## Returns the count of tracked nodes in a category.
 func count(category: StringName) -> int:
 	if not _grids.has(category):
@@ -162,7 +177,10 @@ func _update_all_positions() -> void:
 			info["cell"] = new_cell
 	for d in dead:
 		var info2: Dictionary = _tracked[d]
-		_remove(d, info2["category"], info2["cell"])
+		var cat2: StringName = info2["category"]
+		_remove(d, cat2, info2["cell"])
+		if _members.has(cat2):
+			_members[cat2].erase(d)
 		_tracked.erase(d)
 
 func _cell_for(pos: Vector3) -> Vector2i:

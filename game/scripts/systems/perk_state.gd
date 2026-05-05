@@ -2,13 +2,12 @@ extends Node
 
 # Tier perk registry + applier.
 #
-# Listens to PlayerState tier signals and recomputes the active perk set on
+# Listens to PlayerState signals and recomputes the active perk set on
 # any change. Aggregates effect magnitudes additively for runtime queries.
 #
-# Perk ladders are authored as .tres files at LADDER_DIR/{stat_id}.tres
-# (one per AttributeState.ROLLABLE_STATS entry). Adding a new tier perk is a
-# resource edit in the editor — no code changes here. Schema lives in
-# scripts/perks/{perk_ladder, perk, perk_effect}.gd.
+# Perk ladders are authored as .tres files in LADDER_DIR (one per ladder).
+# Adding a new tier perk is a resource edit in the editor — no code changes
+# here. Schema lives in scripts/perks/{perk_ladder, perk, perk_effect}.gd.
 #
 # Effect kinds — keep this list in sync with what consumers read via
 # get_aggregate(kind). Adding a new effect kind requires a consumer that
@@ -85,8 +84,8 @@ signal perks_changed
 
 const LADDER_DIR := "res://resources/perks/"
 
-# stat_id (StringName) → PerkLadder. Built once on _ready by scanning
-# LADDER_DIR for {stat_id}.tres. Stats with no ladder file load to null and
+# ladder_id (StringName) → PerkLadder. Built once on _ready by scanning
+# all .tres files in LADDER_DIR. Ladders with no matching file are absent;
 # the recompute loop skips them silently.
 var _ladders: Dictionary = {}
 var _active_perks: Array[Perk] = []
@@ -95,25 +94,33 @@ var _initialized: bool = false
 
 func _ready() -> void:
 	_load_ladders()
-	PlayerState.tier_changed.connect(_on_tier_changed)
 	PlayerState.class_changed.connect(_on_player_changed)
 	PlayerState.spec_changed.connect(_on_player_changed)
+	PlayerState.level_changed.connect(_on_level_changed)
 	_recompute()
 
 
 func _load_ladders() -> void:
-	for stat_id: StringName in AttributeState.ROLLABLE_STATS:
-		var path := "%s%s.tres" % [LADDER_DIR, stat_id]
-		if not ResourceLoader.exists(path):
-			continue
-		var ladder := load(path) as PerkLadder
-		if ladder == null:
-			push_warning("[PerkState] Found %s but it isn't a PerkLadder; skipping." % path)
-			continue
-		_ladders[stat_id] = ladder
+	var dir := DirAccess.open(LADDER_DIR)
+	if dir == null:
+		push_warning("[PerkState] Cannot open LADDER_DIR: %s" % LADDER_DIR)
+		return
+	dir.list_dir_begin()
+	var file_name := dir.get_next()
+	while file_name != "":
+		if not dir.current_is_dir() and file_name.ends_with(".tres"):
+			var path := LADDER_DIR + file_name
+			var ladder := load(path) as PerkLadder
+			if ladder == null:
+				push_warning("[PerkState] Found %s but it isn't a PerkLadder; skipping." % path)
+			else:
+				var ladder_id := StringName(file_name.get_basename())
+				_ladders[ladder_id] = ladder
+		file_name = dir.get_next()
+	dir.list_dir_end()
 
 
-func _on_tier_changed(_stat: StringName, _old: int, _new: int) -> void:
+func _on_level_changed(_new_level: int, _old_level: int) -> void:
 	_recompute()
 
 func _on_player_changed(_id: StringName) -> void:
@@ -124,17 +131,19 @@ func _recompute() -> void:
 	var new_active: Array[Perk] = []
 	var new_aggregates: Dictionary = {}
 
-	# Origin classes (Analog/Cyborg) also receive perks for tiers they unlock
-	# in their kore / opposing stats — capped at T2 / T1 by the threshold
-	# tables. Earlier we required spec_id != "" too, which silently denied
-	# origin classes any perks even after unlocking T2.
+	# Placeholder: unlock perks based on player level until the talent-tree-driven
+	# perk system is built. For the player's spec ladder, unlock up to
+	# tier = level / 3. For non-spec ladders, unlock tier 0 only.
 	if PlayerState.class_id != &"":
-		for stat_id: StringName in AttributeState.ROLLABLE_STATS:
-			var ladder: PerkLadder = _ladders.get(stat_id)
+		var max_tier := PlayerState.level / 3
+		for ladder_id: StringName in _ladders.keys():
+			var ladder: PerkLadder = _ladders[ladder_id]
 			if ladder == null or ladder.perks.is_empty():
 				continue
-			var tier := AttributeState.get_unlocked_tier(stat_id, PlayerState.class_id, PlayerState.spec_id)
-			for i in mini(tier, ladder.perks.size()):
+			var tier: int = 0
+			if PlayerState.spec_id != &"" and ladder_id == PlayerState.spec_id:
+				tier = mini(max_tier, ladder.perks.size())
+			for i in tier:
 				var perk: Perk = ladder.perks[i]
 				if perk == null:
 					continue

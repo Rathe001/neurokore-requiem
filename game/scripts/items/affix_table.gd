@@ -101,7 +101,7 @@ const PREFIXES: Array[Dictionary] = [
 	{
 		"id": &"hardened",
 		"label": "Hardened",
-		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Boots"],
+		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Leg Armor", "Boots"],
 		"stat_modifiers": { "damage_reduction": 6 },
 		"min_item_level": 1,
 		"weight": 100,
@@ -109,7 +109,7 @@ const PREFIXES: Array[Dictionary] = [
 	{
 		"id": &"nimble",
 		"label": "Nimble",
-		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Boots"],
+		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Leg Armor", "Boots"],
 		"stat_modifiers": { "move_speed_bonus": 5 },
 		"min_item_level": 1,
 		"weight": 90,
@@ -117,7 +117,7 @@ const PREFIXES: Array[Dictionary] = [
 	{
 		"id": &"fortified",
 		"label": "Fortified",
-		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Boots"],
+		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Leg Armor", "Boots"],
 		"stat_modifiers": { "max_health_bonus": 15 },
 		"min_item_level": 1,
 		"weight": 90,
@@ -125,7 +125,7 @@ const PREFIXES: Array[Dictionary] = [
 	{
 		"id": &"insulated",
 		"label": "Insulated",
-		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Boots"],
+		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Leg Armor", "Boots"],
 		"stat_modifiers": { "electric_resistance": 8 },
 		"min_item_level": 5,
 		"weight": 70,
@@ -133,7 +133,7 @@ const PREFIXES: Array[Dictionary] = [
 	{
 		"id": &"cryo_lined",
 		"label": "Cryo-Lined",
-		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Boots"],
+		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Leg Armor", "Boots"],
 		"stat_modifiers": { "cryo_resistance": 8 },
 		"min_item_level": 5,
 		"weight": 70,
@@ -141,10 +141,27 @@ const PREFIXES: Array[Dictionary] = [
 	{
 		"id": &"hazmat",
 		"label": "Hazmat",
-		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Boots"],
+		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Leg Armor", "Boots"],
 		"stat_modifiers": { "toxic_resistance": 8 },
 		"min_item_level": 5,
 		"weight": 70,
+	},
+	# ── Grenade prefixes ────────────────────────────────────────────────────
+	{
+		"id": &"volatile",
+		"label": "Volatile",
+		"item_types": ["Grenade"],
+		"stat_modifiers": { "damage_bonus_pct": 15 },
+		"min_item_level": 1,
+		"weight": 100,
+	},
+	{
+		"id": &"wide_blast",
+		"label": "Wide-Blast",
+		"item_types": ["Grenade"],
+		"stat_modifiers": { "blast_radius_bonus": 1.0 },
+		"min_item_level": 3,
+		"weight": 80,
 	},
 	# ── Backpack prefixes ────────────────────────────────────────────────────
 	{
@@ -211,11 +228,28 @@ const SUFFIXES: Array[Dictionary] = [
 		"min_item_level": 8,
 		"weight": 70,
 	},
+	# ── Grenade suffixes ─────────────────────────────────────────────────────
+	{
+		"id": &"of_concussion",
+		"label": "of Concussion",
+		"item_types": ["Grenade"],
+		"stat_modifiers": { "knockback_bonus": 3 },
+		"min_item_level": 1,
+		"weight": 90,
+	},
+	{
+		"id": &"of_shrapnel",
+		"label": "of Shrapnel",
+		"item_types": ["Grenade"],
+		"stat_modifiers": { "crit_chance_bonus": 0.08 },
+		"min_item_level": 5,
+		"weight": 80,
+	},
 	# ── Armor suffixes ───────────────────────────────────────────────────────
 	{
 		"id": &"of_the_bear",
 		"label": "of the Bear",
-		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Boots", "Backpack", "Belt", "Mainboard"],
+		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Leg Armor", "Boots", "Backpack"],
 		"stat_modifiers": { "carry_capacity_bonus": 10 },
 		"min_item_level": 1,
 		"weight": 90,
@@ -223,7 +257,7 @@ const SUFFIXES: Array[Dictionary] = [
 	{
 		"id": &"of_resilience",
 		"label": "of Resilience",
-		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Boots"],
+		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Leg Armor", "Boots"],
 		"stat_modifiers": { "elemental_resistance": 6 },
 		"min_item_level": 5,
 		"weight": 80,
@@ -231,7 +265,7 @@ const SUFFIXES: Array[Dictionary] = [
 	{
 		"id": &"of_the_vault",
 		"label": "of the Vault",
-		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Boots"],
+		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Leg Armor", "Boots"],
 		"stat_modifiers": { "max_health_bonus": 10 },
 		"min_item_level": 1,
 		"weight": 90,
@@ -243,23 +277,6 @@ const SUFFIXES: Array[Dictionary] = [
 		"stat_modifiers": { "resource_on_hit": 2 },
 		"min_item_level": 5,
 		"weight": 75,
-	},
-	# ── Optics suffixes ──────────────────────────────────────────────────────
-	{
-		"id": &"of_focus",
-		"label": "of Focus",
-		"item_types": ["Recon"],
-		"stat_modifiers": { "light_range_bonus": 4 },
-		"min_item_level": 1,
-		"weight": 90,
-	},
-	{
-		"id": &"of_lumens",
-		"label": "of Lumens",
-		"item_types": ["Recon"],
-		"stat_modifiers": { "light_energy_bonus": 20 },
-		"min_item_level": 5,
-		"weight": 70,
 	},
 ]
 

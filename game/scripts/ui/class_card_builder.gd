@@ -94,7 +94,7 @@ static func build(entry: Dictionary, on_pressed: Callable) -> Button:
 
 	var hint_label := RichTextLabel.new()
 	hint_label.bbcode_enabled = true
-	hint_label.text = AttributeState.get_scaling_hint(class_id, spec_id)
+	hint_label.text = "Build identity comes from talents and gear."
 	hint_label.fit_content = true
 	hint_label.scroll_active = false
 	hint_label.add_theme_font_size_override(&"normal_font_size", 8)
@@ -127,29 +127,34 @@ static func build(entry: Dictionary, on_pressed: Callable) -> Button:
 	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tags_row.add_child(spacer)
 
-	var pos_tag := PanelContainer.new()
-	pos_tag.theme_type_variation = &"StatPosTag"
-	pos_tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	tags_row.add_child(pos_tag)
-	var plus_stat := Label.new()
-	plus_stat.text = "+" + TranslationServer.translate(entry["stat"])
-	plus_stat.theme_type_variation = &"StatLabel"
-	plus_stat.add_theme_color_override(&"font_color", Color(0.35, 0.9, 0.45, 1.0))
-	plus_stat.add_theme_font_size_override(&"font_size", 7)
-	plus_stat.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	pos_tag.add_child(plus_stat)
+	var stat_text: String = entry.get("stat", "")
+	var opposes_text: String = entry.get("opposes", "")
 
-	var neg_tag := PanelContainer.new()
-	neg_tag.theme_type_variation = &"StatNegTag"
-	neg_tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	tags_row.add_child(neg_tag)
-	var minus_opp := Label.new()
-	minus_opp.text = "-" + TranslationServer.translate(entry["opposes"])
-	minus_opp.theme_type_variation = &"StatLabel"
-	minus_opp.add_theme_color_override(&"font_color", Color(0.9, 0.3, 0.3, 0.85))
-	minus_opp.add_theme_font_size_override(&"font_size", 7)
-	minus_opp.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	neg_tag.add_child(minus_opp)
+	if stat_text != "":
+		var pos_tag := PanelContainer.new()
+		pos_tag.theme_type_variation = &"StatPosTag"
+		pos_tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		tags_row.add_child(pos_tag)
+		var plus_stat := Label.new()
+		plus_stat.text = "+" + TranslationServer.translate(stat_text)
+		plus_stat.theme_type_variation = &"StatLabel"
+		plus_stat.add_theme_color_override(&"font_color", Color(0.35, 0.9, 0.45, 1.0))
+		plus_stat.add_theme_font_size_override(&"font_size", 7)
+		plus_stat.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		pos_tag.add_child(plus_stat)
+
+	if opposes_text != "":
+		var neg_tag := PanelContainer.new()
+		neg_tag.theme_type_variation = &"StatNegTag"
+		neg_tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		tags_row.add_child(neg_tag)
+		var minus_opp := Label.new()
+		minus_opp.text = "-" + TranslationServer.translate(opposes_text)
+		minus_opp.theme_type_variation = &"StatLabel"
+		minus_opp.add_theme_color_override(&"font_color", Color(0.9, 0.3, 0.3, 0.85))
+		minus_opp.add_theme_font_size_override(&"font_size", 7)
+		minus_opp.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		neg_tag.add_child(minus_opp)
 
 	card.pressed.connect(on_pressed)
 	return card

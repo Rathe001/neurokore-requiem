@@ -144,15 +144,13 @@ func _make_origin_entry(origin: StringName) -> Dictionary:
 	}
 
 func _make_spec_entry(origin: StringName, spec_id: StringName) -> Dictionary:
-	var stat: StringName = AttributeState.CLASS_DEFINITIONS[spec_id][&"stat"]
-	var nemesis: StringName = AttributeState.NEMESIS_STAT.get(stat, &"")
 	return {
 		"class_id": origin,
 		"spec_id": spec_id,
 		"label_key": get_class_label(spec_id),
 		"glyph": get_class_glyph(spec_id),
-		"stat": AttributeState.STAT_I18N.get(stat, ""),
-		"opposes": AttributeState.STAT_I18N.get(nemesis, ""),
+		"stat": "",
+		"opposes": "",
 		"backstory": get_class_backstory(spec_id),
 	}
 

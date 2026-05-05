@@ -55,7 +55,7 @@ func activate(skill: Skill, cursor_offset: Vector3) -> void:
 	if cursor_offset.length_squared() > max_sq:
 		cursor_offset = cursor_offset.normalized() * MAX_THROW_RANGE
 	var offhand: Item = InventoryState.get_equipped(&"offhand")
-	var grenade: PrototypeGrenade = GRENADE_SCENE.instantiate()
+	var grenade: PrototypeGrenade = EntityPool.acquire(GRENADE_SCENE) as PrototypeGrenade
 	grenade.target_position = _host.global_position + cursor_offset
 	if offhand != null and offhand.damage_max > 0:
 		grenade.damage_min = offhand.damage_min
@@ -68,7 +68,7 @@ func activate(skill: Skill, cursor_offset: Vector3) -> void:
 		grenade.blast_radius = offhand.blast_radius
 	else:
 		grenade.blast_radius = skill.blast_radius
-	grenade.damage_mult = AttributeState.get_player_damage_mult(PlayerState.class_id, PlayerState.spec_id)
+	grenade.damage_mult = 1.0
 	grenade.knockback = skill.knockback
 	grenade.grenade_type = skill.grenade_type
 	grenade.source_position = _host.global_position

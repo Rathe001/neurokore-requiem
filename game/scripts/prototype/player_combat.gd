@@ -17,7 +17,7 @@ const PROTO_BASE_CRIT_MULT: float = 1.5
 # timer expires on a still-alive target, fire_exile_shot lands a fixed
 # massive shot that isn't tied to any equipped weapon (works barehanded /
 # mid-reload). Damage scales with the player's main stat (Orthodoxy for
-# Count) via get_player_damage_mult.
+# Count) — scales with gear bonuses.
 const EXILE_CURSE_DURATION: float = 4.0
 const EXILE_AUTO_SHOT_BASE_DAMAGE: int = 60
 const EXILE_AUTO_SHOT_KNOCKBACK: float = 4.0
@@ -175,7 +175,7 @@ func _spawn_projectile(skill: Skill, aim: Vector3, eff_range: float, weapon: Ite
 	else:
 		proj.damage_min = skill.damage
 		proj.damage_max = skill.damage
-	proj.damage_mult = AttributeState.get_player_damage_mult(PlayerState.class_id, PlayerState.spec_id)
+	proj.damage_mult = 1.0
 	# Spawn at the player's position (slightly elevated), plus the per-arm
 	# offset for Forged Amalgamation extras (right / left / above). Spawning
 	# ahead of the player would skip enemies standing right next to us;
@@ -250,7 +250,7 @@ func _roll_skill_damage(skill: Skill, weapon: Item) -> int:
 		base = randi_range(weapon.damage_min, weapon.damage_max)
 	else:
 		base = skill.damage
-	var mult := AttributeState.get_player_damage_mult(PlayerState.class_id, PlayerState.spec_id)
+	var mult := 1.0
 	return int(round(float(base) * mult))
 
 func _crit_damage(base: int, is_crit: bool) -> int:
@@ -300,7 +300,7 @@ func fire_exile_shot(target: Node3D) -> void:
 		return
 	var aim_norm := aim / dist
 	PrototypeAttackIndicator.spawn_beam(_host, aim_norm, dist)
-	var mult := AttributeState.get_player_damage_mult(PlayerState.class_id, PlayerState.spec_id)
+	var mult := 1.0
 	var dmg := int(round(float(EXILE_AUTO_SHOT_BASE_DAMAGE) * mult))
 	target.take_damage(dmg, _host.global_position, EXILE_AUTO_SHOT_KNOCKBACK, 1, false)
 

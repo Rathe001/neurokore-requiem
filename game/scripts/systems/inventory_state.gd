@@ -11,7 +11,6 @@ signal items_overflowed(overflow: Array[Item])
 # combined sum.
 const BASE_INVENTORY_SIZE := 8
 const MAX_INVENTORY_SIZE := 40
-const MAX_UTILITY_SLOTS := 4
 
 var equipment: Dictionary = {}
 var inventory: Array[Item] = []
@@ -45,9 +44,7 @@ func is_two_handed_equipped() -> bool:
 
 func set_equipped(slot: StringName, item: Item) -> void:
 	var is_backpack := slot == &"backpack"
-	var is_belt := slot == &"belt"
 	var old_inv_cap := get_inventory_capacity() if is_backpack else 0
-	var old_util_cap := get_utility_capacity() if is_belt else 0
 
 	# Extra weapon slots reject 2H weapons (each extra arm wields a 1H per
 	# the Forged Amalgamation design). Silently no-op rather than swap, so
@@ -81,18 +78,6 @@ func set_equipped(slot: StringName, item: Item) -> void:
 			if not add_to_inventory(displaced):
 				overflow.append(displaced)
 
-	if is_belt:
-		var new_util_cap := get_utility_capacity()
-		for i in range(new_util_cap + 1, old_util_cap + 1):
-			var uid := StringName("utility_%d" % i)
-			var displaced: Item = equipment.get(uid, null)
-			if displaced != null:
-				equipment.erase(uid)
-				equipment_changed.emit(uid)
-				if not add_to_inventory(displaced):
-					overflow.append(displaced)
-		capacity_changed.emit()
-
 	if is_backpack:
 		var new_inv_cap := get_inventory_capacity()
 		for i in range(new_inv_cap, old_inv_cap):
@@ -125,11 +110,6 @@ func get_inventory_capacity() -> int:
 	var bonus := 0 if pack == null else pack.get_modifier(&"inventory_bonus")
 	return min(BASE_INVENTORY_SIZE + bonus, MAX_INVENTORY_SIZE)
 
-func get_utility_capacity() -> int:
-	var belt: Item = equipment.get(&"belt", null)
-	if belt == null:
-		return 0
-	return clamp(belt.utility_slots, 0, MAX_UTILITY_SLOTS)
 
 
 ## How many extra 1H weapon slots the player currently has unlocked, sourced

@@ -16,10 +16,9 @@ extends Area3D
 # arm window. The pulse during arming gives the player visual
 # feedback that the trap isn't yet live.
 #
-# Damage scales with the player's main stat (Ingenuity for Survivalist)
-# via AttributeState.get_player_damage_mult, captured at spawn time so
-# the trap doesn't reach back into PlayerState on detonation (player may
-# have changed class / spec mid-trap-life).
+# Damage mult is captured at spawn time so the trap doesn't reach back
+# into PlayerState on detonation (player may have changed class / spec
+# mid-trap-life). Gear-based bonuses will come via stat_modifiers.
 
 const LIFETIME := 15.0
 const BLAST_RADIUS := 2.6
@@ -54,7 +53,7 @@ var _glow: OmniLight3D
 func _ready() -> void:
 	body_entered.connect(_on_body_entered)
 	_arm_remain = arm_delay
-	_captured_damage_mult = AttributeState.get_player_damage_mult(PlayerState.class_id, PlayerState.spec_id)
+	_captured_damage_mult = 1.0
 	# Cache visual handles so the per-frame pulse doesn't repeat node
 	# lookups. The .tscn gives each instance its own SubResource copy of
 	# the material, so modulating it per-trap doesn't bleed across the

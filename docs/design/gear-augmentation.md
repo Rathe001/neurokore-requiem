@@ -84,7 +84,7 @@ Ranged weapons have a **magazine capacity** — the number of shots before a rel
 - Melee weapons do not have magazines or reloads.
 
 !!! question "Open Questions — Ammo & Reload"
-    - Does reload speed scale with any attribute?
+    - Does reload speed scale with any gear stat (e.g., hands attack speed)?
     - Should certain ammo types be class-locked or require schematics?
     - Can ammo type affect Alt Fire as well, or only Fire?
     - Should there be a passive auto-reload after a delay (like some ARPGs), or always manual?
@@ -98,7 +98,7 @@ Ranged weapons have a **magazine capacity** — the number of shots before a rel
 
 ## Interaction with Other Systems
 
-- **Stat identity / tier perks** — Some augment schematics could require a minimum tier perk level to unlock (e.g., Forged tier 2 unlocks augments for mechanical appendages).
+- **Talent tree / tier perks** — Some augment schematics could require a minimum talent tier to unlock (e.g., Forged tier II unlocks augments for mechanical appendages).
 - **Fire / Alt Fire** — Weapon augments can modify the behavior of Fire and Alt Fire skills (e.g., a laser sight augment adds a visual beam during aiming, a bayonet augment changes the melee fire skill).
 - **Two-handed vs. one-handed** — 2H weapons may have more augment slots than 1H weapons to compensate for losing the offhand.
 
