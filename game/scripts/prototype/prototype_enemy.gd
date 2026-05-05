@@ -1998,14 +1998,10 @@ func _cast_skill_radial(target: Node3D, skill: EnemySkill) -> void:
 			continue
 		if n == self:
 			continue
-		# Skip player-friendly targets (charmed allies) when we're hostile,
-		# and skip OTHER charmed allies when we're charmed ourselves — a
-		# charmed enemy's AoE should only hit hostiles, not friendly pets.
-		if n.has_method(&"is_player_friendly"):
-			if _charmed and n.is_player_friendly():
-				continue
-			if not _charmed and n.is_player_friendly():
-				continue
+		# When charmed, we query &"enemies" — skip fellow charmed allies.
+		# When hostile, we query &"player" — the player is always a valid target.
+		if _charmed and n is PrototypeEnemy and (n as PrototypeEnemy).is_player_friendly():
+			continue
 		var dmg := int(round(float(_attack_damage) * skill.damage_mult * _outgoing_damage_mult()))
 		var kb_dir := (n as Node3D).global_position - global_position
 		kb_dir.y = 0.0
