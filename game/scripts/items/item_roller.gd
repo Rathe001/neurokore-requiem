@@ -75,7 +75,7 @@ func roll(main_type: String, item_level: int, rarity: StringName, rng: RandomNum
 	if main_type == "2H Weapon":
 		item.two_handed = true
 	if main_type == "Backpack":
-		item.stat_modifiers[&"inventory_bonus"] = 8
+		item.stat_modifiers[&"inventory_bonus"] = 4
 
 	_apply_weapon_base(item, main_type, rng)
 	_apply_grenade_base(item, main_type, rng)
