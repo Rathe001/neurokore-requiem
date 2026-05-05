@@ -236,7 +236,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../design/attribute-system/" class="md-tabs__link">
+        <a href="../../design/attribute-system.md" class="md-tabs__link">
           
   
   
@@ -591,7 +591,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/attribute-system/" class="md-nav__link">
+      <a href="../../design/attribute-system.md" class="md-nav__link">
         
   
   
@@ -1073,10 +1073,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#resource-system" class="md-nav__link">
+  <a href="#talent-trees-perk-tiers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Resource System
+        Talent Trees &amp; Perk Tiers
       
     </span>
   </a>
@@ -1084,10 +1084,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#stat-identity-tier-perks" class="md-nav__link">
+  <a href="#resource-system" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Stat Identity &amp; Tier Perks
+        Resource System
       
     </span>
   </a>
@@ -1575,10 +1575,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#resource-system" class="md-nav__link">
+  <a href="#talent-trees-perk-tiers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Resource System
+        Talent Trees &amp; Perk Tiers
       
     </span>
   </a>
@@ -1586,10 +1586,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#stat-identity-tier-perks" class="md-nav__link">
+  <a href="#resource-system" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Stat Identity &amp; Tier Perks
+        Resource System
       
     </span>
   </a>
@@ -1637,8 +1637,17 @@
 <li>Deep build diversity per class, with itemization designed to create build desire — finding an item should make you want to try a new build.</li>
 </ul>
 <h2 id="origin-vs-specialized-classes">Origin vs. Specialized Classes<a class="headerlink" href="#origin-vs-specialized-classes" title="Permanent link">&para;</a></h2>
-<p>Origin classes (Analog and Cyborg) are generalists — jack of all trades for their respective path. They are the easiest to understand and the most forgiving to gear. All three of their <strong>kore</strong> attributes (the three stats native to that origin) contribute equally to a single derived stat (Soul or Interface).</p>
-<p>Specialized classes trade that flexibility for depth. They scale primarily off one attribute, get partial benefit from their two kore stats, and are actively hurt by their opposing stat. See <a href="../../design/attribute-system/">Attribute System</a> for full scaling rules.</p>
+<p>Origin classes (Analog and Cyborg) are generalists — jack of all trades for their respective path. They are the easiest to understand and the most forgiving to gear.</p>
+<p>Specialized classes trade that flexibility for depth. Each has a unique talent tree with signature perks that define their playstyle. The deeper you invest, the more distinct the class feels — a Tier V specialist plays nothing like the origin class they came from.</p>
+<h2 id="talent-trees-perk-tiers">Talent Trees &amp; Perk Tiers<a class="headerlink" href="#talent-trees-perk-tiers" title="Permanent link">&para;</a></h2>
+<p>Each class has a talent tree that drives build identity. Progression through the tree unlocks <strong>perk tiers</strong> (I through V) that represent escalating transformation:</p>
+<ul>
+<li><strong>Tier I–II</strong>: Broadening — picking up tools, exploring the class's kit</li>
+<li><strong>Tier III</strong>: Committing — the tree narrows, builds start to specialize</li>
+<li><strong>Tier IV–V</strong>: Defining — perks that fundamentally change how the class plays, potentially altering resource mechanics or adding entirely new systems</li>
+</ul>
+<p>Each specialist class has a signature perk ladder — Exile (Count), Amalgamation (Forged), Drone Swarm (Automaton), IED (Survivalist), Telekinesis (Polymath), Doomsayer (Enculted). These perks are what <em>make</em> the class — they aren't shared or transferable (outside of extremely rare class-granting item mods).</p>
+<p>Perk tiers are permanent progression through talent investment, not something that can be lost by swapping gear.</p>
 <h2 id="resource-system">Resource System<a class="headerlink" href="#resource-system" title="Permanent link">&para;</a></h2>
 <p>Each class has <strong>one unique resource</strong> capturing the energy they expend. Resources are class-specific and mechanically distinct.</p>
 <table>
@@ -1675,8 +1684,6 @@
 </tr>
 </tbody>
 </table>
-<h2 id="stat-identity-tier-perks">Stat Identity &amp; Tier Perks<a class="headerlink" href="#stat-identity-tier-perks" title="Permanent link">&para;</a></h2>
-<p>Attribute distribution drives <strong>tier perks</strong> that unlock at stat breakpoints and are lost when gear drops you below. Each specialist class has a signature perk ladder — Exile (Count), Amalgamation (Forged), Drone Swarm (Automaton), IED (Survivalist), Telekinesis (Polymath), Doomsayer (Enculted). See each class doc and the <a href="../../design/attribute-system/#specialized-class-tier-perks">tier perks table</a>.</p>
 <h2 id="character-creation">Character Creation<a class="headerlink" href="#character-creation" title="Permanent link">&para;</a></h2>
 <p>Players choose male or female at the start. Both are fully supported for all classes. This effectively doubles the required player character models — a scope consideration for production and a factor in tech stack decisions around animation systems.</p>
 

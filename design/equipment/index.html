@@ -232,7 +232,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../attribute-system/" class="md-tabs__link">
+        <a href="../attribute-system.md" class="md-tabs__link">
           
   
   
@@ -585,7 +585,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../attribute-system/" class="md-nav__link">
+      <a href="../attribute-system.md" class="md-nav__link">
         
   
   
@@ -1540,17 +1540,6 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#armor-slots" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Armor Slots
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#armor-augments" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1609,13 +1598,14 @@
 
 
 <h1 id="equipment">Equipment<a class="headerlink" href="#equipment" title="Permanent link">&para;</a></h1>
-<p>For item properties, rarity, stat budgets, and generation see <a href="../item-architecture/">Item Architecture</a>.</p>
+<p>For item properties, rarity, power budgets, and generation see <a href="../item-architecture/">Item Architecture</a>. For behavior mods and slot stat domains see <a href="../itemization/">Itemization</a>.</p>
 <h2 id="weapon-types">Weapon Types<a class="headerlink" href="#weapon-types" title="Permanent link">&para;</a></h2>
 <p>Weapons are categorized by <strong>damage type</strong> and <strong>handling</strong> (1H or 2H). Damage type determines what enemies are vulnerable or resistant to. Handling determines whether the offhand slot is available.</p>
 <ul>
 <li><strong>1H weapons</strong> define Fire only. Alt Fire comes from the offhand.</li>
 <li><strong>2H weapons</strong> always define Fire. Alt Fire is <strong>optional</strong> — a sledgehammer has no alt fire, but an M4 has a grenade launcher. Augments can add an alt fire to weapons that don't have one natively.</li>
 </ul>
+<p>The weapon type list will grow significantly over time. Each new weapon type should change the player's tactical approach, not just provide different numbers.</p>
 <h2 id="damage-types">Damage Types<a class="headerlink" href="#damage-types" title="Permanent link">&para;</a></h2>
 <h3 id="energy">Energy<a class="headerlink" href="#energy" title="Permanent link">&para;</a></h3>
 <p>Powered by cells or capacitors. Clean, precise, futuristic.</p>
@@ -1744,7 +1734,7 @@
 <tbody>
 <tr>
 <td>Cryo</td>
-<td>Slow → Freeze (stacking)</td>
+<td>Slow, then Freeze (stacking)</td>
 <td>Ice crystals, blue tint on target</td>
 </tr>
 <tr>
@@ -1764,7 +1754,7 @@
 </tr>
 </tbody>
 </table>
-<p>Elemental weapons follow the same 1H/2H structure as energy and kinetic — the element determines the damage type and status effect, not the weapon form factor. A cryo pistol and a cryo rifle both apply slow/freeze, but differ in range, fire rate, and handling.</p>
+<p>Elemental weapons follow the same 1H/2H structure as energy and kinetic — the element determines the damage type and status effect, not the weapon form factor.</p>
 <table>
 <thead>
 <tr>
@@ -1849,12 +1839,12 @@
 </tbody>
 </table>
 <h3 id="class-specific">Class-Specific<a class="headerlink" href="#class-specific" title="Permanent link">&para;</a></h3>
-<p>Weapons gated by <strong>tier perks</strong>, not class selection. Any class that has unlocked the associated tier perk (tier I minimum) can equip the weapon. A Forged who unlocks Enculted tier I through stat distribution can wield an Ancient Text. This creates meaningful cross-class build paths — the weapon works for anyone willing to invest the stats.</p>
+<p>Weapons gated by <strong>talent tree progression</strong>, not stat distribution. A player must have invested deep enough in a specific class's talent tree to equip the weapon. This creates meaningful build commitment — the weapon rewards players who have specialized.</p>
 <table>
 <thead>
 <tr>
 <th>Weapon</th>
-<th>Tier Perk Required</th>
+<th>Class Gate</th>
 <th>Handling</th>
 <th>Fire</th>
 <th>Alt Fire</th>
@@ -1864,55 +1854,54 @@
 <tbody>
 <tr>
 <td>Drone Control Module</td>
-<td>Automaton I</td>
+<td>Automaton</td>
 <td>2H</td>
 <td>Direct drone attack on target</td>
 <td>Recall / reposition drones</td>
-<td>Weapon is the interface for the drone swarm — no direct damage from the player</td>
+<td>Weapon is the interface for the drone swarm</td>
 </tr>
 <tr>
 <td>Ancient Text</td>
-<td>Enculted I</td>
+<td>Enculted</td>
 <td>1H</td>
 <td>Channel curse at target</td>
 <td>—</td>
-<td>Slow, powerful, scales with Ambition</td>
+<td>Slow, powerful</td>
 </tr>
 <tr>
 <td>Exo-Gauntlet</td>
-<td>Forged I</td>
+<td>Forged</td>
 <td>1H</td>
 <td>Augmented punch</td>
 <td>—</td>
-<td>Melee, scales with Deviation</td>
+<td>Melee</td>
 </tr>
 <tr>
 <td>Scavenger's Multi-Tool</td>
-<td>Survivalist I</td>
+<td>Survivalist</td>
 <td>1H</td>
 <td>Context-dependent (melee near, throws far)</td>
 <td>—</td>
-<td>Adapts to range — knife up close, thrown hatchet at distance</td>
+<td>Adapts to range</td>
 </tr>
 <tr>
 <td>Etiquette Piece</td>
-<td>Count/Countess I</td>
+<td>Count/Countess</td>
 <td>1H</td>
 <td>Precise strike (bonus crit)</td>
 <td>—</td>
-<td>Low base damage, high crit multiplier, scales with Orthodoxy</td>
+<td>Low base damage, high crit multiplier</td>
 </tr>
 <tr>
 <td>Synthesis Staff</td>
-<td>Polymath I</td>
+<td>Polymath</td>
 <td>2H</td>
 <td>Arcane bolt</td>
 <td>Overload pulse (AoE)</td>
-<td>Hybrid energy/elemental, scales with Clarity</td>
+<td>Hybrid energy/elemental</td>
 </tr>
 </tbody>
 </table>
-<p>Because tier perks can be lost when stats shift (see <a href="../attribute-system/#stat-identity--tier-perks--visual-metamorphosis">stat identity breakpoints</a>), equipping a class-specific weapon is a commitment — if you lose the tier perk, the weapon becomes unusable until the perk is regained. The <a href="../attribute-system/">gear swap confirmation dialog</a> warns the player if a stat change would lock them out of an equipped class-specific weapon.</p>
 <h2 id="offhands">Offhands<a class="headerlink" href="#offhands" title="Permanent link">&para;</a></h2>
 <p>Offhands occupy the offhand slot when using a 1H weapon. Each offhand's <code>fire_skill</code> becomes the player's <strong>Alt Fire</strong>. Offhands are never "just stat sticks" — they always provide an active Alt Fire ability.</p>
 <p>Most offhands fall into one of three archetypes:</p>
@@ -1953,7 +1942,7 @@
 <td>Grenade</td>
 <td>Triggered fire</td>
 <td>Throw grenade at cursor (AoE on impact)</td>
-<td>Arcing projectile with max range. Elemental variants exist (cryo, frag, incendiary).</td>
+<td>Arcing projectile with max range. Subtype variants (frag, incendiary, cluster, stun).</td>
 </tr>
 <tr>
 <td>Sidearm</td>
@@ -1965,7 +1954,7 @@
 <td>Disruptor</td>
 <td>Triggered fire</td>
 <td>EMP pulse (disables mechanical enemies briefly)</td>
-<td>Short range AoE. Especially effective vs. Cyborg-type enemies.</td>
+<td>Short range AoE.</td>
 </tr>
 <tr>
 <td>Stealth Module</td>
@@ -1977,46 +1966,20 @@
 <td>Drone Relay</td>
 <td>Triggered fire</td>
 <td>Command drone to attack (single target)</td>
-<td>Automaton-themed. Offhand version of drone control — one drone instead of a swarm.</td>
+<td>Automaton-themed. One drone instead of a swarm.</td>
 </tr>
 <tr>
 <td>Cursed Totem</td>
 <td>Triggered fire</td>
 <td>Apply curse DoT at range</td>
-<td>Enculted-themed. Weaker than Ancient Text but frees main hand for a generic weapon.</td>
+<td>Enculted-themed. Frees main hand for a generic weapon.</td>
 </tr>
 </tbody>
 </table>
 <h2 id="armor">Armor<a class="headerlink" href="#armor" title="Permanent link">&para;</a></h2>
-<p>Armor pieces (head, chest, gloves, boots) provide <strong>damage reduction</strong> and contribute to the player's total <strong>weight</strong>. There are no discrete armor weight classes — every piece simply has a weight value. Heavier armor tends to have higher DR; lighter armor keeps the player fast. The player decides their own trade-off by mixing pieces.</p>
+<p>Armor pieces (head, chest, hands, legs, feet) provide <strong>damage reduction</strong> and contribute to the player's total <strong>weight</strong>. Each armor slot also has a <strong>stat domain</strong> and a pool of <strong>behavior mods</strong> — see <a href="../itemization/">Itemization</a> for details.</p>
+<p>There are no discrete armor weight classes — every piece simply has a weight value. Heavier armor tends to have higher DR; lighter armor keeps the player fast. The player decides their own trade-off by mixing pieces.</p>
 <p>See <a href="../item-architecture/#weight-system">Item Architecture — Weight System</a> for how weight affects movement speed.</p>
-<h3 id="armor-slots">Armor Slots<a class="headerlink" href="#armor-slots" title="Permanent link">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Slot</th>
-<th>Example Sub Types</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Head</td>
-<td>Helmet, Hood, Visor</td>
-</tr>
-<tr>
-<td>Chest</td>
-<td>Vest, Jacket, Plate Rig, Hardsuit</td>
-</tr>
-<tr>
-<td>Gloves</td>
-<td>Work Gloves, Gauntlets, Interface Gloves</td>
-</tr>
-<tr>
-<td>Boots</td>
-<td>Runners, Stompers, Mag-Boots</td>
-</tr>
-</tbody>
-</table>
 <h3 id="armor-augments">Armor Augments<a class="headerlink" href="#armor-augments" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -2062,7 +2025,7 @@
 <div class="admonition question">
 <p class="admonition-title">Open Questions — Armor</p>
 <ul>
-<li>Class-specific armor sets (gated by tier perks like weapons)?</li>
+<li>Class-specific armor sets (gated by talent depth like weapons)?</li>
 <li>Should some augments add weight (reinforcement makes the piece heavier)?</li>
 </ul>
 </div>
@@ -2071,10 +2034,10 @@
 <div class="admonition question">
 <p class="admonition-title">Open Questions — Damage Type System</p>
 <ul>
-<li>Do enemies have explicit resistances/vulnerabilities per damage type (e.g., mechanicals resist kinetic, weak to electric)?</li>
+<li>Do enemies have explicit resistances/vulnerabilities per damage type?</li>
 <li>Is there a rock-paper-scissors layer, or just flat resist/vulnerability values?</li>
-<li>Do elemental status effects stack with weapon augment effects (e.g., electric weapon + shock capacitor augment)?</li>
-<li>How does damage type interact with ammo type augments — does a kinetic weapon with incendiary ammo deal fire damage, kinetic damage, or both?</li>
+<li>Do elemental status effects stack with weapon augment effects?</li>
+<li>How does damage type interact with ammo type augments?</li>
 </ul>
 </div>
 <h2 id="rarity-and-base-types">Rarity and Base Types<a class="headerlink" href="#rarity-and-base-types" title="Permanent link">&para;</a></h2>

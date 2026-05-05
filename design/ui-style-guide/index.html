@@ -232,7 +232,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../attribute-system/" class="md-tabs__link">
+        <a href="../attribute-system.md" class="md-tabs__link">
           
   
   
@@ -585,7 +585,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../attribute-system/" class="md-nav__link">
+      <a href="../attribute-system.md" class="md-nav__link">
         
   
   
@@ -1735,14 +1735,14 @@ This document is generated from the current theme resources — update it when t
 <td><code>(0.0, 0.15, 0.05, 0.9)</code></td>
 <td><code>(0.35, 0.9, 0.45, 1.0)</code></td>
 <td><code>(0.35, 0.9, 0.45, 1.0)</code></td>
-<td>Primary stat (<code>+Soul</code>)</td>
+<td>Positive bonus (<code>+Damage</code>)</td>
 </tr>
 <tr>
 <td><code>StatNegTag</code></td>
 <td><code>(0.15, 0.0, 0.0, 0.9)</code></td>
 <td><code>(0.9, 0.3, 0.3, 1.0)</code></td>
 <td><code>(0.9, 0.3, 0.3, 0.85)</code></td>
-<td>Opposing stat (<code>-Interface</code>)</td>
+<td>Negative tradeoff (<code>-Inventory</code>)</td>
 </tr>
 </tbody>
 </table>
@@ -1872,7 +1872,7 @@ This document is generated from the current theme resources — update it when t
 <tbody>
 <tr>
 <td>accent</td>
-<td><code>(0.65, 0.45, 0.25)</code> — Brown / SOU</td>
+<td><code>(0.65, 0.45, 0.25)</code> — Brown</td>
 </tr>
 <tr>
 <td>accent_dim</td>
@@ -1915,7 +1915,7 @@ This document is generated from the current theme resources — update it when t
 <tbody>
 <tr>
 <td>accent</td>
-<td><code>(0.7, 0.85, 0.35)</code> — Olive green / ING</td>
+<td><code>(0.7, 0.85, 0.35)</code> — Olive green</td>
 </tr>
 <tr>
 <td>accent_dim</td>
@@ -1958,7 +1958,7 @@ This document is generated from the current theme resources — update it when t
 <tbody>
 <tr>
 <td>accent</td>
-<td><code>(0.95, 0.92, 0.8)</code> — Ivory / ORT</td>
+<td><code>(0.95, 0.92, 0.8)</code> — Ivory</td>
 </tr>
 <tr>
 <td>accent_dim</td>
@@ -2001,7 +2001,7 @@ This document is generated from the current theme resources — update it when t
 <tbody>
 <tr>
 <td>accent</td>
-<td><code>(0.78, 0.35, 0.85)</code> — Purple / AMB</td>
+<td><code>(0.78, 0.35, 0.85)</code> — Purple</td>
 </tr>
 <tr>
 <td>accent_dim</td>
@@ -2045,7 +2045,7 @@ This document is generated from the current theme resources — update it when t
 <tbody>
 <tr>
 <td>accent</td>
-<td><code>(0.3, 0.85, 1.0)</code> — Cyan / ITF</td>
+<td><code>(0.3, 0.85, 1.0)</code> — Cyan</td>
 </tr>
 <tr>
 <td>accent_dim</td>
@@ -2088,7 +2088,7 @@ This document is generated from the current theme resources — update it when t
 <tbody>
 <tr>
 <td>accent</td>
-<td><code>(0.9, 0.25, 0.2)</code> — Red / DEV</td>
+<td><code>(0.9, 0.25, 0.2)</code> — Red</td>
 </tr>
 <tr>
 <td>accent_dim</td>
@@ -2131,7 +2131,7 @@ This document is generated from the current theme resources — update it when t
 <tbody>
 <tr>
 <td>accent</td>
-<td><code>(0.55, 0.78, 0.85)</code> — Steel blue / OPT</td>
+<td><code>(0.55, 0.78, 0.85)</code> — Steel blue</td>
 </tr>
 <tr>
 <td>accent_dim</td>
@@ -2174,7 +2174,7 @@ This document is generated from the current theme resources — update it when t
 <tbody>
 <tr>
 <td>accent</td>
-<td><code>(0.95, 0.9, 0.3)</code> — Yellow / CLA</td>
+<td><code>(0.95, 0.9, 0.3)</code> — Yellow</td>
 </tr>
 <tr>
 <td>accent_dim</td>
@@ -2218,7 +2218,7 @@ This document is generated from the current theme resources — update it when t
 <ul>
 <li>Never call <code>add_theme_font_size_override</code> with a magic number. Use <code>label.theme_type_variation</code> for Label subtypes. For widget types (CheckBox, OptionButton), read from <code>UIThemeState.palette.font_size_*</code>.</li>
 <li>Never hardcode palette colors. All colors come from <code>UIThemeState.palette.*</code>.</li>
-<li>Fixed colors (e.g. stat tag green/red, morality dot) are documented above and stay fixed regardless of theme.</li>
+<li>Fixed colors (e.g. stat tag green/red) are documented above and stay fixed regardless of theme.</li>
 <li>Panel backgrounds use 0.92–0.96 alpha to keep backgrounds readable over the 3D scene.</li>
 </ul>
 
