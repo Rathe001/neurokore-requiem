@@ -30,6 +30,16 @@ func _ready() -> void:
 	# respecs out of the perk doesn't keep silently-equipped weapons.
 	PerkState.perks_changed.connect(reconcile_extra_weapon_slots)
 
+## Clear all equipment and inventory. Called before creating a new character
+## so no items from a previous session leak through.
+func reset() -> void:
+	var slots := equipment.keys()
+	equipment.clear()
+	inventory.fill(null)
+	for slot in slots:
+		equipment_changed.emit(slot)
+	capacity_changed.emit()
+
 func get_equipped(slot: StringName) -> Item:
 	return equipment.get(slot, null)
 

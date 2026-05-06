@@ -87,9 +87,12 @@ func _physics_process(_delta: float) -> void:
 			return
 		_player_cache = players[0] as Node3D
 	var player := _player_cache
-	if player == null:
+	if player == null or not player.is_inside_tree():
 		return
-	var space := player.get_world_3d().direct_space_state
+	var world := player.get_world_3d()
+	if world == null:
+		return
+	var space := world.direct_space_state
 	if space == null:
 		return
 	# Both ray endpoints anchor to player Y, keeping each ray horizontal so it

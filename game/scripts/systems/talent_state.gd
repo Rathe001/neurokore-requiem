@@ -8,7 +8,7 @@ extends Node
 # A node is "active" when:
 #   * it exists in the loaded tree at (class_id, tier, node_idx),
 #   * the player has a point allocated to that slot (PlayerState), AND
-#   * the slot's tier is currently unlocked (PlayerState.is_tier_unlocked).
+#   * the slot's tier is currently unlocked (PlayerState.is_node_active).
 #
 # What an active node can do (any combination):
 #   1. Contribute magnitudes to one or more effect aggregates via its

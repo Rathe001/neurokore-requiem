@@ -1,6 +1,7 @@
 extends Control
 
-const PANEL_SIZE := Vector2(220.0, 280.0)
+const STARTUP_SCENE := "res://scenes/ui/startup_screen.tscn"
+const PANEL_SIZE := Vector2(220.0, 310.0)
 const BUTTON_SIZE := Vector2(168.0, 32.0)
 const BUTTON_GAP := 6.0
 
@@ -81,6 +82,7 @@ func _build_main_panel() -> void:
 	buttons.add_child(_make_button("COMMON_SETTINGS", _on_settings_pressed))
 	buttons.add_child(_make_button("COMMON_REPORT_BUG", _on_report_bug_pressed))
 	buttons.add_child(_make_button("COMMON_OPEN_LOGS", _on_open_logs_pressed))
+	buttons.add_child(_make_button("COMMON_QUIT_TO_MENU", _on_quit_to_menu_pressed))
 	buttons.add_child(_make_button("COMMON_QUIT_TO_DESKTOP", _on_quit_pressed))
 
 func _build_settings_panel() -> void:
@@ -123,6 +125,12 @@ func _on_resume_pressed() -> void:
 
 func _on_settings_pressed() -> void:
 	_show_settings()
+
+func _on_quit_to_menu_pressed() -> void:
+	if PlayerState.active_save_id != "":
+		SaveManager.save_game(PlayerState.active_save_id)
+	get_tree().change_scene_to_file(STARTUP_SCENE)
+
 
 func _on_quit_pressed() -> void:
 	get_tree().quit()

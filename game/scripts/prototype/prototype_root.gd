@@ -195,6 +195,8 @@ func _reset_player() -> void:
 	PlayerState.new_game_plus += 1
 	if player.has_signal(&"notification_requested"):
 		player.emit_signal(&"notification_requested", tr(&"HUD_BANNER_LEVEL_RESET") % PlayerState.new_game_plus)
+	if PlayerState.active_save_id != "":
+		SaveManager.save_game(PlayerState.active_save_id)
 
 func _spawn_boss() -> void:
 	if boss_spawn == Vector3.ZERO:

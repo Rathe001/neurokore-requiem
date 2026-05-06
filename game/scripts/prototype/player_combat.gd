@@ -145,6 +145,7 @@ func _resolve_cone(skill: Skill, aim: Vector3, eff_range: float, weapon: Item) -
 			continue
 		for _i in hits:
 			if not _roll_hit(weapon):
+				DamageNumber.spawn_miss(enode.get_parent(), enode.global_position + Vector3(0.0, 1.8, 0.0))
 				continue
 			var is_crit := _roll_crit(weapon)
 			var dmg := _crit_damage(_roll_skill_damage(skill, weapon), is_crit)
@@ -161,6 +162,7 @@ func _resolve_aoe(skill: Skill, eff_range: float, weapon: Item) -> void:
 			continue
 		for _i in hits:
 			if not _roll_hit(weapon):
+				DamageNumber.spawn_miss(enode.get_parent(), enode.global_position + Vector3(0.0, 1.8, 0.0))
 				continue
 			var is_crit := _roll_crit(weapon)
 			var dmg := _crit_damage(_roll_skill_damage(skill, weapon), is_crit)
@@ -249,6 +251,7 @@ func _resolve_hitscan(skill: Skill, aim: Vector3, eff_range: float, weapon: Item
 		acc_mult = MELEE_RANGE_ACCURACY_MULT
 	for _i in hits:
 		if not _roll_hit(weapon, acc_mult):
+			DamageNumber.spawn_miss(hit_target.get_parent(), hit_target.global_position + Vector3(0.0, 1.8, 0.0))
 			continue
 		var is_crit := _roll_crit(weapon)
 		var dmg := _crit_damage(_roll_skill_damage(skill, weapon), is_crit)

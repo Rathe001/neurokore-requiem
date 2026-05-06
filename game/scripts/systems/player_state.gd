@@ -31,6 +31,22 @@ var gender: StringName = &"male"
 var avatar_id: int = 0
 ## Player-entered display name. Empty = no name shown in HUD.
 var player_name: String = ""
+## Hardcore mode — death is permanent. Set during character creation.
+var hardcore: bool = false
+## Stable UUID for this character — generated once at creation, never changes.
+## Used as the persistent identity in multiplayer and cloud sync.
+var character_id: String = ""
+## File identifier for the active save slot. Empty = unsaved new character.
+var active_save_id: String = ""
+## Bus fields written by SaveManager on load, read by PrototypePlayer on _ready().
+## Same transfer pattern as class_id/spec_id.
+var saved_credits: int = 0
+var saved_resource_current: float = 0.0
+## Accumulated HP gained from level-ups. Restored on load so max_health
+## reflects all past level-up rolls, not just the base @export value.
+var saved_level_hp_bonus: int = 0
+## Current health at the time of save. -1 means "use max_health" (fresh character).
+var saved_health: int = -1
 
 
 # Loads the portrait matching the current class/gender/avatar_id selection.
@@ -59,7 +75,7 @@ var xp_to_next: int = STARTING_XP_TO_NEXT
 var new_game_plus: int = 0
 
 ## Spent talent points per stat tree.
-## Layout: { stat_id: [[bool]*8]*3 } — 3 tiers × 8 nodes each.
+## Layout: { stat_id: [[bool]*8]*5 } — 5 tiers × 8 nodes each.
 var talent_allocations: Dictionary = {}
 
 ## Spent talent points for kore nodes.
@@ -72,6 +88,30 @@ var _cached_kore_nodes_tier: int = -1
 
 func _ready() -> void:
 	pass
+
+## Reset all character state to fresh defaults. Called before creating a new
+## character so no data from a previous session leaks through.
+func reset() -> void:
+	class_id = &""
+	spec_id = &""
+	gender = &"male"
+	avatar_id = 0
+	player_name = ""
+	hardcore = false
+	character_id = ""
+	active_save_id = ""
+	level = 1
+	xp = 0
+	xp_to_next = STARTING_XP_TO_NEXT
+	talent_points_total = 0
+	new_game_plus = 0
+	saved_credits = 0
+	saved_resource_current = 0.0
+	saved_level_hp_bonus = 0
+	saved_health = -1
+	talent_allocations.clear()
+	kore_node_allocations.clear()
+	_reset_tier_cache()
 
 # ── Class / spec identity ─────────────────────────────────────────────────────
 
@@ -88,7 +128,7 @@ func set_spec(id: StringName) -> void:
 	if spec_id == id:
 		return
 	spec_id = id
-	_reset_tier_cache()
+	reset_talents()
 	spec_changed.emit(spec_id)
 
 func set_class_and_spec(new_class: StringName, new_spec: StringName) -> void:
@@ -202,12 +242,6 @@ func _reset_tier_cache() -> void:
 	_cached_origin_tier = -1
 	_cached_kore_nodes_tier = -1
 
-## Placeholder: tier is unlocked if player level / 3 >= tier (0-indexed).
-## Used by is_node_active for backward compat; prefer get_unlocked_tier()
-## for per-tree gating.
-func is_tier_unlocked(tier: int) -> bool:
-	return tier <= level / 3
-
 ## Kore nodes are removed; always returns false for now.
 func is_kore_node_tier_unlocked(_tier: int) -> bool:
 	return false
@@ -216,9 +250,26 @@ const TALENT_TIER_COUNT := 5
 ## Origin class players can access same-origin trees up to this tier (exclusive).
 const ORIGIN_CLASS_TIER_CAP := 3
 
+## Cumulative point thresholds to unlock each tier within a track.
+## Tier I (index 0) is always open (0 points). Each subsequent tier
+## requires 4 more total points spent anywhere in the same track.
+const TIER_POINT_THRESHOLDS: Array[int] = [0, 4, 8, 12, 16]
+
+## Count total talent points allocated in a single track.
+func _points_in_track(stat_id: StringName) -> int:
+	var tiers_data: Array = talent_allocations.get(stat_id, [])
+	var total := 0
+	for tier_row in tiers_data:
+		for allocated in tier_row:
+			if allocated:
+				total += 1
+	return total
+
 ## Returns the number of unlocked tiers (exclusive upper bound) for a talent
 ## tree identified by its legacy stat_id (&"dev", &"ort", etc.).
 ## 0 = fully locked, 5 = all tiers open.
+## Tier progression is gated by cumulative points spent in the track, not
+## player level. Origin/spec access rules still apply on top.
 func get_unlocked_tier(stat_id: StringName) -> int:
 	var tree_class: StringName = AttributeState.STAT_TO_CLASS.get(stat_id, &"")
 	if tree_class == &"":
@@ -230,20 +281,27 @@ func get_unlocked_tier(stat_id: StringName) -> int:
 	if tree_origin != player_origin:
 		return 0
 
-	var level_cap: int = mini(level / 3 + 1, TALENT_TIER_COUNT)
+	# Point-based tier cap: count points in this track and find the highest
+	# tier whose threshold is met.
+	var points := _points_in_track(stat_id)
+	var point_cap := 1  # tier I is always open
+	for i in range(1, TIER_POINT_THRESHOLDS.size()):
+		if points >= TIER_POINT_THRESHOLDS[i]:
+			point_cap = i + 1
+	var tier_cap: int = mini(point_cap, TALENT_TIER_COUNT)
 
 	# Origin class (no spec) → same-origin trees capped at tier 3
 	if spec_id == &"":
-		return mini(level_cap, ORIGIN_CLASS_TIER_CAP)
+		return mini(tier_cap, ORIGIN_CLASS_TIER_CAP)
 
-	# Own spec tree → full level-gated access
+	# Own spec tree → full point-gated access
 	var own_stat: StringName = AttributeState.CLASS_TO_STAT.get(spec_id, &"")
 	if stat_id == own_stat:
-		return level_cap
+		return tier_cap
 
 	# Same-origin, different spec → requires tier 1+ investment in own spec
 	if _has_own_spec_investment():
-		return level_cap
+		return tier_cap
 	return 0
 
 ## True if the player has allocated at least one node at tier 1+ in their

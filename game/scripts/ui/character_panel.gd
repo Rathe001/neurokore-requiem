@@ -4,7 +4,8 @@ class_name CharacterPanel
 const PANEL_SIZE := Vector2(380.0, 420.0)
 const SHEET_HEIGHT := 240.0
 const STATS_POS := Vector2(16.0, 34.0)
-const STATS_SIZE := Vector2(200.0, 140.0)
+const STATS_SIZE := Vector2(200.0, 200.0)
+const STAT_FONT_SIZE := 11
 const EQUIP_SLOT_SIZE := Vector2(38.0, 38.0)
 const EQUIP_GAP := 4.0
 const EQUIP_COLS := 3
@@ -37,9 +38,16 @@ const EXTRA_WEAPON_SLOTS_LAYOUT: Array[Dictionary] = [
 	{"row": 3, "col": 2, "label_key": "EQUIP_WEAPON_4", "id": &"weapon_4", "accepts": &"weapon"},
 ]
 
+var _level_label: Label
 var _hp_label: Label
 var _resource_label: Label
 var _credits_label: Label
+var _dmg_red_label: Label
+var _crit_label: Label
+var _atk_spd_label: Label
+var _hit_label: Label
+var _move_spd_label: Label
+var _cdr_label: Label
 var _player: Node = null
 # Per-slot ItemSlot nodes for the Forged Amalgamation extra weapon slots.
 # Built once during _build_layout; visibility is toggled by
@@ -344,14 +352,15 @@ func _build_character_sheet(parent: Control) -> void:
 	var stats := VBoxContainer.new()
 	stats.position = STATS_POS
 	stats.size = STATS_SIZE
-	stats.add_theme_constant_override(&"separation", 2)
+	stats.add_theme_constant_override(&"separation", 1)
 	parent.add_child(stats)
 	# Use the player's chosen name from character creation; fall back to the
 	# generic "Operator" label only when the prototype scene bypasses creation.
 	var name_text: String = PlayerState.player_name if not PlayerState.player_name.is_empty() else tr("CHARACTER_PANEL_OPERATOR")
 	stats.add_child(_make_stat_row("CHARACTER_PANEL_NAME", name_text))
 	stats.add_child(_make_stat_row("CHARACTER_PANEL_CLASS", _class_label()))
-	stats.add_child(_make_stat_row("CHARACTER_PANEL_LEVEL", "1"))
+	_level_label = _make_stat_value(str(PlayerState.level))
+	stats.add_child(_make_stat_row_with_value("CHARACTER_PANEL_LEVEL", _level_label))
 	_hp_label = _make_stat_value("— / —")
 	stats.add_child(_make_stat_row_with_value("CHARACTER_PANEL_HEALTH", _hp_label))
 	_resource_label = _make_stat_value("— / —")
@@ -359,6 +368,20 @@ func _build_character_sheet(parent: Control) -> void:
 	_credits_label = _make_stat_value("₢ 0")
 	_credits_label.add_theme_color_override(&"font_color", p.credits)
 	stats.add_child(_make_stat_row_with_value("CHARACTER_PANEL_CREDITS", _credits_label))
+
+	# Combat stats — updated via stats_changed signal from the player.
+	_dmg_red_label = _make_stat_value("0")
+	stats.add_child(_make_stat_row_with_value("Armor", _dmg_red_label))
+	_crit_label = _make_stat_value("0%")
+	stats.add_child(_make_stat_row_with_value("Crit", _crit_label))
+	_hit_label = _make_stat_value("100%")
+	stats.add_child(_make_stat_row_with_value("Accuracy", _hit_label))
+	_atk_spd_label = _make_stat_value("+0%")
+	stats.add_child(_make_stat_row_with_value("Atk Spd", _atk_spd_label))
+	_move_spd_label = _make_stat_value("+0%")
+	stats.add_child(_make_stat_row_with_value("Move Spd", _move_spd_label))
+	_cdr_label = _make_stat_value("0%")
+	stats.add_child(_make_stat_row_with_value("CDR", _cdr_label))
 
 
 	var equip_total_width := float(EQUIP_COLS) * EQUIP_SLOT_SIZE.x + float(EQUIP_COLS - 1) * EQUIP_GAP
@@ -496,6 +519,7 @@ func _make_stat_row_with_value(label_text: String, value: Label) -> HBoxContaine
 	var key := Label.new()
 	key.text = label_text
 	key.theme_type_variation = &"BodyLabel"
+	key.add_theme_font_size_override(&"font_size", STAT_FONT_SIZE)
 	key.add_theme_color_override(&"font_color", UIThemeState.palette.text_dim)
 	key.custom_minimum_size = Vector2(64.0, 0.0)
 	row.add_child(key)
@@ -506,6 +530,7 @@ func _make_stat_value(value_text: String) -> Label:
 	var value := Label.new()
 	value.text = value_text
 	value.theme_type_variation = &"BodyLabel"
+	value.add_theme_font_size_override(&"font_size", STAT_FONT_SIZE)
 	return value
 
 func _make_label(text: String, variation: StringName, color: Color = Color.TRANSPARENT) -> Label:
@@ -527,6 +552,9 @@ func _bind_player() -> void:
 		_player.resource_changed.connect(_on_resource_changed)
 	if _player.has_signal(&"credits_changed"):
 		_player.credits_changed.connect(_on_credits_changed)
+	if _player.has_signal(&"stats_changed"):
+		_player.stats_changed.connect(_on_stats_changed)
+	PlayerState.leveled_up.connect(_on_leveled_up)
 	var max_health: int = int(_player.max_health)
 	_on_health_changed(max_health, max_health)
 	var pool = _player.resource_pool
@@ -534,6 +562,8 @@ func _bind_player() -> void:
 		_on_resource_changed(pool.start_value, pool.max_value)
 	if _player.has_method(&"get_credits"):
 		_on_credits_changed(int(_player.get_credits()))
+	_on_stats_changed()
+	_on_leveled_up(PlayerState.level, 0)
 
 func _on_health_changed(current: int, max_value: int) -> void:
 	if _hp_label != null:
@@ -546,6 +576,33 @@ func _on_resource_changed(current: int, max_value: int) -> void:
 func _on_credits_changed(amount: int) -> void:
 	if _credits_label != null:
 		_credits_label.text = "₢ %d" % max(amount, 0)
+
+func _on_leveled_up(new_level: int, _hp_gain: int) -> void:
+	if _level_label != null:
+		_level_label.text = str(new_level)
+
+func _on_stats_changed() -> void:
+	if _player == null:
+		return
+	var p_node: PrototypePlayer = _player as PrototypePlayer
+	if p_node == null:
+		return
+	if _dmg_red_label != null:
+		_dmg_red_label.text = str(p_node._gear_damage_reduction)
+	if _crit_label != null:
+		var crit_pct: float = p_node._gear_crit_chance_bonus * 100.0
+		_crit_label.text = "%d%%" % int(round(crit_pct))
+	if _hit_label != null:
+		var hit_pct: float = 100.0 + p_node._gear_hit_chance_bonus * 100.0
+		_hit_label.text = "%d%%" % int(round(hit_pct))
+	if _atk_spd_label != null:
+		var atk_pct: float = p_node._gear_attack_speed_bonus * 100.0
+		_atk_spd_label.text = "+%d%%" % int(round(atk_pct))
+	if _move_spd_label != null:
+		_move_spd_label.text = "+%d%%" % p_node._gear_move_speed_bonus
+	if _cdr_label != null:
+		var cdr_pct: float = p_node._gear_cooldown_reduction * 100.0
+		_cdr_label.text = "%d%%" % int(round(cdr_pct))
 
 func _class_label() -> String:
 	if PlayerState.spec_id != &"":

@@ -9,7 +9,7 @@
 
 	// Root folder containing the actual files to upload. Must match the
 	// Godot Windows export path. Update this if you move the project.
-	"contentroot"	"C:/Users/josh/Projects/neurokore-requiem/build/windows/"
+	"contentroot"	"../../build/windows/"
 
 	// Empty = upload only, do not auto-set live on a branch. After upload,
 	// pick the build in the Steamworks dashboard and set live manually.

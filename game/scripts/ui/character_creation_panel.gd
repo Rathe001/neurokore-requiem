@@ -31,6 +31,7 @@ const ACCENT_FEMALE := Color(0.9, 0.45, 0.65, 1.0)
 var _selected_class_id: StringName = &""
 var _selected_gender: StringName = &""
 var _selected_avatar_id: int = 0
+var _selected_difficulty: StringName = &""
 var _name_value: String = ""
 
 # State the avatar section was last built against — lets us skip rebuilds
@@ -42,10 +43,12 @@ var _vbox: VBoxContainer
 var _class_section: Control
 var _gender_section: Control
 var _avatar_section: Control
+var _difficulty_section: Control
 var _name_section: Control
 var _class_cards_box: HBoxContainer
 var _gender_cards_box: HBoxContainer
 var _avatar_cards_box: HBoxContainer
+var _difficulty_cards_box: HBoxContainer
 var _name_input: LineEdit
 var _start_button: Button
 
@@ -56,6 +59,7 @@ func _ready() -> void:
 	_build_ui()
 	_build_class_cards()
 	_build_gender_cards()
+	_build_difficulty_cards()
 	_refresh()
 
 
@@ -65,6 +69,7 @@ func reset_state() -> void:
 	_selected_class_id = &""
 	_selected_gender = &""
 	_selected_avatar_id = 0
+	_selected_difficulty = &""
 	_name_value = ""
 	if _name_input != null:
 		_name_input.text = ""
@@ -114,6 +119,10 @@ func _build_ui() -> void:
 	_avatar_section = _make_section(&"STARTUP_TITLE_AVATAR")
 	_avatar_cards_box = _section_cards_box(_avatar_section)
 	_vbox.add_child(_avatar_section)
+
+	_difficulty_section = _make_section(&"Choose Difficulty")
+	_difficulty_cards_box = _section_cards_box(_difficulty_section)
+	_vbox.add_child(_difficulty_section)
 
 	_name_section = _make_name_section()
 	_vbox.add_child(_name_section)
@@ -196,6 +205,37 @@ func _build_gender_cards() -> void:
 	_gender_cards_box.add_child(female)
 
 
+const DIFFICULTY_CARD_SIZE := Vector2(140.0, 44.0)
+const ACCENT_NORMAL := Color(0.5, 0.7, 0.9, 1.0)
+const ACCENT_HARDCORE := Color(0.85, 0.25, 0.2, 1.0)
+
+var _hardcore_warning: Label
+
+func _build_difficulty_cards() -> void:
+	var normal := _make_pick_card("Normal", "", ACCENT_NORMAL, DIFFICULTY_CARD_SIZE)
+	normal.pressed.connect(func() -> void: _on_difficulty_selected(&"normal"))
+	normal.set_meta(&"id", &"normal")
+	_difficulty_cards_box.add_child(normal)
+
+	var hardcore := _make_pick_card("Hardcore", "", ACCENT_HARDCORE, DIFFICULTY_CARD_SIZE)
+	hardcore.pressed.connect(func() -> void: _on_difficulty_selected(&"hardcore"))
+	hardcore.set_meta(&"id", &"hardcore")
+	_difficulty_cards_box.add_child(hardcore)
+
+	_hardcore_warning = Label.new()
+	_hardcore_warning.text = "Death is permanent. There are no second chances."
+	_hardcore_warning.add_theme_font_size_override(&"font_size", 10)
+	_hardcore_warning.add_theme_color_override(&"font_color", Color(0.85, 0.3, 0.25, 0.85))
+	_hardcore_warning.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_hardcore_warning.visible = false
+	_difficulty_section.add_child(_hardcore_warning)
+
+
+func _on_difficulty_selected(difficulty: StringName) -> void:
+	_selected_difficulty = difficulty
+	_refresh()
+
+
 func _rebuild_avatar_section() -> void:
 	for child in _avatar_cards_box.get_children():
 		child.queue_free()
@@ -247,12 +287,19 @@ func _on_name_submitted(_text: String) -> void:
 
 
 func _on_start_pressed() -> void:
+	apply_to_player_state()
+	start_pressed.emit()
+
+## Write the creation panel's selections into PlayerState. Separated from
+## _on_start_pressed so the startup screen can call it again after a full
+## state reset (e.g. after hardcore death clears the old character).
+func apply_to_player_state() -> void:
 	PlayerState.gender = _selected_gender
 	# Spec stays empty here — picked later in-game via SpecSelectOverlay.
 	PlayerState.set_class_and_spec(_selected_class_id, &"")
 	PlayerState.avatar_id = _selected_avatar_id
 	PlayerState.player_name = _name_value.strip_edges()
-	start_pressed.emit()
+	PlayerState.hardcore = _selected_difficulty == &"hardcore"
 
 
 # ── Refresh ──────────────────────────────────────────────────────────────
@@ -260,7 +307,9 @@ func _on_start_pressed() -> void:
 func _refresh() -> void:
 	_gender_section.visible = _selected_class_id != &""
 	_avatar_section.visible = _selected_gender != &""
-	_name_section.visible = _selected_avatar_id > 0
+	_difficulty_section.visible = _selected_avatar_id > 0
+	_name_section.visible = _selected_difficulty != &""
+	_hardcore_warning.visible = _selected_difficulty == &"hardcore"
 
 	if _avatar_section.visible and (_avatar_built_class != _selected_class_id or _avatar_built_gender != _selected_gender):
 		_rebuild_avatar_section()
@@ -269,13 +318,15 @@ func _refresh() -> void:
 	_apply_card_selection(_gender_cards_box, _selected_gender)
 	if _avatar_section.visible:
 		_apply_card_selection(_avatar_cards_box, _selected_avatar_id)
+	if _difficulty_section.visible:
+		_apply_card_selection(_difficulty_cards_box, _selected_difficulty)
 	_update_start_enabled()
 
 
 func _update_start_enabled() -> void:
 	if _start_button == null:
 		return
-	var is_ready := _selected_avatar_id > 0 and not _name_value.strip_edges().is_empty()
+	var is_ready := _selected_difficulty != &"" and not _name_value.strip_edges().is_empty()
 	_start_button.disabled = not is_ready
 
 

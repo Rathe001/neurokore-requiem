@@ -65,6 +65,8 @@ func _build_theme(p: UIThemeConfig) -> Theme:
 	t.set_color(&"font_color", &"Label", p.text)
 	t.set_color(&"font_color", &"Button", p.text)
 	t.set_color(&"font_color", &"CheckBox", p.text)
+	t.set_color(&"font_hover_color", &"CheckBox", p.accent)
+	t.set_color(&"font_pressed_color", &"CheckBox", p.accent)
 	t.set_color(&"font_hover_color", &"Button", p.accent)
 	t.set_color(&"font_pressed_color", &"Button", p.accent)
 	t.set_color(&"font_disabled_color", &"Button", p.text_dim)
@@ -104,6 +106,22 @@ func _build_theme(p: UIThemeConfig) -> Theme:
 	var button_disabled := button_style.duplicate() as StyleBoxFlat
 	button_disabled.border_color = Color(p.accent_dim.r, p.accent_dim.g, p.accent_dim.b, 0.4)
 	t.set_stylebox(&"disabled", &"Button", button_disabled)
+
+	# CheckBox — use transparent backgrounds so the checkbox mark + label
+	# float without a button-like frame, but keep content margins so hover
+	# doesn't shift the layout.
+	var cb_empty := StyleBoxFlat.new()
+	cb_empty.bg_color = Color.TRANSPARENT
+	cb_empty.content_margin_left = 4
+	cb_empty.content_margin_right = 4
+	cb_empty.content_margin_top = 2
+	cb_empty.content_margin_bottom = 2
+	t.set_stylebox(&"normal", &"CheckBox", cb_empty)
+	t.set_stylebox(&"hover", &"CheckBox", cb_empty)
+	t.set_stylebox(&"pressed", &"CheckBox", cb_empty)
+	t.set_stylebox(&"hover_pressed", &"CheckBox", cb_empty)
+	t.set_stylebox(&"disabled", &"CheckBox", cb_empty)
+	t.set_stylebox(&"focus", &"CheckBox", StyleBoxEmpty.new())
 
 	# Label type variations
 	t.set_type_variation(&"TitleLabel", &"Label")

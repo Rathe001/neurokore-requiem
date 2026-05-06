@@ -19,6 +19,7 @@ enum ActiveKind {
 	SHIELD_HOLD,    # hold RMB → frontal shield absorbs hits until pool drains, then cooldown
 	GRENADE,        # click RMB → throw grenade at cursor with AoE on impact
 	SHIELD_BUFF,    # click RMB → buff player with N% damage reduction; cooldown after pool drains
+	SECOND_WIND,    # instant self-cast → refill resource bar, then cooldown
 }
 
 enum GrenadeType {

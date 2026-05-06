@@ -32,6 +32,9 @@ var accuracy: float = 1.0
 var crit_chance: float = 0.0
 var knockback_strength: float = 0.0
 var source_position: Vector3 = Vector3.ZERO
+## Skip the point-blank accuracy penalty. Set by drones and other sources
+## that always fire at close range by design.
+var ignore_melee_penalty: bool = false
 ## Group whose members the projectile damages. Anything else on the
 ## collision_mask (i.e. walls) just stops the bolt without damage. The
 ## spawner sets this to &"enemies" for player-fired bolts and &"player"
@@ -90,6 +93,7 @@ func _pool_release() -> void:
 	# owner's friendly-fire side. Spawner is expected to set it before
 	# reset(), but the default keeps existing player-fire callers working.
 	target_group = &"enemies"
+	ignore_melee_penalty = false
 
 func _physics_process(delta: float) -> void:
 	var step := speed * delta
@@ -152,6 +156,8 @@ func _on_body_entered(body: Node3D) -> void:
 				# Projectiles run async from PlayerCombat so the perk-aggregate
 				# read happens here at impact.
 				_apply_exile_curse_if_active(body)
+		elif target_group == &"enemies":
+			DamageNumber.spawn_miss(body.get_parent(), body.global_position + Vector3(0.0, 1.8, 0.0))
 	_release()
 
 
@@ -189,7 +195,7 @@ func _roll_hit(target_pos: Vector3) -> bool:
 	# obey the rule — the player still benefits from charging into a
 	# ranged enemy regardless of which class they're playing.
 	var eff_acc := accuracy
-	if source_position.distance_to(target_pos) < MELEE_RANGE_THRESHOLD:
+	if not ignore_melee_penalty and source_position.distance_to(target_pos) < MELEE_RANGE_THRESHOLD:
 		var player_fired := target_group == &"enemies"
 		var ignore_penalty := player_fired and Effects.get_aggregate(&"ignore_point_blank_penalty") > 0.0
 		if not ignore_penalty:

@@ -16,12 +16,12 @@ signal light_changed(is_on: bool)
 # Fires whenever the count of currently-charmed (Doomsayer) enemies
 # changes. HUD listens to update the per-perk badge count.
 signal charm_count_changed(current: int, max_value: int)
+signal stats_changed
 
 const ITEM_PICKUP_SCENE: PackedScene = preload("res://scenes/prototype/prototype_item_pickup.tscn")
 
 const KNOCKBACK_DURATION := 0.22
 const DEATH_HOLD := 0.9
-const RESPAWN_DELAY := 1.0
 const INTERACT_RANGE_SQ := 4.0  # 2.0m — player must stand close to interact
 const PLAYER_WORLD_POS_PARAM := &"player_world_pos"
 
@@ -317,6 +317,7 @@ func _ready() -> void:
 		_resource_current = float(resource_pool.start_value)
 		_resource_last_int = int(_resource_current)
 		resource_changed.emit(_resource_last_int, resource_pool.max_value)
+	_apply_saved_state()
 	_apply_debug_overrides()
 	_spawn_position = global_position
 	_build_crosshair()
@@ -330,6 +331,7 @@ func _ready() -> void:
 	_stand_test_shape.height = STAND_HEIGHT - CROUCH_HEIGHT
 	_build_stat_vfx()
 	_drone_swarm.reconcile()
+	_doomsayer.reconcile()
 
 func _build_stat_vfx() -> void:
 	if _base_mat == null or visual == null:
@@ -351,6 +353,27 @@ func _tint_meshes(node: Node, mat: Material) -> void:
 		(node as MeshInstance3D).material_override = mat
 	for child in node.get_children():
 		_tint_meshes(child, mat)
+
+func _apply_saved_state() -> void:
+	# Restore accumulated level-up HP before recomputing stats so max_health
+	# reflects all past level-up rolls, not just the base @export value.
+	if PlayerState.saved_level_hp_bonus > 0:
+		_level_hp_bonus = PlayerState.saved_level_hp_bonus
+		_recompute_stat_bonuses()
+	# Restore current health. -1 means fresh character → use max_health.
+	if PlayerState.saved_health >= 0:
+		_health = mini(PlayerState.saved_health, max_health)
+	else:
+		_health = max_health
+	health_changed.emit(_health, max_health)
+	if PlayerState.saved_credits > 0:
+		_credits = PlayerState.saved_credits
+		credits_changed.emit(_credits)
+	if PlayerState.saved_resource_current > 0.0 and resource_pool != null:
+		_resource_current = minf(PlayerState.saved_resource_current, float(resource_pool.max_value))
+		_resource_last_int = int(_resource_current)
+		resource_changed.emit(_resource_last_int, resource_pool.max_value)
+
 
 func _apply_debug_overrides() -> void:
 	var cfg: DebugConfig = DebugState.config
@@ -519,6 +542,7 @@ func _recompute_stat_bonuses() -> void:
 			_emit_resource_if_changed()
 			# Force emit even if int didn't change, since max changed.
 			resource_changed.emit(int(_resource_current), resource_pool.max_value)
+	stats_changed.emit()
 
 func _process(delta: float) -> void:
 	RenderingServer.global_shader_parameter_set(PLAYER_WORLD_POS_PARAM, global_position)
@@ -1068,6 +1092,8 @@ func _cast_skill(skill: Skill) -> void:
 				_face_direction(throw_dir)
 				_play_anim(ANIM_ATTACK, 1.4)
 				_grenade.activate(skill, throw_dir)
+			Skill.ActiveKind.SECOND_WIND:
+				_activate_second_wind(skill)
 		return
 	_interacting = false
 	if _combat.is_on_cooldown(skill):
@@ -1172,6 +1198,18 @@ func get_drone_count() -> int:
 	return _drone_swarm.get_drone_count()
 
 
+func _activate_second_wind(skill: Skill) -> void:
+	if _combat.is_on_cooldown(skill):
+		return
+	if resource_pool == null:
+		return
+	_resource_current = float(resource_pool.max_value)
+	_sprint_regen_penalty = 0.0
+	_emit_resource_if_changed()
+	resource_changed.emit(int(_resource_current), resource_pool.max_value)
+	_combat.start_cooldown(skill, 1.0)
+
+
 func _spend_resource(amount: int) -> void:
 	if resource_pool == null:
 		return
@@ -1237,8 +1275,7 @@ func _die() -> void:
 		_death_tween = create_tween()
 		_death_tween.tween_property(visual, "scale:y", 0.15, 0.5)
 	await get_tree().create_timer(DEATH_HOLD).timeout
-	await get_tree().create_timer(RESPAWN_DELAY).timeout
-	respawn()
+	_show_death_screen()
 
 # Update both the player's current position and the respawn anchor used by
 # respawn() / NG+. Called by PrototypeRoot._move_player_to_spawn() after the
@@ -1247,6 +1284,13 @@ func _die() -> void:
 func set_spawn_position(pos: Vector3) -> void:
 	_spawn_position = pos
 	global_position = pos
+
+
+func _show_death_screen() -> void:
+	var screen := DeathScreen.new()
+	screen.continue_pressed.connect(respawn)
+	add_child(screen)
+	screen.show_death(PlayerState.hardcore)
 
 
 func respawn() -> void:
@@ -1472,7 +1516,8 @@ func _apply_light_item() -> void:
 	# from their own headlamp.
 	spot.shadow_caster_mask &= ~(1 << (PLAYER_VISUAL_LAYER - 1))
 	spot.position = FLASHLIGHT_OFFSET
-	spot.visible = _light_on
+	_light_on = true
+	spot.visible = true
 	_equipped_light = spot
 	visual.add_child(spot)
 	_update_flashlight_pitch(0.0)

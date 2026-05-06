@@ -278,6 +278,7 @@ func _try_fire() -> bool:
 	proj.damage_mult = 1.0
 	proj.accuracy = 1.0
 	proj.crit_chance = 0.0
+	proj.ignore_melee_penalty = true
 	get_parent().add_child(proj)
 	proj.global_position = origin
 	proj.monitoring = true

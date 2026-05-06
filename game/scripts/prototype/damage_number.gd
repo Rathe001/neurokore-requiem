@@ -24,6 +24,7 @@ const SHAKE_CRIT_MULTI: float = 0.10
 const COLOR_NORMAL: Color = Color(1.00, 0.95, 0.85, 1.0)
 const COLOR_CRIT: Color = Color(1.00, 0.40, 0.30, 1.0)
 const COLOR_HEAL: Color = Color(0.40, 1.00, 0.55, 1.0)
+const COLOR_MISS: Color = Color(0.70, 0.70, 0.75, 0.9)
 const OUTLINE_COLOR: Color = Color(0.05, 0.05, 0.08, 1.0)
 const OUTLINE_SIZE: int = 12
 
@@ -39,6 +40,10 @@ static func spawn(world: Node, pos: Vector3, amount: int, multistrike: int = 1, 
 		_font_for(multistrike, is_crit),
 		COLOR_CRIT if is_crit else COLOR_NORMAL,
 		_shake_for(multistrike, is_crit))
+
+
+static func spawn_miss(world: Node, pos: Vector3) -> void:
+	_spawn_internal(world, pos, "Miss!", FONT_NORMAL, COLOR_MISS, SHAKE_NONE)
 
 
 static func spawn_heal(world: Node, pos: Vector3, amount: int) -> void:
