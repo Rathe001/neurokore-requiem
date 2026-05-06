@@ -1,5 +1,79 @@
 # Steam Deploy Guide
 
+## First-Time Setup (per machine)
+
+Walk through this once on each machine you plan to deploy from. Subsequent deploys only need the [per-deploy ritual](#before-you-deploy-write-patch-notes).
+
+### Windows
+
+The whole setup lives under `C:\Users\<you>\Tools\` — keeps it portable and out of `Program Files`.
+
+1. **Install Python 3** if you don't have it:
+   - From https://www.python.org/downloads/, tick "Add python.exe to PATH" during install.
+   - If you already have Microsoft's Python Install Manager (`py.exe`) but `python` doesn't run, do `py install default` once.
+   - Verify: `python --version`
+
+2. **Install Godot 4**:
+   - Download `Godot_v4.X.Y-stable_win64.exe` from https://godotengine.org/download/windows
+   - Place it in `C:\Users\<you>\Tools\Godot\` (or wherever you want — adjust paths below).
+   - Open Godot once, then **Editor > Manage Export Templates** and download the matching templates.
+   - Create a `godot.cmd` shim in the same folder so `godot` works on PATH:
+     ```bat
+     @echo off
+     "%~dp0Godot_v4.X.Y-stable_win64_console.exe" %*
+     ```
+     (Use the `_console` variant — it forwards stdout properly for headless export. Update the binary name when Godot updates.)
+
+3. **Install SteamCMD**:
+   ```powershell
+   $dest = "C:\Users\$env:USERNAME\Tools\steamcmd"
+   New-Item -ItemType Directory -Path $dest -Force | Out-Null
+   Invoke-WebRequest -Uri "https://steamcdn-a.akamaihd.net/client/installer/steamcmd.zip" -OutFile "$env:TEMP\steamcmd.zip" -UseBasicParsing
+   Expand-Archive -Path "$env:TEMP\steamcmd.zip" -DestinationPath $dest -Force
+   & "$dest\steamcmd.exe" +quit  # bootstraps the rest of SteamCMD's payload (~45MB)
+   ```
+
+4. **Add both tools to your User PATH**:
+   ```powershell
+   $userPath = [Environment]::GetEnvironmentVariable("PATH", "User")
+   $entries = @("C:\Users\$env:USERNAME\Tools\Godot", "C:\Users\$env:USERNAME\Tools\steamcmd")
+   $current = $userPath -split ';' | Where-Object { $_ -ne "" }
+   foreach ($e in $entries) {
+       if ($current -notcontains $e) { $current += $e }
+   }
+   [Environment]::SetEnvironmentVariable("PATH", ($current -join ';'), "User")
+   ```
+   **Open a fresh terminal** to pick up the PATH change.
+
+5. **(Optional) Persist your Steam username** so you don't have to set it each deploy:
+   ```bat
+   setx STEAM_USER your_actual_steam_username
+   ```
+   Again, fresh terminal required.
+
+6. **Cache your Steam credentials** — run SteamCMD once interactively so it asks for your password and Steam Guard 2FA code, then caches them:
+   ```bat
+   steamcmd +login your_actual_steam_username +quit
+   ```
+   After this, future deploys skip the prompts.
+
+### macOS
+
+```bash
+brew install python godot
+brew install steamcmd        # Apple Silicon also needs: softwareupdate --install-rosetta
+```
+
+Then run `steamcmd +login your_username +quit` once to cache credentials.
+
+The deploy script reads `GODOT`, `STEAMCMD`, `STEAM_USER` env vars; set them in your shell profile if the defaults don't match (`GODOT=/Applications/Godot.app/Contents/MacOS/Godot` is the typical Mac override).
+
+### Linux
+
+`apt install python3 godot steamcmd` (or distro equivalents). Cache credentials the same way.
+
+---
+
 ## Prerequisites
 
 - **Godot 4** on PATH (or set `GODOT` env var / edit the script)
