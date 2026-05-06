@@ -10,3 +10,8 @@ site/
 
 # macOS
 .DS_Store
+
+# Per-machine Claude Code session config (permission allowlists, etc.).
+# .claude/settings.json stays tracked (project-shared); only the .local
+# variant is per-machine. Untracked once via `git rm --cached`.
+.claude/settings.local.json

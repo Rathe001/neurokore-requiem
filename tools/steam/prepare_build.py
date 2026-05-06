@@ -61,7 +61,11 @@ def write(path: Path, content: str, dry_run: bool) -> None:
     if dry_run:
         print(f"[prepare_build] (dry-run) would write {path.relative_to(ROOT)}")
         return
-    path.write_text(content, encoding="utf-8")
+    # Force LF newlines. Without this, Windows runs of write_text default to
+    # CRLF and the resulting commit gets "CRLF will be replaced by LF"
+    # warnings on every deploy because .gitattributes normalizes text files
+    # to LF in the repo.
+    path.write_text(content, encoding="utf-8", newline="\n")
 
 
 def git_short_sha() -> str:
