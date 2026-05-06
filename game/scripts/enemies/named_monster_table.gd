@@ -1,12 +1,21 @@
 extends Node
 
 ## Loads NamedMonster .tres files and rolls one for spawn-point named
-## encounters. Mirrors MonsterAffixTable's pattern — directory scan at
-## _ready, weighted random pick filtered by min_level.
+## encounters. Weighted random pick filtered by min_level.
 ##
-## Adding a new named monster = drop a .tres at NAMED_DIR. No code edit.
+## Adding a new named monster = drop a .tres at NAMED_DIR AND register its
+## filename in NAMED_FILES. The explicit list is required because DirAccess
+## directory enumeration is unreliable in exported Godot 4 builds — the
+## .tres files exist but the listing comes back empty, leaving the named
+## pool silently empty in the Steam build. ResourceLoader.exists() works
+## in both editor and exports.
 
 const NAMED_DIR := "res://resources/enemies/named/"
+const NAMED_FILES: Array[String] = [
+	"cinder_hollowlit.tres",
+	"mother_wreath.tres",
+	"vex_sundered.tres",
+]
 
 var _named: Array[NamedMonster] = []
 var _ready_called: bool = false
@@ -19,16 +28,13 @@ func _load_named() -> void:
 	if _ready_called:
 		return
 	_ready_called = true
-	var dir := DirAccess.open(NAMED_DIR)
-	if dir == null:
-		# No directory or no entries is a valid state — named monsters are
-		# optional content. EnemySpawner will get null from roll_random and
-		# fall through to the regular spawn path.
-		return
-	for filename in dir.get_files():
-		if not filename.ends_with(".tres"):
-			continue
+	for filename in NAMED_FILES:
 		var path := NAMED_DIR + filename
+		if not ResourceLoader.exists(path):
+			# Missing file is a valid state — named monsters are optional
+			# content. EnemySpawner falls through to the regular spawn path
+			# when the pool is empty.
+			continue
 		var named := load(path) as NamedMonster
 		if named == null:
 			push_warning("[NamedMonsterTable] %s isn't a NamedMonster; skipping." % path)

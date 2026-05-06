@@ -105,23 +105,30 @@ func _ready() -> void:
 
 
 func _load_ladders() -> void:
-	var dir := DirAccess.open(LADDER_DIR)
-	if dir == null:
-		push_warning("[PerkState] Cannot open LADDER_DIR: %s" % LADDER_DIR)
-		return
-	dir.list_dir_begin()
-	var file_name := dir.get_next()
-	while file_name != "":
-		if not dir.current_is_dir() and file_name.ends_with(".tres"):
-			var path := LADDER_DIR + file_name
-			var ladder := load(path) as PerkLadder
-			if ladder == null:
-				push_warning("[PerkState] Found %s but it isn't a PerkLadder; skipping." % path)
-			else:
-				var ladder_id := StringName(file_name.get_basename())
-				_ladders[ladder_id] = ladder
-		file_name = dir.get_next()
-	dir.list_dir_end()
+	# Resolve files by stat_id (amb.tres, ort.tres, etc.) — same convention
+	# TalentState uses. We avoid DirAccess.list_dir_begin here because it
+	# isn't reliable in exported Godot 4 builds: the .tres files exist as
+	# resources but the directory listing returns empty, so _ladders ended
+	# up empty in the Steam playtest build and no perks ever unlocked.
+	# Walk CLASS_DEFINITIONS to enumerate the six class slots and resolve
+	# each to its stat_id; ResourceLoader.exists works in both editor and
+	# exported builds.
+	var seen: Dictionary = {}
+	for class_id: StringName in AttributeState.CLASS_DEFINITIONS.keys():
+		var stat_id: StringName = AttributeState.CLASS_TO_STAT.get(class_id, &"")
+		if stat_id == &"" or seen.has(stat_id):
+			continue
+		seen[stat_id] = true
+		var path := "%s%s.tres" % [LADDER_DIR, stat_id]
+		if not ResourceLoader.exists(path):
+			continue
+		var ladder := load(path) as PerkLadder
+		if ladder == null:
+			push_warning("[PerkState] Found %s but it isn't a PerkLadder; skipping." % path)
+			continue
+		_ladders[stat_id] = ladder
+	if _ladders.is_empty():
+		push_warning("[PerkState] No perk ladders loaded — talent allocations won't grant any perks.")
 
 
 func _on_level_changed(_new_level: int, _old_level: int) -> void:

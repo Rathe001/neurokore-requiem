@@ -4,10 +4,22 @@ extends Node
 ## generation. Mirrors AffixTable's pattern but for monster modifiers
 ## instead of item affixes.
 ##
-## Adding a new affix = drop a .tres at AFFIX_DIR. The directory is scanned
-## at _ready; no code edit required.
+## Adding a new affix = drop a .tres at AFFIX_DIR AND register its filename
+## in AFFIX_FILES. The explicit list is required because DirAccess directory
+## enumeration is unreliable in exported Godot 4 builds — the .tres files
+## exist but the listing comes back empty, leaving the affix pool silently
+## empty in the Steam build. ResourceLoader.exists() works in both editor
+## and exports.
 
 const AFFIX_DIR := "res://resources/enemies/affixes/"
+const AFFIX_FILES: Array[String] = [
+	"burning.tres",
+	"frenzied.tres",
+	"jagged.tres",
+	"quickfoot.tres",
+	"tough.tres",
+	"vampiric.tres",
+]
 
 var _affixes: Array[MonsterAffix] = []
 var _ready_called: bool = false
@@ -20,14 +32,11 @@ func _load_affixes() -> void:
 	if _ready_called:
 		return
 	_ready_called = true
-	var dir := DirAccess.open(AFFIX_DIR)
-	if dir == null:
-		push_warning("[MonsterAffixTable] Couldn't open %s; no monster affixes loaded." % AFFIX_DIR)
-		return
-	for filename in dir.get_files():
-		if not filename.ends_with(".tres"):
-			continue
+	for filename in AFFIX_FILES:
 		var path := AFFIX_DIR + filename
+		if not ResourceLoader.exists(path):
+			push_warning("[MonsterAffixTable] Missing affix file: %s" % path)
+			continue
 		var affix := load(path) as MonsterAffix
 		if affix == null:
 			push_warning("[MonsterAffixTable] %s isn't a MonsterAffix; skipping." % path)

@@ -91,6 +91,8 @@ func _load_trees() -> void:
 				continue
 			index[key] = node
 		_trees[stat_id] = index
+	if _trees.is_empty():
+		push_warning("[TalentState] No talent trees loaded — allocated talent nodes won't contribute aggregates.")
 
 
 func _on_level_changed(_new_level: int, _old_level: int) -> void:
