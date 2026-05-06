@@ -1478,6 +1478,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#traction-feet" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Traction (Feet)
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1606,6 +1617,78 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#effectiveness-curve-item-level-scaling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Effectiveness Curve (Item Level Scaling)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Effectiveness Curve (Item Level Scaling)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-curve" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Curve
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scope
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#starter-gear" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Starter Gear
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#recipes-rescaling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recipes / Rescaling
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-this-shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why This Shape
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#open-questions" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1660,8 +1743,8 @@
 <tbody>
 <tr>
 <td>Head</td>
-<td>Hit chance / accuracy</td>
-<td>Awareness and targeting</td>
+<td>Crit chance</td>
+<td>Critical strikes — the spike-damage axis</td>
 </tr>
 <tr>
 <td>Chest</td>
@@ -1690,8 +1773,8 @@
 </tr>
 <tr>
 <td>Weapon (1H or 2H)</td>
-<td>Damage</td>
-<td>Primary offense</td>
+<td>Damage + accuracy</td>
+<td>Primary offense (accuracy is weapon-intrinsic; only weapons can roll hit chance)</td>
 </tr>
 <tr>
 <td>Offhand</td>
@@ -1707,10 +1790,50 @@
 <p>Within their domain, items can roll related bonuses that stay thematically connected:</p>
 <ul>
 <li><strong>Armor pieces</strong> (head, chest, hands, legs, feet) can roll damage reduction</li>
-<li><strong>Weapons</strong> can roll crit chance, stun chance, knockback</li>
+<li><strong>Weapons</strong> can roll stun chance, knockback (crit chance lives on the head slot)</li>
 <li><strong>Offhands</strong> roll stats specific to their archetype (shield pool, blast radius, etc.)</li>
 </ul>
 <p>The goal: a player picking up any item can evaluate it in a few seconds. If gloves only ever affect attack speed, damage reduction, HP, and resource — that's a four-stat comparison at most.</p>
+<h3 id="traction-feet">Traction (Feet)<a class="headerlink" href="#traction-feet" title="Permanent link">&para;</a></h3>
+<p>Traction is the boots stat domain. It's a single number 0–100 that governs how the player interacts with hostile ground — slip, slow, knockdown, and DoT pools (fire, acid, electric pools, etc.). Both axes use the <strong>same staircased breakpoints</strong>, so one roll tracks both:</p>
+<table>
+<thead>
+<tr>
+<th>Traction</th>
+<th>Movement immunity unlocked</th>
+<th>DoT damage reduction</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>&lt; 25</td>
+<td>—</td>
+<td>0%</td>
+</tr>
+<tr>
+<td>25–49</td>
+<td>Slip-down chance</td>
+<td>25%</td>
+</tr>
+<tr>
+<td>50–74</td>
+<td>+ Movement slow on hostile ground</td>
+<td>50%</td>
+</tr>
+<tr>
+<td>75–99</td>
+<td>+ Knockdown on cracked floor / spike pads</td>
+<td>75%</td>
+</tr>
+<tr>
+<td>100</td>
+<td>+ Full stride, immune to all ground effects</td>
+<td>100%</td>
+</tr>
+</tbody>
+</table>
+<p>The staircase is intentional: every breakpoint reads as "a tier earned" and the numeric jump is the moment that matters. Continuous reduction would dilute the breakpoint identity. Only boots roll traction — total = boots traction, no cross-slot stacking — so a player gearing into traction is making an explicit "feet matter" commitment, not accidentally accumulating it from random armor.</p>
+<p>Traction does <strong>not</strong> replace per-element resistance: a fire pool still does damage through <code>fire_resistance</code> like any fire damage. Traction layers on top as an additional reduction specifically for <em>ground-source</em> damage. A player with high fire resistance + low traction takes less damage from fire pools than from incoming fire projectiles, because both stats apply.</p>
 <hr />
 <h2 id="behavior-mods">Behavior Mods<a class="headerlink" href="#behavior-mods" title="Permanent link">&para;</a></h2>
 <p>Each gear slot (excluding weapons and offhands, which define behavior through their base type) can roll one <strong>behavior mod</strong> — a mechanical change to how a game system works. Mods are the identity layer of an item. Two chest pieces with identical stats but different mods play differently.</p>
@@ -1946,6 +2069,65 @@
 </ol>
 <p>A powerful mod consumes more budget, leaving less room for strong base stats or affixes. A jetpack with low resource drain <em>must</em> have weaker base stats. This single mechanism prevents degenerate items — every piece is internally balanced regardless of what specific mod or affixes rolled.</p>
 <p>The budget scales with item level and is multiplied by rarity tier. Higher-level, rarer items have more total budget to distribute, but the tradeoff structure remains. There is no level where an item can be the best at everything simultaneously.</p>
+<hr />
+<h2 id="effectiveness-curve-item-level-scaling">Effectiveness Curve (Item Level Scaling)<a class="headerlink" href="#effectiveness-curve-item-level-scaling" title="Permanent link">&para;</a></h2>
+<p>Items don't get statically replaced when the player outlevels them. Every item carries an <code>item_level</code> (rolled at generation time) and the player's level determines an <strong>effectiveness multiplier</strong> applied to all combat stats and gear bonuses on that item. This single mechanism replaces the need for stat squish patches — numerical ranges stay bounded because old items decay smoothly rather than being inflated past.</p>
+<h3 id="the-curve">The Curve<a class="headerlink" href="#the-curve" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Player vs. ilvl</th>
+<th>Multiplier</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ilvl == player level</td>
+<td>1.00×</td>
+<td>Drop is "for you" — hits its rolled values exactly</td>
+</tr>
+<tr>
+<td>ilvl &gt; player level (above-cap drops from endgame content)</td>
+<td>1.00× → 1.50× ceiling</td>
+<td>Linear boost, +1% per level above</td>
+</tr>
+<tr>
+<td>ilvl &lt; player level</td>
+<td>asymptotic toward 0.30× floor</td>
+<td><code>1 / (1 + delta * 0.05)</code>. Never reaches zero — favorite items stay weakly viable</td>
+</tr>
+</tbody>
+</table>
+<p>A few example values for player level 50:
+- ilvl 50 → 100% (no change)
+- ilvl 40 → 67% (1 / (1 + 0.5))
+- ilvl 30 → 50%
+- ilvl 10 → 33% (just above the 30% floor)
+- ilvl 0 (starter) → 29% → clamped to 30% floor</p>
+<p>For a player at the level cap (100):
+- ilvl 100 → 100%
+- ilvl 120 → 120%
+- ilvl 150 → 150% (hits ceiling — the endgame chase)</p>
+<h3 id="scope">Scope<a class="headerlink" href="#scope" title="Permanent link">&para;</a></h3>
+<p>The multiplier applies to <strong>every</strong> combat-power stat: weapon damage rolls, attack speed, crit chance, accuracy, all stat-modifier bonuses (HP, damage reduction, knockback, resistances, shield pool, etc.). It does <strong>not</strong> apply to:</p>
+<ul>
+<li><strong>Storage stats</strong> (<code>inventory_bonus</code> on backpacks) — bag size shouldn't shrink as the player levels.</li>
+<li><strong>Feel/flavor stats</strong> (<code>weapon_range</code>, <code>blast_radius</code>, light parameters) — these define what a weapon <em>is</em>, not how powerful it is.</li>
+<li><strong>Behavior mods</strong> — a jetpack works as a jetpack regardless of ilvl gap. Mods are <em>identity</em>; the multiplier touches <em>power</em>.</li>
+</ul>
+<p>Code-side: read combat values via <code>Item.get_effective_modifier()</code> or the typed <code>effective_*()</code> accessors (<code>effective_damage_min/max</code>, <code>effective_attack_speed</code>, etc.). Storage and flavor reads stay on the raw <code>get_modifier()</code> path.</p>
+<h3 id="starter-gear">Starter Gear<a class="headerlink" href="#starter-gear" title="Permanent link">&para;</a></h3>
+<p>The player gets a baseline kit on character creation rolled at <code>item_level = 0</code>. With every world drop generating at <code>ilvl &gt;= 1</code>, starter gear is always strictly weaker than anything found — players are never naked, but the first drop is meaningful. Starter pieces sit at the 30% floor for most of leveling, replaced gradually as the player gears up.</p>
+<h3 id="recipes-rescaling">Recipes / Rescaling<a class="headerlink" href="#recipes-rescaling" title="Permanent link">&para;</a></h3>
+<p>A planned crafting interaction lets the player <strong>bring an item up to their current level</strong> in exchange for resources. This is the answer to "I love this drop but I'm now too high-level for it" — instead of replacing the item, the player invests to keep it relevant. Recipe details TBD; the underlying system already supports it (just needs a craft action that bumps <code>item.item_level</code> to <code>PlayerState.level</code>).</p>
+<h3 id="why-this-shape">Why This Shape<a class="headerlink" href="#why-this-shape" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>No stat bloat / squish.</strong> Numbers don't grow with player level, the multiplier does. Stat ranges stay readable across the lifetime of the game.</li>
+<li><strong>Build retention.</strong> Players can keep favorite items longer; gear churn becomes a choice, not a treadmill.</li>
+<li><strong>Endgame chase.</strong> Above-cap ilvl drops (from maps/ubers) become the meaningful prize without breaking the base game's curve.</li>
+<li><strong>Soft, not punishing.</strong> The 30% floor means a beloved low-ilvl unique still functions for experimentation. Aggressive linear decay would punish novelty.</li>
+</ul>
 <hr />
 <h2 id="open-questions">Open Questions<a class="headerlink" href="#open-questions" title="Permanent link">&para;</a></h2>
 <div class="admonition question">
