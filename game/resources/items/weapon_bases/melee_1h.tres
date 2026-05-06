@@ -6,7 +6,7 @@
 [resource]
 script = ExtResource("1_weapon_base")
 id = &"melee_1h"
-display_name = "1H Blade"
+display_name = "Blade"
 glyph = "†"
 two_handed = false
 damage_min_range = Vector2(4, 7)

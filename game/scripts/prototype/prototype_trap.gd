@@ -131,4 +131,15 @@ func _detonate() -> void:
 		if n.has_method(&"is_player_friendly") and n.is_player_friendly():
 			continue
 		n.take_damage(dmg, global_position, KNOCKBACK)
+		_apply_exile_curse_if_active(n)
 	queue_free()
+
+
+const EXILE_CURSE_DURATION: float = 4.0
+
+func _apply_exile_curse_if_active(enemy: Node) -> void:
+	var pct: float = Effects.get_aggregate(&"exile_curse_damage_pct")
+	if pct <= 0.0:
+		return
+	if enemy.has_method(&"apply_curse"):
+		enemy.apply_curse(pct, EXILE_CURSE_DURATION)

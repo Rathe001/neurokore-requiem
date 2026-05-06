@@ -100,7 +100,8 @@ func generate() -> LevelGraph:
 			spawn.scene = _PLAYER_SPAWN_SCENE
 			node.additional_slots.append(spawn)
 		if cell == boss_cell:
-			node.enemy_level_range = boss_level_range
+			var zoff := PlayerState.zone_level_offset()
+			node.enemy_level_range = boss_level_range + Vector2i(zoff, zoff)
 			var boss_slot := InteractableSlot.new()
 			boss_slot.id = &"boss"
 			boss_slot.scene = _BOSS_SPAWN_SCENE

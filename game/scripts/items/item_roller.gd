@@ -266,6 +266,7 @@ func _apply_weapon_base(item: Item, main_type: String, rng: RandomNumberGenerato
 
 func _apply_weapon_base_direct(item: Item, base: WeaponBase, rng: RandomNumberGenerator) -> void:
 	item.weapon_base_id = base.id
+	item.sub_type = base.display_name
 	item.two_handed = base.two_handed
 	item.fire_skill = base.fire_skill
 	item.alt_fire_skill = base.alt_fire_skill

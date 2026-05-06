@@ -85,6 +85,7 @@ func _detonate() -> void:
 			continue
 		var dmg := _roll_damage()
 		n.take_damage(dmg, global_position, eff_knockback, 1, false)
+		_apply_exile_curse_if_active(n)
 		match grenade_type:
 			Skill.GrenadeType.STUN:
 				if n.has_method(&"apply_stun"):
@@ -173,6 +174,16 @@ func _pool_release() -> void:
 	throw_speed = THROW_SPEED
 	if _trail != null:
 		_trail.emitting = true
+
+
+const EXILE_CURSE_DURATION: float = 4.0
+
+func _apply_exile_curse_if_active(enemy: Node) -> void:
+	var pct: float = Effects.get_aggregate(&"exile_curse_damage_pct")
+	if pct <= 0.0:
+		return
+	if enemy.has_method(&"apply_curse"):
+		enemy.apply_curse(pct, EXILE_CURSE_DURATION)
 
 
 func _roll_damage() -> int:

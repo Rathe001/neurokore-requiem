@@ -26,8 +26,8 @@ const ITEM_PICKUP_SCENE: PackedScene = preload("res://scenes/prototype/prototype
 # tougher mobs feels more rewarding.
 const ITEM_DROP_CHANCE_BASE: float = 0.12
 const ITEM_DROP_CHANCE_PER_LEVEL: float = 0.06
-# Item level rolls within this window around the player's current level so
-# drops stay relevant — not 1-100 spread.
+# Item level rolls within this window around the enemy's own level so
+# drops scale with zone difficulty, not the player's character level.
 const ITEM_DROP_ILVL_OFFSET_MIN: int = -1
 const ITEM_DROP_ILVL_OFFSET_MAX: int = 1
 
@@ -110,26 +110,55 @@ const JUMP_COOLDOWN := 0.8        # post-landing lockout — caps jump cadence s
 # Per-level stat ranges, indexed [1..MAX_LEVEL]. Index 0 is unused (no level 0).
 # Tuned so L1 sits near the previous fixed values (40 HP / 10 dmg) and each
 # step up roughly 1.6×s the threat to keep scaling readable in friends-mode.
-const MAX_LEVEL := 3
+# Extended to 15 to cover several NG+ cycles; levels beyond MAX_LEVEL clamp
+# to the top tier so the game never crashes on deep NG+ runs.
+const MAX_LEVEL := 15
 const LEVEL_HP_RANGE: Array[Vector2i] = [
-	Vector2i(0, 0),
-	Vector2i(30, 45),
-	Vector2i(55, 80),
-	Vector2i(90, 130),
+	Vector2i(0, 0),       # 0 — unused
+	Vector2i(30, 45),     # 1
+	Vector2i(55, 80),     # 2
+	Vector2i(90, 130),    # 3
+	Vector2i(130, 190),   # 4
+	Vector2i(190, 270),   # 5
+	Vector2i(270, 390),   # 6
+	Vector2i(390, 550),   # 7
+	Vector2i(550, 780),   # 8
+	Vector2i(780, 1100),  # 9
+	Vector2i(1100, 1550), # 10
+	Vector2i(1550, 2200), # 11
+	Vector2i(2200, 3100), # 12
+	Vector2i(3100, 4400), # 13
+	Vector2i(4400, 6200), # 14
+	Vector2i(6200, 8800), # 15
 ]
 const LEVEL_DAMAGE_RANGE: Array[Vector2i] = [
-	Vector2i(0, 0),
-	Vector2i(3, 6),
-	Vector2i(7, 10),
-	Vector2i(11, 15),
+	Vector2i(0, 0),     # 0 — unused
+	Vector2i(3, 6),     # 1
+	Vector2i(7, 10),    # 2
+	Vector2i(11, 15),   # 3
+	Vector2i(16, 22),   # 4
+	Vector2i(23, 32),   # 5
+	Vector2i(33, 46),   # 6
+	Vector2i(47, 65),   # 7
+	Vector2i(66, 92),   # 8
+	Vector2i(93, 130),  # 9
+	Vector2i(131, 185), # 10
+	Vector2i(186, 260), # 11
+	Vector2i(261, 370), # 12
+	Vector2i(371, 520), # 13
+	Vector2i(521, 730), # 14
+	Vector2i(731, 1030),# 15
 ]
 # Floor-ring emission color per level. Higher levels glow hotter so a player
-# can read threat at a glance from across the room.
+# can read threat at a glance from across the room. Levels beyond the array
+# clamp to the last entry.
 const LEVEL_RING_EMISSION: Array[Color] = [
 	Color.BLACK,
-	Color(1.0, 0.3, 0.18),
-	Color(1.0, 0.65, 0.15),
-	Color(1.0, 0.25, 0.05),
+	Color(1.0, 0.3, 0.18),   # 1 — warm orange
+	Color(1.0, 0.65, 0.15),  # 2 — gold
+	Color(1.0, 0.25, 0.05),  # 3 — deep orange
+	Color(0.9, 0.15, 0.15),  # 4 — red
+	Color(0.8, 0.05, 0.25),  # 5 — crimson
 ]
 
 # Boss tuning: levels above the trash cap, multipliers stacked on the rolled
@@ -170,7 +199,7 @@ static var _s_outline_mat_locked: StandardMaterial3D
 @export var max_health: int = 40
 @export_range(0.0, 1.0, 0.05) var credit_drop_chance: float = 0.6
 @export var display_name: String = "Enemy"
-## Enemy level. 0 means "auto-roll 1..MAX_LEVEL on init"; spawners that want
+## Enemy level. 0 means "auto-roll within current zone band on init"; spawners that want
 ## a specific level (e.g. boss encounters) can set it before reset() runs.
 @export var level: int = 0
 ## Boss flag. Bosses use boosted HP/damage, larger visual, distinct floor ring,
@@ -403,7 +432,7 @@ func _init_enemy() -> void:
 
 ## Roll level (if not pre-set) and derive HP, damage, and floor-ring tint.
 ## Spawners that want a fixed level (e.g. boss) set `level` before reset() runs;
-## anything else (including pooled re-acquires) auto-rolls 1..MAX_LEVEL.
+## anything else (including pooled re-acquires) auto-rolls within the zone band.
 func _apply_level_stats() -> void:
 	if is_boss:
 		_apply_boss_stats()
@@ -421,7 +450,11 @@ func _apply_level_stats() -> void:
 			affixes = named_monster.affixes.duplicate()
 	var lv := clampi(level, 0, MAX_LEVEL)
 	if lv <= 0:
-		lv = randi_range(1, MAX_LEVEL)
+		# Auto-roll within the current zone band when no explicit level is set.
+		var zoff := PlayerState.zone_level_offset()
+		var lo := clampi(1 + zoff, 1, MAX_LEVEL)
+		var hi := clampi(3 + zoff, lo, MAX_LEVEL)
+		lv = randi_range(lo, hi)
 	level = lv
 	var hp_range := LEVEL_HP_RANGE[lv]
 	var dmg_range := LEVEL_DAMAGE_RANGE[lv]
@@ -479,11 +512,14 @@ func _apply_level_stats() -> void:
 			display_name = " ".join(parts)
 
 func _apply_boss_stats() -> void:
-	level = BOSS_LEVEL
-	var top_hp := LEVEL_HP_RANGE[MAX_LEVEL]
-	var top_dmg := LEVEL_DAMAGE_RANGE[MAX_LEVEL]
-	max_health = int(round(randi_range(top_hp.x, top_hp.y) * BOSS_HP_MULT))
-	_attack_damage = int(round(randi_range(top_dmg.x, top_dmg.y) * BOSS_DAMAGE_MULT))
+	# Boss level scales with the zone: base BOSS_LEVEL + NG+ offset, capped
+	# at MAX_LEVEL so the stat array lookup stays in bounds.
+	var zoff := PlayerState.zone_level_offset()
+	level = clampi(BOSS_LEVEL + zoff, BOSS_LEVEL, MAX_LEVEL)
+	var boss_hp := LEVEL_HP_RANGE[level]
+	var boss_dmg := LEVEL_DAMAGE_RANGE[level]
+	max_health = int(round(randi_range(boss_hp.x, boss_hp.y) * BOSS_HP_MULT))
+	_attack_damage = int(round(randi_range(boss_dmg.x, boss_dmg.y) * BOSS_DAMAGE_MULT))
 	if visual != null:
 		visual.scale = Vector3.ONE * BOSS_VISUAL_SCALE
 	_apply_floor_ring_tint_color(BOSS_RING_EMISSION)
@@ -498,7 +534,7 @@ func _roll_display_name() -> void:
 		display_name = NAME_PALETTE[randi() % NAME_PALETTE.size()]
 
 func _apply_floor_ring_tint(lv: int) -> void:
-	_apply_floor_ring_tint_color(LEVEL_RING_EMISSION[lv])
+	_apply_floor_ring_tint_color(LEVEL_RING_EMISSION[mini(lv, LEVEL_RING_EMISSION.size() - 1)])
 
 
 # Per-class ring tint — communicates combat type at a glance. Support
@@ -511,7 +547,7 @@ const _CLASS_TINT_RANGED := Color(0.25, 0.65, 1.0)
 const _CLASS_TINT_SUPPORT := Color(0.25, 1.0, 0.45)
 func _class_ring_color() -> Color:
 	if enemy_class == null:
-		return LEVEL_RING_EMISSION[clampi(level, 0, MAX_LEVEL)]
+		return LEVEL_RING_EMISSION[mini(clampi(level, 0, MAX_LEVEL), LEVEL_RING_EMISSION.size() - 1)]
 	if enemy_class.support_role != EnemyClass.SupportRole.NONE:
 		return _CLASS_TINT_SUPPORT
 	if enemy_class.attack_mode == EnemyClass.AttackMode.RANGED:
@@ -1465,6 +1501,11 @@ func _physics_process(delta: float) -> void:
 	# Animation update — CASTING and KNOCKBACK own their own clips. JUMPING
 	# plays the airborne pose. CROUCHING swaps in the crouch idle/walk pair.
 	# Otherwise we fall back to the standard idle/run.
+	# Guard: if the enemy died mid-tick (e.g. curse-expire auto-shot killed
+	# it during _tick_curse above), skip the animation update so _die()'s
+	# death clip / fallback pose isn't overwritten by the run/idle fallthrough.
+	if _state == State.DEAD:
+		return
 	var moving := _want_dir.length_squared() > 0.01
 	match _state:
 		State.CASTING, State.KNOCKBACK:
@@ -2306,7 +2347,7 @@ func _drop_item() -> void:
 		return
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
-	var ilvl := maxi(1, PlayerState.level + rng.randi_range(ITEM_DROP_ILVL_OFFSET_MIN, ITEM_DROP_ILVL_OFFSET_MAX))
+	var ilvl := maxi(1, level + rng.randi_range(ITEM_DROP_ILVL_OFFSET_MIN, ITEM_DROP_ILVL_OFFSET_MAX))
 	var item: Item
 	if named_drop:
 		# Pick a main_type at random + force the rarity to the named's

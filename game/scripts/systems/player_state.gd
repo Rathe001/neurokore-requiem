@@ -74,6 +74,12 @@ var xp_to_next: int = STARTING_XP_TO_NEXT
 ## Drives the "New Game +N" banner.
 var new_game_plus: int = 0
 
+## Zone level offset derived from NG+ count. Each NG+ shifts enemy levels
+## up by 2 so zones feel progressively harder across resets.
+## NG+0 → +0 (enemies start L1-3), NG+1 → +2 (L3-5), NG+2 → +4 (L5-7), etc.
+func zone_level_offset() -> int:
+	return new_game_plus * 2
+
 ## Spent talent points per stat tree.
 ## Layout: { stat_id: [[bool]*8]*5 } — 5 tiers × 8 nodes each.
 var talent_allocations: Dictionary = {}
@@ -136,7 +142,7 @@ func set_class_and_spec(new_class: StringName, new_spec: StringName) -> void:
 	var spec_diff := spec_id != new_spec
 	class_id = new_class
 	spec_id = new_spec
-	if class_diff:
+	if class_diff or spec_diff:
 		reset_talents()
 	_reset_tier_cache()
 	if class_diff:

@@ -160,8 +160,10 @@ func reset_level() -> void:
 		# Rebake the minimap so it shows the new level geometry.
 		get_tree().call_group(&"minimap", &"rebake")
 	elif builder != null:
-		# Legacy in-place reset.
-		builder.respawn_enemies(PlayerState.level)
+		# Legacy in-place reset — zone-level-based, not player-level.
+		# center=2+offset, spread=1 → range [1+offset, 3+offset].
+		var zoff := PlayerState.zone_level_offset()
+		builder.respawn_enemies(2 + zoff, 1)
 		if spawn_boss_on_ready:
 			_spawn_boss()
 		# Doors close + re-lock, switches clear, exit re-locks. Each interactable

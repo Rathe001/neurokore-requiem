@@ -10,13 +10,19 @@ const PARK_DURATION := 0.14
 const PARK_TOP_MARGIN := 24.0
 const ANCHOR_OFFSET_Y := -16.0  # tooltip sits this far above target's screen point
 
+const COMPARE_BETTER_COLOR := "#66cc66"
+const COMPARE_WORSE_COLOR := "#cc5555"
+const COMPARE_NEUTRAL_COLOR := "#999999"
+
 # Stat modifier lines in the tooltip use generic formatting (white text)
 # now that the old 8-attribute stat system has been removed.
 
 var _bg: PanelContainer
 var _vbox: VBoxContainer
 var _text_label: Label
+var _name_row: HBoxContainer
 var _name_label: Label
+var _dps_label: Label
 var _type_label: Label
 var _desc_label: Label
 var _stats_label: RichTextLabel
@@ -24,6 +30,7 @@ var _stats_label: RichTextLabel
 # LMB lock: while held, the tooltip parks at top-center and freezes — no
 # content updates, no follow-cursor, no hide on hover-exit. Released →
 # unlocked and dismissed.
+var _current_item: Item = null
 var _lmb_held: bool = false
 # Increments on every show_* call and on hide_tooltip. The deferred
 # resume in _resize_then_show captures the value at call time; if it
@@ -83,11 +90,28 @@ func _build_ui() -> void:
 	_text_label.mouse_filter = MOUSE_FILTER_IGNORE
 	_vbox.add_child(_text_label)
 
+	_name_row = HBoxContainer.new()
+	_name_row.mouse_filter = MOUSE_FILTER_IGNORE
+	_name_row.add_theme_constant_override(&"separation", 6)
+	_vbox.add_child(_name_row)
+
 	_name_label = Label.new()
 	_name_label.theme_type_variation = &"BodyLabel"
 	_name_label.add_theme_font_size_override(&"font_size", 10)
 	_name_label.mouse_filter = MOUSE_FILTER_IGNORE
-	_vbox.add_child(_name_label)
+	_name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_name_label.custom_minimum_size = Vector2(80.0, 0.0)
+	_name_row.add_child(_name_label)
+
+	_dps_label = Label.new()
+	_dps_label.theme_type_variation = &"BodyLabel"
+	_dps_label.add_theme_font_size_override(&"font_size", 9)
+	_dps_label.add_theme_color_override(&"font_color", Color(1.0, 0.9, 0.5, 1.0))
+	_dps_label.mouse_filter = MOUSE_FILTER_IGNORE
+	_dps_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_dps_label.size_flags_horizontal = Control.SIZE_SHRINK_END
+	_name_row.add_child(_dps_label)
 
 	_type_label = Label.new()
 	_type_label.theme_type_variation = &"SmallLabel"
@@ -240,7 +264,7 @@ func show_text(text: String) -> void:
 		return
 	_text_label.text = text
 	_text_label.visible = true
-	_name_label.visible = false
+	_name_row.visible = false
 	_type_label.visible = false
 	_desc_label.visible = false
 	_stats_label.visible = false
@@ -252,11 +276,17 @@ func show_item(item: Item) -> void:
 	if item == null:
 		hide_tooltip()
 		return
+	_current_item = item
 	_text_label.visible = false
 
 	_name_label.text = item.name_key
 	_name_label.add_theme_color_override(&"font_color", _rarity_color(item.rarity))
-	_name_label.visible = true
+	_name_row.visible = true
+
+	# DPS in the top-right corner of the name row.
+	var dps_text := _compute_dps_text(item)
+	_dps_label.text = dps_text
+	_dps_label.visible = not dps_text.is_empty()
 
 	var type_text := _build_type_text(item)
 	_type_label.text = type_text
@@ -266,7 +296,14 @@ func show_item(item: Item) -> void:
 	_desc_label.text = item.description_key
 	_desc_label.visible = has_desc
 
-	var stats := _build_stats_text(item)
+	# Inline comparison: look up the equipped item in the same slot and
+	# pass it through so each stat row can show a colored arrow + old value.
+	var equipped: Item = null
+	if item.kind != &"":
+		var eq := InventoryState.get_equipped(item.kind)
+		if eq != null and eq != item:
+			equipped = eq
+	var stats := _build_stats_text(item, equipped)
 	_stats_label.text = stats
 	_stats_label.visible = not stats.is_empty()
 
@@ -281,7 +318,8 @@ func show_skill(skill: Skill, source: Item) -> void:
 	_text_label.visible = false
 	_name_label.text = skill.display_name
 	_name_label.add_theme_color_override(&"font_color", skill.icon_color)
-	_name_label.visible = true
+	_dps_label.visible = false
+	_name_row.visible = true
 	_type_label.visible = false
 	_desc_label.visible = false
 	var stats := _build_skill_stats_text(skill, source)
@@ -296,7 +334,8 @@ func show_talent_node(title: String, body: String) -> void:
 	_text_label.visible = false
 	_name_label.text = title
 	_name_label.add_theme_color_override(&"font_color", Color(0.95, 0.95, 0.95, 1.0))
-	_name_label.visible = true
+	_dps_label.visible = false
+	_name_row.visible = true
 	_type_label.visible = false
 	_desc_label.text = body
 	_desc_label.visible = true
@@ -337,6 +376,7 @@ func hide_tooltip() -> void:
 	if _lmb_held:
 		return
 	_show_token += 1
+	_current_item = null
 	_dismiss()
 	_anchor_target = null
 
@@ -367,7 +407,14 @@ func _build_type_text(item: Item) -> String:
 		return item.main_type
 	return "%s - %s" % [item.main_type, item.sub_type]
 
-func _build_stats_text(item: Item) -> String:
+func _compute_dps_text(item: Item) -> String:
+	if item.damage_max <= 0 or item.attack_speed <= 0.0:
+		return ""
+	var avg_dmg := float(item.effective_damage_min() + item.effective_damage_max()) * 0.5
+	var dps := avg_dmg * item.effective_attack_speed()
+	return "DPS %.1f" % dps
+
+func _build_stats_text(item: Item, equipped: Item = null) -> String:
 	var lines: Array[String] = []
 	# ilvl header — shown for every item so the player can tell at a glance
 	# how outdated/overleveled a drop is. Decimal formatting on the multiplier
@@ -379,12 +426,6 @@ func _build_stats_text(item: Item) -> String:
 	else:
 		lines.append("Item Level: %d (%d%% effective)" % [item.item_level, pct])
 	# Active offhand stats — shield pool, reduction, cooldown, duration.
-	# Different fields are relevant per active_kind so each archetype
-	# gets its own line set; common lines (cooldown, pool) aren't
-	# shared because the fixed-format pattern reads cleaner per item
-	# than a shared header. Pool reads include the offhand's
-	# shield_pool_bonus so the tooltip matches the in-game pool the
-	# player will actually see.
 	if item.fire_skill != null and item.fire_skill.active_kind != Skill.ActiveKind.NONE:
 		var sk: Skill = item.fire_skill
 		var bonus: int = item.get_effective_modifier(&"shield_pool_bonus")
@@ -405,24 +446,44 @@ func _build_stats_text(item: Item) -> String:
 				lines.append("Cooldown: %.1fs" % sk.cooldown)
 				if sk.resource_cost > 0:
 					lines.append("Resource Cost: %d" % sk.resource_cost)
-	# Weapon / combat stats — shown as effective (post-scaling) values so
-	# the number on the tooltip matches what the combat code reads. The
-	# *visibility* check uses the RAW field, otherwise non-weapon items
-	# (whose attack_speed/accuracy default to 1.0) leak a "Speed: 0.95"
-	# line whenever effective_multiplier() != 1.0 — boots, helms, etc.
-	# have no business showing those rows at all.
+	# Weapon / combat stats with inline comparison arrows when equipped != null.
 	if item.damage_max > 0:
-		lines.append("Damage: %d–%d" % [item.effective_damage_min(), item.effective_damage_max()])
+		var line := "Damage: %d–%d" % [item.effective_damage_min(), item.effective_damage_max()]
+		if equipped != null and equipped.damage_max > 0:
+			var new_avg := float(item.effective_damage_min() + item.effective_damage_max()) * 0.5
+			var old_avg := float(equipped.effective_damage_min() + equipped.effective_damage_max()) * 0.5
+			line += " %s %d–%d" % [_compare_arrow(new_avg, old_avg), equipped.effective_damage_min(), equipped.effective_damage_max()]
+		lines.append(line)
 	if item.attack_speed != 1.0:
-		lines.append("Speed: %.2f" % item.effective_attack_speed())
+		var line := "Speed: %.2f" % item.effective_attack_speed()
+		if equipped != null and equipped.attack_speed != 1.0:
+			var new_spd := item.effective_attack_speed()
+			var old_spd := equipped.effective_attack_speed()
+			if not is_equal_approx(new_spd, old_spd):
+				line += " %s %.2f" % [_compare_arrow(new_spd, old_spd), old_spd]
+		lines.append(line)
 	if item.crit_chance > 0.0:
-		lines.append("Crit: %.1f%%" % (item.effective_crit_chance() * 100.0))
+		var line := "Crit: %.1f%%" % (item.effective_crit_chance() * 100.0)
+		if equipped != null and equipped.crit_chance > 0.0:
+			var new_c := item.effective_crit_chance() * 100.0
+			var old_c := equipped.effective_crit_chance() * 100.0
+			if not is_equal_approx(new_c, old_c):
+				line += " %s %.1f%%" % [_compare_arrow(new_c, old_c), old_c]
+		lines.append(line)
 	if item.accuracy != 1.0:
-		lines.append("Accuracy: %.1f%%" % (item.effective_accuracy() * 100.0))
+		var line := "Accuracy: %.1f%%" % (item.effective_accuracy() * 100.0)
+		if equipped != null and equipped.accuracy != 1.0:
+			var new_a := item.effective_accuracy() * 100.0
+			var old_a := equipped.effective_accuracy() * 100.0
+			if not is_equal_approx(new_a, old_a):
+				line += " %s %.1f%%" % [_compare_arrow(new_a, old_a), old_a]
+		lines.append(line)
 	if item.weapon_range > 0.0 and item.damage_max > 0:
-		lines.append("Range: %.1f m" % item.weapon_range)
-	if item.two_handed:
-		lines.append("Two-Handed")
+		var line := "Range: %.1f m" % item.weapon_range
+		if equipped != null and equipped.weapon_range > 0.0 and equipped.damage_max > 0:
+			if not is_equal_approx(item.weapon_range, equipped.weapon_range):
+				line += " %s %.1f m" % [_compare_arrow(item.weapon_range, equipped.weapon_range), equipped.weapon_range]
+		lines.append(line)
 	# Head light mod
 	if item.light_mod != Item.LightMod.NONE:
 		var mod_name := "Light"
@@ -436,28 +497,59 @@ func _build_stats_text(item: Item) -> String:
 	# storage stat, not a power stat, and shouldn't shrink with player level.
 	var inv_bonus := item.get_modifier(&"inventory_bonus")
 	if item.kind == &"backpack" and inv_bonus > 0:
-		lines.append("+%d %s" % [inv_bonus, tr("ITEM_STATS_INVENTORY_BONUS")])
-	# Generic stat modifiers — display all entries with white color.
-	# Skip inventory_bonus for backpacks since it's shown above with a
-	# dedicated line. Power stats display as effective (post-scaling).
-	# Percentage stats use one-decimal precision so marginal upgrades
-	# (10.2% vs 10.1%) are visibly different — see _PCT_STATS.
+		var line := "+%d %s" % [inv_bonus, tr("ITEM_STATS_INVENTORY_BONUS")]
+		if equipped != null:
+			var old_inv := equipped.get_modifier(&"inventory_bonus")
+			if old_inv != inv_bonus:
+				line += " %s %d" % [_compare_arrow(float(inv_bonus), float(old_inv)), old_inv]
+		lines.append(line)
+	# Generic stat modifiers with inline comparison. Union of both items'
+	# keys so stats the hovered item lacks but the equipped one has still
+	# show (as a loss). Power stats display as effective (post-scaling).
+	var all_stat_ids: Dictionary = {}
 	for stat_id: StringName in item.stat_modifiers:
+		all_stat_ids[stat_id] = true
+	if equipped != null:
+		for stat_id: StringName in equipped.stat_modifiers:
+			all_stat_ids[stat_id] = true
+	for stat_id: StringName in all_stat_ids:
 		if stat_id == &"inventory_bonus" and item.kind == &"backpack":
 			continue
-		var raw: int = int(item.stat_modifiers[stat_id])
-		if raw == 0:
+		var raw_new: int = int(item.stat_modifiers.get(stat_id, 0))
+		var raw_old: int = int(equipped.stat_modifiers.get(stat_id, 0)) if equipped != null else 0
+		if raw_new == 0 and raw_old == 0:
 			continue
 		var label := _stat_display_name(stat_id)
 		if stat_id in _PCT_STATS:
-			var amt_f: float = item.get_effective_modifier_float(stat_id)
+			var amt_f: float = item.get_effective_modifier_float(stat_id) if raw_new != 0 else 0.0
+			var old_f: float = equipped.get_effective_modifier_float(stat_id) if equipped != null and raw_old != 0 else 0.0
 			var sign_f: String = "+" if amt_f > 0.0 else ""
-			lines.append("%s%.1f%% %s" % [sign_f, amt_f, label])
+			var line := "%s%.1f%% %s" % [sign_f, amt_f, label]
+			if equipped != null and not is_equal_approx(amt_f, old_f):
+				var old_sign: String = "+" if old_f > 0.0 else ""
+				line += " %s %s%.1f%%" % [_compare_arrow(amt_f, old_f, stat_id), old_sign, old_f]
+			lines.append(line)
 		else:
-			var amount: int = item.get_effective_modifier(stat_id)
+			var amount: int = item.get_effective_modifier(stat_id) if raw_new != 0 else 0
+			var old_amount: int = equipped.get_effective_modifier(stat_id) if equipped != null and raw_old != 0 else 0
 			var sign := "+" if amount > 0 else ""
-			lines.append("%s%d %s" % [sign, amount, label])
+			var line := "%s%d %s" % [sign, amount, label]
+			if equipped != null and amount != old_amount:
+				var old_sign := "+" if old_amount > 0 else ""
+				line += " %s %s%d" % [_compare_arrow(float(amount), float(old_amount), stat_id), old_sign, old_amount]
+			lines.append(line)
 	return "\n".join(lines)
+
+
+## Returns a BBCode-colored arrow: green ▲ for better, red ▼ for worse,
+## grey = for equal. "Better" depends on the stat — damage_reduction going
+## up is good, but most stats follow the "higher = better" rule.
+func _compare_arrow(new_val: float, old_val: float, _stat_id: StringName = &"") -> String:
+	if new_val > old_val:
+		return "[color=%s]▲[/color]" % COMPARE_BETTER_COLOR
+	elif new_val < old_val:
+		return "[color=%s]▼[/color]" % COMPARE_WORSE_COLOR
+	return "[color=%s]=[/color]" % COMPARE_NEUTRAL_COLOR
 
 
 # Stat keys that should render as percentages (with the tenths suffix per

@@ -148,10 +148,11 @@ func generate() -> LevelGraph:
 		var node := RoomNode.new()
 		node.id = current_id
 		node.room = t.room
-		# Difficulty: linear scale by chain index. Lobby (r0) carries no
-		# enemies (start template defines none), so r1 is the first combat
-		# room and rolls in the (1,2) band.
-		node.enemy_level_range = Vector2i(i, i + 1)
+		# Difficulty: linear scale by chain index + NG+ zone offset. Lobby
+		# (r0) carries no enemies (start template defines none), so r1 is the
+		# first combat room. NG+0 starts at (1,2); each NG+ shifts +2.
+		var zoff := PlayerState.zone_level_offset()
+		node.enemy_level_range = Vector2i(i + zoff, i + 1 + zoff)
 		# Occasional "lair" rooms — bumps enemy density on the chosen
 		# template without authoring a separate dense template variant.
 		if rng.randf() < packed_room_chance:
@@ -208,7 +209,8 @@ func generate() -> LevelGraph:
 	end_node.room = end_t.room
 	# Boss arena tops out the difficulty band — slightly above the last
 	# linear chain room so the climactic fight feels appropriately stiff.
-	end_node.enemy_level_range = Vector2i(length, length + 1)
+	var zoff_end := PlayerState.zone_level_offset()
+	end_node.enemy_level_range = Vector2i(length + zoff_end, length + 1 + zoff_end)
 	end_node.theme_override = end_theme  # null is fine — falls through to layout default
 	if boss_arena_minions > 0:
 		end_node.enemy_count_override = boss_arena_minions
@@ -256,7 +258,8 @@ func _add_branch(graph: LevelGraph, junction_id: StringName, junction_wall: Room
 		var b_node := RoomNode.new()
 		b_node.id = b_id
 		b_node.room = t.room
-		b_node.enemy_level_range = Vector2i(base_level, base_level + 1)
+		var zoff_b := PlayerState.zone_level_offset()
+		b_node.enemy_level_range = Vector2i(base_level + zoff_b, base_level + 1 + zoff_b)
 		b_node.theme_override = branch_theme
 		graph.rooms.append(b_node)
 
@@ -285,7 +288,8 @@ func _add_branch(graph: LevelGraph, junction_id: StringName, junction_wall: Room
 	term_node.id = term_id
 	term_node.room = term_t.room
 	# Terminator slightly stiffer than the rest of the branch — payoff fight.
-	term_node.enemy_level_range = Vector2i(base_level + 1, base_level + 2)
+	var zoff_t := PlayerState.zone_level_offset()
+	term_node.enemy_level_range = Vector2i(base_level + 1 + zoff_t, base_level + 2 + zoff_t)
 	term_node.theme_override = branch_theme
 	if place_loot_at_branches:
 		var loot_slot := InteractableSlot.new()

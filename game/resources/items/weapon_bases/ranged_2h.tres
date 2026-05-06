@@ -7,7 +7,7 @@
 [resource]
 script = ExtResource("1_weapon_base")
 id = &"ranged_2h"
-display_name = "2H Plasma Rifle"
+display_name = "Plasma Rifle"
 glyph = "╪"
 two_handed = true
 damage_min_range = Vector2(8, 12)

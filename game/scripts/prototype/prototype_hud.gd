@@ -74,6 +74,9 @@ var _debug_overlay_accum: float = 0.0
 var _state_flashlight: bool = false
 var _state_crouch: bool = false
 var _minimap: Minimap
+var _controls_panel: PanelContainer
+var _talent_btn: Button
+var _talent_btn_glow_phase: float = 0.0
 # Loot tally state: signal carries the running total, not the delta, so we
 # diff it against the last seen value to derive each pickup amount.
 var _last_credits_seen: int = 0
@@ -131,7 +134,11 @@ func _ready() -> void:
 	_bind_skill_slots(player)
 	_bind_resource_pool(player)
 	_build_minimap(player)
+	_build_controls_panel()
 	_build_talents_panel()
+	_build_talent_point_button()
+	PlayerState.talents_changed.connect(_refresh_talent_button)
+	PlayerState.leveled_up.connect(func(_lv: int, _hp: int) -> void: _refresh_talent_button())
 
 func _apply_theme() -> void:
 	root.theme = UIThemeState.theme
@@ -374,6 +381,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	get_viewport().set_input_as_handled()
 
 func _process(delta: float) -> void:
+	_position_controls_panel()
+	_pulse_talent_button(delta)
 	var panel := debug_label.get_parent() as Control
 	var overlay_on := DebugState.config == null or DebugState.config.show_debug_overlay
 	if panel.visible != overlay_on:
@@ -459,9 +468,131 @@ func _build_minimap(player: Node) -> void:
 	if player.has_method(&"is_scanner_active"):
 		_minimap.scanner_active = player.is_scanner_active()
 
+func _build_controls_panel() -> void:
+	# Hide the old full-width hints label at the top of the screen.
+	var old_hints := root.get_node_or_null(^"HotkeyHints")
+	if old_hints != null:
+		old_hints.visible = false
+
+	# Small translucent panel anchored below the minimap in the top-right.
+	var panel := PanelContainer.new()
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.03, 0.04, 0.05, 0.82)
+	style.corner_radius_top_left = 3
+	style.corner_radius_top_right = 3
+	style.corner_radius_bottom_left = 3
+	style.corner_radius_bottom_right = 3
+	style.content_margin_left = 6
+	style.content_margin_right = 6
+	style.content_margin_top = 4
+	style.content_margin_bottom = 4
+	panel.add_theme_stylebox_override(&"panel", style)
+
+	var label := RichTextLabel.new()
+	label.bbcode_enabled = true
+	label.fit_content = true
+	label.scroll_active = false
+	label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	label.add_theme_font_size_override(&"normal_font_size", 6)
+	label.add_theme_font_size_override(&"bold_font_size", 6)
+	label.add_theme_constant_override(&"line_separation", -1)
+	label.add_theme_color_override(&"default_color", Color(0.7, 0.85, 1.0, 0.7))
+
+	var key_color := "#8ab4d8"
+	# Vertical layout — one keybind per line for readability.
+	var text := ""
+	text += "[color=%s]WASD[/color] Move\n" % key_color
+	text += "[color=%s]LMB[/color] Fire\n" % key_color
+	text += "[color=%s]RMB[/color] Skill\n" % key_color
+	text += "[color=%s]Space[/color] Jump\n" % key_color
+	text += "[color=%s]Shift[/color] Sprint\n" % key_color
+	text += "[color=%s]Ctrl[/color] Crouch\n" % key_color
+	text += "[color=%s]R[/color] Reload\n" % key_color
+	text += "[color=%s]F[/color] Light\n" % key_color
+	text += "[color=%s]1-4/Q/E[/color] Skills\n" % key_color
+	text += "[color=%s]I/C[/color] Inventory\n" % key_color
+	text += "[color=%s]N[/color] Talents\n" % key_color
+	text += "[color=%s]Tab[/color] Map\n" % key_color
+	text += "[color=%s]V[/color] View\n" % key_color
+	text += "[color=%s]Esc[/color] Menu" % key_color
+	label.text = text
+	panel.add_child(label)
+	root.add_child(panel)
+
+	panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	_controls_panel = panel
+
+func _position_controls_panel() -> void:
+	if _controls_panel == null or _controls_panel.size.x < 1.0:
+		return
+	var screen := get_viewport().get_visible_rect().size
+	var margin := Minimap.CORNER_MARGIN
+	var map_size := Minimap.CORNER_SIZE
+	var pw := _controls_panel.size.x
+	# Right-align with minimap, sit just below it.
+	_controls_panel.position = Vector2(
+		screen.x - pw - margin,
+		margin + map_size + 4.0,
+	)
+
 func _build_talents_panel() -> void:
 	var talents := TalentsPanel.new()
 	root.add_child(talents)
+
+func _build_talent_point_button() -> void:
+	# Glowing "+" that appears next to the level label when unspent talent
+	# points are available. Clicking it opens the talents panel (same as N).
+	var btn := Button.new()
+	btn.text = "+"
+	btn.flat = true
+	btn.mouse_filter = Control.MOUSE_FILTER_STOP
+	btn.add_theme_font_size_override(&"font_size", 12)
+	btn.add_theme_color_override(&"font_color", Color(0.4, 1.0, 0.5, 1.0))
+	btn.add_theme_color_override(&"font_hover_color", Color(0.6, 1.0, 0.7, 1.0))
+	btn.add_theme_color_override(&"font_pressed_color", Color(0.8, 1.0, 0.85, 1.0))
+	# Place to the right of the level label inside the avatar panel.
+	# LevelLabel: left=5, right=40, top=-17, bottom=-3 (relative to avatar panel bottom).
+	# The button sits just to its right: left=40, right=56.
+	btn.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	btn.offset_left = 40.0
+	btn.offset_right = 58.0
+	btn.offset_top = -19.0
+	btn.offset_bottom = -1.0
+	btn.tooltip_text = "Unallocated talent points (N)"
+	btn.pressed.connect(_on_talent_button_pressed)
+	# Add to AvatarPanel so it anchors to the same bottom-center region.
+	var avatar_panel := root.get_node_or_null(^"AvatarPanel")
+	if avatar_panel != null:
+		avatar_panel.add_child(btn)
+	else:
+		root.add_child(btn)
+	_talent_btn = btn
+	_refresh_talent_button()
+
+func _refresh_talent_button() -> void:
+	if _talent_btn == null:
+		return
+	var available := PlayerState.talent_points_total - PlayerState.get_talent_points_spent()
+	_talent_btn.visible = available > 0
+
+func _pulse_talent_button(delta: float) -> void:
+	if _talent_btn == null or not _talent_btn.visible:
+		return
+	_talent_btn_glow_phase += delta * 3.0
+	# Pulse the green color's brightness between 0.6 and 1.0.
+	var t := 0.5 + 0.5 * sin(_talent_btn_glow_phase)
+	var brightness := lerpf(0.6, 1.0, t)
+	_talent_btn.add_theme_color_override(&"font_color", Color(0.4 * brightness, 1.0 * brightness, 0.5 * brightness, 1.0))
+
+func _on_talent_button_pressed() -> void:
+	# Simulate opening the talents panel — same as pressing N.
+	for node in get_tree().get_nodes_in_group(&"ui_modal"):
+		if node is TalentsPanel:
+			if not node.visible:
+				node.open_menu()
+			return
 
 func set_scanner_active(active: bool) -> void:
 	if _minimap != null:

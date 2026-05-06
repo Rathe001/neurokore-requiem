@@ -89,7 +89,8 @@ func interact(_user: Node) -> void:
 	elif test_weapon_base_paths.size() > 0:
 		var rng := RandomNumberGenerator.new()
 		rng.randomize()
-		var ilvl := maxi(1, PlayerState.level)
+		# Zone-level-based: mid-range of the current NG+ band.
+		var ilvl := maxi(1, 2 + PlayerState.zone_level_offset())
 		for path in test_weapon_base_paths:
 			var base := load(path) as WeaponBase
 			if base == null:
@@ -99,7 +100,7 @@ func interact(_user: Node) -> void:
 	else:
 		var rng := RandomNumberGenerator.new()
 		rng.randomize()
-		var ilvl := maxi(1, PlayerState.level)
+		var ilvl := maxi(1, 2 + PlayerState.zone_level_offset())
 		for _i in random_item_count:
 			items.append(ItemRoller.roll_random(ilvl, rng))
 
