@@ -13,6 +13,8 @@ are mandatory.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-05-06
+
 ### Fixed
 
 - Resource loaders for perks, monster pack affixes, and named monsters
