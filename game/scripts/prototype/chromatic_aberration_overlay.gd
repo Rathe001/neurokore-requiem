@@ -19,12 +19,12 @@ const SHADER: Shader = preload("res://scripts/prototype/chromatic_aberration.gds
 # combined with the shader's radial bias produces a clearly-visible
 # tunneling effect without screen-breaking. Tune downward if it reads as
 # too aggressive.
-const PEAK_STRENGTH := 0.008
+const PEAK_STRENGTH := 0.014
 const RAMP_DURATION := 0.18
-# CanvasLayer between world (default 0) and HUD layers. HUD spawns at higher
-# layers via prototype_hud.tscn; if anything ends up at layer 5 we'd want
-# this lower. Keep at 1 for now.
-const LAYER := 1
+# Layer 0 draws the overlay right after the 3D world but before the HUD
+# (CanvasLayer 1+). hint_screen_texture captures only the 3D scene at this
+# point, so the chromatic split never bleeds into UI elements.
+const LAYER := 0
 
 var _rect: ColorRect
 var _mat: ShaderMaterial

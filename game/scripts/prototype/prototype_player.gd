@@ -55,6 +55,8 @@ const ANIM_DEATH: Array[StringName] = [
 const CROUCH_SPEED_FACTOR := 0.45
 const SPRINT_SPEED_FACTOR := 1.6
 const SPRINT_RESOURCE_PER_SEC := 8.0
+## Penalty delay before resource regen starts after hitting 0 while sprinting.
+const SPRINT_EMPTY_REGEN_DELAY := 2.0
 # Health regen — out-of-combat only by default. Any take_damage() resets the
 # delay; regen ticks as a percentage of max_health per second once the timer
 # expires. Gear/talent surfaces:
@@ -195,6 +197,8 @@ var _fade_rect: ColorRect = null
 var _chromatic: ChromaticAberrationOverlay = null
 var _crouching: bool = false
 var _sprinting: bool = false
+## Time remaining on the regen penalty after emptying resource while sprinting.
+var _sprint_regen_penalty: float = 0.0
 var _is_airborne: bool = false
 var _backing: bool = false
 var _interacting: bool = false
@@ -611,8 +615,11 @@ func _physics_process(delta: float) -> void:
 				_chromatic.set_active(_sprinting)
 			if _sprinting and not infinite_res:
 				var drain := SPRINT_RESOURCE_PER_SEC * delta
+				var was_above_zero := _resource_current > 0.0
 				_resource_current = maxf(0.0, _resource_current - drain)
 				_emit_resource_if_changed()
+				if was_above_zero and _resource_current <= 0.0:
+					_sprint_regen_penalty = SPRINT_EMPTY_REGEN_DELAY
 			# Active Shield (SHIELD_HOLD) slows the player to 20% — the
 			# trade for full damage block is being a near-stationary
 			# target. Buff (SHIELD_BUFF) doesn't slow; it's a passive
@@ -1100,6 +1107,10 @@ func _tick_resource_regen(delta: float) -> void:
 	if resource_pool == null or resource_pool.regen_per_sec <= 0.0:
 		return
 	if _sprinting:
+		return
+	# Penalty cooldown after emptying resource while sprinting.
+	if _sprint_regen_penalty > 0.0:
+		_sprint_regen_penalty -= delta
 		return
 	if _resource_current >= float(resource_pool.max_value):
 		return

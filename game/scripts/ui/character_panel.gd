@@ -1,10 +1,10 @@
 extends Control
 class_name CharacterPanel
 
-const PANEL_SIZE := Vector2(440.0, 500.0)
-const SHEET_HEIGHT := 290.0
+const PANEL_SIZE := Vector2(380.0, 420.0)
+const SHEET_HEIGHT := 240.0
 const STATS_POS := Vector2(16.0, 34.0)
-const STATS_SIZE := Vector2(220.0, 140.0)
+const STATS_SIZE := Vector2(200.0, 140.0)
 const EQUIP_SLOT_SIZE := Vector2(38.0, 38.0)
 const EQUIP_GAP := 4.0
 const EQUIP_COLS := 3
@@ -295,11 +295,15 @@ func _build_layout() -> void:
 	panel.name = "Panel"
 	panel.custom_minimum_size = PANEL_SIZE
 	panel.size = PANEL_SIZE
-	panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	# Center horizontally, sit above the bottom HUD (98px clearance).
+	panel.anchor_left = 0.5
+	panel.anchor_right = 0.5
+	panel.anchor_top = 0.5
+	panel.anchor_bottom = 0.5
 	panel.offset_left = -PANEL_SIZE.x * 0.5
-	panel.offset_top = -PANEL_SIZE.y * 0.5
+	panel.offset_top = -PANEL_SIZE.y * 0.5 - 30.0
 	panel.offset_right = PANEL_SIZE.x * 0.5
-	panel.offset_bottom = PANEL_SIZE.y * 0.5
+	panel.offset_bottom = PANEL_SIZE.y * 0.5 - 30.0
 	panel.add_theme_stylebox_override(&"panel", _opaque_panel_style(p))
 	panel.add_to_group(&"modal_inner_panel")
 	add_child(panel)
