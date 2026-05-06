@@ -179,6 +179,15 @@ def update_vdf_desc(version: str, sha: str, summary: str, dry_run: bool) -> str:
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main() -> None:
+    # Windows console defaults to cp1252, which chokes on the middot ('·') in
+    # the build desc and the box-drawing chars in the summary banner. Force
+    # UTF-8 so the script behaves the same on Windows / macOS / Linux.
+    # reconfigure() is available on Python 3.7+; guarded for safety.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8")
+        except (AttributeError, OSError):
+            pass
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--bump",
