@@ -64,17 +64,22 @@ func interact(_user: Node) -> void:
 	if starter_weapon_kit:
 		var rng := RandomNumberGenerator.new()
 		rng.randomize()
-		var ilvl := maxi(1, PlayerState.level)
+		# Starter kit is intentionally rolled at item_level 0 — every drop in
+		# the world generates at ilvl >= 1, so the starter gear is always
+		# strictly worse than any pickup the player can find. Solves the
+		# "give the player a baseline kit but make new drops feel meaningful"
+		# tension. Effectiveness curve in Item.gd handles the actual scaling.
+		var starter_ilvl := 0
 		# 50/50: one 2H, OR one 1H + one offhand. Both branches roll at
 		# common rarity so the player's first kit is functional but
 		# unspectacular — variety / power comes from later drops.
 		if rng.randf() < 0.5:
-			items.append(ItemRoller.roll("2H Weapon", ilvl, &"common", rng))
+			items.append(ItemRoller.roll("2H Weapon", starter_ilvl, &"common", rng))
 		else:
-			items.append(ItemRoller.roll("1H Weapon", ilvl, &"common", rng))
-			items.append(ItemRoller.roll("Offhand", ilvl, &"common", rng))
+			items.append(ItemRoller.roll("1H Weapon", starter_ilvl, &"common", rng))
+			items.append(ItemRoller.roll("Offhand", starter_ilvl, &"common", rng))
 		# Head armor with a light mod so the player can use F to navigate.
-		items.append(ItemRoller.roll("Head Armor", ilvl, &"common", rng))
+		items.append(ItemRoller.roll("Head Armor", starter_ilvl, &"common", rng))
 		# One of each offhand archetype for playtest — remove once
 		# active-offhand items roll naturally through ItemRoller.
 		items.append(_make_starter_shield_generator())
@@ -145,7 +150,8 @@ func _make_starter_shield_generator() -> Item:
 	item.sub_type = "Amplification Shield"
 	item.glyph = SlotRegistry.glyph_for_type("Offhand")
 	item.glyph_color = Color(0.85, 0.92, 1.0, 1.0)
-	item.rarity = &"unique"
+	item.rarity = &"common"
+	item.item_level = 0
 	item.name_key = "Shield Generator"
 	item.fire_skill = load("res://resources/skills/shield_generator.tres") as Skill
 	return item
@@ -163,7 +169,8 @@ func _make_starter_active_shield() -> Item:
 	item.sub_type = "Active Shield"
 	item.glyph = SlotRegistry.glyph_for_type("Offhand")
 	item.glyph_color = Color(0.85, 0.95, 0.85, 1.0)
-	item.rarity = &"unique"
+	item.rarity = &"common"
+	item.item_level = 0
 	item.name_key = "Active Shield"
 	item.fire_skill = load("res://resources/skills/active_shield.tres") as Skill
 	return item

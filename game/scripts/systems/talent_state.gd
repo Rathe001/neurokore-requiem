@@ -62,8 +62,19 @@ func _ready() -> void:
 
 
 func _load_trees() -> void:
+	# Tree files live under TREE_DIR keyed by the legacy 3-letter stat_id
+	# (amb.tres, ort.tres, etc.) — same convention PlayerState.talent_allocations
+	# and the talents panel UI use. Walk CLASS_DEFINITIONS to enumerate the
+	# six class slots, but resolve each to its stat_id via CLASS_TO_STAT
+	# before reading the file. Origin classes (analog/cyborg) don't have
+	# their own trees; their CLASS_TO_STAT entry is missing and we skip.
+	var seen: Dictionary = {}
 	for class_id: StringName in AttributeState.CLASS_DEFINITIONS.keys():
-		var path := "%s%s.tres" % [TREE_DIR, class_id]
+		var stat_id: StringName = AttributeState.CLASS_TO_STAT.get(class_id, &"")
+		if stat_id == &"" or seen.has(stat_id):
+			continue
+		seen[stat_id] = true
+		var path := "%s%s.tres" % [TREE_DIR, stat_id]
 		if not ResourceLoader.exists(path):
 			continue
 		var tree := load(path) as TalentTree
@@ -76,10 +87,10 @@ func _load_trees() -> void:
 				continue
 			var key := Vector2i(node.tier, node.node_idx)
 			if index.has(key):
-				push_warning("[TalentState] Duplicate node at (%d, %d) on %s — keeping the first." % [node.tier, node.node_idx, class_id])
+				push_warning("[TalentState] Duplicate node at (%d, %d) on %s — keeping the first." % [node.tier, node.node_idx, stat_id])
 				continue
 			index[key] = node
-		_trees[class_id] = index
+		_trees[stat_id] = index
 
 
 func _on_level_changed(_new_level: int, _old_level: int) -> void:

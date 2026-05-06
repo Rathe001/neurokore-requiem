@@ -67,6 +67,7 @@ func roll(main_type: String, item_level: int, rarity: StringName, rng: RandomNum
 	item.main_type = main_type
 	item.kind = SlotRegistry.slot_for_type(main_type)
 	item.rarity = rarity
+	item.item_level = item_level
 	item.id = StringName("rolled_%d_%d" % [item_level, rng.randi()])
 	item.glyph = SlotRegistry.glyph_for_type(main_type)
 	item.glyph_color = RARITY_COLOR.get(rarity, Color.WHITE)
@@ -107,6 +108,7 @@ func roll_from_base(base: WeaponBase, item_level: int, rarity: StringName, rng: 
 	item.main_type = main_type
 	item.kind = SlotRegistry.slot_for_type(main_type)
 	item.rarity = rarity
+	item.item_level = item_level
 	item.id = StringName("rolled_%d_%d" % [item_level, rng.randi()])
 	item.glyph = SlotRegistry.glyph_for_type(main_type)
 	item.glyph_color = RARITY_COLOR.get(rarity, Color.WHITE)
@@ -180,6 +182,7 @@ func _roll_grenade_from_base(base: GrenadeBase, item_level: int, rng: RandomNumb
 	item.main_type = "Grenade"
 	item.kind = SlotRegistry.slot_for_type("Grenade")
 	item.rarity = &"common"
+	item.item_level = item_level
 	item.id = StringName("debug_grenade_%d" % rng.randi())
 	item.glyph = SlotRegistry.glyph_for_type("Grenade")
 	item.glyph_color = RARITY_COLOR.get(&"common", Color.WHITE)

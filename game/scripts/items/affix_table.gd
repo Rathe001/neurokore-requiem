@@ -28,7 +28,7 @@ const PREFIXES: Array[Dictionary] = [
 	{
 		"id": &"precise",
 		"label": "Precise",
-		"item_types": ["1H Weapon", "2H Weapon"],
+		"item_types": ["Head Armor"],
 		"stat_modifiers": { "crit_chance_bonus": 5 },
 		"min_item_level": 1,
 		"weight": 100,
@@ -145,6 +145,35 @@ const PREFIXES: Array[Dictionary] = [
 		"stat_modifiers": { "toxic_resistance": 8 },
 		"min_item_level": 5,
 		"weight": 70,
+	},
+	# ── Boots-only traction prefixes ─────────────────────────────────────────
+	# Traction is the boots stat domain (see docs/design/itemization.md).
+	# Values are tuned to land at the staircased breakpoints (25/50/75/100):
+	# Surefooted alone hits T1, two stacked sources or Iron-Soled alone hit
+	# T2, and unique boots can roll Mag-Plated for guaranteed T3+.
+	{
+		"id": &"surefooted",
+		"label": "Surefooted",
+		"item_types": ["Boots"],
+		"stat_modifiers": { "traction_bonus": 25 },
+		"min_item_level": 1,
+		"weight": 100,
+	},
+	{
+		"id": &"iron_soled",
+		"label": "Iron-Soled",
+		"item_types": ["Boots"],
+		"stat_modifiers": { "traction_bonus": 50 },
+		"min_item_level": 25,
+		"weight": 60,
+	},
+	{
+		"id": &"mag_plated",
+		"label": "Mag-Plated",
+		"item_types": ["Boots"],
+		"stat_modifiers": { "traction_bonus": 75 },
+		"min_item_level": 50,
+		"weight": 25,
 	},
 	# ── Grenade prefixes ────────────────────────────────────────────────────
 	{

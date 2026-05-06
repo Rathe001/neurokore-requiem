@@ -3,6 +3,14 @@ class_name PrototypeProjectile
 
 const PROTO_BASE_CRIT_CHANCE: float = 0.15
 const PROTO_BASE_CRIT_MULT: float = 1.5
+
+# Point-blank penalty mirrored from PlayerCombat — short-range projectile
+# impacts halve accuracy. Same threshold + multiplier so the rule is
+# consistent across hitscan and projectile firing modes. Both player- and
+# enemy-fired projectiles obey this; if the player charges into a ranged
+# enemy, that enemy's bolts also miss more often.
+const MELEE_RANGE_THRESHOLD: float = 2.5
+const MELEE_RANGE_ACCURACY_MULT: float = 0.5
 # World-layer raycast mask for the per-frame sweep. Walls + structures live
 # on layer 1; targets get handled by Area3D body_entered so we don't need
 # to ray-test them.
@@ -129,7 +137,7 @@ func _on_body_entered(body: Node3D) -> void:
 		if target_group == &"enemies" and body.has_method(&"is_player_friendly") and body.is_player_friendly():
 			_release()
 			return
-		if _roll_hit():
+		if _roll_hit(body.global_position):
 			var is_crit := _roll_crit()
 			var dmg := _roll_damage(is_crit)
 			# Player and enemy take_damage signatures both accept the same
@@ -170,10 +178,25 @@ func _release() -> void:
 	_released = true
 	EntityPool.release.call_deferred(self)
 
-func _roll_hit() -> bool:
-	if accuracy >= 1.0:
+func _roll_hit(target_pos: Vector3) -> bool:
+	# Point-blank penalty: if the projectile traveled less than the melee
+	# threshold from its fire origin to where it hit, halve accuracy. Same
+	# rule PlayerCombat applies to hitscan; mirrored here so both firing
+	# modes behave identically and the player can't game one over the other.
+	#
+	# The Count "Point Blank" talent waives the penalty for player-fired
+	# projectiles (target_group == &"enemies"). Enemy-fired bolts always
+	# obey the rule — the player still benefits from charging into a
+	# ranged enemy regardless of which class they're playing.
+	var eff_acc := accuracy
+	if source_position.distance_to(target_pos) < MELEE_RANGE_THRESHOLD:
+		var player_fired := target_group == &"enemies"
+		var ignore_penalty := player_fired and Effects.get_aggregate(&"ignore_point_blank_penalty") > 0.0
+		if not ignore_penalty:
+			eff_acc *= MELEE_RANGE_ACCURACY_MULT
+	if eff_acc >= 1.0:
 		return true
-	return randf() < accuracy
+	return randf() < eff_acc
 
 func _roll_crit() -> bool:
 	var base := crit_chance if crit_chance > 0.0 else PROTO_BASE_CRIT_CHANCE

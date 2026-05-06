@@ -58,9 +58,9 @@ func activate(skill: Skill, cursor_offset: Vector3) -> void:
 	var grenade: PrototypeGrenade = EntityPool.acquire(GRENADE_SCENE) as PrototypeGrenade
 	grenade.target_position = _host.global_position + cursor_offset
 	if offhand != null and offhand.damage_max > 0:
-		grenade.damage_min = offhand.damage_min
-		grenade.damage_max = offhand.damage_max
-		grenade.crit_chance = offhand.crit_chance
+		grenade.damage_min = offhand.effective_damage_min()
+		grenade.damage_max = offhand.effective_damage_max()
+		grenade.crit_chance = offhand.effective_crit_chance()
 	else:
 		grenade.damage_min = skill.damage
 		grenade.damage_max = skill.damage

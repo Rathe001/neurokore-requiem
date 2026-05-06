@@ -97,6 +97,10 @@ func _ready() -> void:
 	PlayerState.class_changed.connect(_on_player_changed)
 	PlayerState.spec_changed.connect(_on_player_changed)
 	PlayerState.level_changed.connect(_on_level_changed)
+	# Talent allocation now drives perk tier unlocks, not level. Re-running on
+	# talents_changed is what makes "spend a talent point" actually grant a
+	# new perk tier.
+	PlayerState.talents_changed.connect(_recompute)
 	_recompute()
 
 
@@ -131,19 +135,28 @@ func _recompute() -> void:
 	var new_active: Array[Perk] = []
 	var new_aggregates: Dictionary = {}
 
-	# Placeholder: unlock perks based on player level until the talent-tree-driven
-	# perk system is built. For the player's spec ladder, unlock up to
-	# tier = level / 3. For non-spec ladders, unlock tier 0 only.
+	# Each ladder's perk progression is driven by the player's talent
+	# allocations in the matching tree. A perk at tier N unlocks once the
+	# player has allocated any talent node at allocation-tier N (0-indexed,
+	# so tier 0 → perk[0] = T1). Class lockouts already gate which tiers
+	# the player could have spent on (via PlayerState.is_node_active /
+	# get_unlocked_tier), so iterating allocations here implicitly respects
+	# the lockout shape.
 	if PlayerState.class_id != &"":
-		var max_tier := PlayerState.level / 3
 		for ladder_id: StringName in _ladders.keys():
 			var ladder: PerkLadder = _ladders[ladder_id]
 			if ladder == null or ladder.perks.is_empty():
 				continue
-			var tier: int = 0
-			if PlayerState.spec_id != &"" and ladder_id == PlayerState.spec_id:
-				tier = mini(max_tier, ladder.perks.size())
-			for i in tier:
+			var alloc: Array = PlayerState.talent_allocations.get(ladder_id, [])
+			var max_alloc_tier := -1
+			for tier_idx in alloc.size():
+				var row: Array = alloc[tier_idx]
+				for node_alloc in row:
+					if node_alloc:
+						max_alloc_tier = maxi(max_alloc_tier, tier_idx)
+						break
+			var unlocked_perks := mini(max_alloc_tier + 1, ladder.perks.size())
+			for i in unlocked_perks:
 				var perk: Perk = ladder.perks[i]
 				if perk == null:
 					continue

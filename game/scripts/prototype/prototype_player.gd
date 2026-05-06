@@ -55,6 +55,20 @@ const ANIM_DEATH: Array[StringName] = [
 const CROUCH_SPEED_FACTOR := 0.45
 const SPRINT_SPEED_FACTOR := 1.6
 const SPRINT_RESOURCE_PER_SEC := 8.0
+# Health regen — out-of-combat only by default. Any take_damage() resets the
+# delay; regen ticks as a percentage of max_health per second once the timer
+# expires. Gear/talent surfaces:
+#   hp_regen_bonus_pct      — adds to HP_REGEN_BASE_PCT (additive, e.g. +1
+#                             means +1% max HP per second on top of the
+#                             baseline). Read via get_effective_modifier so
+#                             low-ilvl regen gear scales down as the player
+#                             outlevels it, like every other power stat.
+#   regen_delay_reduction   — subtracts from HP_REGEN_DELAY (seconds). At
+#                             5s base, a +2 reduction means regen kicks in
+#                             after 3s out of combat instead of 5.
+const HP_REGEN_DELAY := 5.0
+const HP_REGEN_BASE_PCT := 10.0
+const HP_REGEN_MIN_DELAY := 0.5
 # Movement multiplier while holding the Active Shield (SHIELD_HOLD).
 # 20% — the player is essentially planted; the trade is full damage
 # block + still being able to attack. SHIELD_BUFF doesn't apply.
@@ -120,7 +134,20 @@ var _health: int
 var _alive: bool = true
 var _knockback_vel: Vector3 = Vector3.ZERO
 var _knockback_remain: float = 0.0
-var _attacking: bool = false
+# Independent busy flags for the two firing paths so LMB-hold and RMB-hold
+# can interleave. Movement halt and facing gate on EITHER being true (any
+# active commit window stops the player), but each input path only blocks
+# its OWN re-entry — RMB cast can still fire while LMB is mid-windup, and
+# vice versa.
+var _lmb_busy: bool = false
+var _skill_busy: bool = false
+
+
+# True while any attack is in its commit window. Used by movement and
+# facing logic so the player stops / locks orientation during ANY swing,
+# regardless of which input started it.
+func _is_attack_committed() -> bool:
+	return _lmb_busy or _skill_busy
 var _attack_aim: Vector3 = Vector3.ZERO
 var _click_consumed: bool = false
 # Auto-aim target while LMB is held over an enemy. Cleared on release, on
@@ -165,6 +192,7 @@ var _world_env: Environment = null
 var _modal_nodes: Array[CanvasItem] = []
 var _fps_fill_light: OmniLight3D = null
 var _fade_rect: ColorRect = null
+var _chromatic: ChromaticAberrationOverlay = null
 var _crouching: bool = false
 var _sprinting: bool = false
 var _is_airborne: bool = false
@@ -188,6 +216,16 @@ var _gear_crit_chance_bonus: float = 0.0
 var _gear_attack_speed_bonus: float = 0.0
 var _gear_hit_chance_bonus: float = 0.0
 var _gear_cooldown_reduction: float = 0.0
+var _gear_hp_regen_bonus: float = 0.0
+var _gear_regen_delay_reduction: float = 0.0
+# Time since the player was last hit. Counts up each frame; HP regen kicks
+# in once it crosses (HP_REGEN_DELAY - regen_delay_reduction). Reset by
+# take_damage().
+var _out_of_combat_t: float = HP_REGEN_DELAY
+# Sub-integer accumulator so % regen produces the right value at any frame
+# rate — flushed to _health when it crosses 1.0. Without this, a 4%/sec
+# tick at 60fps produces 0 (rounded) every frame and HP never climbs.
+var _hp_regen_accum: float = 0.0
 
 func _ready() -> void:
 	_combat = PlayerCombat.new()
@@ -218,6 +256,8 @@ func _ready() -> void:
 	_fade_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_fade_canvas.add_child(_fade_rect)
 	add_child(_fade_canvas)
+	_chromatic = ChromaticAberrationOverlay.new()
+	add_child(_chromatic)
 	add_to_group(&"player")
 	add_to_group(&"world_item_dropper")
 	SpatialGrid.register(self, &"player")
@@ -359,6 +399,12 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 	knockback_strength = shield_result.knockback
 	_health = max(_health - amount, 0)
 	health_changed.emit(_health, max_health)
+	# Reset out-of-combat regen — any take_damage() call delays HP recovery
+	# by the full configured window. Environmental DoTs / pit damage / boss
+	# AoE all flow through this path, so regen pauses uniformly regardless
+	# of damage source.
+	_out_of_combat_t = 0.0
+	_hp_regen_accum = 0.0
 	_hit_flash_tween = HitFlash.play(self, visual, _hit_flash_tween)
 	if knockback_strength > 0.0:
 		var dir := global_position - knockback_from
@@ -418,19 +464,27 @@ func _recompute_stat_bonuses() -> void:
 	var atk_spd := 0.0
 	var hit := 0.0
 	var cdr := 0.0
+	var hp_regen_bonus := 0.0
+	var regen_delay_red := 0.0
 	for slot in SlotRegistry.SLOTS:
 		var item: Item = InventoryState.get_equipped(slot)
 		if item == null:
 			continue
-		hp_bonus += item.get_modifier(&"max_health_bonus")
-		res_bonus += item.get_modifier(&"max_resource_bonus")
-		dmg_red += item.get_modifier(&"damage_reduction")
-		move_spd += item.get_modifier(&"move_speed_bonus")
-		base_dmg += item.get_modifier(&"base_damage_bonus")
-		crit += float(item.get_modifier(&"crit_chance_bonus")) * 0.01
-		atk_spd += float(item.get_modifier(&"attack_speed_bonus")) * 0.01
-		hit += float(item.get_modifier(&"hit_chance_bonus")) * 0.01
-		cdr += float(item.get_modifier(&"cooldown_reduction")) * 0.01
+		# All gear bonuses here contribute to combat power, so they go
+		# through get_effective_modifier — the aggregate respects ilvl
+		# scaling. Storage stats (inventory_bonus) are read elsewhere via
+		# the raw get_modifier so backpack capacity doesn't shrink with level.
+		hp_bonus += item.get_effective_modifier(&"max_health_bonus")
+		res_bonus += item.get_effective_modifier(&"max_resource_bonus")
+		dmg_red += item.get_effective_modifier(&"damage_reduction")
+		move_spd += item.get_effective_modifier(&"move_speed_bonus")
+		base_dmg += item.get_effective_modifier(&"base_damage_bonus")
+		crit += float(item.get_effective_modifier(&"crit_chance_bonus")) * 0.01
+		atk_spd += float(item.get_effective_modifier(&"attack_speed_bonus")) * 0.01
+		hit += float(item.get_effective_modifier(&"hit_chance_bonus")) * 0.01
+		cdr += float(item.get_effective_modifier(&"cooldown_reduction")) * 0.01
+		hp_regen_bonus += float(item.get_effective_modifier(&"hp_regen_bonus"))
+		regen_delay_red += float(item.get_effective_modifier(&"regen_delay_reduction"))
 	_gear_damage_reduction = dmg_red
 	_gear_move_speed_bonus = move_spd
 	_gear_base_damage_bonus = base_dmg
@@ -438,6 +492,8 @@ func _recompute_stat_bonuses() -> void:
 	_gear_attack_speed_bonus = atk_spd
 	_gear_hit_chance_bonus = hit
 	_gear_cooldown_reduction = cdr
+	_gear_hp_regen_bonus = hp_regen_bonus
+	_gear_regen_delay_reduction = regen_delay_red
 	var new_max := _base_max_health + _level_hp_bonus + hp_bonus
 	if new_max != max_health:
 		var old_max := max_health
@@ -490,6 +546,7 @@ func _physics_process(delta: float) -> void:
 	_update_lock_target()
 	_combat.tick_cooldowns(delta)
 	_tick_resource_regen(delta)
+	_tick_health_regen(delta)
 	_telekinesis.tick(delta)
 	_shield.tick(delta)
 	_doomsayer.tick(delta)
@@ -521,7 +578,7 @@ func _physics_process(delta: float) -> void:
 		velocity.z = _knockback_vel.z * falloff
 		_knockback_remain -= delta
 		_want_dir = Vector3.ZERO
-	elif _attacking and not _is_airborne:
+	elif _is_attack_committed() and not _is_airborne:
 		velocity.x = 0.0
 		velocity.z = 0.0
 	else:
@@ -550,6 +607,8 @@ func _physics_process(delta: float) -> void:
 			var wants_sprint := Input.is_action_pressed(&"sprint") and wish_dir.length_squared() > 0.01
 			var infinite_res := DebugState.config != null and DebugState.config.infinite_resource
 			_sprinting = wants_sprint and not _crouching and not _backing and (infinite_res or _resource_current > 0.0)
+			if _chromatic != null:
+				_chromatic.set_active(_sprinting)
 			if _sprinting and not infinite_res:
 				var drain := SPRINT_RESOURCE_PER_SEC * delta
 				_resource_current = maxf(0.0, _resource_current - drain)
@@ -583,7 +642,7 @@ func _physics_process(delta: float) -> void:
 	if _crouching and not Input.is_physical_key_pressed(KEY_CTRL):
 		_set_crouch(false)
 
-	if _alive and not _attacking and _knockback_remain <= 0.0:
+	if _alive and not _is_attack_committed() and _knockback_remain <= 0.0:
 		if _fps_mode:
 			# In FPS the body follows camera yaw; snapping is fine because the
 			# camera *is* the player view.
@@ -661,7 +720,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		_set_crouch(false)
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed(&"toggle_view") and BuildInfo.dev_tools_enabled():
-		_toggle_fps()
+		_handle_toggle_view()
 		get_viewport().set_input_as_handled()
 	elif _fps_mode and not _fps_transitioning and event is InputEventMouseMotion:
 		var sens := DisplayState.config.fps_mouse_sensitivity if DisplayState.config != null else 0.006
@@ -680,19 +739,24 @@ func _try_interact() -> void:
 		nearest.interact(self)
 
 func _handle_skill_input() -> void:
-	if _attacking:
-		return
+	# No global commit-window gate — each input path self-blocks via its
+	# own busy flag (_lmb_busy / _skill_busy) so LMB-hold and RMB-hold
+	# operate independently. The loop visits every input each frame
+	# instead of returning after the first match.
 	for i in SKILL_INPUTS.size():
 		if not Input.is_action_pressed(SKILL_INPUTS[i]):
 			continue
 		if _is_any_modal_open() or _is_mouse_over_ui():
 			return
+		# LMB-only carve-outs: interactable click consumption + hovered
+		# pickup walk-to-interact. These should never block RMB or
+		# hotkeys, so they `continue` past LMB instead of returning.
 		if i == 0 and _click_consumed:
-			return
+			continue
 		if i == 0 and _fps_mode and _fps_hovered != null and is_instance_valid(_fps_hovered):
 			if Input.is_action_just_pressed(SKILL_INPUTS[i]):
 				_try_interact_with(_fps_hovered)
-			return
+			continue
 		elif i == 0 and not _fps_mode:
 			var hovered := _hovered_clickable()
 			if hovered != null:
@@ -701,7 +765,7 @@ func _handle_skill_input() -> void:
 						_click_consumed = true
 						_walk_to_interact_target = null
 						_interact_with_hovered(hovered)
-					return
+					continue
 				else:
 					# Out of range — start walking to it. Movement loop in
 					# _physics_process synthesises a wish_dir toward this
@@ -709,18 +773,17 @@ func _handle_skill_input() -> void:
 					if Input.is_action_just_pressed(SKILL_INPUTS[i]) and hovered is Node3D:
 						_click_consumed = true
 						_walk_to_interact_target = hovered as Node3D
-					return
+					continue
 		# LMB fans out across every equipped weapon slot (Forged Amalgamation
 		# adds extras). _cast_lmb_combat handles per-slot cooldowns +
 		# stagger; the single-skill _cast_skill path stays for RMB and the
 		# hotkey skills (1-4 / Q / E).
 		if i == 0:
 			_cast_lmb_combat()
-			return
+			continue
 		var skill := resolve_skill(i)
 		if skill != null:
 			_cast_skill(skill)
-		return
 
 func resolve_skill(index: int) -> Skill:
 	var weapon: Item = InventoryState.get_equipped(&"weapon")
@@ -852,7 +915,7 @@ const ARM_OFFSET_VERTICAL := 1.0
 # share a timer; the main weapon also writes the skill-keyed cooldown so
 # the HUD slot icon's progress ring stays accurate for the LMB display.
 func _cast_lmb_combat() -> void:
-	if _attacking:
+	if _lmb_busy:
 		return
 	_interacting = false
 	var aim := _aim_direction()
@@ -888,7 +951,7 @@ func _cast_lmb_combat() -> void:
 	var main_interval := LMB_MULTI_STAGGER_FALLBACK
 	var main_item: Item = InventoryState.get_equipped(&"weapon")
 	if main_item != null and main_item.fire_skill != null:
-		var main_atk_spd: float = main_item.attack_speed if main_item.attack_speed > 0.0 else 1.0
+		var main_atk_spd: float = main_item.effective_attack_speed() if main_item.attack_speed > 0.0 else 1.0
 		main_interval = main_item.fire_skill.cooldown / main_atk_spd
 	var stagger: float = main_interval / float(ready_fires.size())
 
@@ -910,7 +973,7 @@ func _cast_lmb_combat() -> void:
 		var item: Item = f["item"]
 		var slot: StringName = f["slot"]
 		var is_main: bool = f["is_main"]
-		var atk_spd: float = item.attack_speed if item.attack_speed > 0.0 else 1.0
+		var atk_spd: float = item.effective_attack_speed() if item.attack_speed > 0.0 else 1.0
 		_combat.start_slot_cooldown(slot, skill, atk_spd)
 		# Mirror onto the skill-keyed dict for the MAIN weapon so the HUD's
 		# LMB slot reads cooldown the same way it always has.
@@ -950,13 +1013,13 @@ func _cast_lmb_combat() -> void:
 	if main_item != null and main_item.fire_skill != null:
 		var main_wind_up: float = main_item.fire_skill.wind_up
 		if main_wind_up > 0.0:
-			var main_atk_spd_for_stop: float = main_item.attack_speed if main_item.attack_speed > 0.0 else 1.0
+			var main_atk_spd_for_stop: float = main_item.effective_attack_speed() if main_item.attack_speed > 0.0 else 1.0
 			stop_duration = maxf(stop_duration, main_wind_up / main_atk_spd_for_stop)
 	if stop_duration > 0.0:
-		_attacking = true
+		_lmb_busy = true
 		_attack_aim = aim
 		await get_tree().create_timer(stop_duration).timeout
-		_attacking = false
+		_lmb_busy = false
 
 
 # Per-arm world-space offset for the projectile / hitscan source position.
@@ -977,7 +1040,7 @@ func _arm_offset_for_slot(slot: StringName, aim_right: Vector3) -> Vector3:
 
 
 func _cast_skill(skill: Skill) -> void:
-	if skill == null or _attacking:
+	if skill == null or _skill_busy:
 		return
 	# Active offhands (shield, grenade, generator) bypass the standard
 	# fire pipeline — they own state machines that don't fit the
@@ -1009,13 +1072,13 @@ func _cast_skill(skill: Skill) -> void:
 	if aim == Vector3.ZERO:
 		return
 	var weapon := _combat.resolve_skill_source(skill)
-	var atk_spd := weapon.attack_speed if weapon != null else 1.0
+	var atk_spd := weapon.effective_attack_speed() if weapon != null else 1.0
 	if atk_spd <= 0.0:
 		atk_spd = 1.0
 	_combat.start_cooldown(skill, atk_spd)
 	if skill.resource_cost > 0:
 		_spend_resource(skill.resource_cost)
-	_attacking = true
+	_skill_busy = true
 	_attack_aim = aim
 	_attack_weapon = weapon
 	_face_direction(aim)
@@ -1023,7 +1086,7 @@ func _cast_skill(skill: Skill) -> void:
 	PrototypeAttackIndicator.spawn(self, skill, aim, _combat.effective_range(skill, weapon))
 	if skill.wind_up > 0.0:
 		await get_tree().create_timer(skill.wind_up / atk_spd).timeout
-	_attacking = false
+	_skill_busy = false
 	if not _alive:
 		return
 	var fire_aim := _attack_aim
@@ -1042,6 +1105,36 @@ func _tick_resource_regen(delta: float) -> void:
 		return
 	_resource_current = minf(float(resource_pool.max_value), _resource_current + resource_pool.regen_per_sec * delta)
 	_emit_resource_if_changed()
+
+
+# Out-of-combat HP regen. _out_of_combat_t counts up since the last
+# take_damage() and crosses the (delay - reduction) threshold to start
+# regenerating. Regen rate = HP_REGEN_BASE_PCT + gear bonus, applied as
+# a percentage of max_health per second. Stops at full HP and on death.
+# A sub-integer accumulator handles low-rate-low-fps cases where a single
+# delta tick produces less than 1 HP — without it nothing ever regens.
+func _tick_health_regen(delta: float) -> void:
+	if not _alive:
+		return
+	if _health >= max_health:
+		_hp_regen_accum = 0.0
+		return
+	_out_of_combat_t += delta
+	var delay := maxf(HP_REGEN_DELAY - _gear_regen_delay_reduction, HP_REGEN_MIN_DELAY)
+	if _out_of_combat_t < delay:
+		return
+	var rate_pct := HP_REGEN_BASE_PCT + _gear_hp_regen_bonus
+	if rate_pct <= 0.0:
+		return
+	_hp_regen_accum += float(max_health) * (rate_pct / 100.0) * delta
+	if _hp_regen_accum < 1.0:
+		return
+	var whole_hp := int(floor(_hp_regen_accum))
+	_hp_regen_accum -= float(whole_hp)
+	var prev := _health
+	_health = mini(_health + whole_hp, max_health)
+	if _health != prev:
+		health_changed.emit(_health, max_health)
 
 
 # Public accessors for the buff bar. Live counts of the per-spec
@@ -1118,6 +1211,9 @@ func fire_exile_shot(target: Node3D) -> void:
 func _die() -> void:
 	_alive = false
 	died.emit()
+	_sprinting = false
+	if _chromatic != null:
+		_chromatic.set_active(false)
 	_drone_swarm.cleanup()
 	_ied.cleanup()
 	_doomsayer.cleanup()
@@ -1149,7 +1245,8 @@ func respawn() -> void:
 	global_position = _spawn_position
 	velocity = Vector3.ZERO
 	_knockback_remain = 0.0
-	_attacking = false
+	_lmb_busy = false
+	_skill_busy = false
 	_recompute_stat_bonuses()
 	_health = max_health
 	_alive = true
@@ -1215,6 +1312,22 @@ func _update_lock_target() -> void:
 			if n is Node3D and n.is_in_group(&"enemies"):
 				_lock_target = n
 				break
+
+# Three-state V-key cycler:
+#   - in FPS                           → exit FPS (back to iso default)
+#   - in iso with tilted pitch         → reset iso pitch to default
+#   - in iso already at default pitch  → enter FPS
+# Lets a single key both undo a debug tilt and toggle between camera modes.
+func _handle_toggle_view() -> void:
+	if _fps_mode:
+		_toggle_fps()
+		return
+	var iso_cam := _camera as PrototypeCamera
+	if iso_cam != null and not iso_cam.is_at_default_pitch():
+		iso_cam.reset_pitch()
+		return
+	_toggle_fps()
+
 
 func _toggle_fps() -> void:
 	if _fps_transitioning:

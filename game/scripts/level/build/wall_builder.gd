@@ -254,13 +254,16 @@ static func _add_ns_faces(st: SurfaceTool, cx: float, outer_z: float, inner_z: f
 		else:
 			_vquad(st, Vector3(cx - ox, 0, outer_z), Vector3(cx - hg, 0, outer_z), h)
 			_vquad(st, Vector3(cx + hg, 0, outer_z), Vector3(cx + ox, 0, outer_z), h)
-		# Inner segments
+		# Inner segments — extended to ±ox so the corner cube's inside face
+		# is covered. Stopping at ±ix would leave a visible gap where the
+		# perpendicular wall's inner face also stops short, producing a
+		# see-through hole at every room corner.
 		if is_north:
-			_vquad(st, Vector3(cx - ix, 0, inner_z), Vector3(cx - hg, 0, inner_z), h)
-			_vquad(st, Vector3(cx + hg, 0, inner_z), Vector3(cx + ix, 0, inner_z), h)
+			_vquad(st, Vector3(cx - ox, 0, inner_z), Vector3(cx - hg, 0, inner_z), h)
+			_vquad(st, Vector3(cx + hg, 0, inner_z), Vector3(cx + ox, 0, inner_z), h)
 		else:
-			_vquad(st, Vector3(cx - hg, 0, inner_z), Vector3(cx - ix, 0, inner_z), h)
-			_vquad(st, Vector3(cx + ix, 0, inner_z), Vector3(cx + hg, 0, inner_z), h)
+			_vquad(st, Vector3(cx - hg, 0, inner_z), Vector3(cx - ox, 0, inner_z), h)
+			_vquad(st, Vector3(cx + ox, 0, inner_z), Vector3(cx + hg, 0, inner_z), h)
 		# Reveal faces
 		if is_north:
 			_vquad(st, Vector3(cx - hg, 0, inner_z), Vector3(cx - hg, 0, outer_z), h)
@@ -274,10 +277,12 @@ static func _add_ns_faces(st: SurfaceTool, cx: float, outer_z: float, inner_z: f
 	else:
 		if is_north:
 			_vquad(st, Vector3(cx + ox, 0, outer_z), Vector3(cx - ox, 0, outer_z), h)
-			_vquad(st, Vector3(cx - ix, 0, inner_z), Vector3(cx + ix, 0, inner_z), h)
+			# Inner extended to ±ox (was ±ix) — covers the corner cube's
+			# inside face. See has_opening branch above for the same fix.
+			_vquad(st, Vector3(cx - ox, 0, inner_z), Vector3(cx + ox, 0, inner_z), h)
 		else:
 			_vquad(st, Vector3(cx - ox, 0, outer_z), Vector3(cx + ox, 0, outer_z), h)
-			_vquad(st, Vector3(cx + ix, 0, inner_z), Vector3(cx - ix, 0, inner_z), h)
+			_vquad(st, Vector3(cx + ox, 0, inner_z), Vector3(cx - ox, 0, inner_z), h)
 		_hquad_top(st, cx - ox, z0, cx + ox, z1, h)
 
 
@@ -296,13 +301,15 @@ static func _add_ew_faces(st: SurfaceTool, cz: float, outer_x: float, inner_x: f
 		else:
 			_vquad(st, Vector3(outer_x, 0, cz - oz), Vector3(outer_x, 0, cz - hg), h)
 			_vquad(st, Vector3(outer_x, 0, cz + hg), Vector3(outer_x, 0, cz + oz), h)
-		# Inner segments
+		# Inner segments — extended to ±oz so the corner cube's inside face
+		# is covered. See _add_ns_faces for the equivalent fix on N/S walls;
+		# the gap looked like a small see-through patch at every room corner.
 		if is_east:
-			_vquad(st, Vector3(inner_x, 0, cz - iz), Vector3(inner_x, 0, cz - hg), h)
-			_vquad(st, Vector3(inner_x, 0, cz + hg), Vector3(inner_x, 0, cz + iz), h)
+			_vquad(st, Vector3(inner_x, 0, cz - oz), Vector3(inner_x, 0, cz - hg), h)
+			_vquad(st, Vector3(inner_x, 0, cz + hg), Vector3(inner_x, 0, cz + oz), h)
 		else:
-			_vquad(st, Vector3(inner_x, 0, cz - hg), Vector3(inner_x, 0, cz - iz), h)
-			_vquad(st, Vector3(inner_x, 0, cz + iz), Vector3(inner_x, 0, cz + hg), h)
+			_vquad(st, Vector3(inner_x, 0, cz - hg), Vector3(inner_x, 0, cz - oz), h)
+			_vquad(st, Vector3(inner_x, 0, cz + oz), Vector3(inner_x, 0, cz + hg), h)
 		# Reveal faces
 		_vquad(st, Vector3(min_x, 0, cz - hg), Vector3(max_x, 0, cz - hg), h)
 		_vquad(st, Vector3(max_x, 0, cz + hg), Vector3(min_x, 0, cz + hg), h)
@@ -312,8 +319,10 @@ static func _add_ew_faces(st: SurfaceTool, cz: float, outer_x: float, inner_x: f
 	else:
 		if is_east:
 			_vquad(st, Vector3(outer_x, 0, cz + oz), Vector3(outer_x, 0, cz - oz), h)
-			_vquad(st, Vector3(inner_x, 0, cz - iz), Vector3(inner_x, 0, cz + iz), h)
+			# Inner extended to ±oz (was ±iz) — covers the corner cube's
+			# inside face. Same rationale as the has_opening branch above.
+			_vquad(st, Vector3(inner_x, 0, cz - oz), Vector3(inner_x, 0, cz + oz), h)
 		else:
 			_vquad(st, Vector3(outer_x, 0, cz - oz), Vector3(outer_x, 0, cz + oz), h)
-			_vquad(st, Vector3(inner_x, 0, cz + iz), Vector3(inner_x, 0, cz - iz), h)
+			_vquad(st, Vector3(inner_x, 0, cz + oz), Vector3(inner_x, 0, cz - oz), h)
 		_hquad_top(st, min_x, cz - iz, max_x, cz + iz, h)

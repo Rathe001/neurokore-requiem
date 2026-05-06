@@ -42,6 +42,7 @@ ItemRoller="*res://scripts/items/item_roller.gd"
 LosCuller="*res://scripts/systems/los_culler.gd"
 ProximityLighting="*res://scripts/systems/proximity_lighting.gd"
 OverhangFader="*res://scripts/systems/overhang_fader.gd"
+Traction="*res://scripts/systems/traction.gd"
 
 [display]
 

@@ -21,13 +21,13 @@ Every class uses the same eight equipment slots. There are no class-locked or or
 
 | Slot | Stat Domain | Role |
 |------|-------------|------|
-| Head | Hit chance / accuracy | Awareness and targeting |
+| Head | Crit chance | Critical strikes — the spike-damage axis |
 | Chest | Health regeneration | Core survivability |
 | Hands | Attack speed | Offensive tempo |
 | Legs | Movement speed | Ground mobility |
 | Feet | Traction / surface handling | Environmental navigation |
 | Back (Backpack) | Inventory capacity | Storage and movement ability |
-| Weapon (1H or 2H) | Damage | Primary offense |
+| Weapon (1H or 2H) | Damage + accuracy | Primary offense (accuracy is weapon-intrinsic; only weapons can roll hit chance) |
 | Offhand | Utility / defense | Secondary ability (blocked by 2H weapons) |
 
 Each slot's **stat domain** is the primary numeric bonus it provides. A pair of gloves always tells you about attack speed. Boots always tell you about traction. This keeps drops instantly readable — the player knows what a slot *does* without memorizing cross-slot stat interactions.
@@ -41,10 +41,26 @@ Every equippable item can roll **+HP** and **+Resource** as secondary bonuses, r
 Within their domain, items can roll related bonuses that stay thematically connected:
 
 - **Armor pieces** (head, chest, hands, legs, feet) can roll damage reduction
-- **Weapons** can roll crit chance, stun chance, knockback
+- **Weapons** can roll stun chance, knockback (crit chance lives on the head slot)
 - **Offhands** roll stats specific to their archetype (shield pool, blast radius, etc.)
 
 The goal: a player picking up any item can evaluate it in a few seconds. If gloves only ever affect attack speed, damage reduction, HP, and resource — that's a four-stat comparison at most.
+
+### Traction (Feet)
+
+Traction is the boots stat domain. It's a single number 0–100 that governs how the player interacts with hostile ground — slip, slow, knockdown, and DoT pools (fire, acid, electric pools, etc.). Both axes use the **same staircased breakpoints**, so one roll tracks both:
+
+| Traction | Movement immunity unlocked | DoT damage reduction |
+|----------|----------------------------|----------------------|
+| < 25 | — | 0% |
+| 25–49 | Slip-down chance | 25% |
+| 50–74 | + Movement slow on hostile ground | 50% |
+| 75–99 | + Knockdown on cracked floor / spike pads | 75% |
+| 100 | + Full stride, immune to all ground effects | 100% |
+
+The staircase is intentional: every breakpoint reads as "a tier earned" and the numeric jump is the moment that matters. Continuous reduction would dilute the breakpoint identity. Only boots roll traction — total = boots traction, no cross-slot stacking — so a player gearing into traction is making an explicit "feet matter" commitment, not accidentally accumulating it from random armor.
+
+Traction does **not** replace per-element resistance: a fire pool still does damage through `fire_resistance` like any fire damage. Traction layers on top as an additional reduction specifically for *ground-source* damage. A player with high fire resistance + low traction takes less damage from fire pools than from incoming fire projectiles, because both stats apply.
 
 ---
 
@@ -165,6 +181,57 @@ Every item is generated against a **power budget** determined by item level and 
 A powerful mod consumes more budget, leaving less room for strong base stats or affixes. A jetpack with low resource drain *must* have weaker base stats. This single mechanism prevents degenerate items — every piece is internally balanced regardless of what specific mod or affixes rolled.
 
 The budget scales with item level and is multiplied by rarity tier. Higher-level, rarer items have more total budget to distribute, but the tradeoff structure remains. There is no level where an item can be the best at everything simultaneously.
+
+---
+
+## Effectiveness Curve (Item Level Scaling)
+
+Items don't get statically replaced when the player outlevels them. Every item carries an `item_level` (rolled at generation time) and the player's level determines an **effectiveness multiplier** applied to all combat stats and gear bonuses on that item. This single mechanism replaces the need for stat squish patches — numerical ranges stay bounded because old items decay smoothly rather than being inflated past.
+
+### The Curve
+
+| Player vs. ilvl | Multiplier | Behavior |
+|------|------|------|
+| ilvl == player level | 1.00× | Drop is "for you" — hits its rolled values exactly |
+| ilvl > player level (above-cap drops from endgame content) | 1.00× → 1.50× ceiling | Linear boost, +1% per level above |
+| ilvl < player level | asymptotic toward 0.30× floor | `1 / (1 + delta * 0.05)`. Never reaches zero — favorite items stay weakly viable |
+
+A few example values for player level 50:
+- ilvl 50 → 100% (no change)
+- ilvl 40 → 67% (1 / (1 + 0.5))
+- ilvl 30 → 50%
+- ilvl 10 → 33% (just above the 30% floor)
+- ilvl 0 (starter) → 29% → clamped to 30% floor
+
+For a player at the level cap (100):
+- ilvl 100 → 100%
+- ilvl 120 → 120%
+- ilvl 150 → 150% (hits ceiling — the endgame chase)
+
+### Scope
+
+The multiplier applies to **every** combat-power stat: weapon damage rolls, attack speed, crit chance, accuracy, all stat-modifier bonuses (HP, damage reduction, knockback, resistances, shield pool, etc.). It does **not** apply to:
+
+- **Storage stats** (`inventory_bonus` on backpacks) — bag size shouldn't shrink as the player levels.
+- **Feel/flavor stats** (`weapon_range`, `blast_radius`, light parameters) — these define what a weapon *is*, not how powerful it is.
+- **Behavior mods** — a jetpack works as a jetpack regardless of ilvl gap. Mods are *identity*; the multiplier touches *power*.
+
+Code-side: read combat values via `Item.get_effective_modifier()` or the typed `effective_*()` accessors (`effective_damage_min/max`, `effective_attack_speed`, etc.). Storage and flavor reads stay on the raw `get_modifier()` path.
+
+### Starter Gear
+
+The player gets a baseline kit on character creation rolled at `item_level = 0`. With every world drop generating at `ilvl >= 1`, starter gear is always strictly weaker than anything found — players are never naked, but the first drop is meaningful. Starter pieces sit at the 30% floor for most of leveling, replaced gradually as the player gears up.
+
+### Recipes / Rescaling
+
+A planned crafting interaction lets the player **bring an item up to their current level** in exchange for resources. This is the answer to "I love this drop but I'm now too high-level for it" — instead of replacing the item, the player invests to keep it relevant. Recipe details TBD; the underlying system already supports it (just needs a craft action that bumps `item.item_level` to `PlayerState.level`).
+
+### Why This Shape
+
+- **No stat bloat / squish.** Numbers don't grow with player level, the multiplier does. Stat ranges stay readable across the lifetime of the game.
+- **Build retention.** Players can keep favorite items longer; gear churn becomes a choice, not a treadmill.
+- **Endgame chase.** Above-cap ilvl drops (from maps/ubers) become the meaningful prize without breaking the base game's curve.
+- **Soft, not punishing.** The 30% floor means a beloved low-ilvl unique still functions for experimentation. Aggressive linear decay would punish novelty.
 
 ---
 

@@ -10,6 +10,17 @@ const PROJECTILE_SCENE: PackedScene = preload("res://scenes/prototype/prototype_
 const PROTO_BASE_CRIT_CHANCE: float = 0.15
 const PROTO_BASE_CRIT_MULT: float = 1.5
 
+# Point-blank accuracy penalty for ranged attacks. When a hitscan or
+# projectile resolves against a target within MELEE_RANGE_THRESHOLD of the
+# fire origin, accuracy is multiplied by MELEE_RANGE_ACCURACY_MULT — i.e.
+# half-misses at point blank. Pushes the player toward sprint-disengage
+# instead of tank-shooting at melee range. Melee skills (cone / AoE) are
+# unaffected; the penalty is specific to "shooting something next to you."
+# PrototypeProjectile mirrors these values to apply the same rule to
+# in-flight projectile hits.
+const MELEE_RANGE_THRESHOLD: float = 2.5
+const MELEE_RANGE_ACCURACY_MULT: float = 0.5
+
 # Count Exile constants. EXILE_CURSE_DURATION is the medium-long window
 # the curse persists after the FIRST hit. Subsequent hits while the curse
 # is active do NOT refresh the timer — the window is fixed from the moment
@@ -116,7 +127,7 @@ func resolve_skill_hit(skill: Skill, aim: Vector3, weapon: Item, source_offset: 
 func _knockback_for(skill: Skill, weapon: Item) -> float:
 	var bonus: float = 0.0
 	if weapon != null:
-		bonus = float(weapon.get_modifier(&"knockback_bonus"))
+		bonus = float(weapon.get_effective_modifier(&"knockback_bonus"))
 	return skill.knockback + bonus
 
 
@@ -172,10 +183,10 @@ func _spawn_projectile(skill: Skill, aim: Vector3, eff_range: float, weapon: Ite
 	proj.knockback_strength = _knockback_for(skill, weapon)
 	proj.source_position = _host.global_position
 	if weapon != null and weapon.damage_max > 0:
-		proj.damage_min = weapon.damage_min + _host._gear_base_damage_bonus
-		proj.damage_max = weapon.damage_max + _host._gear_base_damage_bonus
-		proj.accuracy = weapon.accuracy + _host._gear_hit_chance_bonus
-		proj.crit_chance = weapon.crit_chance + _host._gear_crit_chance_bonus
+		proj.damage_min = weapon.effective_damage_min() + _host._gear_base_damage_bonus
+		proj.damage_max = weapon.effective_damage_max() + _host._gear_base_damage_bonus
+		proj.accuracy = weapon.effective_accuracy() + _host._gear_hit_chance_bonus
+		proj.crit_chance = weapon.effective_crit_chance() + _host._gear_crit_chance_bonus
 	else:
 		proj.damage_min = skill.damage + _host._gear_base_damage_bonus
 		proj.damage_max = skill.damage + _host._gear_base_damage_bonus
@@ -226,8 +237,18 @@ func _resolve_hitscan(skill: Skill, aim: Vector3, eff_range: float, weapon: Item
 	PrototypeAttackIndicator.spawn_beam(_host, aim, beam_end, source_offset)
 	if hit_target == null:
 		return
+	# Point-blank penalty: if the hit target is within melee range of the
+	# fire origin, halve effective accuracy. Encourages disengage-and-shoot
+	# instead of standing in the enemy's face with a rifle. The Count
+	# "Point Blank" talent grants &"ignore_point_blank_penalty" — when
+	# allocated, the multiplier stays at 1.0 regardless of target distance.
+	var target_dist := origin.distance_to(hit_target.global_position)
+	var ignore_penalty := Effects.get_aggregate(&"ignore_point_blank_penalty") > 0.0
+	var acc_mult := 1.0
+	if target_dist < MELEE_RANGE_THRESHOLD and not ignore_penalty:
+		acc_mult = MELEE_RANGE_ACCURACY_MULT
 	for _i in hits:
-		if not _roll_hit(weapon):
+		if not _roll_hit(weapon, acc_mult):
 			continue
 		var is_crit := _roll_crit(weapon)
 		var dmg := _crit_damage(_roll_skill_damage(skill, weapon), is_crit)
@@ -239,13 +260,14 @@ func _resolve_hitscan(skill: Skill, aim: Vector3, eff_range: float, weapon: Item
 # ---------------------------------------------------------------------------
 
 func _roll_crit(weapon: Item = null) -> bool:
-	var base_crit := weapon.crit_chance if weapon != null and weapon.crit_chance > 0.0 else PROTO_BASE_CRIT_CHANCE
+	var base_crit := weapon.effective_crit_chance() if weapon != null and weapon.crit_chance > 0.0 else PROTO_BASE_CRIT_CHANCE
 	var chance := base_crit + Effects.get_aggregate(&"crit_chance_pct") + _host._gear_crit_chance_bonus
 	return randf() < chance
 
-func _roll_hit(weapon: Item) -> bool:
-	var acc := weapon.accuracy if weapon != null else 1.0
+func _roll_hit(weapon: Item, accuracy_mult: float = 1.0) -> bool:
+	var acc := weapon.effective_accuracy() if weapon != null else 1.0
 	acc += _host._gear_hit_chance_bonus
+	acc *= accuracy_mult
 	if acc >= 1.0:
 		return true
 	return randf() < acc
@@ -253,7 +275,7 @@ func _roll_hit(weapon: Item) -> bool:
 func _roll_skill_damage(skill: Skill, weapon: Item) -> int:
 	var base: int
 	if weapon != null and weapon.damage_max > 0:
-		base = randi_range(weapon.damage_min, weapon.damage_max)
+		base = randi_range(weapon.effective_damage_min(), weapon.effective_damage_max())
 	else:
 		base = skill.damage
 	base += _host._gear_base_damage_bonus

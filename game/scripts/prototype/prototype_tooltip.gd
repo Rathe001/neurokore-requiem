@@ -369,6 +369,15 @@ func _build_type_text(item: Item) -> String:
 
 func _build_stats_text(item: Item) -> String:
 	var lines: Array[String] = []
+	# ilvl header — shown for every item so the player can tell at a glance
+	# how outdated/overleveled a drop is. Decimal formatting on the multiplier
+	# so 1.0 reads as "100%" cleanly.
+	var mult: float = item.effective_multiplier()
+	var pct: int = int(round(mult * 100.0))
+	if pct == 100:
+		lines.append("Item Level: %d" % item.item_level)
+	else:
+		lines.append("Item Level: %d (%d%% effective)" % [item.item_level, pct])
 	# Active offhand stats — shield pool, reduction, cooldown, duration.
 	# Different fields are relevant per active_kind so each archetype
 	# gets its own line set; common lines (cooldown, pool) aren't
@@ -378,11 +387,11 @@ func _build_stats_text(item: Item) -> String:
 	# player will actually see.
 	if item.fire_skill != null and item.fire_skill.active_kind != Skill.ActiveKind.NONE:
 		var sk: Skill = item.fire_skill
-		var bonus: int = item.get_modifier(&"shield_pool_bonus")
+		var bonus: int = item.get_effective_modifier(&"shield_pool_bonus")
 		var pool_total: int = sk.shield_pool + bonus
 		match sk.active_kind:
 			Skill.ActiveKind.SHIELD_BUFF:
-				lines.append("Damage Reduction: %d%%" % int(round(sk.damage_reduction * 100.0)))
+				lines.append("Damage Reduction: %.1f%%" % (sk.damage_reduction * 100.0))
 				lines.append("Shield Pool: %d" % pool_total)
 				lines.append("Duration: %ds" % int(round(sk.duration)))
 				lines.append("Cooldown on Break: %.1fs" % sk.cooldown)
@@ -396,15 +405,20 @@ func _build_stats_text(item: Item) -> String:
 				lines.append("Cooldown: %.1fs" % sk.cooldown)
 				if sk.resource_cost > 0:
 					lines.append("Resource Cost: %d" % sk.resource_cost)
-	# Weapon / combat stats
+	# Weapon / combat stats — shown as effective (post-scaling) values so
+	# the number on the tooltip matches what the combat code reads. The
+	# *visibility* check uses the RAW field, otherwise non-weapon items
+	# (whose attack_speed/accuracy default to 1.0) leak a "Speed: 0.95"
+	# line whenever effective_multiplier() != 1.0 — boots, helms, etc.
+	# have no business showing those rows at all.
 	if item.damage_max > 0:
-		lines.append("Damage: %d–%d" % [item.damage_min, item.damage_max])
+		lines.append("Damage: %d–%d" % [item.effective_damage_min(), item.effective_damage_max()])
 	if item.attack_speed != 1.0:
-		lines.append("Speed: %.2f" % item.attack_speed)
+		lines.append("Speed: %.2f" % item.effective_attack_speed())
 	if item.crit_chance > 0.0:
-		lines.append("Crit: %d%%" % int(item.crit_chance * 100))
+		lines.append("Crit: %.1f%%" % (item.effective_crit_chance() * 100.0))
 	if item.accuracy != 1.0:
-		lines.append("Accuracy: %d%%" % int(item.accuracy * 100))
+		lines.append("Accuracy: %.1f%%" % (item.effective_accuracy() * 100.0))
 	if item.weapon_range > 0.0 and item.damage_max > 0:
 		lines.append("Range: %.1f m" % item.weapon_range)
 	if item.two_handed:
@@ -418,23 +432,55 @@ func _build_stats_text(item: Item) -> String:
 			Item.LightMod.SCANNER: mod_name = "Scanner"
 			Item.LightMod.UV: mod_name = "UV Lamp"
 		lines.append("Mod: %s" % mod_name)
-	# Container
+	# Container — shown via raw modifier because inventory capacity is a
+	# storage stat, not a power stat, and shouldn't shrink with player level.
 	var inv_bonus := item.get_modifier(&"inventory_bonus")
 	if item.kind == &"backpack" and inv_bonus > 0:
 		lines.append("+%d %s" % [inv_bonus, tr("ITEM_STATS_INVENTORY_BONUS")])
 	# Generic stat modifiers — display all entries with white color.
 	# Skip inventory_bonus for backpacks since it's shown above with a
-	# dedicated line. Same for light_mod stats on head armor if any overlap.
+	# dedicated line. Power stats display as effective (post-scaling).
+	# Percentage stats use one-decimal precision so marginal upgrades
+	# (10.2% vs 10.1%) are visibly different — see _PCT_STATS.
 	for stat_id: StringName in item.stat_modifiers:
 		if stat_id == &"inventory_bonus" and item.kind == &"backpack":
 			continue
-		var amount: int = int(item.stat_modifiers[stat_id])
-		if amount == 0:
+		var raw: int = int(item.stat_modifiers[stat_id])
+		if raw == 0:
 			continue
 		var label := _stat_display_name(stat_id)
-		var sign := "+" if amount > 0 else ""
-		lines.append("%s%d %s" % [sign, amount, label])
+		if stat_id in _PCT_STATS:
+			var amt_f: float = item.get_effective_modifier_float(stat_id)
+			var sign_f: String = "+" if amt_f > 0.0 else ""
+			lines.append("%s%.1f%% %s" % [sign_f, amt_f, label])
+		else:
+			var amount: int = item.get_effective_modifier(stat_id)
+			var sign := "+" if amount > 0 else ""
+			lines.append("%s%d %s" % [sign, amount, label])
 	return "\n".join(lines)
+
+
+# Stat keys that should render as percentages (with the tenths suffix per
+# the "marginal upgrades visible" rule). Anything not in this set is
+# rendered as a flat integer. New affixes that produce a percentage
+# bonus must be added here, otherwise their tooltip line drops the %.
+const _PCT_STATS: Dictionary = {
+	&"damage_reduction": true,
+	&"crit_chance_bonus": true,
+	&"crit_damage_bonus": true,
+	&"attack_speed_bonus": true,
+	&"hit_chance_bonus": true,
+	&"cooldown_reduction": true,
+	&"electric_resistance": true,
+	&"cryo_resistance": true,
+	&"toxic_resistance": true,
+	&"elemental_resistance": true,
+	&"resource_cost_reduction": true,
+	&"lifesteal_percent": true,
+	&"armor_penetration": true,
+	&"damage_bonus_pct": true,
+	&"hp_regen_bonus": true,
+}
 
 const _STAT_LABELS: Dictionary = {
 	&"max_health_bonus": "Max Health",
@@ -459,6 +505,9 @@ const _STAT_LABELS: Dictionary = {
 	&"inventory_bonus": "Inventory Slots",
 	&"range_bonus": "Range",
 	&"knockback_bonus": "Knockback",
+	&"traction_bonus": "Traction",
+	&"hp_regen_bonus": "HP Regen / sec",
+	&"regen_delay_reduction": "Regen Delay Reduction",
 	&"resource_cost_reduction": "Resource Cost Reduction",
 	&"lifesteal_percent": "Life Steal",
 	&"armor_penetration": "Armor Penetration",
@@ -475,25 +524,25 @@ func _build_skill_stats_text(skill: Skill, source: Item) -> String:
 	var lines: Array[String] = []
 	match skill.active_kind:
 		Skill.ActiveKind.SHIELD_HOLD:
-			var bonus: int = source.get_modifier(&"shield_pool_bonus") if source != null else 0
+			var bonus: int = source.get_effective_modifier(&"shield_pool_bonus") if source != null else 0
 			lines.append("Damage Block: 100%")
 			lines.append("Shield Pool: %d" % (skill.shield_pool + bonus))
 			lines.append("Cooldown on Break: %.1fs" % skill.cooldown)
 		Skill.ActiveKind.SHIELD_BUFF:
-			var bonus: int = source.get_modifier(&"shield_pool_bonus") if source != null else 0
-			lines.append("Damage Reduction: %d%%" % int(round(skill.damage_reduction * 100.0)))
+			var bonus: int = source.get_effective_modifier(&"shield_pool_bonus") if source != null else 0
+			lines.append("Damage Reduction: %.1f%%" % (skill.damage_reduction * 100.0))
 			lines.append("Shield Pool: %d" % (skill.shield_pool + bonus))
 			lines.append("Duration: %ds" % int(round(skill.duration)))
 			lines.append("Cooldown on Break: %.1fs" % skill.cooldown)
 		Skill.ActiveKind.GRENADE:
 			if source != null and source.damage_max > 0:
-				lines.append("Damage: %d–%d" % [source.damage_min, source.damage_max])
+				lines.append("Damage: %d–%d" % [source.effective_damage_min(), source.effective_damage_max()])
 			elif skill.damage > 0:
 				lines.append("Damage: %d" % skill.damage)
 			var radius := source.blast_radius if source != null and source.blast_radius > 0.0 else skill.blast_radius
 			lines.append("Blast Radius: %.1f m" % radius)
 			if source != null and source.crit_chance > 0.0:
-				lines.append("Crit: %d%%" % int(source.crit_chance * 100))
+				lines.append("Crit: %.1f%%" % (source.effective_crit_chance() * 100.0))
 			if skill.knockback > 0.0:
 				lines.append("Knockback: %.1f" % skill.knockback)
 			lines.append("Cooldown: %.1fs" % skill.cooldown)
@@ -511,15 +560,15 @@ func _build_skill_stats_text(skill: Skill, source: Item) -> String:
 		_:
 			# Standard weapon skill (cone, aoe, projectile, hitscan).
 			if source != null and source.damage_max > 0:
-				lines.append("Damage: %d–%d" % [source.damage_min, source.damage_max])
+				lines.append("Damage: %d–%d" % [source.effective_damage_min(), source.effective_damage_max()])
 			elif skill.damage > 0:
 				lines.append("Damage: %d" % skill.damage)
 			if source != null and source.attack_speed != 1.0:
-				lines.append("Speed: %.2f" % source.attack_speed)
+				lines.append("Speed: %.2f" % source.effective_attack_speed())
 			if source != null and source.crit_chance > 0.0:
-				lines.append("Crit: %d%%" % int(source.crit_chance * 100))
+				lines.append("Crit: %.1f%%" % (source.effective_crit_chance() * 100.0))
 			if source != null and source.accuracy < 1.0:
-				lines.append("Accuracy: %d%%" % int(source.accuracy * 100))
+				lines.append("Accuracy: %.1f%%" % (source.effective_accuracy() * 100.0))
 			var eff_range := source.weapon_range if source != null and source.weapon_range > 0.0 else skill.skill_range
 			if eff_range > 0.0:
 				lines.append("Range: %.1f m" % eff_range)

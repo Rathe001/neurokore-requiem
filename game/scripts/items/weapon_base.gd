@@ -21,9 +21,16 @@ class_name WeaponBase extends Resource
 # add on top: effective = weapon.attack_speed * (1 + bonus_pct).
 @export var attack_speed_range: Vector2 = Vector2(0.9, 1.1)
 
-# Both stored as 0..1 and rolled per-instance. Crit_chance feeds crit rolls
-# in combat; accuracy gates miss vs hit.
-@export var crit_chance_range: Vector2 = Vector2(0.05, 0.10)
+# Crit chance is now a Head Armor stat domain — weapons no longer roll
+# intrinsic crit. The field stays in the schema as (0, 0) so the rolled
+# Item.crit_chance is always 0 on a weapon, which makes _roll_crit fall
+# through to the player's gear-aggregated crit bonus (sourced from helm).
+# Override this on a base only for special weapons that should "guarantee
+# crit" regardless of helm — extremely rare; leave at 0/0 for the rest.
+@export var crit_chance_range: Vector2 = Vector2(0.0, 0.0)
+# Accuracy is weapon-intrinsic — only weapons can roll it (no helm/armor
+# affixes touch hit_chance). Rolled per-instance and combat resolves
+# miss/hit purely from the weapon plus weapon-only "Honed" affixes.
 @export var accuracy_range: Vector2 = Vector2(0.90, 0.97)
 
 # Effective range in world units. Melee weapons sit around 2–4; ranged

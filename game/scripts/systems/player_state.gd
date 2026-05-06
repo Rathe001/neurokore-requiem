@@ -18,7 +18,10 @@ const XP_CURVE_GROWTH := 1.35
 const XP_PER_ENEMY_LEVEL := 20
 const HP_GAIN_PER_LEVEL_MIN := 20
 const HP_GAIN_PER_LEVEL_MAX := 25
-const TALENT_POINTS_PER_LEVEL := 1
+## How often a talent point is granted. 1 point every N level-ups; the
+## level-up only awards a point when the new level is divisible by this.
+## Level 100 → ~33 points at the current cadence.
+const LEVELS_PER_TALENT_POINT := 3
 
 var class_id: StringName = &""
 var spec_id: StringName = &""
@@ -185,7 +188,8 @@ func gain_xp(amount: int) -> void:
 func _do_level_up() -> void:
 	var old := level
 	level += 1
-	talent_points_total += TALENT_POINTS_PER_LEVEL
+	if level % LEVELS_PER_TALENT_POINT == 0:
+		talent_points_total += 1
 	xp_to_next = int(round(STARTING_XP_TO_NEXT * pow(XP_CURVE_GROWTH, float(level - 1))))
 	var hp_gain := randi_range(HP_GAIN_PER_LEVEL_MIN, HP_GAIN_PER_LEVEL_MAX)
 	level_changed.emit(level, old)

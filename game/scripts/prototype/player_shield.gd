@@ -118,7 +118,7 @@ func _activate(skill: Skill) -> void:
 	var bonus_pool: int = 0
 	var offhand: Item = InventoryState.get_equipped(&"offhand")
 	if offhand != null:
-		bonus_pool = offhand.get_modifier(&"shield_pool_bonus")
+		bonus_pool = offhand.get_effective_modifier(&"shield_pool_bonus")
 	var fresh_pool_max := maxi(skill.shield_pool + bonus_pool, 1)
 	var refresh_pool := false
 	if skill.active_kind == Skill.ActiveKind.SHIELD_BUFF:

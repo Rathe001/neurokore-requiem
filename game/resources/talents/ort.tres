@@ -1,0 +1,34 @@
+[gd_resource type="Resource" script_class="TalentTree" load_steps=4 format=3]
+
+; Count (ort) talent tree — Orthodoxy-aligned support nodes.
+;
+; Each TalentNode places itself at (tier, node_idx) on the 8×3 grid the
+; talents panel renders. Effects use the PerkEffect schema; aggregate
+; keys here are read by gameplay code via Effects.get_aggregate(kind).
+
+[ext_resource type="Script" path="res://scripts/talents/talent_node.gd" id="node_script"]
+[ext_resource type="Script" path="res://scripts/talents/talent_tree.gd" id="tree_script"]
+[ext_resource type="Script" path="res://scripts/perks/perk_effect.gd" id="effect_script"]
+
+; Point Blank — ranged attacks at melee range no longer suffer the
+; point-blank accuracy penalty. PlayerCombat (hitscan) and PrototypeProjectile
+; both check Effects.get_aggregate(&"ignore_point_blank_penalty") > 0.0
+; before applying the half-accuracy multiplier; this magnitude makes that
+; check pass while the talent is allocated.
+[sub_resource type="Resource" id="effect_ort_t1_n0_pointblank"]
+script = ExtResource("effect_script")
+kind = &"ignore_point_blank_penalty"
+magnitude = 1.0
+
+[sub_resource type="Resource" id="node_ort_t1_n0"]
+script = ExtResource("node_script")
+id = &"ort_t1_n0_point_blank"
+label = "Point Blank"
+description = "Ranged attacks ignore the accuracy penalty when firing at targets in melee range. Hold the line — the Count fights at any distance."
+tier = 0
+node_idx = 0
+effects = [SubResource("effect_ort_t1_n0_pointblank")]
+
+[resource]
+script = ExtResource("tree_script")
+nodes = [SubResource("node_ort_t1_n0")]
