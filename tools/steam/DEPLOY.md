@@ -3,24 +3,51 @@
 ## Prerequisites
 
 - **Godot 4** on PATH (or set `GODOT` env var / edit the script)
+- **Python 3** on PATH. Used by `prepare_build.py` to bump version + roll the changelog. Standard library only — no `pip install` step.
+  - macOS: usually preinstalled; otherwise `brew install python`.
+  - Linux: `apt install python3` / your distro's equivalent.
+  - Windows: install from https://www.python.org/downloads/ and tick "Add python.exe to PATH" during setup. If you have the Microsoft Python Install Manager (`py.exe`) but no actual interpreter, run `py install default` once. Verify with `python --version`.
 - **SteamCMD** installed and on PATH (or set `STEAMCMD` env var / edit the script)
   - macOS: `brew install steamcmd` (Apple Silicon also needs `softwareupdate --install-rosetta`)
   - Windows: https://developer.valvesoftware.com/wiki/SteamCMD#Downloading_SteamCMD
 - **Windows export template** installed in Godot (Editor > Manage Export Templates)
 - Steam account with Steamworks publisher permissions
 
+## Before You Deploy: Write Patch Notes
+
+Open [`CHANGELOG.md`](../../CHANGELOG.md) at the repo root and add bullet points to the `## [Unreleased]` section under the appropriate `### Added` / `### Changed` / `### Fixed` / `### Removed` heading. **The deploy script will refuse to proceed if `[Unreleased]` is empty** — patch notes are mandatory, not optional.
+
+Example:
+
+```markdown
+## [Unreleased]
+
+### Fixed
+
+- Resource loaders now work in exported builds (perks, monster affixes,
+  named monsters were silently empty after the playtest export).
+
+### Added
+
+- Hardcore mode toggle on the character creation panel.
+```
+
 ## Quick Deploy
 
 **macOS / Linux:**
 ```bash
 cd tools/steam
-./deploy.sh
+./deploy.sh                # patch bump (default): 0.1.0 → 0.1.1
+BUMP=minor ./deploy.sh     # 0.1.0 → 0.2.0
+BUMP=major ./deploy.sh     # 0.1.0 → 1.0.0
 ```
 
 **Windows:**
 ```bat
 cd tools\steam
-deploy.bat
+deploy.bat              :: patch bump (default)
+deploy.bat minor        :: 0.1.0 → 0.2.0
+deploy.bat major        :: 0.1.0 → 1.0.0
 ```
 
 Both scripts accept config via environment variables:
@@ -28,13 +55,33 @@ Both scripts accept config via environment variables:
 GODOT=/Applications/Godot.app/Contents/MacOS/Godot \
 STEAMCMD=steamcmd \
 STEAM_USER=your_username \
+PYTHON=python3.12 \
 ./deploy.sh
 ```
 
 This will:
-1. Clean the `build/windows/` directory
-2. Export the Godot project (headless, release mode) — cross-compiles on macOS
-3. Upload to Steam via SteamCMD (prompts for password + Steam Guard on first run)
+1. **Bump version** in `BuildInfo.gd` (semver, `--bump` controls which component)
+2. **Roll the changelog** — moves `## [Unreleased]` body to a `## [VERSION] - DATE` section, leaves a fresh empty `## [Unreleased]` above
+3. **Update the VDF `desc`** to `v<version> · <git-sha> · <first changelog bullet>` so the Steamworks build list is scannable
+4. Clean the `build/windows/` directory
+5. Export the Godot project (headless, release mode) — cross-compiles on macOS
+6. Upload to Steam via SteamCMD (prompts for password + Steam Guard on first run)
+
+After upload succeeds, **commit the changes** — the script edited `BuildInfo.gd`, `CHANGELOG.md`, and the VDF on disk:
+```bash
+git commit -am "Release v0.1.1"
+git tag v0.1.1            # optional but useful for `git log` navigation
+git push --follow-tags
+```
+
+### Dry Run
+
+If you want to see what version would be bumped without actually deploying:
+```bash
+python3 tools/steam/prepare_build.py --bump patch --dry-run
+```
+
+That skips file writes and tells you the new version + VDF desc the real run would produce.
 
 ## After Upload
 
@@ -67,11 +114,15 @@ The "Request Access" button appears automatically on the base game's store page.
 
 ```
 tools/steam/
-  app_build_4689320.vdf    # App-level build config (references depot VDF)
+  prepare_build.py         # Version bump + changelog rotation + VDF desc rewrite
+  app_build_4689320.vdf    # App-level build config (desc auto-updated by prepare_build.py)
   depot_build_4689321.vdf  # Depot file mapping + exclusions
-  deploy.sh                # macOS/Linux: one-click export + upload
-  deploy.bat               # Windows: one-click export + upload
+  deploy.sh                # macOS/Linux: prepare + export + upload
+  deploy.bat               # Windows: prepare + export + upload
   output/                  # SteamPipe build logs (auto-created, gitignored)
+
+CHANGELOG.md               # Patch notes (root of repo). [Unreleased] section is the
+                           # source of truth for what's in the next deploy.
 ```
 
 ## Troubleshooting
@@ -90,3 +141,9 @@ tools/steam/
 **Build uploads but depot is empty**
 - Check that `build/windows/` actually contains the exported files after the Godot step.
 - The VDF uses a relative `contentroot` (`../../build/windows/`) — run the script from `tools/steam/`.
+
+**"prepare_build.py failed" / "CHANGELOG.md '## [Unreleased]' section is empty"**
+- The deploy script intentionally refuses to ship without patch notes. Open `CHANGELOG.md`, write what's in this build under `## [Unreleased]` (use the existing `### Added` / `### Fixed` headings as a template), then re-run.
+
+**"NoInstallsError: No runtimes are installed" (Windows)**
+- You have Microsoft's Python Install Manager (`py.exe`) but no actual Python interpreter. Run `py install default` once, then `python --version` should work.
