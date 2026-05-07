@@ -1,22 +1,26 @@
 extends Node
 
-## Multiplayer lifecycle — owns the active Steam Lobby, the current
-## SteamMultiplayerPeer, and the host/client role. Other gameplay systems
-## ask NetState "are we in a lobby?", "am I the host?", "what's my peer id?"
-## rather than reaching into the Steam API directly.
+## Multiplayer lifecycle — owns the active Steam Lobby, tracks members,
+## relays chat. Other gameplay systems ask NetState "are we in a lobby?",
+## "am I the host?", "what's my peer id?" instead of reaching into Steam
+## directly.
 ##
-## Phase 0 stub: structural only. Lobby creation/join/leave and the actual
-## peer management land in Phase 1. The autoload is registered now so
-## downstream systems can compile against it.
+## Phase 1A: lobby plumbing only (create / join / leave / list / chat).
+## The actual SteamMultiplayerPeer wiring + game-scene replication land in
+## Phase 2; this layer's job is just the room you stand in BEFORE the game.
 ##
-## Mode rationale: the code path for "we're in single player" is the same
-## as "we're host with no other peers," so most game systems don't need
-## to branch on multiplayer at all — they just check `is_authority()`,
-## which is true for the SP player and the MP host.
+## Authority rationale: SP and MP-host follow the same code path, so most
+## gameplay reads `is_authority()` (true for both) instead of branching on
+## multiplayer at all. Only the MP-client returns false.
 
 signal lobby_state_changed
-signal peer_connected(peer_id: int)
-signal peer_disconnected(peer_id: int)
+signal lobby_created_result(success: bool, new_lobby_id: int)
+signal lobby_joined_result(success: bool, joined_lobby_id: int)
+signal lobby_left
+signal lobby_member_joined(steam_id: int, member_name: String)
+signal lobby_member_left(steam_id: int, member_name: String)
+signal lobby_chat_received(steam_id: int, member_name: String, text: String)
+signal lobby_match_list_updated(lobbies: Array)
 
 enum Mode {
 	OFFLINE,  # No lobby, no peer — single player.
@@ -24,13 +28,130 @@ enum Mode {
 	CLIENT,   # We joined someone else's lobby; they own the simulation.
 }
 
+# Mirrors Steam's k_ELobbyType. Public is what the lobby browser shows;
+# Friends-only is invite-or-friends-list; Private is invite-only and
+# doesn't show up in the public browser.
+enum LobbyType {
+	PRIVATE = 0,
+	FRIENDS = 1,
+	PUBLIC = 2,
+	INVISIBLE = 3,
+}
+
+# Lobby metadata key used to filter the lobby browser to OUR game's
+# lobbies (vs. other games using the same Steam app id, which shouldn't
+# happen but defense-in-depth). Set on createLobby, filtered on
+# requestLobbyList.
+const LOBBY_GAME_KEY: String = "game"
+const LOBBY_GAME_VALUE: String = "neurokore"
+const LOBBY_NAME_KEY: String = "name"
+const LOBBY_HOST_KEY: String = "host"
+
 var mode: Mode = Mode.OFFLINE
 var lobby_id: int = 0
+var lobby_owner_id: int = 0
+# steam_id (int) -> persona_name (String) for everyone currently in the
+# lobby including the local player. Refreshed on every member join /
+# leave so UI can read straight from this.
+var lobby_members: Dictionary = {}
+
+var _signals_connected: bool = false
 
 
 func _ready() -> void:
 	process_priority = -90  # after SteamState (-100), before gameplay autoloads
+	if SteamState.initialized:
+		_connect_steam_signals()
+	else:
+		SteamState.initialized_changed.connect(_on_steam_initialized)
 
+
+func _on_steam_initialized(active: bool) -> void:
+	if active:
+		_connect_steam_signals()
+
+
+func _connect_steam_signals() -> void:
+	if _signals_connected:
+		return
+	_signals_connected = true
+	# Async results from createLobby / joinLobby — both fire even when the
+	# call fails, with status fields telling us why.
+	Steam.lobby_created.connect(_on_lobby_created)
+	Steam.lobby_joined.connect(_on_lobby_joined)
+	# Member entered / left / disconnected / kicked / banned. All four
+	# arrive on the same callback with a `change_state` discriminator.
+	Steam.lobby_chat_update.connect(_on_lobby_chat_update)
+	Steam.lobby_message.connect(_on_lobby_message)
+	Steam.lobby_match_list.connect(_on_lobby_match_list)
+
+
+# ─── Public API ───────────────────────────────────────────────────────────
+
+## Creates a Steam lobby with the given name + max members + privacy.
+## Async — listen for `lobby_created_result` to know whether it worked.
+func create_lobby(lobby_name: String, max_members: int, lobby_type: LobbyType) -> void:
+	if not _ensure_steam():
+		return
+	if lobby_id != 0:
+		push_warning("[NetState] create_lobby called while already in a lobby — leaving first.")
+		leave_lobby()
+	# Stash the requested name so _on_lobby_created can stamp it onto
+	# the lobby metadata once the lobby exists. createLobby itself
+	# doesn't take a name — the lobby starts nameless and we set it
+	# via setLobbyData immediately after.
+	_pending_lobby_name = lobby_name
+	Steam.createLobby(int(lobby_type), max_members)
+
+
+## Joins an existing lobby by its Steam lobby id (64-bit int).
+## Async — listen for `lobby_joined_result`.
+func join_lobby(target_lobby_id: int) -> void:
+	if not _ensure_steam():
+		return
+	if lobby_id == target_lobby_id:
+		return
+	if lobby_id != 0:
+		leave_lobby()
+	Steam.joinLobby(target_lobby_id)
+
+
+## Leaves the current lobby. Synchronous — on return, lobby_id == 0.
+func leave_lobby() -> void:
+	if lobby_id == 0:
+		return
+	Steam.leaveLobby(lobby_id)
+	lobby_id = 0
+	lobby_owner_id = 0
+	lobby_members.clear()
+	mode = Mode.OFFLINE
+	lobby_left.emit()
+	lobby_state_changed.emit()
+
+
+## Asks Steam for the public lobby list. Async — listen for
+## `lobby_match_list_updated`. Filtered to only lobbies tagged with
+## our game key, world-wide distance.
+func request_lobby_list() -> void:
+	if not _ensure_steam():
+		return
+	# Filter: only OUR game's lobbies. Steam app ids are unique so this is
+	# belt-and-suspenders, but if we ever fork the project this is what
+	# stops the two forks from seeing each other's rooms.
+	Steam.addRequestLobbyListStringFilter(LOBBY_GAME_KEY, LOBBY_GAME_VALUE, Steam.LOBBY_COMPARISON_EQUAL)
+	Steam.addRequestLobbyListDistanceFilter(Steam.LOBBY_DISTANCE_FILTER_WORLDWIDE)
+	Steam.requestLobbyList()
+
+
+## Sends a chat message to all members of the current lobby.
+## Other peers receive it via `lobby_chat_received`.
+func send_chat(text: String) -> void:
+	if lobby_id == 0 or text.is_empty():
+		return
+	Steam.sendLobbyChatMsg(lobby_id, text)
+
+
+# ─── State queries ────────────────────────────────────────────────────────
 
 # True when this peer owns the world simulation. SP and MP-host both
 # return true. MP-client returns false. Use this to gate enemy AI ticks,
@@ -49,3 +170,119 @@ func is_host() -> bool:
 
 func is_client() -> bool:
 	return mode == Mode.CLIENT
+
+
+# ─── Steam callback handlers ──────────────────────────────────────────────
+
+var _pending_lobby_name: String = ""
+
+
+func _on_lobby_created(connect_status: int, new_lobby_id: int) -> void:
+	# Steam's k_EResult enum: 1 = OK. Anything else is a failure (auth
+	# expired, no internet, lobby quota hit, etc.). We don't try to
+	# discriminate the failure modes here — the user retries from the UI.
+	if connect_status != 1:
+		push_warning("[NetState] Lobby creation failed (status %d)" % connect_status)
+		_pending_lobby_name = ""
+		lobby_created_result.emit(false, 0)
+		return
+	lobby_id = new_lobby_id
+	lobby_owner_id = SteamState.steam_id
+	mode = Mode.HOST
+	# Stamp metadata so the lobby browser can find + display this lobby.
+	# `name` is what the user typed; `host` is the persona; `game` is the
+	# filter key.
+	Steam.setLobbyData(lobby_id, LOBBY_GAME_KEY, LOBBY_GAME_VALUE)
+	Steam.setLobbyData(lobby_id, LOBBY_HOST_KEY, SteamState.persona_name)
+	if not _pending_lobby_name.is_empty():
+		Steam.setLobbyData(lobby_id, LOBBY_NAME_KEY, _pending_lobby_name)
+	_pending_lobby_name = ""
+	_refresh_members()
+	print("[NetState] Lobby created: %d (%s)" % [lobby_id, Steam.getLobbyData(lobby_id, LOBBY_NAME_KEY)])
+	lobby_created_result.emit(true, lobby_id)
+	lobby_state_changed.emit()
+
+
+func _on_lobby_joined(joined_lobby_id: int, _permissions: int, _locked: bool, response: int) -> void:
+	# response == 1 means joined successfully. Other values: the lobby is
+	# full, doesn't exist anymore, the user is banned, etc. Caller's UI
+	# should show a friendly "couldn't join" toast and bounce back.
+	if response != 1:
+		push_warning("[NetState] Lobby join failed (response %d)" % response)
+		lobby_joined_result.emit(false, 0)
+		return
+	lobby_id = joined_lobby_id
+	lobby_owner_id = Steam.getLobbyOwner(lobby_id)
+	# `mode` distinguishes "I created the lobby" from "I joined someone
+	# else's lobby" — Steam doesn't tell us which one we did, so we infer
+	# from owner_id == self.
+	mode = Mode.HOST if lobby_owner_id == SteamState.steam_id else Mode.CLIENT
+	_refresh_members()
+	print("[NetState] Lobby joined: %d (%s, %d/%d members)" % [
+		lobby_id,
+		Steam.getLobbyData(lobby_id, LOBBY_NAME_KEY),
+		Steam.getNumLobbyMembers(lobby_id),
+		Steam.getLobbyMemberLimit(lobby_id),
+	])
+	lobby_joined_result.emit(true, lobby_id)
+	lobby_state_changed.emit()
+
+
+func _on_lobby_chat_update(_changed_lobby_id: int, changed_id: int, _maker_id: int, change_state: int) -> void:
+	# change_state values from Steam's k_EChatMemberStateChange flags:
+	#   1 = entered, 2 = left, 4 = disconnected, 8 = kicked, 16 = banned.
+	# We treat anything-but-entered as "left" — UI doesn't care why.
+	var member_name: String = Steam.getFriendPersonaName(changed_id)
+	_refresh_members()
+	if change_state == 1:
+		print("[NetState] Member joined: %s (%d)" % [member_name, changed_id])
+		lobby_member_joined.emit(changed_id, member_name)
+	else:
+		print("[NetState] Member left: %s (%d, state %d)" % [member_name, changed_id, change_state])
+		lobby_member_left.emit(changed_id, member_name)
+	lobby_state_changed.emit()
+
+
+func _on_lobby_message(_received_lobby_id: int, sender_id: int, text: String, _chat_type: int) -> void:
+	var member_name: String = Steam.getFriendPersonaName(sender_id)
+	print("[NetState] Chat from %s (%d): %s" % [member_name, sender_id, text])
+	lobby_chat_received.emit(sender_id, member_name, text)
+
+
+func _on_lobby_match_list(matched_lobbies: Array) -> void:
+	# Steam returns just lobby ids — fetch the metadata we'll show in the
+	# browser. Member count needs a network round-trip per lobby, which
+	# Steam already did before firing the callback, so getNumLobbyMembers
+	# is cheap here.
+	var infos: Array = []
+	for lid_variant in matched_lobbies:
+		var lid: int = int(lid_variant)
+		infos.append({
+			&"lobby_id": lid,
+			&"name": Steam.getLobbyData(lid, LOBBY_NAME_KEY),
+			&"host": Steam.getLobbyData(lid, LOBBY_HOST_KEY),
+			&"member_count": Steam.getNumLobbyMembers(lid),
+			&"member_limit": Steam.getLobbyMemberLimit(lid),
+		})
+	print("[NetState] Lobby list: %d result(s)" % infos.size())
+	lobby_match_list_updated.emit(infos)
+
+
+func _refresh_members() -> void:
+	lobby_members.clear()
+	if lobby_id == 0:
+		return
+	var count: int = Steam.getNumLobbyMembers(lobby_id)
+	for i in count:
+		var member_id: int = Steam.getLobbyMemberByIndex(lobby_id, i)
+		var member_name: String = Steam.getFriendPersonaName(member_id)
+		lobby_members[member_id] = member_name
+
+
+# ─── Internals ────────────────────────────────────────────────────────────
+
+func _ensure_steam() -> bool:
+	if not SteamState.initialized:
+		push_warning("[NetState] Steam not initialized; networking unavailable.")
+		return false
+	return true

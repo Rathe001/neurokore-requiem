@@ -15,3 +15,9 @@ site/
 # .claude/settings.json stays tracked (project-shared); only the .local
 # variant is per-machine. Untracked once via `git rm --cached`.
 .claude/settings.local.json
+
+# Windows leaves these tilde-prefixed temp files next to a DLL when
+# something held the file open during a write — Godot re-importing the
+# GodotSteam GDExtension is the usual culprit. They're not real artifacts.
+~*.dll
+~*.dll~*.TMP
