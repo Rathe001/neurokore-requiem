@@ -21,6 +21,8 @@ config/features=PackedStringArray("4.6", "Forward Plus")
 [autoload]
 
 BuildInfo="*res://scripts/systems/build_info.gd"
+SteamState="*res://scripts/systems/steam_state.gd"
+NetState="*res://scripts/systems/net_state.gd"
 DebugState="*res://scripts/systems/debug_state.gd"
 AccessibilityState="*res://scripts/systems/accessibility_state.gd"
 PlayerState="*res://scripts/systems/player_state.gd"
@@ -99,3 +101,10 @@ player_world_pos={
 "type": "vec3",
 "value": Vector3(0, 0, 0)
 }
+
+[steam]
+
+initialization/app_id=0
+initialization/initialize_on_startup=false
+initialization/embed_callbacks=false
+multiplayer_peer/max_channels=4
