@@ -20,5 +20,5 @@ enum Mode {
 ## Temporal anti-aliasing — accumulates samples across frames. Cheap and
 ## extremely effective on procedural shaders (kills the sub-pixel crawl
 ## on bump-mapped floor seams). Compose with MSAA for the best image.
-@export var use_taa: bool = true
+@export var use_taa: bool = false
 @export var bloom_enabled: bool = true

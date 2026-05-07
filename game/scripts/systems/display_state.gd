@@ -168,7 +168,12 @@ func _load_config() -> DisplayConfig:
 		var loaded := load(SAVE_PATH) as DisplayConfig
 		if loaded != null:
 			return loaded
-	return DisplayConfig.new()
+	# First launch — platform-aware defaults. TAA causes GPU hangs on
+	# macOS Metal, so only enable it on Windows where it's stable.
+	var cfg := DisplayConfig.new()
+	if OS.get_name() == "Windows":
+		cfg.use_taa = true
+	return cfg
 
 func _center_window() -> void:
 	var screen := DisplayServer.window_get_current_screen()
