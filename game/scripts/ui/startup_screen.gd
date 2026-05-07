@@ -11,6 +11,10 @@ var _main_panel: Control
 var _creation_panel: CharacterCreationPanel
 var _single_player_panel: ContinuePanel
 var _settings_panel: SettingsPanel
+var _multiplayer_panel: MultiplayerPanel
+var _create_lobby_panel: CreateLobbyPanel
+var _browse_lobbies_panel: BrowseLobbiesPanel
+var _lobby_room_panel: LobbyRoomPanel
 
 func _ready() -> void:
 	theme = UIThemeState.theme
@@ -20,15 +24,48 @@ func _ready() -> void:
 	_build_creation_panel()
 	_build_single_player_panel()
 	_build_settings_panel()
+	_build_multiplayer_panels()
 	_build_version_stamp()
 	_show_main()
 	UIThemeState.changed.connect(_on_theme_changed)
+	# Lobby creation / join results route us into the LobbyRoom panel.
+	# Async because Steam answers these calls a few frames after the
+	# request — wiring through NetState signals keeps the UI flow
+	# synchronous-feeling without hard-coding timing.
+	NetState.lobby_created_result.connect(_on_lobby_created_result)
+	NetState.lobby_joined_result.connect(_on_lobby_joined_result)
 
 func _build_settings_panel() -> void:
 	_settings_panel = SettingsPanel.new()
 	_settings_panel.visible = false
 	_settings_panel.back_pressed.connect(_show_main)
 	add_child(_settings_panel)
+
+
+func _build_multiplayer_panels() -> void:
+	_multiplayer_panel = MultiplayerPanel.new()
+	_multiplayer_panel.visible = false
+	_multiplayer_panel.back_pressed.connect(_show_main)
+	_multiplayer_panel.create_pressed.connect(_show_create_lobby)
+	_multiplayer_panel.browse_pressed.connect(_show_browse_lobbies)
+	add_child(_multiplayer_panel)
+
+	_create_lobby_panel = CreateLobbyPanel.new()
+	_create_lobby_panel.visible = false
+	_create_lobby_panel.back_pressed.connect(_show_multiplayer)
+	_create_lobby_panel.submit_pressed.connect(_on_create_submit)
+	add_child(_create_lobby_panel)
+
+	_browse_lobbies_panel = BrowseLobbiesPanel.new()
+	_browse_lobbies_panel.visible = false
+	_browse_lobbies_panel.back_pressed.connect(_show_multiplayer)
+	_browse_lobbies_panel.lobby_selected.connect(_on_browse_join)
+	add_child(_browse_lobbies_panel)
+
+	_lobby_room_panel = LobbyRoomPanel.new()
+	_lobby_room_panel.visible = false
+	_lobby_room_panel.leave_pressed.connect(_show_multiplayer)
+	add_child(_lobby_room_panel)
 
 func _build_creation_panel() -> void:
 	_creation_panel = CharacterCreationPanel.new()
@@ -120,7 +157,7 @@ func _build_main_panel() -> void:
 	_main_panel.add_child(buttons)
 
 	buttons.add_child(_make_button("MENU_SINGLE_PLAYER", _on_single_player_pressed))
-	buttons.add_child(_make_button("MENU_MULTIPLAYER", func() -> void: pass, false))
+	buttons.add_child(_make_button("MENU_MULTIPLAYER", _on_multiplayer_pressed))
 	buttons.add_child(_make_button("COMMON_OPTIONS", _on_options_pressed))
 	buttons.add_child(_make_button("COMMON_REPORT_BUG", _on_report_bug_pressed))
 	buttons.add_child(_make_button("COMMON_OPEN_LOGS", _on_open_logs_pressed))
@@ -139,6 +176,10 @@ func _hide_all() -> void:
 	_creation_panel.visible = false
 	_single_player_panel.visible = false
 	_settings_panel.visible = false
+	_multiplayer_panel.visible = false
+	_create_lobby_panel.visible = false
+	_browse_lobbies_panel.visible = false
+	_lobby_room_panel.visible = false
 
 func _show_main() -> void:
 	_hide_all()
@@ -155,6 +196,56 @@ func _show_settings() -> void:
 
 func _on_single_player_pressed() -> void:
 	_show_single_player()
+
+
+func _on_multiplayer_pressed() -> void:
+	_show_multiplayer()
+
+
+func _show_multiplayer() -> void:
+	_hide_all()
+	_multiplayer_panel.visible = true
+
+
+func _show_create_lobby() -> void:
+	_hide_all()
+	_create_lobby_panel.set_default_name("%s's Game" % SteamState.persona_name)
+	_create_lobby_panel.visible = true
+
+
+func _show_browse_lobbies() -> void:
+	_hide_all()
+	_browse_lobbies_panel.visible = true
+	_browse_lobbies_panel.refresh()
+
+
+func _show_lobby_room() -> void:
+	_hide_all()
+	_lobby_room_panel.visible = true
+	_lobby_room_panel.reset()
+
+
+func _on_create_submit(lobby_name: String, max_members: int, lobby_type: int) -> void:
+	NetState.create_lobby(lobby_name, max_members, lobby_type as NetState.LobbyType)
+	# Stay on the form until lobby_created_result fires — that handler
+	# decides whether to advance to the lobby room or surface an error.
+
+
+func _on_browse_join(target_lobby_id: int) -> void:
+	NetState.join_lobby(target_lobby_id)
+
+
+func _on_lobby_created_result(success: bool, _new_lobby_id: int) -> void:
+	if success:
+		_show_lobby_room()
+	# On failure we just stay on the create form — the warning print
+	# from NetState lands in the editor output. A toast would be a Phase
+	# 1C polish pass.
+
+
+func _on_lobby_joined_result(success: bool, _joined_lobby_id: int) -> void:
+	if success:
+		_show_lobby_room()
 
 func _show_single_player() -> void:
 	_hide_all()

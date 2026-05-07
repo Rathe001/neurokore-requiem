@@ -1,7 +1,7 @@
 extends Control
 
 const PANEL_POS := Vector2(12.0, 44.0)
-const PANEL_SIZE := Vector2(170.0, 320.0)
+const PANEL_SIZE := Vector2(170.0, 224.0)
 
 const STAT_KEY_WIDTH := 70.0
 
@@ -85,37 +85,6 @@ func _build_layout() -> void:
 		credits_text = str(cfg.starting_credits)
 	_add_readonly_row(vbox, "DEBUG_START_POS", start_text)
 	_add_readonly_row(vbox, "DEBUG_START_CR", credits_text)
-
-	# ── Net smoke-test (Phase 1A — remove when the real lobby UI lands) ──
-	vbox.add_child(HSeparator.new())
-	var net_label := Label.new()
-	net_label.text = "Net (test)"
-	net_label.theme_type_variation = &"SmallLabel"
-	net_label.add_theme_color_override(&"font_color", p.text)
-	vbox.add_child(net_label)
-	_add_net_button(vbox, "Create lobby", _on_net_create_lobby)
-	_add_net_button(vbox, "List lobbies", _on_net_list_lobbies)
-	_add_net_button(vbox, "Send 'hi'", _on_net_send_hi)
-	_add_net_button(vbox, "Leave lobby", _on_net_leave_lobby)
-
-func _add_net_button(parent: VBoxContainer, label: String, callback: Callable) -> void:
-	var btn := Button.new()
-	btn.text = label
-	btn.add_theme_font_size_override(&"font_size", UIThemeState.palette.font_size_tooltip)
-	btn.pressed.connect(callback)
-	parent.add_child(btn)
-
-func _on_net_create_lobby() -> void:
-	NetState.create_lobby("Test Lobby", 4, NetState.LobbyType.PUBLIC)
-
-func _on_net_list_lobbies() -> void:
-	NetState.request_lobby_list()
-
-func _on_net_send_hi() -> void:
-	NetState.send_chat("hi from %s" % SteamState.persona_name)
-
-func _on_net_leave_lobby() -> void:
-	NetState.leave_lobby()
 
 func _add_bool_row(parent: VBoxContainer, label_key: String, key: StringName) -> void:
 	var check := CheckBox.new()
