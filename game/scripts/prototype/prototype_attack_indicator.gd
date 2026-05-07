@@ -93,7 +93,7 @@ static func spawn_line(host: Node3D, aim: Vector3, attack_range: float, wind_up:
 ## Instant hitscan beam: a glowing cylinder from the host along aim for `length`
 ## units, detached into world space so it stays put while the host moves.
 ## Fades quickly (no wind-up phase).
-const BEAM_RADIUS := 0.04
+const BEAM_RADIUS := 0.012
 const BEAM_FADE := 0.18
 
 static func spawn_beam(host: Node3D, aim: Vector3, length: float, source_offset: Vector3 = Vector3.ZERO) -> void:
@@ -408,7 +408,7 @@ static func _beam_core_material(color: Color) -> StandardMaterial3D:
 		template.albedo_color = Color(color.r, color.g, color.b, 0.95)
 		template.emission_enabled = true
 		template.emission = color
-		template.emission_energy_multiplier = 12.0
+		template.emission_energy_multiplier = 20.0
 		template.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		template.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		template.cull_mode = BaseMaterial3D.CULL_DISABLED
@@ -419,10 +419,10 @@ static func _beam_glow_material(color: Color) -> StandardMaterial3D:
 	var template: StandardMaterial3D = _beam_glow_mat_cache.get(color)
 	if template == null:
 		template = StandardMaterial3D.new()
-		template.albedo_color = Color(color.r, color.g, color.b, 0.3)
+		template.albedo_color = Color(color.r, color.g, color.b, 0.35)
 		template.emission_enabled = true
 		template.emission = color
-		template.emission_energy_multiplier = 6.0
+		template.emission_energy_multiplier = 10.0
 		template.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		template.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		template.cull_mode = BaseMaterial3D.CULL_DISABLED

@@ -71,7 +71,8 @@ func _reveal_button() -> void:
 
 func _on_button_pressed() -> void:
 	if _hardcore:
-		SaveManager.delete_save(PlayerState.active_save_id)
+		if PlayerState.active_save_id != "":
+			SaveManager.delete_save(PlayerState.active_save_id)
 		PlayerState.reset()
 		InventoryState.reset()
 		get_tree().change_scene_to_file(STARTUP_SCENE)

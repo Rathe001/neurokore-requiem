@@ -184,7 +184,8 @@ func _build_class_cards() -> void:
 	# Compact pick cards here; SpecSelectOverlay uses the rich
 	# ClassCardBuilder layout for the spec choice in-game.
 	for class_id: StringName in AttributeState.ORIGIN_DEFINITIONS:
-		var accent := UIThemeState.get_palette_for(class_id, &"").accent
+		var palette := UIThemeState.get_palette_for(class_id, &"")
+		var accent: Color = palette.accent if palette != null else Color(0.5, 0.7, 1.0)
 		var label := SpecSelectOverlay.get_class_label(class_id)
 		var card := _make_pick_card(label, "", accent, CLASS_CARD_SIZE)
 		var cid := class_id  # capture by value

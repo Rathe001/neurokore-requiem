@@ -91,7 +91,8 @@ func _add_character_row(save: Dictionary) -> void:
 	var spec_id: StringName = StringName(save.get("spec_id", ""))
 	var hardcore: bool = save.get("hardcore", false)
 
-	var accent := UIThemeState.get_palette_for(class_id, spec_id).accent
+	var palette := UIThemeState.get_palette_for(class_id, spec_id)
+	var accent: Color = palette.accent if palette != null else Color(0.5, 0.7, 1.0)
 	var bg_color := Color(accent.r * 0.08, accent.g * 0.08, accent.b * 0.08, 0.9)
 	var hover_color := Color(accent.r * 0.16, accent.g * 0.16, accent.b * 0.16, 0.95)
 
