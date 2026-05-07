@@ -1589,6 +1589,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#reforging-not-yet-implemented" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reforging (not yet implemented)
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1971,6 +1982,8 @@
 </ul>
 <p>Code-side: read combat values via <code>Item.get_effective_modifier()</code> or the typed <code>effective_*()</code> accessors. Storage and flavor reads stay on the raw <code>get_modifier()</code> path.</p>
 <p><strong>Why this shape:</strong> no stat bloat or squish (numbers stay bounded), build retention (favorite items stay viable longer), and a meaningful endgame chase (above-cap ilvl drops become the prize without breaking the base curve). The 30% floor is intentional — aggressive linear decay would punish novelty.</p>
+<h3 id="reforging-not-yet-implemented">Reforging (not yet implemented)<a class="headerlink" href="#reforging-not-yet-implemented" title="Permanent link">&para;</a></h3>
+<p>Players can pay credits at an NPC or station to <strong>reforge</strong> a selected item, raising its <code>item_level</code> to match the player's current level and restoring its effectiveness to 100%. This lets strong early drops stay relevant indefinitely — a well-rolled rare from floor 1 can be carried into endgame if the player invests credits to keep it current. The cost should scale with the level gap so reforging a slightly outdated item is cheap, but jumping a 20-level gap is a deliberate investment.</p>
 <h2 id="equipment">Equipment<a class="headerlink" href="#equipment" title="Permanent link">&para;</a></h2>
 <h3 id="weapons">Weapons<a class="headerlink" href="#weapons" title="Permanent link">&para;</a></h3>
 <p>Categorized by <strong>damage type</strong> (energy / kinetic / elemental / melee, plus class-specific weapons gated by talent depth) and <strong>handling</strong> (1H or 2H). Damage type determines what enemies are vulnerable or resistant to. Handling determines whether the offhand slot is available.</p>
