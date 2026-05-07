@@ -138,8 +138,8 @@ static func spawn_beam(host: Node3D, aim: Vector3, length: float, source_offset:
 	# the beam lives <0.2s; volumetric fog disabled to keep horde-firing cheap.
 	var impact_light := OmniLight3D.new()
 	impact_light.light_color = color
-	impact_light.light_energy = 4.0
-	impact_light.omni_range = 5.0
+	impact_light.light_energy = 2.5
+	impact_light.omni_range = 4.0
 	impact_light.omni_attenuation = 2.0
 	impact_light.shadow_enabled = false
 	impact_light.light_volumetric_fog_energy = 0.0
@@ -153,6 +153,62 @@ static func spawn_beam(host: Node3D, aim: Vector3, length: float, source_offset:
 	tween.tween_property(glow_mat, "emission_energy_multiplier", 0.0, BEAM_FADE)
 	tween.tween_property(impact_light, "light_energy", 0.0, BEAM_FADE).set_ease(Tween.EASE_IN)
 	tween.chain().tween_callback(node.queue_free)
+
+# Brief impact flash spawned at a hit point — small emissive sphere that
+# scales up as it fades, plus a short-lived OmniLight so nearby surfaces
+# catch the burst. Used by projectile collisions and hitscan target hits.
+# `color_override` opts in to a specific tint; pass Color() (zero alpha) to
+# fall back to _color_for_host so player shots stay class-colored.
+const IMPACT_DURATION := 0.22
+const IMPACT_RADIUS_START := 0.18
+const IMPACT_RADIUS_END := 0.55
+
+static func spawn_impact_burst(host: Node3D, world_pos: Vector3, color_override: Color = Color(0, 0, 0, 0)) -> void:
+	if host == null:
+		return
+	var parent: Node = host.get_parent()
+	if parent == null:
+		parent = host
+	var color := color_override
+	if color.a == 0.0:
+		color = _color_for_host(host)
+
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = Color(color.r, color.g, color.b, 0.95)
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.emission_enabled = true
+	mat.emission = color
+	mat.emission_energy_multiplier = 4.0
+
+	var mesh := SphereMesh.new()
+	mesh.radius = IMPACT_RADIUS_START
+	mesh.height = IMPACT_RADIUS_START * 2.0
+	mesh.radial_segments = 12
+	mesh.rings = 6
+
+	var inst := MeshInstance3D.new()
+	inst.mesh = mesh
+	inst.material_override = mat
+	parent.add_child(inst)
+	inst.global_position = world_pos
+
+	var light := OmniLight3D.new()
+	light.light_color = color
+	light.light_energy = 3.0
+	light.omni_range = 3.5
+	light.omni_attenuation = 2.0
+	light.shadow_enabled = false
+	light.light_volumetric_fog_energy = 0.0
+	inst.add_child(light)
+
+	var scale_target := IMPACT_RADIUS_END / IMPACT_RADIUS_START
+	var tween := inst.create_tween().set_parallel(true)
+	tween.tween_property(inst, "scale", Vector3.ONE * scale_target, IMPACT_DURATION).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	tween.tween_property(mat, "albedo_color:a", 0.0, IMPACT_DURATION).set_ease(Tween.EASE_IN)
+	tween.tween_property(mat, "emission_energy_multiplier", 0.0, IMPACT_DURATION).set_ease(Tween.EASE_IN)
+	tween.tween_property(light, "light_energy", 0.0, IMPACT_DURATION).set_ease(Tween.EASE_IN)
+	tween.chain().tween_callback(inst.queue_free)
 
 static func spawn_hit_cone(host: Node3D, aim: Vector3, attack_range: float, cone_deg: float) -> void:
 	var forward := Vector3(aim.x, 0.0, aim.z)

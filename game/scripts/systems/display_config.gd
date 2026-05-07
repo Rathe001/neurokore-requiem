@@ -15,6 +15,10 @@ enum Mode {
 @export var mode: Mode = Mode.WINDOWED
 @export var resolution: Vector2i = Vector2i(1280, 720)
 @export var fps_mouse_sensitivity: float = 0.006
-@export var msaa_3d: Viewport.MSAA = Viewport.MSAA_DISABLED
+@export var msaa_3d: Viewport.MSAA = Viewport.MSAA_4X
 @export var screen_space_aa: Viewport.ScreenSpaceAA = Viewport.SCREEN_SPACE_AA_FXAA
+## Temporal anti-aliasing — accumulates samples across frames. Cheap and
+## extremely effective on procedural shaders (kills the sub-pixel crawl
+## on bump-mapped floor seams). Compose with MSAA for the best image.
+@export var use_taa: bool = true
 @export var bloom_enabled: bool = true

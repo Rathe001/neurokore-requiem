@@ -149,8 +149,26 @@ func _register(node: Node) -> void:
 		var light := node as Light3D
 		if not _baselines.has(light):
 			_baselines[light] = light.light_energy
-			# Pre-dim to the occluded floor so newly-spawned lights don't render
-			# at full baseline for the one frame before _process runs its first
-			# proximity check. Without this, every light flashes bright on level
-			# load, exposing the entire level for ~0.5s while the lerp settles.
-			light.light_energy = light.light_energy * OCCLUDED_DIM_FACTOR
+			# Pre-dim using the actual player→light distance instead of a hard
+			# occluded floor. Without this, transient lights (projectile glows,
+			# beam impact lights) spawn at zero energy and the smoothing ramp
+			# (~0.17s) takes longer than the projectile's flight — they never
+			# reach visible brightness. Level lights spawned before the player
+			# exists fall back to OCCLUDED_DIM_FACTOR, preserving the original
+			# "no level-load flash" behaviour.
+			light.light_energy = light.light_energy * _initial_factor_for(light)
+
+
+func _initial_factor_for(light: Light3D) -> float:
+	var players := get_tree().get_nodes_in_group(&"player")
+	if players.is_empty():
+		return OCCLUDED_DIM_FACTOR
+	var player := players[0] as Node3D
+	if player == null:
+		return OCCLUDED_DIM_FACTOR
+	var d := light.global_position - player.global_position
+	var dist := Vector2(d.x, d.z).length()
+	if dist >= OUTER_RADIUS:
+		return DIM_FACTOR
+	var t := smoothstep(INNER_RADIUS, OUTER_RADIUS, dist)
+	return lerp(1.0, DIM_FACTOR, t)

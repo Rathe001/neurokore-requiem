@@ -14,7 +14,7 @@ extends CanvasLayer
 signal continue_pressed
 
 const STARTUP_SCENE := "res://scenes/ui/startup_screen.tscn"
-const OVERLAY_COLOR := Color(0.25, 0.02, 0.02, 0.72)
+const OVERLAY_COLOR := Color(0.25, 0.02, 0.02, 0.42)
 const FADE_DURATION := 0.6
 const BUTTON_DELAY := 1.2
 const BUTTON_SIZE := Vector2(200.0, 40.0)

@@ -43,6 +43,15 @@ const DEFAULT_ATTACK_COOLDOWN := 2.0
 const DEFAULT_ATTACK_WINDUP := 0.4
 const DEFAULT_ATTACK_CONE_DEG := 80.0
 const DEFAULT_ATTACK_KNOCKBACK := 0.0
+# Hysteresis on the chase→hold transition. Once a melee enemy reaches
+# attack range, it stays in hold until distance exceeds attack_range plus
+# this buffer. Without it the enemy yo-yos between hold and chase whenever
+# the player drifts a few cm across the boundary (knockback, light motion,
+# physics push). Same idea for ranged at the kite boundary, with a wider
+# buffer because kite distance is larger and ranged enemies should commit
+# more strongly to their firing band.
+const ATTACK_RANGE_HYSTERESIS := 0.4
+const RANGED_KITE_HYSTERESIS := 1.0
 # Leash distance — once the enemy strays this far from its spawn while
 # chasing, it disengages and walks back to spawn. Prevents whole-level
 # chases (and the "lure them into a pit" exploit). Squared for the cheap
@@ -113,6 +122,11 @@ const JUMP_COOLDOWN := 0.8        # post-landing lockout — caps jump cadence s
 # Extended to 15 to cover several NG+ cycles; levels beyond MAX_LEVEL clamp
 # to the top tier so the game never crashes on deep NG+ runs.
 const MAX_LEVEL := 15
+# Global HP multiplier applied on top of LEVEL_HP_RANGE rolls. Single knob
+# for "enemies are too tanky" tuning — touches every spawn (regular, pack,
+# named, boss) without rewriting the per-level table or any per-archetype
+# overrides. 1.0 = balanced; lower = squishier.
+const HP_GLOBAL_MULT := 0.5
 const LEVEL_HP_RANGE: Array[Vector2i] = [
 	Vector2i(0, 0),       # 0 — unused
 	Vector2i(30, 45),     # 1
@@ -274,6 +288,10 @@ var _knockback_remain: float = 0.0
 var _attack_cd: float = 0.0
 var _attack_damage: int = 10
 var _want_dir: Vector3 = Vector3.ZERO
+# True when in an attack-hold or kite-hold pose. Lets the chase→hold
+# transition use a tighter threshold than hold→chase, eliminating boundary
+# stutter at attack range / kite distance.
+var _holding_position: bool = false
 var _player_ref: Node3D
 var _outlined_meshes: Array[MeshInstance3D] = []
 var _hover_hooked: bool = false
@@ -458,7 +476,7 @@ func _apply_level_stats() -> void:
 	level = lv
 	var hp_range := LEVEL_HP_RANGE[lv]
 	var dmg_range := LEVEL_DAMAGE_RANGE[lv]
-	max_health = randi_range(hp_range.x, hp_range.y)
+	max_health = int(round(randi_range(hp_range.x, hp_range.y) * HP_GLOBAL_MULT))
 	_attack_damage = randi_range(dmg_range.x, dmg_range.y)
 	# Compound affix multipliers onto the rolled stats. Storing the per-stat
 	# mult product on the enemy lets _attack_cooldown / _chase_speed use them
@@ -518,7 +536,7 @@ func _apply_boss_stats() -> void:
 	level = clampi(BOSS_LEVEL + zoff, BOSS_LEVEL, MAX_LEVEL)
 	var boss_hp := LEVEL_HP_RANGE[level]
 	var boss_dmg := LEVEL_DAMAGE_RANGE[level]
-	max_health = int(round(randi_range(boss_hp.x, boss_hp.y) * BOSS_HP_MULT))
+	max_health = int(round(randi_range(boss_hp.x, boss_hp.y) * BOSS_HP_MULT * HP_GLOBAL_MULT))
 	_attack_damage = int(round(randi_range(boss_dmg.x, boss_dmg.y) * BOSS_DAMAGE_MULT))
 	if visual != null:
 		visual.scale = Vector3.ONE * BOSS_VISUAL_SCALE
@@ -984,6 +1002,17 @@ func apply_curse(damage_pct: float, duration: float) -> void:
 # player attacks would be friendly fire.
 func is_player_friendly() -> bool:
 	return _charmed
+
+
+# True when this enemy is actively pursuing the player (CHASING state and
+# not on the player's team via charm). Used by the player's HP regen tick
+# to gate "out of combat" — any nearby aggro'd enemy keeps regen paused
+# even when the player isn't being hit. Knockback / stunned / grabbed
+# count too: the enemy is meaningfully engaged, just not currently mobile.
+func is_engaged_with_player() -> bool:
+	if _charmed:
+		return false
+	return _state == State.CHASING or _state == State.KNOCKBACK or _state == State.STUNNED or _state == State.GRABBED
 
 
 # Tick the curse timer; on expire, fire the player's auto-shot at this
@@ -1680,6 +1709,7 @@ func _chase_tick() -> void:
 	if _is_ranged() and not charmed:
 		var kite := _ranged_kite_distance()
 		if dist <= _attack_range() and _attack_cd <= 0.0 and has_los:
+			_holding_position = false
 			_cast_attack(target, to_target / dist)
 			return
 		if dist < kite * 0.7:
@@ -1687,27 +1717,47 @@ func _chase_tick() -> void:
 			# the retreat because navmesh wants to hug walls; a noisy bumpy
 			# straight-line retreat reads as "skittish ranged enemy" and is
 			# fine. Bumping into walls is the player's intended advantage.
+			_holding_position = false
 			var away := -to_target / dist
 			_want_dir = away
 			var back_speed := CHASE_SPEED * 0.55 * _crouch_speed_factor() * _affix_move_speed_mult() * _self_buff_speed_mult
 			velocity.x = away.x * back_speed
 			velocity.z = away.z * back_speed
 			return
-		if dist <= kite:
-			# Hold position in the firing band — wait for cooldown / LoS.
+		# Hold band with hysteresis: enter when within kite distance, stay
+		# until well past it. Without the second clause the enemy oscillates
+		# between hold and chase whenever the player drifts a few cm across
+		# the kite boundary — which read in playtest as a stutter step.
+		if dist <= kite or (_holding_position and dist <= kite + RANGED_KITE_HYSTERESIS):
+			_holding_position = true
 			_want_dir = Vector3.ZERO
 			velocity.x = 0.0
 			velocity.z = 0.0
 			return
 		# else: too far, fall through to navmesh chase below
 
-	# Aggro'd melee: chase until in range with cooldown ready, then swing.
-	# No hold-position on cooldown — the enemy closes to melee distance
-	# and stays on the target. Once the attack starts, the windup commits
-	# regardless of whether the player retreats mid-animation.
-	elif dist <= _attack_range() and _attack_cd <= 0.0 and has_los:
-		_cast_attack(target, to_target / dist)
+	# Aggro'd melee (or charmed). In attack range → swing if ready, otherwise
+	# stand and face. Hysteresis on the hold→chase transition keeps the enemy
+	# planted for a small buffer past attack range so light drift (knockback,
+	# player movement, physics) doesn't trigger a re-chase. Holding while on
+	# cooldown is what stops melee enemies from constantly pushing into the
+	# target between swings; the buffer is what stops boundary oscillation.
+	elif (dist <= _attack_range() or (_holding_position and dist <= _attack_range() + ATTACK_RANGE_HYSTERESIS)) and has_los:
+		if dist <= _attack_range() and _attack_cd <= 0.0:
+			_holding_position = false
+			_cast_attack(target, to_target / dist)
+		else:
+			_holding_position = true
+			_face_direction(to_target / dist)
+			_want_dir = Vector3.ZERO
+			velocity.x = 0.0
+			velocity.z = 0.0
 		return
+
+	# Reaching the chase block means the enemy is meaningfully outside
+	# attack/kite range — explicitly drop the hold flag so the next
+	# in-range entry uses the strict threshold, not the buffered one.
+	_holding_position = false
 
 	# Pathfind via NavigationAgent — routes around walls and pit edges
 	# instead of charging straight at the target. Falls back to direct

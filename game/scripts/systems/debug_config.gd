@@ -29,3 +29,9 @@ extends Resource
 
 @export_group("Overlay")
 @export var show_debug_overlay: bool = false
+
+@export_group("Post-Processing")
+## Screen filter mode. 0=Off, 1=VHS, 2=Security Cam, 3=Night Vision,
+## 4=Thermal, 5=Concussed, 6=Drunk, 7=Low HP, 8=Hallucination, 9=Glitch,
+## 10=Noir, 11=Inverted. Mirrors RetroFilterOverlay.RetroMode.
+@export var retro_filter_mode: int = 0

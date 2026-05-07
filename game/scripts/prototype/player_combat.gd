@@ -239,6 +239,7 @@ func _resolve_hitscan(skill: Skill, aim: Vector3, eff_range: float, weapon: Item
 	PrototypeAttackIndicator.spawn_beam(_host, aim, beam_end, source_offset)
 	if hit_target == null:
 		return
+	PrototypeAttackIndicator.spawn_impact_burst(_host, hit_target.global_position + Vector3(0.0, 0.9, 0.0))
 	# Point-blank penalty: if the hit target is within melee range of the
 	# fire origin, halve effective accuracy. Encourages disengage-and-shoot
 	# instead of standing in the enemy's face with a rifle. The Count
@@ -332,6 +333,7 @@ func fire_exile_shot(target: Node3D) -> void:
 		return
 	var aim_norm := aim / dist
 	PrototypeAttackIndicator.spawn_beam(_host, aim_norm, dist)
+	PrototypeAttackIndicator.spawn_impact_burst(_host, target.global_position + Vector3(0.0, 0.9, 0.0))
 	var mult := 1.0
 	var dmg := int(round(float(EXILE_AUTO_SHOT_BASE_DAMAGE) * mult))
 	target.take_damage(dmg, _host.global_position, EXILE_AUTO_SHOT_KNOCKBACK, 1, false)

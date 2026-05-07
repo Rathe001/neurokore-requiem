@@ -12,6 +12,7 @@ var _window_mode_option: OptionButton
 var _resolution_option: OptionButton
 var _msaa_option: OptionButton
 var _fxaa_option: OptionButton
+var _taa_option: OptionButton
 var _bloom_option: OptionButton
 var _sensitivity_slider: HSlider
 
@@ -48,6 +49,8 @@ func _ready() -> void:
 	body.add_child(_make_option_row("MENU_SETTINGS_MSAA", _msaa_option))
 	_fxaa_option = _make_fxaa_option()
 	body.add_child(_make_option_row("MENU_SETTINGS_FXAA", _fxaa_option))
+	_taa_option = _make_taa_option()
+	body.add_child(_make_option_row("MENU_SETTINGS_TAA", _taa_option))
 	_bloom_option = _make_bloom_option()
 	body.add_child(_make_option_row("MENU_SETTINGS_BLOOM", _bloom_option))
 
@@ -119,6 +122,14 @@ func _make_fxaa_option() -> OptionButton:
 	option.item_selected.connect(_on_fxaa_selected)
 	return option
 
+func _make_taa_option() -> OptionButton:
+	var option := OptionButton.new()
+	option.add_theme_font_size_override(&"font_size", UIThemeState.palette.font_size_sublabel)
+	option.add_item(tr("COMMON_OFF"), 0)
+	option.add_item(tr("COMMON_ON"), 1)
+	option.item_selected.connect(_on_taa_selected)
+	return option
+
 func _make_bloom_option() -> OptionButton:
 	var option := OptionButton.new()
 	option.add_theme_font_size_override(&"font_size", UIThemeState.palette.font_size_sublabel)
@@ -179,6 +190,7 @@ func _refresh_display_options() -> void:
 	_resolution_option.disabled = DisplayState.config.mode != DisplayConfig.Mode.WINDOWED
 	_msaa_option.select(_msaa_option.get_item_index(DisplayState.config.msaa_3d))
 	_fxaa_option.select(_fxaa_option.get_item_index(DisplayState.config.screen_space_aa))
+	_taa_option.select(_taa_option.get_item_index(1 if DisplayState.config.use_taa else 0))
 	_bloom_option.select(_bloom_option.get_item_index(1 if DisplayState.config.bloom_enabled else 0))
 	_sensitivity_slider.set_value_no_signal(DisplayState.config.fps_mouse_sensitivity)
 
@@ -196,6 +208,9 @@ func _on_msaa_selected(index: int) -> void:
 
 func _on_fxaa_selected(index: int) -> void:
 	DisplayState.set_screen_space_aa(_fxaa_option.get_item_id(index) as Viewport.ScreenSpaceAA)
+
+func _on_taa_selected(index: int) -> void:
+	DisplayState.set_use_taa(_taa_option.get_item_id(index) == 1)
 
 func _on_bloom_selected(index: int) -> void:
 	DisplayState.set_bloom_enabled(_bloom_option.get_item_id(index) == 1)

@@ -10,6 +10,7 @@ signal credits_changed(amount: int)
 # white outline around the HP bar and to show the buff bar entry.
 signal shield_buff_changed(active: bool, pool: int, pool_max: int, reduction: float, cooldown_remain: float, cooldown_total: float, duration_remain: float)
 signal died
+signal respawned
 signal notification_requested(text: String)
 signal crouch_changed(is_crouching: bool)
 signal light_changed(is_on: bool)
@@ -69,6 +70,10 @@ const SPRINT_EMPTY_REGEN_DELAY := 2.0
 #                             5s base, a +2 reduction means regen kicks in
 #                             after 3s out of combat instead of 5.
 const HP_REGEN_DELAY := 5.0
+# Radius for the "any aggro'd enemy nearby" check that gates regen. Slightly
+# larger than enemy AGGRO_RANGE (10m) so an enemy that just aggro'd from the
+# edge of its detection range still counts as combat for the player.
+const COMBAT_PROXIMITY_RADIUS := 12.0
 const HP_REGEN_BASE_PCT := 10.0
 const HP_REGEN_MIN_DELAY := 0.5
 # Movement multiplier while holding the Active Shield (SHIELD_HOLD).
@@ -195,6 +200,9 @@ var _modal_nodes: Array[CanvasItem] = []
 var _fps_fill_light: OmniLight3D = null
 var _fade_rect: ColorRect = null
 var _chromatic: ChromaticAberrationOverlay = null
+var _retro_filter: RetroFilterOverlay = null
+var _low_hp_warning: LowHpWarningOverlay = null
+var _death_glitch: DeathGlitchOverlay = null
 var _crouching: bool = false
 var _sprinting: bool = false
 ## Time remaining on the regen penalty after emptying resource while sprinting.
@@ -262,6 +270,18 @@ func _ready() -> void:
 	add_child(_fade_canvas)
 	_chromatic = ChromaticAberrationOverlay.new()
 	add_child(_chromatic)
+	# Added after chromatic so its shader samples the chromatic-aberrated
+	# screen — both live on CanvasLayer 0, tree order picks the order.
+	_retro_filter = RetroFilterOverlay.new()
+	add_child(_retro_filter)
+	# Real-game warning overlays. setup() before add_child so health_changed
+	# is connected before any initial emissions.
+	_low_hp_warning = LowHpWarningOverlay.new()
+	_low_hp_warning.setup(self)
+	add_child(_low_hp_warning)
+	_death_glitch = DeathGlitchOverlay.new()
+	_death_glitch.setup(self)
+	add_child(_death_glitch)
 	add_to_group(&"player")
 	add_to_group(&"world_item_dropper")
 	SpatialGrid.register(self, &"player")
@@ -1148,8 +1168,11 @@ func _tick_resource_regen(delta: float) -> void:
 # take_damage() and crosses the (delay - reduction) threshold to start
 # regenerating. Regen rate = HP_REGEN_BASE_PCT + gear bonus, applied as
 # a percentage of max_health per second. Stops at full HP and on death.
-# A sub-integer accumulator handles low-rate-low-fps cases where a single
-# delta tick produces less than 1 HP — without it nothing ever regens.
+# Also stops when any aggro'd enemy is within COMBAT_PROXIMITY_RADIUS —
+# dodging hits for 5+ seconds shouldn't count as "out of combat" if the
+# enemy is still actively chasing. A sub-integer accumulator handles
+# low-rate-low-fps cases where a single delta tick produces less than 1
+# HP — without it nothing ever regens.
 func _tick_health_regen(delta: float) -> void:
 	if not _alive:
 		return
@@ -1159,6 +1182,9 @@ func _tick_health_regen(delta: float) -> void:
 	_out_of_combat_t += delta
 	var delay := maxf(HP_REGEN_DELAY - _gear_regen_delay_reduction, HP_REGEN_MIN_DELAY)
 	if _out_of_combat_t < delay:
+		return
+	if _is_in_combat():
+		_hp_regen_accum = 0.0
 		return
 	var rate_pct := HP_REGEN_BASE_PCT + _gear_hp_regen_bonus
 	if rate_pct <= 0.0:
@@ -1172,6 +1198,20 @@ func _tick_health_regen(delta: float) -> void:
 	_health = mini(_health + whole_hp, max_health)
 	if _health != prev:
 		health_changed.emit(_health, max_health)
+
+
+# True when any non-charmed enemy within COMBAT_PROXIMITY_RADIUS is in an
+# active engagement state (chasing, knocked back, stunned, grabbed).
+# Charmed pets and idle / returning enemies don't count — the player is
+# only "in combat" when something is actively hostile and aware of them.
+func _is_in_combat() -> bool:
+	var nearby := SpatialGrid.query_radius(global_position, COMBAT_PROXIMITY_RADIUS, &"enemies")
+	for n in nearby:
+		if not is_instance_valid(n):
+			continue
+		if n.has_method(&"is_engaged_with_player") and n.is_engaged_with_player():
+			return true
+	return false
 
 
 # Public accessors for the buff bar. Live counts of the per-spec
@@ -1315,6 +1355,7 @@ func respawn() -> void:
 		_resource_last_int = int(_resource_current)
 		resource_changed.emit(_resource_last_int, resource_pool.max_value)
 	health_changed.emit(_health, max_health)
+	respawned.emit()
 	_play_anim(ANIM_IDLE)
 
 func _cursor_offset() -> Vector3:

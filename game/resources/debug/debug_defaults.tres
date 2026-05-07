@@ -14,3 +14,4 @@ one_shot_enemies = false
 disable_enemies = false
 show_attack_telegraphs = false
 show_debug_overlay = false
+retro_filter_mode = 0

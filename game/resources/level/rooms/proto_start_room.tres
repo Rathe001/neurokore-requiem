@@ -29,7 +29,10 @@ offset = Vector3(0, 0.5, 0)
 script = ExtResource("2")
 id = &"starter_chest"
 scene = ExtResource("loot_crate")
-offset = Vector3(-2.5, 0.3, 2.5)
+; Tucked into the SW corner so the player's spawn pad at room center reads
+; as visually clear. Crate body is 1.0 × 0.7, walls at ±4, so this leaves
+; ~0.5m gap to the wall and ~3.5m to the player.
+offset = Vector3(-3.0, 0.3, 3.0)
 
 [resource]
 script = ExtResource("1")

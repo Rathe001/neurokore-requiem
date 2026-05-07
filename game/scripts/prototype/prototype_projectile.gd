@@ -141,6 +141,11 @@ func _on_body_entered(body: Node3D) -> void:
 		if target_group == &"enemies" and body.has_method(&"is_player_friendly") and body.is_player_friendly():
 			_release()
 			return
+		# Spawn the impact burst before damage / release. Uses the projectile's
+		# own glow color so it matches the bolt visual instead of the player
+		# class accent — enemy bolts impact in their own color too. Y offset
+		# lifts the burst off the floor onto the target's silhouette.
+		PrototypeAttackIndicator.spawn_impact_burst(self, body.global_position + Vector3(0.0, 0.9, 0.0), _projectile_color())
 		if _roll_hit(body.global_position):
 			var is_crit := _roll_crit()
 			var dmg := _roll_damage(is_crit)
@@ -183,6 +188,14 @@ func _release() -> void:
 		return
 	_released = true
 	EntityPool.release.call_deferred(self)
+
+
+func _projectile_color() -> Color:
+	var glow := get_node_or_null(^"Glow") as OmniLight3D
+	if glow != null:
+		return glow.light_color
+	return Color(0.4, 0.85, 1.0)
+
 
 func _roll_hit(target_pos: Vector3) -> bool:
 	# Point-blank penalty: if the projectile traveled less than the melee

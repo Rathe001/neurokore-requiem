@@ -43,6 +43,16 @@ func _unhandled_input(event: InputEvent) -> void:
 		toggle_fullscreen()
 		get_viewport().set_input_as_handled()
 
+func _notification(what: int) -> void:
+	# Alt-tab cycle: viewport state (TAA history, MSAA buffer, glow buffer)
+	# can land in a bad spot when the window regains focus — most visibly the
+	# WorldEnvironment glow goes dark and projectile / beam lights stop
+	# blooming. Re-applying the saved config rebinds the viewport AA settings
+	# and pushes glow_enabled back onto every WorldEnvironment, which is
+	# enough to clear the issue without rebuilding the scene.
+	if what == NOTIFICATION_APPLICATION_FOCUS_IN:
+		apply.call_deferred()
+
 func available_resolutions() -> Array[Vector2i]:
 	var screen := DisplayServer.screen_get_size(DisplayServer.window_get_current_screen())
 	var combined: Array[Vector2i] = []
@@ -83,6 +93,13 @@ func set_screen_space_aa(new_ssaa: Viewport.ScreenSpaceAA) -> void:
 	apply()
 	save()
 
+func set_use_taa(enabled: bool) -> void:
+	if config == null or config.use_taa == enabled:
+		return
+	config.use_taa = enabled
+	apply()
+	save()
+
 func set_bloom_enabled(enabled: bool) -> void:
 	if config == null or config.bloom_enabled == enabled:
 		return
@@ -117,6 +134,7 @@ func apply() -> void:
 	if vp != null:
 		vp.msaa_3d = config.msaa_3d
 		vp.screen_space_aa = config.screen_space_aa
+		vp.use_taa = config.use_taa
 	_apply_bloom_to_environments()
 	changed.emit()
 
