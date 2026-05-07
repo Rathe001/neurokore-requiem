@@ -12,9 +12,20 @@ extends Node
 const SAVE_DIR := "user://saves/"
 const CURRENT_SAVE_VERSION := 1
 
+## Autosave interval in seconds. Fires only when a character is loaded
+## (active_save_id is set) and a player node exists in the tree.
+const AUTOSAVE_INTERVAL := 120.0
+
+var _autosave_timer: Timer
+
 func _ready() -> void:
 	_ensure_save_dir()
 	get_tree().set_auto_accept_quit(false)
+	_autosave_timer = Timer.new()
+	_autosave_timer.wait_time = AUTOSAVE_INTERVAL
+	_autosave_timer.autostart = true
+	_autosave_timer.timeout.connect(_on_autosave)
+	add_child(_autosave_timer)
 
 
 func _notification(what: int) -> void:
@@ -22,6 +33,16 @@ func _notification(what: int) -> void:
 		if PlayerState.active_save_id != "":
 			save_game(PlayerState.active_save_id)
 		get_tree().quit()
+
+
+func _on_autosave() -> void:
+	if PlayerState.active_save_id == "":
+		return
+	# Only save when a player node exists — avoids writing empty state
+	# during menus or scene transitions.
+	if get_tree().get_first_node_in_group(&"player") == null:
+		return
+	save_game(PlayerState.active_save_id)
 
 
 # ── Public API ────────────────────────────────────────────────────────────

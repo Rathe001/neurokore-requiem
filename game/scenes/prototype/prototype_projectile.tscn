@@ -6,8 +6,8 @@
 radius = 0.3
 
 [sub_resource type="SphereMesh" id="SphereMesh_1"]
-radius = 0.06
-height = 0.2
+radius = 0.03
+height = 0.1
 radial_segments = 8
 rings = 4
 
@@ -16,7 +16,7 @@ shading_mode = 0
 albedo_color = Color(0.4, 0.85, 1.0, 1.0)
 emission_enabled = true
 emission = Color(0.4, 0.85, 1.0, 1.0)
-emission_energy_multiplier = 4.0
+emission_energy_multiplier = 14.0
 
 [node name="PrototypeProjectile" type="Area3D"]
 collision_layer = 0
