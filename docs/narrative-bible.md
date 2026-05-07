@@ -1,0 +1,199 @@
+# Narrative Bible
+
+> **Status: Aspirational.** None of the content in this doc is implemented in the playtest. It exists as a worldbuilding reference for future work — the EF-723 setting, the rep encounter structure, the Confrontation, the Sub-Level Zero categories. When in doubt about the world's *tone*, read this; when in doubt about what *currently runs*, read the code.
+
+The starting-zone narrative (Earth Facility #723) is a 3-level scripted progression that ends in a class choice. It is the project's narrative spine — every later zone is shaped by what happens here.
+
+## Earth Facility #723
+
+A vast corporate complex that served simultaneously as a cutting-edge augmentation research center and a high-security detention facility. The same corporation that pioneered augmentation technology also imprisoned those who resisted it.
+
+The facility has been abandoned. Not destroyed, not decommissioned with care — simply left. A memo recovered from a terminal near the entrance:
+
+> *"Re: EF-723 Operations Suspension*
+>
+> *Facility #723 has been flagged for decommission effective end of quarter. Current holdings represent ₩0.0000003% of Q3 portfolio. Operational costs no longer justify output. Asset recovery teams will not be dispatched. Regards, Resource Optimization Division."*
+
+The people inside — patients, prisoners, staff, experiments — were not mentioned.
+
+The "Earth" prefix is intentional. There are other facilities. There are other planets. The corporation's scale is expressed in denominations that don't have common names.
+
+### Layout
+
+```
+[ AUGMENTATION WING ]          [ DETENTION WING ]
+  Cyborg starting zone           Analog starting zone
+         |                              |
+         |______________________________|
+                       |
+              [ CONVERGENCE POINT ]
+               Lower maintenance
+               corridors / escape
+```
+
+The two paths converge in the facility's lower maintenance infrastructure — utilitarian tunnels neither wing's inhabitants would typically have reason to enter. This is where Cyborg and Analog players meet for the first time before escaping together into Sub-Level Zero.
+
+## The Representative System
+
+Each starting zone is 3 levels long — one per specialized class of that origin. Each level introduces one class representative. The rep saves the player once per level, in a moment that reflects their class's power, before the final Confrontation.
+
+This creates two things:
+
+1. **Debt** — the player owes each rep their life by the time the choice arrives.
+2. **Betrayal** — choosing one rep means fighting and killing the other two. They saved you. You know exactly what you're doing.
+
+The saves are not subtle. They are designed to be memorable. Each save moment is also when the rep teaches the player their class skill and the skill tree opens for the first time.
+
+## Cyborg path: the Augmentation Wing
+
+The Cyborg player wakes mid-procedure on an operating table. The corp abandoned them during an augmentation operation. Their last procedure is half-finished. The wing has been deteriorating ever since — failed experiments roam the halls, black market operators occupy the lower levels, and something is still running in the experimental labs at the core.
+
+### Level 1 — The Ward
+
+Half-finished patients shamble through the corridors — people abandoned mid-augmentation, some fused to equipment, some with procedures that went catastrophically wrong. The game's first introduction to body horror.
+
+**Rep: The Forged.** A former corporate security enforcer given a prototype heavy chassis. When the corp pulled out, he stayed — maintaining brutal order over whatever the ward became. He finds the player pinned under a collapsed augmentation rig.
+
+> *He tears the rig off you with one hand. He doesn't say much. He doesn't need to.*
+
+### Level 2 — The Market
+
+The black market that formed in the lower levels after the corp left. Desperate people, contraband augments, open firefights over territory.
+
+**Rep: The Automaton.** A fixer who built a small empire through drone networks and scripted systems. Never personally in danger — always three cameras ahead, always a drone between herself and the problem. She clears an ambush the player was walking into before they even knew it was there.
+
+> *You hear the shots before you round the corner. By the time you get there, four bodies and a drone hovering at eye level. It tilts slightly, like it's looking at you. Then it leaves.*
+
+### Level 3 — The Core
+
+The experimental labs. Sealed when the corp left. Something has been running in here since.
+
+**Rep: The Polymath.** A volunteer research subject for cognitive augmentation beyond approved limits. Barely recognizable as a person. Knows things they couldn't possibly know. Stops the player in the corridor outside a room that looks completely empty.
+
+> *"Don't go in there." He doesn't look at you when he says it. Three seconds later, the ceiling collapses into the room.*
+
+## Analog path: the Detention Wing
+
+The Analog player is an inmate in the facility's high-security detention block. The prison holds people who couldn't afford augmentation, refused it, or were flagged as threats to the corp's augmentation agenda. Many were destined for experimental procedures without consent.
+
+The power goes out. The cells open. The blackout originates from the deepest solitary block — something the Enculted rep did, or something drawn to her, or both. It is not entirely clear.
+
+### Level 1 — The Cell Block
+
+Chaos. Inmates in the corridors, augmented guards cracking down, the facility's security systems going dark in rolling waves.
+
+**Rep: The Survivalist.** A fellow prisoner who has been preparing for exactly this. Has spent months converting contraband into weapons and mapping guard rotations. He finds the player cornered in a stairwell.
+
+> *A door flies open. He throws you something you can't identify and says "figure it out" before disappearing around the corner. It works.*
+
+### Level 2 — The Interior
+
+The administrative and research sections between the cell block and the deep facility. More organized resistance from guards. Less chaos, more danger.
+
+**Rep: The Count / Countess.** A political prisoner — incarcerated for refusing a mandatory augmentation order. Has maintained composure, routine, and an almost absurd dignity throughout their detention. The player walks into a corridor with a guard sniper covering the only exit.
+
+> *A single shot from somewhere above and behind you. The sniper drops. She steps out of a maintenance shaft, straightens her collar, and gestures toward the exit.*
+
+### Level 3 — The Deep Block
+
+The oldest part of the facility. Solitary confinement for subjects deemed too dangerous or too unstable for general population. The lights here have been flickering for weeks. Guards stopped doing full patrols months ago.
+
+**Rep: The Enculted.** In solitary. Has been here longer than the records show. When the player reaches the sealed door blocking the exit, it opens on its own. A guard standing ten feet away stares at the wall, unblinking, unreachable.
+
+> *She steps out of her cell like she's been waiting. She doesn't explain the door. She doesn't explain the guard. She looks at you like she already knows what you're going to choose.*
+
+## The Confrontation
+
+All three reps converge at the exit point — the threshold between the starting zone and Sub-Level Zero below.
+
+The reps do not present themselves calmly. They argue with each other first — each convinced their path is the obvious correct choice, each dismissive of the others. The player watches three people who just saved their life disagree about everything except one thing.
+
+Eventually they turn to the player. The player may ask about each class before deciding — this is the primary opportunity to understand what each path entails before committing. Questions can be directed at any rep; the others will react to the answers.
+
+When the player has heard enough, they make their choice. If they cannot decide, the reps make the decision for them:
+
+> *"You've seen what we can do. You know what's out there. Pick one of us, or we leave you here."*
+
+The ultimatum is not a bluff. The violence that follows is not a punishment — it is the logical conclusion of three people who each believe, genuinely, that their way is the only way worth surviving.
+
+### The fight
+
+**Choose a rep → ally with them, fight the other two.** The fight is the first true boss encounter. The chosen rep fights alongside the player; the other two fight together. The encounter is designed to showcase what the unchosen classes can do — players experience the roads not taken as threats rather than demonstrations.
+
+The two defeated reps are dead. Permanently. The world will reflect their absence.
+
+### The chosen rep, after
+
+The chosen rep accompanies the player into Sub-Level Zero and through the exit. They become the player's **representative companion** going forward:
+
+- They appear at designated level-up points throughout the game — leveling is not done on the fly.
+- They join certain boss encounters where it makes thematic sense.
+- Their dialogue reacts to the player's talent progression and class transformation — they are the character most sensitive to how deep the player has gone.
+
+## The Origin Class path
+
+The player may refuse all three reps.
+
+The refusal appears to be the independent choice. The three reps exchange a look and step aside. The fight begins anyway. Three-on-one, it becomes apparent around the three-quarter mark that this was a mistake.
+
+Then a fourth figure enters.
+
+**The mystery rep** — an Analog for Cyborg players, a Cyborg for Analog players. They intervene without explanation, turning a losing fight into a winnable one.
+
+After the battle, they introduce themselves. They are the rep of those who refused to sell themselves for power — the only path that costs you nothing and gives you nothing except yourself. They will fill the companion role going forward, same as any class rep.
+
+The difference: the player didn't choose this. They failed to choose anything, and were given something anyway. The mystery rep knows this. They don't mention it — but they know.
+
+**The mystery rep is the morally "good" path.** All six specialized classes represent a compromise. The origin class, under this companion, does not. This is reinforced by the origin class's breadth — they have access to all three specialist skill trees at shallow depth rather than one at full depth.
+
+## Sub-Level Zero
+
+The basement of Earth Facility #723. Below the augmentation wing. Below the detention block. Below everything. The first common zone after the Confrontation.
+
+Sub-Level Zero was the facility's third operation — the one that doesn't appear on any public documentation. The prison population was the supply chain. Prisoners who refused augmentation, or whose augmentation responses were deemed anomalous, were transferred here. The bio weapons program used them.
+
+When the facility was abandoned, Sub-Level Zero was not decommissioned. The experiments were not terminated. The door was locked from the outside, the power was cut, and the quarterly report moved on.
+
+That was some time ago.
+
+### Convergence
+
+Sub-Level Zero is where the Cyborg and Analog paths meet for the first time. Both players escape downward from their respective wings and emerge into the same basement. They were in the same building for their entire starting zone without knowing it. Neither is expecting the other.
+
+### The three categories
+
+Three categories of enemy inhabit Sub-Level Zero, reflecting how long ago each experiment was abandoned:
+
+**Abandoned** — functional weapons that were left running with no target and no handler. Still doing what they were designed to do. They have not changed. The horror is that they don't need to.
+
+**Forgotten** — experiments the corp lost track of before the abandonment. Had time alone to change. The original design intent is no longer recognizable. Nobody knows what they are now, including them.
+
+**Failed** — did not work as intended. Still alive. Still trying to complete an objective that their broken biology will never allow them to fulfill. The most unsettling category — not because they're dangerous, but because of what they're attempting.
+
+### The Exit
+
+Near the end of Sub-Level Zero, the player finds a functional elevator behind a lit doorway. The light is not neon. It is not special. It is just working light in a place where nothing works — and by the time the player reaches it, that is enough.
+
+The elevator has power. The building has been dark for the entire playthrough. **Someone wanted this exit to stay open.**
+
+The door leads out of Earth Facility #723 and into the world above.
+
+> Open: who maintains the elevator? Why does it still have power? This implies an outside party with knowledge of and interest in the facility. Leaving it unresolved too long risks feeling like an oversight rather than a mystery.
+
+## Rep alignments (character bible)
+
+Each rep has a worldview shaped by who they are and what they sacrificed. They react when the player drifts from their alignment — not with judgment menus or system notifications, but through ambient dialogue, tone shifts, and occasional direct confrontation.
+
+The morality plane that originally drove these reactions is on hold. The character bibles below stand on their own as worldbuilding regardless.
+
+| Rep | Character notes |
+|---|---|
+| **Mystery Rep** | The "good" path. Reacts most strongly to drift toward selfish or corrupt decisions — the only rep whose worldview is not itself a compromise. |
+| **Count / Countess** | Extreme arrogance and a superiority complex — *"I didn't need a machine to make me dangerous."* Their refusal of augmentation is not humility; it's contempt. Reacts to any loss of composure or signs of desperation. |
+| **Survivalist** | Corrupted by trauma — watched everyone they knew get augmented, broken, or killed. Helps others because they've seen what happens when nobody does, but the cost has hollowed them out. Reacts to cold, self-serving decisions that mirror the people who destroyed everything they cared about. |
+| **Automaton** | Binary logic has no room for selfishness — selfishness requires a self making a preference. The Automaton has dissolved their moral agency into scripts and systems. Not corrupted through malice, but through the removal of the self from the equation entirely. Reacts to emotional or personally motivated decisions as noise in the system. |
+| **Enculted** | Sold their soul for power. The constant battle to prevent complete insanity is the price of that bargain — a cost they accepted knowingly. Reacts to selfless decisions as a waste of what they sacrificed everything to obtain. |
+| **Polymath** | Made a conscious, deliberate decision to augment their intelligence for personal power. The "curiosity" framing is how they justify it. Corrupted through ambition dressed as scholarship. Reacts to decisions that suggest the player values others over their own advancement. |
+| **Forged** | Power through total self-erasure. Reacts to any decision that suggests the player still values their humanity. |
+
+The rep isn't a conscience system. They're a person with a worldview, and your choices are telling them who you really are.

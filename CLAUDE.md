@@ -6,86 +6,44 @@ This file is committed to the repo so context is available on any machine. It is
 
 - **Two sources of truth, with a clear split.**
   - `/docs` is the **design intent** layer: tone, vision, system shape, identity, design rules. Read it before answering design-shaped questions or proposing changes that affect the game's identity. It is intentionally lossy on numbers and current state.
-  - **Code** is the **implementation** layer: the actual stats, formulas, field names, current behaviour. Read it before answering questions about what the game *currently does*.
+  - **Code** under `game/` is the **implementation** layer: actual stats, formulas, field names, current behaviour. Read it before answering questions about what the game *currently does*.
   - When the two diverge, that's a flag to revisit one or the other — not automatically a bug. Sometimes the implementation has moved past the design, sometimes the design has moved past the implementation.
 - **Don't update docs after every implementation tweak.** Docs change when *intent* changes (new class, new system, dropped feature). Tuning a magnitude or renaming a field is a code change only.
 - **CLAUDE.md is a pointer, not a mirror.** Do not duplicate doc content here — just enough to orient and navigate.
 
 ## What This Is
 
-**Neurokore: Requiem** is a Diablo 2-style fixed-camera low-poly 3D ARPG set in a cyberpunk world with a layered tone: gritty neon-noir baseline, campy 80s sci-fi surface, 80s body horror edge. Low-poly meshes + high-res PBR textures + realistic dynamic lighting — stylized, not photo-real.
-
-Full world and tone detail: [`docs/world/tone.md`](docs/world/tone.md)
+**Neurokore: Requiem** is a Diablo 2-style fixed-camera low-poly 3D ARPG in a cyberpunk world with a layered tone: gritty neon-noir baseline, campy 80s sci-fi surface, 80s body horror edge. Low-poly meshes + high-res PBR textures + realistic dynamic lighting — stylized, not photo-real.
 
 ## Design Pillars
 
 - Class identity is paramount — each class plays like a different game mode
 - Class-specific resource systems (not shared across classes)
-- Deep build diversity through loot-driven itemization
+- Deep build diversity — talents are the build spine, gear is the build amplifier
 - Deliberate, weighted, build-dependent combat
 
-Full combat design: [`docs/design/combat.md`](docs/design/combat.md) — includes targeting modes (cone, AoE, projectile, hitscan) and damage pipeline
+## Docs
 
-## Classes (8 at launch)
+The design intent layer lives in five short docs. Code is authoritative for current numbers — these docs explain the *why*.
 
-Two **origin classes** (generalist) and six **specialized classes** (3 per origin):
-
-| Origin | Specialized Classes |
-|---|---|
-| **Analog** | Survivalist, Count/Countess, Enculted |
-| **Cyborg** | Forged, Automaton, Polymath |
-
-Each class has one unique resource. See [`docs/classes/overview.md`](docs/classes/overview.md) for the full resource table.
-
-Full class details:
-- [`docs/classes/overview.md`](docs/classes/overview.md)
-- [`docs/classes/cyborg.md`](docs/classes/cyborg.md)
-- [`docs/classes/human.md`](docs/classes/human.md) *(Analog origin class)*
-- [`docs/classes/spec-monsters.md`](docs/classes/spec-monsters.md)
-
-## Visual Style & Level Design
-
-- [`docs/world/art-style.md`](docs/world/art-style.md)
-- [`docs/world/level-design.md`](docs/world/level-design.md)
-
-## Starting Zones & Key Systems
-
-- [`docs/design/starting-zones.md`](docs/design/starting-zones.md) — Earth Facility #723, rep system, class choice boss battle, origin class path
-- [`docs/design/morality-system.md`](docs/design/morality-system.md) — on hold; may resurface as hidden narrative system
-- [`docs/design/skill-tree.md`](docs/design/skill-tree.md) — Fire/Alt Fire (weapon/offhand), 1H/2H weapons, tutorial progression, starting skills, hotkeys
-- [`docs/design/itemization.md`](docs/design/itemization.md) — **itemization design intent**: gear slots, stat domains, behavior mods, power budget, sprint, class interactions, cross-slot synergies
-- [`docs/design/item-architecture.md`](docs/design/item-architecture.md) — item structural layer: type hierarchy, slots, weight system, prefix/suffix modifiers, rarity tiers, item generation pipeline, augment slot rules
-- [`docs/design/equipment.md`](docs/design/equipment.md) — weapon types (energy, kinetic, elemental, melee, class-specific), offhands, armor, damage types
-- [`docs/design/gear-augmentation.md`](docs/design/gear-augmentation.md) — schematics (workbench), field augments (class skills), ammo types, magazine/reload, augment slots
-- [`docs/design/zones.md`](docs/design/zones.md) — zone design philosophy, Sub-Level Zero, zone registry
-- [`docs/design/dialog-ui.md`](docs/design/dialog-ui.md) — animated portraits, class effects, UI philosophy
-- [`docs/design/controls.md`](docs/design/controls.md) — WASD movement, mouse for attacks, controller as future work
-- [`docs/world/lighting.md`](docs/world/lighting.md) — darkness as default, equippable light sources, zone lighting tiers
-- [`docs/design/ui-style-guide.md`](docs/design/ui-style-guide.md) — type scale, tag components, color groups, all 9 class palettes, i18n and theming conventions
+- [`docs/world.md`](docs/world.md) — tone, faction dynamic, art direction, lighting policy, zones thesis
+- [`docs/classes.md`](docs/classes.md) — the eight classes (2 origins + 6 specs), resources, talent tier shape, signature perks, class-tuned monster variants
+- [`docs/systems.md`](docs/systems.md) — combat targeting modes + damage pipeline, itemization design intent, gear slots, traction breakpoints, item-level effectiveness curve, equipment taxonomy
+- [`docs/conventions.md`](docs/conventions.md) — tech stack, performance pillars, coding conventions, infrastructure (SpatialGrid / EntityPool), inspirations
+- [`docs/narrative-bible.md`](docs/narrative-bible.md) — Earth Facility #723, the reps, the Confrontation, Sub-Level Zero, mystery rep, rep alignments. **Aspirational — none of it is implemented yet.** Read for tone; don't read as current state.
 
 ## Platform & Performance
 
-**Always keep these in mind when making architecture or design decisions:**
+Always keep these in mind when making architecture or design decisions:
 
 - **Initial release:** Steam, single player only
 - **Future targets:** Android/iOS port, multiplayer — do not design against these
 - **Performance bar:** average spec PC (integrated graphics, 8GB RAM). Mobile-aware.
-- **Horde density** (end-game Vampire Survivors scale) must be solved at the architecture level — entity management, spatial partitioning, object pooling
+- **Horde density** (end-game Vampire-Survivors scale) must be solved at the architecture level — entity management, spatial partitioning (`SpatialGrid` autoload), object pooling (`EntityPool` autoload)
 - **Multiplayer:** design for it from the start, implement it later
-
-Full details: [`docs/design/platform.md`](docs/design/platform.md)
-
-## Tech Stack
-
-- **Engine:** Godot 4 (Forward+ renderer on PC; mobile renderer path for the eventual mobile port)
-- **Language:** GDScript (with C# / GDExtension as a performance escape hatch for hot paths)
-- **3D modeling & animation:** Blender
-- **2D tooling:** Aseprite (UI icons, decals, emissive texture work)
-
-Full details: [`docs/design/tech-stack.md`](docs/design/tech-stack.md)
-
-Coding conventions: [`docs/design/coding-conventions.md`](docs/design/coding-conventions.md)
 
 ## Project Status
 
-Early prototype. [`docs/status.md`](docs/status.md) lists the **open design questions** (not implementation status — code is authoritative for that). When you need to know "what currently works," read the code under `game/scripts/` or check `git log`.
+Early prototype. **Steam playtest is live** (v0.1.1, 2026-05-06). The code under `game/scripts/` and `git log` are authoritative for what currently works — more accurate than any status writeup could stay.
+
+Open design areas not derivable from code: origin-class perk ladders (Analog/Cyborg generalists), Polymath/Enculted resource models (both currently TBD), behavior-mod pools per slot (~4 each), end-game loop, death/failure model, economy and crafting, power-budget tuning at scale.
