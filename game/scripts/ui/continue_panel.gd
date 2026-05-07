@@ -1,18 +1,25 @@
 extends Control
 class_name ContinuePanel
 
-## Character list panel shown from the startup screen "Continue" button.
-## Displays saved characters with avatar, name, class, level, and hardcore
-## badge. Clicking a row loads the save and launches the game.
+## Character list panel for the startup screen. Displays saved characters
+## with avatar, name, class, level, and hardcore badge. Clicking a row loads
+## the save and launches the game. Optionally shows a "Create Character"
+## button when show_create_button is true (Single Player flow).
 
 signal back_pressed
 signal character_selected(save_id: String)
+signal create_character_pressed
 
 const ROW_SIZE := Vector2(360.0, 56.0)
 const ROW_GAP := 6
 const AVATAR_SIZE := 44.0
 const TITLE_FONT_SIZE := 16
 const DELETE_CONFIRM_DELAY := 1.5
+
+## When true, shows a "Create Character" button above the character list.
+var show_create_button: bool = false
+## Override the panel title (default "Single Player").
+var panel_title: String = "MENU_SINGLE_PLAYER"
 
 var _vbox: VBoxContainer
 var _rows_box: VBoxContainer
@@ -68,11 +75,18 @@ func _build_ui() -> void:
 	center.add_child(_vbox)
 
 	var title := Label.new()
-	title.text = "Continue"
+	title.text = panel_title
 	title.add_theme_font_size_override(&"font_size", TITLE_FONT_SIZE)
 	title.add_theme_color_override(&"font_color", Color(0.85, 0.92, 1.0, 1.0))
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_vbox.add_child(title)
+
+	if show_create_button:
+		var create_btn := Button.new()
+		create_btn.text = "MENU_CREATE_CHARACTER"
+		create_btn.custom_minimum_size = Vector2(ROW_SIZE.x, 36.0)
+		create_btn.pressed.connect(func() -> void: create_character_pressed.emit())
+		_vbox.add_child(create_btn)
 
 	_rows_box = VBoxContainer.new()
 	_rows_box.add_theme_constant_override(&"separation", ROW_GAP)

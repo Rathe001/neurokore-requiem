@@ -9,7 +9,7 @@ const BUTTON_GAP := 8.0
 
 var _main_panel: Control
 var _creation_panel: CharacterCreationPanel
-var _continue_panel: ContinuePanel
+var _single_player_panel: ContinuePanel
 var _settings_panel: SettingsPanel
 
 func _ready() -> void:
@@ -18,7 +18,7 @@ func _ready() -> void:
 	_build_background()
 	_build_main_panel()
 	_build_creation_panel()
-	_build_continue_panel()
+	_build_single_player_panel()
 	_build_settings_panel()
 	_build_version_stamp()
 	_show_main()
@@ -33,17 +33,20 @@ func _build_settings_panel() -> void:
 func _build_creation_panel() -> void:
 	_creation_panel = CharacterCreationPanel.new()
 	_creation_panel.visible = false
-	_creation_panel.back_pressed.connect(_show_main)
+	_creation_panel.back_pressed.connect(_show_single_player)
 	_creation_panel.start_pressed.connect(_on_start_pressed)
 	add_child(_creation_panel)
 
 
-func _build_continue_panel() -> void:
-	_continue_panel = ContinuePanel.new()
-	_continue_panel.visible = false
-	_continue_panel.back_pressed.connect(_show_main)
-	_continue_panel.character_selected.connect(_on_character_selected)
-	add_child(_continue_panel)
+func _build_single_player_panel() -> void:
+	_single_player_panel = ContinuePanel.new()
+	_single_player_panel.show_create_button = true
+	_single_player_panel.panel_title = "MENU_SINGLE_PLAYER"
+	_single_player_panel.visible = false
+	_single_player_panel.back_pressed.connect(_show_main)
+	_single_player_panel.character_selected.connect(_on_character_selected)
+	_single_player_panel.create_character_pressed.connect(_on_new_game_pressed)
+	add_child(_single_player_panel)
 
 func _build_version_stamp() -> void:
 	var label := Label.new()
@@ -116,9 +119,8 @@ func _build_main_panel() -> void:
 	buttons.offset_bottom = -180.0
 	_main_panel.add_child(buttons)
 
-	if SaveManager.has_any_saves():
-		buttons.add_child(_make_button("COMMON_CONTINUE", _on_continue_pressed))
-	buttons.add_child(_make_button("COMMON_NEW_GAME", _on_new_game_pressed))
+	buttons.add_child(_make_button("MENU_SINGLE_PLAYER", _on_single_player_pressed))
+	buttons.add_child(_make_button("MENU_MULTIPLAYER", func() -> void: pass, false))
 	buttons.add_child(_make_button("COMMON_OPTIONS", _on_options_pressed))
 	buttons.add_child(_make_button("COMMON_REPORT_BUG", _on_report_bug_pressed))
 	buttons.add_child(_make_button("COMMON_OPEN_LOGS", _on_open_logs_pressed))
@@ -135,7 +137,7 @@ func _make_button(text: String, callback: Callable, enabled: bool = true) -> But
 func _hide_all() -> void:
 	_main_panel.visible = false
 	_creation_panel.visible = false
-	_continue_panel.visible = false
+	_single_player_panel.visible = false
 	_settings_panel.visible = false
 
 func _show_main() -> void:
@@ -151,10 +153,13 @@ func _show_settings() -> void:
 	_hide_all()
 	_settings_panel.visible = true
 
-func _on_continue_pressed() -> void:
+func _on_single_player_pressed() -> void:
+	_show_single_player()
+
+func _show_single_player() -> void:
 	_hide_all()
-	_continue_panel.refresh()
-	_continue_panel.visible = true
+	_single_player_panel.refresh()
+	_single_player_panel.visible = true
 
 
 func _on_character_selected(save_id: String) -> void:
