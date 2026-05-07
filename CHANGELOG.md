@@ -13,6 +13,8 @@ are mandatory.
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-05-06
+
 ### Added
 
 - Low-HP warning vignette: pulsing red rim activates below 30% HP, intensity ramps as HP drops further.

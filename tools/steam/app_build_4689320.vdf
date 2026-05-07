@@ -1,7 +1,7 @@
 "appbuild"
 {
 	"appid"			"4689320"
-	"desc"			"v0.1.1 · e951866 · Resource loaders for perks, monster pack affixes, and nam..."
+	"desc"			"v0.1.2 · 900c1a5 · Low-HP warning vignette: pulsing red rim activates below..."
 
 	// Where SteamPipe writes its build logs and intermediate state.
 	// Created on first run. Safe to .gitignore.
