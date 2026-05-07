@@ -4,13 +4,12 @@ class_name PrototypeProjectile
 const PROTO_BASE_CRIT_CHANCE: float = 0.15
 const PROTO_BASE_CRIT_MULT: float = 1.5
 
-# Point-blank penalty mirrored from PlayerCombat — short-range projectile
-# impacts halve accuracy. Same threshold + multiplier so the rule is
-# consistent across hitscan and projectile firing modes. Both player- and
-# enemy-fired projectiles obey this; if the player charges into a ranged
-# enemy, that enemy's bolts also miss more often.
+# Point-blank penalty mirrored from PlayerCombat — 25% accuracy reduction
+# at short range. Both player- and enemy-fired projectiles obey this; if
+# the player charges into a ranged enemy, that enemy's bolts also miss
+# more often.
 const MELEE_RANGE_THRESHOLD: float = 2.5
-const MELEE_RANGE_ACCURACY_MULT: float = 0.5
+const MELEE_RANGE_ACCURACY_MULT: float = 0.75
 # World-layer raycast mask for the per-frame sweep. Walls + structures live
 # on layer 1; targets get handled by Area3D body_entered so we don't need
 # to ray-test them.
@@ -40,6 +39,11 @@ var ignore_melee_penalty: bool = false
 ## spawner sets this to &"enemies" for player-fired bolts and &"player"
 ## for enemy-fired bolts; collision_mask is derived in reset() to match.
 var target_group: StringName = &"enemies"
+## AoE blast radius on impact. When > 0 the projectile explodes on hit,
+## damaging all targets in range instead of just the one it struck.
+var blast_radius: float = 0.0
+## Visual scale multiplier for the mesh + glow. 1.0 = default bolt size.
+var visual_scale: float = 1.0
 
 var _traveled: float = 0.0
 var _hit: bool = false
@@ -67,6 +71,14 @@ func reset() -> void:
 	# is_player_friendly check in _on_body_entered.
 	var target_mask := (PLAYER_LAYER_MASK | CHARMED_ALLY_LAYER_MASK) if target_group == &"player" else ENEMY_LAYER_MASK
 	collision_mask = WORLD_LAYER_MASK | target_mask
+	# Scale the visual mesh + glow to match the skill's visual weight.
+	var vis := get_node_or_null(^"Visual") as MeshInstance3D
+	if vis != null:
+		vis.scale = Vector3.ONE * visual_scale
+	var glow := get_node_or_null(^"Glow") as OmniLight3D
+	if glow != null:
+		glow.omni_range = 5.0 * visual_scale
+		glow.light_energy = 3.0 * visual_scale
 	# body_entered only fires when a body crosses INTO the area on a later
 	# physics frame; if a target is already overlapping at spawn (close-
 	# range fire), the signal never triggers. Defer a sweep over current
@@ -94,6 +106,8 @@ func _pool_release() -> void:
 	# reset(), but the default keeps existing player-fire callers working.
 	target_group = &"enemies"
 	ignore_melee_penalty = false
+	blast_radius = 0.0
+	visual_scale = 1.0
 
 func _physics_process(delta: float) -> void:
 	var step := speed * delta
@@ -141,29 +155,49 @@ func _on_body_entered(body: Node3D) -> void:
 		if target_group == &"enemies" and body.has_method(&"is_player_friendly") and body.is_player_friendly():
 			_release()
 			return
-		# Spawn the impact burst before damage / release. Uses the projectile's
-		# own glow color so it matches the bolt visual instead of the player
-		# class accent — enemy bolts impact in their own color too. Y offset
-		# lifts the burst off the floor onto the target's silhouette.
-		PrototypeAttackIndicator.spawn_impact_burst(self, body.global_position + Vector3(0.0, 0.9, 0.0), _projectile_color())
-		if _roll_hit(body.global_position):
+		var impact_pos := body.global_position + Vector3(0.0, 0.9, 0.0)
+		if blast_radius > 0.0:
+			_explode(impact_pos)
+		else:
+			_hit_single(body, impact_pos)
+	_release()
+
+
+func _hit_single(body: Node3D, impact_pos: Vector3) -> void:
+	PrototypeAttackIndicator.spawn_impact_burst(self, impact_pos, _projectile_color())
+	if _roll_hit(body.global_position):
+		var is_crit := _roll_crit()
+		var dmg := _roll_damage(is_crit)
+		if target_group == &"player":
+			body.take_damage(dmg, source_position, knockback_strength)
+		else:
+			body.take_damage(dmg, source_position, knockback_strength, 1, is_crit)
+			_apply_exile_curse_if_active(body)
+	elif target_group == &"enemies":
+		DamageNumber.spawn_miss(body.get_parent(), body.global_position + Vector3(0.0, 1.8, 0.0))
+
+
+func _explode(impact_pos: Vector3) -> void:
+	# Larger impact burst scaled to the blast radius.
+	PrototypeAttackIndicator.spawn_explosion(self, impact_pos, blast_radius, _projectile_color())
+	# Damage every target inside the blast radius.
+	var targets: Array[Node3D] = SpatialGrid.query_radius(
+		global_position, blast_radius, target_group)
+	for target: Node3D in targets:
+		if not target.has_method(&"take_damage"):
+			continue
+		if target_group == &"enemies" and target.has_method(&"is_player_friendly") and target.is_player_friendly():
+			continue
+		if _roll_hit(target.global_position):
 			var is_crit := _roll_crit()
 			var dmg := _roll_damage(is_crit)
-			# Player and enemy take_damage signatures both accept the same
-			# leading args; player ignores the trailing (multistrike, is_crit)
-			# extras since its signature stops earlier.
 			if target_group == &"player":
-				body.take_damage(dmg, source_position, knockback_strength)
+				target.take_damage(dmg, source_position, knockback_strength)
 			else:
-				body.take_damage(dmg, source_position, knockback_strength, 1, is_crit)
-				# Count Exile — apply curse on player-fired projectile hits
-				# the same way PlayerCombat does for cone/aoe/hitscan paths.
-				# Projectiles run async from PlayerCombat so the perk-aggregate
-				# read happens here at impact.
-				_apply_exile_curse_if_active(body)
+				target.take_damage(dmg, source_position, knockback_strength, 1, is_crit)
+				_apply_exile_curse_if_active(target)
 		elif target_group == &"enemies":
-			DamageNumber.spawn_miss(body.get_parent(), body.global_position + Vector3(0.0, 1.8, 0.0))
-	_release()
+			DamageNumber.spawn_miss(target.get_parent(), target.global_position + Vector3(0.0, 1.8, 0.0))
 
 
 # Duplicates PlayerCombat.EXILE_CURSE_DURATION rather than reaching across

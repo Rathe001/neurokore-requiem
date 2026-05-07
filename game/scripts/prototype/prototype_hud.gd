@@ -616,7 +616,7 @@ func _on_resource_changed(current: int, max_value: int) -> void:
 	resource_label.text = "%d / %d" % [max(current, 0), max_value]
 
 func _on_player_died() -> void:
-	_show_banner(tr("HUD_BANNER_DIED"), 2.0)
+	pass
 
 
 # Build a 1px white outline that tracks the HP bar's frame. Visible

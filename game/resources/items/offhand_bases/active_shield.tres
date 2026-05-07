@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="OffhandBase" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/offhand_base.gd" id="1_offhand_base"]
+[ext_resource type="Resource" path="res://resources/skills/active_shield.tres" id="2_fire_skill"]
+
+[resource]
+script = ExtResource("1_offhand_base")
+id = &"active_shield"
+display_name = "Active Shield"
+glyph = "◊"
+fire_skill = ExtResource("2_fire_skill")

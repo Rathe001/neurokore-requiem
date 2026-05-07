@@ -44,7 +44,7 @@ func show_death(hardcore: bool) -> void:
 		_button.text = "Back to Main Menu"
 	else:
 		_title.text = "YOU HAVE DIED"
-		_message.text = "Steel yourself and try again."
+		_message.text = "...but death is not the end"
 		_button.text = "Continue"
 
 	# Fade the overlay in, then reveal the button after a short delay so

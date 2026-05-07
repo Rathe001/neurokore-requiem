@@ -282,11 +282,7 @@ func show_item(item: Item) -> void:
 	_name_label.text = item.name_key
 	_name_label.add_theme_color_override(&"font_color", _rarity_color(item.rarity))
 	_name_row.visible = true
-
-	# DPS in the top-right corner of the name row.
-	var dps_text := _compute_dps_text(item)
-	_dps_label.text = dps_text
-	_dps_label.visible = not dps_text.is_empty()
+	_dps_label.visible = false
 
 	var type_text := _build_type_text(item)
 	_type_label.text = type_text
@@ -407,12 +403,15 @@ func _build_type_text(item: Item) -> String:
 		return item.main_type
 	return "%s - %s" % [item.main_type, item.sub_type]
 
-func _compute_dps_text(item: Item) -> String:
-	if item.damage_max <= 0 or item.attack_speed <= 0.0:
-		return ""
+func _compute_dps(item: Item) -> float:
 	var avg_dmg := float(item.effective_damage_min() + item.effective_damage_max()) * 0.5
-	var dps := avg_dmg * item.effective_attack_speed()
-	return "DPS %.1f" % dps
+	var spd := item.effective_attack_speed()
+	var acc := clampf(item.effective_accuracy(), 0.0, 1.0)
+	# Use weapon crit if present, otherwise the global base chance.
+	var crit := item.effective_crit_chance() if item.crit_chance > 0.0 else 0.15
+	var crit_mult := 1.5
+	# eDPS = avg_damage × speed × accuracy × (1 + crit × (crit_mult - 1))
+	return avg_dmg * spd * acc * (1.0 + crit * (crit_mult - 1.0))
 
 func _build_stats_text(item: Item, equipped: Item = null) -> String:
 	var lines: Array[String] = []
@@ -425,6 +424,16 @@ func _build_stats_text(item: Item, equipped: Item = null) -> String:
 		lines.append("Item Level: %d" % item.item_level)
 	else:
 		lines.append("Item Level: %d (%d%% effective)" % [item.item_level, pct])
+	# DPS summary — the single most important number for weapon comparison.
+	# Factors in accuracy and crit so it reflects real expected output.
+	if item.damage_max > 0 and item.attack_speed > 0.0:
+		var new_dps := _compute_dps(item)
+		var line := "[color=#ffe680]DPS: %.1f[/color]" % new_dps
+		if equipped != null and equipped.damage_max > 0 and equipped.attack_speed > 0.0:
+			var old_dps := _compute_dps(equipped)
+			if not is_equal_approx(new_dps, old_dps):
+				line += " %s [color=#ffe680]%.1f[/color]" % [_compare_arrow(new_dps, old_dps), old_dps]
+		lines.append(line)
 	# Active offhand stats — shield pool, reduction, cooldown, duration.
 	if item.fire_skill != null and item.fire_skill.active_kind != Skill.ActiveKind.NONE:
 		var sk: Skill = item.fire_skill
@@ -651,10 +660,15 @@ func _build_skill_stats_text(skill: Skill, source: Item) -> String:
 					lines.append("[color=#88aaff]Stun: staggers enemies[/color]")
 		_:
 			# Standard weapon skill (cone, aoe, projectile, hitscan).
+			var dmg_mult := skill.damage_multiplier
 			if source != null and source.damage_max > 0:
-				lines.append("Damage: %d–%d" % [source.effective_damage_min(), source.effective_damage_max()])
+				var dmin := int(round(source.effective_damage_min() * dmg_mult))
+				var dmax := int(round(source.effective_damage_max() * dmg_mult))
+				lines.append("Damage: %d–%d" % [dmin, dmax])
 			elif skill.damage > 0:
-				lines.append("Damage: %d" % skill.damage)
+				lines.append("Damage: %d" % int(round(skill.damage * dmg_mult)))
+			if dmg_mult != 1.0:
+				lines.append("Damage Multiplier: %.1f×" % dmg_mult)
 			if source != null and source.attack_speed != 1.0:
 				lines.append("Speed: %.2f" % source.effective_attack_speed())
 			if source != null and source.crit_chance > 0.0:
@@ -664,6 +678,8 @@ func _build_skill_stats_text(skill: Skill, source: Item) -> String:
 			var eff_range := source.weapon_range if source != null and source.weapon_range > 0.0 else skill.skill_range
 			if eff_range > 0.0:
 				lines.append("Range: %.1f m" % eff_range)
+			if skill.blast_radius > 0.0:
+				lines.append("Blast Radius: %.1f m" % skill.blast_radius)
 			if skill.cooldown > 0.0:
 				lines.append("Cooldown: %.1fs" % skill.cooldown)
 			if skill.resource_cost > 0:
@@ -674,7 +690,10 @@ func _build_skill_stats_text(skill: Skill, source: Item) -> String:
 				Skill.TargetingMode.AOE_RADIAL:
 					lines.append("Targeting: AoE Radial")
 				Skill.TargetingMode.PROJECTILE:
-					lines.append("Targeting: Projectile")
+					if skill.blast_radius > 0.0:
+						lines.append("Targeting: AoE Projectile")
+					else:
+						lines.append("Targeting: Projectile")
 				Skill.TargetingMode.HITSCAN:
 					lines.append("Targeting: Hitscan")
 	return "\n".join(lines)

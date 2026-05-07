@@ -143,6 +143,10 @@ Code-side: read combat values via `Item.get_effective_modifier()` or the typed `
 
 **Why this shape:** no stat bloat or squish (numbers stay bounded), build retention (favorite items stay viable longer), and a meaningful endgame chase (above-cap ilvl drops become the prize without breaking the base curve). The 30% floor is intentional — aggressive linear decay would punish novelty.
 
+### Reforging (not yet implemented)
+
+Players can pay credits at an NPC or station to **reforge** a selected item, raising its `item_level` to match the player's current level and restoring its effectiveness to 100%. This lets strong early drops stay relevant indefinitely — a well-rolled rare from floor 1 can be carried into endgame if the player invests credits to keep it current. The cost should scale with the level gap so reforging a slightly outdated item is cheap, but jumping a 20-level gap is a deliberate investment.
+
 ## Equipment
 
 ### Weapons

@@ -14,8 +14,7 @@ const COLOR_OPENED := Color(0.35, 0.35, 0.35, 1.0)
 @export var test_weapon_base_paths: Array[String] = []
 ## When true, the crate spits out a starter weapon kit instead of the
 ## default item generation: 50/50 chance of (one common 2H weapon) vs
-## (one common 1H weapon + one common offhand), plus a head armor with
-## a light mod so the player can navigate dark zones. Set by
+## (one common 1H weapon + one common offhand). Set by
 ## LootCrateDoorPuzzle on the spawn-room chest.
 @export var starter_weapon_kit: bool = false
 ## Optional door this crate unlocks on first interact — mirrors the
@@ -70,20 +69,12 @@ func interact(_user: Node) -> void:
 		# "give the player a baseline kit but make new drops feel meaningful"
 		# tension. Effectiveness curve in Item.gd handles the actual scaling.
 		var starter_ilvl := 0
-		# 50/50: one 2H, OR one 1H + one offhand. Both branches roll at
-		# common rarity so the player's first kit is functional but
-		# unspectacular — variety / power comes from later drops.
+		# 50/50: one 2H weapon, OR one 1H weapon + one offhand.
 		if rng.randf() < 0.5:
 			items.append(ItemRoller.roll("2H Weapon", starter_ilvl, &"common", rng))
 		else:
 			items.append(ItemRoller.roll("1H Weapon", starter_ilvl, &"common", rng))
 			items.append(ItemRoller.roll("Offhand", starter_ilvl, &"common", rng))
-		# Head armor with a light mod so the player can use F to navigate.
-		items.append(ItemRoller.roll("Head Armor", starter_ilvl, &"common", rng))
-		# One of each offhand archetype for playtest — remove once
-		# active-offhand items roll naturally through ItemRoller.
-		items.append(_make_starter_shield_generator())
-		items.append(_make_starter_active_shield())
 	elif fixed_items.size() > 0:
 		items.assign(fixed_items)
 	elif test_weapon_base_paths.size() > 0:
@@ -137,41 +128,3 @@ func interact(_user: Node) -> void:
 func _apply_color(c: Color) -> void:
 	_mat.albedo_color = c
 	_mat.emission = c
-
-
-# Hand-built Shield Generator offhand for playtest. Equip in the
-# offhand slot; RMB activates a 25% damage-reduction buff with a
-# 25-damage absorption pool (level-1 baseline). Remove this helper
-# once active-offhand items roll naturally through ItemRoller.
-func _make_starter_shield_generator() -> Item:
-	var item := Item.new()
-	item.id = &"starter_shield_generator"
-	item.kind = &"offhand"
-	item.main_type = "Offhand"
-	item.sub_type = "Amplification Shield"
-	item.glyph = SlotRegistry.glyph_for_type("Offhand")
-	item.glyph_color = Color(0.85, 0.92, 1.0, 1.0)
-	item.rarity = &"common"
-	item.item_level = 0
-	item.name_key = "Shield Generator"
-	item.fire_skill = load("res://resources/skills/shield_generator.tres") as Skill
-	return item
-
-
-# Hand-built Active Shield offhand for playtest. Hold RMB to block
-# 100% of incoming damage up to a 50-damage pool. Releases without
-# cooldown; pool only refreshes after a break (post-cooldown). Same
-# remove-once-rolling caveat as the Shield Generator.
-func _make_starter_active_shield() -> Item:
-	var item := Item.new()
-	item.id = &"starter_active_shield"
-	item.kind = &"offhand"
-	item.main_type = "Offhand"
-	item.sub_type = "Active Shield"
-	item.glyph = SlotRegistry.glyph_for_type("Offhand")
-	item.glyph_color = Color(0.85, 0.95, 0.85, 1.0)
-	item.rarity = &"common"
-	item.item_level = 0
-	item.name_key = "Active Shield"
-	item.fire_skill = load("res://resources/skills/active_shield.tres") as Skill
-	return item

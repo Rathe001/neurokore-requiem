@@ -210,6 +210,62 @@ static func spawn_impact_burst(host: Node3D, world_pos: Vector3, color_override:
 	tween.tween_property(light, "light_energy", 0.0, IMPACT_DURATION).set_ease(Tween.EASE_IN)
 	tween.chain().tween_callback(inst.queue_free)
 
+# AoE explosion burst — like spawn_impact_burst but scaled to a blast_radius.
+# Produces a larger sphere + brighter flash + wider omni-light so the player
+# can read the AoE footprint at a glance.
+const EXPLOSION_DURATION := 0.35
+
+static func spawn_explosion(host: Node3D, world_pos: Vector3, blast_radius: float, color_override: Color = Color(0, 0, 0, 0)) -> void:
+	if host == null:
+		return
+	var parent: Node = host.get_parent()
+	if parent == null:
+		parent = host
+	var color := color_override
+	if color.a == 0.0:
+		color = _color_for_host(host)
+
+	var start_radius := blast_radius * 0.15
+	var end_radius := blast_radius * 0.7
+
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = Color(color.r, color.g, color.b, 0.85)
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.emission_enabled = true
+	mat.emission = color
+	mat.emission_energy_multiplier = 8.0
+
+	var mesh := SphereMesh.new()
+	mesh.radius = start_radius
+	mesh.height = start_radius * 2.0
+	mesh.radial_segments = 16
+	mesh.rings = 8
+
+	var inst := MeshInstance3D.new()
+	inst.mesh = mesh
+	inst.material_override = mat
+	parent.add_child(inst)
+	inst.global_position = world_pos
+
+	var light := OmniLight3D.new()
+	light.light_color = color
+	light.light_energy = 6.0
+	light.omni_range = blast_radius * 1.5
+	light.omni_attenuation = 1.5
+	light.shadow_enabled = false
+	light.light_volumetric_fog_energy = 0.0
+	inst.add_child(light)
+
+	var scale_target := end_radius / start_radius
+	var tween := inst.create_tween().set_parallel(true)
+	tween.tween_property(inst, "scale", Vector3.ONE * scale_target, EXPLOSION_DURATION).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_EXPO)
+	tween.tween_property(mat, "albedo_color:a", 0.0, EXPLOSION_DURATION).set_ease(Tween.EASE_IN)
+	tween.tween_property(mat, "emission_energy_multiplier", 0.0, EXPLOSION_DURATION * 0.8).set_ease(Tween.EASE_IN)
+	tween.tween_property(light, "light_energy", 0.0, EXPLOSION_DURATION).set_ease(Tween.EASE_IN)
+	tween.chain().tween_callback(inst.queue_free)
+
+
 static func spawn_hit_cone(host: Node3D, aim: Vector3, attack_range: float, cone_deg: float) -> void:
 	var forward := Vector3(aim.x, 0.0, aim.z)
 	if forward.length_squared() > 0.0001:

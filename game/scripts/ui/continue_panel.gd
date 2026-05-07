@@ -133,11 +133,14 @@ func _add_character_row(save: Dictionary) -> void:
 	row_btn.add_theme_stylebox_override(&"focus", StyleBoxEmpty.new())
 	row_btn.pressed.connect(func() -> void: character_selected.emit(save_id))
 
+	var inset := 6.0  # border (1) + padding (5) — keeps children clear of the border
 	var hbox := HBoxContainer.new()
 	hbox.add_theme_constant_override(&"separation", 10)
 	hbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	hbox.offset_left = 8.0
-	hbox.offset_right = -8.0
+	hbox.offset_left = inset
+	hbox.offset_right = -inset
+	hbox.offset_top = inset
+	hbox.offset_bottom = -inset
 	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row_btn.add_child(hbox)
 
@@ -205,7 +208,8 @@ func _add_character_row(save: Dictionary) -> void:
 
 func _make_avatar(class_id: StringName, gender: String, avatar_id: int) -> Control:
 	var container := ColorRect.new()
-	container.custom_minimum_size = Vector2(AVATAR_SIZE, AVATAR_SIZE)
+	container.custom_minimum_size = Vector2(AVATAR_SIZE, 0.0)
+	container.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	container.color = Color(0.06, 0.07, 0.1, 0.8)
 	container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
@@ -218,10 +222,6 @@ func _make_avatar(class_id: StringName, gender: String, avatar_id: int) -> Contr
 			img.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 			img.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 			img.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-			img.offset_left = 2.0
-			img.offset_top = 2.0
-			img.offset_right = -2.0
-			img.offset_bottom = -2.0
 			img.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			container.add_child(img)
 	return container

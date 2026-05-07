@@ -54,6 +54,12 @@ const WEAPON_BASE_PATHS: Dictionary = {
 	],
 }
 
+const OFFHAND_BASE_PATHS: Array[String] = [
+	"res://resources/items/offhand_bases/buckler.tres",
+	"res://resources/items/offhand_bases/shield_generator.tres",
+	"res://resources/items/offhand_bases/active_shield.tres",
+]
+
 const GRENADE_BASE_PATHS: Array[String] = [
 	"res://resources/items/grenade_bases/frag.tres",
 	"res://resources/items/grenade_bases/incendiary.tres",
@@ -79,6 +85,7 @@ func roll(main_type: String, item_level: int, rarity: StringName, rng: RandomNum
 		item.stat_modifiers[&"inventory_bonus"] = 4
 
 	_apply_weapon_base(item, main_type, rng)
+	_apply_offhand_base(item, main_type, rng)
 	_apply_grenade_base(item, main_type, rng)
 	_apply_head_light_mod(item, main_type, item_level, rng)
 
@@ -282,6 +289,21 @@ func _apply_weapon_base_direct(item: Item, base: WeaponBase, rng: RandomNumberGe
 	item.crit_chance = rng.randf_range(base.crit_chance_range.x, base.crit_chance_range.y)
 	item.accuracy = rng.randf_range(base.accuracy_range.x, base.accuracy_range.y)
 	item.weapon_range = rng.randf_range(base.weapon_range_range.x, base.weapon_range_range.y)
+
+func _apply_offhand_base(item: Item, main_type: String, rng: RandomNumberGenerator) -> void:
+	if main_type != "Offhand":
+		return
+	if OFFHAND_BASE_PATHS.is_empty():
+		return
+	var path: String = OFFHAND_BASE_PATHS[rng.randi_range(0, OFFHAND_BASE_PATHS.size() - 1)]
+	var base := load(path) as OffhandBase
+	if base == null:
+		push_warning("[ItemRoller] missing OffhandBase: %s" % path)
+		return
+	item.sub_type = base.display_name
+	item.fire_skill = base.fire_skill
+	if base.glyph != "":
+		item.glyph = base.glyph
 
 func _apply_grenade_base(item: Item, main_type: String, rng: RandomNumberGenerator) -> void:
 	if main_type != "Grenade":

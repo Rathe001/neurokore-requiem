@@ -41,6 +41,10 @@ enum GrenadeType {
 @export var knockback: float = 0.0
 @export var projectile_speed: float = 30.0
 @export var icon_color: Color = Color(0.7, 0.9, 1.0, 1.0)
+## Multiplier applied to the weapon's base damage when this skill fires.
+## 1.0 = weapon damage as-is. Values > 1.0 make the skill hit harder than
+## a normal attack (e.g. Charged Plasma at 2.5× weapon damage).
+@export var damage_multiplier: float = 1.0
 
 @export_group("Active Offhand")
 ## Set to anything other than NONE to make this skill an "active offhand"
@@ -63,7 +67,7 @@ enum GrenadeType {
 ## can immediately re-cast. A break (pool drained before expiry) is
 ## what triggers Skill.cooldown.
 @export var duration: float = 120.0
-## GRENADE: explosion radius in world units.
-@export var blast_radius: float = 3.0
+## Explosion radius in world units. Used by grenades and AoE projectiles.
+@export var blast_radius: float = 0.0
 ## GRENADE: detonation behaviour subtype.
 @export var grenade_type: GrenadeType = GrenadeType.FRAG

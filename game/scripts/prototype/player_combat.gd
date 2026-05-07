@@ -13,13 +13,13 @@ const PROTO_BASE_CRIT_MULT: float = 1.5
 # Point-blank accuracy penalty for ranged attacks. When a hitscan or
 # projectile resolves against a target within MELEE_RANGE_THRESHOLD of the
 # fire origin, accuracy is multiplied by MELEE_RANGE_ACCURACY_MULT — i.e.
-# half-misses at point blank. Pushes the player toward sprint-disengage
-# instead of tank-shooting at melee range. Melee skills (cone / AoE) are
-# unaffected; the penalty is specific to "shooting something next to you."
-# PrototypeProjectile mirrors these values to apply the same rule to
-# in-flight projectile hits.
+# 25% accuracy penalty at point blank. Pushes the player toward sprint-
+# disengage instead of tank-shooting at melee range. Melee skills (cone /
+# AoE) are unaffected; the penalty is specific to "shooting something next
+# to you." PrototypeProjectile mirrors these values to apply the same rule
+# to in-flight projectile hits.
 const MELEE_RANGE_THRESHOLD: float = 2.5
-const MELEE_RANGE_ACCURACY_MULT: float = 0.5
+const MELEE_RANGE_ACCURACY_MULT: float = 0.75
 
 # Count Exile constants. EXILE_CURSE_DURATION is the medium-long window
 # the curse persists after the FIRST hit. Subsequent hits while the curse
@@ -192,7 +192,9 @@ func _spawn_projectile(skill: Skill, aim: Vector3, eff_range: float, weapon: Ite
 	else:
 		proj.damage_min = skill.damage + _host._gear_base_damage_bonus
 		proj.damage_max = skill.damage + _host._gear_base_damage_bonus
-	proj.damage_mult = 1.0
+	proj.damage_mult = skill.damage_multiplier
+	proj.blast_radius = skill.blast_radius
+	proj.visual_scale = skill.damage_multiplier if skill.damage_multiplier > 1.0 else 1.0
 	# Spawn at the player's position (slightly elevated), plus the per-arm
 	# offset for Forged Amalgamation extras (right / left / above). Spawning
 	# ahead of the player would skip enemies standing right next to us;
@@ -283,8 +285,7 @@ func _roll_skill_damage(skill: Skill, weapon: Item) -> int:
 	else:
 		base = skill.damage
 	base += _host._gear_base_damage_bonus
-	var mult := 1.0
-	return int(round(float(base) * mult))
+	return int(round(float(base) * skill.damage_multiplier))
 
 func _crit_damage(base: int, is_crit: bool) -> int:
 	if not is_crit:
