@@ -29,7 +29,7 @@ func _ready() -> void:
 	UIThemeState.changed.connect(_apply_theme)
 	mouse_entered.connect(_on_mouse_entered)
 	mouse_exited.connect(_on_mouse_exited)
-	tree_exiting.connect(_on_mouse_exited)
+	tree_exiting.connect(_on_tree_exiting)
 	_cooldown_dim = ColorRect.new()
 	_cooldown_dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_cooldown_dim.color = Color(0.0, 0.0, 0.0, 0.65)
@@ -120,6 +120,11 @@ func _on_mouse_entered() -> void:
 func _on_mouse_exited() -> void:
 	if is_inside_tree():
 		get_tree().call_group(&"interactable_tooltip", &"hide_tooltip")
+
+
+func _on_tree_exiting() -> void:
+	_on_mouse_exited()
+	UIThemeState.changed.disconnect(_apply_theme)
 
 
 func _resolve_source_item() -> Item:

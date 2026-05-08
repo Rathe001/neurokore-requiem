@@ -31,6 +31,7 @@ var accuracy: float = 1.0
 var crit_chance: float = 0.0
 var knockback_strength: float = 0.0
 var source_position: Vector3 = Vector3.ZERO
+var _ray_query := PhysicsRayQueryParameters3D.new()
 ## Skip the point-blank accuracy penalty. Set by drones and other sources
 ## that always fire at close range by design.
 var ignore_melee_penalty: bool = false
@@ -120,10 +121,12 @@ func _physics_process(delta: float) -> void:
 	# the new position.
 	var space := get_world_3d().direct_space_state
 	if space != null:
-		var query := PhysicsRayQueryParameters3D.create(from, to, WORLD_LAYER_MASK)
-		query.collide_with_areas = false
-		query.collide_with_bodies = true
-		var hit := space.intersect_ray(query)
+		_ray_query.from = from
+		_ray_query.to = to
+		_ray_query.collision_mask = WORLD_LAYER_MASK
+		_ray_query.collide_with_areas = false
+		_ray_query.collide_with_bodies = true
+		var hit := space.intersect_ray(_ray_query)
 		if not hit.is_empty():
 			global_position = hit.position
 			_traveled += from.distance_to(hit.position)

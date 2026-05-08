@@ -42,6 +42,14 @@ func _ready() -> void:
 	NetState.game_starting.connect(_on_game_starting)
 
 
+func _exit_tree() -> void:
+	NetState.lobby_state_changed.disconnect(_refresh)
+	NetState.lobby_chat_received.disconnect(_on_chat_received)
+	NetState.lobby_member_joined.disconnect(_on_member_joined)
+	NetState.lobby_member_left.disconnect(_on_member_left)
+	NetState.game_starting.disconnect(_on_game_starting)
+
+
 # Called by the parent (StartupScreen) when this panel becomes visible.
 # Wipes any stale chat log from a previous lobby and pulls a fresh
 # snapshot from NetState.

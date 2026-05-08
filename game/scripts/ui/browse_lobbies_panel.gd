@@ -25,6 +25,10 @@ func _ready() -> void:
 	NetState.lobby_match_list_updated.connect(_on_match_list)
 
 
+func _exit_tree() -> void:
+	NetState.lobby_match_list_updated.disconnect(_on_match_list)
+
+
 func refresh() -> void:
 	_clear_list()
 	_empty_label.text = "MENU_MP_BROWSE_LOADING"

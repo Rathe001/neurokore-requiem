@@ -84,13 +84,8 @@ func zone_level_offset() -> int:
 ## Layout: { stat_id: [[bool]*8]*5 } — 5 tiers × 8 nodes each.
 var talent_allocations: Dictionary = {}
 
-## Spent talent points for kore nodes.
-## Layout: [[bool]*4]*3 — 3 tiers × 4 nodes.
-var kore_node_allocations: Array = []
-
 var _cached_tiers: Dictionary = {}
 var _cached_origin_tier: int = -1
-var _cached_kore_nodes_tier: int = -1
 
 func _ready() -> void:
 	pass
@@ -116,7 +111,6 @@ func reset() -> void:
 	saved_level_hp_bonus = 0
 	saved_health = -1
 	talent_allocations.clear()
-	kore_node_allocations.clear()
 	_reset_tier_cache()
 
 # ── Class / spec identity ─────────────────────────────────────────────────────
@@ -161,15 +155,6 @@ func set_talent_alloc(stat: StringName, tier: int, node: int, allocated: bool) -
 	talent_allocations[stat][tier][node] = allocated
 	talents_changed.emit()
 
-func set_kore_node_alloc(tier: int, node: int, allocated: bool) -> void:
-	if kore_node_allocations.is_empty():
-		var rows: Array = []
-		for _i in 3:
-			rows.append(_make_node_row(4))
-		kore_node_allocations = rows
-	kore_node_allocations[tier][node] = allocated
-	talents_changed.emit()
-
 static func _make_node_row(count: int) -> Array:
 	var row: Array = []
 	row.resize(count)
@@ -183,10 +168,6 @@ func get_talent_points_spent() -> int:
 			for allocated in node_row:
 				if allocated:
 					total += 1
-	for tier_row in kore_node_allocations:
-		for allocated in tier_row:
-			if allocated:
-				total += 1
 	return total
 
 ## True if a stat tree node has a point allocated (regardless of tier unlock state).
@@ -202,15 +183,8 @@ func is_node_active(stat_id: StringName, tier: int, node: int) -> bool:
 		return false
 	return tier < get_unlocked_tier(stat_id)
 
-## True if a kore node is allocated AND its tier is currently unlocked.
-func is_kore_node_active(tier: int, node: int) -> bool:
-	if kore_node_allocations.is_empty() or not kore_node_allocations[tier][node]:
-		return false
-	return is_kore_node_tier_unlocked(tier)
-
 func reset_talents() -> void:
 	talent_allocations.clear()
-	kore_node_allocations.clear()
 	_reset_tier_cache()
 	talents_changed.emit()
 
@@ -246,11 +220,6 @@ func _do_level_up() -> void:
 func _reset_tier_cache() -> void:
 	_cached_tiers.clear()
 	_cached_origin_tier = -1
-	_cached_kore_nodes_tier = -1
-
-## Kore nodes are removed; always returns false for now.
-func is_kore_node_tier_unlocked(_tier: int) -> bool:
-	return false
 
 const TALENT_TIER_COUNT := 5
 ## Origin class players can access same-origin trees up to this tier (exclusive).

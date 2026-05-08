@@ -89,7 +89,7 @@ func _ready() -> void:
 	_update_avatar_panel()
 	_repaint_xp(PlayerState.xp, PlayerState.xp_to_next)
 	UIThemeState.changed.connect(_apply_theme)
-	PlayerState.level_changed.connect(func(_n: int, _o: int) -> void: _update_avatar_panel())
+	PlayerState.level_changed.connect(_on_level_changed)
 	PlayerState.xp_changed.connect(_repaint_xp)
 	# Buffs bar repopulates on any of the signals that can shift the active
 	# perk set: gear swap (stats), tier crossing, class/spec change. PerkState
@@ -97,8 +97,8 @@ func _ready() -> void:
 	# upstream signals too so display stays accurate even if PerkState is
 	# briefly out of sync during a recompute cycle.
 	PerkState.perks_changed.connect(_update_buffs_bar)
-	PlayerState.class_changed.connect(func(_id: StringName) -> void: _update_buffs_bar())
-	PlayerState.spec_changed.connect(func(_id: StringName) -> void: _update_buffs_bar())
+	PlayerState.class_changed.connect(_on_class_or_spec_changed)
+	PlayerState.spec_changed.connect(_on_class_or_spec_changed)
 	_update_buffs_bar()
 	var player := get_tree().get_first_node_in_group(&"player")
 	if player == null:
@@ -122,7 +122,7 @@ func _ready() -> void:
 	# entry. Cheaper to rebuild the bar than to reach in and surgically
 	# patch one Label — the bar has at most ~6 entries.
 	if player.has_signal(&"charm_count_changed"):
-		player.charm_count_changed.connect(func(_c: int, _m: int) -> void: _update_buffs_bar())
+		player.charm_count_changed.connect(_on_charm_count_changed)
 	if player.has_signal(&"shield_buff_changed"):
 		player.shield_buff_changed.connect(_on_shield_buff_changed)
 	if player.has_signal(&"credits_changed"):
@@ -138,7 +138,39 @@ func _ready() -> void:
 	_build_talents_panel()
 	_build_talent_point_button()
 	PlayerState.talents_changed.connect(_refresh_talent_button)
-	PlayerState.leveled_up.connect(func(_lv: int, _hp: int) -> void: _refresh_talent_button())
+	PlayerState.leveled_up.connect(_on_leveled_up)
+
+func _exit_tree() -> void:
+	UIThemeState.changed.disconnect(_apply_theme)
+	PlayerState.level_changed.disconnect(_on_level_changed)
+	PlayerState.xp_changed.disconnect(_repaint_xp)
+	PerkState.perks_changed.disconnect(_update_buffs_bar)
+	PlayerState.class_changed.disconnect(_on_class_or_spec_changed)
+	PlayerState.spec_changed.disconnect(_on_class_or_spec_changed)
+	PerkState.perk_gained.disconnect(_on_perk_gained)
+	PlayerState.talents_changed.disconnect(_refresh_talent_button)
+	PlayerState.leveled_up.disconnect(_on_leveled_up)
+	if InventoryState.equipment_changed.is_connected(_on_equipment_changed):
+		InventoryState.equipment_changed.disconnect(_on_equipment_changed)
+	if TalentState.granted_skills_changed.is_connected(_on_granted_skills_changed):
+		TalentState.granted_skills_changed.disconnect(_on_granted_skills_changed)
+
+
+func _on_level_changed(_new: int, _old: int) -> void:
+	_update_avatar_panel()
+
+
+func _on_class_or_spec_changed(_id: StringName) -> void:
+	_update_buffs_bar()
+
+
+func _on_charm_count_changed(_c: int, _m: int) -> void:
+	_update_buffs_bar()
+
+
+func _on_leveled_up(_lv: int, _hp: int) -> void:
+	_refresh_talent_button()
+
 
 func _apply_theme() -> void:
 	root.theme = UIThemeState.theme

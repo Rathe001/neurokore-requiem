@@ -93,13 +93,30 @@ func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_to_group(&"ui_modal")
 	theme = UIThemeState.theme
-	UIThemeState.changed.connect(func() -> void: theme = UIThemeState.theme; _repaint())
+	UIThemeState.changed.connect(_on_theme_changed)
 	PlayerState.class_changed.connect(_on_player_class_changed)
 	PlayerState.spec_changed.connect(_on_player_class_changed)
 	PlayerState.talents_changed.connect(_repaint)
-	PlayerState.leveled_up.connect(func(_lv: int, _hp: int) -> void: _repaint())
+	PlayerState.leveled_up.connect(_on_leveled_up)
 	_load_perk_ladders()
 	_build_layout()
+
+func _exit_tree() -> void:
+	UIThemeState.changed.disconnect(_on_theme_changed)
+	PlayerState.class_changed.disconnect(_on_player_class_changed)
+	PlayerState.spec_changed.disconnect(_on_player_class_changed)
+	PlayerState.talents_changed.disconnect(_repaint)
+	PlayerState.leveled_up.disconnect(_on_leveled_up)
+
+
+func _on_theme_changed() -> void:
+	theme = UIThemeState.theme
+	_repaint()
+
+
+func _on_leveled_up(_lv: int, _hp: int) -> void:
+	_repaint()
+
 
 func _gui_input(event: InputEvent) -> void:
 	if not (event is InputEventMouseButton):

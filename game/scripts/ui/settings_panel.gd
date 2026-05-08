@@ -74,6 +74,11 @@ func _ready() -> void:
 	_refresh_display_options()
 	DisplayState.changed.connect(_refresh_display_options)
 
+
+func _exit_tree() -> void:
+	DisplayState.changed.disconnect(_refresh_display_options)
+
+
 func _make_option_row(label_key: String, option: OptionButton) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override(&"separation", 8)

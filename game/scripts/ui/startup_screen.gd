@@ -35,6 +35,12 @@ func _ready() -> void:
 	NetState.lobby_created_result.connect(_on_lobby_created_result)
 	NetState.lobby_joined_result.connect(_on_lobby_joined_result)
 
+func _exit_tree() -> void:
+	UIThemeState.changed.disconnect(_on_theme_changed)
+	NetState.lobby_created_result.disconnect(_on_lobby_created_result)
+	NetState.lobby_joined_result.disconnect(_on_lobby_joined_result)
+
+
 func _build_settings_panel() -> void:
 	_settings_panel = SettingsPanel.new()
 	_settings_panel.visible = false

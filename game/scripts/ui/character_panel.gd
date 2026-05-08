@@ -85,6 +85,14 @@ func _process(_delta: float) -> void:
 	if _held_cursor != null:
 		_held_cursor.position = get_viewport().get_mouse_position() - Vector2(12, 12)
 
+func _exit_tree() -> void:
+	UIThemeState.changed.disconnect(_on_theme_changed)
+	InventoryState.capacity_changed.disconnect(_on_capacity_changed)
+	PerkState.perks_changed.disconnect(_refresh_extra_weapon_slot_visibility)
+	if PlayerState.leveled_up.is_connected(_on_leveled_up):
+		PlayerState.leveled_up.disconnect(_on_leveled_up)
+
+
 func _on_theme_changed() -> void:
 	theme = UIThemeState.theme
 	var p := UIThemeState.palette

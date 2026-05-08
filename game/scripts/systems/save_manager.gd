@@ -223,7 +223,6 @@ func _serialize_player() -> Dictionary:
 		"level_hp_bonus": level_hp_bonus,
 		"health_current": health_current,
 		"talent_allocations": _serialize_talent_allocations(),
-		"kore_node_allocations": PlayerState.kore_node_allocations.duplicate(true),
 	}
 
 
@@ -244,8 +243,6 @@ func _deserialize_player(data: Dictionary) -> void:
 	PlayerState.saved_level_hp_bonus = int(data.get("level_hp_bonus", 0))
 	PlayerState.saved_health = int(data.get("health_current", -1))
 	_deserialize_talent_allocations(data.get("talent_allocations", {}))
-	var kore: Array = data.get("kore_node_allocations", [])
-	PlayerState.kore_node_allocations = kore if not kore.is_empty() else []
 	# Trigger recomputation in dependent systems.
 	PlayerState.class_changed.emit(PlayerState.class_id)
 	PlayerState.spec_changed.emit(PlayerState.spec_id)

@@ -19,6 +19,11 @@ func _ready() -> void:
 	_build_version_stamp()
 	UIThemeState.changed.connect(_on_theme_changed)
 
+
+func _exit_tree() -> void:
+	UIThemeState.changed.disconnect(_on_theme_changed)
+
+
 func _build_version_stamp() -> void:
 	var label := Label.new()
 	label.text = BuildInfo.display_string()

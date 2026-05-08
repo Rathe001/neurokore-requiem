@@ -38,6 +38,11 @@ func _ready() -> void:
 	_build_layout()
 	UIThemeState.changed.connect(_on_theme_changed)
 
+
+func _exit_tree() -> void:
+	UIThemeState.changed.disconnect(_on_theme_changed)
+
+
 func _on_theme_changed() -> void:
 	theme = UIThemeState.theme
 

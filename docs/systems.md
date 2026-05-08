@@ -79,7 +79,7 @@ The staircase is intentional: every breakpoint reads as "a tier earned" and the 
 
 Traction does not replace per-element resistance. A fire pool still does damage through `fire_resistance` like any fire damage; traction layers on top as an additional reduction specifically for *ground-source* damage.
 
-### Behavior mods
+### Behavior mods *(design intent — not yet implemented)*
 
 Each gear slot (excluding weapons and offhands, which define behavior through their base type) can roll one **behavior mod**. Mods are the identity layer — two chest pieces with identical stats but different mods play differently.
 
@@ -156,7 +156,7 @@ Categorized by **damage type** (energy / kinetic / elemental / melee, plus class
 - **1H weapons** define Fire only. Alt Fire comes from the offhand.
 - **2H weapons** always define Fire. Alt Fire is *optional* — a sledgehammer has no alt fire, but an M4 has a grenade launcher. Augments can add an alt fire to weapons that don't have one natively.
 
-The weapon-type list will grow significantly. Each new weapon type should change the player's tactical approach, not just provide different numbers.
+Currently four base weapon types exist (`melee_1h`, `ranged_1h`, `melee_2h`, `ranged_2h`). Named sub-types (Pistol, SMG, Combat Knife, etc.) are future work — each new weapon type should change the player's tactical approach, not just provide different numbers.
 
 ### Offhands
 

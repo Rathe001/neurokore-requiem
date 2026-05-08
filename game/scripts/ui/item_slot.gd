@@ -37,8 +37,15 @@ func _ready() -> void:
 	UIThemeState.changed.connect(_on_theme_changed)
 	mouse_entered.connect(_on_mouse_entered)
 	mouse_exited.connect(_on_mouse_exited)
-	tree_exiting.connect(_on_mouse_exited)
+	tree_exiting.connect(_on_tree_exiting)
 	_refresh()
+
+
+func _on_tree_exiting() -> void:
+	_on_mouse_exited()
+	InventoryState.equipment_changed.disconnect(_on_equipment_changed)
+	InventoryState.inventory_changed.disconnect(_on_inventory_changed)
+	UIThemeState.changed.disconnect(_on_theme_changed)
 
 func _on_theme_changed() -> void:
 	theme = UIThemeState.theme
