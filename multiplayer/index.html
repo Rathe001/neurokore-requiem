@@ -1670,7 +1670,7 @@
   <a href="#phase-5-loot" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Phase 5 — Loot
+        Phase 5 — Loot ✅
       
     </span>
   </a>
@@ -1997,8 +1997,10 @@
 <h3 id="phase-4-combat-events">Phase 4 — Combat events ✅<a class="headerlink" href="#phase-4-combat-events" title="Permanent link">&para;</a></h3>
 <p>All player damage sources (hitscan, projectile, grenade, trap, telekinesis, doomsayer DoT) route through <code>PrototypeEnemy.deal_damage()</code> — clients send <code>request_damage.rpc_id(1, ...)</code>, host applies authoritatively. Host broadcasts hit visuals (damage numbers, hit flash, squash) to all clients via <code>_client_show_hit</code> RPC on each enemy.</p>
 <p>New <code>CombatVisuals</code> autoload wraps <code>PrototypeAttackIndicator</code> with RPC broadcasting: beams, hit cones, hit radials, impact bursts, explosions, and telegraphs (cone + radial) are all visible to every peer. Cosmetic-only, unreliable transport — a dropped visual has zero gameplay impact. Remote clients receive world-position + is_player flag; a temporary anchor Node3D is created at the origin for the indicator to attach to, then freed (immediately for impact visuals, delayed for telegraphs that parent to the host).</p>
-<h3 id="phase-5-loot">Phase 5 — Loot<a class="headerlink" href="#phase-5-loot" title="Permanent link">&para;</a></h3>
-<p>Loot drop with <code>owner_id</code> field as designed. Manual-drop UI / inventory action ("Drop" button or drag-out-of-inventory). Pickup validation. Visual distinction between owned and free-for-all drops.</p>
+<h3 id="phase-5-loot">Phase 5 — Loot ✅<a class="headerlink" href="#phase-5-loot" title="Permanent link">&para;</a></h3>
+<p>New <code>PickupsContainer</code> (sibling of <code>EnemiesContainer</code>) holds all world pickups with a <code>MultiplayerSpawner</code> using a custom <code>spawn_function</code>. Item data is serialized via <code>Item.to_dict()</code> / <code>Item.from_dict()</code> (Skills stored as <code>resource_path</code> strings) and deserialized on every peer.</p>
+<p>Per-player instanced drops: when an enemy dies in MP, the host rolls one independent item per lobby member, each stamped with that player's peer id as <code>owner_id</code>. Non-owned item labels are dimmed to 35% alpha. Credits are shared (not instanced) and auto-collect for the nearest local player.</p>
+<p>Host-validated pickup: clients request via RPC on PickupsContainer (persistent node); host validates <code>owner_id</code>, confirms with serialized item data, then <code>queue_free</code>s (spawner replicates removal). Loot crates use the same per-player instanced drop pattern with host-only open + visual RPC. Manual inventory drops have empty <code>owner_id</code> (anyone can pick up). EntityPool is bypassed for credits in MP (spawner needs fresh instances); SP retains pooling.</p>
 <h3 id="phase-6-world-state">Phase 6 — World state<a class="headerlink" href="#phase-6-world-state" title="Permanent link">&para;</a></h3>
 <p>Level / zone transition sync (host triggers, all clients follow). Door / switch / interactable state replicated. Host's local save now stores world progress (current zone, switches flipped, bosses killed). Other players' saves only store their character data.</p>
 <h3 id="phase-7-drop-in">Phase 7 — Drop-in<a class="headerlink" href="#phase-7-drop-in" title="Permanent link">&para;</a></h3>
