@@ -19,6 +19,7 @@ var _velocity: Vector3 = Vector3.ZERO
 var _popping: bool = true
 var _player_ref: Node3D
 var _amount_label: Label3D = null
+var _collecting: bool = false
 
 func _ready() -> void:
 	_init_pickup()
@@ -26,7 +27,8 @@ func _ready() -> void:
 func _init_pickup() -> void:
 	add_to_group(&"pickups")
 	SpatialGrid.register(self, &"pickups")
-	_player_ref = get_tree().get_first_node_in_group(&"player") as Node3D
+	_player_ref = _find_local_player()
+	_collecting = false
 	_ensure_amount_label()
 	_randomize_pop()
 
@@ -68,6 +70,7 @@ func reset() -> void:
 func _pool_release() -> void:
 	remove_from_group(&"pickups")
 	_popping = true
+	_collecting = false
 	_velocity = Vector3.ZERO
 	_player_ref = null
 
@@ -88,8 +91,10 @@ func _tick_pop(delta: float) -> void:
 		_popping = false
 
 func _tick_settled(delta: float) -> void:
+	if _collecting:
+		return
 	if _player_ref == null or not is_instance_valid(_player_ref):
-		_player_ref = get_tree().get_first_node_in_group(&"player") as Node3D
+		_player_ref = _find_local_player()
 	var player := _player_ref
 	if player == null:
 		return
@@ -103,9 +108,38 @@ func _tick_settled(delta: float) -> void:
 		global_position += (to_player / dist) * MAGNET_SPEED * delta
 
 func _collect(player: Node) -> void:
-	if player.has_method(&"add_credits"):
-		player.add_credits(amount)
-	SpatialGrid.unregister(self)
-	# Deferred — _collect runs from _physics_process, and EntityPool.release
-	# removes a CollisionObject from the tree, which physics forbids mid-step.
-	EntityPool.release.call_deferred(self)
+	if _collecting:
+		return
+	# SP path: direct collect + return to pool.
+	if not NetState.is_in_lobby():
+		if player.has_method(&"add_credits"):
+			player.add_credits(amount)
+		SpatialGrid.unregister(self)
+		# Deferred — _collect runs from _physics_process, and EntityPool.release
+		# removes a CollisionObject from the tree, which physics forbids mid-step.
+		EntityPool.release.call_deferred(self)
+		return
+	# MP path: request from host via PickupsContainer. Mark _collecting
+	# to prevent duplicate requests while waiting for the host confirm.
+	_collecting = true
+	var container := get_tree().get_first_node_in_group(&"pickups_container")
+	if container != null:
+		# Host collects inline (rpc_id to self doesn't fire for server).
+		if NetState.is_host():
+			if player.has_method(&"add_credits"):
+				player.add_credits(amount)
+			SpatialGrid.unregister(self)
+			queue_free.call_deferred()
+		else:
+			container.request_credit_collect.rpc_id(1, get_path())
+
+
+## In MP, find only the LOCAL player (the one with multiplayer authority)
+## so credits magnet to the player on this machine, not a remote avatar.
+func _find_local_player() -> Node3D:
+	if not NetState.is_in_lobby():
+		return get_tree().get_first_node_in_group(&"player") as Node3D
+	for node in get_tree().get_nodes_in_group(&"player"):
+		if node is Node3D and node.is_multiplayer_authority():
+			return node as Node3D
+	return null

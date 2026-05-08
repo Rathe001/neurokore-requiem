@@ -2487,13 +2487,21 @@ func _die() -> void:
 func _drop_credits() -> void:
 	if randf() >= credit_drop_chance:
 		return
+	var drop_pos := global_position + Vector3(0.0, 1.0, 0.0)
+	var amt := randi_range(CREDIT_DROP_MIN, CREDIT_DROP_MAX)
+	# MP: spawn via PickupsContainer so the spawner replicates to all peers.
+	var container := _find_pickups_container()
+	if container != null and NetState.is_in_lobby():
+		container.spawn_credit(amt, drop_pos)
+		return
+	# SP: use EntityPool for horde-scale perf.
 	var parent := get_parent()
 	if parent == null:
 		return
 	var pickup := EntityPool.acquire(CREDIT_PICKUP_SCENE)
-	pickup.amount = randi_range(CREDIT_DROP_MIN, CREDIT_DROP_MAX)
-	parent.add_child(pickup)
-	pickup.global_position = global_position + Vector3(0.0, 1.0, 0.0)
+	pickup.amount = amt
+	(container if container != null else parent).add_child(pickup)
+	pickup.global_position = drop_pos
 	pickup.reset()
 
 func _drop_item() -> void:
@@ -2504,7 +2512,26 @@ func _drop_item() -> void:
 		var drop_chance := ITEM_DROP_CHANCE_BASE + ITEM_DROP_CHANCE_PER_LEVEL * float(maxi(level - 1, 0))
 		if randf() >= drop_chance:
 			return
-	var parent := get_parent()
+	var drop_pos := global_position + Vector3(0.0, 1.0, 0.0)
+	var container := _find_pickups_container()
+	# MP: per-player instanced drops — roll one item per lobby member.
+	if NetState.is_in_lobby() and container != null:
+		for peer_id_v in NetState.lobby_members.keys():
+			var peer_id: int = int(peer_id_v)
+			var rng := RandomNumberGenerator.new()
+			rng.randomize()
+			var ilvl := maxi(1, level + rng.randi_range(ITEM_DROP_ILVL_OFFSET_MIN, ITEM_DROP_ILVL_OFFSET_MAX))
+			var item: Item
+			if named_drop:
+				var pool := SlotRegistry.MAIN_TYPES
+				var main_type: String = pool[rng.randi_range(0, pool.size() - 1)]
+				item = ItemRoller.roll(main_type, ilvl, named_monster.guaranteed_drop_rarity, rng)
+			else:
+				item = ItemRoller.roll_random(ilvl, rng)
+			container.spawn_item(item, drop_pos, StringName(str(peer_id)))
+		return
+	# SP: single drop, no owner.
+	var parent := container if container != null else get_parent()
 	if parent == null:
 		return
 	var rng := RandomNumberGenerator.new()
@@ -2512,19 +2539,25 @@ func _drop_item() -> void:
 	var ilvl := maxi(1, level + rng.randi_range(ITEM_DROP_ILVL_OFFSET_MIN, ITEM_DROP_ILVL_OFFSET_MAX))
 	var item: Item
 	if named_drop:
-		# Pick a main_type at random + force the rarity to the named's
-		# floor. Treats the floor as "drops AT this rarity" rather than
-		# "rolls at this or higher" — keeps the reward predictable; later
-		# we can layer in chance-of-upgrade-tier on top.
 		var pool := SlotRegistry.MAIN_TYPES
 		var main_type: String = pool[rng.randi_range(0, pool.size() - 1)]
 		item = ItemRoller.roll(main_type, ilvl, named_monster.guaranteed_drop_rarity, rng)
 	else:
 		item = ItemRoller.roll_random(ilvl, rng)
-	var pickup := ITEM_PICKUP_SCENE.instantiate()
-	pickup.configure(item)
-	parent.add_child(pickup)
-	pickup.global_position = global_position + Vector3(0.0, 1.0, 0.0)
+	if container != null:
+		container.spawn_item(item, drop_pos)
+	else:
+		var pickup := ITEM_PICKUP_SCENE.instantiate()
+		pickup.configure(item)
+		parent.add_child(pickup)
+		pickup.global_position = drop_pos
+
+
+func _find_pickups_container() -> PickupsContainer:
+	var pc := get_tree().get_first_node_in_group(&"pickups_container")
+	if pc is PickupsContainer:
+		return pc as PickupsContainer
+	return null
 
 func _become_corpse() -> void:
 	# If reset_level released this enemy back to the pool during DEATH_HOLD,

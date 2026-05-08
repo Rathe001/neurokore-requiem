@@ -1607,13 +1607,34 @@ func get_shield_buff_state() -> Dictionary:
 
 
 func drop_item(item: Item) -> void:
+	var drop_pos := global_position + Vector3(randf_range(-0.5, 0.5), 0.0, randf_range(-0.5, 0.5))
+	# Manual drops have no owner — anyone can pick them up.
+	var container := get_tree().get_first_node_in_group(&"pickups_container") as PickupsContainer
+	if container != null:
+		if NetState.is_in_lobby() and NetState.is_client():
+			# Client: ask host to spawn the drop for us.
+			_request_drop_item.rpc_id(1, item.to_dict(), drop_pos.x, drop_pos.z)
+			return
+		container.spawn_item(item, drop_pos)
+		return
+	# Fallback: direct instantiate (no PickupsContainer in scene).
 	var parent := get_parent()
 	if parent == null:
 		return
 	var pickup := ITEM_PICKUP_SCENE.instantiate() as Node3D
 	pickup.configure(item)
 	parent.add_child(pickup)
-	pickup.global_position = global_position + Vector3(randf_range(-0.5, 0.5), 0.0, randf_range(-0.5, 0.5))
+	pickup.global_position = drop_pos
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _request_drop_item(item_data: Dictionary, pos_x: float, pos_z: float) -> void:
+	if not multiplayer.is_server():
+		return
+	var dropped_item := Item.from_dict(item_data)
+	var container := get_tree().get_first_node_in_group(&"pickups_container") as PickupsContainer
+	if container != null:
+		container.spawn_item(dropped_item, Vector3(pos_x, 0.0, pos_z))
 
 func _apply_light_item() -> void:
 	if visual == null:

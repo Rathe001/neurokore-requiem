@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=10 format=3]
 
 ; Generic level scene: WorldEnvironment + LevelBuilder + EnemiesContainer +
 ; PlayersContainer + HUD + Camera. The LevelBuilder's `layout` export
@@ -12,6 +12,7 @@
 [ext_resource type="Script" path="res://scripts/prototype/prototype_camera.gd" id="script_camera"]
 [ext_resource type="Script" path="res://scripts/prototype/players_container.gd" id="script_players_container"]
 [ext_resource type="Script" path="res://scripts/prototype/enemies_container.gd" id="script_enemies_container"]
+[ext_resource type="Script" path="res://scripts/prototype/pickups_container.gd" id="script_pickups_container"]
 [ext_resource type="Script" path="res://scripts/level/level_builder.gd" id="script_builder"]
 [ext_resource type="PackedScene" path="res://scenes/prototype/prototype_hud.tscn" id="scene_hud"]
 [ext_resource type="Resource" path="res://resources/level/layouts/procgen_demo.tres" id="layout"]
@@ -72,6 +73,12 @@ navigation_mesh = SubResource("navmesh_level")
 ; MultiplayerSpawner inside replicates spawn / despawn to all peers.
 [node name="EnemiesContainer" type="Node3D" parent="."]
 script = ExtResource("script_enemies_container")
+
+; PickupsContainer holds all world pickups (items + credits). In
+; multiplayer, a MultiplayerSpawner with a custom spawn_function
+; replicates drops to all peers with serialized item data.
+[node name="PickupsContainer" type="Node3D" parent="."]
+script = ExtResource("script_pickups_container")
 
 ; PlayersContainer's _ready spawns the local player BEFORE this node's
 ; siblings (HUD, Camera) hit _ready, so their group lookups for &"player"

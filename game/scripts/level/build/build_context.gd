@@ -10,6 +10,9 @@ var root: Node3D
 ## this node so the MultiplayerSpawner can replicate them in MP. Defaults
 ## to root when no dedicated container is found (backwards compat).
 var enemies: Node3D
+## Container node for spawned pickups (items + credits). In MP the
+## PickupsContainer's MultiplayerSpawner replicates drops to all peers.
+var pickups: Node3D
 var layout: LevelLayout
 ## The active LevelGraph used by this build. For graph-mode layouts this is
 ## layout.graph; for generator-mode it's the transient graph the generator
@@ -50,6 +53,8 @@ static func create(root_: Node3D, layout_: LevelLayout, graph_: LevelGraph = nul
 	ctx.root = root_
 	var ec := root_.get_node_or_null("EnemiesContainer") as Node3D
 	ctx.enemies = ec if ec != null else root_
+	var pc := root_.get_node_or_null("PickupsContainer") as Node3D
+	ctx.pickups = pc if pc != null else root_
 	ctx.layout = layout_
 	# Caller passes the resolved graph (generator output OR layout.graph).
 	# Falling back to layout.graph keeps backward compat with anything that

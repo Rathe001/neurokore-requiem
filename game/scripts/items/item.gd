@@ -127,3 +127,83 @@ func effective_crit_chance() -> float:
 
 func effective_accuracy() -> float:
 	return clampf(accuracy * effective_multiplier(), 0.0, 1.0)
+
+
+# ── Network serialization ──────────────────────────────────────────
+# Used by PickupsContainer to replicate item drops across MP peers.
+# Colors become [r,g,b,a] arrays; Skill resources become resource_path
+# strings. Everything else is a primitive that Godot can send natively.
+
+func to_dict() -> Dictionary:
+	var d: Dictionary = {}
+	d[&"id"] = String(id)
+	d[&"name_key"] = name_key
+	d[&"description_key"] = description_key
+	d[&"kind"] = String(kind)
+	d[&"main_type"] = main_type
+	d[&"sub_type"] = sub_type
+	d[&"rarity"] = String(rarity)
+	d[&"glyph"] = glyph
+	d[&"glyph_color"] = [glyph_color.r, glyph_color.g, glyph_color.b, glyph_color.a]
+	d[&"item_level"] = item_level
+	d[&"two_handed"] = two_handed
+	d[&"weapon_base_id"] = String(weapon_base_id)
+	d[&"damage_min"] = damage_min
+	d[&"damage_max"] = damage_max
+	d[&"attack_speed"] = attack_speed
+	d[&"crit_chance"] = crit_chance
+	d[&"accuracy"] = accuracy
+	d[&"weapon_range"] = weapon_range
+	d[&"blast_radius"] = blast_radius
+	d[&"light_mod"] = int(light_mod)
+	d[&"light_energy"] = light_energy
+	d[&"light_range"] = light_range
+	d[&"light_color"] = [light_color.r, light_color.g, light_color.b, light_color.a]
+	d[&"fire_skill"] = fire_skill.resource_path if fire_skill != null else ""
+	d[&"alt_fire_skill"] = alt_fire_skill.resource_path if alt_fire_skill != null else ""
+	# stat_modifiers keys are StringName; convert to String for safe RPC transit.
+	var mods: Dictionary = {}
+	for k in stat_modifiers:
+		mods[String(k)] = stat_modifiers[k]
+	d[&"stat_modifiers"] = mods
+	return d
+
+
+static func from_dict(d: Dictionary) -> Item:
+	var item := Item.new()
+	item.id = StringName(d.get(&"id", ""))
+	item.name_key = d.get(&"name_key", "")
+	item.description_key = d.get(&"description_key", "")
+	item.kind = StringName(d.get(&"kind", ""))
+	item.main_type = d.get(&"main_type", "")
+	item.sub_type = d.get(&"sub_type", "")
+	item.rarity = StringName(d.get(&"rarity", "common"))
+	item.glyph = d.get(&"glyph", "?")
+	var gc: Array = d.get(&"glyph_color", [1, 1, 1, 1])
+	item.glyph_color = Color(gc[0], gc[1], gc[2], gc[3])
+	item.item_level = int(d.get(&"item_level", 1))
+	item.two_handed = d.get(&"two_handed", false)
+	item.weapon_base_id = StringName(d.get(&"weapon_base_id", ""))
+	item.damage_min = int(d.get(&"damage_min", 0))
+	item.damage_max = int(d.get(&"damage_max", 0))
+	item.attack_speed = float(d.get(&"attack_speed", 1.0))
+	item.crit_chance = float(d.get(&"crit_chance", 0.0))
+	item.accuracy = float(d.get(&"accuracy", 1.0))
+	item.weapon_range = float(d.get(&"weapon_range", 3.0))
+	item.blast_radius = float(d.get(&"blast_radius", 0.0))
+	item.light_mod = int(d.get(&"light_mod", 0)) as LightMod
+	item.light_energy = float(d.get(&"light_energy", 1.2))
+	item.light_range = float(d.get(&"light_range", 12.0))
+	var lc: Array = d.get(&"light_color", [1, 1, 1, 1])
+	item.light_color = Color(lc[0], lc[1], lc[2], lc[3])
+	var skill_path: String = d.get(&"fire_skill", "")
+	if skill_path != "":
+		item.fire_skill = load(skill_path) as Skill
+	var alt_path: String = d.get(&"alt_fire_skill", "")
+	if alt_path != "":
+		item.alt_fire_skill = load(alt_path) as Skill
+	var mods: Dictionary = d.get(&"stat_modifiers", {})
+	item.stat_modifiers = {}
+	for k in mods:
+		item.stat_modifiers[StringName(k)] = mods[k]
+	return item

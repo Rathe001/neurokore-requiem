@@ -19,10 +19,14 @@ var _corpses: Array[Node3D] = []
 var _corpse_head: int = 0
 var _spec_overlay: SpecSelectOverlay
 @onready var _enemies_container: Node3D = get_node_or_null("EnemiesContainer") as Node3D
+@onready var _pickups_container: PickupsContainer = get_node_or_null("PickupsContainer") as PickupsContainer
 
 
 func _get_enemy_parent() -> Node3D:
 	return _enemies_container if _enemies_container != null else self
+
+func _get_pickup_parent() -> PickupsContainer:
+	return _pickups_container
 
 ## True when we're a non-host client in an active MP session. Enemy spawning,
 ## wave clears, and boss creation are host-only; clients receive enemy nodes

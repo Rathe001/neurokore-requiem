@@ -9,6 +9,9 @@ const BOB_SPEED := 2.2
 const SPIN_SPEED := 0.8
 
 var item: Item = null
+## Peer id (as StringName) of the player who owns this drop. Empty means
+## anyone can pick it up (manual drops, SP drops).
+var owner_id: StringName = &""
 
 @onready var _object: Node3D = $Visual/Object
 @onready var _halo: MeshInstance3D = $Visual/Halo
@@ -21,8 +24,9 @@ var _bob_phase: float = 0.0
 var _object_y: float = 0.0
 var _name_label: Label3D = null
 
-func configure(p_item: Item) -> void:
+func configure(p_item: Item, p_owner_id: StringName = &"") -> void:
 	item = p_item
+	owner_id = p_owner_id
 
 func _ready() -> void:
 	add_to_group(&"pickups")
@@ -47,10 +51,7 @@ func _ready() -> void:
 	)
 	_area.mouse_entered.connect(_on_hover_enter)
 	_area.mouse_exited.connect(_on_hover_exit)
-	# No direct LMB→pickup handler. The player's _handle_skill_input owns the
-	# pickup-on-click path now: it gates on INTERACT_RANGE and walks to the
-	# pickup if out of range. Without this, clicking a hovered pickup from
-	# across the room would teleport the item into the inventory.
+	_apply_ownership_visual()
 
 
 func _build_name_label(p_item: Item) -> void:
@@ -72,6 +73,23 @@ func _build_name_label(p_item: Item) -> void:
 	_name_label.position = Vector3(0, 0.9, 0)
 	_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	add_child(_name_label)
+
+
+## Dim non-owned item labels so the player can tell at a glance which drops
+## are theirs. Only applies in MP; in SP every drop is owned by default.
+func _apply_ownership_visual() -> void:
+	if not NetState.is_in_lobby():
+		return
+	if owner_id == &"":
+		return
+	var local_id := StringName(str(multiplayer.get_unique_id()))
+	if owner_id == local_id:
+		return
+	# Not ours — dim the label to 35% alpha.
+	if _name_label != null:
+		var dim: Color = item.glyph_color if item != null else Color.WHITE
+		dim.a = 0.35
+		_name_label.modulate = dim
 
 
 func _physics_process(delta: float) -> void:
@@ -106,14 +124,17 @@ func _on_hover_enter() -> void:
 		get_tree().call_group(&"interactable_tooltip", &"show_item", item)
 	if _name_label != null:
 		# Brighter on hover so the player sees what they're targeting.
-		_name_label.modulate = Color(1.0, 1.0, 1.0, 1.0)
+		if _is_owned_by_local_player():
+			_name_label.modulate = Color(1.0, 1.0, 1.0, 1.0)
 
 func _on_hover_exit() -> void:
 	remove_from_group(&"hovered_clickable")
 	remove_from_group(&"tooltip_target")
 	get_tree().call_group(&"interactable_tooltip", &"hide_tooltip")
 	if _name_label != null and item != null:
-		_name_label.modulate = item.glyph_color
+		if _is_owned_by_local_player():
+			_name_label.modulate = item.glyph_color
+		# Non-owned items stay dimmed.
 
 ## Called by PrototypePlayer._interact_with_hovered after distance gating
 ## (and after the walk-to-interact path catches up if the click was made
@@ -122,7 +143,46 @@ func _on_hover_exit() -> void:
 func interact(_user: Node) -> void:
 	if _popping:
 		return
+	# Non-owned items can't be picked up.
+	if not _is_owned_by_local_player():
+		return
+	# SP or host: pick up directly.
+	if not NetState.is_in_lobby():
+		_do_local_pickup()
+		return
+	# MP host picking up own item.
+	if NetState.is_host():
+		_do_local_pickup()
+		return
+	# MP client: request from host via PickupsContainer (persistent node).
+	var container := _find_pickups_container()
+	if container != null:
+		container.request_item_pickup.rpc_id(1, get_path())
+
+
+func _do_local_pickup() -> void:
 	if InventoryState.add_to_inventory(item):
 		get_tree().call_group(&"interactable_tooltip", &"hide_tooltip")
 		SpatialGrid.unregister(self)
 		queue_free()
+
+
+## True when the local player is allowed to pick this up: either we own it,
+## it has no owner (manual drop), or we're in SP.
+func _is_owned_by_local_player() -> bool:
+	if not NetState.is_in_lobby():
+		return true
+	if owner_id == &"":
+		return true
+	return owner_id == StringName(str(multiplayer.get_unique_id()))
+
+
+func _find_pickups_container() -> PickupsContainer:
+	var pc := get_tree().get_first_node_in_group(&"pickups_container")
+	if pc is PickupsContainer:
+		return pc as PickupsContainer
+	# Fallback: walk up the tree.
+	var parent := get_parent()
+	if parent is PickupsContainer:
+		return parent as PickupsContainer
+	return null

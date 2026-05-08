@@ -153,8 +153,13 @@ All player damage sources (hitscan, projectile, grenade, trap, telekinesis, doom
 
 New `CombatVisuals` autoload wraps `PrototypeAttackIndicator` with RPC broadcasting: beams, hit cones, hit radials, impact bursts, explosions, and telegraphs (cone + radial) are all visible to every peer. Cosmetic-only, unreliable transport — a dropped visual has zero gameplay impact. Remote clients receive world-position + is_player flag; a temporary anchor Node3D is created at the origin for the indicator to attach to, then freed (immediately for impact visuals, delayed for telegraphs that parent to the host).
 
-### Phase 5 — Loot
-Loot drop with `owner_id` field as designed. Manual-drop UI / inventory action ("Drop" button or drag-out-of-inventory). Pickup validation. Visual distinction between owned and free-for-all drops.
+### Phase 5 — Loot ✅
+
+New `PickupsContainer` (sibling of `EnemiesContainer`) holds all world pickups with a `MultiplayerSpawner` using a custom `spawn_function`. Item data is serialized via `Item.to_dict()` / `Item.from_dict()` (Skills stored as `resource_path` strings) and deserialized on every peer.
+
+Per-player instanced drops: when an enemy dies in MP, the host rolls one independent item per lobby member, each stamped with that player's peer id as `owner_id`. Non-owned item labels are dimmed to 35% alpha. Credits are shared (not instanced) and auto-collect for the nearest local player.
+
+Host-validated pickup: clients request via RPC on PickupsContainer (persistent node); host validates `owner_id`, confirms with serialized item data, then `queue_free`s (spawner replicates removal). Loot crates use the same per-player instanced drop pattern with host-only open + visual RPC. Manual inventory drops have empty `owner_id` (anyone can pick up). EntityPool is bypassed for credits in MP (spawner needs fresh instances); SP retains pooling.
 
 ### Phase 6 — World state
 Level / zone transition sync (host triggers, all clients follow). Door / switch / interactable state replicated. Host's local save now stores world progress (current zone, switches flipped, bosses killed). Other players' saves only store their character data.

@@ -47,29 +47,68 @@ func reset_state() -> void:
 	_apply_color(COLOR_CLOSED)
 	if lid != null:
 		lid.visible = true
+		lid.rotation_degrees.x = 0.0
 	input_ray_pickable = true
 	SpatialGrid.register(self, &"interactables")
 
 func interact(_user: Node) -> void:
 	if _opened:
 		return
-	_opened = true
-	_apply_color(COLOR_OPENED)
-	if lid != null:
-		var tween := create_tween()
-		tween.tween_property(lid, "rotation_degrees:x", -110.0, 0.3).set_ease(Tween.EASE_OUT)
+	# MP client: request the host to open.
+	if NetState.is_in_lobby() and NetState.is_client():
+		_request_open.rpc_id(1)
+		return
+	# SP or MP host: open directly.
+	_do_open()
 
+
+func _do_open() -> void:
+	_opened = true
+	_open_visual()
+	if NetState.is_in_lobby():
+		_client_open_visual.rpc()
+
+	var items: Array[Item] = _roll_items()
+	var drop_pos := global_position + Vector3(0.0, 1.5, 0.0)
+	var container := _find_pickups_container()
+
+	# MP: per-player instanced drops.
+	if NetState.is_in_lobby() and container != null:
+		for peer_id_v in NetState.lobby_members.keys():
+			var peer_id: int = int(peer_id_v)
+			# Re-roll per player so each gets a unique item set.
+			var peer_items := _roll_items()
+			for item in peer_items:
+				container.spawn_item(item, drop_pos, StringName(str(peer_id)))
+	elif container != null:
+		# SP with PickupsContainer.
+		for item in items:
+			container.spawn_item(item, drop_pos)
+	else:
+		# Fallback: direct instantiate.
+		var parent := get_parent()
+		if parent == null:
+			return
+		for item in items:
+			var pickup := ITEM_PICKUP_SCENE.instantiate()
+			pickup.configure(item)
+			parent.add_child(pickup)
+			pickup.global_position = drop_pos
+
+	if target_door != NodePath():
+		var door := get_node_or_null(target_door) as PrototypeDoor
+		if door != null:
+			door.unlock()
+
+	_become_inert()
+
+
+func _roll_items() -> Array[Item]:
 	var items: Array[Item] = []
 	if starter_weapon_kit:
 		var rng := RandomNumberGenerator.new()
 		rng.randomize()
-		# Starter kit is intentionally rolled at item_level 0 — every drop in
-		# the world generates at ilvl >= 1, so the starter gear is always
-		# strictly worse than any pickup the player can find. Solves the
-		# "give the player a baseline kit but make new drops feel meaningful"
-		# tension. Effectiveness curve in Item.gd handles the actual scaling.
 		var starter_ilvl := 0
-		# 50/50: one 2H weapon, OR one 1H weapon + one offhand.
 		if rng.randf() < 0.5:
 			items.append(ItemRoller.roll("2H Weapon", starter_ilvl, &"common", rng))
 		else:
@@ -80,7 +119,6 @@ func interact(_user: Node) -> void:
 	elif test_weapon_base_paths.size() > 0:
 		var rng := RandomNumberGenerator.new()
 		rng.randomize()
-		# Zone-level-based: mid-range of the current NG+ band.
 		var ilvl := maxi(1, 2 + PlayerState.zone_level_offset())
 		for path in test_weapon_base_paths:
 			var base := load(path) as WeaponBase
@@ -94,29 +132,17 @@ func interact(_user: Node) -> void:
 		var ilvl := maxi(1, 2 + PlayerState.zone_level_offset())
 		for _i in random_item_count:
 			items.append(ItemRoller.roll_random(ilvl, rng))
+	return items
 
-	var parent := get_parent()
-	if parent == null:
-		return
-	for i in items.size():
-		var pickup := ITEM_PICKUP_SCENE.instantiate()
-		pickup.configure(items[i])
-		parent.add_child(pickup)
-		pickup.global_position = global_position + Vector3(0.0, 1.5, 0.0)
 
-	# Trigger any door wired to this crate (LootCrateDoorPuzzle uses this
-	# to gate level progression on a chest open). Mirrors the switch
-	# pattern — single unlock() call, door figures out the rest.
-	if target_door != NodePath():
-		var door := get_node_or_null(target_door) as PrototypeDoor
-		if door != null:
-			door.unlock()
+func _open_visual() -> void:
+	_apply_color(COLOR_OPENED)
+	if lid != null:
+		var tween := create_tween()
+		tween.tween_property(lid, "rotation_degrees:x", -110.0, 0.3).set_ease(Tween.EASE_OUT)
 
-	# Become inert after opening — drop out of mouse picking, the spatial
-	# grid (no more proximity-interact triggers), and any active hover/
-	# tooltip state. Without input_ray_pickable=false the cursor keeps
-	# highlighting an empty crate, which the player reads as "still has
-	# something" until they've clicked enough to confirm.
+
+func _become_inert() -> void:
 	input_ray_pickable = false
 	SpatialGrid.unregister(self)
 	if _outline != null:
@@ -124,6 +150,32 @@ func interact(_user: Node) -> void:
 	remove_from_group(&"hovered_clickable")
 	remove_from_group(&"tooltip_target")
 	get_tree().call_group(&"interactable_tooltip", &"hide_tooltip")
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _request_open() -> void:
+	if not multiplayer.is_server():
+		return
+	if _opened:
+		return
+	_do_open()
+
+
+@rpc("authority", "call_remote", "reliable")
+func _client_open_visual() -> void:
+	if _opened:
+		return
+	_opened = true
+	_open_visual()
+	_become_inert()
+
+
+func _find_pickups_container() -> PickupsContainer:
+	var pc := get_tree().get_first_node_in_group(&"pickups_container")
+	if pc is PickupsContainer:
+		return pc as PickupsContainer
+	return null
+
 
 func _apply_color(c: Color) -> void:
 	_mat.albedo_color = c
