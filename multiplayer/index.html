@@ -1637,7 +1637,7 @@
   <a href="#phase-2c-cleanup" class="md-nav__link">
     <span class="md-ellipsis">
       
-        📅 Phase 2C — Cleanup
+        Phase 2C — Cleanup ✅
       
     </span>
   </a>
@@ -1820,7 +1820,7 @@
 
 <h1 id="multiplayer">Multiplayer<a class="headerlink" href="#multiplayer" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status: In progress.</strong> Phases 0 through 7 are shipped and on <code>main</code>. <strong>Phase 2C (cleanup) is the next chunk.</strong> See <a href="#implementation-phases">Implementation phases</a> below for the full sequence and what each one covers.</p>
+<p><strong>Status: In progress.</strong> Phases 0 through 7 + 2C are shipped and on <code>main</code>. All planned networking phases are complete. See <a href="#implementation-phases">Implementation phases</a> below for the full sequence and what each one covers.</p>
 <p><strong>Verification gap to keep in mind:</strong> local testing uses one Steam account in two processes (editor + <code>--mp-force-client</code> .exe), which is enough to verify lobby flow, scene transitions, and avatar spawning, but Steam P2P routing same-id-to-itself is undefined — actual cross-peer position sync, RPCs, and member-join callbacks need real two-account testing or shipping to playtest. Anything in Phase 2B+ that involves traffic between peers should be assumed <em>code-correct, runtime-unverified</em> until we get a second account into a lobby.</p>
 </blockquote>
 <h2 id="design-pillars">Design pillars<a class="headerlink" href="#design-pillars" title="Permanent link">&para;</a></h2>
@@ -1984,13 +1984,14 @@
 <p>Restructured the player from a baked node in <code>level_shell.tscn</code> into a runtime-spawned scene. <code>scenes/prototype/player.tscn</code> (extracted) now carries a <code>MultiplayerSynchronizer</code> replicating <code>global_position</code>, <code>Visual.rotation</code>, and <code>net_moving</code>. New <code>PlayersContainer</code> script in <code>level_shell.tscn</code> spawns one Player per lobby member into a shared container; node paths match across machines so the synchronizers can route. <code>prototype_player.gd</code> now branches on <code>_is_remote_player()</code> — non-authority avatars get <code>_ready_remote()</code> (anim + mesh shadow layer only) and skip combat / abilities / overlays. Remote anim choice (idle vs run) is driven from the synced <code>net_moving</code> flag.</p>
 <p><strong>Critical detection rule:</strong> <code>multiplayer.has_multiplayer_peer()</code> is misleading because GodotSteam plumbing leaves it set in SP — use <code>NetState.is_in_lobby()</code> for the actual SP/MP discriminator everywhere.</p>
 <p>Verified locally that both clients spawn two Player nodes (own + remote) on each side. Cross-peer sync NOT verified — same-account routing is undefined per Steam.</p>
-<h3 id="phase-2c-cleanup">📅 Phase 2C — Cleanup<a class="headerlink" href="#phase-2c-cleanup" title="Permanent link">&para;</a></h3>
-<p>The work to make the multiplayer flow safe to leave/re-enter without leaking state. Concrete items:
-- <strong>Mid-game disconnect</strong>: when a peer drops, <code>multiplayer.peer_disconnected</code> already fires <code>_on_peer_disconnected</code> in <code>PlayersContainer</code> to despawn their avatar. Verify nothing else holds a reference (HUD, signals, target locks, etc.). Add a brief "X disconnected" notification.
-- <strong>Quit-to-menu from a running MP session</strong>: <code>main_menu.gd._on_quit_to_menu_pressed</code> already calls <code>NetState.leave_lobby()</code> (added in Phase 2A). Audit: does that path also reset <code>multiplayer.multiplayer_peer</code> to null on every machine? Does the lobby leave callback propagate to other peers and trigger their despawn?
-- <strong>Despawn animation</strong>: Currently <code>queue_free</code> is a hard snap. A 0.2s fade or character-drop would read better. Probably do this when we have proper death animation work in Phase 3+.
-- <strong>Reconnection</strong> (nice-to-have): Steam holds connections briefly; if a peer drops and rejoins within ~30s, ideally we re-bind without forcing them through the lobby browser. Defer if it's significant work.
-- <strong>Audit <code>_alive</code> / <code>_health</code> / damage code paths on remote players</strong>: in Phase 2B I early-return on <code>_is_remote_player()</code> in <code>_physics_process</code> etc., but <code>take_damage</code>, <code>_die</code>, <code>respawn</code> aren't gated. Phase 3 will properly handle these via authoritative state, but for 2C add defensive early-returns so a stray call from gameplay code doesn't NPE on a remote player's null <code>_combat</code>.</p>
+<h3 id="phase-2c-cleanup">Phase 2C — Cleanup ✅<a class="headerlink" href="#phase-2c-cleanup" title="Permanent link">&para;</a></h3>
+<p>Hardened the multiplayer flow for safe leave/re-enter and fixed null-dereference risks on remote players.</p>
+<ul>
+<li><strong>Quit-to-menu audit</strong>: confirmed <code>main_menu.gd._on_quit_to_menu_pressed</code> → <code>NetState.leave_lobby()</code> → <code>_teardown_peer()</code> correctly closes the <code>SteamMultiplayerPeer</code>, sets <code>multiplayer.multiplayer_peer = null</code>, resets all lobby state, and emits <code>lobby_left</code>. Other peers see the disconnect via <code>peer_disconnected</code> → <code>_despawn_for</code>. No leaked state.</li>
+<li><strong>Despawn animation</strong>: replaced hard <code>queue_free</code> in <code>PlayersContainer._despawn_for</code> with a 0.25s scale-down tween before freeing, so disconnects don't look like a hard pop.</li>
+<li><strong>Remote player safety audit</strong>: added null guards on all public methods that access subsystems not initialized on remote players (<code>_combat</code>, <code>_shield</code>, <code>_grenade</code>, <code>_doomsayer</code>, <code>_ied</code>, <code>_drone_swarm</code>). Methods guarded: <code>fire_exile_shot</code>, <code>get_cooldown_ratio</code>, <code>get_cooldown_remain</code>, <code>get_shield_buff_kind</code>, <code>get_shield_buff_state</code>, <code>get_charm_count/max</code>, <code>get_trap_count/max</code>, <code>get_drone_count</code>. <code>take_damage</code>, <code>_die</code>, and <code>respawn</code> were already gated on <code>_is_remote_player()</code>.</li>
+<li><strong>Reconnection</strong> deferred: Steam's brief connection hold makes this a nice-to-have, but re-binding a peer mid-session is non-trivial. Late joiners can rejoin through the lobby browser via Phase 7's drop-in flow.</li>
+</ul>
 <h3 id="phase-3-enemies">Phase 3 — Enemies ✅<a class="headerlink" href="#phase-3-enemies" title="Permanent link">&para;</a></h3>
 <p>Enemies spawn into a dedicated <code>EnemiesContainer</code> with a <code>MultiplayerSpawner</code> that replicates host spawns to all clients. Each enemy carries a <code>MultiplayerSynchronizer</code> broadcasting <code>global_position</code>, <code>Visual:rotation</code>, <code>net_health</code>, <code>net_max_health</code>, and <code>net_state</code> (State enum as int). Clients skip AI entirely (<code>_is_remote_enemy()</code> gate in <code>_physics_process</code>) and drive animations + health bars from synced values. Death detected client-side via <code>net_state == DEAD</code>; corpse cleanup handled by the spawner's removal replication.</p>
 <p>Damage from player combat (cone/AoE/hitscan/exile) routes through <code>_deal_damage()</code> in <code>PlayerCombat</code> → <code>request_damage.rpc_id(1, ...)</code> on clients, with the host applying it authoritatively via <code>take_damage()</code>. XP, loot drops, and death side-effects only fire on the host. Spawning (<code>_spawn_wave</code>, <code>_spawn_boss</code>, <code>reset_level</code>) is gated behind <code>_is_mp_client()</code>.</p>
