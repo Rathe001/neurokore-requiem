@@ -93,6 +93,72 @@ func _on_spawn(data: Variant) -> Node:
 			return Node3D.new()
 
 
+# ── Drop-in snapshot (Phase 7) ────────────────────────────────────
+
+## Host-side: serialize every live pickup for a late-joining peer.
+func serialize_all() -> Array:
+	var result: Array = []
+	for child in get_children():
+		if child is MultiplayerSpawner:
+			continue
+		if child.has_method(&"configure") and &"item" in child:
+			# Item pickup.
+			var item_data: Dictionary = child.item.to_dict() if child.item != null else {}
+			var oid: String = String(child.owner_id) if child.owner_id != null else ""
+			result.append({
+				&"name": child.name,
+				&"t": "item",
+				&"d": item_data,
+				&"px": child.global_position.x,
+				&"py": child.global_position.y,
+				&"pz": child.global_position.z,
+				&"o": oid,
+			})
+		elif &"amount" in child:
+			# Credit pickup.
+			result.append({
+				&"name": child.name,
+				&"t": "credit",
+				&"a": int(child.amount),
+				&"px": child.global_position.x,
+				&"py": child.global_position.y,
+				&"pz": child.global_position.z,
+			})
+	return result
+
+
+## Client-side: recreate pickups from a snapshot.
+func apply_snapshot(data: Array) -> void:
+	for entry in data:
+		var d: Dictionary = entry as Dictionary
+		if d == null:
+			continue
+		var type: String = d.get(&"t", "")
+		var pos := Vector3(
+			float(d.get(&"px", 0.0)),
+			float(d.get(&"py", 0.0)),
+			float(d.get(&"pz", 0.0)),
+		)
+		var node_name: String = d.get(&"name", "")
+		match type:
+			"item":
+				var item := Item.from_dict(d.get(&"d", {}))
+				var owner_str: String = d.get(&"o", "")
+				var pickup := ITEM_PICKUP_SCENE.instantiate()
+				pickup.configure(item, StringName(owner_str))
+				if node_name != "":
+					pickup.name = node_name
+				add_child(pickup)
+				pickup.global_position = pos
+			"credit":
+				var pickup := CREDIT_PICKUP_SCENE.instantiate()
+				pickup.amount = int(d.get(&"a", 1))
+				if node_name != "":
+					pickup.name = node_name
+				add_child(pickup)
+				pickup.global_position = pos
+
+
 # ── Pickup validation RPCs ─────────────────────────────────────────
 # Routed through this persistent node so the pickup can be queue_free'd
 # immediately after confirm without worrying about RPC delivery order.

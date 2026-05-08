@@ -18,8 +18,40 @@ func _ready() -> void:
 	if layout == null:
 		push_warning("[LevelBuilder] No layout assigned.")
 		return
+	_apply_mp_seed()
 	_build_level()
 	_bake_navigation()
+	_store_mp_seed()
+
+
+# In MP, ensure both host and late joiners use the same seed. Host
+# captures a deterministic seed before the first build; late joiners
+# read it from lobby data so they generate identical geometry.
+func _apply_mp_seed() -> void:
+	if not NetState.is_in_lobby():
+		return
+	if layout == null or layout.generator == null:
+		return
+	if NetState.is_client():
+		# Late joiner: read the seed the host stored in lobby data.
+		var lobby_seed := NetState.get_level_seed()
+		if lobby_seed != 0:
+			layout.generator.rng_seed = lobby_seed
+	else:
+		# Host: if the resource seed is 0 (time-based fallback, seed would
+		# be lost), pin it to a random value so it's capturable after build.
+		if layout.generator.rng_seed == 0:
+			layout.generator.rng_seed = randi()
+			if layout.generator.rng_seed == 0:
+				layout.generator.rng_seed = 1
+
+
+func _store_mp_seed() -> void:
+	if not NetState.is_in_lobby() or not NetState.is_host():
+		return
+	if layout == null or layout.generator == null:
+		return
+	NetState.set_level_seed(layout.generator.rng_seed)
 
 
 # Tear down the current level and rebuild from scratch with a new seed

@@ -1,6 +1,6 @@
 # Multiplayer
 
-> **Status: In progress.** Phases 0 through 6 are shipped and on `main`. **Phase 7 (drop-in joins) is the next chunk.** See [Implementation phases](#implementation-phases) below for the full sequence and what each one covers.
+> **Status: In progress.** Phases 0 through 7 are shipped and on `main`. **Phase 2C (cleanup) is the next chunk.** See [Implementation phases](#implementation-phases) below for the full sequence and what each one covers.
 >
 > **Verification gap to keep in mind:** local testing uses one Steam account in two processes (editor + `--mp-force-client` .exe), which is enough to verify lobby flow, scene transitions, and avatar spawning, but Steam P2P routing same-id-to-itself is undefined — actual cross-peer position sync, RPCs, and member-join callbacks need real two-account testing or shipping to playtest. Anything in Phase 2B+ that involves traffic between peers should be assumed *code-correct, runtime-unverified* until we get a second account into a lobby.
 
@@ -167,8 +167,9 @@ Door, switch, and exit pad interactions are host-authoritative: clients send `_r
 
 Level reset (NG+ transition) is synchronized: host picks a seed, broadcasts `_client_reset_level(seed, is_procgen)` to all clients. Both peers clear enemies/corpses/pickups and rebuild: procgen path rebuilds geometry from the shared seed (deterministic layout), legacy path resets interactable states. Enemy spawning during rebuild is skipped on clients via an early return in `EnemySpawner.spawn_in_bounds` — enemies arrive from the host through `EnemiesContainer`'s `MultiplayerSpawner`. Both peers advance NG+ and reset the player independently.
 
-### 🔜 Phase 7 — Drop-in (NEXT)
-Mid-session join handshake. Host serializes a state snapshot — current zone, all live enemies, all world loot, all current players' positions — and sends to the joining peer. Joiner spawns at a safe entry point (zone start) and starts receiving normal updates. The hard part is making the snapshot complete enough that nothing visible desyncs.
+### Phase 7 — Drop-in ✅
+
+Mid-session join support. Three pieces: (1) **NetState late-join plumbing** — host calls `_peer.add_peer(new_id)` in `_on_lobby_chat_update` when a member joins during an active game, accepting their SteamMultiplayerPeer connection. The existing `_check_started_flag()` path already handles the client side (reads `started=1`, creates peer, fires `game_starting`). (2) **Level seed sync** — host stores the procgen seed in Steam lobby data (`LOBBY_SEED_KEY`) on initial build and every level reset. `LevelBuilder._ready()` reads it on the client side so late joiners build identical geometry. Host pins `rng_seed` to a captured value (not 0/time-fallback) so the seed is always deterministic and retrievable. (3) **World state snapshot** — after scene load, the late joiner sends `_request_snapshot.rpc_id(1)` to the host. Host responds with `_deliver_snapshot` containing all live enemies (position, rotation, health, state, level, boss flag, display name, node name), all pickups (item data or credit amount, position, owner_id, node name), and all interactable states (door locked/open/unlock-counter, switch used, exit locked). Joiner recreates enemies and pickups with matching node names so `MultiplayerSynchronizer` updates route correctly for ongoing play. `PlayersContainer._on_peer_connected` handles avatar spawning (already shipped in Phase 2B). Future spawns (enemies, pickups) arrive normally via `MultiplayerSpawner`.
 
 ## Technical decisions
 

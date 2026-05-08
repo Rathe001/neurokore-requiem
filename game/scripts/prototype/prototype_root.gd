@@ -45,6 +45,10 @@ func _ready() -> void:
 		_clear_enemies()
 	elif spawn_boss_on_ready and not _is_mp_client():
 		_spawn_boss()
+	# Late-joining client: request a world state snapshot from the host
+	# so enemies, pickups, and interactable states match the running game.
+	if NetState.is_in_lobby() and NetState.is_client() and NetState.game_started:
+		call_deferred(&"_request_world_snapshot")
 
 
 # If the level placed a PrototypePlayerSpawn marker (via a player_spawn slot
@@ -189,7 +193,9 @@ func _do_reset_level(override_seed: int = 0) -> void:
 		# Procgen path: fresh layout per NG+.
 		var seed_val := override_seed if override_seed != 0 else randi()
 		# Broadcast seed so clients rebuild the same geometry.
+		# Also store in lobby data so late joiners get the current seed.
 		if NetState.is_in_lobby():
+			NetState.set_level_seed(seed_val)
 			_client_reset_level.rpc(seed_val, true)
 		await builder.rebuild(seed_val)
 		# The freshly-built level placed a new player_spawn marker; teleport
@@ -262,6 +268,105 @@ func _client_reset_level(seed_val: int, is_procgen: bool) -> void:
 		_show_spec_select()
 	else:
 		_reset_player()
+
+
+# ── Drop-in snapshot (Phase 7) ────────────────────────────────────
+
+func _request_world_snapshot() -> void:
+	if not NetState.is_client():
+		return
+	_request_snapshot.rpc_id(1)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _request_snapshot() -> void:
+	if not multiplayer.is_server():
+		return
+	var requester := multiplayer.get_remote_sender_id()
+	var snapshot := _build_snapshot()
+	_deliver_snapshot.rpc_id(requester, snapshot)
+
+
+func _build_snapshot() -> Dictionary:
+	var snapshot: Dictionary = {}
+	snapshot[&"ng_plus"] = PlayerState.new_game_plus
+	# Enemies.
+	if _enemies_container != null and _enemies_container is EnemiesContainer:
+		snapshot[&"enemies"] = (_enemies_container as EnemiesContainer).serialize_all()
+	else:
+		snapshot[&"enemies"] = []
+	# Pickups.
+	if _pickups_container != null:
+		snapshot[&"pickups"] = _pickups_container.serialize_all()
+	else:
+		snapshot[&"pickups"] = []
+	# Interactable states.
+	snapshot.merge(_serialize_interactables())
+	return snapshot
+
+
+@rpc("authority", "call_remote", "reliable")
+func _deliver_snapshot(snapshot: Dictionary) -> void:
+	PlayerState.new_game_plus = int(snapshot.get(&"ng_plus", 0))
+	if _enemies_container != null and _enemies_container is EnemiesContainer:
+		(_enemies_container as EnemiesContainer).apply_snapshot(snapshot.get(&"enemies", []))
+	if _pickups_container != null:
+		_pickups_container.apply_snapshot(snapshot.get(&"pickups", []))
+	_apply_interactable_snapshot(snapshot)
+	_move_player_to_spawn()
+
+
+func _serialize_interactables() -> Dictionary:
+	var doors: Array = []
+	for d in get_tree().get_nodes_in_group(&"doors"):
+		if d is PrototypeDoor:
+			doors.append({
+				&"path": str(get_path_to(d)),
+				&"locked": d.locked,
+				&"remaining": d._unlocks_remaining,
+				&"open": d._open,
+			})
+	var switches: Array = []
+	for s in get_tree().get_nodes_in_group(&"resettable"):
+		if s is PrototypeSwitch:
+			switches.append({
+				&"path": str(get_path_to(s)),
+				&"used": s._used,
+			})
+	var exits: Array = []
+	for e in get_tree().get_nodes_in_group(&"boss_listeners"):
+		if e is PrototypeExit:
+			exits.append({
+				&"path": str(get_path_to(e)),
+				&"locked": e._locked,
+			})
+	return {&"doors": doors, &"switches": switches, &"exits": exits}
+
+
+func _apply_interactable_snapshot(snapshot: Dictionary) -> void:
+	for d_data in snapshot.get(&"doors", []):
+		var d := get_node_or_null(NodePath(String(d_data[&"path"]))) as PrototypeDoor
+		if d == null:
+			continue
+		d._unlocks_remaining = int(d_data.get(&"remaining", d._unlocks_remaining))
+		d.locked = bool(d_data.get(&"locked", d.locked))
+		if bool(d_data.get(&"open", false)):
+			d._open = true
+			d.collision.disabled = true
+			d.mesh.position.y = d._rest_y + PrototypeDoor.SLIDE_DISTANCE
+		d._refresh_tint()
+	for s_data in snapshot.get(&"switches", []):
+		var s := get_node_or_null(NodePath(String(s_data[&"path"]))) as PrototypeSwitch
+		if s == null:
+			continue
+		if bool(s_data.get(&"used", false)):
+			s._mark_used()
+	for e_data in snapshot.get(&"exits", []):
+		var e := get_node_or_null(NodePath(String(e_data[&"path"]))) as PrototypeExit
+		if e == null:
+			continue
+		if not bool(e_data.get(&"locked", true)):
+			e.unlock()
 
 
 func _spawn_boss() -> void:

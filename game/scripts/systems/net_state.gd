@@ -56,6 +56,7 @@ const LOBBY_HOST_KEY: String = "host"
 # right transport for this signal because it's already replicated to all
 # members and survives ordering / late callbacks.
 const LOBBY_STARTED_KEY: String = "started"
+const LOBBY_SEED_KEY: String = "level_seed"
 
 var mode: Mode = Mode.OFFLINE
 var lobby_id: int = 0
@@ -236,6 +237,22 @@ func is_client() -> bool:
 	return mode == Mode.CLIENT
 
 
+## Store the current level seed in lobby data so late joiners can rebuild
+## the same geometry. Called by LevelBuilder on initial build and by
+## PrototypeRoot on level reset.
+func set_level_seed(seed_val: int) -> void:
+	if lobby_id != 0:
+		Steam.setLobbyData(lobby_id, LOBBY_SEED_KEY, str(seed_val))
+
+
+## Read the level seed from lobby data. Returns 0 when unavailable.
+func get_level_seed() -> int:
+	if lobby_id == 0:
+		return 0
+	var s := Steam.getLobbyData(lobby_id, LOBBY_SEED_KEY)
+	return int(s) if s != "" else 0
+
+
 # ─── Steam callback handlers ──────────────────────────────────────────────
 
 var _pending_lobby_name: String = ""
@@ -300,6 +317,12 @@ func _on_lobby_chat_update(_changed_lobby_id: int, changed_id: int, _maker_id: i
 	_refresh_members()
 	if change_state == 1:
 		print("[NetState] Member joined: %s (%d)" % [member_name, changed_id])
+		# Accept late-joining peers into the active game. Without this,
+		# the SteamMultiplayerPeer ignores connections from members who
+		# joined the lobby after start_game().
+		if game_started and _peer != null and is_host():
+			_peer.add_peer(changed_id)
+			print("[NetState] Late join: added peer %d to active game." % changed_id)
 		lobby_member_joined.emit(changed_id, member_name)
 	else:
 		print("[NetState] Member left: %s (%d, state %d)" % [member_name, changed_id, change_state])
