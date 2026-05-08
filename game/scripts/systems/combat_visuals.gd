@@ -1,5 +1,4 @@
 extends Node
-class_name CombatVisuals
 ## Autoload that broadcasts combat visual effects to all MP peers.
 ## In SP, calls pass straight through to PrototypeAttackIndicator.
 ## In MP, the caller's client spawns the visual locally AND sends an
@@ -10,14 +9,21 @@ class_name CombatVisuals
 ## Call sites use CombatVisuals.spawn_beam(...) etc. instead of
 ## PrototypeAttackIndicator.spawn_beam(...) for any visual that
 ## should be visible to all players.
+##
+## Public API is static so callers can use CombatVisuals.spawn_*()
+## without class_name (Godot 4.6 forbids class_name on autoloads).
+## RPCs route through the autoload instance via host.get_node().
+
+const _AUTOLOAD_PATH := ^"/root/CombatVisuals"
 
 
 # ── Beam (hitscan) ──────────────────────────────────────────────
 
-func spawn_beam(host: Node3D, aim: Vector3, length: float, source_offset: Vector3 = Vector3.ZERO) -> void:
+static func spawn_beam(host: Node3D, aim: Vector3, length: float, source_offset: Vector3 = Vector3.ZERO) -> void:
 	PrototypeAttackIndicator.spawn_beam(host, aim, length, source_offset)
 	if NetState.is_in_lobby():
-		_rpc_beam.rpc(host.global_position, aim, length, source_offset, host.is_in_group(&"player"))
+		var cv: Node = host.get_node(_AUTOLOAD_PATH)
+		cv._rpc_beam.rpc(host.global_position, aim, length, source_offset, host.is_in_group(&"player"))
 
 @rpc("any_peer", "call_remote", "unreliable")
 func _rpc_beam(origin: Vector3, aim: Vector3, length: float, source_offset: Vector3, is_player: bool) -> void:
@@ -28,10 +34,11 @@ func _rpc_beam(origin: Vector3, aim: Vector3, length: float, source_offset: Vect
 
 # ── Hit cone (melee shockwave) ──────────────────────────────────
 
-func spawn_hit_cone(host: Node3D, aim: Vector3, attack_range: float, cone_deg: float) -> void:
+static func spawn_hit_cone(host: Node3D, aim: Vector3, attack_range: float, cone_deg: float) -> void:
 	PrototypeAttackIndicator.spawn_hit_cone(host, aim, attack_range, cone_deg)
 	if NetState.is_in_lobby():
-		_rpc_hit_cone.rpc(host.global_position, aim, attack_range, cone_deg, host.is_in_group(&"player"))
+		var cv: Node = host.get_node(_AUTOLOAD_PATH)
+		cv._rpc_hit_cone.rpc(host.global_position, aim, attack_range, cone_deg, host.is_in_group(&"player"))
 
 @rpc("any_peer", "call_remote", "unreliable")
 func _rpc_hit_cone(origin: Vector3, aim: Vector3, attack_range: float, cone_deg: float, is_player: bool) -> void:
@@ -42,10 +49,11 @@ func _rpc_hit_cone(origin: Vector3, aim: Vector3, attack_range: float, cone_deg:
 
 # ── Hit radial (AoE shockwave) ──────────────────────────────────
 
-func spawn_hit_radial(host: Node3D, radius: float) -> void:
+static func spawn_hit_radial(host: Node3D, radius: float) -> void:
 	PrototypeAttackIndicator.spawn_hit_radial(host, radius)
 	if NetState.is_in_lobby():
-		_rpc_hit_radial.rpc(host.global_position, radius, host.is_in_group(&"player"))
+		var cv: Node = host.get_node(_AUTOLOAD_PATH)
+		cv._rpc_hit_radial.rpc(host.global_position, radius, host.is_in_group(&"player"))
 
 @rpc("any_peer", "call_remote", "unreliable")
 func _rpc_hit_radial(origin: Vector3, radius: float, is_player: bool) -> void:
@@ -56,10 +64,11 @@ func _rpc_hit_radial(origin: Vector3, radius: float, is_player: bool) -> void:
 
 # ── Impact burst ────────────────────────────────────────────────
 
-func spawn_impact_burst(host: Node3D, world_pos: Vector3, color_override: Color = Color(0, 0, 0, 0)) -> void:
+static func spawn_impact_burst(host: Node3D, world_pos: Vector3, color_override: Color = Color(0, 0, 0, 0)) -> void:
 	PrototypeAttackIndicator.spawn_impact_burst(host, world_pos, color_override)
 	if NetState.is_in_lobby():
-		_rpc_impact_burst.rpc(host.global_position, world_pos, color_override, host.is_in_group(&"player"))
+		var cv: Node = host.get_node(_AUTOLOAD_PATH)
+		cv._rpc_impact_burst.rpc(host.global_position, world_pos, color_override, host.is_in_group(&"player"))
 
 @rpc("any_peer", "call_remote", "unreliable")
 func _rpc_impact_burst(origin: Vector3, world_pos: Vector3, color_override: Color, is_player: bool) -> void:
@@ -70,10 +79,11 @@ func _rpc_impact_burst(origin: Vector3, world_pos: Vector3, color_override: Colo
 
 # ── Explosion ───────────────────────────────────────────────────
 
-func spawn_explosion(host: Node3D, world_pos: Vector3, blast_radius: float, color_override: Color = Color(0, 0, 0, 0)) -> void:
+static func spawn_explosion(host: Node3D, world_pos: Vector3, blast_radius: float, color_override: Color = Color(0, 0, 0, 0)) -> void:
 	PrototypeAttackIndicator.spawn_explosion(host, world_pos, blast_radius, color_override)
 	if NetState.is_in_lobby():
-		_rpc_explosion.rpc(host.global_position, world_pos, blast_radius, color_override, host.is_in_group(&"player"))
+		var cv: Node = host.get_node(_AUTOLOAD_PATH)
+		cv._rpc_explosion.rpc(host.global_position, world_pos, blast_radius, color_override, host.is_in_group(&"player"))
 
 @rpc("any_peer", "call_remote", "unreliable")
 func _rpc_explosion(origin: Vector3, world_pos: Vector3, blast_radius: float, color_override: Color, is_player: bool) -> void:
@@ -84,10 +94,11 @@ func _rpc_explosion(origin: Vector3, world_pos: Vector3, blast_radius: float, co
 
 # ── Telegraph: cone (enemy attack warning) ──────────────────────
 
-func spawn_cone(host: Node3D, aim: Vector3, attack_range: float, cone_deg: float, wind_up: float = 0.0) -> void:
+static func spawn_cone(host: Node3D, aim: Vector3, attack_range: float, cone_deg: float, wind_up: float = 0.0) -> void:
 	PrototypeAttackIndicator.spawn_cone(host, aim, attack_range, cone_deg, wind_up)
 	if NetState.is_in_lobby():
-		_rpc_cone.rpc(host.global_position, aim, attack_range, cone_deg, wind_up, host.is_in_group(&"player"))
+		var cv: Node = host.get_node(_AUTOLOAD_PATH)
+		cv._rpc_cone.rpc(host.global_position, aim, attack_range, cone_deg, wind_up, host.is_in_group(&"player"))
 
 @rpc("any_peer", "call_remote", "unreliable")
 func _rpc_cone(origin: Vector3, aim: Vector3, attack_range: float, cone_deg: float, wind_up: float, is_player: bool) -> void:
@@ -100,10 +111,11 @@ func _rpc_cone(origin: Vector3, aim: Vector3, attack_range: float, cone_deg: flo
 
 # ── Telegraph: radial (enemy AoE warning) ───────────────────────
 
-func spawn_radial(host: Node3D, radius: float, wind_up: float = 0.0) -> void:
+static func spawn_radial(host: Node3D, radius: float, wind_up: float = 0.0) -> void:
 	PrototypeAttackIndicator.spawn_radial(host, radius, wind_up)
 	if NetState.is_in_lobby():
-		_rpc_radial.rpc(host.global_position, radius, wind_up, host.is_in_group(&"player"))
+		var cv: Node = host.get_node(_AUTOLOAD_PATH)
+		cv._rpc_radial.rpc(host.global_position, radius, wind_up, host.is_in_group(&"player"))
 
 @rpc("any_peer", "call_remote", "unreliable")
 func _rpc_radial(origin: Vector3, radius: float, wind_up: float, is_player: bool) -> void:
