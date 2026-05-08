@@ -95,7 +95,13 @@ func _on_peer_connected(peer_id: int) -> void:
 
 
 func _on_peer_disconnected(peer_id: int) -> void:
+	var member_name: String = NetState.lobby_members.get(peer_id, "")
+	if member_name.is_empty():
+		member_name = "A player"
 	_despawn_for(peer_id)
+	var local := get_local_player()
+	if local != null:
+		local.notification_requested.emit("%s disconnected." % member_name)
 
 
 func _spawn_for(peer_id: int) -> PrototypePlayer:

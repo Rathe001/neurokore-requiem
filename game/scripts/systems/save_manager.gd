@@ -31,7 +31,8 @@ func _ready() -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
 		if PlayerState.active_save_id != "":
-			save_game(PlayerState.active_save_id)
+			save_game(PlayerState.active_save_id, active_save_dir)
+		NetState.leave_lobby()
 		get_tree().quit()
 
 

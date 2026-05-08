@@ -496,10 +496,14 @@ func is_alive() -> bool:
 
 
 func is_player_friendly(target: Node) -> bool:
+	if _combat == null:
+		return false
 	return _combat.is_player_friendly(target)
 
 
 func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_strength: float = 0.0) -> void:
+	if _is_remote_player():
+		return
 	if not _alive:
 		return
 	if DebugState.config != null and DebugState.config.god_mode:
@@ -1385,6 +1389,8 @@ func fire_exile_shot(target: Node3D) -> void:
 	_combat.fire_exile_shot(target)
 
 func _die() -> void:
+	if _is_remote_player():
+		return
 	_alive = false
 	died.emit()
 	_sprinting = false
@@ -1421,6 +1427,8 @@ func _show_death_screen() -> void:
 
 
 func respawn() -> void:
+	if _is_remote_player():
+		return
 	if _death_tween != null and _death_tween.is_valid():
 		_death_tween.kill()
 		_death_tween = null
