@@ -1744,6 +1744,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#local-two-instance-testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Local two-instance testing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#non-goals-at-launch" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1958,6 +1969,13 @@
 <li><strong>Cross-region play</strong>: Steam relay handles it transparently, but latency to a host on another continent will be 200ms+. Worth showing ping in the lobby browser.</li>
 <li><strong>Pet / drone replication</strong>: Automaton drones, charm pets, IED traps — all need authority decisions. Probably "spawn-side authority" — whoever owns the controlling entity owns the spawned ones too, but they're host-replicated like enemies.</li>
 </ul>
+<h2 id="local-two-instance-testing">Local two-instance testing<a class="headerlink" href="#local-two-instance-testing" title="Permanent link">&para;</a></h2>
+<p>Without a second Steam account, you can run the editor + an exported <code>.exe</code> against the same Steam user — useful for verifying the lobby flow, scene transition, and any host/client UI divergence. The catch: NetState identifies the host by <code>lobby_owner_id == SteamState.steam_id</code>, which is true on both processes when they share an account, so the second process incorrectly identifies as host.</p>
+<p>Workaround: launch the second instance with <strong><code>--mp-force-client</code></strong>:</p>
+<div class="highlight"><pre><span></span><code>build\windows\neurokore-requiem.exe --mp-force-client
+</code></pre></div>
+<p>This forces <code>is_host()</code> / <code>is_client()</code> / <code>is_authority()</code> to return client-side values regardless of Steam IDs. <strong>Dev-only — never enable this in shipped builds.</strong> Real multi-user testing (different Steam accounts) doesn't need the flag.</p>
+<p>What this <em>does</em> validate locally: lobby creation, joining, browsing, chat plumbing, the Start transition, scene loading on both ends. What it <em>doesn't</em> validate: actual peer-to-peer network traffic between two same-account processes (Steam routing same-ID-to-itself is undefined). For that, real two-account testing is required and will happen for free once playtest builds reach actual users.</p>
 <h2 id="non-goals-at-launch">Non-goals at launch<a class="headerlink" href="#non-goals-at-launch" title="Permanent link">&para;</a></h2>
 <ul>
 <li>PvP / arena / dueling</li>
