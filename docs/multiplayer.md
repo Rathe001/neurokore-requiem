@@ -1,6 +1,8 @@
 # Multiplayer
 
-> **Status: Planned.** Lobby UI scaffolding is in place (Multiplayer button on the startup screen, currently disabled at `startup_screen.gd:123`). No networking is implemented yet. This document is the design intent and the implementation roadmap. Phases are sequenced in the order we'll actually build.
+> **Status: In progress.** Phases 0, 1A, 1B, 2A, and 2B are shipped and on `main`. **Phase 2C (cleanup) is the next chunk.** See [Implementation phases](#implementation-phases) below for the full sequence and what each one covers.
+>
+> **Verification gap to keep in mind:** local testing uses one Steam account in two processes (editor + `--mp-force-client` .exe), which is enough to verify lobby flow, scene transitions, and avatar spawning, but Steam P2P routing same-id-to-itself is undefined — actual cross-peer position sync, RPCs, and member-join callbacks need real two-account testing or shipping to playtest. Anything in Phase 2B+ that involves traffic between peers should be assumed *code-correct, runtime-unverified* until we get a second account into a lobby.
 
 ## Design pillars
 
@@ -108,16 +110,38 @@ Well within typical residential bandwidth. Bigger constraint is host CPU running
 
 Each phase ends with a runnable, testable game. Don't conflate phases.
 
-### Phase 0 — Foundation
-Add `godot-steam-multiplayer-peer` to `addons/`. Initialize Steam in an autoload (`SteamState`?) using App ID 4689320 (already configured in Steamworks). Stub out a `NetState` autoload to manage lobby + peer lifecycle. Verify the plugin compiles and Steam initializes on launch.
+The legend: **✅ shipped**, **🔜 next up**, **📅 planned**.
 
-### Phase 1 — Lobby
-Enable the Multiplayer button. Build the lobby UI: Create Game / Browse Games / Friends List. Create Game collects name + party size + privacy (public/friends/private). Browse lists Steam lobbies with name, host, player count. Join transitions to a pre-game lobby room (chat + ready check). Start transitions to the existing `level_shell.tscn` with networking active. Test: 2 clients on different machines see each other in a Steam lobby, can chat, can launch into the game scene together (no gameplay sync yet).
+### ✅ Phase 0 — Foundation (commit `5a64928`)
+Installed GodotSteam 4.18.1 GDExtension into `game/addons/godotsteam/`. Wired `SteamState` autoload (initialises Steam SDK via `steamInitEx`, ticks `Steam.run_callbacks()` per frame) and `NetState` autoload stub. App ID 4689320 baked into `steam_appid.txt` so the editor launch works without going through Steam.
 
-### Phase 2 — Player presence
-Spawn remote-player avatars on peer connect. Replicate own player position via `MultiplayerSynchronizer`. Despawn on disconnect. No combat — just walk around in the same world together. Confirms the transport works for the simplest possible state.
+### ✅ Phase 1A — Lobby plumbing (commit `1926fb6`)
+`NetState` gained the Steam Lobby API: `create_lobby` / `join_lobby` / `leave_lobby` / `request_lobby_list` / `send_chat`. Hooked Steam callbacks (`lobby_created`, `lobby_joined`, `lobby_chat_update`, `lobby_message`, `lobby_match_list`). Tracks `lobby_id`, `lobby_owner_id`, `mode` (OFFLINE / HOST / CLIENT), and `lobby_members` for UI to read.
 
-### Phase 3 — Enemies
+### ✅ Phase 1B — Lobby UI (commit `a00b429`)
+Four panels under `game/scripts/ui/`: `multiplayer_panel`, `create_lobby_panel`, `browse_lobbies_panel`, `lobby_room_panel`. Wired through `startup_screen.gd` with NetState's `lobby_created_result` / `lobby_joined_result` driving the transitions. Lobby room has member list (host tagged), chat log + input, Leave + Start buttons.
+
+### ✅ Phase 2A — Networked transport + scene transition (commit `2bebf03`)
+On host's Start, `NetState.start_game()` creates a `SteamMultiplayerPeer` via `create_host(0)`, registers each lobby member as a known peer, binds `multiplayer.multiplayer_peer`, then sets `started=1` lobby data. Clients pick up the lobby data update (with a 1 Hz polling fallback) and `create_client(host_steam_id, 0)`. Both fire `game_starting`, the UI swaps to `level_shell.tscn`. `--mp-force-client` CLI flag added for same-Steam-id local testing — see [Local two-instance testing](#local-two-instance-testing).
+
+Plus a defensive cleanup pass (commit `5fb3465`): quit-to-menu now calls `NetState.leave_lobby()` so a leaked peer can't bleed into a subsequent SP session.
+
+### ✅ Phase 2B — Per-peer player avatars + position sync (commit `efe84b4`)
+Restructured the player from a baked node in `level_shell.tscn` into a runtime-spawned scene. `scenes/prototype/player.tscn` (extracted) now carries a `MultiplayerSynchronizer` replicating `global_position`, `Visual.rotation`, and `net_moving`. New `PlayersContainer` script in `level_shell.tscn` spawns one Player per lobby member into a shared container; node paths match across machines so the synchronizers can route. `prototype_player.gd` now branches on `_is_remote_player()` — non-authority avatars get `_ready_remote()` (anim + mesh shadow layer only) and skip combat / abilities / overlays. Remote anim choice (idle vs run) is driven from the synced `net_moving` flag.
+
+**Critical detection rule:** `multiplayer.has_multiplayer_peer()` is misleading because GodotSteam plumbing leaves it set in SP — use `NetState.is_in_lobby()` for the actual SP/MP discriminator everywhere.
+
+Verified locally that both clients spawn two Player nodes (own + remote) on each side. Cross-peer sync NOT verified — same-account routing is undefined per Steam.
+
+### 🔜 Phase 2C — Cleanup (NEXT)
+The work to make the multiplayer flow safe to leave/re-enter without leaking state. Concrete items:
+- **Mid-game disconnect**: when a peer drops, `multiplayer.peer_disconnected` already fires `_on_peer_disconnected` in `PlayersContainer` to despawn their avatar. Verify nothing else holds a reference (HUD, signals, target locks, etc.). Add a brief "X disconnected" notification.
+- **Quit-to-menu from a running MP session**: `main_menu.gd._on_quit_to_menu_pressed` already calls `NetState.leave_lobby()` (added in Phase 2A). Audit: does that path also reset `multiplayer.multiplayer_peer` to null on every machine? Does the lobby leave callback propagate to other peers and trigger their despawn?
+- **Despawn animation**: Currently `queue_free` is a hard snap. A 0.2s fade or character-drop would read better. Probably do this when we have proper death animation work in Phase 3+.
+- **Reconnection** (nice-to-have): Steam holds connections briefly; if a peer drops and rejoins within ~30s, ideally we re-bind without forcing them through the lobby browser. Defer if it's significant work.
+- **Audit `_alive` / `_health` / damage code paths on remote players**: in Phase 2B I early-return on `_is_remote_player()` in `_physics_process` etc., but `take_damage`, `_die`, `respawn` aren't gated. Phase 3 will properly handle these via authoritative state, but for 2C add defensive early-returns so a stray call from gameplay code doesn't NPE on a remote player's null `_combat`.
+
+### 📅 Phase 3 — Enemies
 Move enemy authority to host. Spawners run only on host; spawn events RPC-broadcast to clients with deterministic IDs. Position + state machine sync via synchronizers. Damage application via RPC (host computes, broadcasts hit visuals + HP delta). Death events RPC. After this phase, all 4 players can fight enemies in the same world.
 
 ### Phase 4 — Combat events
@@ -140,8 +164,8 @@ Lockstep requires perfect determinism (RNG, floating point, frame timing) across
 ### Why Steam Lobby over a custom matchmaker
 Free; built-in NAT traversal, friend invites, server browser. Only cost is tying launch to Steam — already the launch platform.
 
-### Why `godot-steam-multiplayer-peer` over `GodotSteam`
-Both are mature plugins, but `godot-steam-multiplayer-peer` presents as a standard Godot `MultiplayerPeer`, which means the rest of the codebase uses normal `@rpc` and `MultiplayerSynchronizer` nodes — no Steam-specific calls scattered through gameplay code. Easier to swap transports later (e.g., for a stress-test ENet build) without rewriting.
+### Why GodotSteam (not godot-steam-multiplayer-peer)
+We originally planned on `godot-steam-multiplayer-peer`. When we went to install it during Phase 0, the upstream repo had been paused (Dec 2025) with a notice steering users to GodotSteam. GodotSteam itself merged its old separate `MultiplayerPeer` repo into the main 4.x branch, so the all-in-one GodotSteam GDExtension now provides the Steam SDK wrapper, the `SteamMultiplayerPeer` (which still presents as a standard Godot `MultiplayerPeer`), and Stats / Cloud / Friends — one install instead of two. Project lives on Codeberg now (`codeberg.org/godotsteam/godotsteam`), not GitHub.
 
 ### Why 4 players
 Each peer multiplies replication traffic by ~4× per replicated entity. At horde density, 4 is already pushing CPU on the host. 8 would force per-enemy delta compression or aggressive spatial culling — engineering work that doesn't pay off until we have multiplayer working at 4 first.
