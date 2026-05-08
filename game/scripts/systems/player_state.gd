@@ -14,8 +14,8 @@ signal leveled_up(new_level: int, hp_gain: int)
 # climb. With XP_PER_ENEMY_LEVEL=20, a level-1 enemy is 20 xp; a level-5 enemy
 # is 100. Tuned for friends-mode demo pacing.
 const STARTING_XP_TO_NEXT := 100
-const XP_CURVE_GROWTH := 1.35
-const XP_PER_ENEMY_LEVEL := 20
+const XP_CURVE_GROWTH := 1.45
+const XP_PER_ENEMY_LEVEL := 4
 const HP_GAIN_PER_LEVEL_MIN := 20
 const HP_GAIN_PER_LEVEL_MAX := 25
 ## How often a talent point is granted. 1 point every N level-ups; the
@@ -209,7 +209,11 @@ func gain_xp(amount: int) -> void:
 func _do_level_up() -> void:
 	var old := level
 	level += 1
-	if level % LEVELS_PER_TALENT_POINT == 0:
+	# Talent point cadence: grant on the first gained level (level 2) and
+	# every LEVELS_PER_TALENT_POINT after that — so 2, 5, 8, 11... with
+	# LEVELS_PER_TALENT_POINT=3. The shift means the player isn't waiting
+	# until level 3 to feel any tree progression.
+	if level >= 2 and (level - 2) % LEVELS_PER_TALENT_POINT == 0:
 		talent_points_total += 1
 	xp_to_next = int(round(STARTING_XP_TO_NEXT * pow(XP_CURVE_GROWTH, float(level - 1))))
 	var hp_gain := randi_range(HP_GAIN_PER_LEVEL_MIN, HP_GAIN_PER_LEVEL_MAX)

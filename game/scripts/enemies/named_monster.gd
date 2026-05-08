@@ -47,4 +47,4 @@ class_name NamedMonster extends Resource
 ## Floor on the kill drop's rarity. Item generation can roll higher than
 ## this (e.g. unique on a rare floor) but never lower. Future hook for
 ## guaranteed unique-tier item drops once that path exists.
-@export var guaranteed_drop_rarity: StringName = &"rare"
+@export var guaranteed_drop_rarity: StringName = &"magic"

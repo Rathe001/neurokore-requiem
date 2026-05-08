@@ -15,10 +15,10 @@ const ILVL_EARLY_MAX: int = 33
 const ILVL_MID_MAX: int = 66
 
 const RARITY_WEIGHTS: Dictionary = {
-	&"common": 60,
-	&"magic":  25,
-	&"rare":   12,
-	&"unique":  3,
+	&"common": 80,
+	&"magic":  14,
+	&"rare":    5,
+	&"unique":  1,
 }
 
 const RARITY_PREFIX_COUNT: Dictionary = {

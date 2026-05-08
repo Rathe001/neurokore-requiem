@@ -23,4 +23,4 @@ visual_scale = 1.25
 ring_tint = Color(1.0, 0.85, 0.2, 1.0)
 weight = 100
 min_level = 1
-guaranteed_drop_rarity = &"rare"
+guaranteed_drop_rarity = &"magic"

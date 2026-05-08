@@ -15,6 +15,13 @@ class_name LootCrateDoorPuzzle
 
 
 func apply(_ctx: LevelBuildContext, slots: Dictionary, doors: Dictionary) -> void:
+	# NG+ runs already have gear from the previous loop — skip the starter
+	# chest setup entirely. The crate node still exists in the room (placed
+	# by the level builder) but stays unconfigured: no starter kit, no door
+	# wiring. The door it would have gated stays unlocked, so the player
+	# walks through unimpeded.
+	if PlayerState.new_game_plus > 0:
+		return
 	if door_connection_id == &"":
 		push_error("[LootCrateDoorPuzzle] door_connection_id not set.")
 		return
