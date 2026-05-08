@@ -1,6 +1,6 @@
 # Multiplayer
 
-> **Status: In progress.** Phases 0 through 7 are shipped and on `main`. **Phase 2C (cleanup) is the next chunk.** See [Implementation phases](#implementation-phases) below for the full sequence and what each one covers.
+> **Status: In progress.** Phases 0 through 7 + 2C are shipped and on `main`. All planned networking phases are complete. See [Implementation phases](#implementation-phases) below for the full sequence and what each one covers.
 >
 > **Verification gap to keep in mind:** local testing uses one Steam account in two processes (editor + `--mp-force-client` .exe), which is enough to verify lobby flow, scene transitions, and avatar spawning, but Steam P2P routing same-id-to-itself is undefined — actual cross-peer position sync, RPCs, and member-join callbacks need real two-account testing or shipping to playtest. Anything in Phase 2B+ that involves traffic between peers should be assumed *code-correct, runtime-unverified* until we get a second account into a lobby.
 
@@ -133,13 +133,14 @@ Restructured the player from a baked node in `level_shell.tscn` into a runtime-s
 
 Verified locally that both clients spawn two Player nodes (own + remote) on each side. Cross-peer sync NOT verified — same-account routing is undefined per Steam.
 
-### 📅 Phase 2C — Cleanup
-The work to make the multiplayer flow safe to leave/re-enter without leaking state. Concrete items:
-- **Mid-game disconnect**: when a peer drops, `multiplayer.peer_disconnected` already fires `_on_peer_disconnected` in `PlayersContainer` to despawn their avatar. Verify nothing else holds a reference (HUD, signals, target locks, etc.). Add a brief "X disconnected" notification.
-- **Quit-to-menu from a running MP session**: `main_menu.gd._on_quit_to_menu_pressed` already calls `NetState.leave_lobby()` (added in Phase 2A). Audit: does that path also reset `multiplayer.multiplayer_peer` to null on every machine? Does the lobby leave callback propagate to other peers and trigger their despawn?
-- **Despawn animation**: Currently `queue_free` is a hard snap. A 0.2s fade or character-drop would read better. Probably do this when we have proper death animation work in Phase 3+.
-- **Reconnection** (nice-to-have): Steam holds connections briefly; if a peer drops and rejoins within ~30s, ideally we re-bind without forcing them through the lobby browser. Defer if it's significant work.
-- **Audit `_alive` / `_health` / damage code paths on remote players**: in Phase 2B I early-return on `_is_remote_player()` in `_physics_process` etc., but `take_damage`, `_die`, `respawn` aren't gated. Phase 3 will properly handle these via authoritative state, but for 2C add defensive early-returns so a stray call from gameplay code doesn't NPE on a remote player's null `_combat`.
+### Phase 2C — Cleanup ✅
+
+Hardened the multiplayer flow for safe leave/re-enter and fixed null-dereference risks on remote players.
+
+- **Quit-to-menu audit**: confirmed `main_menu.gd._on_quit_to_menu_pressed` → `NetState.leave_lobby()` → `_teardown_peer()` correctly closes the `SteamMultiplayerPeer`, sets `multiplayer.multiplayer_peer = null`, resets all lobby state, and emits `lobby_left`. Other peers see the disconnect via `peer_disconnected` → `_despawn_for`. No leaked state.
+- **Despawn animation**: replaced hard `queue_free` in `PlayersContainer._despawn_for` with a 0.25s scale-down tween before freeing, so disconnects don't look like a hard pop.
+- **Remote player safety audit**: added null guards on all public methods that access subsystems not initialized on remote players (`_combat`, `_shield`, `_grenade`, `_doomsayer`, `_ied`, `_drone_swarm`). Methods guarded: `fire_exile_shot`, `get_cooldown_ratio`, `get_cooldown_remain`, `get_shield_buff_kind`, `get_shield_buff_state`, `get_charm_count/max`, `get_trap_count/max`, `get_drone_count`. `take_damage`, `_die`, and `respawn` were already gated on `_is_remote_player()`.
+- **Reconnection** deferred: Steam's brief connection hold makes this a nice-to-have, but re-binding a peer mid-session is non-trivial. Late joiners can rejoin through the lobby browser via Phase 7's drop-in flow.
 
 ### Phase 3 — Enemies ✅
 

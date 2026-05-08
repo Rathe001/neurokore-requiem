@@ -1310,22 +1310,32 @@ func _is_in_combat() -> bool:
 # orbiting drones (OPT). Max counters are derived from the perk
 # aggregates so the HUD can render "X/Y" without re-reading internals.
 func get_charm_count() -> int:
+	if _doomsayer == null:
+		return 0
 	return _doomsayer.get_charm_count()
 
 
 func get_charm_max() -> int:
+	if _doomsayer == null:
+		return 0
 	return _doomsayer.get_charm_max()
 
 
 func get_trap_count() -> int:
+	if _ied == null:
+		return 0
 	return _ied.get_trap_count()
 
 
 func get_trap_max() -> int:
+	if _ied == null:
+		return 0
 	return _ied.get_trap_max()
 
 
 func get_drone_count() -> int:
+	if _drone_swarm == null:
+		return 0
 	return _drone_swarm.get_drone_count()
 
 
@@ -1365,20 +1375,24 @@ func get_credits() -> int:
 	return _credits
 
 func get_cooldown_ratio(skill: Skill) -> float:
-	if skill != null and _shield.is_shield_skill(skill):
+	if skill != null and _shield != null and _shield.is_shield_skill(skill):
 		return _shield.get_cooldown_ratio(skill)
-	if skill != null and _grenade.is_grenade_skill(skill):
+	if skill != null and _grenade != null and _grenade.is_grenade_skill(skill):
 		return _grenade.get_cooldown_ratio(skill)
+	if _combat == null:
+		return 0.0
 	return _combat.get_cooldown_ratio(skill)
 
 
 func get_cooldown_remain(skill: Skill) -> float:
 	if skill == null:
 		return 0.0
-	if _shield.is_shield_skill(skill):
+	if _shield != null and _shield.is_shield_skill(skill):
 		return _shield.get_cooldown_remain(skill)
-	if _grenade.is_grenade_skill(skill):
+	if _grenade != null and _grenade.is_grenade_skill(skill):
 		return _grenade.get_cooldown_remain(skill)
+	if _combat == null:
+		return 0.0
 	return _combat.get_cooldown_remain(skill)
 
 # Public entry for the Count Exile expire callback. PrototypeEnemy._tick_curse
@@ -1386,6 +1400,8 @@ func get_cooldown_remain(skill: Skill) -> float:
 # the shot's damage / VFX live. Thin proxy so the enemy doesn't reach into
 # the player's private _combat field.
 func fire_exile_shot(target: Node3D) -> void:
+	if _combat == null:
+		return
 	_combat.fire_exile_shot(target)
 
 func _die() -> void:
@@ -1599,10 +1615,14 @@ func _on_items_overflowed(overflow: Array[Item]) -> void:
 
 
 func get_shield_buff_kind() -> Skill.ActiveKind:
+	if _shield == null:
+		return Skill.ActiveKind.NONE
 	return _shield.get_shield_buff_kind()
 
 
 func get_shield_buff_state() -> Dictionary:
+	if _shield == null:
+		return {}
 	return _shield.get_shield_buff_state()
 
 

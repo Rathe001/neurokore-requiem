@@ -129,4 +129,11 @@ func _despawn_for(peer_id: int) -> void:
 	var player := _spawned[peer_id] as PrototypePlayer
 	_spawned.erase(peer_id)
 	if is_instance_valid(player):
-		player.queue_free()
+		_fade_and_free(player)
+
+
+func _fade_and_free(player: PrototypePlayer) -> void:
+	# Brief shrink-down so disconnects don't look like a hard pop.
+	var tw := create_tween()
+	tw.tween_property(player, "scale", Vector3(0.01, 0.01, 0.01), 0.25)
+	tw.tween_callback(player.queue_free)
