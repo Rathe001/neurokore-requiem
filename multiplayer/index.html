@@ -1659,7 +1659,7 @@
   <a href="#phase-4-combat-events" class="md-nav__link">
     <span class="md-ellipsis">
       
-        📅 Phase 4 — Combat events
+        Phase 4 — Combat events ✅
       
     </span>
   </a>
@@ -1994,9 +1994,9 @@
 <h3 id="phase-3-enemies">Phase 3 — Enemies ✅<a class="headerlink" href="#phase-3-enemies" title="Permanent link">&para;</a></h3>
 <p>Enemies spawn into a dedicated <code>EnemiesContainer</code> with a <code>MultiplayerSpawner</code> that replicates host spawns to all clients. Each enemy carries a <code>MultiplayerSynchronizer</code> broadcasting <code>global_position</code>, <code>Visual:rotation</code>, <code>net_health</code>, <code>net_max_health</code>, and <code>net_state</code> (State enum as int). Clients skip AI entirely (<code>_is_remote_enemy()</code> gate in <code>_physics_process</code>) and drive animations + health bars from synced values. Death detected client-side via <code>net_state == DEAD</code>; corpse cleanup handled by the spawner's removal replication.</p>
 <p>Damage from player combat (cone/AoE/hitscan/exile) routes through <code>_deal_damage()</code> in <code>PlayerCombat</code> → <code>request_damage.rpc_id(1, ...)</code> on clients, with the host applying it authoritatively via <code>take_damage()</code>. XP, loot drops, and death side-effects only fire on the host. Spawning (<code>_spawn_wave</code>, <code>_spawn_boss</code>, <code>reset_level</code>) is gated behind <code>_is_mp_client()</code>.</p>
-<p><strong>Not yet covered (Phase 4):</strong> projectile, grenade, trap, telekinesis, and doomsayer damage paths are gated against client-side application but don't send RPCs yet — those hits won't register on clients until Phase 4.</p>
-<h3 id="phase-4-combat-events">📅 Phase 4 — Combat events<a class="headerlink" href="#phase-4-combat-events" title="Permanent link">&para;</a></h3>
-<p>Projectile spawn replication: host RPCs spawn event with seed + direction; clients dead-reckon trajectory and only the host evaluates collisions. Hitscan: host computes beam endpoint, broadcasts visual via RPC. Impact burst, damage numbers, hit flashes all via RPC. The combat visuals you'd expect.</p>
+<h3 id="phase-4-combat-events">Phase 4 — Combat events ✅<a class="headerlink" href="#phase-4-combat-events" title="Permanent link">&para;</a></h3>
+<p>All player damage sources (hitscan, projectile, grenade, trap, telekinesis, doomsayer DoT) route through <code>PrototypeEnemy.deal_damage()</code> — clients send <code>request_damage.rpc_id(1, ...)</code>, host applies authoritatively. Host broadcasts hit visuals (damage numbers, hit flash, squash) to all clients via <code>_client_show_hit</code> RPC on each enemy.</p>
+<p>New <code>CombatVisuals</code> autoload wraps <code>PrototypeAttackIndicator</code> with RPC broadcasting: beams, hit cones, hit radials, impact bursts, explosions, and telegraphs (cone + radial) are all visible to every peer. Cosmetic-only, unreliable transport — a dropped visual has zero gameplay impact. Remote clients receive world-position + is_player flag; a temporary anchor Node3D is created at the origin for the indicator to attach to, then freed (immediately for impact visuals, delayed for telegraphs that parent to the host).</p>
 <h3 id="phase-5-loot">Phase 5 — Loot<a class="headerlink" href="#phase-5-loot" title="Permanent link">&para;</a></h3>
 <p>Loot drop with <code>owner_id</code> field as designed. Manual-drop UI / inventory action ("Drop" button or drag-out-of-inventory). Pickup validation. Visual distinction between owned and free-for-all drops.</p>
 <h3 id="phase-6-world-state">Phase 6 — World state<a class="headerlink" href="#phase-6-world-state" title="Permanent link">&para;</a></h3>
