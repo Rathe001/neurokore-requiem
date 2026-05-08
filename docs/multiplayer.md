@@ -1,6 +1,6 @@
 # Multiplayer
 
-> **Status: In progress.** Phases 0, 1A, 1B, 2A, and 2B are shipped and on `main`. **Phase 2C (cleanup) is the next chunk.** See [Implementation phases](#implementation-phases) below for the full sequence and what each one covers.
+> **Status: In progress.** Phases 0 through 6 are shipped and on `main`. **Phase 7 (drop-in joins) is the next chunk.** See [Implementation phases](#implementation-phases) below for the full sequence and what each one covers.
 >
 > **Verification gap to keep in mind:** local testing uses one Steam account in two processes (editor + `--mp-force-client` .exe), which is enough to verify lobby flow, scene transitions, and avatar spawning, but Steam P2P routing same-id-to-itself is undefined — actual cross-peer position sync, RPCs, and member-join callbacks need real two-account testing or shipping to playtest. Anything in Phase 2B+ that involves traffic between peers should be assumed *code-correct, runtime-unverified* until we get a second account into a lobby.
 
@@ -133,7 +133,7 @@ Restructured the player from a baked node in `level_shell.tscn` into a runtime-s
 
 Verified locally that both clients spawn two Player nodes (own + remote) on each side. Cross-peer sync NOT verified — same-account routing is undefined per Steam.
 
-### 🔜 Phase 2C — Cleanup (NEXT)
+### 📅 Phase 2C — Cleanup
 The work to make the multiplayer flow safe to leave/re-enter without leaking state. Concrete items:
 - **Mid-game disconnect**: when a peer drops, `multiplayer.peer_disconnected` already fires `_on_peer_disconnected` in `PlayersContainer` to despawn their avatar. Verify nothing else holds a reference (HUD, signals, target locks, etc.). Add a brief "X disconnected" notification.
 - **Quit-to-menu from a running MP session**: `main_menu.gd._on_quit_to_menu_pressed` already calls `NetState.leave_lobby()` (added in Phase 2A). Audit: does that path also reset `multiplayer.multiplayer_peer` to null on every machine? Does the lobby leave callback propagate to other peers and trigger their despawn?
@@ -161,10 +161,13 @@ Per-player instanced drops: when an enemy dies in MP, the host rolls one indepen
 
 Host-validated pickup: clients request via RPC on PickupsContainer (persistent node); host validates `owner_id`, confirms with serialized item data, then `queue_free`s (spawner replicates removal). Loot crates use the same per-player instanced drop pattern with host-only open + visual RPC. Manual inventory drops have empty `owner_id` (anyone can pick up). EntityPool is bypassed for credits in MP (spawner needs fresh instances); SP retains pooling.
 
-### Phase 6 — World state
-Level / zone transition sync (host triggers, all clients follow). Door / switch / interactable state replicated. Host's local save now stores world progress (current zone, switches flipped, bosses killed). Other players' saves only store their character data.
+### Phase 6 — World state ✅
 
-### Phase 7 — Drop-in
+Door, switch, and exit pad interactions are host-authoritative: clients send `_request_interact.rpc_id(1)`, host validates and performs the action, then broadcasts state changes to all clients. Doors broadcast open/close slide + unlock/relock counter via `_client_set_open` / `_client_unlock` / `_client_relock` RPCs. Switches broadcast `_client_mark_used` for one-shot deactivation. Exit pad broadcasts `_client_unlock` when the boss dies. Boss-death group callbacks (`on_boss_died`) are host-only gated on doors and exit.
+
+Level reset (NG+ transition) is synchronized: host picks a seed, broadcasts `_client_reset_level(seed, is_procgen)` to all clients. Both peers clear enemies/corpses/pickups and rebuild: procgen path rebuilds geometry from the shared seed (deterministic layout), legacy path resets interactable states. Enemy spawning during rebuild is skipped on clients via an early return in `EnemySpawner.spawn_in_bounds` — enemies arrive from the host through `EnemiesContainer`'s `MultiplayerSpawner`. Both peers advance NG+ and reset the player independently.
+
+### 🔜 Phase 7 — Drop-in (NEXT)
 Mid-session join handshake. Host serializes a state snapshot — current zone, all live enemies, all world loot, all current players' positions — and sends to the joining peer. Joiner spawns at a safe entry point (zone start) and starts receiving normal updates. The hard part is making the snapshot complete enough that nothing visible desyncs.
 
 ## Technical decisions

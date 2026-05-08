@@ -56,7 +56,16 @@ func _move_player_to_spawn() -> void:
 	var marker := get_tree().get_first_node_in_group(&"player_spawn") as Node3D
 	if marker == null:
 		return
-	var player := get_tree().get_first_node_in_group(&"player") as Node3D
+	var player: Node3D = null
+	if NetState.is_in_lobby():
+		# In MP, find the local player (the one with multiplayer authority),
+		# not a remote avatar that happens to be first in the group.
+		for node in get_tree().get_nodes_in_group(&"player"):
+			if node.is_multiplayer_authority():
+				player = node as Node3D
+				break
+	else:
+		player = get_tree().get_first_node_in_group(&"player") as Node3D
 	if player == null:
 		return
 	if player.has_method(&"set_spawn_position"):
@@ -161,11 +170,12 @@ func _clear_pickups() -> void:
 #     scaled level, reset interactable states, keep geometry. Same level.
 # PlayerState (level/XP) and InventoryState carry over either way.
 func reset_level() -> void:
-	# In MP, only the host resets the level — clients receive the rebuilt
-	# enemies via MultiplayerSpawner. Full client-side NG+ coordination
-	# (geometry rebuild, player teleport) is future work (Phase 4+).
 	if _is_mp_client():
 		return
+	_do_reset_level()
+
+
+func _do_reset_level(override_seed: int = 0) -> void:
 	# Drop any active tooltip BEFORE freeing the world — otherwise an exit-pad
 	# tooltip (or anything else hovered at the moment of interaction) keeps
 	# showing because mouse_exited doesn't fire reliably when the anchor body
@@ -176,9 +186,12 @@ func reset_level() -> void:
 	_clear_pickups()
 	var builder := get_node_or_null("LevelBuilder") as LevelBuilder
 	if builder != null and builder.layout != null and builder.layout.generator != null:
-		# Procgen path: fresh layout per NG+. randi() may rarely be 0; the
-		# generator falls back to wall-clock time in that case, so it's fine.
-		await builder.rebuild(randi())
+		# Procgen path: fresh layout per NG+.
+		var seed_val := override_seed if override_seed != 0 else randi()
+		# Broadcast seed so clients rebuild the same geometry.
+		if NetState.is_in_lobby():
+			_client_reset_level.rpc(seed_val, true)
+		await builder.rebuild(seed_val)
 		# The freshly-built level placed a new player_spawn marker; teleport
 		# the player there (and update their post-death respawn anchor).
 		_move_player_to_spawn()
@@ -186,6 +199,8 @@ func reset_level() -> void:
 		get_tree().call_group(&"minimap", &"rebake")
 	elif builder != null:
 		# Legacy in-place reset — zone-level-based, not player-level.
+		if NetState.is_in_lobby():
+			_client_reset_level.rpc(0, false)
 		# center=2+offset, spread=1 → range [1+offset, 3+offset].
 		var zoff := PlayerState.zone_level_offset()
 		builder.respawn_enemies(2 + zoff, 1)
@@ -224,6 +239,30 @@ func _reset_player() -> void:
 		player.emit_signal(&"notification_requested", tr(&"HUD_BANNER_LEVEL_RESET") % PlayerState.new_game_plus)
 	if PlayerState.active_save_id != "":
 		SaveManager.save_game(PlayerState.active_save_id)
+
+# ── Multiplayer RPCs ──────────────────────────────────────────────────
+
+@rpc("authority", "call_remote", "reliable")
+func _client_reset_level(seed_val: int, is_procgen: bool) -> void:
+	get_tree().call_group(&"interactable_tooltip", &"hide_tooltip")
+	_clear_enemies()
+	_clear_corpses()
+	_clear_pickups()
+	var builder := get_node_or_null("LevelBuilder") as LevelBuilder
+	if is_procgen and builder != null:
+		await builder.rebuild(seed_val)
+		_move_player_to_spawn()
+		get_tree().call_group(&"minimap", &"rebake")
+	elif builder != null:
+		# Legacy path: reset interactable states. Enemy respawn comes from host
+		# via MultiplayerSpawner — client skips respawn_enemies.
+		get_tree().call_group(&"resettable", &"reset_state")
+	# Clients also advance NG+ and reset player state.
+	if PlayerState.new_game_plus == 0:
+		_show_spec_select()
+	else:
+		_reset_player()
+
 
 func _spawn_boss() -> void:
 	if boss_spawn == Vector3.ZERO:

@@ -75,11 +75,18 @@ func lock() -> void:
 
 # Group dispatch from PrototypeEnemy._die() when a boss falls.
 func on_boss_died(_boss: Node) -> void:
+	if NetState.is_in_lobby() and NetState.is_client():
+		return
 	unlock()
+	if NetState.is_in_lobby():
+		_client_unlock.rpc()
 
 func interact(_user: Node) -> void:
 	if _locked:
 		get_tree().call_group(&"interactable_tooltip", &"show_text", tr(&"EXIT_TOOLTIP_LOCKED"))
+		return
+	if NetState.is_in_lobby() and NetState.is_client():
+		_request_interact.rpc_id(1)
 		return
 	get_tree().call_group(&"level_reset_handler", &"reset_level")
 
@@ -88,3 +95,19 @@ func _refresh_tint() -> void:
 	_pad_mat.albedo_color = Color(c.r * 0.25, c.g * 0.25, c.b * 0.25, 1.0)
 	_pad_mat.emission = c
 	_ring_mat.emission = c
+
+
+# ── Multiplayer RPCs ──────────────────────────────────────────────────
+
+@rpc("any_peer", "call_remote", "reliable")
+func _request_interact() -> void:
+	if not multiplayer.is_server():
+		return
+	if _locked:
+		return
+	get_tree().call_group(&"level_reset_handler", &"reset_level")
+
+
+@rpc("authority", "call_remote", "reliable")
+func _client_unlock() -> void:
+	unlock()

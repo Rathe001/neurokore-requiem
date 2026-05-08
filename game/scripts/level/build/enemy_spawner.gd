@@ -87,6 +87,10 @@ const NAMED_CHANCE := 0.005
 
 
 static func spawn_in_bounds(ctx: LevelBuildContext, piece: LevelPiece, center: Vector3, hx: float, hz: float, count: int, scene: PackedScene, level_range: Vector2i = Vector2i.ZERO, class_pool: Array[EnemyClass] = []) -> void:
+	# MP clients receive enemies via EnemiesContainer's MultiplayerSpawner —
+	# spawning locally would create duplicates.
+	if NetState.is_in_lobby() and NetState.is_client():
+		return
 	if scene == null:
 		scene = ENEMY_SCENE_DEFAULT
 

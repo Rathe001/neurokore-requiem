@@ -51,6 +51,9 @@ func reset_state() -> void:
 func interact(_user: Node) -> void:
 	if target_door == NodePath():
 		return
+	if NetState.is_in_lobby() and NetState.is_client():
+		_request_interact.rpc_id(1)
+		return
 	var door := get_node_or_null(target_door) as PrototypeDoor
 	if door == null:
 		return
@@ -59,18 +62,7 @@ func interact(_user: Node) -> void:
 	# excluded — it's the only repeatable action.
 	if _used and action != Action.TOGGLE:
 		return
-	match action:
-		Action.TOGGLE:
-			door.toggle()
-		Action.OPEN:
-			door.open()
-			_mark_used()
-		Action.CLOSE:
-			door.close()
-			_mark_used()
-		Action.UNLOCK:
-			door.unlock()
-			_mark_used()
+	_do_action(door)
 
 func _mark_used() -> void:
 	if _used:
@@ -106,3 +98,48 @@ func _refresh_lamp() -> void:
 	# Energy 0 when used reads as a hard "off" state instead of a dim glow
 	# that's easy to miss against bright room lighting.
 	_mat.emission_energy_multiplier = 0.0 if _used else LAMP_EMISSION_IDLE
+
+
+func _do_action(door: PrototypeDoor) -> void:
+	match action:
+		Action.TOGGLE:
+			door.toggle()
+			if NetState.is_in_lobby():
+				door._client_set_open.rpc(door.is_open())
+		Action.OPEN:
+			door.open()
+			_mark_used()
+			if NetState.is_in_lobby():
+				door._client_set_open.rpc(door.is_open())
+				_client_mark_used.rpc()
+		Action.CLOSE:
+			door.close()
+			_mark_used()
+			if NetState.is_in_lobby():
+				door._client_set_open.rpc(door.is_open())
+				_client_mark_used.rpc()
+		Action.UNLOCK:
+			# door.unlock() broadcasts its own _client_unlock RPC.
+			door.unlock()
+			_mark_used()
+			if NetState.is_in_lobby():
+				_client_mark_used.rpc()
+
+
+# ── Multiplayer RPCs ──────────────────────────────────────────────────
+
+@rpc("any_peer", "call_remote", "reliable")
+func _request_interact() -> void:
+	if not multiplayer.is_server():
+		return
+	var door := get_node_or_null(target_door) as PrototypeDoor
+	if door == null:
+		return
+	if _used and action != Action.TOGGLE:
+		return
+	_do_action(door)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _client_mark_used() -> void:
+	_mark_used()

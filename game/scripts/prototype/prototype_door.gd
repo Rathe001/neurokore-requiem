@@ -137,7 +137,12 @@ func interact(_user: Node) -> void:
 		# player thinks the click missed.
 		get_tree().call_group(&"interactable_tooltip", &"show_text", tr(&"DOOR_LOCKED"))
 		return
+	if NetState.is_in_lobby() and NetState.is_client():
+		_request_interact.rpc_id(1)
+		return
 	toggle()
+	if NetState.is_in_lobby():
+		_client_set_open.rpc(_open)
 
 func unlock() -> void:
 	if not locked:
@@ -146,9 +151,13 @@ func unlock() -> void:
 	if _unlocks_remaining > 0:
 		# Partial progress — keep locked but refresh in case UI shows count.
 		_refresh_tint()
+		if NetState.is_in_lobby():
+			_client_unlock.rpc(_unlocks_remaining)
 		return
 	locked = false
 	_refresh_tint()
+	if NetState.is_in_lobby():
+		_client_unlock.rpc(0)
 
 
 ## Re-increment the lock counter by one. Used by ClearRoomPuzzle when a
@@ -161,10 +170,14 @@ func relock_one() -> void:
 	_unlocks_remaining += 1
 	locked = true
 	_refresh_tint()
+	if NetState.is_in_lobby():
+		_client_relock.rpc()
 
 # Group dispatch from PrototypeEnemy._die() when a boss falls. Only doors
 # flagged with unlock_on_boss subscribe.
 func on_boss_died(_boss: Node) -> void:
+	if NetState.is_in_lobby() and NetState.is_client():
+		return
 	unlock()
 
 func _animate(target_y: float) -> void:
@@ -236,3 +249,46 @@ func _refresh_tint() -> void:
 		)
 	_frame_mat.albedo_color = oc
 	_frame_mat.emission = oc
+
+
+# ── Multiplayer RPCs ──────────────────────────────────────────────────
+
+@rpc("any_peer", "call_remote", "reliable")
+func _request_interact() -> void:
+	if not multiplayer.is_server():
+		return
+	if locked:
+		return
+	toggle()
+	_client_set_open.rpc(_open)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _client_set_open(is_open: bool) -> void:
+	if is_open:
+		if not _open:
+			_open = true
+			collision.disabled = true
+			_animate(_rest_y + SLIDE_DISTANCE)
+			_refresh_tint()
+	else:
+		if _open:
+			_open = false
+			collision.disabled = false
+			_animate(_rest_y)
+			_refresh_tint()
+
+
+@rpc("authority", "call_remote", "reliable")
+func _client_unlock(remaining: int) -> void:
+	_unlocks_remaining = remaining
+	if remaining <= 0:
+		locked = false
+	_refresh_tint()
+
+
+@rpc("authority", "call_remote", "reliable")
+func _client_relock() -> void:
+	_unlocks_remaining += 1
+	locked = true
+	_refresh_tint()
