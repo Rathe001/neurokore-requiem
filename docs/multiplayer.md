@@ -147,10 +147,11 @@ Enemies spawn into a dedicated `EnemiesContainer` with a `MultiplayerSpawner` th
 
 Damage from player combat (cone/AoE/hitscan/exile) routes through `_deal_damage()` in `PlayerCombat` → `request_damage.rpc_id(1, ...)` on clients, with the host applying it authoritatively via `take_damage()`. XP, loot drops, and death side-effects only fire on the host. Spawning (`_spawn_wave`, `_spawn_boss`, `reset_level`) is gated behind `_is_mp_client()`.
 
-**Not yet covered (Phase 4):** projectile, grenade, trap, telekinesis, and doomsayer damage paths are gated against client-side application but don't send RPCs yet — those hits won't register on clients until Phase 4.
+### Phase 4 — Combat events ✅
 
-### 📅 Phase 4 — Combat events
-Projectile spawn replication: host RPCs spawn event with seed + direction; clients dead-reckon trajectory and only the host evaluates collisions. Hitscan: host computes beam endpoint, broadcasts visual via RPC. Impact burst, damage numbers, hit flashes all via RPC. The combat visuals you'd expect.
+All player damage sources (hitscan, projectile, grenade, trap, telekinesis, doomsayer DoT) route through `PrototypeEnemy.deal_damage()` — clients send `request_damage.rpc_id(1, ...)`, host applies authoritatively. Host broadcasts hit visuals (damage numbers, hit flash, squash) to all clients via `_client_show_hit` RPC on each enemy.
+
+New `CombatVisuals` autoload wraps `PrototypeAttackIndicator` with RPC broadcasting: beams, hit cones, hit radials, impact bursts, explosions, and telegraphs (cone + radial) are all visible to every peer. Cosmetic-only, unreliable transport — a dropped visual has zero gameplay impact. Remote clients receive world-position + is_player flag; a temporary anchor Node3D is created at the origin for the indicator to attach to, then freed (immediately for impact visuals, delayed for telegraphs that parent to the host).
 
 ### Phase 5 — Loot
 Loot drop with `owner_id` field as designed. Manual-drop UI / inventory action ("Drop" button or drag-out-of-inventory). Pickup validation. Visual distinction between owned and free-for-all drops.
