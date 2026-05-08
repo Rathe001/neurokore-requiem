@@ -14,6 +14,11 @@ const CLUSTER_SPREAD := 2.5
 const CLUSTER_DAMAGE_SCALE := 0.5
 const ARC_HEIGHT_FACTOR := 0.4
 const CLUSTER_ARC_HEIGHT := 1.2
+# Linear-impulse force applied to ragdoll corpses caught in the blast.
+# Falls off linearly from MAX at blast center to MIN at the edge so a corpse
+# adjacent to the boom genuinely launches but a corpse on the rim only nudges.
+const CORPSE_IMPULSE_MAX: float = 12.0
+const CORPSE_IMPULSE_MIN: float = 3.0
 const _GRENADE_SCENE: PackedScene = preload("res://scenes/prototype/prototype_grenade.tscn")
 
 var target_position: Vector3
@@ -93,6 +98,20 @@ func _detonate() -> void:
 			Skill.GrenadeType.INCENDIARY:
 				var burn := maxi(1, int(round(float(dmg) * 0.5)))
 				PrototypeEnemy.deal_damage(n, burn, global_position, 0.0, 1, false)
+	# Toss any ragdoll corpses caught in the blast — same falloff curve as
+	# damage (linear from CORPSE_IMPULSE_MAX at the center to MIN at the
+	# blast edge). Cheap iteration since corpses are short-lived (~20s) and
+	# capped in count.
+	for c in get_tree().get_nodes_in_group(&"ragdoll_corpses"):
+		var rb := c as PrototypeRagdollCorpse
+		if rb == null or not is_instance_valid(rb):
+			continue
+		var dist := rb.global_position.distance_to(global_position)
+		if dist > blast_radius:
+			continue
+		var t := dist / blast_radius
+		var force: float = lerp(CORPSE_IMPULSE_MAX, CORPSE_IMPULSE_MIN, t)
+		rb.apply_explosion_impulse(global_position, force)
 	if grenade_type == Skill.GrenadeType.CLUSTER and not is_cluster_child:
 		_spawn_cluster_children()
 	# Brief delay so the trail particles finish fading before we hide the node.
