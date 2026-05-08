@@ -23,9 +23,9 @@ const DIM_FACTOR := 0.05        # ambient level when no player nearby (line of s
 const OCCLUDED_DIM_FACTOR := 0.0  # ambient level when blocked by wall or closed door
 const WORLD_LAYER_MASK := 1     # walls + floors + doors
 const RAY_HEIGHT := 0.5         # low sample height — clears floor colliders but stays
-                                #   below crouch-tunnel ceilings; the ray is horizontal
-                                #   (same Y on both endpoints), so we never aim it up at
-                                #   ceiling-mounted lights and trip on a low overhead.
+								#   below crouch-tunnel ceilings; the ray is horizontal
+								#   (same Y on both endpoints), so we never aim it up at
+								#   ceiling-mounted lights and trip on a low overhead.
 const SMOOTHING_RATE := 6.0     # higher = snappier; ~6 gives a ~0.17s time constant
 # 4m cells — lights are static, so the raycast result only changes when the
 # player crosses a cell boundary. Re-raycasting every frame is wasted work;
@@ -50,12 +50,20 @@ func _ready() -> void:
 	_scan(get_tree().root)
 
 func _process(delta: float) -> void:
-	if not is_instance_valid(_cached_player):
+	# Quit-to-menu / level-change can leave _cached_player as a valid (not
+	# freed) instance whose tree has been torn down. get_world_3d() then
+	# returns an empty Ref<World3D> and direct_space_state on that is a
+	# null-instance access. Re-fetch via group lookup; if no player exists
+	# in the new tree state, sit out the frame.
+	if not is_instance_valid(_cached_player) or not _cached_player.is_inside_tree():
 		_cached_player = get_tree().get_first_node_in_group(&"player") as Node3D
 	if _cached_player == null:
 		return
 	var player := _cached_player
-	var space := player.get_world_3d().direct_space_state
+	var world := player.get_world_3d()
+	if world == null:
+		return
+	var space := world.direct_space_state
 	if space == null:
 		return
 	var p := player.global_position

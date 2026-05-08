@@ -171,6 +171,14 @@ func _update_all_positions() -> void:
 		if not is_instance_valid(node):
 			dead.append(node)
 			continue
+		# Detached but not freed — pool release or level teardown removed
+		# the node from the tree. Skip silently this tick: reading
+		# global_position on an out-of-tree Node3D returns Transform3D()
+		# and spams "!is_inside_tree()" warnings. If the entity gets
+		# re-acquired it'll re-enter the tree and resume; if it's
+		# permanently gone, validity will fail on a later tick.
+		if not node.is_inside_tree():
+			continue
 		var info: Dictionary = _tracked[node]
 		var pos: Vector3 = node.global_position
 		var last: Vector3 = info["last_pos"]
