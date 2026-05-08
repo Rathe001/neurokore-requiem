@@ -1518,10 +1518,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#behavior-mods" class="md-nav__link">
+  <a href="#behavior-mods-design-intent-not-yet-implemented" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Behavior mods
+        Behavior mods (design intent — not yet implemented)
       
     </span>
   </a>
@@ -1836,7 +1836,7 @@
 </table>
 <p>The staircase is intentional: every breakpoint reads as "a tier earned" and the numeric jump is the moment that matters. Continuous reduction would dilute the breakpoint identity. <strong>Only boots roll traction</strong> — total = boots traction, no cross-slot stacking — so a player gearing into traction is making an explicit "feet matter" commitment, not accidentally accumulating it.</p>
 <p>Traction does not replace per-element resistance. A fire pool still does damage through <code>fire_resistance</code> like any fire damage; traction layers on top as an additional reduction specifically for <em>ground-source</em> damage.</p>
-<h3 id="behavior-mods">Behavior mods<a class="headerlink" href="#behavior-mods" title="Permanent link">&para;</a></h3>
+<h3 id="behavior-mods-design-intent-not-yet-implemented">Behavior mods <em>(design intent — not yet implemented)</em><a class="headerlink" href="#behavior-mods-design-intent-not-yet-implemented" title="Permanent link">&para;</a></h3>
 <p>Each gear slot (excluding weapons and offhands, which define behavior through their base type) can roll one <strong>behavior mod</strong>. Mods are the identity layer — two chest pieces with identical stats but different mods play differently.</p>
 <p>Principles: <strong>mods change behavior, not just numbers</strong>; <strong>each mod has a tradeoff</strong> (a jetpack backpack has fewer inventory slots — power costs something); <strong>mods are rollable with their own parameters</strong> (a jetpack might drain 18 or 26 resource per second depending on the roll); <strong>~4 mods per slot</strong> for variety without dilution.</p>
 <p>Cross-slot synergies are emergent, not designed. A player who discovers a mod combination that works with their talent build has found their <em>build identity</em> — and that moment is what makes loot-driven games compelling.</p>
@@ -1991,7 +1991,7 @@
 <li><strong>1H weapons</strong> define Fire only. Alt Fire comes from the offhand.</li>
 <li><strong>2H weapons</strong> always define Fire. Alt Fire is <em>optional</em> — a sledgehammer has no alt fire, but an M4 has a grenade launcher. Augments can add an alt fire to weapons that don't have one natively.</li>
 </ul>
-<p>The weapon-type list will grow significantly. Each new weapon type should change the player's tactical approach, not just provide different numbers.</p>
+<p>Currently four base weapon types exist (<code>melee_1h</code>, <code>ranged_1h</code>, <code>melee_2h</code>, <code>ranged_2h</code>). Named sub-types (Pistol, SMG, Combat Knife, etc.) are future work — each new weapon type should change the player's tactical approach, not just provide different numbers.</p>
 <h3 id="offhands">Offhands<a class="headerlink" href="#offhands" title="Permanent link">&para;</a></h3>
 <p>Occupy the offhand slot when using a 1H weapon. Each offhand's <code>fire_skill</code> becomes the player's <strong>Alt Fire</strong>. Offhands are never just stat sticks — they always provide an active ability. Three archetypes:</p>
 <ul>
