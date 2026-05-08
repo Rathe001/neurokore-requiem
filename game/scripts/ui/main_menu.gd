@@ -132,6 +132,12 @@ func _on_quit_to_menu_pressed() -> void:
 	# Clear so the quit-handler on the startup screen doesn't re-save
 	# with empty/reset state after the scene transition.
 	PlayerState.active_save_id = ""
+	# Tear down any active lobby + SteamMultiplayerPeer so a subsequent
+	# single-player session starts with a clean MultiplayerAPI. Without
+	# this, leaving a multiplayer game via Esc → Quit to Menu leaks the
+	# bound peer into the next SP session and RPCs / MultiplayerSpawner
+	# misbehave against a phantom network.
+	NetState.leave_lobby()
 	get_tree().change_scene_to_file(STARTUP_SCENE)
 
 
