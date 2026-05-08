@@ -6,6 +6,10 @@ class_name LevelBuildContext
 ## piece of output collected back for LevelBuilder.get_door().
 
 var root: Node3D
+## Container node for spawned enemies. Enemies are added as children of
+## this node so the MultiplayerSpawner can replicate them in MP. Defaults
+## to root when no dedicated container is found (backwards compat).
+var enemies: Node3D
 var layout: LevelLayout
 ## The active LevelGraph used by this build. For graph-mode layouts this is
 ## layout.graph; for generator-mode it's the transient graph the generator
@@ -44,6 +48,8 @@ var wall_keys: Array = []
 static func create(root_: Node3D, layout_: LevelLayout, graph_: LevelGraph = null) -> LevelBuildContext:
 	var ctx := LevelBuildContext.new()
 	ctx.root = root_
+	var ec := root_.get_node_or_null("EnemiesContainer") as Node3D
+	ctx.enemies = ec if ec != null else root_
 	ctx.layout = layout_
 	# Caller passes the resolved graph (generator output OR layout.graph).
 	# Falling back to layout.graph keeps backward compat with anything that

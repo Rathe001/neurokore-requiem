@@ -218,7 +218,7 @@ static func _pick_class(pool: Array[EnemyClass], limits: Dictionary = {}) -> Ene
 
 static func _spawn(ctx: LevelBuildContext, pos: Vector3, scene: PackedScene, level_override: int = 0, affixes: Array[MonsterAffix] = [], named: NamedMonster = null, class_override: EnemyClass = null) -> void:
 	var enemy := EntityPool.acquire(scene)
-	ctx.root.add_child(enemy)
+	ctx.enemies.add_child(enemy)
 	enemy.global_position = pos
 	if level_override > 0 and "level" in enemy:
 		enemy.level = level_override

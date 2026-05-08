@@ -18,6 +18,17 @@ const BOSS_SCENE: PackedScene = preload("res://scenes/prototype/prototype_enemy.
 var _corpses: Array[Node3D] = []
 var _corpse_head: int = 0
 var _spec_overlay: SpecSelectOverlay
+@onready var _enemies_container: Node3D = get_node_or_null("EnemiesContainer") as Node3D
+
+
+func _get_enemy_parent() -> Node3D:
+	return _enemies_container if _enemies_container != null else self
+
+## True when we're a non-host client in an active MP session. Enemy spawning,
+## wave clears, and boss creation are host-only; clients receive enemy nodes
+## via the MultiplayerSpawner on EnemiesContainer.
+func _is_mp_client() -> bool:
+	return NetState.is_in_lobby() and not NetState.is_host()
 
 func _ready() -> void:
 	add_to_group(&"corpse_manager")
@@ -28,7 +39,7 @@ func _ready() -> void:
 	_move_player_to_spawn()
 	if DebugState.config != null and DebugState.config.disable_enemies:
 		_clear_enemies()
-	elif spawn_boss_on_ready:
+	elif spawn_boss_on_ready and not _is_mp_client():
 		_spawn_boss()
 
 
@@ -67,6 +78,10 @@ func _wire_switches() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not BuildInfo.dev_tools_enabled():
 		return
+	# Debug spawning/clearing is host-only in MP — clients receive enemies via
+	# the MultiplayerSpawner.
+	if _is_mp_client():
+		return
 	if event.is_action_pressed(&"debug_horde_spawn"):
 		if DebugState.config != null and DebugState.config.disable_enemies:
 			return
@@ -94,12 +109,13 @@ func _spawn_wave(count: int) -> void:
 	if player_node != null and is_instance_valid(player_node):
 		player = player_node as Node3D
 	var center: Vector3 = player.global_position if player != null else Vector3.ZERO
+	var parent := _get_enemy_parent()
 	for i in count:
 		var angle := randf() * TAU
 		var radius := randf_range(spawn_min_radius, spawn_max_radius)
 		var pos := center + Vector3(cos(angle) * radius, 0.0, sin(angle) * radius)
 		var enemy := EntityPool.acquire(ENEMY_SCENE)
-		add_child(enemy)
+		parent.add_child(enemy)
 		enemy.global_position = pos
 		# Wipe any leftover affixes / named identity the pool occupant
 		# carried — wave spawns are vanilla trash, not pack leaders or
@@ -141,6 +157,11 @@ func _clear_pickups() -> void:
 #     scaled level, reset interactable states, keep geometry. Same level.
 # PlayerState (level/XP) and InventoryState carry over either way.
 func reset_level() -> void:
+	# In MP, only the host resets the level — clients receive the rebuilt
+	# enemies via MultiplayerSpawner. Full client-side NG+ coordination
+	# (geometry rebuild, player teleport) is future work (Phase 4+).
+	if _is_mp_client():
+		return
 	# Drop any active tooltip BEFORE freeing the world — otherwise an exit-pad
 	# tooltip (or anything else hovered at the moment of interaction) keeps
 	# showing because mouse_exited doesn't fire reliably when the anchor body
@@ -219,7 +240,7 @@ func _spawn_boss() -> void:
 		boss.affixes = [] as Array[MonsterAffix]
 	if "named_monster" in boss:
 		boss.named_monster = null
-	add_child(boss)
+	_get_enemy_parent().add_child(boss)
 	boss.global_position = boss_spawn
 	if boss.has_method(&"reset"):
 		boss.reset()

@@ -1,14 +1,17 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=9 format=3]
 
-; Generic level scene: WorldEnvironment + LevelBuilder + PlayersContainer +
-; HUD + Camera. The LevelBuilder's `layout` export decides what level is
-; built. Players are instantiated dynamically into PlayersContainer (one
-; per peer in multiplayer, or one for the local player in single-player)
-; so the same scene structure works for both modes.
+; Generic level scene: WorldEnvironment + LevelBuilder + EnemiesContainer +
+; PlayersContainer + HUD + Camera. The LevelBuilder's `layout` export
+; decides what level is built. Players are instantiated dynamically into
+; PlayersContainer (one per peer in multiplayer, or one for the local
+; player in single-player) so the same scene structure works for both
+; modes. Enemies are spawned into EnemiesContainer; in multiplayer a
+; MultiplayerSpawner attached there replicates them to all peers.
 
 [ext_resource type="Script" path="res://scripts/prototype/prototype_root.gd" id="script_root"]
 [ext_resource type="Script" path="res://scripts/prototype/prototype_camera.gd" id="script_camera"]
 [ext_resource type="Script" path="res://scripts/prototype/players_container.gd" id="script_players_container"]
+[ext_resource type="Script" path="res://scripts/prototype/enemies_container.gd" id="script_enemies_container"]
 [ext_resource type="Script" path="res://scripts/level/level_builder.gd" id="script_builder"]
 [ext_resource type="PackedScene" path="res://scenes/prototype/prototype_hud.tscn" id="scene_hud"]
 [ext_resource type="Resource" path="res://resources/level/layouts/procgen_demo.tres" id="layout"]
@@ -64,6 +67,11 @@ layout = ExtResource("layout")
 [node name="NavigationRegion3D" type="NavigationRegion3D" parent="."]
 unique_name_in_owner = true
 navigation_mesh = SubResource("navmesh_level")
+
+; EnemiesContainer holds all spawned enemies. In multiplayer, a
+; MultiplayerSpawner inside replicates spawn / despawn to all peers.
+[node name="EnemiesContainer" type="Node3D" parent="."]
+script = ExtResource("script_enemies_container")
 
 ; PlayersContainer's _ready spawns the local player BEFORE this node's
 ; siblings (HUD, Camera) hit _ready, so their group lookups for &"player"

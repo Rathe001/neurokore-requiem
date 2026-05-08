@@ -130,6 +130,21 @@ func _knockback_for(skill: Skill, weapon: Item) -> float:
 		bonus = float(weapon.get_effective_modifier(&"knockback_bonus"))
 	return skill.knockback + bonus
 
+## Route damage to an enemy. In SP (or on the host), calls take_damage
+## directly. On a MP client, sends the hit to the host via RPC so the
+## authority applies it. Damage numbers still spawn locally for instant
+## feedback — the host re-broadcasts health via the synchronizer.
+func _deal_damage(target: Node3D, amount: int, knockback_from: Vector3, knockback_strength: float, multistrike: int, is_crit: bool) -> void:
+	if NetState.is_in_lobby() and not NetState.is_host():
+		target.request_damage.rpc_id(1, amount, knockback_from, knockback_strength, multistrike, is_crit)
+		# Local visual feedback — damage number + hit flash. The host will
+		# independently compute health; this is purely cosmetic so the
+		# client doesn't feel laggy.
+		var head := target.global_position + Vector3(0.0, 1.8, 0.0)
+		DamageNumber.spawn(target.get_parent(), head, amount, multistrike, is_crit)
+		return
+	target.take_damage(amount, knockback_from, knockback_strength, multistrike, is_crit)
+
 
 func _resolve_cone(skill: Skill, aim: Vector3, eff_range: float, weapon: Item) -> void:
 	var half_cos := cos(deg_to_rad(skill.cone_deg * 0.5))
@@ -149,7 +164,7 @@ func _resolve_cone(skill: Skill, aim: Vector3, eff_range: float, weapon: Item) -
 				continue
 			var is_crit := _roll_crit(weapon)
 			var dmg := _crit_damage(_roll_skill_damage(skill, weapon), is_crit)
-			enode.take_damage(dmg, _host.global_position, kb, hits, is_crit)
+			_deal_damage(enode, dmg, _host.global_position, kb, hits, is_crit)
 		_apply_exile_curse_if_active(enode)
 
 func _resolve_aoe(skill: Skill, eff_range: float, weapon: Item) -> void:
@@ -166,7 +181,7 @@ func _resolve_aoe(skill: Skill, eff_range: float, weapon: Item) -> void:
 				continue
 			var is_crit := _roll_crit(weapon)
 			var dmg := _crit_damage(_roll_skill_damage(skill, weapon), is_crit)
-			enode.take_damage(dmg, _host.global_position, kb, hits, is_crit)
+			_deal_damage(enode, dmg, _host.global_position, kb, hits, is_crit)
 		_apply_exile_curse_if_active(enode)
 
 
@@ -258,7 +273,7 @@ func _resolve_hitscan(skill: Skill, aim: Vector3, eff_range: float, weapon: Item
 			continue
 		var is_crit := _roll_crit(weapon)
 		var dmg := _crit_damage(_roll_skill_damage(skill, weapon), is_crit)
-		hit_target.take_damage(dmg, _host.global_position, _knockback_for(skill, weapon), hits, is_crit)
+		_deal_damage(hit_target, dmg, _host.global_position, _knockback_for(skill, weapon), hits, is_crit)
 	_apply_exile_curse_if_active(hit_target)
 
 # ---------------------------------------------------------------------------
@@ -337,6 +352,6 @@ func fire_exile_shot(target: Node3D) -> void:
 	PrototypeAttackIndicator.spawn_impact_burst(_host, target.global_position + Vector3(0.0, 0.9, 0.0))
 	var mult := 1.0
 	var dmg := int(round(float(EXILE_AUTO_SHOT_BASE_DAMAGE) * mult))
-	target.take_damage(dmg, _host.global_position, EXILE_AUTO_SHOT_KNOCKBACK, 1, false)
+	_deal_damage(target, dmg, _host.global_position, EXILE_AUTO_SHOT_KNOCKBACK, 1, false)
 
 

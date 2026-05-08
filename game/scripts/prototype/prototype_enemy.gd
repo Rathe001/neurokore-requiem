@@ -363,6 +363,13 @@ var _spawn_position: Vector3 = Vector3.ZERO
 var _return_stuck_timer: float = 0.0
 var _return_last_dist_sq: float = 0.0
 
+# Networking: synced by the MultiplayerSynchronizer to clients. Authority
+# (host) writes these each physics tick; clients read them for visuals.
+var net_health: int = 0
+var net_max_health: int = 0
+var net_state: int = 0  # State enum as int
+var _net_prev_pos: Vector3 = Vector3.ZERO
+
 func _ready() -> void:
 	_init_enemy()
 	_setup_hover()
@@ -370,7 +377,10 @@ func _ready() -> void:
 func _init_enemy() -> void:
 	_generation += 1
 	add_to_group(&"enemies")
-	SpatialGrid.register(self, &"enemies")
+	# SpatialGrid drives AI queries (aggro, support, AoE) — only the host
+	# needs it. Clients skip registration since they don't run AI.
+	if not _is_remote_enemy():
+		SpatialGrid.register(self, &"enemies")
 	if not is_boss:
 		_roll_display_name()
 	# Reset transient visuals before _apply_level_stats so boss scaling, applied
@@ -789,8 +799,21 @@ func set_tooltip_locked(on: bool) -> void:
 	_tooltip_locked = on
 	_refresh_outline()
 
+## RPC endpoint: any peer can request damage on an enemy. Only the host
+## (authority) actually applies it — clients' local take_damage is gated.
+## Clients call `request_damage.rpc_id(1, ...)` to route hits to the host.
+@rpc("any_peer", "call_remote", "reliable")
+func request_damage(amount: int, knockback_from: Vector3, knockback_strength: float, multistrike: int, is_crit: bool) -> void:
+	if not multiplayer.is_server():
+		return
+	take_damage(amount, knockback_from, knockback_strength, multistrike, is_crit)
+
 func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_strength: float = 0.0, multistrike: int = 1, is_crit: bool = false) -> void:
 	if not _is_alive():
+		return
+	# Clients don't apply damage locally — they route hits through
+	# request_damage RPC to the host.
+	if _is_remote_enemy():
 		return
 	if DebugState.config != null and DebugState.config.one_shot_enemies:
 		amount = max(amount, max_health)
@@ -835,6 +858,16 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 ## (damage, animation triggers, hover). All other states are "alive enough."
 func _is_alive() -> bool:
 	return _state != State.DEAD
+
+## True when this enemy exists on a non-host client in an active MP session.
+## Same detection rule as _is_remote_player: NetState.is_in_lobby() is the
+## SP/MP discriminator (multiplayer.has_multiplayer_peer() lies because
+## GodotSteam binds a peer at Steam init). Enemy authority always stays
+## with the host (peer 1) — they're never transferred.
+func _is_remote_enemy() -> bool:
+	if not NetState.is_in_lobby():
+		return false
+	return not is_multiplayer_authority()
 
 
 # Per-class attack-param accessors. Precedence: EnemySkill basic_attack →
@@ -1446,6 +1479,9 @@ func _update_health_bar() -> void:
 		_HP_BAR_FRIENDLY if _charmed else _HP_BAR_HOSTILE)
 
 func _physics_process(delta: float) -> void:
+	if _is_remote_enemy():
+		_remote_physics_process()
+		return
 	if _state == State.DEAD:
 		return
 	_attack_cd = maxf(0.0, _attack_cd - delta)
@@ -1553,6 +1589,54 @@ func _physics_process(delta: float) -> void:
 				_play_anim(ANIM_RUN if moving else ANIM_IDLE)
 			if moving:
 				_face_direction(_want_dir)
+
+	# Authority writes net_* vars each tick — the MultiplayerSynchronizer
+	# broadcasts them to clients, which read them in _remote_physics_process.
+	net_health = _health
+	net_max_health = max_health
+	net_state = _state as int
+
+
+## Client-side tick for remote enemies (non-authority in MP). The
+## MultiplayerSynchronizer feeds global_position and Visual.rotation
+## directly; this method only handles health bar + animation derived
+## from the synced net_state.
+func _remote_physics_process() -> void:
+	var synced_state: int = net_state
+	# Detect death transition on the client side.
+	if synced_state == State.DEAD:
+		if _state != State.DEAD:
+			_state = State.DEAD
+			set_physics_process(false)
+			set_deferred(&"collision_layer", 0)
+			set_deferred(&"collision_mask", 0)
+			if collision != null:
+				collision.set_deferred(&"disabled", true)
+			if health_bar != null:
+				health_bar.visible = false
+			_play_anim(ANIM_DEATH, 1.0)
+		return
+	_state = synced_state as State
+	# Update health bar from synced values.
+	_health = net_health
+	max_health = net_max_health
+	_update_health_bar()
+	# Animation from synced state — simplified, no crouch/jump on client yet.
+	match _state:
+		State.CASTING, State.KNOCKBACK:
+			pass
+		State.JUMPING:
+			_play_anim(ANIM_JUMP)
+		State.STUNNED, State.GRABBED:
+			_play_anim(ANIM_IDLE)
+		_:
+			# Infer movement from position delta — the synchronizer writes
+			# global_position directly; velocity isn't meaningful on clients.
+			var delta_pos := global_position - _net_prev_pos
+			delta_pos.y = 0.0
+			var moving := delta_pos.length_squared() > 0.0001
+			_play_anim(ANIM_RUN if moving else ANIM_IDLE)
+	_net_prev_pos = global_position
 
 
 # Quadratic ease-out: full impulse at the moment of impact, near-zero by the
