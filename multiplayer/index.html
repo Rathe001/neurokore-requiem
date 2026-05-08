@@ -1579,10 +1579,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#phase-0-foundation" class="md-nav__link">
+  <a href="#phase-0-foundation-commit-5a64928" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Phase 0 — Foundation
+        ✅ Phase 0 — Foundation (commit 5a64928)
       
     </span>
   </a>
@@ -1590,10 +1590,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#phase-1-lobby" class="md-nav__link">
+  <a href="#phase-1a-lobby-plumbing-commit-1926fb6" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Phase 1 — Lobby
+        ✅ Phase 1A — Lobby plumbing (commit 1926fb6)
       
     </span>
   </a>
@@ -1601,10 +1601,43 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#phase-2-player-presence" class="md-nav__link">
+  <a href="#phase-1b-lobby-ui-commit-a00b429" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Phase 2 — Player presence
+        ✅ Phase 1B — Lobby UI (commit a00b429)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-2a-networked-transport-scene-transition-commit-2bebf03" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ✅ Phase 2A — Networked transport + scene transition (commit 2bebf03)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-2b-per-peer-player-avatars-position-sync-commit-efe84b4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ✅ Phase 2B — Per-peer player avatars + position sync (commit efe84b4)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-2c-cleanup-next" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🔜 Phase 2C — Cleanup (NEXT)
       
     </span>
   </a>
@@ -1615,7 +1648,7 @@
   <a href="#phase-3-enemies" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Phase 3 — Enemies
+        📅 Phase 3 — Enemies
       
     </span>
   </a>
@@ -1706,10 +1739,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#why-godot-steam-multiplayer-peer-over-godotsteam" class="md-nav__link">
+  <a href="#why-godotsteam-not-godot-steam-multiplayer-peer" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Why godot-steam-multiplayer-peer over GodotSteam
+        Why GodotSteam (not godot-steam-multiplayer-peer)
       
     </span>
   </a>
@@ -1787,7 +1820,8 @@
 
 <h1 id="multiplayer">Multiplayer<a class="headerlink" href="#multiplayer" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status: Planned.</strong> Lobby UI scaffolding is in place (Multiplayer button on the startup screen, currently disabled at <code>startup_screen.gd:123</code>). No networking is implemented yet. This document is the design intent and the implementation roadmap. Phases are sequenced in the order we'll actually build.</p>
+<p><strong>Status: In progress.</strong> Phases 0, 1A, 1B, 2A, and 2B are shipped and on <code>main</code>. <strong>Phase 2C (cleanup) is the next chunk.</strong> See <a href="#implementation-phases">Implementation phases</a> below for the full sequence and what each one covers.</p>
+<p><strong>Verification gap to keep in mind:</strong> local testing uses one Steam account in two processes (editor + <code>--mp-force-client</code> .exe), which is enough to verify lobby flow, scene transitions, and avatar spawning, but Steam P2P routing same-id-to-itself is undefined — actual cross-peer position sync, RPCs, and member-join callbacks need real two-account testing or shipping to playtest. Anything in Phase 2B+ that involves traffic between peers should be assumed <em>code-correct, runtime-unverified</em> until we get a second account into a lobby.</p>
 </blockquote>
 <h2 id="design-pillars">Design pillars<a class="headerlink" href="#design-pillars" title="Permanent link">&para;</a></h2>
 <ul>
@@ -1936,13 +1970,28 @@
 <p><strong>Hard MP horde cap: ~50 active enemies on screen</strong> (vs. the SP target of 100+). Spawners need to throttle when in MP. Endgame "Vampire Survivors scale" hordes are a single-player-only feature unless we move enemy authority off the host (probably never).</p>
 <h2 id="implementation-phases">Implementation phases<a class="headerlink" href="#implementation-phases" title="Permanent link">&para;</a></h2>
 <p>Each phase ends with a runnable, testable game. Don't conflate phases.</p>
-<h3 id="phase-0-foundation">Phase 0 — Foundation<a class="headerlink" href="#phase-0-foundation" title="Permanent link">&para;</a></h3>
-<p>Add <code>godot-steam-multiplayer-peer</code> to <code>addons/</code>. Initialize Steam in an autoload (<code>SteamState</code>?) using App ID 4689320 (already configured in Steamworks). Stub out a <code>NetState</code> autoload to manage lobby + peer lifecycle. Verify the plugin compiles and Steam initializes on launch.</p>
-<h3 id="phase-1-lobby">Phase 1 — Lobby<a class="headerlink" href="#phase-1-lobby" title="Permanent link">&para;</a></h3>
-<p>Enable the Multiplayer button. Build the lobby UI: Create Game / Browse Games / Friends List. Create Game collects name + party size + privacy (public/friends/private). Browse lists Steam lobbies with name, host, player count. Join transitions to a pre-game lobby room (chat + ready check). Start transitions to the existing <code>level_shell.tscn</code> with networking active. Test: 2 clients on different machines see each other in a Steam lobby, can chat, can launch into the game scene together (no gameplay sync yet).</p>
-<h3 id="phase-2-player-presence">Phase 2 — Player presence<a class="headerlink" href="#phase-2-player-presence" title="Permanent link">&para;</a></h3>
-<p>Spawn remote-player avatars on peer connect. Replicate own player position via <code>MultiplayerSynchronizer</code>. Despawn on disconnect. No combat — just walk around in the same world together. Confirms the transport works for the simplest possible state.</p>
-<h3 id="phase-3-enemies">Phase 3 — Enemies<a class="headerlink" href="#phase-3-enemies" title="Permanent link">&para;</a></h3>
+<p>The legend: <strong>✅ shipped</strong>, <strong>🔜 next up</strong>, <strong>📅 planned</strong>.</p>
+<h3 id="phase-0-foundation-commit-5a64928">✅ Phase 0 — Foundation (commit <code>5a64928</code>)<a class="headerlink" href="#phase-0-foundation-commit-5a64928" title="Permanent link">&para;</a></h3>
+<p>Installed GodotSteam 4.18.1 GDExtension into <code>game/addons/godotsteam/</code>. Wired <code>SteamState</code> autoload (initialises Steam SDK via <code>steamInitEx</code>, ticks <code>Steam.run_callbacks()</code> per frame) and <code>NetState</code> autoload stub. App ID 4689320 baked into <code>steam_appid.txt</code> so the editor launch works without going through Steam.</p>
+<h3 id="phase-1a-lobby-plumbing-commit-1926fb6">✅ Phase 1A — Lobby plumbing (commit <code>1926fb6</code>)<a class="headerlink" href="#phase-1a-lobby-plumbing-commit-1926fb6" title="Permanent link">&para;</a></h3>
+<p><code>NetState</code> gained the Steam Lobby API: <code>create_lobby</code> / <code>join_lobby</code> / <code>leave_lobby</code> / <code>request_lobby_list</code> / <code>send_chat</code>. Hooked Steam callbacks (<code>lobby_created</code>, <code>lobby_joined</code>, <code>lobby_chat_update</code>, <code>lobby_message</code>, <code>lobby_match_list</code>). Tracks <code>lobby_id</code>, <code>lobby_owner_id</code>, <code>mode</code> (OFFLINE / HOST / CLIENT), and <code>lobby_members</code> for UI to read.</p>
+<h3 id="phase-1b-lobby-ui-commit-a00b429">✅ Phase 1B — Lobby UI (commit <code>a00b429</code>)<a class="headerlink" href="#phase-1b-lobby-ui-commit-a00b429" title="Permanent link">&para;</a></h3>
+<p>Four panels under <code>game/scripts/ui/</code>: <code>multiplayer_panel</code>, <code>create_lobby_panel</code>, <code>browse_lobbies_panel</code>, <code>lobby_room_panel</code>. Wired through <code>startup_screen.gd</code> with NetState's <code>lobby_created_result</code> / <code>lobby_joined_result</code> driving the transitions. Lobby room has member list (host tagged), chat log + input, Leave + Start buttons.</p>
+<h3 id="phase-2a-networked-transport-scene-transition-commit-2bebf03">✅ Phase 2A — Networked transport + scene transition (commit <code>2bebf03</code>)<a class="headerlink" href="#phase-2a-networked-transport-scene-transition-commit-2bebf03" title="Permanent link">&para;</a></h3>
+<p>On host's Start, <code>NetState.start_game()</code> creates a <code>SteamMultiplayerPeer</code> via <code>create_host(0)</code>, registers each lobby member as a known peer, binds <code>multiplayer.multiplayer_peer</code>, then sets <code>started=1</code> lobby data. Clients pick up the lobby data update (with a 1 Hz polling fallback) and <code>create_client(host_steam_id, 0)</code>. Both fire <code>game_starting</code>, the UI swaps to <code>level_shell.tscn</code>. <code>--mp-force-client</code> CLI flag added for same-Steam-id local testing — see <a href="#local-two-instance-testing">Local two-instance testing</a>.</p>
+<p>Plus a defensive cleanup pass (commit <code>5fb3465</code>): quit-to-menu now calls <code>NetState.leave_lobby()</code> so a leaked peer can't bleed into a subsequent SP session.</p>
+<h3 id="phase-2b-per-peer-player-avatars-position-sync-commit-efe84b4">✅ Phase 2B — Per-peer player avatars + position sync (commit <code>efe84b4</code>)<a class="headerlink" href="#phase-2b-per-peer-player-avatars-position-sync-commit-efe84b4" title="Permanent link">&para;</a></h3>
+<p>Restructured the player from a baked node in <code>level_shell.tscn</code> into a runtime-spawned scene. <code>scenes/prototype/player.tscn</code> (extracted) now carries a <code>MultiplayerSynchronizer</code> replicating <code>global_position</code>, <code>Visual.rotation</code>, and <code>net_moving</code>. New <code>PlayersContainer</code> script in <code>level_shell.tscn</code> spawns one Player per lobby member into a shared container; node paths match across machines so the synchronizers can route. <code>prototype_player.gd</code> now branches on <code>_is_remote_player()</code> — non-authority avatars get <code>_ready_remote()</code> (anim + mesh shadow layer only) and skip combat / abilities / overlays. Remote anim choice (idle vs run) is driven from the synced <code>net_moving</code> flag.</p>
+<p><strong>Critical detection rule:</strong> <code>multiplayer.has_multiplayer_peer()</code> is misleading because GodotSteam plumbing leaves it set in SP — use <code>NetState.is_in_lobby()</code> for the actual SP/MP discriminator everywhere.</p>
+<p>Verified locally that both clients spawn two Player nodes (own + remote) on each side. Cross-peer sync NOT verified — same-account routing is undefined per Steam.</p>
+<h3 id="phase-2c-cleanup-next">🔜 Phase 2C — Cleanup (NEXT)<a class="headerlink" href="#phase-2c-cleanup-next" title="Permanent link">&para;</a></h3>
+<p>The work to make the multiplayer flow safe to leave/re-enter without leaking state. Concrete items:
+- <strong>Mid-game disconnect</strong>: when a peer drops, <code>multiplayer.peer_disconnected</code> already fires <code>_on_peer_disconnected</code> in <code>PlayersContainer</code> to despawn their avatar. Verify nothing else holds a reference (HUD, signals, target locks, etc.). Add a brief "X disconnected" notification.
+- <strong>Quit-to-menu from a running MP session</strong>: <code>main_menu.gd._on_quit_to_menu_pressed</code> already calls <code>NetState.leave_lobby()</code> (added in Phase 2A). Audit: does that path also reset <code>multiplayer.multiplayer_peer</code> to null on every machine? Does the lobby leave callback propagate to other peers and trigger their despawn?
+- <strong>Despawn animation</strong>: Currently <code>queue_free</code> is a hard snap. A 0.2s fade or character-drop would read better. Probably do this when we have proper death animation work in Phase 3+.
+- <strong>Reconnection</strong> (nice-to-have): Steam holds connections briefly; if a peer drops and rejoins within ~30s, ideally we re-bind without forcing them through the lobby browser. Defer if it's significant work.
+- <strong>Audit <code>_alive</code> / <code>_health</code> / damage code paths on remote players</strong>: in Phase 2B I early-return on <code>_is_remote_player()</code> in <code>_physics_process</code> etc., but <code>take_damage</code>, <code>_die</code>, <code>respawn</code> aren't gated. Phase 3 will properly handle these via authoritative state, but for 2C add defensive early-returns so a stray call from gameplay code doesn't NPE on a remote player's null <code>_combat</code>.</p>
+<h3 id="phase-3-enemies">📅 Phase 3 — Enemies<a class="headerlink" href="#phase-3-enemies" title="Permanent link">&para;</a></h3>
 <p>Move enemy authority to host. Spawners run only on host; spawn events RPC-broadcast to clients with deterministic IDs. Position + state machine sync via synchronizers. Damage application via RPC (host computes, broadcasts hit visuals + HP delta). Death events RPC. After this phase, all 4 players can fight enemies in the same world.</p>
 <h3 id="phase-4-combat-events">Phase 4 — Combat events<a class="headerlink" href="#phase-4-combat-events" title="Permanent link">&para;</a></h3>
 <p>Projectile spawn replication: host RPCs spawn event with seed + direction; clients dead-reckon trajectory and only the host evaluates collisions. Hitscan: host computes beam endpoint, broadcasts visual via RPC. Impact burst, damage numbers, hit flashes all via RPC. The combat visuals you'd expect.</p>
@@ -1957,8 +2006,8 @@
 <p>Lockstep requires perfect determinism (RNG, floating point, frame timing) across peers and forces lockstep at the slowest peer's framerate. Host-authoritative is simpler, more permissive of jitter, and standard for coop PvE.</p>
 <h3 id="why-steam-lobby-over-a-custom-matchmaker">Why Steam Lobby over a custom matchmaker<a class="headerlink" href="#why-steam-lobby-over-a-custom-matchmaker" title="Permanent link">&para;</a></h3>
 <p>Free; built-in NAT traversal, friend invites, server browser. Only cost is tying launch to Steam — already the launch platform.</p>
-<h3 id="why-godot-steam-multiplayer-peer-over-godotsteam">Why <code>godot-steam-multiplayer-peer</code> over <code>GodotSteam</code><a class="headerlink" href="#why-godot-steam-multiplayer-peer-over-godotsteam" title="Permanent link">&para;</a></h3>
-<p>Both are mature plugins, but <code>godot-steam-multiplayer-peer</code> presents as a standard Godot <code>MultiplayerPeer</code>, which means the rest of the codebase uses normal <code>@rpc</code> and <code>MultiplayerSynchronizer</code> nodes — no Steam-specific calls scattered through gameplay code. Easier to swap transports later (e.g., for a stress-test ENet build) without rewriting.</p>
+<h3 id="why-godotsteam-not-godot-steam-multiplayer-peer">Why GodotSteam (not godot-steam-multiplayer-peer)<a class="headerlink" href="#why-godotsteam-not-godot-steam-multiplayer-peer" title="Permanent link">&para;</a></h3>
+<p>We originally planned on <code>godot-steam-multiplayer-peer</code>. When we went to install it during Phase 0, the upstream repo had been paused (Dec 2025) with a notice steering users to GodotSteam. GodotSteam itself merged its old separate <code>MultiplayerPeer</code> repo into the main 4.x branch, so the all-in-one GodotSteam GDExtension now provides the Steam SDK wrapper, the <code>SteamMultiplayerPeer</code> (which still presents as a standard Godot <code>MultiplayerPeer</code>), and Stats / Cloud / Friends — one install instead of two. Project lives on Codeberg now (<code>codeberg.org/godotsteam/godotsteam</code>), not GitHub.</p>
 <h3 id="why-4-players">Why 4 players<a class="headerlink" href="#why-4-players" title="Permanent link">&para;</a></h3>
 <p>Each peer multiplies replication traffic by ~4× per replicated entity. At horde density, 4 is already pushing CPU on the host. 8 would force per-enemy delta compression or aggressive spatial culling — engineering work that doesn't pay off until we have multiplayer working at 4 first.</p>
 <h2 id="open-questions">Open questions<a class="headerlink" href="#open-questions" title="Permanent link">&para;</a></h2>
