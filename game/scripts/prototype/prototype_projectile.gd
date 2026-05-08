@@ -46,6 +46,43 @@ var _hit: bool = false
 var _connected: bool = false
 var _released: bool = false
 
+# Visual presets. Bullets (laser bolts — small, fast, no AoE) render as a
+# thin elongated BoxMesh that streaks along travel direction. AoE shots
+# (charged plasma, anything with blast_radius > 0) keep the original
+# SphereMesh from the .tscn so the heavier hit reads as a glowing orb.
+# The discriminator is `blast_radius > 0` set by the spawner before reset().
+const LASER_BOX_SIZE: Vector3 = Vector3(0.07, 0.07, 0.55)
+static var _laser_mesh: BoxMesh = null
+# Cached on first reset so we can swap back to the authored sphere when an
+# AoE shot is acquired from the same pool slot that previously held a bullet.
+var _sphere_mesh_cache: Mesh = null
+
+# Side-tinted material variants. Player fire keeps the authored cyan plasma
+# look; enemy fire (target_group == &"player") swaps to a red variant so the
+# player can read incoming bolts at a glance. Both are static caches built
+# off the .tscn-defined material the first time a projectile resets.
+const PLAYER_PROJECTILE_COLOR: Color = Color(0.4, 0.85, 1.0, 1.0)
+const ENEMY_PROJECTILE_COLOR: Color = Color(1.0, 0.88, 0.15, 1.0)
+static var _player_material: StandardMaterial3D = null
+static var _enemy_material: StandardMaterial3D = null
+
+static func _get_laser_mesh() -> BoxMesh:
+	if _laser_mesh == null:
+		_laser_mesh = BoxMesh.new()
+		_laser_mesh.size = LASER_BOX_SIZE
+	return _laser_mesh
+
+# First call captures the authored cyan material as the player variant, then
+# clones+retints it for the enemy variant. Subsequent calls are free.
+static func _ensure_side_materials(default_mat: StandardMaterial3D) -> void:
+	if _player_material == null:
+		_player_material = default_mat
+	if _enemy_material == null and _player_material != null:
+		var m: StandardMaterial3D = _player_material.duplicate()
+		m.albedo_color = ENEMY_PROJECTILE_COLOR
+		m.emission = ENEMY_PROJECTILE_COLOR
+		_enemy_material = m
+
 func _ready() -> void:
 	_connect_signal()
 
@@ -67,14 +104,47 @@ func reset() -> void:
 	# is_player_friendly check in _on_body_entered.
 	var target_mask := (PLAYER_LAYER_MASK | CHARMED_ALLY_LAYER_MASK) if target_group == &"player" else ENEMY_LAYER_MASK
 	collision_mask = WORLD_LAYER_MASK | target_mask
-	# Scale the visual mesh + glow to match the skill's visual weight.
+	# Swap visual based on shot type. AoE shots keep the authored sphere;
+	# regular bullets get the elongated laser box, oriented along travel
+	# (look_at on the projectile node so the box's Z axis aligns with
+	# direction and the streak reads as motion blur).
+	var enemy_fire := target_group == &"player"
+	var tint: Color = ENEMY_PROJECTILE_COLOR if enemy_fire else PLAYER_PROJECTILE_COLOR
 	var vis := get_node_or_null(^"Visual") as MeshInstance3D
 	if vis != null:
+		if _sphere_mesh_cache == null:
+			_sphere_mesh_cache = vis.mesh
+		if blast_radius > 0.0:
+			vis.mesh = _sphere_mesh_cache
+		else:
+			vis.mesh = _get_laser_mesh()
 		vis.scale = Vector3.ONE * visual_scale
+		# Side-tint the material. The authored material on the .tscn becomes
+		# the player variant; the enemy variant is cloned-and-retinted on
+		# first need. Both are reused across pool acquires.
+		var src := vis.material_override as StandardMaterial3D
+		if src != null:
+			_ensure_side_materials(src)
+		if enemy_fire and _enemy_material != null:
+			vis.material_override = _enemy_material
+		elif _player_material != null:
+			vis.material_override = _player_material
+	if blast_radius <= 0.0 and direction.length_squared() > 0.0001:
+		# look_at requires a target distinct from current position; offset
+		# along direction (already-normalized at spawn). Up vector defaults
+		# to world Y — fine since fire trajectories are near-horizontal.
+		look_at(global_position + direction, Vector3.UP)
+	else:
+		# Reset rotation for sphere shots so a previous bullet's basis
+		# doesn't leak through (visually irrelevant but keeps the node tidy).
+		rotation = Vector3.ZERO
 	var glow := get_node_or_null(^"Glow") as OmniLight3D
 	if glow != null:
 		glow.omni_range = 5.0 * visual_scale
 		glow.light_energy = 3.0 * visual_scale
+		# Drives _projectile_color() too — impact bursts and explosion VFX
+		# pick up the side color automatically.
+		glow.light_color = tint
 	# body_entered only fires when a body crosses INTO the area on a later
 	# physics frame; if a target is already overlapping at spawn (close-
 	# range fire), the signal never triggers. Defer a sweep over current
@@ -124,15 +194,36 @@ func _physics_process(delta: float) -> void:
 		_ray_query.collide_with_bodies = true
 		var hit := space.intersect_ray(_ray_query)
 		if not hit.is_empty():
-			global_position = hit.position
-			_traveled += from.distance_to(hit.position)
+			var impact_pos: Vector3 = hit.position
+			global_position = impact_pos
+			_traveled += from.distance_to(impact_pos)
 			_hit = true
+			# Spawn the impact visual on the wall surface so the bolt
+			# doesn't just vanish. AoE shots detonate their full explosion
+			# against the wall — query_radius from impact_pos still catches
+			# any targets clustered near the impact point.
+			if blast_radius > 0.0:
+				_explode(impact_pos)
+			else:
+				CombatVisuals.spawn_impact_burst(self, impact_pos, _projectile_color())
 			_release()
 			return
 	global_position = to
 	_traveled += step
 	if _traveled >= max_range:
 		_release()
+
+# True when `body` is a charmed enemy (player-friendly mind-controlled pet).
+# Used by collision logic to decide whether a projectile should hit. The
+# narrow PrototypeEnemy type-check is critical: PrototypePlayer also has an
+# is_player_friendly method, but its signature takes a target argument and
+# calling it without one crashes. Routing through this helper keeps the
+# signature mismatch contained.
+static func _is_charmed_pet(body: Node) -> bool:
+	if not (body is PrototypeEnemy):
+		return false
+	return (body as PrototypeEnemy).is_player_friendly()
+
 
 func _on_body_entered(body: Node3D) -> void:
 	if _hit:
@@ -141,17 +232,30 @@ func _on_body_entered(body: Node3D) -> void:
 	# Enemy-fired projectiles target the player AND any charmed pets (which
 	# are in the &"enemies" group but flagged player-friendly). Player-fired
 	# projectiles only damage enemies and skip player-friendly ones below.
+	#
+	# is_player_friendly() exists on TWO classes with DIFFERENT signatures:
+	#   PrototypeEnemy.is_player_friendly() -> bool          (no args)
+	#   PrototypePlayer.is_player_friendly(target: Node) -> bool
+	# Calling on a PrototypePlayer without args crashes. Use _is_charmed_pet
+	# helper to keep the call constrained to enemies.
 	var is_valid_target := body.is_in_group(target_group)
 	if not is_valid_target and target_group == &"player":
-		if body.has_method(&"is_player_friendly") and body.is_player_friendly():
+		# Charmed pets are valid targets for enemy projectiles (the host's
+		# own minions get hit by hostile fire).
+		if _is_charmed_pet(body):
+			is_valid_target = true
+		# Remote-player avatars (other peers' characters on this client)
+		# live in the &"remote_player" group, not &"player". They're still
+		# valid targets for enemy projectiles — visual hit on the client,
+		# damage applied authoritatively on host.
+		elif body.is_in_group(&"remote_player"):
 			is_valid_target = true
 	if is_valid_target and body.has_method(&"take_damage"):
 		# Player-fired projectiles skip player-friendly (charmed) enemies —
 		# no friendly fire from drones, telekinesis bolts, or ranged
-		# weapons. The projectile passes through and continues to the
-		# next valid target, but since we already set _hit=true above, we
-		# just _release() instead.
-		if target_group == &"enemies" and body.has_method(&"is_player_friendly") and body.is_player_friendly():
+		# weapons. Same _is_charmed_pet helper to avoid the signature
+		# mismatch on PrototypePlayer.
+		if target_group == &"enemies" and _is_charmed_pet(body):
 			_release()
 			return
 		var impact_pos := body.global_position + Vector3(0.0, 0.9, 0.0)

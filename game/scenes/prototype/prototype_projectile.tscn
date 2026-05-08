@@ -28,6 +28,7 @@ script = ExtResource("1_script")
 shape = SubResource("SphereShape3D_1")
 
 [node name="Visual" type="MeshInstance3D" parent="."]
+cast_shadow = 0
 mesh = SubResource("SphereMesh_1")
 material_override = SubResource("StandardMaterial3D_1")
 

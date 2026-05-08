@@ -14,5 +14,5 @@ resource_cost = 12
 targeting_mode = 2
 cone_deg = 0.0
 knockback = 0.0
-projectile_speed = 13.0
+projectile_speed = 26.0
 icon_color = Color(0.9, 0.5, 1.0, 1.0)
