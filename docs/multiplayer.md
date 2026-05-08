@@ -141,10 +141,15 @@ The work to make the multiplayer flow safe to leave/re-enter without leaking sta
 - **Reconnection** (nice-to-have): Steam holds connections briefly; if a peer drops and rejoins within ~30s, ideally we re-bind without forcing them through the lobby browser. Defer if it's significant work.
 - **Audit `_alive` / `_health` / damage code paths on remote players**: in Phase 2B I early-return on `_is_remote_player()` in `_physics_process` etc., but `take_damage`, `_die`, `respawn` aren't gated. Phase 3 will properly handle these via authoritative state, but for 2C add defensive early-returns so a stray call from gameplay code doesn't NPE on a remote player's null `_combat`.
 
-### 📅 Phase 3 — Enemies
-Move enemy authority to host. Spawners run only on host; spawn events RPC-broadcast to clients with deterministic IDs. Position + state machine sync via synchronizers. Damage application via RPC (host computes, broadcasts hit visuals + HP delta). Death events RPC. After this phase, all 4 players can fight enemies in the same world.
+### Phase 3 — Enemies ✅
 
-### Phase 4 — Combat events
+Enemies spawn into a dedicated `EnemiesContainer` with a `MultiplayerSpawner` that replicates host spawns to all clients. Each enemy carries a `MultiplayerSynchronizer` broadcasting `global_position`, `Visual:rotation`, `net_health`, `net_max_health`, and `net_state` (State enum as int). Clients skip AI entirely (`_is_remote_enemy()` gate in `_physics_process`) and drive animations + health bars from synced values. Death detected client-side via `net_state == DEAD`; corpse cleanup handled by the spawner's removal replication.
+
+Damage from player combat (cone/AoE/hitscan/exile) routes through `_deal_damage()` in `PlayerCombat` → `request_damage.rpc_id(1, ...)` on clients, with the host applying it authoritatively via `take_damage()`. XP, loot drops, and death side-effects only fire on the host. Spawning (`_spawn_wave`, `_spawn_boss`, `reset_level`) is gated behind `_is_mp_client()`.
+
+**Not yet covered (Phase 4):** projectile, grenade, trap, telekinesis, and doomsayer damage paths are gated against client-side application but don't send RPCs yet — those hits won't register on clients until Phase 4.
+
+### 📅 Phase 4 — Combat events
 Projectile spawn replication: host RPCs spawn event with seed + direction; clients dead-reckon trajectory and only the host evaluates collisions. Hitscan: host computes beam endpoint, broadcasts visual via RPC. Impact burst, damage numbers, hit flashes all via RPC. The combat visuals you'd expect.
 
 ### Phase 5 — Loot
