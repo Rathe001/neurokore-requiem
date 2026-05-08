@@ -31,7 +31,7 @@ The design intent layer lives in five short docs. Code is authoritative for curr
 - [`docs/systems.md`](docs/systems.md) — combat targeting modes + damage pipeline, itemization design intent, gear slots, traction breakpoints, item-level effectiveness curve, equipment taxonomy
 - [`docs/conventions.md`](docs/conventions.md) — tech stack, performance pillars, coding conventions, infrastructure (SpatialGrid / EntityPool), inspirations
 - [`docs/narrative-bible.md`](docs/narrative-bible.md) — Earth Facility #723, the reps, the Confrontation, Sub-Level Zero, mystery rep, rep alignments. **Aspirational — none of it is implemented yet.** Read for tone; don't read as current state.
-- [`docs/multiplayer.md`](docs/multiplayer.md) — Steam P2P coop plan (host-authoritative, 4-player cap, drop-in, instanced loot with manual-drop sharing). **Planned, not yet implemented.** Lobby UI scaffolding shipped; networking unbuilt.
+- [`docs/multiplayer.md`](docs/multiplayer.md) — Steam P2P coop (host-authoritative, 4-player cap, drop-in, instanced loot with manual-drop sharing). **Shipped** (Phases 0–7 + 2C on `main`). Lobby, transport, avatars, enemy sync, combat visuals, loot, world state, drop-in joins, and cleanup all landed.
 
 ## Platform & Performance
 

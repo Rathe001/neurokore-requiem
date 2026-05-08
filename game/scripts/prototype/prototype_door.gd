@@ -35,6 +35,7 @@ var _rest_y: float = 0.0
 var _initial_locked: bool = false
 var _unlocks_remaining: int = 1
 var _hovered: bool = false
+var _interact_cooldown: bool = false
 var _tween: Tween
 var _mat: ShaderMaterial
 var _frame_mat: StandardMaterial3D
@@ -257,10 +258,13 @@ func _refresh_tint() -> void:
 func _request_interact() -> void:
 	if not multiplayer.is_server():
 		return
-	if locked:
+	if locked or _interact_cooldown:
 		return
+	_interact_cooldown = true
 	toggle()
 	_client_set_open.rpc(_open)
+	# Brief cooldown prevents two near-simultaneous RPCs from toggling twice.
+	get_tree().create_timer(0.15).timeout.connect(func() -> void: _interact_cooldown = false)
 
 
 @rpc("authority", "call_remote", "reliable")

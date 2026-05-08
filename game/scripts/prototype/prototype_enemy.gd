@@ -613,6 +613,10 @@ func _tint_recursive(node: Node, color: Color) -> void:
 		_tint_recursive(child, color)
 
 
+# Static cache of tinted materials keyed by (base_material_rid, color) to avoid
+# duplicating a new StandardMaterial3D for every surface of every enemy on spawn.
+static var _tint_mat_cache: Dictionary = {}
+
 func _tint_mesh(mesh_inst: MeshInstance3D, color: Color) -> void:
 	var surface_count := mesh_inst.mesh.get_surface_count() if mesh_inst.mesh != null else 0
 	if surface_count == 0:
@@ -620,23 +624,35 @@ func _tint_mesh(mesh_inst: MeshInstance3D, color: Color) -> void:
 	for i in surface_count:
 		var base_mat := mesh_inst.get_active_material(i)
 		if base_mat is StandardMaterial3D:
-			var mat := (base_mat as StandardMaterial3D).duplicate() as StandardMaterial3D
-			mat.emission_enabled = true
-			mat.emission = color
-			mat.emission_energy_multiplier = 0.45
-			mesh_inst.set_surface_override_material(i, mat)
+			var key := Vector3i(base_mat.get_rid().get_id(), color.to_rgba32(), 0)
+			var cached: StandardMaterial3D = _tint_mat_cache.get(key)
+			if cached == null:
+				cached = (base_mat as StandardMaterial3D).duplicate() as StandardMaterial3D
+				cached.emission_enabled = true
+				cached.emission = color
+				cached.emission_energy_multiplier = 0.45
+				_tint_mat_cache[key] = cached
+			mesh_inst.set_surface_override_material(i, cached)
 		else:
-			# Non-StandardMaterial3D (shader mat, etc.) — create a fresh
-			# override that preserves the base albedo feel with a tinted glow.
-			var mat := StandardMaterial3D.new()
-			mat.emission_enabled = true
-			mat.emission = color
-			mat.emission_energy_multiplier = 0.45
-			mesh_inst.set_surface_override_material(i, mat)
+			var key := Vector3i(0, color.to_rgba32(), 1)
+			var cached: StandardMaterial3D = _tint_mat_cache.get(key)
+			if cached == null:
+				cached = StandardMaterial3D.new()
+				cached.emission_enabled = true
+				cached.emission = color
+				cached.emission_energy_multiplier = 0.45
+				_tint_mat_cache[key] = cached
+			mesh_inst.set_surface_override_material(i, cached)
 
 
 ## Called by EntityPool.release() before pooling. Disconnects stale listeners.
 func _pool_release() -> void:
+	if _hit_tween != null and _hit_tween.is_valid():
+		_hit_tween.kill()
+		_hit_tween = null
+	if _hit_flash_tween != null and _hit_flash_tween.is_valid():
+		_hit_flash_tween.kill()
+		_hit_flash_tween = null
 	for conn in died.get_connections():
 		died.disconnect(conn["callable"])
 	for conn in revived.get_connections():
@@ -818,6 +834,8 @@ static func deal_damage(target: Node3D, amount: int, knockback_from: Vector3, kn
 @rpc("any_peer", "call_remote", "reliable")
 func request_damage(amount: int, knockback_from: Vector3, knockback_strength: float, multistrike: int, is_crit: bool) -> void:
 	if not multiplayer.is_server():
+		return
+	if not is_inside_tree():
 		return
 	take_damage(amount, knockback_from, knockback_strength, multistrike, is_crit)
 

@@ -128,7 +128,7 @@ func _on_settings_pressed() -> void:
 
 func _on_quit_to_menu_pressed() -> void:
 	if PlayerState.active_save_id != "":
-		SaveManager.save_game(PlayerState.active_save_id, SaveManager.active_save_dir)
+		SaveManager.save_game(PlayerState.active_save_id)
 	# Clear so the quit-handler on the startup screen doesn't re-save
 	# with empty/reset state after the scene transition.
 	PlayerState.active_save_id = ""

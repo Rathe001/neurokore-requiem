@@ -40,6 +40,28 @@ static var _beam_glow_mesh_cache: Dictionary = {}
 # Beam material templates keyed by Color — duplicated per use for tween animation.
 static var _beam_core_mat_cache: Dictionary = {}
 static var _beam_glow_mat_cache: Dictionary = {}
+# Reusable pool of OmniLight3D for impact/beam/explosion effects. Avoids
+# creating hundreds of light nodes per frame during horde-scale combat.
+static var _light_pool: Array[OmniLight3D] = []
+const _LIGHT_POOL_MAX := 32
+
+static func _acquire_light() -> OmniLight3D:
+	if not _light_pool.is_empty():
+		return _light_pool.pop_back()
+	return OmniLight3D.new()
+
+
+static func _release_light(light: OmniLight3D) -> void:
+	if not is_instance_valid(light):
+		return
+	if light.get_parent() != null:
+		light.get_parent().remove_child(light)
+	light.light_energy = 0.0
+	if _light_pool.size() < _LIGHT_POOL_MAX:
+		_light_pool.append(light)
+	else:
+		light.queue_free()
+
 
 static func spawn(host: Node3D, skill: Skill, aim: Vector3, attack_range: float = 0.0) -> void:
 	var eff_range := attack_range if attack_range > 0.0 else skill.skill_range
@@ -136,7 +158,7 @@ static func spawn_beam(host: Node3D, aim: Vector3, length: float, source_offset:
 	# brief glow — matches the visual contract the projectile already has
 	# (see prototype_projectile.tscn's Glow OmniLight3D). No shadows because
 	# the beam lives <0.2s; volumetric fog disabled to keep horde-firing cheap.
-	var impact_light := OmniLight3D.new()
+	var impact_light := _acquire_light()
 	impact_light.light_color = color
 	impact_light.light_energy = 2.5
 	impact_light.omni_range = 4.0
@@ -152,6 +174,7 @@ static func spawn_beam(host: Node3D, aim: Vector3, length: float, source_offset:
 	tween.tween_property(core_mat, "emission_energy_multiplier", 0.0, BEAM_FADE)
 	tween.tween_property(glow_mat, "emission_energy_multiplier", 0.0, BEAM_FADE)
 	tween.tween_property(impact_light, "light_energy", 0.0, BEAM_FADE).set_ease(Tween.EASE_IN)
+	tween.chain().tween_callback(_release_light.bind(impact_light))
 	tween.chain().tween_callback(node.queue_free)
 
 # Brief impact flash spawned at a hit point — small emissive sphere that
@@ -193,7 +216,7 @@ static func spawn_impact_burst(host: Node3D, world_pos: Vector3, color_override:
 	parent.add_child(inst)
 	inst.global_position = world_pos
 
-	var light := OmniLight3D.new()
+	var light := _acquire_light()
 	light.light_color = color
 	light.light_energy = 3.0
 	light.omni_range = 3.5
@@ -208,6 +231,7 @@ static func spawn_impact_burst(host: Node3D, world_pos: Vector3, color_override:
 	tween.tween_property(mat, "albedo_color:a", 0.0, IMPACT_DURATION).set_ease(Tween.EASE_IN)
 	tween.tween_property(mat, "emission_energy_multiplier", 0.0, IMPACT_DURATION).set_ease(Tween.EASE_IN)
 	tween.tween_property(light, "light_energy", 0.0, IMPACT_DURATION).set_ease(Tween.EASE_IN)
+	tween.chain().tween_callback(_release_light.bind(light))
 	tween.chain().tween_callback(inst.queue_free)
 
 # AoE explosion burst — like spawn_impact_burst but scaled to a blast_radius.
@@ -248,7 +272,7 @@ static func spawn_explosion(host: Node3D, world_pos: Vector3, blast_radius: floa
 	parent.add_child(inst)
 	inst.global_position = world_pos
 
-	var light := OmniLight3D.new()
+	var light := _acquire_light()
 	light.light_color = color
 	light.light_energy = 6.0
 	light.omni_range = blast_radius * 1.5
@@ -263,6 +287,7 @@ static func spawn_explosion(host: Node3D, world_pos: Vector3, blast_radius: floa
 	tween.tween_property(mat, "albedo_color:a", 0.0, EXPLOSION_DURATION).set_ease(Tween.EASE_IN)
 	tween.tween_property(mat, "emission_energy_multiplier", 0.0, EXPLOSION_DURATION * 0.8).set_ease(Tween.EASE_IN)
 	tween.tween_property(light, "light_energy", 0.0, EXPLOSION_DURATION).set_ease(Tween.EASE_IN)
+	tween.chain().tween_callback(_release_light.bind(light))
 	tween.chain().tween_callback(inst.queue_free)
 
 

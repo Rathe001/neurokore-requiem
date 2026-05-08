@@ -39,6 +39,7 @@ var _visible: Dictionary = {}    # Light3D -> bool (in proximity AND line of sig
 var _blocked: Dictionary = {}    # Light3D -> bool (cached LoS test result)
 var _query := PhysicsRayQueryParameters3D.new()
 var _last_player_cell: Vector2i = _UNSET_CELL
+var _cached_player: Node3D       # refreshed when invalidated or on cell change
 
 func _ready() -> void:
 	_query.collision_mask = WORLD_LAYER_MASK
@@ -49,12 +50,11 @@ func _ready() -> void:
 	_scan(get_tree().root)
 
 func _process(delta: float) -> void:
-	var players := get_tree().get_nodes_in_group(&"player")
-	if players.is_empty():
+	if not is_instance_valid(_cached_player):
+		_cached_player = get_tree().get_first_node_in_group(&"player") as Node3D
+	if _cached_player == null:
 		return
-	var player := players[0] as Node3D
-	if player == null:
-		return
+	var player := _cached_player
 	var space := player.get_world_3d().direct_space_state
 	if space == null:
 		return
@@ -160,12 +160,11 @@ func _register(node: Node) -> void:
 
 
 func _initial_factor_for(light: Light3D) -> float:
-	var players := get_tree().get_nodes_in_group(&"player")
-	if players.is_empty():
+	if not is_instance_valid(_cached_player):
+		_cached_player = get_tree().get_first_node_in_group(&"player") as Node3D
+	if _cached_player == null:
 		return OCCLUDED_DIM_FACTOR
-	var player := players[0] as Node3D
-	if player == null:
-		return OCCLUDED_DIM_FACTOR
+	var player := _cached_player
 	var d := light.global_position - player.global_position
 	var dist := Vector2(d.x, d.z).length()
 	if dist >= OUTER_RADIUS:

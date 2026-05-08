@@ -31,7 +31,7 @@ func _ready() -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
 		if PlayerState.active_save_id != "":
-			save_game(PlayerState.active_save_id, active_save_dir)
+			save_game(PlayerState.active_save_id)
 		NetState.leave_lobby()
 		get_tree().quit()
 
@@ -67,12 +67,34 @@ func save_game(save_id: String = "") -> String:
 
 	var json_str := JSON.stringify(data, "\t")
 	var path := SAVE_DIR + save_id + ".json"
-	var file := FileAccess.open(path, FileAccess.WRITE)
+	var tmp_path := SAVE_DIR + save_id + ".tmp"
+
+	# Write to a temp file first so a crash mid-write doesn't corrupt the
+	# real save. Only rename once the full JSON is safely on disk.
+	var file := FileAccess.open(tmp_path, FileAccess.WRITE)
 	if file == null:
-		push_warning("[SaveManager] Failed to write save file: %s (error %d)" % [path, FileAccess.get_open_error()])
+		push_error("[SaveManager] Failed to open temp save file: %s (error %d)" % [tmp_path, FileAccess.get_open_error()])
 		return save_id
 	file.store_string(json_str)
 	file.close()
+
+	# Verify the temp file parses before replacing the real save.
+	var verify := FileAccess.open(tmp_path, FileAccess.READ)
+	if verify == null:
+		push_error("[SaveManager] Temp save vanished after write: %s" % tmp_path)
+		return save_id
+	var verify_json := JSON.new()
+	var verify_ok := verify_json.parse(verify.get_as_text()) == OK
+	verify.close()
+	if not verify_ok:
+		push_error("[SaveManager] Temp save is invalid JSON — aborting: %s" % tmp_path)
+		DirAccess.remove_absolute(tmp_path)
+		return save_id
+
+	# Atomic swap: remove old, rename temp → real.
+	if FileAccess.file_exists(path):
+		DirAccess.remove_absolute(path)
+	DirAccess.rename_absolute(tmp_path, path)
 	return save_id
 
 

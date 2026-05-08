@@ -28,6 +28,7 @@ const PLAYER_SAMPLE_HEIGHT := 0.9  # aim at chest, not feet — feet sample can
 var _aabbs: Dictionary = {}
 # mesh -> float current transparency (lerped each frame)
 var _transparency: Dictionary = {}
+var _cached_player: Node3D
 
 func _ready() -> void:
 	get_tree().node_added.connect(_on_node_added)
@@ -61,12 +62,11 @@ func _register(mesh: MeshInstance3D) -> void:
 	_transparency[mesh] = 0.0   # start fully opaque
 
 func _process(delta: float) -> void:
-	var players := get_tree().get_nodes_in_group(&"player")
-	if players.is_empty():
+	if not is_instance_valid(_cached_player):
+		_cached_player = get_tree().get_first_node_in_group(&"player") as Node3D
+	if _cached_player == null:
 		return
-	var player := players[0] as Node3D
-	if player == null:
-		return
+	var player := _cached_player
 	var cam := get_viewport().get_camera_3d()
 	if cam == null:
 		return
