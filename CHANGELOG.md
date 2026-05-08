@@ -13,6 +13,8 @@ are mandatory.
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-05-08
+
 ### Added
 
 - **Ragdoll corpses** with physics tumble — enemies fall and roll on death (impulse derived from the killing hit), self-sink into the floor after 20s. Walk through them freely; corpses brush aside but never block. Grenades launch them.

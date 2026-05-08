@@ -1,7 +1,7 @@
 "appbuild"
 {
 	"appid"			"4689320"
-	"desc"			"v0.1.2 · 900c1a5 · Low-HP warning vignette: pulsing red rim activates below..."
+	"desc"			"v0.1.3 · 1f58188 · **Ragdoll corpses** with physics tumble — enemies fall an..."
 
 	// Where SteamPipe writes its build logs and intermediate state.
 	// Created on first run. Safe to .gitignore.
