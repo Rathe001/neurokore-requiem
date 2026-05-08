@@ -19,7 +19,32 @@ const FADE_DURATION := 0.6
 const BUTTON_DELAY := 1.2
 const BUTTON_SIZE := Vector2(200.0, 40.0)
 const TITLE_FONT_SIZE := 28
-const MSG_FONT_SIZE := 16
+const MSG_FONT_SIZE := 13
+
+# Cause-keyed snarky death messages. The death screen rolls a random entry
+# from the matching list when shown. New environmental causes hook in by
+# adding a key here AND calling player.set_death_cause(&"key") just before
+# take_damage; if a cause has no entry the GENERIC list is used.
+const _SNARK_GENERIC: Array[String] = [
+	"Skill issue.",
+	"Ow. That looked like it hurt.",
+	"Maybe try not standing in the bullets next time?",
+	"Your enemies send their regards.",
+	"You died doing what you loved: making poor decisions.",
+	"Have you considered dodging?",
+	"Heroic. Briefly.",
+	"That'll buff out.",
+]
+const _SNARK_PIT: Array[String] = [
+	"You might want to try jumping harder next time.",
+	"The floor wasn't your friend after all.",
+	"Should've seen that hole coming.",
+	"Gravity remains undefeated.",
+	"That pit had your name on it. Specifically.",
+]
+const _SNARK_BY_CAUSE: Dictionary = {
+	&"pit": _SNARK_PIT,
+}
 ## Render above the HUD and everything else.
 const DEATH_LAYER := 110
 
@@ -35,7 +60,7 @@ func _ready() -> void:
 	_build_ui()
 
 
-func show_death(hardcore: bool) -> void:
+func show_death(hardcore: bool, cause: StringName = &"") -> void:
 	_hardcore = hardcore
 	visible = true
 	if hardcore:
@@ -44,7 +69,7 @@ func show_death(hardcore: bool) -> void:
 		_button.text = "Back to Main Menu"
 	else:
 		_title.text = "YOU HAVE DIED"
-		_message.text = "...but death is not the end"
+		_message.text = _pick_snark(cause)
 		_button.text = "Continue"
 
 	# Fade the overlay in, then reveal the button after a short delay so
@@ -60,6 +85,13 @@ func show_death(hardcore: bool) -> void:
 	tween.parallel().tween_property(_message, "modulate:a", 1.0, FADE_DURATION)
 	tween.tween_interval(BUTTON_DELAY - FADE_DURATION)
 	tween.tween_callback(_reveal_button)
+
+
+func _pick_snark(cause: StringName) -> String:
+	var pool: Array[String] = _SNARK_BY_CAUSE.get(cause, _SNARK_GENERIC)
+	if pool.is_empty():
+		pool = _SNARK_GENERIC
+	return pool[randi() % pool.size()]
 
 
 func _reveal_button() -> void:
@@ -108,6 +140,10 @@ func _build_ui() -> void:
 	_message.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_message.add_theme_font_size_override(&"font_size", MSG_FONT_SIZE)
 	_message.add_theme_color_override(&"font_color", Color(0.78, 0.72, 0.7))
+	# Snarky one-liners can run a touch long — wrap rather than overflow.
+	# custom_minimum_size pins the wrap width so the label sizes vertically.
+	_message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_message.custom_minimum_size = Vector2(380.0, 0.0)
 	vbox.add_child(_message)
 
 	var spacer := Control.new()

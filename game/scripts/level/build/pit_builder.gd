@@ -75,6 +75,8 @@ static func _create_pit_kill_area(ctx: LevelBuildContext, center: Vector3, inner
 	(shape.shape as BoxShape3D).size = Vector3(inner_x, 0.5, inner_z)
 	kill.add_child(shape)
 	kill.body_entered.connect(func(body: Node) -> void:
+		if body.has_method(&"set_death_cause"):
+			body.set_death_cause(&"pit")
 		if body.has_method(&"take_damage"):
 			body.take_damage(9999, Vector3.ZERO, 0.0)
 	)

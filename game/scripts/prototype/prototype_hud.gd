@@ -30,6 +30,7 @@ const DEBUG_OVERLAY_INTERVAL := 0.1
 @onready var resource_bg: ColorRect = %ResourceBackground
 @onready var resource_border: ReferenceRect = %ResourceBorder
 @onready var resource_frame: NinePatchRect = %ResourceFrame
+@onready var avatar_panel: Control = %AvatarPanel
 @onready var avatar_bg: ColorRect = %AvatarBackground
 @onready var avatar_border: ReferenceRect = %AvatarBorder
 @onready var avatar_image: TextureRect = %AvatarImage
@@ -139,6 +140,11 @@ func _ready() -> void:
 	_build_talent_point_button()
 	PlayerState.talents_changed.connect(_refresh_talent_button)
 	PlayerState.leveled_up.connect(_on_leveled_up)
+	# Click anywhere on the avatar panel (outside the + button, which has
+	# its own STOP filter) opens the character sheet — same affordance as
+	# pressing I/C. Avatar panel mouse_filter is STOP in the .tscn.
+	if avatar_panel != null:
+		avatar_panel.gui_input.connect(_on_avatar_clicked)
 
 func _exit_tree() -> void:
 	UIThemeState.changed.disconnect(_apply_theme)
@@ -579,24 +585,29 @@ func _build_talents_panel() -> void:
 	root.add_child(talents)
 
 func _build_talent_point_button() -> void:
-	# Glowing "+" that appears next to the level label when unspent talent
-	# points are available. Clicking it opens the talents panel (same as N).
+	# Glowing "+" that appears in the upper-right of the avatar panel when
+	# unspent talent points are available. Clicking it opens the talents
+	# panel (same as N). Pulses via _pulse_talent_button each frame.
 	var btn := Button.new()
 	btn.text = "+"
 	btn.flat = true
 	btn.mouse_filter = Control.MOUSE_FILTER_STOP
-	btn.add_theme_font_size_override(&"font_size", 12)
+	btn.add_theme_font_size_override(&"font_size", 28)
 	btn.add_theme_color_override(&"font_color", Color(0.4, 1.0, 0.5, 1.0))
 	btn.add_theme_color_override(&"font_hover_color", Color(0.6, 1.0, 0.7, 1.0))
 	btn.add_theme_color_override(&"font_pressed_color", Color(0.8, 1.0, 0.85, 1.0))
-	# Place to the right of the level label inside the avatar panel.
-	# LevelLabel: left=5, right=40, top=-17, bottom=-3 (relative to avatar panel bottom).
-	# The button sits just to its right: left=40, right=56.
-	btn.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	btn.offset_left = 40.0
-	btn.offset_right = 58.0
-	btn.offset_top = -19.0
-	btn.offset_bottom = -1.0
+	# Outline-as-glow: a thick same-hue outline reads as a soft halo around
+	# the glyph at avatar scale. Combined with the pulse, the "+" feels
+	# like an alert beacon rather than a stray glyph.
+	btn.add_theme_color_override(&"font_outline_color", Color(0.4, 1.0, 0.5, 0.9))
+	btn.add_theme_constant_override(&"outline_size", 8)
+	# Anchor top-right of the AvatarPanel. AvatarPanel is 90×90; button is
+	# ~30×30 sitting just inside the corner so it doesn't crowd the border.
+	btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	btn.offset_left = -32.0
+	btn.offset_right = -2.0
+	btn.offset_top = -2.0
+	btn.offset_bottom = 28.0
 	btn.tooltip_text = "Unallocated talent points (N)"
 	btn.pressed.connect(_on_talent_button_pressed)
 	# Add to AvatarPanel so it anchors to the same bottom-center region.
@@ -618,15 +629,35 @@ func _pulse_talent_button(delta: float) -> void:
 	if _talent_btn == null or not _talent_btn.visible:
 		return
 	_talent_btn_glow_phase += delta * 3.0
-	# Pulse the green color's brightness between 0.6 and 1.0.
+	# Pulse the green color's brightness between 0.6 and 1.0 on the glyph,
+	# AND oscillate the outline alpha so the halo "breathes" — reads as a
+	# beacon at the corner of the avatar instead of a static glyph.
 	var t := 0.5 + 0.5 * sin(_talent_btn_glow_phase)
 	var brightness := lerpf(0.6, 1.0, t)
 	_talent_btn.add_theme_color_override(&"font_color", Color(0.4 * brightness, 1.0 * brightness, 0.5 * brightness, 1.0))
+	var outline_alpha := lerpf(0.35, 0.95, t)
+	_talent_btn.add_theme_color_override(&"font_outline_color", Color(0.4, 1.0, 0.5, outline_alpha))
 
 func _on_talent_button_pressed() -> void:
 	# Simulate opening the talents panel — same as pressing N.
 	for node in get_tree().get_nodes_in_group(&"ui_modal"):
 		if node is TalentsPanel:
+			if not node.visible:
+				node.open_menu()
+			return
+
+
+func _on_avatar_clicked(event: InputEvent) -> void:
+	# Left click on the avatar (excluding the talent + button which has its
+	# own STOP filter) opens the character sheet. Same affordance as the
+	# I/C hotkey — discoverable for mouse-only players.
+	if not (event is InputEventMouseButton):
+		return
+	var mb := event as InputEventMouseButton
+	if mb.button_index != MOUSE_BUTTON_LEFT or not mb.pressed:
+		return
+	for node in get_tree().get_nodes_in_group(&"ui_modal"):
+		if node is CharacterPanel:
 			if not node.visible:
 				node.open_menu()
 			return

@@ -16,6 +16,7 @@ anchor_bottom = 1.0
 mouse_filter = 2
 
 [node name="AvatarPanel" type="Control" parent="Root"]
+unique_name_in_owner = true
 anchor_left = 0.5
 anchor_right = 0.5
 anchor_top = 1.0
@@ -24,7 +25,7 @@ offset_left = -270.0
 offset_top = -98.0
 offset_right = -180.0
 offset_bottom = -8.0
-mouse_filter = 2
+mouse_filter = 0
 
 [node name="AvatarBackground" type="ColorRect" parent="Root/AvatarPanel"]
 unique_name_in_owner = true

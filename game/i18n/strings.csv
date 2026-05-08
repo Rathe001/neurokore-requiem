@@ -182,7 +182,8 @@ HUD_BANNER_LEVEL_RESET,New Game +%d
 DOOR_LOCKED,It's locked
 HUD_BANNER_DIED,You died
 HUD_BANNER_NO_LIGHT,I wish I had a light...
-HUD_LEVEL_UP_FORMAT,You are now level %d! Press N to view talents
+HUD_LEVEL_UP_FORMAT,Level up!
+HUD_LEVEL_UP_TALENT_POINT,Talent point available (%d)
 HUD_LEVEL_FORMAT,Lvl. %d
 HUD_XP_FORMAT,%d / %d XP
 HUD_CREDITS_FORMAT,%d cr

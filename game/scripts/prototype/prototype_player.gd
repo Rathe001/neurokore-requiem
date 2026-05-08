@@ -139,6 +139,10 @@ var _combat: PlayerCombat
 var _camera: Camera3D
 var _health: int
 var _alive: bool = true
+# Most recent death-cause tag. Set by environmental kill paths (pit, future
+# DoT/explosion variants) just before take_damage; consumed by the death
+# screen to pick a snarky message. Empty = generic combat death.
+var _death_cause: StringName = &""
 var _knockback_vel: Vector3 = Vector3.ZERO
 var _knockback_remain: float = 0.0
 # Independent busy flags for the two firing paths so LMB-hold and RMB-hold
@@ -317,6 +321,8 @@ func _ready() -> void:
 	_shield = PlayerShield.new()
 	_shield.setup(self)
 	add_child(_shield)
+	_build_shield_visual()
+	shield_buff_changed.connect(_on_shield_buff_changed_visual)
 	_grenade = PlayerGrenade.new()
 	_grenade.setup(self)
 	add_child(_grenade)
@@ -538,7 +544,16 @@ func _on_player_leveled_up(new_level: int, hp_gain: int) -> void:
 	_recompute_stat_bonuses()
 	_health = max_health
 	health_changed.emit(_health, max_health)
-	notification_requested.emit(tr("HUD_LEVEL_UP_FORMAT") % new_level)
+	# Banner: "Level up!" plus a conditional second line when THIS level-up
+	# granted a talent point. The N in the line is the running unspent
+	# count (not "1 new"), so a player who already had unspent points sees
+	# the live tally and knows they have multiple to allocate.
+	var msg := tr("HUD_LEVEL_UP_FORMAT")
+	if new_level % PlayerState.LEVELS_PER_TALENT_POINT == 0:
+		var unspent: int = PlayerState.talent_points_total - PlayerState.get_talent_points_spent()
+		if unspent > 0:
+			msg += "\n" + (tr("HUD_LEVEL_UP_TALENT_POINT") % unspent)
+	notification_requested.emit(msg)
 	_play_levelup_vfx()
 
 func _play_levelup_vfx() -> void:
@@ -837,6 +852,7 @@ func _physics_process(delta: float) -> void:
 	# logic above so the moving / idle state stays consistent between
 	# the local animation choice and what's broadcast to remotes.
 	net_moving = _want_dir.length_squared() > 0.01 and not _interacting
+
 
 func _unhandled_input(event: InputEvent) -> void:
 	if _is_remote_player():
@@ -1445,11 +1461,18 @@ func set_spawn_position(pos: Vector3) -> void:
 	global_position = pos
 
 
+## Called by environmental kill paths (PitBuilder, future DoT/explosion
+## causes) just before take_damage so the death screen can pick a
+## cause-specific snarky message. Cleared on respawn.
+func set_death_cause(cause: StringName) -> void:
+	_death_cause = cause
+
+
 func _show_death_screen() -> void:
 	var screen := DeathScreen.new()
 	screen.continue_pressed.connect(respawn)
 	add_child(screen)
-	screen.show_death(PlayerState.hardcore)
+	screen.show_death(PlayerState.hardcore, _death_cause)
 
 
 func respawn() -> void:
@@ -1458,6 +1481,7 @@ func respawn() -> void:
 	if _death_tween != null and _death_tween.is_valid():
 		_death_tween.kill()
 		_death_tween = null
+	_death_cause = &""
 	global_position = _spawn_position
 	velocity = Vector3.ZERO
 	_knockback_remain = 0.0
@@ -1635,6 +1659,56 @@ func get_shield_buff_state() -> Dictionary:
 	if _shield == null:
 		return {}
 	return _shield.get_shield_buff_state()
+
+
+# Translucent white sphere parented to the player; toggled by the
+# shield_buff_changed signal. Built once in _ready and reused across
+# activations so we don't churn on rapid HOLD on/off cycles.
+var _shield_visual: MeshInstance3D = null
+
+const SHIELD_VISUAL_RADIUS: float = 1.05
+const SHIELD_VISUAL_HEIGHT_OFFSET: float = 1.0
+const SHIELD_VISUAL_ALPHA: float = 0.18
+
+func _build_shield_visual() -> void:
+	var mesh_inst := MeshInstance3D.new()
+	var sph := SphereMesh.new()
+	sph.radius = SHIELD_VISUAL_RADIUS
+	# SphereMesh.height is the FULL diameter — must be 2×radius or the mesh
+	# pinches into a lemon shape.
+	sph.height = SHIELD_VISUAL_RADIUS * 2.0
+	sph.radial_segments = 24
+	sph.rings = 12
+	mesh_inst.mesh = sph
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.albedo_color = Color(1.0, 1.0, 1.0, SHIELD_VISUAL_ALPHA)
+	# Faint emissive so the bubble reads against a black corridor without
+	# adding meaningful illumination to the scene.
+	mat.emission_enabled = true
+	mat.emission = Color(0.85, 0.92, 1.0, 1.0)
+	mat.emission_energy_multiplier = 0.4
+	# Render both faces so the player inside still sees the bubble's far
+	# wall — cull_back would leave the camera looking through an open hole.
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	# Don't write depth — the player's body should remain visible THROUGH
+	# the bubble. With depth-write on, the alpha sphere occludes itself and
+	# the model behind it inconsistently.
+	mat.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+	mesh_inst.material_override = mat
+	mesh_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# Lift to chest height so the sphere encloses the model from feet to
+	# slightly above head rather than centering on the floor.
+	mesh_inst.position = Vector3(0.0, SHIELD_VISUAL_HEIGHT_OFFSET, 0.0)
+	mesh_inst.visible = false
+	add_child(mesh_inst)
+	_shield_visual = mesh_inst
+
+
+func _on_shield_buff_changed_visual(active: bool, _pool: int, _pool_max: int, _reduction: float, _cd_remain: float, _cd_total: float, _dur_remain: float) -> void:
+	if _shield_visual != null:
+		_shield_visual.visible = active
 
 
 func drop_item(item: Item) -> void:
