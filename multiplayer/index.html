@@ -1689,10 +1689,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#phase-7-drop-in-next" class="md-nav__link">
+  <a href="#phase-7-drop-in" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🔜 Phase 7 — Drop-in (NEXT)
+        Phase 7 — Drop-in ✅
       
     </span>
   </a>
@@ -1820,7 +1820,7 @@
 
 <h1 id="multiplayer">Multiplayer<a class="headerlink" href="#multiplayer" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status: In progress.</strong> Phases 0 through 6 are shipped and on <code>main</code>. <strong>Phase 7 (drop-in joins) is the next chunk.</strong> See <a href="#implementation-phases">Implementation phases</a> below for the full sequence and what each one covers.</p>
+<p><strong>Status: In progress.</strong> Phases 0 through 7 are shipped and on <code>main</code>. <strong>Phase 2C (cleanup) is the next chunk.</strong> See <a href="#implementation-phases">Implementation phases</a> below for the full sequence and what each one covers.</p>
 <p><strong>Verification gap to keep in mind:</strong> local testing uses one Steam account in two processes (editor + <code>--mp-force-client</code> .exe), which is enough to verify lobby flow, scene transitions, and avatar spawning, but Steam P2P routing same-id-to-itself is undefined — actual cross-peer position sync, RPCs, and member-join callbacks need real two-account testing or shipping to playtest. Anything in Phase 2B+ that involves traffic between peers should be assumed <em>code-correct, runtime-unverified</em> until we get a second account into a lobby.</p>
 </blockquote>
 <h2 id="design-pillars">Design pillars<a class="headerlink" href="#design-pillars" title="Permanent link">&para;</a></h2>
@@ -2004,8 +2004,8 @@
 <h3 id="phase-6-world-state">Phase 6 — World state ✅<a class="headerlink" href="#phase-6-world-state" title="Permanent link">&para;</a></h3>
 <p>Door, switch, and exit pad interactions are host-authoritative: clients send <code>_request_interact.rpc_id(1)</code>, host validates and performs the action, then broadcasts state changes to all clients. Doors broadcast open/close slide + unlock/relock counter via <code>_client_set_open</code> / <code>_client_unlock</code> / <code>_client_relock</code> RPCs. Switches broadcast <code>_client_mark_used</code> for one-shot deactivation. Exit pad broadcasts <code>_client_unlock</code> when the boss dies. Boss-death group callbacks (<code>on_boss_died</code>) are host-only gated on doors and exit.</p>
 <p>Level reset (NG+ transition) is synchronized: host picks a seed, broadcasts <code>_client_reset_level(seed, is_procgen)</code> to all clients. Both peers clear enemies/corpses/pickups and rebuild: procgen path rebuilds geometry from the shared seed (deterministic layout), legacy path resets interactable states. Enemy spawning during rebuild is skipped on clients via an early return in <code>EnemySpawner.spawn_in_bounds</code> — enemies arrive from the host through <code>EnemiesContainer</code>'s <code>MultiplayerSpawner</code>. Both peers advance NG+ and reset the player independently.</p>
-<h3 id="phase-7-drop-in-next">🔜 Phase 7 — Drop-in (NEXT)<a class="headerlink" href="#phase-7-drop-in-next" title="Permanent link">&para;</a></h3>
-<p>Mid-session join handshake. Host serializes a state snapshot — current zone, all live enemies, all world loot, all current players' positions — and sends to the joining peer. Joiner spawns at a safe entry point (zone start) and starts receiving normal updates. The hard part is making the snapshot complete enough that nothing visible desyncs.</p>
+<h3 id="phase-7-drop-in">Phase 7 — Drop-in ✅<a class="headerlink" href="#phase-7-drop-in" title="Permanent link">&para;</a></h3>
+<p>Mid-session join support. Three pieces: (1) <strong>NetState late-join plumbing</strong> — host calls <code>_peer.add_peer(new_id)</code> in <code>_on_lobby_chat_update</code> when a member joins during an active game, accepting their SteamMultiplayerPeer connection. The existing <code>_check_started_flag()</code> path already handles the client side (reads <code>started=1</code>, creates peer, fires <code>game_starting</code>). (2) <strong>Level seed sync</strong> — host stores the procgen seed in Steam lobby data (<code>LOBBY_SEED_KEY</code>) on initial build and every level reset. <code>LevelBuilder._ready()</code> reads it on the client side so late joiners build identical geometry. Host pins <code>rng_seed</code> to a captured value (not 0/time-fallback) so the seed is always deterministic and retrievable. (3) <strong>World state snapshot</strong> — after scene load, the late joiner sends <code>_request_snapshot.rpc_id(1)</code> to the host. Host responds with <code>_deliver_snapshot</code> containing all live enemies (position, rotation, health, state, level, boss flag, display name, node name), all pickups (item data or credit amount, position, owner_id, node name), and all interactable states (door locked/open/unlock-counter, switch used, exit locked). Joiner recreates enemies and pickups with matching node names so <code>MultiplayerSynchronizer</code> updates route correctly for ongoing play. <code>PlayersContainer._on_peer_connected</code> handles avatar spawning (already shipped in Phase 2B). Future spawns (enemies, pickups) arrive normally via <code>MultiplayerSpawner</code>.</p>
 <h2 id="technical-decisions">Technical decisions<a class="headerlink" href="#technical-decisions" title="Permanent link">&para;</a></h2>
 <h3 id="why-host-authoritative-not-deterministic-lockstep">Why host-authoritative, not deterministic lockstep<a class="headerlink" href="#why-host-authoritative-not-deterministic-lockstep" title="Permanent link">&para;</a></h3>
 <p>Lockstep requires perfect determinism (RNG, floating point, frame timing) across peers and forces lockstep at the slowest peer's framerate. Host-authoritative is simpler, more permissive of jitter, and standard for coop PvE.</p>
