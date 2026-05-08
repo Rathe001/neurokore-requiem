@@ -15,6 +15,7 @@ var _multiplayer_panel: MultiplayerPanel
 var _create_lobby_panel: CreateLobbyPanel
 var _browse_lobbies_panel: BrowseLobbiesPanel
 var _lobby_room_panel: LobbyRoomPanel
+var _mp_button: Button
 
 func _ready() -> void:
 	theme = UIThemeState.theme
@@ -39,6 +40,8 @@ func _exit_tree() -> void:
 	UIThemeState.changed.disconnect(_on_theme_changed)
 	NetState.lobby_created_result.disconnect(_on_lobby_created_result)
 	NetState.lobby_joined_result.disconnect(_on_lobby_joined_result)
+	if SteamState.initialized_changed.is_connected(_on_steam_initialized_changed):
+		SteamState.initialized_changed.disconnect(_on_steam_initialized_changed)
 
 
 func _build_settings_panel() -> void:
@@ -163,7 +166,11 @@ func _build_main_panel() -> void:
 	_main_panel.add_child(buttons)
 
 	buttons.add_child(_make_button("MENU_SINGLE_PLAYER", _on_single_player_pressed))
-	buttons.add_child(_make_button("MENU_MULTIPLAYER", _on_multiplayer_pressed))
+	_mp_button = _make_button("MENU_MULTIPLAYER", _on_multiplayer_pressed, SteamState.initialized)
+	if not SteamState.initialized:
+		_mp_button.tooltip_text = "Steam is required for multiplayer"
+		SteamState.initialized_changed.connect(_on_steam_initialized_changed)
+	buttons.add_child(_mp_button)
 	buttons.add_child(_make_button("COMMON_OPTIONS", _on_options_pressed))
 	buttons.add_child(_make_button("COMMON_REPORT_BUG", _on_report_bug_pressed))
 	buttons.add_child(_make_button("COMMON_OPEN_LOGS", _on_open_logs_pressed))
@@ -206,6 +213,13 @@ func _on_single_player_pressed() -> void:
 
 func _on_multiplayer_pressed() -> void:
 	_show_multiplayer()
+
+
+func _on_steam_initialized_changed(value: bool) -> void:
+	if _mp_button != null:
+		_mp_button.disabled = not value
+		if value:
+			_mp_button.tooltip_text = ""
 
 
 func _show_multiplayer() -> void:
