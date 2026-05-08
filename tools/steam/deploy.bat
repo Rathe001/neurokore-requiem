@@ -2,12 +2,13 @@
 setlocal
 
 :: ── Configuration ────────────────────────────────────────────────────────────
-:: Path to the Godot editor executable. Update this if yours lives elsewhere.
-set GODOT=godot
-:: Path to steamcmd.exe. Update this to your local install.
-set STEAMCMD=steamcmd
-:: Steam account used for uploads (must have Steamworks publisher permissions).
-set STEAM_USER=your_steam_username
+:: All three honor an existing env var if set; placeholder defaults match the
+:: pattern in deploy.sh (${VAR:-default}). Set STEAM_USER persistently with
+:: `setx STEAM_USER your_username` (fresh terminal required) so you don't have
+:: to substitute it into this committed file each deploy.
+if "%GODOT%"=="" set GODOT=godot
+if "%STEAMCMD%"=="" set STEAMCMD=steamcmd
+if "%STEAM_USER%"=="" set STEAM_USER=your_steam_username
 :: ─────────────────────────────────────────────────────────────────────────────
 
 set ROOT=%~dp0..\..
