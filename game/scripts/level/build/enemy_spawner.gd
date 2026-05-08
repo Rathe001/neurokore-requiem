@@ -27,6 +27,7 @@ const ENEMY_SCENE_DEFAULT: PackedScene = preload("res://scenes/prototype/prototy
 const _DEFAULT_CLASS_PATHS: Array[String] = [
 	"res://resources/enemies/classes/basic_melee.tres",
 	"res://resources/enemies/classes/basic_ranged.tres",
+	"res://resources/enemies/classes/ranged_laser.tres",
 	"res://resources/enemies/classes/melee_healer.tres",
 	"res://resources/enemies/classes/ranged_buffer.tres",
 ]

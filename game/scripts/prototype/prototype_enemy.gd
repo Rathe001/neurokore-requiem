@@ -24,8 +24,8 @@ const CREDIT_PICKUP_SCENE: PackedScene = preload("res://scenes/prototype/prototy
 const ITEM_PICKUP_SCENE: PackedScene = preload("res://scenes/prototype/prototype_item_pickup.tscn")
 # Base drop chance per enemy. Higher-level enemies get a bonus so killing
 # tougher mobs feels more rewarding.
-const ITEM_DROP_CHANCE_BASE: float = 0.12
-const ITEM_DROP_CHANCE_PER_LEVEL: float = 0.06
+const ITEM_DROP_CHANCE_BASE: float = 0.05
+const ITEM_DROP_CHANCE_PER_LEVEL: float = 0.025
 # Item level rolls within this window around the enemy's own level so
 # drops scale with zone difficulty, not the player's character level.
 const ITEM_DROP_ILVL_OFFSET_MIN: int = -1
@@ -153,10 +153,10 @@ const LEVEL_HP_RANGE: Array[Vector2i] = [
 ]
 const LEVEL_DAMAGE_RANGE: Array[Vector2i] = [
 	Vector2i(0, 0),     # 0 — unused
-	Vector2i(3, 6),     # 1
-	Vector2i(4, 7),     # 2
-	Vector2i(5, 9),     # 3
-	Vector2i(6, 10),    # 4
+	Vector2i(6, 11),    # 1
+	Vector2i(8, 14),    # 2
+	Vector2i(10, 17),   # 3
+	Vector2i(12, 20),   # 4
 	Vector2i(7, 12),    # 5
 	Vector2i(9, 15),    # 6
 	Vector2i(10, 18),   # 7
@@ -185,7 +185,10 @@ const LEVEL_RING_EMISSION: Array[Color] = [
 # stats, and a deep-red glow distinct from any trash tier.
 const BOSS_LEVEL := 5
 const BOSS_HP_MULT := 3.0
-const BOSS_DAMAGE_MULT := 1.5
+const BOSS_DAMAGE_MULT := 2.25
+# Bosses move at this multiple of CHASE_SPEED so the encounter has more
+# pressure than a kited trash mob. Applied in _movement_speed_base().
+const BOSS_SPEED_MULT := 1.35
 const BOSS_VISUAL_SCALE := 1.6
 const BOSS_RING_EMISSION := Color(1.0, 0.05, 0.05)
 const MAX_AGGRO_CASCADE := 2
@@ -335,6 +338,10 @@ var _damage_buff_remain: float = 0.0
 var _curse_remain: float = 0.0
 var _curse_damage_pct: float = 0.0
 var _curse_marker: Label3D = null
+# Thin red "red dot sight" line from player to this enemy while cursed.
+# Top-level so it lives in world space; tracks both endpoints each tick.
+# Cleared AFTER the auto-shot lands (or immediately on death/reset).
+var _curse_laser: MeshInstance3D = null
 # Enculted Doomsayer afflictions. STUN moves the enemy into State.STUNNED
 # (frozen); CHARM repoints the chase target at the nearest other enemy
 # without changing State (the existing chase logic does the work via the
@@ -440,6 +447,7 @@ func _init_enemy() -> void:
 	_curse_remain = 0.0
 	_curse_damage_pct = 0.0
 	_clear_curse_marker()
+	_clear_curse_laser()
 	_stun_remain = 0.0
 	_charmed = false
 	_charm_target = null
@@ -678,6 +686,10 @@ func _pool_release() -> void:
 ## Re-initialize an enemy returned from the pool.
 func reset() -> void:
 	remove_from_group(&"corpses")
+	# Restore the visual the ragdoll spawn hid on death — pool re-acquire
+	# would otherwise show an invisible enemy.
+	if visual != null:
+		visual.visible = true
 	_init_enemy()
 	# EnemySpawner sets global_position right before calling reset(), so
 	# capturing here gives us the correct spawn point even when the enemy
@@ -911,7 +923,7 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 	if NetState.is_in_lobby():
 		_client_show_hit.rpc(amount, multistrike, is_crit)
 	if _health <= 0:
-		_die()
+		_die(knockback_from, knockback_strength)
 
 ## Helper — DEAD is the only state in which the enemy should ignore inputs
 ## (damage, animation triggers, hover). All other states are "alive enough."
@@ -1085,6 +1097,7 @@ func apply_curse(damage_pct: float, duration: float) -> void:
 	_curse_damage_pct = damage_pct
 	_curse_remain = duration
 	_show_curse_marker()
+	_show_curse_laser()
 	_refresh_tooltip_if_hovered()
 
 
@@ -1116,6 +1129,8 @@ func _tick_curse(delta: float) -> void:
 		return
 	_curse_remain -= delta
 	if _curse_remain > 0.0:
+		# Still cursed — keep the laser tracking both endpoints.
+		_update_curse_laser()
 		return
 	_curse_damage_pct = 0.0
 	_curse_remain = 0.0
@@ -1128,6 +1143,10 @@ func _tick_curse(delta: float) -> void:
 		player = get_tree().get_first_node_in_group(&"player") as Node3D
 	if player != null and player.has_method(&"fire_exile_shot"):
 		player.fire_exile_shot(self)
+	# Laser disappears AFTER the target takes damage from Exile — order is
+	# significant: clearing before fire_exile_shot would leave a one-frame
+	# gap where the shot hits but the targeting beam is already gone.
+	_clear_curse_laser()
 
 
 # Floating glyph above the head — visible while cursed, freed on expire.
@@ -1155,6 +1174,86 @@ func _clear_curse_marker() -> void:
 	if _curse_marker != null and is_instance_valid(_curse_marker):
 		_curse_marker.queue_free()
 	_curse_marker = null
+
+
+# Thin red beam from the player's chest to the cursed enemy's chest. Reads
+# as a red-dot-sight reticle in 3D — telegraphs the impending Exile auto-shot
+# without the visual weight of a hitscan beam. Built once, repositioned each
+# tick via _update_curse_laser; freed when the curse ends.
+const CURSE_LASER_RADIUS: float = 0.014
+const CURSE_LASER_COLOR: Color = Color(1.0, 0.12, 0.12, 0.9)
+const CURSE_LASER_PLAYER_OFFSET: Vector3 = Vector3(0.0, 1.0, 0.0)
+const CURSE_LASER_TARGET_OFFSET: Vector3 = Vector3(0.0, 1.0, 0.0)
+
+func _show_curse_laser() -> void:
+	if _curse_laser != null and is_instance_valid(_curse_laser):
+		return
+	var mesh_inst := MeshInstance3D.new()
+	var cyl := CylinderMesh.new()
+	cyl.top_radius = CURSE_LASER_RADIUS
+	cyl.bottom_radius = CURSE_LASER_RADIUS
+	cyl.height = 1.0  # scaled per-frame
+	cyl.radial_segments = 6
+	cyl.cap_top = false
+	cyl.cap_bottom = false
+	mesh_inst.mesh = cyl
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = CURSE_LASER_COLOR
+	mat.emission_enabled = true
+	mat.emission = Color(1.0, 0.25, 0.25, 1.0)
+	mat.emission_energy_multiplier = 2.5
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	# Don't cast shadows — a red shadow strip from a sight beam reads as a
+	# bug, not stylistic.
+	mat.shadow_to_opacity = false
+	mesh_inst.material_override = mat
+	mesh_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# top_level so the laser's transform isn't dragged by the enemy's local
+	# space — both endpoints are world-space positions.
+	mesh_inst.top_level = true
+	add_child(mesh_inst)
+	_curse_laser = mesh_inst
+	_update_curse_laser()
+
+
+func _clear_curse_laser() -> void:
+	if _curse_laser != null and is_instance_valid(_curse_laser):
+		_curse_laser.queue_free()
+	_curse_laser = null
+
+
+# Recomputes laser endpoints — player chest to enemy chest. The cylinder's
+# default Y axis is rotated to align with the player→enemy vector via a
+# shortest-arc quaternion; degenerate (player and enemy coincident) hides
+# the laser for the frame.
+func _update_curse_laser() -> void:
+	if _curse_laser == null or not is_instance_valid(_curse_laser):
+		return
+	var player: Node3D = _player_ref
+	if player == null or not is_instance_valid(player):
+		player = get_tree().get_first_node_in_group(&"player") as Node3D
+	if player == null or not is_inside_tree():
+		_curse_laser.visible = false
+		return
+	var p_pos: Vector3 = player.global_position + CURSE_LASER_PLAYER_OFFSET
+	var e_pos: Vector3 = global_position + CURSE_LASER_TARGET_OFFSET
+	var diff := e_pos - p_pos
+	var dist := diff.length()
+	if dist < 0.05:
+		_curse_laser.visible = false
+		return
+	_curse_laser.visible = true
+	_curse_laser.global_position = (p_pos + e_pos) * 0.5
+	_curse_laser.scale = Vector3(1.0, dist, 1.0)
+	var dir := diff / dist
+	# Quaternion(arc_from, arc_to) returns the shortest-arc rotation; safe
+	# for parallel vectors but degenerate when antiparallel — fall back to a
+	# 180° flip around X in that case.
+	if dir.dot(Vector3.UP) < -0.9999:
+		_curse_laser.basis = Basis(Vector3(1.0, 0.0, 0.0), PI)
+	else:
+		_curse_laser.basis = Basis(Quaternion(Vector3.UP, dir))
 
 
 # ---------------------------------------------------------------------------
@@ -1974,6 +2073,8 @@ var _loose_running: bool = false
 func _movement_speed_base() -> float:
 	if _charmed and _player_ref != null and is_instance_valid(_player_ref) and _player_ref is PrototypePlayer:
 		return (_player_ref as PrototypePlayer).move_speed
+	if is_boss:
+		return CHASE_SPEED * BOSS_SPEED_MULT
 	return CHASE_SPEED
 
 
@@ -2219,7 +2320,7 @@ func _cast_skill_cone(target: Node3D, aim: Vector3, skill: EnemySkill) -> void:
 	CombatVisuals.spawn_cone(self, aim, skill.skill_range, skill.cone_deg, skill.wind_up)
 	var gen := _generation
 	await get_tree().create_timer(skill.wind_up).timeout
-	if _generation != gen or _state != State.CASTING:
+	if not is_inside_tree() or _generation != gen or _state != State.CASTING:
 		return
 	_change_state(State.CHASING)
 	if not is_instance_valid(target):
@@ -2248,7 +2349,7 @@ func _cast_skill_radial(target: Node3D, skill: EnemySkill) -> void:
 	CombatVisuals.spawn_radial(self, skill.aoe_radius, skill.wind_up)
 	var gen := _generation
 	await get_tree().create_timer(skill.wind_up).timeout
-	if _generation != gen or _state != State.CASTING:
+	if not is_inside_tree() or _generation != gen or _state != State.CASTING:
 		return
 	_change_state(State.CHASING)
 	# AoE hits everything in radius via SpatialGrid. For enemies, that means
@@ -2282,7 +2383,7 @@ func _cast_skill_projectile(target: Node3D, aim: Vector3, skill: EnemySkill) -> 
 	_play_anim(ANIM_ATTACK, 1.2)
 	var gen := _generation
 	await get_tree().create_timer(skill.wind_up).timeout
-	if _generation != gen or _state != State.CASTING:
+	if not is_inside_tree() or _generation != gen or _state != State.CASTING:
 		return
 	_change_state(State.CHASING)
 	if not is_instance_valid(target):
@@ -2344,7 +2445,7 @@ func _cast_skill_self_buff(skill: EnemySkill) -> void:
 	_play_anim(ANIM_ATTACK, 1.0)
 	var gen := _generation
 	await get_tree().create_timer(skill.wind_up).timeout
-	if _generation != gen or _state != State.CASTING:
+	if not is_inside_tree() or _generation != gen or _state != State.CASTING:
 		return
 	_change_state(State.CHASING)
 	_self_buff_remain = skill.buff_duration
@@ -2379,7 +2480,7 @@ func _cast_melee_attack(player: Node3D, aim: Vector3) -> void:
 	# Bail if anything preempted us during the windup (knockback, death,
 	# leash, or pool recycle). The generation counter catches pool recycles;
 	# the state check catches in-lifetime preemptions.
-	if _generation != gen or _state != State.CASTING:
+	if not is_inside_tree() or _generation != gen or _state != State.CASTING:
 		return
 	_change_state(State.CHASING)
 	if not is_instance_valid(player):
@@ -2418,7 +2519,7 @@ func _cast_ranged_attack(player: Node3D, aim: Vector3) -> void:
 	var windup_now := _attack_windup()
 	var gen := _generation
 	await get_tree().create_timer(windup_now).timeout
-	if _generation != gen or _state != State.CASTING:
+	if not is_inside_tree() or _generation != gen or _state != State.CASTING:
 		return
 	_change_state(State.CHASING)
 	if not is_instance_valid(player):
@@ -2437,6 +2538,11 @@ func _cast_ranged_attack(player: Node3D, aim: Vector3) -> void:
 
 
 func _spawn_enemy_projectile(aim: Vector3) -> void:
+	# Pool/level teardown can free the enemy from the tree between the
+	# windup-await resume and here. Bail rather than read global_position
+	# off a detached node and crash on get_parent().add_child(...).
+	if not is_inside_tree():
+		return
 	var proj: PrototypeProjectile = EntityPool.acquire(enemy_class.projectile_scene)
 	if proj == null:
 		return
@@ -2483,7 +2589,7 @@ func _apply_enemy_aim_spread(aim: Vector3) -> Vector3:
 	return Vector3(sin(yaw) * cos_p, sin(pitch), cos(yaw) * cos_p)
 
 
-func _die() -> void:
+func _die(kill_from: Vector3 = Vector3.ZERO, kill_force: float = 0.0) -> void:
 	_change_state(State.DEAD)
 	# Drop out of the spatial grid immediately so AoE/cone queries during the
 	# DEATH_HOLD window stop "hitting" the corpse-in-progress. The actual
@@ -2508,6 +2614,7 @@ func _die() -> void:
 	# so reset() (pool re-acquire) starts from a clean slate.
 	_clear_affliction_marker()
 	_clear_curse_marker()
+	_clear_curse_laser()
 	_stun_remain = 0.0
 	_weaken_remain = 0.0
 	_weaken_mult = 0.0
@@ -2516,43 +2623,18 @@ func _die() -> void:
 	PlayerState.gain_xp(PlayerState.xp_award_for_enemy(level))
 	_drop_credits()
 	_drop_item()
-	var played := _play_anim(ANIM_DEATH, 1.0)
-	if not played:
-		# No death clip for this rig — settle it in a non-stride pose
-		# BEFORE pausing. A bare anim_player.pause() freezes on whatever
-		# was playing (usually RUN, since the enemy was chasing when
-		# killed), which leaves the corpse with limbs splayed mid-stride
-		# once the rotation tween lays it flat. Strategy:
-		#   1. Try to play one of the named idle clips and seek to its
-		#      first frame.
-		#   2. If no named idle exists on this rig, seek the CURRENTLY
-		#      playing clip back to frame 0 — the first frame of a loop
-		#      anim is typically a feet-together neutral pose, much
-		#      closer to "fallen body" than wherever pause caught us
-		#      mid-cycle. Different rigs ship different naming
-		#      conventions for idle (Idle_Normal, Idle_A, Standing,
-		#      etc.); rather than chasing every variant we accept any
-		#      frame-0 pose as "good enough" once we've fallen.
-		# seek(time, update=true) forces the value tracks to apply this
-		# tick — advance(0.0) does NOT (delta=0 doesn't sample tracks),
-		# which is why earlier attempts at this fix silently regressed.
-		if anim_player != null:
-			var settled := false
-			for idle_name in ANIM_IDLE:
-				if anim_player.has_animation(idle_name):
-					anim_player.play(idle_name)
-					anim_player.seek(0.0, true)
-					settled = true
-					break
-			if not settled and anim_player.current_animation != "":
-				anim_player.seek(0.0, true)
-			anim_player.pause()
-		if visual != null:
-			var tween := create_tween()
-			tween.tween_property(visual, "rotation:x", deg_to_rad(-75.0), DEATH_FALLBACK_DURATION)
+	# Ragdoll path: spawn a physics-driven corpse with a clone of our visual
+	# and hide ours. Replaces the old death-anim / fallback rotation tween —
+	# the tumble + sink reads better than a static "lay flat" pose and lets
+	# explosions/players knock corpses around. The original CharacterBody3D
+	# stays in tree as an inert placeholder until DEATH_HOLD elapses, then
+	# becomes a registered corpse for the existing pool-eviction system.
+	_spawn_ragdoll_corpse(kill_from, kill_force)
+	if visual != null:
+		visual.visible = false
 	var gen := _generation
 	await get_tree().create_timer(DEATH_HOLD).timeout
-	if _generation != gen:
+	if not is_inside_tree() or _generation != gen:
 		return
 	_become_corpse()
 
@@ -2630,6 +2712,49 @@ func _find_pickups_container() -> PickupsContainer:
 	if pc is PickupsContainer:
 		return pc as PickupsContainer
 	return null
+
+# Spawns a PrototypeRagdollCorpse next to us with a duplicate of the visual
+# subtree, then hands it the kill direction so it tumbles away from the hit.
+# Best-effort: silently no-ops if the visual is missing or we have no parent
+# to attach the corpse to (mid-teardown).
+func _spawn_ragdoll_corpse(kill_from: Vector3, kill_force: float) -> void:
+	if visual == null:
+		return
+	var parent := get_parent()
+	if parent == null:
+		return
+	var corpse := PrototypeRagdollCorpse.new()
+	parent.add_child(corpse)
+	# Spawn slightly above ground so the tumble has clearance — the capsule's
+	# lower hemisphere otherwise spawns penetrating the floor and the rigid
+	# body fires immediately upward to depenetrate, which reads as a hop.
+	corpse.global_position = global_position + Vector3(0.0, 0.6, 0.0)
+	var clone := visual.duplicate() as Node3D
+	if clone == null:
+		corpse.queue_free()
+		return
+	clone.position = Vector3.ZERO
+	# Copy the enemy facing onto the corpse before we detach — once the rigid
+	# body starts tumbling its rotation is physics-driven, but the initial
+	# pose should match the killed enemy.
+	clone.rotation = visual.rotation
+	corpse.global_transform.basis = global_transform.basis
+	corpse.setup_visual(clone, RAGDOLL_CAPSULE_HEIGHT, RAGDOLL_CAPSULE_RADIUS)
+	var dir: Vector3 = Vector3.ZERO
+	if kill_from != Vector3.ZERO:
+		var d := global_position - kill_from
+		d.y = 0.0
+		if d.length_squared() > 0.0001:
+			dir = d.normalized()
+	corpse.apply_death_impulse(dir, kill_force)
+
+
+# Capsule sizing for the ragdoll. Matches the enemy's authored CapsuleShape3D
+# in prototype_enemy.tscn (height 1.7, radius 0.6) but a touch smaller so the
+# tumbling body doesn't scrape walls it didn't quite touch alive.
+const RAGDOLL_CAPSULE_HEIGHT: float = 1.5
+const RAGDOLL_CAPSULE_RADIUS: float = 0.5
+
 
 func _become_corpse() -> void:
 	# If reset_level released this enemy back to the pool during DEATH_HOLD,

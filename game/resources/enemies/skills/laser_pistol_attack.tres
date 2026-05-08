@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="EnemySkill" load_steps=3 format=3]
+
+; Laser pistol basic attack — fast, low-damage, accurate. Distinct from the
+; standard "Ranged Shot" which is slower and harder-hitting per bolt. Used
+; by ranged_laser.tres enemies to give some encounters a pop-pop-pop firing
+; cadence the player can read as "different enemy archetype" without needing
+; new mesh art.
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_skill.gd" id="script"]
+[ext_resource type="PackedScene" path="res://scenes/prototype/prototype_projectile.tscn" id="projectile_scene"]
+
+[resource]
+script = ExtResource("script")
+id = &"laser_pistol_attack"
+display_name = "Laser Shot"
+targeting_mode = 2
+damage_mult = 0.55
+skill_range = 14.0
+cooldown = 0.8
+wind_up = 0.15
+projectile_scene = ExtResource("projectile_scene")
+projectile_speed = 28.0
+projectile_max_range = 16.0
+projectile_count = 1

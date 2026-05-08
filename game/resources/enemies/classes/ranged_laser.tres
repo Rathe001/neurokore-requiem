@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="EnemyClass" load_steps=4 format=3]
+
+; Ranged + laser pistol — fires fast, accurate, low-per-shot bolts. Plays
+; differently from basic_ranged: pressure comes from sustained DPS rather
+; than dodging slow heavy shots. Same enemy mesh; the firing cadence and
+; bolt speed are what telegraph the archetype.
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_class.gd" id="script"]
+[ext_resource type="PackedScene" path="res://scenes/prototype/prototype_projectile.tscn" id="projectile_scene"]
+[ext_resource type="Resource" path="res://resources/enemies/skills/laser_pistol_attack.tres" id="basic_attack"]
+
+[resource]
+script = ExtResource("script")
+id = &"ranged_laser"
+label = "Laser Trooper"
+basic_attack = ExtResource("basic_attack")
+skill_pool = []
+attack_mode = 1
+attack_range = 14.0
+attack_cooldown = 0.8
+attack_windup = 0.15
+attack_damage_mult = 0.55
+projectile_scene = ExtResource("projectile_scene")
+projectile_speed = 28.0
+projectile_max_range = 16.0
+accuracy = 0.85
+ranged_kite_distance = 7.0
+support_role = 0
