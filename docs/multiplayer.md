@@ -154,6 +154,20 @@ Each peer multiplies replication traffic by ~4× per replicated entity. At horde
 - **Cross-region play**: Steam relay handles it transparently, but latency to a host on another continent will be 200ms+. Worth showing ping in the lobby browser.
 - **Pet / drone replication**: Automaton drones, charm pets, IED traps — all need authority decisions. Probably "spawn-side authority" — whoever owns the controlling entity owns the spawned ones too, but they're host-replicated like enemies.
 
+## Local two-instance testing
+
+Without a second Steam account, you can run the editor + an exported `.exe` against the same Steam user — useful for verifying the lobby flow, scene transition, and any host/client UI divergence. The catch: NetState identifies the host by `lobby_owner_id == SteamState.steam_id`, which is true on both processes when they share an account, so the second process incorrectly identifies as host.
+
+Workaround: launch the second instance with **`--mp-force-client`**:
+
+```
+build\windows\neurokore-requiem.exe --mp-force-client
+```
+
+This forces `is_host()` / `is_client()` / `is_authority()` to return client-side values regardless of Steam IDs. **Dev-only — never enable this in shipped builds.** Real multi-user testing (different Steam accounts) doesn't need the flag.
+
+What this *does* validate locally: lobby creation, joining, browsing, chat plumbing, the Start transition, scene loading on both ends. What it *doesn't* validate: actual peer-to-peer network traffic between two same-account processes (Steam routing same-ID-to-itself is undefined). For that, real two-account testing is required and will happen for free once playtest builds reach actual users.
+
 ## Non-goals at launch
 
 - PvP / arena / dueling

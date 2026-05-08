@@ -21,6 +21,10 @@ signal lobby_member_joined(steam_id: int, member_name: String)
 signal lobby_member_left(steam_id: int, member_name: String)
 signal lobby_chat_received(steam_id: int, member_name: String, text: String)
 signal lobby_match_list_updated(lobbies: Array)
+## Fires on host AND every client at the moment we're transitioning into
+## the game scene. UI listens for this and calls change_scene_to_file —
+## NetState never touches scenes directly.
+signal game_starting
 
 enum Mode {
 	OFFLINE,  # No lobby, no peer — single player.
@@ -46,6 +50,12 @@ const LOBBY_GAME_KEY: String = "game"
 const LOBBY_GAME_VALUE: String = "neurokore"
 const LOBBY_NAME_KEY: String = "name"
 const LOBBY_HOST_KEY: String = "host"
+# Set to "1" by the host when Start is pressed. Every member receives a
+# lobby_data_update callback; non-host clients read this and create their
+# SteamMultiplayerPeer client connection in response. Lobby data is the
+# right transport for this signal because it's already replicated to all
+# members and survives ordering / late callbacks.
+const LOBBY_STARTED_KEY: String = "started"
 
 var mode: Mode = Mode.OFFLINE
 var lobby_id: int = 0
@@ -54,12 +64,27 @@ var lobby_owner_id: int = 0
 # lobby including the local player. Refreshed on every member join /
 # leave so UI can read straight from this.
 var lobby_members: Dictionary = {}
+# True once we've created the SteamMultiplayerPeer and bound it to
+# multiplayer.multiplayer_peer for this session. Reset on leave_lobby.
+var game_started: bool = false
 
+var _peer: SteamMultiplayerPeer = null
 var _signals_connected: bool = false
+var _poll_accum: float = 0.0
+# Dev-only override. Two-process tests on a single Steam account fail
+# our `lobby_owner_id == SteamState.steam_id` check (same id on both
+# sides), so the second process incorrectly identifies as host. Pass
+# `--mp-force-client` on the .exe command line to force CLIENT mode
+# regardless of Steam IDs — only useful with same-account testing,
+# never wanted in production builds.
+var _force_client_for_testing: bool = false
 
 
 func _ready() -> void:
 	process_priority = -90  # after SteamState (-100), before gameplay autoloads
+	_force_client_for_testing = "--mp-force-client" in OS.get_cmdline_args()
+	if _force_client_for_testing:
+		print("[NetState] --mp-force-client active: forcing CLIENT role regardless of Steam IDs.")
 	if SteamState.initialized:
 		_connect_steam_signals()
 	else:
@@ -84,6 +109,10 @@ func _connect_steam_signals() -> void:
 	Steam.lobby_chat_update.connect(_on_lobby_chat_update)
 	Steam.lobby_message.connect(_on_lobby_message)
 	Steam.lobby_match_list.connect(_on_lobby_match_list)
+	# Fires on every member when ANY lobby data changes. We use it to
+	# detect the host setting `started=1` and trigger the client peer
+	# connection + scene transition.
+	Steam.lobby_data_update.connect(_on_lobby_data_update)
 
 
 # ─── Public API ───────────────────────────────────────────────────────────
@@ -117,14 +146,18 @@ func join_lobby(target_lobby_id: int) -> void:
 
 
 ## Leaves the current lobby. Synchronous — on return, lobby_id == 0.
+## Tears down any active SteamMultiplayerPeer too so a subsequent
+## lobby join doesn't inherit stale peer state.
 func leave_lobby() -> void:
 	if lobby_id == 0:
 		return
+	_teardown_peer()
 	Steam.leaveLobby(lobby_id)
 	lobby_id = 0
 	lobby_owner_id = 0
 	lobby_members.clear()
 	mode = Mode.OFFLINE
+	game_started = false
 	lobby_left.emit()
 	lobby_state_changed.emit()
 
@@ -143,6 +176,31 @@ func request_lobby_list() -> void:
 	Steam.requestLobbyList()
 
 
+## Host-only. Creates a SteamMultiplayerPeer, registers every lobby
+## member as a known peer, binds the peer to the MultiplayerAPI, then
+## stamps `started=1` onto lobby data so clients trigger their own
+## peer connection. Fires `game_starting` locally so the UI can swap
+## to the game scene; clients fire the same signal from
+## _on_lobby_data_update once Steam delivers the data update.
+func start_game() -> bool:
+	if not is_host():
+		push_warning("[NetState] start_game called by non-host; ignored.")
+		return false
+	if game_started:
+		return true
+	if not _create_host_peer():
+		return false
+	game_started = true
+	# Setting lobby data is broadcast to all members — this is what
+	# tells clients to spin up their own SteamMultiplayerPeer. Doing it
+	# AFTER the host peer is up means clients can't race ahead and try
+	# to connect before the host is listening.
+	Steam.setLobbyData(lobby_id, LOBBY_STARTED_KEY, "1")
+	print("[NetState] Game starting (host) — peer ready, %d known members." % lobby_members.size())
+	game_starting.emit()
+	return true
+
+
 ## Sends a chat message to all members of the current lobby.
 ## Other peers receive it via `lobby_chat_received`.
 func send_chat(text: String) -> void:
@@ -157,6 +215,8 @@ func send_chat(text: String) -> void:
 # return true. MP-client returns false. Use this to gate enemy AI ticks,
 # damage rolls, loot generation, level / zone state mutations.
 func is_authority() -> bool:
+	if _force_client_for_testing:
+		return false
 	return mode != Mode.CLIENT
 
 
@@ -165,10 +225,14 @@ func is_in_lobby() -> bool:
 
 
 func is_host() -> bool:
+	if _force_client_for_testing:
+		return false
 	return mode == Mode.HOST
 
 
 func is_client() -> bool:
+	if _force_client_for_testing:
+		return true
 	return mode == Mode.CLIENT
 
 
@@ -266,6 +330,87 @@ func _on_lobby_match_list(matched_lobbies: Array) -> void:
 		})
 	print("[NetState] Lobby list: %d result(s)" % infos.size())
 	lobby_match_list_updated.emit(infos)
+
+
+func _on_lobby_data_update(_arg0: int, _arg1: int, _arg2: int) -> void:
+	_check_started_flag()
+
+
+# Pulled out so the once-per-second polling fallback can call it too —
+# both routes share the same gating logic. Polling is defensive: if the
+# Steam callback ever fails to deliver (signal rename across versions,
+# delivery quirk on a specific user, etc.) the poll still picks up the
+# `started=1` data within ~1s and triggers the client connection.
+func _check_started_flag() -> void:
+	if lobby_id == 0 or game_started:
+		return
+	var started: String = Steam.getLobbyData(lobby_id, LOBBY_STARTED_KEY)
+	if started != "1":
+		return
+	# Host already wired its peer in start_game(); only clients land here.
+	if is_host():
+		return
+	if not _create_client_peer():
+		return
+	game_started = true
+	print("[NetState] Game starting (client) — connecting to host %d." % lobby_owner_id)
+	game_starting.emit()
+
+
+func _process(delta: float) -> void:
+	if lobby_id == 0 or game_started:
+		return
+	_poll_accum += delta
+	if _poll_accum < 1.0:
+		return
+	_poll_accum = 0.0
+	_check_started_flag()
+
+
+func _create_host_peer() -> bool:
+	var peer := SteamMultiplayerPeer.new()
+	# create_host returns Godot's Error enum (OK = 0). Anything else is
+	# fatal here — peer is unusable, surface the failure to the caller
+	# so the UI can stay on the lobby room with an error toast.
+	var err: int = peer.create_host(0)
+	if err != OK:
+		push_warning("[NetState] create_host failed (err %d)" % err)
+		return false
+	# Tell the peer about every other lobby member so it's expecting
+	# their inbound connections. The host's own steam_id is implicit;
+	# only OTHER members need adding.
+	for member_id_v in lobby_members.keys():
+		var member_id: int = int(member_id_v)
+		if member_id != SteamState.steam_id:
+			peer.add_peer(member_id)
+	multiplayer.multiplayer_peer = peer
+	_peer = peer
+	return true
+
+
+func _create_client_peer() -> bool:
+	if lobby_owner_id == 0:
+		push_warning("[NetState] _create_client_peer: no lobby_owner_id known.")
+		return false
+	var peer := SteamMultiplayerPeer.new()
+	var err: int = peer.create_client(lobby_owner_id, 0)
+	if err != OK:
+		push_warning("[NetState] create_client failed (err %d)" % err)
+		return false
+	multiplayer.multiplayer_peer = peer
+	_peer = peer
+	return true
+
+
+func _teardown_peer() -> void:
+	if _peer == null:
+		return
+	# Closing first triggers a clean disconnect for all peers; clearing
+	# multiplayer_peer afterwards drops the reference so a future
+	# create_host / create_client starts from scratch.
+	_peer.close()
+	multiplayer.multiplayer_peer = null
+	_peer = null
 
 
 func _refresh_members() -> void:

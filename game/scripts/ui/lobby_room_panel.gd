@@ -36,6 +36,10 @@ func _ready() -> void:
 	NetState.lobby_chat_received.connect(_on_chat_received)
 	NetState.lobby_member_joined.connect(_on_member_joined)
 	NetState.lobby_member_left.connect(_on_member_left)
+	# Both host and client land on this signal — host emits it locally
+	# from start_game(), client emits it after picking up the lobby
+	# data update. Single transition path, no host/client branch needed.
+	NetState.game_starting.connect(_on_game_starting)
 
 
 # Called by the parent (StartupScreen) when this panel becomes visible.
@@ -189,10 +193,27 @@ func _on_leave_pressed() -> void:
 
 
 func _on_start_pressed() -> void:
-	# Phase 1B: host transitions to the game scene alone. Phase 2 will
-	# add networked scene-loading so all peers follow. Clients stay in
-	# the lobby for now — the Start button is disabled for them anyway.
+	# Host calls start_game(), which sets up the SteamMultiplayerPeer
+	# and broadcasts `started=1` to lobby data. The actual scene change
+	# is deferred to the game_starting handler so it fires from the same
+	# code path on host AND client (the client picks up the lobby data
+	# update and emits game_starting from there).
 	if not NetState.is_host():
 		return
+	if not NetState.start_game():
+		# Peer creation failed — leave the user on the lobby room. The
+		# warning print from NetState lands in the editor output. A
+		# proper toast would be Phase 2 polish.
+		return
+
+
+func _on_game_starting() -> void:
+	# Defer the scene change one frame: lets the SteamMultiplayerPeer
+	# settle into multiplayer.multiplayer_peer before the new scene's
+	# autoloads + nodes start querying it.
 	start_pressed.emit()
+	call_deferred("_change_to_game_scene")
+
+
+func _change_to_game_scene() -> void:
 	get_tree().change_scene_to_file(GAME_SCENE)
