@@ -1,0 +1,65 @@
+[gd_scene load_steps=8 format=3]
+
+; Player scene — extracted from level_shell.tscn for Phase 2B so that
+; one Player node can be spawned dynamically per peer (multiplayer)
+; OR once locally (single player) without changing the scene tree.
+;
+; The MultiplayerSynchronizer at the bottom replicates the small set of
+; state remote peers need to render this player: position, facing, and
+; whether the local-authority player is moving (drives idle/run anim
+; on the remote side).
+
+[ext_resource type="Script" path="res://scripts/prototype/prototype_player.gd" id="script_player"]
+[ext_resource type="PackedScene" path="res://art/3d/characters/quaternius/UAL1_Standard.glb" id="char_model_player"]
+[ext_resource type="Resource" path="res://resources/skills/energy.tres" id="pool_energy"]
+
+[sub_resource type="StandardMaterial3D" id="mat_ring_player"]
+albedo_color = Color(0, 0, 0, 0)
+emission_enabled = true
+emission = Color(0.2, 0.85, 1.0, 1)
+emission_energy_multiplier = 3.0
+shading_mode = 0
+transparency = 1
+
+[sub_resource type="TorusMesh" id="mesh_ring_player"]
+material = SubResource("mat_ring_player")
+inner_radius = 0.5
+outer_radius = 0.62
+
+[sub_resource type="CapsuleShape3D" id="shape_player"]
+radius = 0.4
+height = 1.6
+
+[sub_resource type="SceneReplicationConfig" id="repl_config"]
+properties/0/path = NodePath(".:global_position")
+properties/0/spawn = true
+properties/0/replication_mode = 1
+properties/1/path = NodePath("Visual:rotation")
+properties/1/spawn = true
+properties/1/replication_mode = 1
+properties/2/path = NodePath(".:net_moving")
+properties/2/spawn = true
+properties/2/replication_mode = 1
+
+[node name="Player" type="CharacterBody3D"]
+collision_layer = 4
+collision_mask = 3
+script = ExtResource("script_player")
+skills = Array[Skill]([null, null, null, null, null, null])
+resource_pool = ExtResource("pool_energy")
+
+[node name="Visual" type="Node3D" parent="."]
+
+[node name="Character" parent="Visual" instance=ExtResource("char_model_player")]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0)
+
+[node name="FloorRing" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.03, 0)
+mesh = SubResource("mesh_ring_player")
+
+[node name="Collision" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+shape = SubResource("shape_player")
+
+[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
+replication_config = SubResource("repl_config")

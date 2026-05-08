@@ -38,12 +38,35 @@ var _mw_held: bool = false
 func _ready() -> void:
 	if target_path != NodePath():
 		_target = get_node_or_null(target_path) as Node3D
+	# Fallback: look up the local player via PlayersContainer once the
+	# scene tree is ready. Phase 2B made the player a runtime-spawned
+	# child rather than a baked node, so the @export NodePath in the
+	# scene file no longer points anywhere — we resolve it here instead.
+	if _target == null:
+		_target = _resolve_local_player()
 	_init_orbit_from_offset()
 	_default_pitch_rad = _pitch_rad
 	if _target != null:
 		_snap_to_target()
 	else:
 		look_at(Vector3.ZERO, Vector3.UP)
+
+
+func _resolve_local_player() -> Node3D:
+	# PlayersContainer is a sibling under the level shell root; reach
+	# up via the parent rather than hardcoding a path so this still
+	# works if the camera ever gets reparented.
+	var root: Node = get_parent()
+	if root == null:
+		return null
+	var container: Node = root.get_node_or_null(^"PlayersContainer")
+	if container == null:
+		return null
+	# get_local_player() falls back to "any spawned player" when the
+	# local id can't be resolved, so this won't crash on edge cases.
+	if container.has_method(&"get_local_player"):
+		return container.get_local_player() as Node3D
+	return null
 
 
 ## Snap pitch back to the initial (@export-derived) value. Called by the

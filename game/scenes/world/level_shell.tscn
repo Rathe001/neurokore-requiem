@@ -1,17 +1,16 @@
-[gd_scene load_steps=12 format=3]
+[gd_scene load_steps=8 format=3]
 
-; Generic level scene: WorldEnvironment + LevelBuilder + Player + HUD + Camera.
-; The LevelBuilder's `layout` export decides what level is built. No
-; level-specific interactables are placed in the scene tree — switches, loot
-; crates, etc. come from RoomDef.slots in the layout.
+; Generic level scene: WorldEnvironment + LevelBuilder + PlayersContainer +
+; HUD + Camera. The LevelBuilder's `layout` export decides what level is
+; built. Players are instantiated dynamically into PlayersContainer (one
+; per peer in multiplayer, or one for the local player in single-player)
+; so the same scene structure works for both modes.
 
 [ext_resource type="Script" path="res://scripts/prototype/prototype_root.gd" id="script_root"]
 [ext_resource type="Script" path="res://scripts/prototype/prototype_camera.gd" id="script_camera"]
-[ext_resource type="Script" path="res://scripts/prototype/prototype_player.gd" id="script_player"]
+[ext_resource type="Script" path="res://scripts/prototype/players_container.gd" id="script_players_container"]
 [ext_resource type="Script" path="res://scripts/level/level_builder.gd" id="script_builder"]
 [ext_resource type="PackedScene" path="res://scenes/prototype/prototype_hud.tscn" id="scene_hud"]
-[ext_resource type="PackedScene" path="res://art/3d/characters/quaternius/UAL1_Standard.glb" id="char_model_player"]
-[ext_resource type="Resource" path="res://resources/skills/energy.tres" id="pool_energy"]
 [ext_resource type="Resource" path="res://resources/level/layouts/procgen_demo.tres" id="layout"]
 
 [sub_resource type="Environment" id="env_test"]
@@ -29,23 +28,6 @@ glow_blend_mode = 1
 glow_hdr_threshold = 0.9
 glow_hdr_scale = 2.0
 volumetric_fog_enabled = false
-
-[sub_resource type="StandardMaterial3D" id="mat_ring_player"]
-albedo_color = Color(0, 0, 0, 0)
-emission_enabled = true
-emission = Color(0.2, 0.85, 1.0, 1)
-emission_energy_multiplier = 3.0
-shading_mode = 0
-transparency = 1
-
-[sub_resource type="TorusMesh" id="mesh_ring_player"]
-material = SubResource("mat_ring_player")
-inner_radius = 0.5
-outer_radius = 0.62
-
-[sub_resource type="CapsuleShape3D" id="shape_player"]
-radius = 0.4
-height = 1.6
 
 ; agent_height matches the enemy CROUCH_HEIGHT (1.0) so the navmesh routes
 ; through low-ceiling crawlspaces. Enemies detect overhead clearance at run
@@ -83,25 +65,12 @@ layout = ExtResource("layout")
 unique_name_in_owner = true
 navigation_mesh = SubResource("navmesh_level")
 
-[node name="Player" type="CharacterBody3D" parent="."]
-collision_layer = 4
-collision_mask = 3
-script = ExtResource("script_player")
-skills = Array[Skill]([null, null, null, null, null, null])
-resource_pool = ExtResource("pool_energy")
-
-[node name="Visual" type="Node3D" parent="Player"]
-
-[node name="Character" parent="Player/Visual" instance=ExtResource("char_model_player")]
-transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0)
-
-[node name="FloorRing" type="MeshInstance3D" parent="Player"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.03, 0)
-mesh = SubResource("mesh_ring_player")
-
-[node name="Collision" type="CollisionShape3D" parent="Player"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
-shape = SubResource("shape_player")
+; PlayersContainer's _ready spawns the local player BEFORE this node's
+; siblings (HUD, Camera) hit _ready, so their group lookups for &"player"
+; succeed on first try. The container's script also handles per-peer
+; spawn / despawn when networked.
+[node name="PlayersContainer" type="Node3D" parent="."]
+script = ExtResource("script_players_container")
 
 [node name="HUD" parent="." instance=ExtResource("scene_hud")]
 
@@ -113,4 +82,6 @@ size = 22.0
 near = 0.1
 far = 100.0
 script = ExtResource("script_camera")
-target_path = NodePath("../Player")
+; target is set at runtime by PlayersContainer once the local player
+; is spawned — the scene file no longer hardcodes a NodePath because
+; the player path varies (one shared container, dynamic children).

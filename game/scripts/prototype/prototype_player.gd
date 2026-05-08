@@ -203,6 +203,11 @@ var _chromatic: ChromaticAberrationOverlay = null
 var _retro_filter: RetroFilterOverlay = null
 var _low_hp_warning: LowHpWarningOverlay = null
 var _death_glitch: DeathGlitchOverlay = null
+# Replicated by the MultiplayerSynchronizer attached to player.tscn — the
+# authority sets it from velocity each physics tick; remote peers read it
+# to choose between idle and run animations. Other replicated state
+# (global_position, Visual:rotation) the synchronizer pulls automatically.
+var net_moving: bool = false
 var _crouching: bool = false
 var _sprinting: bool = false
 ## Time remaining on the regen penalty after emptying resource while sprinting.
@@ -240,6 +245,17 @@ var _out_of_combat_t: float = HP_REGEN_DELAY
 var _hp_regen_accum: float = 0.0
 
 func _ready() -> void:
+	# Non-authority players on this client (remote peers' avatars in MP)
+	# get a minimal setup — no combat, no abilities, no overlays.
+	# Position + facing come via MultiplayerSynchronizer; animations
+	# come from net_moving + _update_remote_anim() in _physics_process.
+	# In SP we explicitly skip the authority check — Godot's
+	# is_multiplayer_authority() returns false with no peer (default
+	# authority 1, unique_id 0), which would incorrectly route the
+	# baked-scene player down the remote path.
+	if _is_remote_player():
+		_ready_remote()
+		return
 	_combat = PlayerCombat.new()
 	_combat.setup(self)
 	add_child(_combat)
@@ -352,6 +368,57 @@ func _ready() -> void:
 	_build_stat_vfx()
 	_drone_swarm.reconcile()
 	_doomsayer.reconcile()
+
+
+# Minimal _ready path for non-authority remote players. Only sets up the
+# visual side (animation player wiring, mesh shadow layers) — the rest of
+# the player's behavior is intentionally inert because it's driven by
+# the authority on another peer.
+func _ready_remote() -> void:
+	_ensure_loop(ANIM_IDLE)
+	_ensure_loop(ANIM_RUN)
+	_ensure_loop(ANIM_WALK_BACK)
+	if anim_player != null:
+		anim_player.animation_finished.connect(_on_anim_finished)
+	_play_anim(ANIM_IDLE)
+	# Same shadow-layer trick as the authority path so equipped lights
+	# (added later, when we sync those) won't self-shadow on remotes.
+	if visual != null:
+		for child in visual.get_children():
+			if child is VisualInstance3D:
+				child.layers |= (1 << (PLAYER_VISUAL_LAYER - 1))
+			for grandchild in child.get_children():
+				if grandchild is VisualInstance3D:
+					grandchild.layers |= (1 << (PLAYER_VISUAL_LAYER - 1))
+	add_to_group(&"remote_player")
+
+
+# True when this Player instance represents another peer's avatar on
+# the local client (full setup, input, combat all skipped). False in
+# single-player and on the local peer's own avatar in multiplayer.
+#
+# Detection caveat: we can't gate on multiplayer.has_multiplayer_peer()
+# because GodotSteam auto-binds a SteamMultiplayerPeer at Steam init —
+# that flag is true even in SP. NetState.is_in_lobby() is the signal
+# for "we're actually networked," and only when that's true do we
+# care about authority routing.
+func _is_remote_player() -> bool:
+	if not NetState.is_in_lobby():
+		return false
+	return not is_multiplayer_authority()
+
+
+# Drives idle / run animation on a non-authority remote player using the
+# replicated `net_moving` flag. _play_anim is idempotent — already-playing
+# animations don't restart — so calling this every physics tick is cheap.
+func _update_remote_anim() -> void:
+	if anim_player == null:
+		return
+	if net_moving:
+		_play_anim(ANIM_RUN, 1.0, 0.15)
+	else:
+		_play_anim(ANIM_IDLE, 1.0, 0.15)
+
 
 func _build_stat_vfx() -> void:
 	if _base_mat == null or visual == null:
@@ -565,6 +632,12 @@ func _recompute_stat_bonuses() -> void:
 	stats_changed.emit()
 
 func _process(delta: float) -> void:
+	# Remote players don't push their position into the global shader
+	# param (multiple writers would fight every frame) and don't run any
+	# of the FPS / interact-cursor / mouse-mode UX. All of that lives
+	# with whoever has authority on the local machine.
+	if _is_remote_player():
+		return
 	RenderingServer.global_shader_parameter_set(PLAYER_WORLD_POS_PARAM, global_position)
 	if _fps_mode:
 		_fps_hover_timer -= delta
@@ -586,8 +659,15 @@ func _tick_fps_mouse_mode() -> void:
 		Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 
 func _physics_process(delta: float) -> void:
+	# Remote (non-authority) players: no input, no combat, no physics.
+	# Position / rotation come from the synchronizer; animation is
+	# chosen from the synced net_moving flag.
+	if _is_remote_player():
+		_update_remote_anim()
+		return
 	if not _alive:
 		velocity = Vector3.ZERO
+		net_moving = false
 		return
 	if not Input.is_action_pressed(SKILL_INPUTS[0]):
 		_click_consumed = false
@@ -748,8 +828,15 @@ func _physics_process(delta: float) -> void:
 				_play_anim(ANIM_CROUCH_IDLE if _crouching else ANIM_IDLE, 1.0, 0.15)
 
 	_handle_skill_input()
+	# Replicated to remote peers via the player's MultiplayerSynchronizer.
+	# Threshold matches the existing `_want_dir.length_squared() > 0.01`
+	# logic above so the moving / idle state stays consistent between
+	# the local animation choice and what's broadcast to remotes.
+	net_moving = _want_dir.length_squared() > 0.01 and not _interacting
 
 func _unhandled_input(event: InputEvent) -> void:
+	if _is_remote_player():
+		return
 	if not _alive:
 		return
 	if event.is_action_pressed(&"interact"):
