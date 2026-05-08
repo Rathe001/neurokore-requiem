@@ -164,14 +164,14 @@ func _on_body_entered(body: Node3D) -> void:
 
 
 func _hit_single(body: Node3D, impact_pos: Vector3) -> void:
-	PrototypeAttackIndicator.spawn_impact_burst(self, impact_pos, _projectile_color())
+	CombatVisuals.spawn_impact_burst(self, impact_pos, _projectile_color())
 	if _roll_hit(body.global_position):
 		var is_crit := _roll_crit()
 		var dmg := _roll_damage(is_crit)
 		if target_group == &"player":
 			body.take_damage(dmg, source_position, knockback_strength)
 		else:
-			body.take_damage(dmg, source_position, knockback_strength, 1, is_crit)
+			PrototypeEnemy.deal_damage(body, dmg, source_position, knockback_strength, 1, is_crit)
 			_apply_exile_curse_if_active(body)
 	elif target_group == &"enemies":
 		DamageNumber.spawn_miss(body.get_parent(), body.global_position + Vector3(0.0, 1.8, 0.0))
@@ -179,7 +179,7 @@ func _hit_single(body: Node3D, impact_pos: Vector3) -> void:
 
 func _explode(impact_pos: Vector3) -> void:
 	# Larger impact burst scaled to the blast radius.
-	PrototypeAttackIndicator.spawn_explosion(self, impact_pos, blast_radius, _projectile_color())
+	CombatVisuals.spawn_explosion(self, impact_pos, blast_radius, _projectile_color())
 	# Damage every target inside the blast radius.
 	var targets: Array[Node3D] = SpatialGrid.query_radius(
 		global_position, blast_radius, target_group)
@@ -194,7 +194,7 @@ func _explode(impact_pos: Vector3) -> void:
 			if target_group == &"player":
 				target.take_damage(dmg, source_position, knockback_strength)
 			else:
-				target.take_damage(dmg, source_position, knockback_strength, 1, is_crit)
+				PrototypeEnemy.deal_damage(target, dmg, source_position, knockback_strength, 1, is_crit)
 				_apply_exile_curse_if_active(target)
 		elif target_group == &"enemies":
 			DamageNumber.spawn_miss(target.get_parent(), target.global_position + Vector3(0.0, 1.8, 0.0))

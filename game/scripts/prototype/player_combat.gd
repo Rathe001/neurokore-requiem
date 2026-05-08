@@ -106,10 +106,10 @@ func resolve_skill_hit(skill: Skill, aim: Vector3, weapon: Item, source_offset: 
 	var eff_range := effective_range(skill, weapon)
 	match skill.targeting_mode:
 		Skill.TargetingMode.SINGLE_CONE:
-			PrototypeAttackIndicator.spawn_hit_cone(_host, aim, eff_range, skill.cone_deg)
+			CombatVisuals.spawn_hit_cone(_host, aim, eff_range, skill.cone_deg)
 			_resolve_cone(skill, aim, eff_range, weapon)
 		Skill.TargetingMode.AOE_RADIAL:
-			PrototypeAttackIndicator.spawn_hit_radial(_host, eff_range)
+			CombatVisuals.spawn_hit_radial(_host, eff_range)
 			_resolve_aoe(skill, eff_range, weapon)
 		Skill.TargetingMode.PROJECTILE:
 			_spawn_projectile(skill, aim, eff_range, weapon, source_offset)
@@ -130,20 +130,11 @@ func _knockback_for(skill: Skill, weapon: Item) -> float:
 		bonus = float(weapon.get_effective_modifier(&"knockback_bonus"))
 	return skill.knockback + bonus
 
-## Route damage to an enemy. In SP (or on the host), calls take_damage
-## directly. On a MP client, sends the hit to the host via RPC so the
-## authority applies it. Damage numbers still spawn locally for instant
-## feedback — the host re-broadcasts health via the synchronizer.
+## Convenience wrapper — delegates to the static PrototypeEnemy.deal_damage
+## so PlayerCombat call sites stay short. See PrototypeEnemy.deal_damage for
+## the SP / MP routing logic.
 func _deal_damage(target: Node3D, amount: int, knockback_from: Vector3, knockback_strength: float, multistrike: int, is_crit: bool) -> void:
-	if NetState.is_in_lobby() and not NetState.is_host():
-		target.request_damage.rpc_id(1, amount, knockback_from, knockback_strength, multistrike, is_crit)
-		# Local visual feedback — damage number + hit flash. The host will
-		# independently compute health; this is purely cosmetic so the
-		# client doesn't feel laggy.
-		var head := target.global_position + Vector3(0.0, 1.8, 0.0)
-		DamageNumber.spawn(target.get_parent(), head, amount, multistrike, is_crit)
-		return
-	target.take_damage(amount, knockback_from, knockback_strength, multistrike, is_crit)
+	PrototypeEnemy.deal_damage(target, amount, knockback_from, knockback_strength, multistrike, is_crit)
 
 
 func _resolve_cone(skill: Skill, aim: Vector3, eff_range: float, weapon: Item) -> void:
@@ -253,10 +244,10 @@ func _resolve_hitscan(skill: Skill, aim: Vector3, eff_range: float, weapon: Item
 	var beam_end := wall_dist
 	if hit_target != null:
 		beam_end = minf(beam_end, origin.distance_to(hit_target.global_position))
-	PrototypeAttackIndicator.spawn_beam(_host, aim, beam_end, source_offset)
+	CombatVisuals.spawn_beam(_host, aim, beam_end, source_offset)
 	if hit_target == null:
 		return
-	PrototypeAttackIndicator.spawn_impact_burst(_host, hit_target.global_position + Vector3(0.0, 0.9, 0.0))
+	CombatVisuals.spawn_impact_burst(_host, hit_target.global_position + Vector3(0.0, 0.9, 0.0))
 	# Point-blank penalty: if the hit target is within melee range of the
 	# fire origin, halve effective accuracy. Encourages disengage-and-shoot
 	# instead of standing in the enemy's face with a rifle. The Count
@@ -348,8 +339,8 @@ func fire_exile_shot(target: Node3D) -> void:
 	if dist < 0.001:
 		return
 	var aim_norm := aim / dist
-	PrototypeAttackIndicator.spawn_beam(_host, aim_norm, dist)
-	PrototypeAttackIndicator.spawn_impact_burst(_host, target.global_position + Vector3(0.0, 0.9, 0.0))
+	CombatVisuals.spawn_beam(_host, aim_norm, dist)
+	CombatVisuals.spawn_impact_burst(_host, target.global_position + Vector3(0.0, 0.9, 0.0))
 	var mult := 1.0
 	var dmg := int(round(float(EXILE_AUTO_SHOT_BASE_DAMAGE) * mult))
 	_deal_damage(target, dmg, _host.global_position, EXILE_AUTO_SHOT_KNOCKBACK, 1, false)

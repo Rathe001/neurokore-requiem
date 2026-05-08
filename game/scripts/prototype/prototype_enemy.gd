@@ -799,6 +799,19 @@ func set_tooltip_locked(on: bool) -> void:
 	_tooltip_locked = on
 	_refresh_outline()
 
+## Static helper: route damage to an enemy, handling SP / MP host / MP client
+## transparently. Every damage source (player_combat, projectile, grenade,
+## trap, telekinesis, doomsayer) calls this instead of target.take_damage().
+## In SP or on the host, calls take_damage directly. On a MP client, sends
+## the hit to the host via RPC. Hit visuals (damage number, flash, squash)
+## are broadcast to ALL clients by the host's take_damage via _client_show_hit,
+## so the client path no longer spawns local feedback.
+static func deal_damage(target: Node3D, amount: int, knockback_from: Vector3, knockback_strength: float = 0.0, multistrike: int = 1, is_crit: bool = false) -> void:
+	if NetState.is_in_lobby() and not NetState.is_host():
+		target.request_damage.rpc_id(1, amount, knockback_from, knockback_strength, multistrike, is_crit)
+		return
+	target.take_damage(amount, knockback_from, knockback_strength, multistrike, is_crit)
+
 ## RPC endpoint: any peer can request damage on an enemy. Only the host
 ## (authority) actually applies it — clients' local take_damage is gated.
 ## Clients call `request_damage.rpc_id(1, ...)` to route hits to the host.
@@ -807,6 +820,17 @@ func request_damage(amount: int, knockback_from: Vector3, knockback_strength: fl
 	if not multiplayer.is_server():
 		return
 	take_damage(amount, knockback_from, knockback_strength, multistrike, is_crit)
+
+## Host → all clients: play hit visuals (damage number, squash, flash).
+## Sent from take_damage after the host applies damage so every client
+## sees every hit, not just the attacker. Unreliable because a dropped
+## damage number is cosmetic — no gameplay impact.
+@rpc("authority", "call_remote", "unreliable")
+func _client_show_hit(amount: int, multistrike: int, is_crit: bool) -> void:
+	var head := global_position + Vector3(0.0, 1.8, 0.0)
+	DamageNumber.spawn(get_parent(), head, amount, multistrike, is_crit)
+	_play_hit_squash()
+	_hit_flash_tween = HitFlash.play(self, visual, _hit_flash_tween)
 
 func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_strength: float = 0.0, multistrike: int = 1, is_crit: bool = false) -> void:
 	if not _is_alive():
@@ -851,6 +875,10 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 	_play_hit_squash()
 	_hit_flash_tween = HitFlash.play(self, visual, _hit_flash_tween)
 	_refresh_tooltip_if_hovered()
+	# Broadcast hit visuals to all clients so every player sees every hit's
+	# damage number, squash, and flash — not just the attacker.
+	if NetState.is_in_lobby():
+		_client_show_hit.rpc(amount, multistrike, is_crit)
 	if _health <= 0:
 		_die()
 
@@ -2143,7 +2171,7 @@ func _cast_skill_cone(target: Node3D, aim: Vector3, skill: EnemySkill) -> void:
 	velocity.z = 0.0
 	_face_direction(aim)
 	_play_anim(ANIM_ATTACK, 1.2)
-	PrototypeAttackIndicator.spawn_cone(self, aim, skill.skill_range, skill.cone_deg, skill.wind_up)
+	CombatVisuals.spawn_cone(self, aim, skill.skill_range, skill.cone_deg, skill.wind_up)
 	var gen := _generation
 	await get_tree().create_timer(skill.wind_up).timeout
 	if _generation != gen or _state != State.CASTING:
@@ -2172,7 +2200,7 @@ func _cast_skill_radial(target: Node3D, skill: EnemySkill) -> void:
 	velocity.x = 0.0
 	velocity.z = 0.0
 	_play_anim(ANIM_ATTACK, 1.0)
-	PrototypeAttackIndicator.spawn_radial(self, skill.aoe_radius, skill.wind_up)
+	CombatVisuals.spawn_radial(self, skill.aoe_radius, skill.wind_up)
 	var gen := _generation
 	await get_tree().create_timer(skill.wind_up).timeout
 	if _generation != gen or _state != State.CASTING:
@@ -2299,7 +2327,7 @@ func _cast_melee_attack(player: Node3D, aim: Vector3) -> void:
 	var range_now := _attack_range()
 	var cone_now := _melee_cone_deg()
 	var windup_now := _attack_windup()
-	PrototypeAttackIndicator.spawn_cone(self, aim, range_now, cone_now, windup_now)
+	CombatVisuals.spawn_cone(self, aim, range_now, cone_now, windup_now)
 	var gen := _generation
 	await get_tree().create_timer(windup_now).timeout
 	# Bail if anything preempted us during the windup (knockback, death,

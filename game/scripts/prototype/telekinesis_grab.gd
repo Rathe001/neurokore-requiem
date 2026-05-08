@@ -113,14 +113,14 @@ func _apply_impact() -> void:
 	# the take_damage knockback origin to point back at the player.
 	var player_pos: Vector3 = _player.global_position
 	global_position = landing_pos
-	PrototypeAttackIndicator.spawn_hit_radial(self, AOE_RADIUS)
+	CombatVisuals.spawn_hit_radial(self, AOE_RADIUS)
 	# Release BEFORE dealing damage so the take_damage knockback can
 	# move the target normally (KNOCKBACK state expects to control
 	# velocity, which GRABBED was suspending).
 	if _target.has_method(&"release_grab"):
 		_target.release_grab()
 	if _target.has_method(&"take_damage"):
-		_target.take_damage(_direct_damage, player_pos, 0.0)
+		PrototypeEnemy.deal_damage(_target, _direct_damage, player_pos)
 	# AoE damage to neighbours. Radius query uses the post-slam landing
 	# position; the lifted target may have moved horizontally during
 	# the lift if it got grabbed mid-stride.
@@ -133,7 +133,7 @@ func _apply_impact() -> void:
 		# Spare friendly (charmed) enemies caught in the slam radius.
 		if n.has_method(&"is_player_friendly") and n.is_player_friendly():
 			continue
-		n.take_damage(aoe_damage, landing_pos, AOE_KNOCKBACK)
+		PrototypeEnemy.deal_damage(n, aoe_damage, landing_pos, AOE_KNOCKBACK)
 	queue_free()
 
 

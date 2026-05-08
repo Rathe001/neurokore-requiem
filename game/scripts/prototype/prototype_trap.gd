@@ -120,7 +120,7 @@ func _detonate() -> void:
 	# Reuses the same indicator the player's hitscan paths use, anchored
 	# to self so the ring scales correctly even if the trap was nudged by
 	# physics (it isn't, but cheap insurance).
-	PrototypeAttackIndicator.spawn_hit_radial(self, BLAST_RADIUS)
+	CombatVisuals.spawn_hit_radial(self, BLAST_RADIUS)
 	var dmg := int(round(float(BASE_DAMAGE) * _captured_damage_mult))
 	for n in SpatialGrid.query_radius(global_position, BLAST_RADIUS, &"enemies"):
 		if not (n is Node3D) or not is_instance_valid(n):
@@ -130,7 +130,7 @@ func _detonate() -> void:
 		# Spare friendly (charmed) enemies caught in the blast radius.
 		if n.has_method(&"is_player_friendly") and n.is_player_friendly():
 			continue
-		n.take_damage(dmg, global_position, KNOCKBACK)
+		PrototypeEnemy.deal_damage(n, dmg, global_position, KNOCKBACK)
 		_apply_exile_curse_if_active(n)
 	queue_free()
 

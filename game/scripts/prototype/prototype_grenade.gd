@@ -67,7 +67,7 @@ func _detonate() -> void:
 	_detonated = true
 	if _trail != null:
 		_trail.emitting = false
-	PrototypeAttackIndicator.spawn_hit_radial(self, blast_radius)
+	CombatVisuals.spawn_hit_radial(self, blast_radius)
 	var eff_knockback := knockback
 	match grenade_type:
 		Skill.GrenadeType.INCENDIARY:
@@ -84,16 +84,15 @@ func _detonate() -> void:
 		if n.has_method(&"is_player_friendly") and n.is_player_friendly():
 			continue
 		var dmg := _roll_damage()
-		n.take_damage(dmg, global_position, eff_knockback, 1, false)
+		PrototypeEnemy.deal_damage(n, dmg, global_position, eff_knockback, 1, false)
 		_apply_exile_curse_if_active(n)
 		match grenade_type:
 			Skill.GrenadeType.STUN:
 				if n.has_method(&"apply_stun"):
 					n.apply_stun(STUN_DURATION)
 			Skill.GrenadeType.INCENDIARY:
-				if n.has_method(&"take_damage"):
-					var burn := maxi(1, int(round(float(dmg) * 0.5)))
-					n.take_damage(burn, global_position, 0.0, 1, false)
+				var burn := maxi(1, int(round(float(dmg) * 0.5)))
+				PrototypeEnemy.deal_damage(n, burn, global_position, 0.0, 1, false)
 	if grenade_type == Skill.GrenadeType.CLUSTER and not is_cluster_child:
 		_spawn_cluster_children()
 	# Brief delay so the trail particles finish fading before we hide the node.
