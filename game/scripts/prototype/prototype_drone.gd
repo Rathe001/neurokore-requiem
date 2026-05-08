@@ -264,6 +264,8 @@ func _try_fire() -> bool:
 	if aim_to.length_squared() < 0.0001:
 		return false
 	var proj: PrototypeProjectile = EntityPool.acquire(PROJECTILE_SCENE)
+	if proj == null:
+		return false
 	proj.target_group = &"enemies"
 	proj.direction = aim_to.normalized()
 	proj.speed = PROJECTILE_SPEED

@@ -132,6 +132,8 @@ func _spawn_wave(count: int) -> void:
 		var radius := randf_range(spawn_min_radius, spawn_max_radius)
 		var pos := center + Vector3(cos(angle) * radius, 0.0, sin(angle) * radius)
 		var enemy := EntityPool.acquire(ENEMY_SCENE)
+		if enemy == null:
+			continue
 		parent.add_child(enemy)
 		enemy.global_position = pos
 		# Wipe any leftover affixes / named identity the pool occupant
@@ -373,6 +375,8 @@ func _spawn_boss() -> void:
 	if boss_spawn == Vector3.ZERO:
 		return
 	var boss := EntityPool.acquire(BOSS_SCENE)
+	if boss == null:
+		return
 	# Set identity before add_child so the first _init_enemy pass applies boss
 	# stats directly and skips the trash display-name roll. Without this, fresh
 	# (un-pooled) instances run trash setup, then re-init through reset() — the

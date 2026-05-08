@@ -22,6 +22,8 @@ func reset_state() -> void:
 
 func _spawn() -> void:
 	var boss := EntityPool.acquire(ENEMY_SCENE)
+	if boss == null:
+		return
 	# Set identity before add_child so the first _init_enemy pass applies
 	# boss stats directly and skips the trash display-name roll. (Prevents
 	# a brief tint/floor-ring flicker on un-pooled instances.)

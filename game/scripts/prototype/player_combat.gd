@@ -185,6 +185,8 @@ func is_player_friendly(target: Node) -> bool:
 
 func _spawn_projectile(skill: Skill, aim: Vector3, eff_range: float, weapon: Item, source_offset: Vector3 = Vector3.ZERO) -> void:
 	var proj: PrototypeProjectile = EntityPool.acquire(PROJECTILE_SCENE)
+	if proj == null:
+		return
 	proj.direction = aim.normalized()
 	proj.speed = skill.projectile_speed
 	proj.max_range = eff_range

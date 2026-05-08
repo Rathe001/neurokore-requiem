@@ -56,6 +56,8 @@ func activate(skill: Skill, cursor_offset: Vector3) -> void:
 		cursor_offset = cursor_offset.normalized() * MAX_THROW_RANGE
 	var offhand: Item = InventoryState.get_equipped(&"offhand")
 	var grenade: PrototypeGrenade = EntityPool.acquire(GRENADE_SCENE) as PrototypeGrenade
+	if grenade == null:
+		return
 	grenade.target_position = _host.global_position + cursor_offset
 	if offhand != null and offhand.damage_max > 0:
 		grenade.damage_min = offhand.effective_damage_min()

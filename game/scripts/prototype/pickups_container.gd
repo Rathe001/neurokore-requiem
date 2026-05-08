@@ -54,6 +54,8 @@ func spawn_credit(amount: int, pos: Vector3) -> void:
 	else:
 		# SP path — use EntityPool for horde-scale perf.
 		var pickup := EntityPool.acquire(CREDIT_PICKUP_SCENE)
+		if pickup == null:
+			return
 		pickup.amount = amount
 		add_child(pickup)
 		pickup.global_position = pos

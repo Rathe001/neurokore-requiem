@@ -113,6 +113,8 @@ func _spawn_cluster_children() -> void:
 		var dist := CLUSTER_SPREAD * randf_range(0.6, 1.4)
 		var offset := Vector3(cos(angle), 0.0, sin(angle)) * dist
 		var child := EntityPool.acquire(_GRENADE_SCENE) as PrototypeGrenade
+		if child == null:
+			continue
 		child.target_position = global_position + offset
 		child.damage_min = int(round(float(damage_min) * CLUSTER_DAMAGE_SCALE))
 		child.damage_max = int(round(float(damage_max) * CLUSTER_DAMAGE_SCALE))
