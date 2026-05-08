@@ -8,7 +8,7 @@ class_name FloorBuilder
 ## Pit interiors (the shaft and ooze/spike floor) are owned by PitBuilder;
 ## this file only handles the surface plane(s) and the perimeter trim.
 
-const FLOOR_OVERLAP := 0.2  ## extends piece floors to cover under walls (= wall_thickness * 0.5)
+const FLOOR_OVERLAP := 0.3  ## extends piece floors past wall outer face (slightly > wall_thickness * 0.5)
 const PIT_TRIM_H := 0.12    ## height of raised lip at pit edges
 # Sub-millimetre vertical bias applied to corridor floor MESHES (not their
 # colliders) so the corridor loses the depth tie wherever it overlaps room

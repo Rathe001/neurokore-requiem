@@ -1,0 +1,35 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/prototype/isr_drone.gd" id="script_isr"]
+
+[sub_resource type="SphereMesh" id="mesh_isr"]
+radius = 0.09
+height = 0.18
+radial_segments = 10
+rings = 5
+
+[sub_resource type="StandardMaterial3D" id="mat_isr"]
+shading_mode = 0
+albedo_color = Color(0.2, 1.0, 0.3, 1)
+emission_enabled = true
+emission = Color(0.2, 1.0, 0.3, 1)
+emission_energy_multiplier = 5.0
+
+; ISR surveillance drone — small glowing green orb.
+; No collision (pure visual + gameplay marker). Floats above the marked
+; target and projects a scanning cone downward.
+[node name="ISRDrone" type="Node3D"]
+script = ExtResource("script_isr")
+
+[node name="Mesh" type="MeshInstance3D" parent="."]
+mesh = SubResource("mesh_isr")
+material_override = SubResource("mat_isr")
+cast_shadow = 0
+
+[node name="Glow" type="OmniLight3D" parent="."]
+light_color = Color(0.2, 1.0, 0.3, 1)
+light_energy = 1.5
+omni_range = 3.0
+omni_attenuation = 2.0
+shadow_enabled = false
+light_volumetric_fog_energy = 0.0

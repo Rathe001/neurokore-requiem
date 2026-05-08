@@ -25,21 +25,9 @@ const LABEL_WIDTH := 120.0
 const LABEL_GAP := 8.0
 const CLASS_NAME_HEIGHT := 15.0
 const STAT_LINE_HEIGHT := 11.0
-const DESC_FONT_SIZE := 8
+const DESC_FONT_SIZE := 7
 const DESC_COLOR := Color(1.0, 1.0, 1.0, 0.45)
 const DESC_GAP := 2.0
-
-# Short perk summaries for the label column. These are deliberately terse to
-# fit the narrow 120px label area. Full descriptions live in the .tres files
-# and appear on node hover.
-const PERK_SUMMARIES: Dictionary = {
-	&"ort": "Exile — Curse for bonus damage",
-	&"ing": "IED — Proximity trap mines",
-	&"amb": "Doomsayer — Charm enemies",
-	&"dev": "Amalgamation — Extra weapon arms",
-	&"opt": "Drone Swarm — Auto-fire drones",
-	&"cla": "Telekinesis — Psionic slam",
-}
 
 const PERK_DIR := "res://resources/perks/"
 
@@ -164,9 +152,10 @@ func _on_node_clicked(event: InputEvent, stat_id: StringName, tier: int, node_id
 	if tier >= unlocked:
 		_show_lock_reason(stat_id, tier)
 		return
+	var infinite_points := DebugState.config != null and DebugState.config.unlock_all_talents
 	if PlayerState.is_talent_allocated(stat_id, tier, node_idx):
 		PlayerState.set_talent_alloc(stat_id, tier, node_idx, false)
-	elif PlayerState.get_talent_points_spent() < PlayerState.talent_points_total:
+	elif infinite_points or PlayerState.get_talent_points_spent() < PlayerState.talent_points_total:
 		PlayerState.set_talent_alloc(stat_id, tier, node_idx, true)
 
 # ── Signals ────────────────────────────────────────────────────────────────────
@@ -255,7 +244,9 @@ func _build_row(row_def: Dictionary) -> Dictionary:
 	desc.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	desc.add_theme_font_size_override(&"font_size", DESC_FONT_SIZE)
 	desc.add_theme_color_override(&"font_color", DESC_COLOR)
-	desc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	desc.mouse_filter = Control.MOUSE_FILTER_STOP
+	desc.mouse_entered.connect(_on_perk_desc_hovered.bind(stat_id))
+	desc.mouse_exited.connect(_on_node_unhovered)
 	container.add_child(desc)
 
 	var bar_bg := ColorRect.new()
@@ -312,7 +303,6 @@ func _build_row(row_def: Dictionary) -> Dictionary:
 		lock_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		lock_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		lock_lbl.add_theme_color_override(&"font_color", TIER_LOCK_COLOR)
-		lock_lbl.z_index = 1
 		lock_lbl.visible = false
 		container.add_child(lock_lbl)
 		tier_locks.append(lock_lbl)
@@ -527,7 +517,50 @@ func _show_lock_reason(stat_id: StringName, tier: int) -> void:
 	get_tree().call_group(&"interactable_tooltip", &"show_talent_node", "Locked", reason)
 
 func _perk_desc_text(stat_id: StringName) -> String:
-	return PERK_SUMMARIES.get(stat_id, "")
+	var ladder: PerkLadder = _perk_ladders.get(stat_id)
+	if ladder == null or ladder.perks.is_empty():
+		return ""
+	var active_perk := _get_active_perk(stat_id, ladder)
+	if active_perk != null:
+		return active_perk.label
+	# Not yet unlocked — show the T1 perk name dimmed.
+	var perk: Perk = ladder.perks[0]
+	return perk.label.split(" ")[0] if perk != null else ""
+
+
+func _get_active_perk(stat_id: StringName, ladder: PerkLadder) -> Perk:
+	var alloc: Array = PlayerState.talent_allocations.get(stat_id, [])
+	var max_alloc_tier := -1
+	for tier_idx in alloc.size():
+		var row: Array = alloc[tier_idx]
+		for node_alloc in row:
+			if node_alloc:
+				max_alloc_tier = maxi(max_alloc_tier, tier_idx)
+				break
+	var perk_idx := mini(max_alloc_tier, ladder.perks.size() - 1)
+	if perk_idx < 0:
+		return null
+	return ladder.perks[perk_idx]
+
+
+func _on_perk_desc_hovered(stat_id: StringName) -> void:
+	var ladder: PerkLadder = _perk_ladders.get(stat_id)
+	if ladder == null or ladder.perks.is_empty():
+		return
+	var perk := _get_active_perk(stat_id, ladder)
+	if perk == null:
+		perk = ladder.perks[0]
+		if perk == null:
+			return
+		get_tree().call_group(&"interactable_tooltip", &"show_talent_node",
+			perk.label, perk.description)
+		return
+	var title: String = perk.label
+	var body: String = perk.description
+	var player := get_tree().get_first_node_in_group(&"player") as PrototypePlayer
+	for line in EffectFormatter.buff_lines_for_stat(stat_id, player):
+		body += "\n• " + line
+	get_tree().call_group(&"interactable_tooltip", &"show_talent_node", title, body)
 
 
 func _paint_row(row: Dictionary, unlocked_tier: int) -> void:

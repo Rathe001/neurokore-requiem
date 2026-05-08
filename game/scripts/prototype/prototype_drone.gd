@@ -22,7 +22,9 @@ extends CharacterBody3D
 # Stats are hardcoded for now. Future gear mods or talent effects could
 # modify these (wander_radius, fire_cooldown, projectile damage type, etc.).
 
-const PROJECTILE_SCENE: PackedScene = preload("res://scenes/prototype/prototype_projectile.tscn")
+# Lazy-loaded to avoid an empty-resource_path issue with preload() on pooled
+# scenes. The scene is cached by Godot after the first load() call.
+static var _projectile_scene: PackedScene
 
 # Wander volume around the player. MIN keeps drones from bunching at the
 # player's center; MAX keeps the swarm visibly close in dense fights.
@@ -62,8 +64,9 @@ const TELEPORT_BACK_DISTANCE := 6.0
 
 const ATTACK_RANGE := 9.0
 const FIRE_COOLDOWN := 1.4
-const PROJECTILE_SPEED := 22.0
+const PROJECTILE_SPEED := 11.0
 const PROJECTILE_BASE_DAMAGE := 8
+const _WORLD_LAYER_MASK := 1
 
 var _player: Node3D = null
 var _wander_offset: Vector3 = Vector3.ZERO
@@ -77,6 +80,12 @@ var _fire_cd: float = 0.0
 var _chase_target: Node3D = null
 var _swarm_bearing: float = 0.0
 var _swarm_radius: float = 2.0
+
+
+static func _get_projectile_scene() -> PackedScene:
+	if _projectile_scene == null:
+		_projectile_scene = load("res://scenes/prototype/prototype_projectile.tscn") as PackedScene
+	return _projectile_scene
 
 
 # Extra args (orbit_index / orbit_total) kept for call-site compatibility
@@ -167,9 +176,10 @@ func _swarm_position_for(target: Node3D) -> Vector3:
 	return around
 
 
-# Drop the current chase target if it died, got charmed, lost LOS to the
-# player, or drifted past leash. Leaving stale targets attached makes the
-# drone hover over a corpse or tug at the leash edge.
+# Drop the current chase target if it died, got charmed, or strayed past
+# leash. LoS is NOT checked here — the drone does its own wall raycast at
+# fire time, which is more accurate than the staggered LosCuller for a
+# fast-moving entity like a drone hovering around enemies.
 func _validate_chase_target() -> void:
 	if _chase_target == null:
 		return
@@ -182,9 +192,6 @@ func _validate_chase_target() -> void:
 	if _chase_target.has_method(&"is_player_friendly") and _chase_target.is_player_friendly():
 		_chase_target = null
 		return
-	if not LosCuller.has_los_to_player(_chase_target):
-		_chase_target = null
-		return
 	var to_player := _chase_target.global_position - _player.global_position
 	# +2 grace beyond the leash so a target dancing right at the edge
 	# doesn't strobe in/out of the chase state every frame.
@@ -192,9 +199,11 @@ func _validate_chase_target() -> void:
 		_chase_target = null
 
 
-# Pick the nearest visible enemy within ATTACK_RANGE that's also inside
-# the player's leash. Roll a fresh swarm bearing/radius per acquisition
-# so two drones engaging the same target won't stack on the same point.
+# Pick the nearest enemy within ATTACK_RANGE of the player that's also
+# inside the player's leash. Roll a fresh swarm bearing/radius per
+# acquisition so two drones engaging the same target won't stack on the
+# same point. Uses LosCuller for initial acquisition (player must be able
+# to see the enemy to send drones after it).
 func _acquire_chase_target() -> void:
 	var best: Node3D = null
 	var best_d2 := ATTACK_RANGE * ATTACK_RANGE
@@ -231,39 +240,23 @@ func _pick_new_target() -> void:
 	_retarget_t = randf_range(RETARGET_INTERVAL_MIN, RETARGET_INTERVAL_MAX)
 
 
-# Pick the nearest enemy within ATTACK_RANGE and spawn a projectile aimed
-# at chest height. Returns true when a shot was fired so the caller can
-# refresh the cooldown only on a real fire.
+# Fire at the chase target (or nearest visible enemy). Uses a direct
+# drone→enemy raycast against the World layer instead of the staggered
+# LosCuller, so the drone's own line-of-sight is authoritative — it won't
+# refuse to fire at an enemy it can clearly see just because the culler
+# hasn't refreshed yet.
 func _try_fire() -> bool:
-	var best: Node3D = null
-	var best_dist_sq := ATTACK_RANGE * ATTACK_RANGE
-	for n in SpatialGrid.query_radius(global_position, ATTACK_RANGE, &"enemies"):
-		if not (n is Node3D) or not is_instance_valid(n):
-			continue
-		if not n.has_method(&"take_damage"):
-			continue
-		# Skip player-friendly (charmed) pets — drones are an extension
-		# of the player and shouldn't waste shots on bolts that the
-		# projectile script will then filter out as friendly fire.
-		if n.has_method(&"is_player_friendly") and n.is_player_friendly():
-			continue
-		# Drones respect line-of-sight from the PLAYER's perspective —
-		# they're an extension of the player, not independent scouts.
-		# An enemy the player can't see can't be targeted by their
-		# drones either, matching the rule for charm / DoT / telekinesis.
-		if not LosCuller.has_los_to_player(n):
-			continue
-		var d2 := global_position.distance_squared_to(n.global_position)
-		if d2 < best_dist_sq:
-			best_dist_sq = d2
-			best = n
+	var best := _pick_fire_target()
 	if best == null:
 		return false
 	var origin := global_position
 	var aim_to := best.global_position + Vector3(0.0, 0.9, 0.0) - origin
 	if aim_to.length_squared() < 0.0001:
 		return false
-	var proj: PrototypeProjectile = EntityPool.acquire(PROJECTILE_SCENE)
+	var scene := _get_projectile_scene()
+	if scene == null:
+		return false
+	var proj: PrototypeProjectile = EntityPool.acquire(scene)
 	if proj == null:
 		return false
 	proj.target_group = &"enemies"
@@ -286,3 +279,48 @@ func _try_fire() -> bool:
 	proj.monitoring = true
 	proj.reset()
 	return true
+
+
+# Prefer the current chase target if it's in range and not wall-blocked.
+# Fall back to a SpatialGrid scan for any visible enemy nearby.
+func _pick_fire_target() -> Node3D:
+	if _chase_target != null and is_instance_valid(_chase_target):
+		var d2 := global_position.distance_squared_to(_chase_target.global_position)
+		if d2 <= ATTACK_RANGE * ATTACK_RANGE and _has_clear_shot(_chase_target):
+			return _chase_target
+	# Fallback: nearest enemy the drone can directly see.
+	var best: Node3D = null
+	var best_d2 := ATTACK_RANGE * ATTACK_RANGE
+	for n in SpatialGrid.query_radius(global_position, ATTACK_RANGE, &"enemies"):
+		if not (n is Node3D) or not is_instance_valid(n):
+			continue
+		if not n.has_method(&"take_damage"):
+			continue
+		if n.has_method(&"is_player_friendly") and n.is_player_friendly():
+			continue
+		if not _has_clear_shot(n):
+			continue
+		var d2 := global_position.distance_squared_to(n.global_position)
+		if d2 < best_d2:
+			best_d2 = d2
+			best = n
+	return best
+
+
+# Direct raycast from the drone to the target against the World layer.
+# Returns true when no wall blocks the shot. Cheaper and more accurate
+# for a moving drone than the player-centric staggered LosCuller.
+func _has_clear_shot(target: Node3D) -> bool:
+	var world := get_world_3d()
+	if world == null:
+		return false
+	var space := world.direct_space_state
+	if space == null:
+		return false
+	var query := PhysicsRayQueryParameters3D.new()
+	query.collision_mask = _WORLD_LAYER_MASK
+	query.collide_with_areas = false
+	query.collide_with_bodies = true
+	query.from = global_position
+	query.to = target.global_position + Vector3(0.0, 0.9, 0.0)
+	return space.intersect_ray(query).is_empty()

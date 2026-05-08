@@ -88,6 +88,14 @@ func query_cone(origin: Vector3, aim: Vector3, radius: float, half_cos: float, c
 		return results
 	var grid: Dictionary = _grids[category]
 	var r_sq := radius * radius
+	# Flatten aim to XZ — diff is XZ-projected below, so aim must match.
+	# Without this, a 3D aim (e.g. angled up at a lifted enemy) shrinks the
+	# effective cone because the Y component eats into the dot product.
+	var aim_flat := Vector3(aim.x, 0.0, aim.z)
+	if aim_flat.length_squared() > 0.0001:
+		aim_flat = aim_flat.normalized()
+	else:
+		aim_flat = aim
 	var min_cell := _cell_for(origin - Vector3(radius, 0.0, radius))
 	var max_cell := _cell_for(origin + Vector3(radius, 0.0, radius))
 	for cx in range(min_cell.x, max_cell.x + 1):
@@ -105,7 +113,7 @@ func query_cone(origin: Vector3, aim: Vector3, radius: float, half_cos: float, c
 				if dist_sq > r_sq or dist_sq < 0.000001:
 					continue
 				var dist := sqrt(dist_sq)
-				if aim.dot(diff / dist) < half_cos:
+				if aim_flat.dot(diff / dist) < half_cos:
 					continue
 				results.append(node)
 	return results

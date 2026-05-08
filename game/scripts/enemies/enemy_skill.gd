@@ -36,7 +36,7 @@ enum TargetingMode {
 
 @export_group("Projectile")
 @export var projectile_scene: PackedScene
-@export var projectile_speed: float = 18.0
+@export var projectile_speed: float = 10.0
 @export var projectile_max_range: float = 14.0
 ## Number of projectiles per cast. >1 spawns a symmetric spread around the
 ## aim vector, each offset by projectile_spread_deg.

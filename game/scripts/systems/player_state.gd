@@ -74,11 +74,12 @@ var xp_to_next: int = STARTING_XP_TO_NEXT
 ## Drives the "New Game +N" banner.
 var new_game_plus: int = 0
 
-## Zone level offset derived from NG+ count. Each NG+ shifts enemy levels
-## up by 2 so zones feel progressively harder across resets.
-## NG+0 → +0 (enemies start L1-3), NG+1 → +2 (L3-5), NG+2 → +4 (L5-7), etc.
+## Zone level offset — enemies start near the player's level so a freshly
+## generated zone never feels trivially under-levelled after NG+ resets.
+## Falls back to the NG+ bump (×2 per cycle) when the player is low level
+## (early first playthrough).
 func zone_level_offset() -> int:
-	return new_game_plus * 2
+	return maxi(new_game_plus * 2, level - 1)
 
 ## Spent talent points per stat tree.
 ## Layout: { stat_id: [[bool]*8]*5 } — 5 tiers × 8 nodes each.

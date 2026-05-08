@@ -6,8 +6,8 @@
 radius = 0.3
 
 [sub_resource type="SphereMesh" id="SphereMesh_1"]
-radius = 0.03
-height = 0.1
+radius = 0.09
+height = 0.22
 radial_segments = 8
 rings = 4
 
@@ -37,8 +37,8 @@ material_override = SubResource("StandardMaterial3D_1")
 ; and self-shadowing on the projectile mesh looks wrong.
 [node name="Glow" type="OmniLight3D" parent="."]
 light_color = Color(0.4, 0.85, 1.0, 1.0)
-light_energy = 3.0
-omni_range = 5.0
+light_energy = 4.5
+omni_range = 6.0
 omni_attenuation = 2.0
 shadow_enabled = false
 light_volumetric_fog_energy = 0.0

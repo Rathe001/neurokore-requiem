@@ -1,0 +1,33 @@
+[gd_resource type="Resource" script_class="TalentTree" load_steps=5 format=3]
+
+; Polymath (cla) talent tree — utility nodes.
+;
+; Each TalentNode places itself at (tier, node_idx) on the 8×3 grid the
+; talents panel renders. Effects use the PerkEffect schema; aggregate
+; keys here are read by gameplay code via Effects.get_aggregate(kind).
+
+[ext_resource type="Script" path="res://scripts/talents/talent_node.gd" id="node_script"]
+[ext_resource type="Script" path="res://scripts/talents/talent_tree.gd" id="tree_script"]
+[ext_resource type="Script" path="res://scripts/perks/perk_effect.gd" id="effect_script"]
+
+; Mindlink — whenever your attack damages an enemy, the nearest other
+; enemy within 6m suffers the same damage. A psionic echo — one mind
+; screams, another bleeds. Always-on binary toggle (magnitude 1.0);
+; gameplay code checks Effects.get_aggregate(&"mindlink_active") > 0.0.
+[sub_resource type="Resource" id="effect_cla_t0_n0_mindlink"]
+script = ExtResource("effect_script")
+kind = &"mindlink_active"
+magnitude = 1.0
+
+[sub_resource type="Resource" id="node_cla_t0_n0"]
+script = ExtResource("node_script")
+id = &"cla_t0_n0_mindlink"
+label = "Mindlink"
+description = "When you damage an enemy, the nearest other enemy within 6m suffers the same damage. One mind screams — another bleeds."
+tier = 0
+node_idx = 0
+effects = [SubResource("effect_cla_t0_n0_mindlink")]
+
+[resource]
+script = ExtResource("tree_script")
+nodes = [SubResource("node_cla_t0_n0")]

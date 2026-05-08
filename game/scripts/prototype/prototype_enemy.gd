@@ -31,6 +31,12 @@ const ITEM_DROP_CHANCE_PER_LEVEL: float = 0.06
 const ITEM_DROP_ILVL_OFFSET_MIN: int = -1
 const ITEM_DROP_ILVL_OFFSET_MAX: int = 1
 
+# Maximum angular spread (radians) at 0% accuracy for enemy projectiles.
+# Matched to the player's INACCURACY_SPREAD_MAX so both sides play by
+# the same rules — designers tune the feel via EnemyClass.accuracy.
+const ENEMY_INACCURACY_SPREAD_MAX: float = 0.25
+const ENEMY_VERTICAL_SPREAD_RATIO: float = 0.5
+
 const GRAVITY := 22.0
 const CHASE_SPEED := 3.2
 const AGGRO_RANGE := 10.0
@@ -117,10 +123,10 @@ const JUMP_LANDING_GRACE := 0.18  # require this much airtime before is_on_floor
 const JUMP_COOLDOWN := 0.8        # post-landing lockout — caps jump cadence so a chain of pillars doesn't read as constant hopping
 
 # Per-level stat ranges, indexed [1..MAX_LEVEL]. Index 0 is unused (no level 0).
-# Tuned so L1 sits near the previous fixed values (40 HP / 10 dmg) and each
-# step up roughly 1.6×s the threat to keep scaling readable in friends-mode.
-# Extended to 15 to cover several NG+ cycles; levels beyond MAX_LEVEL clamp
-# to the top tier so the game never crashes on deep NG+ runs.
+# Tuned so L1 sits near the previous fixed values and each step up ~1.2× the
+# threat — a flatter curve that keeps NG+ approachable without exponential
+# spikes. Extended to 15 to cover several NG+ cycles; levels beyond MAX_LEVEL
+# clamp to the top tier so the game never crashes on deep NG+ runs.
 const MAX_LEVEL := 15
 # Global HP multiplier applied on top of LEVEL_HP_RANGE rolls. Single knob
 # for "enemies are too tanky" tuning — touches every spawn (regular, pack,
@@ -130,38 +136,38 @@ const HP_GLOBAL_MULT := 0.5
 const LEVEL_HP_RANGE: Array[Vector2i] = [
 	Vector2i(0, 0),       # 0 — unused
 	Vector2i(30, 45),     # 1
-	Vector2i(55, 80),     # 2
-	Vector2i(90, 130),    # 3
-	Vector2i(130, 190),   # 4
-	Vector2i(190, 270),   # 5
-	Vector2i(270, 390),   # 6
-	Vector2i(390, 550),   # 7
-	Vector2i(550, 780),   # 8
-	Vector2i(780, 1100),  # 9
-	Vector2i(1100, 1550), # 10
-	Vector2i(1550, 2200), # 11
-	Vector2i(2200, 3100), # 12
-	Vector2i(3100, 4400), # 13
-	Vector2i(4400, 6200), # 14
-	Vector2i(6200, 8800), # 15
+	Vector2i(36, 54),     # 2
+	Vector2i(44, 65),     # 3
+	Vector2i(52, 78),     # 4
+	Vector2i(63, 94),     # 5
+	Vector2i(76, 113),    # 6
+	Vector2i(91, 136),    # 7
+	Vector2i(109, 163),   # 8
+	Vector2i(131, 196),   # 9
+	Vector2i(157, 235),   # 10
+	Vector2i(188, 282),   # 11
+	Vector2i(226, 339),   # 12
+	Vector2i(271, 406),   # 13
+	Vector2i(325, 488),   # 14
+	Vector2i(390, 585),   # 15
 ]
 const LEVEL_DAMAGE_RANGE: Array[Vector2i] = [
 	Vector2i(0, 0),     # 0 — unused
 	Vector2i(3, 6),     # 1
-	Vector2i(7, 10),    # 2
-	Vector2i(11, 15),   # 3
-	Vector2i(16, 22),   # 4
-	Vector2i(23, 32),   # 5
-	Vector2i(33, 46),   # 6
-	Vector2i(47, 65),   # 7
-	Vector2i(66, 92),   # 8
-	Vector2i(93, 130),  # 9
-	Vector2i(131, 185), # 10
-	Vector2i(186, 260), # 11
-	Vector2i(261, 370), # 12
-	Vector2i(371, 520), # 13
-	Vector2i(521, 730), # 14
-	Vector2i(731, 1030),# 15
+	Vector2i(4, 7),     # 2
+	Vector2i(5, 9),     # 3
+	Vector2i(6, 10),    # 4
+	Vector2i(7, 12),    # 5
+	Vector2i(9, 15),    # 6
+	Vector2i(10, 18),   # 7
+	Vector2i(12, 21),   # 8
+	Vector2i(15, 25),   # 9
+	Vector2i(18, 30),   # 10
+	Vector2i(21, 36),   # 11
+	Vector2i(26, 43),   # 12
+	Vector2i(31, 52),   # 13
+	Vector2i(37, 62),   # 14
+	Vector2i(44, 75),   # 15
 ]
 # Floor-ring emission color per level. Higher levels glow hotter so a player
 # can read threat at a glance from across the room. Levels beyond the array
@@ -341,6 +347,7 @@ var _charmed: bool = false
 var _charm_target: Node3D = null
 var _weaken_remain: float = 0.0
 var _weaken_mult: float = 0.0  # 0..1 fractional reduction (0.5 = -50% damage)
+var _isr_vuln_count: int = 0
 var _affliction_marker: Label3D = null
 var _floor_ring_mat: StandardMaterial3D
 # Skill system state. _special_skills is assigned by the spawner AFTER
@@ -438,6 +445,7 @@ func _init_enemy() -> void:
 	_charm_target = null
 	_weaken_remain = 0.0
 	_weaken_mult = 0.0
+	_isr_vuln_count = 0
 	_loose_running = false
 	_clear_affliction_marker()
 	_special_skills.clear()
@@ -758,6 +766,9 @@ func _build_tooltip_body() -> String:
 		lines.append("Weakened −%d%% dmg · %.1fs" % [pct, _weaken_remain])
 	if _curse_remain > 0.0 and _curse_damage_pct > 0.0:
 		lines.append("Cursed +%d%% dmg taken · %.1fs" % [int(round(_curse_damage_pct)), _curse_remain])
+	if _isr_vuln_count > 0:
+		var vuln_pct := int(round(float(_isr_vuln_count) * (ISRDrone.VULN_MULT - 1.0) * 100.0))
+		lines.append("ISR Scanned +%d%% dmg taken" % vuln_pct)
 	# Affix names — already baked into display_name's prefix, but
 	# spelling them out as a discrete line makes it explicit when an
 	# elite shows up so the player knows what they're up against.
@@ -873,6 +884,8 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 	# enjoys the leash protection.
 	if _curse_damage_pct > 0.0:
 		amount = int(round(float(amount) * (1.0 + _curse_damage_pct * 0.01)))
+	if _isr_vuln_count > 0:
+		amount = int(round(float(amount) * (1.0 + float(_isr_vuln_count) * (ISRDrone.VULN_MULT - 1.0))))
 	_health -= amount
 	_update_health_bar()
 	var head := global_position + Vector3(0.0, 1.8, 0.0)
@@ -1321,6 +1334,20 @@ func apply_weaken(magnitude: float, duration: float) -> void:
 	if duration > _weaken_remain:
 		_weaken_remain = duration
 	_show_affliction_marker("↓", Color(0.7, 0.7, 0.7, 1.0))
+	_refresh_tooltip_if_hovered()
+
+
+func apply_isr_mark() -> void:
+	_isr_vuln_count += 1
+	_show_affliction_marker("◎", Color(1.0, 0.45, 0.2, 1.0))
+	_refresh_tooltip_if_hovered()
+
+
+func remove_isr_mark() -> void:
+	_isr_vuln_count = maxi(0, _isr_vuln_count - 1)
+	if _isr_vuln_count <= 0:
+		if _stun_remain <= 0.0 and not _charmed and _weaken_remain <= 0.0:
+			_clear_affliction_marker()
 	_refresh_tooltip_if_hovered()
 
 
@@ -2263,8 +2290,9 @@ func _cast_skill_projectile(target: Node3D, aim: Vector3, skill: EnemySkill) -> 
 	if not LosCuller.has_los_to_player(self):
 		return
 	# Re-aim at target's current position (they may have strafed during windup).
-	var to_p: Vector3 = target.global_position - global_position
-	to_p.y = 0.0
+	# Full 3D aim from enemy chest to target chest.
+	var origin := global_position + Vector3(0.0, 1.4, 0.0)
+	var to_p: Vector3 = (target.global_position + Vector3(0.0, 1.0, 0.0)) - origin
 	var dist := to_p.length()
 	if dist < 0.001:
 		return
@@ -2292,7 +2320,7 @@ func _spawn_skill_projectile(aim: Vector3, skill: EnemySkill) -> void:
 	if proj == null:
 		return
 	proj.target_group = &"player"
-	proj.direction = aim
+	proj.direction = _apply_enemy_aim_spread(aim)
 	proj.speed = skill.projectile_speed
 	proj.max_range = skill.projectile_max_range
 	proj.knockback_strength = skill.knockback
@@ -2398,10 +2426,10 @@ func _cast_ranged_attack(player: Node3D, aim: Vector3) -> void:
 	if not LosCuller.has_los_to_player(self):
 		return
 	# Re-aim at the player's CURRENT position — they may have strafed during
-	# the windup. Aiming at the stale `aim` vector is the classic "bullet
-	# follows where they used to be" tell.
-	var to_p: Vector3 = player.global_position - global_position
-	to_p.y = 0.0
+	# the windup. Full 3D aim from enemy chest to player chest so shots angle
+	# up/down when the player is on a different elevation.
+	var origin := global_position + Vector3(0.0, 1.4, 0.0)
+	var to_p: Vector3 = (player.global_position + Vector3(0.0, 1.0, 0.0)) - origin
 	var dist := to_p.length()
 	if dist < 0.001:
 		return
@@ -2413,7 +2441,7 @@ func _spawn_enemy_projectile(aim: Vector3) -> void:
 	if proj == null:
 		return
 	proj.target_group = &"player"
-	proj.direction = aim
+	proj.direction = _apply_enemy_aim_spread(aim)
 	proj.speed = enemy_class.projectile_speed
 	proj.max_range = enemy_class.projectile_max_range
 	proj.knockback_strength = 0.0  # no knockback on default ranged attacks — reserve for special skills
@@ -2428,6 +2456,32 @@ func _spawn_enemy_projectile(aim: Vector3) -> void:
 	proj.global_position = global_position + Vector3(0.0, 1.4, 0.0)
 	proj.monitoring = true
 	proj.reset()
+
+
+## Minimum horizontal spread on a miss (radians) — same as player.
+const ENEMY_MISS_MIN_SPREAD: float = 0.06
+
+## Accuracy is a hit/miss roll: 72% accuracy = 72% of shots fly true,
+## 28% get visible spread applied. Same model as the player system.
+func _apply_enemy_aim_spread(aim: Vector3) -> Vector3:
+	var acc := enemy_class.accuracy if enemy_class != null else 0.75
+	acc = clampf(acc, 0.0, 1.0)
+	if randf() < acc:
+		return aim
+	# Miss — apply spread with a guaranteed minimum so it goes wide.
+	var yaw := atan2(aim.x, aim.z)
+	var pitch := asin(clampf(aim.y, -1.0, 1.0))
+	var h_spread := randf_range(ENEMY_MISS_MIN_SPREAD, ENEMY_INACCURACY_SPREAD_MAX)
+	if randf() < 0.5:
+		h_spread = -h_spread
+	var v_max := ENEMY_INACCURACY_SPREAD_MAX * ENEMY_VERTICAL_SPREAD_RATIO
+	var v_spread := randf_range(-v_max, v_max)
+	yaw += h_spread
+	pitch += v_spread
+	pitch = clampf(pitch, -PI * 0.5, PI * 0.5)
+	var cos_p := cos(pitch)
+	return Vector3(sin(yaw) * cos_p, sin(pitch), cos(yaw) * cos_p)
+
 
 func _die() -> void:
 	_change_state(State.DEAD)

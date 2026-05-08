@@ -10,6 +10,13 @@ const SEAM := 0.02  ## anti-z-fight gap for corridor walls abutting room geometr
 # loses the depth tie wherever it overlaps room geometry under a shared wall
 # — invisible at the fixed top-down camera but eliminates flicker.
 const CORRIDOR_WALL_Y_BIAS := -0.001
+# Room wall faces share the y=0 edge with the floor PlaneMesh. Without
+# overlap, the GPU rasterizer can leave sub-pixel gaps at that edge —
+# visible as thin dark lines at every wall base from the isometric camera.
+# Extending the mesh below y=0 turns the shared edge into an overlap,
+# sealing the junction. Corridor walls already handle this via their
+# BoxMesh bottom sitting at CORRIDOR_WALL_Y_BIAS below the floor.
+const ROOM_WALL_FLOOR_SINK := 0.02
 
 
 static func get_wall_mesh(ctx: LevelBuildContext, size_x: float, size_z: float) -> BoxMesh:
@@ -205,6 +212,12 @@ static func build_room_mesh(ctx: LevelBuildContext, center: Vector3, rd: RoomDef
 	_add_ew_faces(st, cz, cx - ox, cx - ix, oz, iz, h,
 		RoomDef.Wall.WEST in rd.openings, rd.opening_width, false)
 
+	# Diagonal baffle quads inside each corner cube — seals any sub-pixel
+	# sightline that could pass between perpendicular wall faces meeting at
+	# a shared edge. Double-sided (two opposing vquads) so the face is
+	# visible regardless of camera angle.
+	_add_corner_baffles(st, cx, cz, ox, oz, ix, iz, h)
+
 	var inst := MeshInstance3D.new()
 	inst.name = &"RoomWalls"
 	inst.mesh = st.commit()
@@ -219,8 +232,12 @@ static func build_room_mesh(ctx: LevelBuildContext, center: Vector3, rd: RoomDef
 # (Godot's front-face convention). Normals are set explicitly because
 # generate_normals() averages vertices that share the same position.
 static func _vquad(st: SurfaceTool, bl: Vector3, br: Vector3, h: float) -> void:
-	var tl := bl + Vector3(0, h, 0)
-	var top_right := br + Vector3(0, h, 0)
+	# Extend below the floor plane so the wall-floor junction overlaps
+	# rather than meeting at a shared edge (seals rasterizer precision gaps).
+	bl = Vector3(bl.x, bl.y - ROOM_WALL_FLOOR_SINK, bl.z)
+	br = Vector3(br.x, br.y - ROOM_WALL_FLOOR_SINK, br.z)
+	var tl := bl + Vector3(0, h + ROOM_WALL_FLOOR_SINK, 0)
+	var top_right := br + Vector3(0, h + ROOM_WALL_FLOOR_SINK, 0)
 	var n := (br - bl).cross(tl - bl).normalized()
 	st.set_normal(n)
 	st.add_vertex(bl); st.add_vertex(top_right); st.add_vertex(br)
@@ -313,9 +330,10 @@ static func _add_ew_faces(st: SurfaceTool, cz: float, outer_x: float, inner_x: f
 		# Reveal faces
 		_vquad(st, Vector3(min_x, 0, cz - hg), Vector3(max_x, 0, cz - hg), h)
 		_vquad(st, Vector3(max_x, 0, cz + hg), Vector3(min_x, 0, cz + hg), h)
-		# Top segments
-		_hquad_top(st, min_x, cz - iz, max_x, cz - hg, h)
-		_hquad_top(st, min_x, cz + hg, max_x, cz + iz, h)
+		# Top segments — extended to ±oz (from ±iz) so the wall top covers
+		# the corner cube directly, not relying on the N/S wall top alone.
+		_hquad_top(st, min_x, cz - oz, max_x, cz - hg, h)
+		_hquad_top(st, min_x, cz + hg, max_x, cz + oz, h)
 	else:
 		if is_east:
 			_vquad(st, Vector3(outer_x, 0, cz + oz), Vector3(outer_x, 0, cz - oz), h)
@@ -325,4 +343,25 @@ static func _add_ew_faces(st: SurfaceTool, cz: float, outer_x: float, inner_x: f
 		else:
 			_vquad(st, Vector3(outer_x, 0, cz - oz), Vector3(outer_x, 0, cz + oz), h)
 			_vquad(st, Vector3(inner_x, 0, cz + oz), Vector3(inner_x, 0, cz - oz), h)
-		_hquad_top(st, min_x, cz - iz, max_x, cz + iz, h)
+		# Extended to ±oz (from ±iz) — same corner-coverage fix as above.
+		_hquad_top(st, min_x, cz - oz, max_x, cz + oz, h)
+
+
+# Adds a double-sided diagonal vertical quad inside each of the four room
+# corner cubes. Each baffle runs from the inner-face edge (ix, iz) to the
+# outer-face edge (ox, oz), creating an opaque plane that blocks any
+# sub-pixel sightline through the corner where two perpendicular walls meet.
+static func _add_corner_baffles(st: SurfaceTool, cx: float, cz: float,
+		ox: float, oz: float, ix: float, iz: float, h: float) -> void:
+	# NE corner: inner edge at (cx+ix, cz-iz), outer edge at (cx+ox, cz-oz)
+	_vquad(st, Vector3(cx + ix, 0, cz - iz), Vector3(cx + ox, 0, cz - oz), h)
+	_vquad(st, Vector3(cx + ox, 0, cz - oz), Vector3(cx + ix, 0, cz - iz), h)
+	# NW corner: inner edge at (cx-ix, cz-iz), outer edge at (cx-ox, cz-oz)
+	_vquad(st, Vector3(cx - ox, 0, cz - oz), Vector3(cx - ix, 0, cz - iz), h)
+	_vquad(st, Vector3(cx - ix, 0, cz - iz), Vector3(cx - ox, 0, cz - oz), h)
+	# SE corner: inner edge at (cx+ix, cz+iz), outer edge at (cx+ox, cz+oz)
+	_vquad(st, Vector3(cx + ox, 0, cz + oz), Vector3(cx + ix, 0, cz + iz), h)
+	_vquad(st, Vector3(cx + ix, 0, cz + iz), Vector3(cx + ox, 0, cz + oz), h)
+	# SW corner: inner edge at (cx-ix, cz+iz), outer edge at (cx-ox, cz+oz)
+	_vquad(st, Vector3(cx - ix, 0, cz + iz), Vector3(cx - ox, 0, cz + oz), h)
+	_vquad(st, Vector3(cx - ox, 0, cz + oz), Vector3(cx - ix, 0, cz + iz), h)

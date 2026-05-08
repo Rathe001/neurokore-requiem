@@ -18,7 +18,16 @@ var _pools: Dictionary = {}
 
 ## Get an instance from the pool, or instantiate a new one.
 func acquire(scene: PackedScene) -> Node3D:
+	if scene == null:
+		push_error("[EntityPool] acquire() null scene — %s" % _get_caller_hint())
+		return null
 	var key := scene.resource_path
+	if key.is_empty():
+		push_error("[EntityPool] acquire() empty resource_path — %s" % _get_caller_hint())
+		return null
+	if scene.get_state().get_node_count() == 0:
+		push_error("[EntityPool] acquire() scene '%s' has empty state (0 nodes) — %s" % [key, _get_caller_hint()])
+		return null
 	if _pools.has(key):
 		var pool: Array = _pools[key]
 		while pool.size() > 0:
@@ -28,7 +37,19 @@ func acquire(scene: PackedScene) -> Node3D:
 				node.set_process(true)
 				node.visible = true
 				return node
-	return scene.instantiate() as Node3D
+	var inst := scene.instantiate()
+	if inst == null:
+		push_error("[EntityPool] acquire() instantiate() returned null for '%s' — %s" % [key, _get_caller_hint()])
+		return null
+	return inst as Node3D
+
+
+static func _get_caller_hint() -> String:
+	var stack := get_stack()
+	if stack == null or stack.size() < 3:
+		return "unknown"
+	var frame: Dictionary = stack[2]  # 0=this func, 1=acquire, 2=caller
+	return "%s:%d (%s)" % [frame.get("source", "?"), frame.get("line", 0), frame.get("function", "?")]
 
 ## Return an instance to the pool instead of freeing it.
 ## The node is removed from the scene tree and stored for reuse.

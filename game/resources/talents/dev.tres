@@ -1,0 +1,33 @@
+[gd_resource type="Resource" script_class="TalentTree" load_steps=5 format=3]
+
+; Forged (dev) talent tree — combat nodes.
+;
+; Each TalentNode places itself at (tier, node_idx) on the 8×3 grid the
+; talents panel renders. Effects use the PerkEffect schema; aggregate
+; keys here are read by gameplay code via Effects.get_aggregate(kind).
+
+[ext_resource type="Script" path="res://scripts/talents/talent_node.gd" id="node_script"]
+[ext_resource type="Script" path="res://scripts/talents/talent_tree.gd" id="tree_script"]
+[ext_resource type="Script" path="res://scripts/perks/perk_effect.gd" id="effect_script"]
+
+; Multistrike — 30% chance for each attack to fire a second simultaneous
+; projectile / beam / swing. Each strike is a separate attack with its own
+; spread, crit roll, and damage roll. Checked via PerkState.roll_multistrike()
+; which reads Effects.get_aggregate(&"multistrike_double_chance").
+[sub_resource type="Resource" id="effect_dev_t0_n0_multistrike"]
+script = ExtResource("effect_script")
+kind = &"multistrike_double_chance"
+magnitude = 0.30
+
+[sub_resource type="Resource" id="node_dev_t0_n0"]
+script = ExtResource("node_script")
+id = &"dev_t0_n0_multistrike"
+label = "Multistrike"
+description = "Attacks have a 30% chance to fire a second simultaneous strike. Each strike is independent — its own trajectory, its own damage. The Forged hits twice before you blink."
+tier = 0
+node_idx = 0
+effects = [SubResource("effect_dev_t0_n0_multistrike")]
+
+[resource]
+script = ExtResource("tree_script")
+nodes = [SubResource("node_dev_t0_n0")]

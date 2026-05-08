@@ -1,0 +1,33 @@
+[gd_resource type="Resource" script_class="TalentTree" load_steps=5 format=3]
+
+; Automaton (opt) talent tree — tech nodes.
+;
+; Each TalentNode places itself at (tier, node_idx) on the 8×3 grid the
+; talents panel renders. Effects use the PerkEffect schema; aggregate
+; keys here are read by gameplay code via Effects.get_aggregate(kind).
+
+[ext_resource type="Script" path="res://scripts/talents/talent_node.gd" id="node_script"]
+[ext_resource type="Script" path="res://scripts/talents/talent_tree.gd" id="tree_script"]
+[ext_resource type="Script" path="res://scripts/perks/perk_effect.gd" id="effect_script"]
+
+; ISR Drone — 20% chance on hit to deploy a surveillance drone that
+; orbits the target for 7 seconds, increasing all incoming damage by
+; 25%. The drone projects a scanning laser onto the marked target.
+; Checked via Effects.get_aggregate(&"isr_drone_chance").
+[sub_resource type="Resource" id="effect_opt_t0_n0_isr"]
+script = ExtResource("effect_script")
+kind = &"isr_drone_chance"
+magnitude = 0.20
+
+[sub_resource type="Resource" id="node_opt_t0_n0"]
+script = ExtResource("node_script")
+id = &"opt_t0_n0_isr_drone"
+label = "ISR Drone"
+description = "Attacks have a 20% chance to deploy a surveillance drone that orbits the target for 7 seconds. While scanned, the target takes 25% more damage from all sources."
+tier = 0
+node_idx = 0
+effects = [SubResource("effect_opt_t0_n0_isr")]
+
+[resource]
+script = ExtResource("tree_script")
+nodes = [SubResource("node_opt_t0_n0")]

@@ -39,7 +39,7 @@ enum GrenadeType {
 @export var targeting_mode: TargetingMode = TargetingMode.SINGLE_CONE
 @export var cone_deg: float = 60.0
 @export var knockback: float = 0.0
-@export var projectile_speed: float = 30.0
+@export var projectile_speed: float = 14.0
 @export var icon_color: Color = Color(0.7, 0.9, 1.0, 1.0)
 ## Multiplier applied to the weapon's base damage when this skill fires.
 ## 1.0 = weapon damage as-is. Values > 1.0 make the skill hit harder than

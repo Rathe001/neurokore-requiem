@@ -44,8 +44,13 @@ enum SupportRole {
 ## scene (or any node that exposes the same fields used by player projectiles
 ## — see prototype_projectile.gd).
 @export var projectile_scene: PackedScene
-@export var projectile_speed: float = 18.0
+@export var projectile_speed: float = 10.0
 @export var projectile_max_range: float = 18.0
+## Aim accuracy [0.0–1.0]. Lower values widen the projectile spread cone.
+## 1.0 = perfect aim, 0.7 = moderate spread (some shots miss a strafing
+## player), 0.5 = wild spray. Prevents ranged packs from alpha-striking
+## the player in a single synchronized volley.
+@export_range(0.0, 1.0) var accuracy: float = 0.75
 ## Distance the enemy tries to keep from the player while firing — closer
 ## triggers a backpedal, farther triggers normal chase.
 @export var ranged_kite_distance: float = 8.0

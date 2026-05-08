@@ -19,6 +19,7 @@ extends Resource
 @export_group("Player Cheats")
 @export var god_mode: bool = false
 @export var infinite_resource: bool = false
+@export var unlock_all_talents: bool = false
 
 @export_group("Enemy Behavior")
 @export var one_shot_enemies: bool = false

@@ -4,12 +4,6 @@ class_name PrototypeProjectile
 const PROTO_BASE_CRIT_CHANCE: float = 0.15
 const PROTO_BASE_CRIT_MULT: float = 1.5
 
-# Point-blank penalty mirrored from PlayerCombat — 25% accuracy reduction
-# at short range. Both player- and enemy-fired projectiles obey this; if
-# the player charges into a ranged enemy, that enemy's bolts also miss
-# more often.
-const MELEE_RANGE_THRESHOLD: float = 2.5
-const MELEE_RANGE_ACCURACY_MULT: float = 0.75
 # World-layer raycast mask for the per-frame sweep. Walls + structures live
 # on layer 1; targets get handled by Area3D body_entered so we don't need
 # to ray-test them.
@@ -22,19 +16,20 @@ const PLAYER_LAYER_MASK := 4
 const CHARMED_ALLY_LAYER_MASK := 16
 
 var direction: Vector3 = Vector3.FORWARD
-var speed: float = 30.0
+var speed: float = 14.0
 var max_range: float = 20.0
 var damage_min: int = 0
 var damage_max: int = 0
 var damage_mult: float = 1.0
-var accuracy: float = 1.0
 var crit_chance: float = 0.0
 var knockback_strength: float = 0.0
 var source_position: Vector3 = Vector3.ZERO
-var _ray_query := PhysicsRayQueryParameters3D.new()
-## Skip the point-blank accuracy penalty. Set by drones and other sources
-## that always fire at close range by design.
+# Retained for compatibility with enemy/drone spawners that set these.
+# Player accuracy is now handled by aim spread at spawn time; these
+# fields are no-ops for player-fired projectiles.
+var accuracy: float = 1.0
 var ignore_melee_penalty: bool = false
+var _ray_query := PhysicsRayQueryParameters3D.new()
 ## Group whose members the projectile damages. Anything else on the
 ## collision_mask (i.e. walls) just stops the bolt without damage. The
 ## spawner sets this to &"enemies" for player-fired bolts and &"player"
@@ -106,6 +101,7 @@ func _pool_release() -> void:
 	# owner's friendly-fire side. Spawner is expected to set it before
 	# reset(), but the default keeps existing player-fire callers working.
 	target_group = &"enemies"
+	accuracy = 1.0
 	ignore_melee_penalty = false
 	blast_radius = 0.0
 	visual_scale = 1.0
@@ -168,22 +164,19 @@ func _on_body_entered(body: Node3D) -> void:
 
 func _hit_single(body: Node3D, impact_pos: Vector3) -> void:
 	CombatVisuals.spawn_impact_burst(self, impact_pos, _projectile_color())
-	if _roll_hit(body.global_position):
-		var is_crit := _roll_crit()
-		var dmg := _roll_damage(is_crit)
-		if target_group == &"player":
-			body.take_damage(dmg, source_position, knockback_strength)
-		else:
-			PrototypeEnemy.deal_damage(body, dmg, source_position, knockback_strength, 1, is_crit)
-			_apply_exile_curse_if_active(body)
-	elif target_group == &"enemies":
-		DamageNumber.spawn_miss(body.get_parent(), body.global_position + Vector3(0.0, 1.8, 0.0))
+	var is_crit := _roll_crit()
+	var dmg := _roll_damage(is_crit)
+	if target_group == &"player":
+		body.take_damage(dmg, source_position, knockback_strength)
+	else:
+		PrototypeEnemy.deal_damage(body, dmg, source_position, knockback_strength, 1, is_crit)
+		_apply_exile_curse_if_active(body)
+		_apply_mindlink(body, dmg, is_crit)
+		_try_spawn_isr_drone(body)
 
 
 func _explode(impact_pos: Vector3) -> void:
-	# Larger impact burst scaled to the blast radius.
 	CombatVisuals.spawn_explosion(self, impact_pos, blast_radius, _projectile_color())
-	# Damage every target inside the blast radius.
 	var targets: Array[Node3D] = SpatialGrid.query_radius(
 		global_position, blast_radius, target_group)
 	for target: Node3D in targets:
@@ -191,16 +184,15 @@ func _explode(impact_pos: Vector3) -> void:
 			continue
 		if target_group == &"enemies" and target.has_method(&"is_player_friendly") and target.is_player_friendly():
 			continue
-		if _roll_hit(target.global_position):
-			var is_crit := _roll_crit()
-			var dmg := _roll_damage(is_crit)
-			if target_group == &"player":
-				target.take_damage(dmg, source_position, knockback_strength)
-			else:
-				PrototypeEnemy.deal_damage(target, dmg, source_position, knockback_strength, 1, is_crit)
-				_apply_exile_curse_if_active(target)
-		elif target_group == &"enemies":
-			DamageNumber.spawn_miss(target.get_parent(), target.global_position + Vector3(0.0, 1.8, 0.0))
+		var is_crit := _roll_crit()
+		var dmg := _roll_damage(is_crit)
+		if target_group == &"player":
+			target.take_damage(dmg, source_position, knockback_strength)
+		else:
+			PrototypeEnemy.deal_damage(target, dmg, source_position, knockback_strength, 1, is_crit)
+			_apply_exile_curse_if_active(target)
+			_apply_mindlink(target, dmg, is_crit)
+			_try_spawn_isr_drone(target)
 
 
 # Duplicates PlayerCombat.EXILE_CURSE_DURATION rather than reaching across
@@ -217,10 +209,55 @@ func _apply_exile_curse_if_active(enemy: Node) -> void:
 	if enemy.has_method(&"apply_curse"):
 		enemy.apply_curse(pct, EXILE_CURSE_DURATION)
 
+
+# Duplicates PlayerCombat.MINDLINK_RADIUS — same self-contained rationale
+# as the exile curse above. Keep in sync.
+const MINDLINK_RADIUS: float = 6.0
+# Static guard so projectile mindlink echoes don't chain.
+static var _mindlink_echoing: bool = false
+
+func _apply_mindlink(primary: Node3D, dmg: int, is_crit: bool) -> void:
+	if _mindlink_echoing:
+		return
+	if Effects.get_aggregate(&"mindlink_active") <= 0.0:
+		return
+	if primary == null or not is_instance_valid(primary):
+		return
+	var best: Node3D = null
+	var best_d2 := MINDLINK_RADIUS * MINDLINK_RADIUS
+	for n: Node3D in SpatialGrid.query_radius(primary.global_position, MINDLINK_RADIUS, &"enemies"):
+		if n == primary:
+			continue
+		if not n.has_method(&"take_damage"):
+			continue
+		if n.has_method(&"is_player_friendly") and n.is_player_friendly():
+			continue
+		var d2 := primary.global_position.distance_squared_to(n.global_position)
+		if d2 < best_d2:
+			best_d2 = d2
+			best = n
+	if best == null:
+		return
+	CombatVisuals.spawn_impact_burst(primary, best.global_position + Vector3(0.0, 0.9, 0.0))
+	_mindlink_echoing = true
+	PrototypeEnemy.deal_damage(best, dmg, source_position, 0.0, 1, is_crit)
+	_mindlink_echoing = false
+
+
+func _try_spawn_isr_drone(enemy: Node3D) -> void:
+	if target_group != &"enemies":
+		return
+	var chance := Effects.get_aggregate(&"isr_drone_chance")
+	if chance <= 0.0 or randf() >= chance:
+		return
+	if enemy == null or not is_instance_valid(enemy):
+		return
+	if enemy.has_method(&"is_player_friendly") and enemy.is_player_friendly():
+		return
+	ISRDrone.spawn_on(enemy)
+
+
 func _release() -> void:
-	# Called from physics callback contexts (body_entered, _physics_process), so
-	# defer the pool return — EntityPool.release synchronously toggles `monitoring`
-	# and removes this Area3D from the tree, both forbidden during physics.
 	if _released:
 		return
 	_released = true
@@ -233,26 +270,6 @@ func _projectile_color() -> Color:
 		return glow.light_color
 	return Color(0.4, 0.85, 1.0)
 
-
-func _roll_hit(target_pos: Vector3) -> bool:
-	# Point-blank penalty: if the projectile traveled less than the melee
-	# threshold from its fire origin to where it hit, halve accuracy. Same
-	# rule PlayerCombat applies to hitscan; mirrored here so both firing
-	# modes behave identically and the player can't game one over the other.
-	#
-	# The Count "Point Blank" talent waives the penalty for player-fired
-	# projectiles (target_group == &"enemies"). Enemy-fired bolts always
-	# obey the rule — the player still benefits from charging into a
-	# ranged enemy regardless of which class they're playing.
-	var eff_acc := accuracy
-	if not ignore_melee_penalty and source_position.distance_to(target_pos) < MELEE_RANGE_THRESHOLD:
-		var player_fired := target_group == &"enemies"
-		var ignore_penalty := player_fired and Effects.get_aggregate(&"ignore_point_blank_penalty") > 0.0
-		if not ignore_penalty:
-			eff_acc *= MELEE_RANGE_ACCURACY_MULT
-	if eff_acc >= 1.0:
-		return true
-	return randf() < eff_acc
 
 func _roll_crit() -> bool:
 	var base := crit_chance if crit_chance > 0.0 else PROTO_BASE_CRIT_CHANCE

@@ -1059,9 +1059,11 @@ const ARM_OFFSET_VERTICAL := 1.0
 func _cast_lmb_combat() -> void:
 	if _lmb_busy:
 		return
+	_lmb_busy = true
 	_interacting = false
 	var aim := _aim_direction()
 	if aim == Vector3.ZERO:
+		_lmb_busy = false
 		return
 	var infinite_resource := DebugState.config != null and DebugState.config.infinite_resource
 
@@ -1083,6 +1085,7 @@ func _cast_lmb_combat() -> void:
 		ready_fires.append({"slot": slot, "item": item, "skill": skill, "is_main": is_main})
 
 	if ready_fires.is_empty():
+		_lmb_busy = false
 		return
 
 	# Stagger across the MAIN weapon's effective attack interval so a
@@ -1142,26 +1145,33 @@ func _cast_lmb_combat() -> void:
 			_combat.resolve_skill_hit(captured_skill, fire_aim, captured_item, captured_offset)
 		, CONNECT_ONE_SHOT)
 
-	_face_direction(aim)
-	_play_anim(ANIM_ATTACK, 1.4)
-	_ied.toss_trap(_cursor_offset())
-	# Hold the player still for a brief "swing commit" window so a click
-	# reads as a deliberate strike, not a strafe-shot. Two contributors:
-	#   - main weapon's wind_up scaled by its attack_speed (single-arm feel)
-	#   - max_fire_delay across the staggered volley (Amalgamation feel)
-	# Take the max so neither contributor swallows the other; a 4-arm
-	# Forged with a 0.05s wind-up still pauses for the full volley span.
-	var stop_duration := max_fire_delay
-	if main_item != null and main_item.fire_skill != null:
+	# Animation + movement stop only when the main weapon fired this volley.
+	# Extra arms fire silently — the Forged stays mobile while extras shoot.
+	var main_fired := false
+	for f in ready_fires:
+		if f["is_main"]:
+			main_fired = true
+			break
+	if main_fired:
+		_face_direction(aim)
+		_play_anim(ANIM_ATTACK, 1.4)
+		_ied.toss_trap(_cursor_offset())
+	# Hold the player still for the main weapon's wind-up only. Extra arms
+	# don't contribute to the stop — Forged stays mobile while extras fire.
+	var stop_duration := 0.0
+	if main_fired and main_item != null and main_item.fire_skill != null:
 		var main_wind_up: float = main_item.fire_skill.wind_up
 		if main_wind_up > 0.0:
 			var main_atk_spd_for_stop: float = main_item.effective_attack_speed() if main_item.attack_speed > 0.0 else 1.0
 			stop_duration = maxf(stop_duration, main_wind_up / main_atk_spd_for_stop)
 	if stop_duration > 0.0:
-		_lmb_busy = true
 		_attack_aim = aim
 		await get_tree().create_timer(stop_duration).timeout
-		_lmb_busy = false
+	else:
+		# No wind-up — hold the guard for one physics frame so a second
+		# _cast_lmb_combat call on the very next tick can't slip through.
+		await get_tree().process_frame
+	_lmb_busy = false
 
 
 # Per-arm world-space offset for the projectile / hitscan source position.
@@ -1487,11 +1497,12 @@ func _cursor_offset() -> Vector3:
 func _aim_direction() -> Vector3:
 	if _fps_mode:
 		var forward := -_fps_camera.global_transform.basis.z
-		forward.y = 0.0
 		return forward.normalized() if forward.length_squared() > 0.0001 else Vector3.ZERO
 	if _lock_target != null:
-		var to_target := _lock_target.global_position - global_position
-		to_target.y = 0.0
+		# 3D aim from player chest to target chest — angles up toward lifted
+		# enemies (telekinesis grab) instead of firing flat underneath them.
+		var chest := Vector3(0.0, 1.0, 0.0)
+		var to_target := (_lock_target.global_position + Vector3(0.0, 0.9, 0.0)) - (global_position + chest)
 		if to_target.length_squared() > 0.0001:
 			return to_target.normalized()
 	var offset := _cursor_offset()

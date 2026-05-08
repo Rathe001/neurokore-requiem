@@ -10,16 +10,26 @@ const PROJECTILE_SCENE: PackedScene = preload("res://scenes/prototype/prototype_
 const PROTO_BASE_CRIT_CHANCE: float = 0.15
 const PROTO_BASE_CRIT_MULT: float = 1.5
 
-# Point-blank accuracy penalty for ranged attacks. When a hitscan or
-# projectile resolves against a target within MELEE_RANGE_THRESHOLD of the
-# fire origin, accuracy is multiplied by MELEE_RANGE_ACCURACY_MULT — i.e.
-# 25% accuracy penalty at point blank. Pushes the player toward sprint-
-# disengage instead of tank-shooting at melee range. Melee skills (cone /
-# AoE) are unaffected; the penalty is specific to "shooting something next
-# to you." PrototypeProjectile mirrors these values to apply the same rule
-# to in-flight projectile hits.
+# Point-blank spread penalty for ranged attacks. When a hitscan fires
+# within MELEE_RANGE_THRESHOLD of the nearest target, effective accuracy
+# is multiplied by MELEE_RANGE_ACCURACY_MULT before computing spread —
+# wider cone at point blank pushes the player toward sprint-disengage.
+# Projectiles apply the penalty at spawn time. Melee skills (cone / AoE)
+# are unaffected.
 const MELEE_RANGE_THRESHOLD: float = 2.5
 const MELEE_RANGE_ACCURACY_MULT: float = 0.75
+
+# Maximum angular spread (radians) at 0% accuracy. At 100% accuracy the
+# shot is perfectly straight. Linear interpolation:
+#   spread = (1 - accuracy) * INACCURACY_SPREAD_MAX
+# 0.25 rad ≈ 14° — at range 20, a 0% accuracy shot deviates up to ~5m.
+const INACCURACY_SPREAD_MAX: float = 0.25
+
+# Hitscan cone half-angle for SpatialGrid.query_cone hit detection. The
+# cone tests against enemy center-points, so it needs to be wide enough
+# to catch enemies whose capsule edge overlaps the beam visually. 4° at
+# range 10 ≈ 0.7m, matching the 0.75m enemy collision radius.
+const HITSCAN_CONE_HALF_DEG: float = 4.0
 
 # Count Exile constants. EXILE_CURSE_DURATION is the medium-long window
 # the curse persists after the FIRST hit. Subsequent hits while the curse
@@ -27,14 +37,31 @@ const MELEE_RANGE_ACCURACY_MULT: float = 0.75
 # of application, so the player has to commit damage inside it. When the
 # timer expires on a still-alive target, fire_exile_shot lands a fixed
 # massive shot that isn't tied to any equipped weapon (works barehanded /
-# mid-reload). Damage scales with the player's main stat (Orthodoxy for
-# Count) — scales with gear bonuses.
+# mid-reload). Damage scales with gear bonuses.
 const EXILE_CURSE_DURATION: float = 4.0
 const EXILE_AUTO_SHOT_BASE_DAMAGE: int = 60
 const EXILE_AUTO_SHOT_KNOCKBACK: float = 4.0
 
+# Overclock — Survivalist talent. When the roll succeeds, the attack deals
+# +25% damage but loses 25% range. Visuals scale up 25% to sell the hit.
+const OVERCLOCK_DAMAGE_MULT: float = 1.25
+const OVERCLOCK_RANGE_MULT: float = 0.75
+const OVERCLOCK_VISUAL_SCALE: float = 1.25
+
+# Mindlink — Polymath talent. When active, each hit echoes full damage to
+# the nearest other enemy within this radius of the primary target.
+const MINDLINK_RADIUS: float = 6.0
+
 var _host: PrototypePlayer
 var _cooldowns: Dictionary = {}
+# Resolved aim direction from the most recent hitscan / projectile fire.
+# Used by Double Tap to copy the exact same trajectory for the follow-up.
+var _last_resolved_aim: Vector3 = Vector3.FORWARD
+# Per-attack overclock state — set at the top of resolve_skill_hit, read
+# by damage rolling and visual spawn functions during that same call.
+var _overclock_active: bool = false
+# Guard flag so Mindlink echoes don't trigger further echoes.
+var _mindlink_echoing: bool = false
 # Per-equipment-slot cooldowns for the multi-weapon LMB path. Two identical
 # weapons in different slots (Forged Amalgamation) have independent timers
 # because the key is the slot StringName, not the Skill resource. Non-LMB
@@ -102,19 +129,77 @@ func resolve_skill_source(skill: Skill) -> Item:
 		return offhand
 	return null
 
+## Stagger delay between multistrike repeat attacks so each hit reads as a
+## distinct visual event (separate cone flash, projectile, etc.).
+const MULTISTRIKE_STAGGER: float = 0.08
+
 func resolve_skill_hit(skill: Skill, aim: Vector3, weapon: Item, source_offset: Vector3 = Vector3.ZERO) -> void:
 	var eff_range := effective_range(skill, weapon)
+	# Overclock roll — Survivalist talent. On proc: +25% damage, -25% range,
+	# visually fatter/brighter shot. The flag is read by _roll_skill_damage
+	# and visual spawn helpers during this same call stack.
+	var oc_chance := Effects.get_aggregate(&"overclock_chance")
+	_overclock_active = oc_chance > 0.0 and randf() < oc_chance
+	if _overclock_active:
+		eff_range *= OVERCLOCK_RANGE_MULT
+	var hits := PerkState.roll_multistrike()
 	match skill.targeting_mode:
 		Skill.TargetingMode.SINGLE_CONE:
 			CombatVisuals.spawn_hit_cone(_host, aim, eff_range, skill.cone_deg)
 			_resolve_cone(skill, aim, eff_range, weapon)
+			for extra in hits - 1:
+				var delay := MULTISTRIKE_STAGGER * float(extra + 1)
+				_host.get_tree().create_timer(delay).timeout.connect(func() -> void:
+					if not _host._alive:
+						return
+					CombatVisuals.spawn_hit_cone(_host, aim, eff_range, skill.cone_deg)
+					_resolve_cone(skill, aim, eff_range, weapon)
+				, CONNECT_ONE_SHOT)
 		Skill.TargetingMode.AOE_RADIAL:
 			CombatVisuals.spawn_hit_radial(_host, eff_range)
 			_resolve_aoe(skill, eff_range, weapon)
+			for extra in hits - 1:
+				var delay := MULTISTRIKE_STAGGER * float(extra + 1)
+				_host.get_tree().create_timer(delay).timeout.connect(func() -> void:
+					if not _host._alive:
+						return
+					CombatVisuals.spawn_hit_radial(_host, eff_range)
+					_resolve_aoe(skill, eff_range, weapon)
+				, CONNECT_ONE_SHOT)
 		Skill.TargetingMode.PROJECTILE:
-			_spawn_projectile(skill, aim, eff_range, weapon, source_offset)
+			for i in hits:
+				_spawn_projectile(skill, aim, eff_range, weapon, source_offset)
+			_try_double_tap(skill, aim, eff_range, weapon, source_offset)
 		Skill.TargetingMode.HITSCAN:
-			_resolve_hitscan(skill, aim, eff_range, weapon, source_offset)
+			for i in hits:
+				_resolve_hitscan(skill, aim, eff_range, weapon, source_offset)
+			_try_double_tap(skill, aim, eff_range, weapon, source_offset)
+	_overclock_active = false
+
+# ---------------------------------------------------------------------------
+# Double Tap — Count talent: chance to fire a consecutive follow-up shot
+# with the same aim as the primary. Only projectile / hitscan; melee
+# patterns (cone, AoE) don't double-tap.
+# ---------------------------------------------------------------------------
+
+## Delay before the follow-up shot fires — short enough to read as a rapid
+## double-shot, long enough that both beams / bolts are visually distinct.
+const DOUBLE_TAP_DELAY: float = 0.10
+
+func _try_double_tap(skill: Skill, aim: Vector3, eff_range: float, weapon: Item, source_offset: Vector3) -> void:
+	var chance := Effects.get_aggregate(&"double_tap_chance")
+	if chance <= 0.0 or randf() >= chance:
+		return
+	var tap_aim := _last_resolved_aim
+	_host.get_tree().create_timer(DOUBLE_TAP_DELAY).timeout.connect(func() -> void:
+		if not _host._alive:
+			return
+		match skill.targeting_mode:
+			Skill.TargetingMode.PROJECTILE:
+				_spawn_projectile_exact(skill, tap_aim, eff_range, weapon, source_offset)
+			Skill.TargetingMode.HITSCAN:
+				_resolve_hitscan_exact(skill, tap_aim, eff_range, weapon, source_offset)
+	, CONNECT_ONE_SHOT)
 
 # ---------------------------------------------------------------------------
 # Hit patterns
@@ -139,41 +224,32 @@ func _deal_damage(target: Node3D, amount: int, knockback_from: Vector3, knockbac
 
 func _resolve_cone(skill: Skill, aim: Vector3, eff_range: float, weapon: Item) -> void:
 	var half_cos := cos(deg_to_rad(skill.cone_deg * 0.5))
-	var hits := PerkState.roll_multistrike()
 	var kb := _knockback_for(skill, weapon)
 	for enode: Node3D in SpatialGrid.query_cone(_host.global_position, aim, eff_range, half_cos, &"enemies"):
 		if not enode.has_method(&"take_damage"):
 			continue
-		# Charmed enemies are fighting for the player — friendly fire from
-		# any player-source attack (cone / aoe / hitscan / projectile / IED /
-		# drones) is blocked by the is_player_friendly check.
 		if is_player_friendly(enode):
 			continue
-		for _i in hits:
-			if not _roll_hit(weapon):
-				DamageNumber.spawn_miss(enode.get_parent(), enode.global_position + Vector3(0.0, 1.8, 0.0))
-				continue
-			var is_crit := _roll_crit(weapon)
-			var dmg := _crit_damage(_roll_skill_damage(skill, weapon), is_crit)
-			_deal_damage(enode, dmg, _host.global_position, kb, hits, is_crit)
+		var is_crit := _roll_crit(weapon)
+		var dmg := _crit_damage(_roll_skill_damage(skill, weapon), is_crit)
+		_deal_damage(enode, dmg, _host.global_position, kb, 1, is_crit)
 		_apply_exile_curse_if_active(enode)
+		_apply_mindlink(enode, dmg, is_crit)
+		_try_spawn_isr_drone(enode)
 
 func _resolve_aoe(skill: Skill, eff_range: float, weapon: Item) -> void:
-	var hits := PerkState.roll_multistrike()
 	var kb := _knockback_for(skill, weapon)
 	for enode: Node3D in SpatialGrid.query_radius(_host.global_position, eff_range, &"enemies"):
 		if not enode.has_method(&"take_damage"):
 			continue
 		if is_player_friendly(enode):
 			continue
-		for _i in hits:
-			if not _roll_hit(weapon):
-				DamageNumber.spawn_miss(enode.get_parent(), enode.global_position + Vector3(0.0, 1.8, 0.0))
-				continue
-			var is_crit := _roll_crit(weapon)
-			var dmg := _crit_damage(_roll_skill_damage(skill, weapon), is_crit)
-			_deal_damage(enode, dmg, _host.global_position, kb, hits, is_crit)
+		var is_crit := _roll_crit(weapon)
+		var dmg := _crit_damage(_roll_skill_damage(skill, weapon), is_crit)
+		_deal_damage(enode, dmg, _host.global_position, kb, 1, is_crit)
 		_apply_exile_curse_if_active(enode)
+		_apply_mindlink(enode, dmg, is_crit)
+		_try_spawn_isr_drone(enode)
 
 
 # Cheap duck-typed check — charmed enemies expose is_player_friendly()
@@ -183,11 +259,30 @@ func _resolve_aoe(skill: Skill, eff_range: float, weapon: Item) -> void:
 func is_player_friendly(target: Node) -> bool:
 	return target.has_method(&"is_player_friendly") and target.is_player_friendly()
 
+## Random spread (radians) applied to extra-arm projectiles so they
+## converge toward the main-hand target without looking perfectly identical.
+const EXTRA_ARM_SPREAD_RAD := 0.04
+
 func _spawn_projectile(skill: Skill, aim: Vector3, eff_range: float, weapon: Item, source_offset: Vector3 = Vector3.ZERO) -> void:
 	var proj: PrototypeProjectile = EntityPool.acquire(PROJECTILE_SCENE)
 	if proj == null:
 		return
-	proj.direction = aim.normalized()
+	var aim_norm := aim.normalized()
+	# Extra arms spawn offset from the player. To hit the same target as
+	# the main hand, re-aim from the offset spawn position toward the
+	# main-hand's target point (player + aim * range). Adds slight random
+	# spread so the volley looks organic, not robotic.
+	var spawn_pos := _host.global_position + Vector3(0.0, 1.0, 0.0) + source_offset
+	if source_offset != Vector3.ZERO:
+		var target_point := _host.global_position + Vector3(0.0, 1.0, 0.0) + aim_norm * eff_range
+		aim_norm = (target_point - spawn_pos).normalized()
+		var spread := randf_range(-EXTRA_ARM_SPREAD_RAD, EXTRA_ARM_SPREAD_RAD)
+		aim_norm = aim_norm.rotated(Vector3.UP, spread)
+	# Accuracy-based angular spread — inaccurate weapons scatter shots
+	# around the aim direction. Stray shots can still hit nearby enemies.
+	aim_norm = _apply_aim_spread(aim_norm, weapon)
+	_last_resolved_aim = aim_norm
+	proj.direction = aim_norm
 	proj.speed = skill.projectile_speed
 	proj.max_range = eff_range
 	proj.knockback_strength = _knockback_for(skill, weapon)
@@ -195,32 +290,44 @@ func _spawn_projectile(skill: Skill, aim: Vector3, eff_range: float, weapon: Ite
 	if weapon != null and weapon.damage_max > 0:
 		proj.damage_min = weapon.effective_damage_min() + _host._gear_base_damage_bonus
 		proj.damage_max = weapon.effective_damage_max() + _host._gear_base_damage_bonus
-		proj.accuracy = weapon.effective_accuracy() + _host._gear_hit_chance_bonus
 		proj.crit_chance = weapon.effective_crit_chance() + _host._gear_crit_chance_bonus
 	else:
 		proj.damage_min = skill.damage + _host._gear_base_damage_bonus
 		proj.damage_max = skill.damage + _host._gear_base_damage_bonus
 	proj.damage_mult = skill.damage_multiplier
+	if _overclock_active:
+		proj.damage_mult *= OVERCLOCK_DAMAGE_MULT
 	proj.blast_radius = skill.blast_radius
-	proj.visual_scale = skill.damage_multiplier if skill.damage_multiplier > 1.0 else 1.0
-	# Spawn at the player's position (slightly elevated), plus the per-arm
-	# offset for Forged Amalgamation extras (right / left / above). Spawning
-	# ahead of the player would skip enemies standing right next to us;
-	# player collision_layer doesn't match the projectile mask so no self-
-	# hit; the projectile sweeps forward and catches close-range targets
-	# via PrototypeProjectile._check_initial_overlaps().
-	var spawn_pos := _host.global_position + Vector3(0.0, 1.0, 0.0) + source_offset
+	var vis := skill.damage_multiplier if skill.damage_multiplier > 1.0 else 1.0
+	if _overclock_active:
+		vis *= OVERCLOCK_VISUAL_SCALE
+	proj.visual_scale = vis
 	_host.get_parent().add_child(proj)
 	proj.global_position = spawn_pos
 	proj.monitoring = true
 	proj.reset()
 
 func _resolve_hitscan(skill: Skill, aim: Vector3, eff_range: float, weapon: Item, source_offset: Vector3 = Vector3.ZERO) -> void:
-	var hits := PerkState.roll_multistrike()
-	# Same per-arm offset as projectiles so the beam visibly emanates from
-	# the right / left / above point on Forged Amalgamation extras.
 	var origin := _host.global_position + Vector3(0.0, 1.0, 0.0) + source_offset
 	var aim_norm := aim.normalized()
+	# Re-aim from the offset origin toward the main-hand target point so
+	# extra arms converge on the same spot instead of firing parallel.
+	if source_offset != Vector3.ZERO:
+		var target_point := _host.global_position + Vector3(0.0, 1.0, 0.0) + aim_norm * eff_range
+		aim_norm = (target_point - origin).normalized()
+		var spread := randf_range(-EXTRA_ARM_SPREAD_RAD, EXTRA_ARM_SPREAD_RAD)
+		aim_norm = aim_norm.rotated(Vector3.UP, spread)
+	# Point-blank penalty widens spread when target is close. The Count
+	# "Point Blank" talent waives this.
+	var acc_mult := 1.0
+	var ignore_penalty := Effects.get_aggregate(&"ignore_point_blank_penalty") > 0.0
+	if not ignore_penalty:
+		for enode: Node3D in SpatialGrid.query_radius(origin, MELEE_RANGE_THRESHOLD, &"enemies"):
+			if enode.has_method(&"take_damage") and not is_player_friendly(enode):
+				acc_mult = MELEE_RANGE_ACCURACY_MULT
+				break
+	aim_norm = _apply_aim_spread(aim_norm, weapon, acc_mult)
+	_last_resolved_aim = aim_norm
 	var wall_dist := eff_range
 	var hit_target: Node3D = null
 	var space := _host.get_world_3d().direct_space_state
@@ -229,11 +336,8 @@ func _resolve_hitscan(skill: Skill, aim: Vector3, eff_range: float, weapon: Item
 	var result := space.intersect_ray(query)
 	if not result.is_empty():
 		wall_dist = origin.distance_to(result["position"])
-	var half_cos := cos(deg_to_rad(2.5))
+	var half_cos := cos(deg_to_rad(HITSCAN_CONE_HALF_DEG))
 	var closest_dist := INF
-	# Cone query origin matches the visual beam origin so the damage
-	# pattern shifts with the per-arm offset — Forged Amalgamation extras
-	# act as independent firing points, not just visual flair.
 	for enode: Node3D in SpatialGrid.query_cone(origin, aim_norm, wall_dist, half_cos, &"enemies"):
 		if not enode.has_method(&"take_damage"):
 			continue
@@ -246,28 +350,81 @@ func _resolve_hitscan(skill: Skill, aim: Vector3, eff_range: float, weapon: Item
 	var beam_end := wall_dist
 	if hit_target != null:
 		beam_end = minf(beam_end, origin.distance_to(hit_target.global_position))
-	CombatVisuals.spawn_beam(_host, aim, beam_end, source_offset)
-	if hit_target == null:
-		return
-	CombatVisuals.spawn_impact_burst(_host, hit_target.global_position + Vector3(0.0, 0.9, 0.0))
-	# Point-blank penalty: if the hit target is within melee range of the
-	# fire origin, halve effective accuracy. Encourages disengage-and-shoot
-	# instead of standing in the enemy's face with a rifle. The Count
-	# "Point Blank" talent grants &"ignore_point_blank_penalty" — when
-	# allocated, the multiplier stays at 1.0 regardless of target distance.
-	var target_dist := origin.distance_to(hit_target.global_position)
-	var ignore_penalty := Effects.get_aggregate(&"ignore_point_blank_penalty") > 0.0
-	var acc_mult := 1.0
-	if target_dist < MELEE_RANGE_THRESHOLD and not ignore_penalty:
-		acc_mult = MELEE_RANGE_ACCURACY_MULT
-	for _i in hits:
-		if not _roll_hit(weapon, acc_mult):
-			DamageNumber.spawn_miss(hit_target.get_parent(), hit_target.global_position + Vector3(0.0, 1.8, 0.0))
-			continue
+	CombatVisuals.spawn_beam(_host, aim_norm, beam_end, source_offset)
+	if hit_target != null:
+		CombatVisuals.spawn_impact_burst(_host, hit_target.global_position + Vector3(0.0, 0.9, 0.0))
 		var is_crit := _roll_crit(weapon)
 		var dmg := _crit_damage(_roll_skill_damage(skill, weapon), is_crit)
-		_deal_damage(hit_target, dmg, _host.global_position, _knockback_for(skill, weapon), hits, is_crit)
-	_apply_exile_curse_if_active(hit_target)
+		_deal_damage(hit_target, dmg, _host.global_position, _knockback_for(skill, weapon), 1, is_crit)
+		_apply_exile_curse_if_active(hit_target)
+		_apply_mindlink(hit_target, dmg, is_crit)
+		_try_spawn_isr_drone(hit_target)
+
+# ---------------------------------------------------------------------------
+# Double Tap follow-up variants — fire along a pre-resolved aim direction
+# with no additional spread. Single hit, no multistrike.
+# ---------------------------------------------------------------------------
+
+func _spawn_projectile_exact(skill: Skill, aim_norm: Vector3, eff_range: float, weapon: Item, source_offset: Vector3) -> void:
+	var proj: PrototypeProjectile = EntityPool.acquire(PROJECTILE_SCENE)
+	if proj == null:
+		return
+	var spawn_pos := _host.global_position + Vector3(0.0, 1.0, 0.0) + source_offset
+	proj.direction = aim_norm
+	proj.speed = skill.projectile_speed
+	proj.max_range = eff_range
+	proj.knockback_strength = _knockback_for(skill, weapon)
+	proj.source_position = _host.global_position
+	if weapon != null and weapon.damage_max > 0:
+		proj.damage_min = weapon.effective_damage_min() + _host._gear_base_damage_bonus
+		proj.damage_max = weapon.effective_damage_max() + _host._gear_base_damage_bonus
+		proj.crit_chance = weapon.effective_crit_chance() + _host._gear_crit_chance_bonus
+	else:
+		proj.damage_min = skill.damage + _host._gear_base_damage_bonus
+		proj.damage_max = skill.damage + _host._gear_base_damage_bonus
+	proj.damage_mult = skill.damage_multiplier
+	proj.blast_radius = skill.blast_radius
+	proj.visual_scale = skill.damage_multiplier if skill.damage_multiplier > 1.0 else 1.0
+	_host.get_parent().add_child(proj)
+	proj.global_position = spawn_pos
+	proj.monitoring = true
+	proj.reset()
+
+
+func _resolve_hitscan_exact(skill: Skill, aim_norm: Vector3, eff_range: float, weapon: Item, source_offset: Vector3) -> void:
+	var origin := _host.global_position + Vector3(0.0, 1.0, 0.0) + source_offset
+	var wall_dist := eff_range
+	var hit_target: Node3D = null
+	var space := _host.get_world_3d().direct_space_state
+	var ray_end := origin + aim_norm * eff_range
+	var query := PhysicsRayQueryParameters3D.create(origin, ray_end, 1)
+	var result := space.intersect_ray(query)
+	if not result.is_empty():
+		wall_dist = origin.distance_to(result["position"])
+	var half_cos := cos(deg_to_rad(HITSCAN_CONE_HALF_DEG))
+	var closest_dist := INF
+	for enode: Node3D in SpatialGrid.query_cone(origin, aim_norm, wall_dist, half_cos, &"enemies"):
+		if not enode.has_method(&"take_damage"):
+			continue
+		if is_player_friendly(enode):
+			continue
+		var dist := origin.distance_squared_to(enode.global_position)
+		if dist < closest_dist:
+			closest_dist = dist
+			hit_target = enode
+	var beam_end := wall_dist
+	if hit_target != null:
+		beam_end = minf(beam_end, origin.distance_to(hit_target.global_position))
+	CombatVisuals.spawn_beam(_host, aim_norm, beam_end, source_offset)
+	if hit_target != null:
+		CombatVisuals.spawn_impact_burst(_host, hit_target.global_position + Vector3(0.0, 0.9, 0.0))
+		var is_crit := _roll_crit(weapon)
+		var dmg := _crit_damage(_roll_skill_damage(skill, weapon), is_crit)
+		_deal_damage(hit_target, dmg, _host.global_position, _knockback_for(skill, weapon), 1, is_crit)
+		_apply_exile_curse_if_active(hit_target)
+		_apply_mindlink(hit_target, dmg, is_crit)
+		_try_spawn_isr_drone(hit_target)
+
 
 # ---------------------------------------------------------------------------
 # Damage rolling
@@ -278,13 +435,39 @@ func _roll_crit(weapon: Item = null) -> bool:
 	var chance := base_crit + Effects.get_aggregate(&"crit_chance_pct") + _host._gear_crit_chance_bonus
 	return randf() < chance
 
-func _roll_hit(weapon: Item, accuracy_mult: float = 1.0) -> bool:
+## Vertical spread is half horizontal — enough to see shots angle into
+## the air or hit the floor, but left/right remains the dominant miss axis.
+const VERTICAL_SPREAD_RATIO: float = 0.5
+## Minimum horizontal spread on a miss (radians). Guarantees the shot
+## visibly goes wide rather than grazing the target.
+const MISS_MIN_SPREAD: float = 0.06
+
+## Accuracy is a hit/miss roll: 75% accuracy = 75% of shots fly true,
+## 25% get visible spread applied. accuracy_mult handles situational
+## modifiers (e.g. point-blank penalty). Misses spread in both yaw and
+## pitch so stray shots fly high / low as well as left / right.
+func _apply_aim_spread(aim: Vector3, weapon: Item, accuracy_mult: float = 1.0) -> Vector3:
 	var acc := weapon.effective_accuracy() if weapon != null else 1.0
 	acc += _host._gear_hit_chance_bonus
 	acc *= accuracy_mult
-	if acc >= 1.0:
-		return true
-	return randf() < acc
+	acc = clampf(acc, 0.0, 1.0)
+	# Hit roll — accurate shots fly straight at the target.
+	if randf() < acc:
+		return aim
+	# Miss — apply spread. Range is [MISS_MIN_SPREAD, INACCURACY_SPREAD_MAX]
+	# so misses always visibly go wide, never graze.
+	var yaw := atan2(aim.x, aim.z)
+	var pitch := asin(clampf(aim.y, -1.0, 1.0))
+	var h_spread := randf_range(MISS_MIN_SPREAD, INACCURACY_SPREAD_MAX)
+	if randf() < 0.5:
+		h_spread = -h_spread
+	var v_max := INACCURACY_SPREAD_MAX * VERTICAL_SPREAD_RATIO
+	var v_spread := randf_range(-v_max, v_max)
+	yaw += h_spread
+	pitch += v_spread
+	pitch = clampf(pitch, -PI * 0.5, PI * 0.5)
+	var cos_p := cos(pitch)
+	return Vector3(sin(yaw) * cos_p, sin(pitch), cos(yaw) * cos_p)
 
 func _roll_skill_damage(skill: Skill, weapon: Item) -> int:
 	var base: int
@@ -293,7 +476,10 @@ func _roll_skill_damage(skill: Skill, weapon: Item) -> int:
 	else:
 		base = skill.damage
 	base += _host._gear_base_damage_bonus
-	return int(round(float(base) * skill.damage_multiplier))
+	var dmg_mult := skill.damage_multiplier
+	if _overclock_active:
+		dmg_mult *= OVERCLOCK_DAMAGE_MULT
+	return int(round(float(base) * dmg_mult))
 
 func _crit_damage(base: int, is_crit: bool) -> int:
 	if not is_crit:
@@ -305,11 +491,6 @@ func _crit_damage(base: int, is_crit: bool) -> int:
 # Count Exile — apply curse on hit + auto-fire massive shot on expire
 # ---------------------------------------------------------------------------
 
-# Apply the Exile curse on a freshly-hit enemy. Called by every damage path
-# (cone / aoe / projectile / hitscan) right after take_damage so the perk
-# works regardless of weapon shape. No-op when the perk isn't active, the
-# target was killed by the same hit, OR the target is already cursed (the
-# duration is fixed from first application — see EXILE_CURSE_DURATION).
 func _apply_exile_curse_if_active(enemy: Node) -> void:
 	var pct: float = Effects.get_aggregate(&"exile_curse_damage_pct")
 	if pct <= 0.0:
@@ -320,19 +501,11 @@ func _apply_exile_curse_if_active(enemy: Node) -> void:
 		enemy.apply_curse(pct, EXILE_CURSE_DURATION)
 
 
-# Fire the Count Exile expire shot at a still-alive cursed enemy. Called
-# back from PrototypeEnemy._tick_curse when the timer drains. Damage is
-# fixed (not weapon-driven) so the shot lands even if the player has no
-# weapon equipped or is mid-reload — the perk's payoff is independent of
-# loadout. Visualised with the standard hitscan beam so the player sees
-# the follow-up land.
 func fire_exile_shot(target: Node3D) -> void:
 	if target == null or not is_instance_valid(target):
 		return
 	if not target.has_method(&"take_damage"):
 		return
-	# Edge case: enemy was cursed, then became charmed mid-curse. Skip
-	# the auto-shot — friendly fire would land on a now-allied enemy.
 	if is_player_friendly(target):
 		return
 	var origin := _host.global_position + Vector3(0.0, 1.0, 0.0)
@@ -348,3 +521,53 @@ func fire_exile_shot(target: Node3D) -> void:
 	_deal_damage(target, dmg, _host.global_position, EXILE_AUTO_SHOT_KNOCKBACK, 1, false)
 
 
+# ---------------------------------------------------------------------------
+# Polymath Mindlink — echo damage to a nearby enemy
+# ---------------------------------------------------------------------------
+
+func _apply_mindlink(primary: Node3D, dmg: int, is_crit: bool) -> void:
+	if _mindlink_echoing:
+		return
+	if Effects.get_aggregate(&"mindlink_active") <= 0.0:
+		return
+	if primary == null or not is_instance_valid(primary):
+		return
+	var best: Node3D = null
+	var best_d2 := MINDLINK_RADIUS * MINDLINK_RADIUS
+	for n: Node3D in SpatialGrid.query_radius(primary.global_position, MINDLINK_RADIUS, &"enemies"):
+		if n == primary:
+			continue
+		if not n.has_method(&"take_damage"):
+			continue
+		if is_player_friendly(n):
+			continue
+		var d2 := primary.global_position.distance_squared_to(n.global_position)
+		if d2 < best_d2:
+			best_d2 = d2
+			best = n
+	if best == null:
+		return
+	# Visual: beam from primary to echo target so the link reads clearly.
+	var link_dir := best.global_position - primary.global_position
+	var link_dist := link_dir.length()
+	if link_dist > 0.001:
+		CombatVisuals.spawn_beam(primary, link_dir.normalized(), link_dist)
+	CombatVisuals.spawn_impact_burst(_host, best.global_position + Vector3(0.0, 0.9, 0.0))
+	_mindlink_echoing = true
+	_deal_damage(best, dmg, _host.global_position, 0.0, 1, is_crit)
+	_mindlink_echoing = false
+
+
+# ---------------------------------------------------------------------------
+# Automaton ISR Drone — chance to spawn a surveillance drone on hit
+# ---------------------------------------------------------------------------
+
+func _try_spawn_isr_drone(enemy: Node3D) -> void:
+	var chance := Effects.get_aggregate(&"isr_drone_chance")
+	if chance <= 0.0 or randf() >= chance:
+		return
+	if enemy == null or not is_instance_valid(enemy):
+		return
+	if is_player_friendly(enemy):
+		return
+	ISRDrone.spawn_on(enemy)

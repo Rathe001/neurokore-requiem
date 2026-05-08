@@ -245,11 +245,11 @@ func _update_buffs_bar() -> void:
 		child.queue_free()
 	if PlayerState.class_id == &"":
 		return
-	# Show active perks from PerkState directly.
+	# Show only the highest active perk per tree (tiers replace, not stack).
+	var best_per_tree: Dictionary = {}  # stat_id → {tier, perk}
 	for perk: Perk in PerkState.get_active_perks():
 		if perk == null:
 			continue
-		# Parse perk id "{stat}_t{N}" to extract stat + tier for display.
 		var id_parts := String(perk.id).split("_t")
 		if id_parts.size() != 2:
 			continue
@@ -257,7 +257,12 @@ func _update_buffs_bar() -> void:
 		var tier := int(id_parts[1])
 		if tier <= 0:
 			continue
-		_add_buff_entry(stat_id, tier, perk)
+		var prev: Dictionary = best_per_tree.get(stat_id, {})
+		if prev.is_empty() or tier > int(prev["tier"]):
+			best_per_tree[stat_id] = {"tier": tier, "perk": perk}
+	for stat_id: StringName in best_per_tree.keys():
+		var entry: Dictionary = best_per_tree[stat_id]
+		_add_buff_entry(stat_id, int(entry["tier"]), entry["perk"] as Perk)
 	# Active offhand: SHIELD_BUFF gets its own buff-bar entry while
 	# active so the player can see the % reduction and the remaining
 	# pool. Cooldown state is communicated via the HP-bar outline
