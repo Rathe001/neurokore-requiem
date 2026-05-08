@@ -1648,7 +1648,7 @@
   <a href="#phase-3-enemies" class="md-nav__link">
     <span class="md-ellipsis">
       
-        📅 Phase 3 — Enemies
+        Phase 3 — Enemies ✅
       
     </span>
   </a>
@@ -1659,7 +1659,7 @@
   <a href="#phase-4-combat-events" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Phase 4 — Combat events
+        📅 Phase 4 — Combat events
       
     </span>
   </a>
@@ -1991,9 +1991,11 @@
 - <strong>Despawn animation</strong>: Currently <code>queue_free</code> is a hard snap. A 0.2s fade or character-drop would read better. Probably do this when we have proper death animation work in Phase 3+.
 - <strong>Reconnection</strong> (nice-to-have): Steam holds connections briefly; if a peer drops and rejoins within ~30s, ideally we re-bind without forcing them through the lobby browser. Defer if it's significant work.
 - <strong>Audit <code>_alive</code> / <code>_health</code> / damage code paths on remote players</strong>: in Phase 2B I early-return on <code>_is_remote_player()</code> in <code>_physics_process</code> etc., but <code>take_damage</code>, <code>_die</code>, <code>respawn</code> aren't gated. Phase 3 will properly handle these via authoritative state, but for 2C add defensive early-returns so a stray call from gameplay code doesn't NPE on a remote player's null <code>_combat</code>.</p>
-<h3 id="phase-3-enemies">📅 Phase 3 — Enemies<a class="headerlink" href="#phase-3-enemies" title="Permanent link">&para;</a></h3>
-<p>Move enemy authority to host. Spawners run only on host; spawn events RPC-broadcast to clients with deterministic IDs. Position + state machine sync via synchronizers. Damage application via RPC (host computes, broadcasts hit visuals + HP delta). Death events RPC. After this phase, all 4 players can fight enemies in the same world.</p>
-<h3 id="phase-4-combat-events">Phase 4 — Combat events<a class="headerlink" href="#phase-4-combat-events" title="Permanent link">&para;</a></h3>
+<h3 id="phase-3-enemies">Phase 3 — Enemies ✅<a class="headerlink" href="#phase-3-enemies" title="Permanent link">&para;</a></h3>
+<p>Enemies spawn into a dedicated <code>EnemiesContainer</code> with a <code>MultiplayerSpawner</code> that replicates host spawns to all clients. Each enemy carries a <code>MultiplayerSynchronizer</code> broadcasting <code>global_position</code>, <code>Visual:rotation</code>, <code>net_health</code>, <code>net_max_health</code>, and <code>net_state</code> (State enum as int). Clients skip AI entirely (<code>_is_remote_enemy()</code> gate in <code>_physics_process</code>) and drive animations + health bars from synced values. Death detected client-side via <code>net_state == DEAD</code>; corpse cleanup handled by the spawner's removal replication.</p>
+<p>Damage from player combat (cone/AoE/hitscan/exile) routes through <code>_deal_damage()</code> in <code>PlayerCombat</code> → <code>request_damage.rpc_id(1, ...)</code> on clients, with the host applying it authoritatively via <code>take_damage()</code>. XP, loot drops, and death side-effects only fire on the host. Spawning (<code>_spawn_wave</code>, <code>_spawn_boss</code>, <code>reset_level</code>) is gated behind <code>_is_mp_client()</code>.</p>
+<p><strong>Not yet covered (Phase 4):</strong> projectile, grenade, trap, telekinesis, and doomsayer damage paths are gated against client-side application but don't send RPCs yet — those hits won't register on clients until Phase 4.</p>
+<h3 id="phase-4-combat-events">📅 Phase 4 — Combat events<a class="headerlink" href="#phase-4-combat-events" title="Permanent link">&para;</a></h3>
 <p>Projectile spawn replication: host RPCs spawn event with seed + direction; clients dead-reckon trajectory and only the host evaluates collisions. Hitscan: host computes beam endpoint, broadcasts visual via RPC. Impact burst, damage numbers, hit flashes all via RPC. The combat visuals you'd expect.</p>
 <h3 id="phase-5-loot">Phase 5 — Loot<a class="headerlink" href="#phase-5-loot" title="Permanent link">&para;</a></h3>
 <p>Loot drop with <code>owner_id</code> field as designed. Manual-drop UI / inventory action ("Drop" button or drag-out-of-inventory). Pickup validation. Visual distinction between owned and free-for-all drops.</p>
