@@ -174,9 +174,14 @@ func request_item_pickup(pickup_path: NodePath) -> void:
 		return
 	var requester: int = multiplayer.get_remote_sender_id()
 	var owner: String = String(pickup.owner_id) if pickup.owner_id != null else ""
-	# Validate: owner must match requester, or be empty (manual drop).
-	if owner != "" and owner != str(requester):
-		return
+	# Validate: owner_id is a Steam id (set at drop time from
+	# NetState.lobby_members, keyed by Steam id), `requester` is a Godot
+	# peer id. Bridge through NetState.steam_id_for_peer so the
+	# comparison happens in the same id space.
+	if owner != "":
+		var requester_steam_id: int = NetState.steam_id_for_peer(requester)
+		if owner != str(requester_steam_id):
+			return
 	# Confirm to the requesting peer with the full item data so they
 	# don't depend on the node still existing when the RPC arrives.
 	var item_data: Dictionary = pickup.item.to_dict() if pickup.item != null else {}

@@ -16,6 +16,13 @@ var _create_lobby_panel: CreateLobbyPanel
 var _browse_lobbies_panel: BrowseLobbiesPanel
 var _lobby_room_panel: LobbyRoomPanel
 var _mp_button: Button
+# What to do after the user picks (or creates) a character on the
+# ContinuePanel / CharacterCreationPanel: "sp" → load the save and
+# launch the game scene (the original flow); "mp" → load the save and
+# advance to the multiplayer panel instead. Letting the user enter MP
+# without a character would land them in level_shell with empty
+# PlayerState (no class, no level, no avatar).
+var _post_select_target: String = "sp"
 
 func _ready() -> void:
 	theme = UIThemeState.theme
@@ -208,11 +215,17 @@ func _show_settings() -> void:
 	_settings_panel.visible = true
 
 func _on_single_player_pressed() -> void:
+	_post_select_target = "sp"
 	_show_single_player()
 
 
 func _on_multiplayer_pressed() -> void:
-	_show_multiplayer()
+	# MP requires a character (class, spec, talents) to be loaded before
+	# entering. Route through the same character-select panel as SP, but
+	# remember to advance to the multiplayer panel instead of the game
+	# scene once a character is picked or created.
+	_post_select_target = "mp"
+	_show_single_player()
 
 
 func _on_steam_initialized_changed(value: bool) -> void:
@@ -274,7 +287,11 @@ func _show_single_player() -> void:
 
 
 func _on_character_selected(save_id: String) -> void:
-	if SaveManager.load_game(save_id):
+	if not SaveManager.load_game(save_id):
+		return
+	if _post_select_target == "mp":
+		_show_multiplayer()
+	else:
 		get_tree().change_scene_to_file(GAME_SCENE)
 
 
@@ -309,7 +326,13 @@ func _on_start_pressed() -> void:
 	_creation_panel.apply_to_player_state()
 	PlayerState.character_id = _generate_uuid()
 	SaveManager.save_game()
-	get_tree().change_scene_to_file(GAME_SCENE)
+	# MP path skips the immediate game-scene launch — character is now
+	# saved and PlayerState populated, advance to the multiplayer panel
+	# so the user can host or browse with this fresh character.
+	if _post_select_target == "mp":
+		_show_multiplayer()
+	else:
+		get_tree().change_scene_to_file(GAME_SCENE)
 
 
 static func _generate_uuid() -> String:

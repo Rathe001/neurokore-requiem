@@ -2,53 +2,53 @@ extends Node3D
 class_name PlayersContainer
 
 ## Owns one PrototypePlayer per peer (or just one in single-player). Each
-## peer spawns the SAME set of players in `_ready` based on the current
-## NetState.lobby_members snapshot — no MultiplayerSpawner needed because
-## the spawn pattern is deterministic across all peers.
+## peer spawns its OWN avatar on `_ready` and any already-connected
+## remote peers, then reacts to `multiplayer.peer_connected` /
+## `peer_disconnected` for late-joiners and disconnects.
 ##
-## Why deterministic-spawn-on-ready instead of host-replicated spawning:
-##   - Per-player MultiplayerSynchronizer routing requires identical
-##     node paths on every peer. Naming each player by its Steam id and
-##     having every peer spawn-by-id-list keeps paths in lockstep.
-##   - The HUD's `&"player"` group lookup runs in HUD._ready (sibling
-##     of this node, runs AFTER us in tree order). Spawning here means
-##     the local player exists by the time HUD looks for it.
+## Node naming and authority both use **Godot peer IDs**, NOT Steam ids.
+## SteamMultiplayerPeer (per its source) sets `unique_id = 1` for the
+## server and generates a fresh id per client — those ids ARE consistent
+## across all peers (negotiated during handshake), but they are NOT the
+## Steam ids tracked in NetState.lobby_members. Conflating the two
+## causes phantom avatars (the host gets spawned both as "1" via
+## get_unique_id and again as their Steam id from lobby_members).
 ##
-## Authority: each spawned Player has its multiplayer_authority set to
-## that player's Steam id. SteamMultiplayerPeer uses Steam ids as peer
-## ids, so `is_multiplayer_authority()` returns true on the local
-## player and false on remotes. PrototypePlayer gates input / physics /
-## animation logic on that flag.
+## Authority side-effect: each Player node has multiplayer_authority set
+## to its Godot peer id, so `is_multiplayer_authority()` returns true on
+## the local peer's own avatar and false on remotes. PrototypePlayer
+## gates input / physics / animation on that flag.
 
 const PLAYER_SCENE: PackedScene = preload("res://scenes/prototype/player.tscn")
 
-# Peer id used for the local player when there's no MultiplayerPeer
-# (i.e. single-player). 1 mirrors Godot's "server" id; in SP mode
-# is_multiplayer_authority() returns true regardless because Godot
-# treats "no peer" as "I'm authority".
+# Godot peer id used for the local player when there's no MultiplayerPeer
+# (single-player). 1 mirrors Godot's "server" id; in SP mode
+# is_multiplayer_authority() returns true regardless because Godot treats
+# "no peer" as "I'm authority".
 const SP_LOCAL_ID: int = 1
 
-# peer_id (int, Steam id when networked) -> PrototypePlayer
+# godot_peer_id (int) -> PrototypePlayer
 var _spawned: Dictionary = {}
 
 
 func _ready() -> void:
-	# multiplayer.has_multiplayer_peer() can't be used as the SP/MP
-	# discriminator — GodotSteam plumbing leaves the engine flag in
-	# misleading states across launch and lobby cycles. NetState.is_in_lobby()
-	# is the authoritative signal: only true once we've actually created
-	# or joined a Steam Lobby.
-	var local_id: int = _local_peer_id()
-	# Always spawn the local player. In SP this is the only one; in MP
-	# it's our own avatar and we add the other lobby members below.
+	# NetState.is_in_lobby() is the SP/MP discriminator.
+	# multiplayer.has_multiplayer_peer() can't be trusted because
+	# GodotSteam plumbing leaves the engine flag in misleading states
+	# across launch and lobby cycles.
+	if not NetState.is_in_lobby():
+		_spawn_for(SP_LOCAL_ID)
+		return
+
+	# MP: spawn local player at our own peer id (1 if host, generated id
+	# if client), then one for each peer already connected at scene-load.
+	# Remaining peers come in via multiplayer.peer_connected.
+	var local_id: int = multiplayer.get_unique_id()
 	_spawn_for(local_id)
-	if NetState.is_in_lobby():
-		for member_id_v in NetState.lobby_members.keys():
-			var member_id: int = int(member_id_v)
-			if member_id != local_id:
-				_spawn_for(member_id)
-		multiplayer.peer_connected.connect(_on_peer_connected)
-		multiplayer.peer_disconnected.connect(_on_peer_disconnected)
+	for peer_id in multiplayer.get_peers():
+		_spawn_for(int(peer_id))
+	multiplayer.peer_connected.connect(_on_peer_connected)
+	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 
 
 # Convenience for camera / HUD wiring — both want the player whose input
@@ -67,37 +67,29 @@ func get_local_player() -> PrototypePlayer:
 
 
 func _local_peer_id() -> int:
-	# get_unique_id() works for both SP (returns 1 by default, OR the
-	# Steam id if GodotSteam auto-bound a peer) and MP (returns our
-	# Steam id once we've joined a lobby). Either way it's the right
-	# value to use as the local player's multiplayer authority.
+	# Godot peer id space. 1 in SP (no peer), 1 on host, generated id on
+	# clients. Always matches multiplayer_authority of the local Player.
+	if not NetState.is_in_lobby():
+		return SP_LOCAL_ID
 	return multiplayer.get_unique_id()
 
 
-func _spawn_from_lobby_members() -> void:
-	# NetState.lobby_members was populated in _on_lobby_joined / created.
-	# Even if a connection isn't fully handshaken yet, spawning the
-	# placeholder Players means the synchronizers are ready to receive
-	# the first state update the moment the link comes up.
-	for member_id_v in NetState.lobby_members.keys():
-		_spawn_for(int(member_id_v))
-	# Edge case: host may load the scene before any clients have actually
-	# connected at the multiplayer layer (lobby members are known via
-	# Steam, but multiplayer.peer_connected fires later). The lobby
-	# member list still has them, so we spawn proactively.
-
-
 func _on_peer_connected(peer_id: int) -> void:
-	# Only happens for peers that join after we entered the scene — the
-	# initial set was covered by _spawn_from_lobby_members. Phase 7
-	# drop-in coop will rely on this; for Phase 2B it's mostly defensive.
 	_spawn_for(peer_id)
 
 
 func _on_peer_disconnected(peer_id: int) -> void:
-	var member_name: String = NetState.lobby_members.get(peer_id, "")
-	if member_name.is_empty():
-		member_name = "A player"
+	# Look up the disconnecting peer's persona for the toast. We have to
+	# map back from Godot peer id → Steam id → name; SteamMultiplayerPeer
+	# exposes get_steam_id_for_peer_id when available.
+	var member_name: String = "A player"
+	var peer := multiplayer.multiplayer_peer
+	if peer != null and peer.has_method(&"get_steam_id_for_peer_id"):
+		var steam_id: int = peer.get_steam_id_for_peer_id(peer_id)
+		if steam_id != 0:
+			var stored: Variant = NetState.lobby_members.get(steam_id, "")
+			if not String(stored).is_empty():
+				member_name = String(stored)
 	_despawn_for(peer_id)
 	var local := get_local_player()
 	if local != null:

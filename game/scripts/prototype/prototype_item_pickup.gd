@@ -77,12 +77,17 @@ func _build_name_label(p_item: Item) -> void:
 
 ## Dim non-owned item labels so the player can tell at a glance which drops
 ## are theirs. Only applies in MP; in SP every drop is owned by default.
+##
+## owner_id is a Steam id stringified at drop time (see prototype_enemy
+## ._drop_item iterating NetState.lobby_members.keys() — those are Steam
+## ids, not Godot peer ids). Compare to SteamState.steam_id, NOT
+## multiplayer.get_unique_id() which is a Godot peer id (always 1 on host).
 func _apply_ownership_visual() -> void:
 	if not NetState.is_in_lobby():
 		return
 	if owner_id == &"":
 		return
-	var local_id := StringName(str(multiplayer.get_unique_id()))
+	var local_id := StringName(str(SteamState.steam_id))
 	if owner_id == local_id:
 		return
 	# Not ours — dim the label to 35% alpha.
@@ -169,12 +174,16 @@ func _do_local_pickup() -> void:
 
 ## True when the local player is allowed to pick this up: either we own it,
 ## it has no owner (manual drop), or we're in SP.
+##
+## owner_id is a Steam id (see _apply_ownership_visual for context).
+## Compare to SteamState.steam_id; multiplayer.get_unique_id() is the
+## Godot peer id (host always 1) and would never match a Steam id.
 func _is_owned_by_local_player() -> bool:
 	if not NetState.is_in_lobby():
 		return true
 	if owner_id == &"":
 		return true
-	return owner_id == StringName(str(multiplayer.get_unique_id()))
+	return owner_id == StringName(str(SteamState.steam_id))
 
 
 func _find_pickups_container() -> PickupsContainer:

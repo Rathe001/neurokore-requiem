@@ -237,6 +237,20 @@ func is_client() -> bool:
 	return mode == Mode.CLIENT
 
 
+## Map a Godot peer id (1 for host, generated for clients) back to a
+## Steam id. Item ownership, chat attribution, and any other gameplay
+## state stored under Steam ids needs this bridge because RPC senders
+## arrive as Godot peer ids. Returns 0 when no mapping is available
+## (peer disconnected, plugin doesn't expose the helper).
+func steam_id_for_peer(peer_id: int) -> int:
+	if peer_id == 1:
+		# Host is always the lobby owner.
+		return lobby_owner_id
+	if _peer != null and _peer.has_method(&"get_steam_id_for_peer_id"):
+		return int(_peer.get_steam_id_for_peer_id(peer_id))
+	return 0
+
+
 ## Store the current level seed in lobby data so late joiners can rebuild
 ## the same geometry. Called by LevelBuilder on initial build and by
 ## PrototypeRoot on level reset.
