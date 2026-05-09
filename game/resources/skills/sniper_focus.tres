@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="Skill" load_steps=2 format=3]
+
+; Sniper Focus — RMB-hold buff. Pins the player in place and drains
+; resource per second; while held every shot rolls with +0.50 crit
+; chance (flat, on top of any helm/talent crit bonuses). Turns the
+; sniper's already-heavy single-shot into a near-guaranteed crit at
+; the cost of mobility — the canonical "wait for the shot" stance.
+
+[ext_resource type="Script" path="res://scripts/skills/skill.gd" id="1_skill_script"]
+
+[resource]
+script = ExtResource("1_skill_script")
+display_name = "Focus"
+glyph = "F"
+damage = 0
+skill_range = 0.0
+cooldown = 0.0
+wind_up = 0.0
+resource_cost = 0
+targeting_mode = 0
+cone_deg = 0.0
+icon_color = Color(0.85, 0.78, 0.7, 1.0)
+active_kind = 5
+aim_hold_accuracy_bonus = 0.0
+aim_hold_crit_bonus = 0.50
+aim_hold_resource_drain = 30.0
+aim_hold_locks_movement = true

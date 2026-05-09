@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="Skill" load_steps=2 format=3]
+
+; SMG primary fire — very fast cadence, low per-shot damage, low accuracy.
+; Sustained spray. Smaller magazine (10–50 rounds) means more frequent
+; reloads, which is why the reload itself is also faster on the SMG base.
+
+[ext_resource type="Script" path="res://scripts/skills/skill.gd" id="1_skill_script"]
+
+[resource]
+script = ExtResource("1_skill_script")
+display_name = "SMG Burst"
+glyph = "i"
+damage = 2
+skill_range = 14.0
+cooldown = 0.15
+wind_up = 0.0
+resource_cost = 0
+targeting_mode = 2
+cone_deg = 0.0
+knockback = 0.0
+projectile_speed = 34.0
+icon_color = Color(0.85, 0.78, 0.7, 1.0)

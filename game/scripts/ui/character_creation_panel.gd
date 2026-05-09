@@ -33,6 +33,10 @@ var _selected_gender: StringName = &""
 var _selected_avatar_id: int = 0
 var _selected_difficulty: StringName = &""
 var _name_value: String = ""
+## Roster bucket the new character belongs to. Set by the startup screen
+## before showing the panel. Stamped onto PlayerState in apply_to_player_state
+## so the character only appears in the matching roster.
+var mode_id: StringName = &"sp"
 
 # State the avatar section was last built against — lets us skip rebuilds
 # when downstream state changes.
@@ -301,6 +305,7 @@ func apply_to_player_state() -> void:
 	PlayerState.avatar_id = _selected_avatar_id
 	PlayerState.player_name = _name_value.strip_edges()
 	PlayerState.hardcore = _selected_difficulty == &"hardcore"
+	PlayerState.mode_id = mode_id
 
 
 # ── Refresh ──────────────────────────────────────────────────────────────

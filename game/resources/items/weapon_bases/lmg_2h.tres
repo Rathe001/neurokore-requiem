@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="WeaponBase" load_steps=4 format=3]
+
+; LMG (2H) — sustained-fire bullet weapon. Modest per-shot damage at
+; ~4 shots/sec, but a 100–200 round magazine means you barely ever
+; stop firing. Accuracy rolls low (0.55–0.75) so the threat is volume,
+; not precision. Slow reload (3.5s) makes magazine management a real
+; consideration. Tuned to ~22 raw DPS in line with the other archetypes.
+; RMB alt-fire is the Tripod aim-hold buff (lmg_tripod.tres).
+
+[ext_resource type="Script" path="res://scripts/items/weapon_base.gd" id="1_weapon_base"]
+[ext_resource type="Resource" path="res://resources/skills/lmg_burst.tres" id="2_fire_skill"]
+[ext_resource type="Resource" path="res://resources/skills/lmg_tripod.tres" id="3_alt_fire"]
+
+[resource]
+script = ExtResource("1_weapon_base")
+id = &"lmg_2h"
+display_name = "LMG"
+glyph = "I"
+two_handed = true
+damage_min_range = Vector2(3, 5)
+damage_max_range = Vector2(5, 8)
+attack_speed_range = Vector2(0.7, 0.9)
+crit_chance_range = Vector2(0.0, 0.0)
+accuracy_range = Vector2(0.55, 0.75)
+weapon_range_range = Vector2(16.0, 20.0)
+fire_skill = ExtResource("2_fire_skill")
+alt_fire_skill = ExtResource("3_alt_fire")
+ammo_capacity_range = Vector2i(100, 200)
+reload_time = 3.5

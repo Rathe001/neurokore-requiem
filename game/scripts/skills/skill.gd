@@ -20,6 +20,7 @@ enum ActiveKind {
 	GRENADE,        # click RMB → throw grenade at cursor with AoE on impact
 	SHIELD_BUFF,    # click RMB → buff player with N% damage reduction; cooldown after pool drains
 	SECOND_WIND,    # instant self-cast → refill resource bar, then cooldown
+	AIM_HOLD,       # hold RMB → buff accuracy/crit while drains resource (LMG Tripod, Sniper Focus)
 }
 
 enum GrenadeType {
@@ -71,3 +72,19 @@ enum GrenadeType {
 @export var blast_radius: float = 0.0
 ## GRENADE: detonation behaviour subtype.
 @export var grenade_type: GrenadeType = GrenadeType.FRAG
+
+## AIM_HOLD: additive accuracy bonus applied while RMB is held. 0.3 means
+## "+30% accuracy on top of the weapon's rolled accuracy" — clamped to 1.0
+## downstream so a 0.7-accuracy weapon with +0.3 hold buff fires perfectly
+## straight while held.
+@export var aim_hold_accuracy_bonus: float = 0.0
+## AIM_HOLD: additive crit chance applied while RMB is held. 0.5 means
+## "+50% crit chance on every shot fired during the hold."
+@export var aim_hold_crit_bonus: float = 0.0
+## AIM_HOLD: resource drained per second of hold. Hold ends when the
+## resource pool empties (or the player releases RMB).
+@export var aim_hold_resource_drain: float = 30.0
+## AIM_HOLD: when true, the player can't move while holding. Trades
+## mobility for the buff so the hold reads as a deliberate stance, not
+## a free always-on benefit.
+@export var aim_hold_locks_movement: bool = true

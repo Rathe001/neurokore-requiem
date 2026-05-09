@@ -74,34 +74,35 @@ room = ExtResource("room_grand_arena")
 role = &"linear"
 weight = 0.25
 
-; Pit and spike rooms read as a real hazard — they were appearing in
-; nearly half of all chains at the prior 0.7/0.4/0.3/0.35 weights.
-; Cut hard so they show up as a memorable obstacle, not a constant
-; one. Combined pit weight ~0.4 vs ~3.0 non-pit = ~12% chance per
-; linear slot (one per chain on average at length 7).
+; Pit and spike rooms — bumped back up after playtesters reported only
+; seeing them once per run. Previous values (0.15/0.10/0.08/0.08) were
+; over-corrected from an earlier pass when pits were appearing in nearly
+; half of every chain. New combined weight ~1.0 vs ~3.0 non-pit = ~25%
+; per linear slot, ~1.5–1.75 pits per length-7 chain. Memorable hazard
+; without dominating the layout.
 [sub_resource type="Resource" id="template_pit_linear"]
 script = ExtResource("script_template")
 room = ExtResource("room_pit_linear")
 role = &"linear"
-weight = 0.15
+weight = 0.35
 
 [sub_resource type="Resource" id="template_pit_chasm"]
 script = ExtResource("script_template")
 room = ExtResource("room_pit_chasm")
 role = &"linear"
-weight = 0.10
+weight = 0.25
 
 [sub_resource type="Resource" id="template_spike_chamber"]
 script = ExtResource("script_template")
 room = ExtResource("room_spike_chamber")
 role = &"linear"
-weight = 0.08
+weight = 0.20
 
 [sub_resource type="Resource" id="template_pit_bottomless"]
 script = ExtResource("script_template")
 room = ExtResource("room_pit_bottomless")
 role = &"linear"
-weight = 0.08
+weight = 0.20
 
 [sub_resource type="Resource" id="template_end"]
 script = ExtResource("script_template")

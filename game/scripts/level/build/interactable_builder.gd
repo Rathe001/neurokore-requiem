@@ -22,9 +22,23 @@ static func _spawn_list(ctx: LevelBuildContext, room_id: StringName, center: Vec
 		inst.transform.origin = center + slot.offset
 		if slot.rotation_y != 0.0:
 			inst.rotation_degrees.y = slot.rotation_y
+		# Deterministic name keyed on (room_id, slot.id) so the same node lives at
+		# the same NodePath on host AND client. Required for @rpc methods on
+		# interactables — Godot routes RPCs by path, and Godot's auto-@N suffix
+		# rename can drift between peers if iteration order isn't byte-identical
+		# (which it usually is, but we don't want to bet a P0 MP bug on it).
+		inst.name = _slot_node_name(room_id, slot.id)
 		ctx.root.add_child(inst)
 
 		var key := StringName("%s.%s" % [room_id, slot.id])
 		if ctx.slots.has(key):
 			push_warning("[InteractableBuilder] Duplicate slot key '%s'; later instance wins." % key)
 		ctx.slots[key] = inst
+
+
+# Build a Godot-safe deterministic node name from the slot key. Strips the
+# few characters Godot rejects in node names (`/` `:` `@` `.`) and replaces
+# them with `_`. Keeps the rest readable in the editor.
+static func _slot_node_name(room_id: StringName, slot_id: StringName) -> String:
+	var raw := "Slot_%s_%s" % [room_id, slot_id]
+	return raw.replace("/", "_").replace(":", "_").replace("@", "_").replace(".", "_")

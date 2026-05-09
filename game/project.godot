@@ -23,6 +23,7 @@ config/features=PackedStringArray("4.6", "Forward Plus")
 BuildInfo="*res://scripts/systems/build_info.gd"
 SteamState="*res://scripts/systems/steam_state.gd"
 NetState="*res://scripts/systems/net_state.gd"
+GlobalChatState="*res://scripts/systems/global_chat_state.gd"
 DebugState="*res://scripts/systems/debug_state.gd"
 AccessibilityState="*res://scripts/systems/accessibility_state.gd"
 PlayerState="*res://scripts/systems/player_state.gd"
@@ -87,6 +88,8 @@ move_right={
 3d_physics/layer_3="Player"
 3d_physics/layer_4="Pickups"
 3d_physics/layer_6="Corpses"
+3d_physics/layer_7="Interactables"
+3d_physics/layer_8="Pillars"
 
 [rendering]
 

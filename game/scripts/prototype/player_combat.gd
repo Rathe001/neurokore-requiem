@@ -302,6 +302,9 @@ func _spawn_projectile(skill: Skill, aim: Vector3, eff_range: float, weapon: Ite
 	if _overclock_active:
 		vis *= OVERCLOCK_VISUAL_SCALE
 	proj.visual_scale = vis
+	# Bullet weapons (LMG/SMG/sniper/RPG) flag the projectile so it
+	# renders as a tracer streak instead of an energy bolt.
+	proj.is_bullet = weapon != null and weapon.is_bullet_weapon()
 	_host.get_parent().add_child(proj)
 	proj.global_position = spawn_pos
 	proj.monitoring = true
@@ -385,6 +388,7 @@ func _spawn_projectile_exact(skill: Skill, aim_norm: Vector3, eff_range: float, 
 	proj.damage_mult = skill.damage_multiplier
 	proj.blast_radius = skill.blast_radius
 	proj.visual_scale = skill.damage_multiplier if skill.damage_multiplier > 1.0 else 1.0
+	proj.is_bullet = weapon != null and weapon.is_bullet_weapon()
 	_host.get_parent().add_child(proj)
 	proj.global_position = spawn_pos
 	proj.monitoring = true
@@ -433,6 +437,8 @@ func _resolve_hitscan_exact(skill: Skill, aim_norm: Vector3, eff_range: float, w
 func _roll_crit(weapon: Item = null) -> bool:
 	var base_crit := weapon.effective_crit_chance() if weapon != null and weapon.crit_chance > 0.0 else PROTO_BASE_CRIT_CHANCE
 	var chance := base_crit + Effects.get_aggregate(&"crit_chance_pct") + _host._gear_crit_chance_bonus
+	# AIM_HOLD (Sniper Focus) flat-adds to crit chance while RMB is held.
+	chance += _host.aim_hold_crit_bonus()
 	return randf() < chance
 
 ## Vertical spread is half horizontal — enough to see shots angle into
@@ -449,6 +455,11 @@ const MISS_MIN_SPREAD: float = 0.06
 func _apply_aim_spread(aim: Vector3, weapon: Item, accuracy_mult: float = 1.0) -> Vector3:
 	var acc := weapon.effective_accuracy() if weapon != null else 1.0
 	acc += _host._gear_hit_chance_bonus
+	# AIM_HOLD (Tripod / Focus) layers a flat accuracy bonus while RMB is
+	# held — the buff is intentional flat-add (not a multiplier) so the
+	# Tripod's +0.3 reads as "30 more points of accuracy" regardless of
+	# the rolled accuracy on the weapon.
+	acc += _host.aim_hold_accuracy_bonus()
 	acc *= accuracy_mult
 	acc = clampf(acc, 0.0, 1.0)
 	# Hit roll — accurate shots fly straight at the target.
@@ -502,6 +513,13 @@ func _apply_exile_curse_if_active(enemy: Node) -> void:
 
 
 func fire_exile_shot(target: Node3D) -> void:
+	# Curse can outlive the player — _tick_curse on the enemy keeps
+	# counting down regardless of player state. If the player is already
+	# dead when the timer expires, swallow the auto-shot. Otherwise a
+	# corpse would still finish the kill, which reads as the player
+	# winning a fight they actually lost.
+	if _host == null or not _host.is_alive():
+		return
 	if target == null or not is_instance_valid(target):
 		return
 	if not target.has_method(&"take_damage"):

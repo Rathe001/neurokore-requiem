@@ -57,6 +57,17 @@ const LOBBY_HOST_KEY: String = "host"
 # members and survives ordering / late callbacks.
 const LOBBY_STARTED_KEY: String = "started"
 const LOBBY_SEED_KEY: String = "level_seed"
+# "1" if the host's character is hardcore, "0" otherwise. Stamped on
+# create_lobby; read by the lobby browser to filter out lobbies that
+# don't match the joining player's character difficulty (HC chars can
+# only play with HC, softcore can only play with softcore).
+const LOBBY_HARDCORE_KEY: String = "hardcore"
+# Optional join password — only set on Private lobbies that opted in.
+# Stored plain-text in lobby data; the browse-side join flow prompts
+# the user and compares locally before letting the join proceed. Not
+# secure against determined inspection (lobby metadata is readable by
+# anyone), but enough to gate casual coop joins by friend-of-a-friend.
+const LOBBY_PASSWORD_KEY: String = "password"
 
 var mode: Mode = Mode.OFFLINE
 var lobby_id: int = 0
@@ -119,18 +130,22 @@ func _connect_steam_signals() -> void:
 # ─── Public API ───────────────────────────────────────────────────────────
 
 ## Creates a Steam lobby with the given name + max members + privacy.
+## `password` is optional — when non-empty (Private lobbies that opted
+## in), it's stamped onto lobby metadata so the join side can verify.
 ## Async — listen for `lobby_created_result` to know whether it worked.
-func create_lobby(lobby_name: String, max_members: int, lobby_type: LobbyType) -> void:
+func create_lobby(lobby_name: String, max_members: int, lobby_type: LobbyType, password: String = "") -> void:
 	if not _ensure_steam():
 		return
 	if lobby_id != 0:
 		push_warning("[NetState] create_lobby called while already in a lobby — leaving first.")
 		leave_lobby()
-	# Stash the requested name so _on_lobby_created can stamp it onto
-	# the lobby metadata once the lobby exists. createLobby itself
-	# doesn't take a name — the lobby starts nameless and we set it
-	# via setLobbyData immediately after.
+	# Stash the requested name + password so _on_lobby_created can
+	# stamp them onto the lobby metadata once the lobby exists.
+	# createLobby itself doesn't take these — the lobby starts blank
+	# and we set the keys via setLobbyData immediately after.
 	_pending_lobby_name = lobby_name
+	_pending_lobby_password = password
+	_pending_create = true
 	Steam.createLobby(int(lobby_type), max_members)
 
 
@@ -143,6 +158,7 @@ func join_lobby(target_lobby_id: int) -> void:
 		return
 	if lobby_id != 0:
 		leave_lobby()
+	_pending_join_id = target_lobby_id
 	Steam.joinLobby(target_lobby_id)
 
 
@@ -270,9 +286,25 @@ func get_level_seed() -> int:
 # ─── Steam callback handlers ──────────────────────────────────────────────
 
 var _pending_lobby_name: String = ""
+var _pending_lobby_password: String = ""
+## Set true while we're awaiting our own `lobby_created` callback. Steam
+## fires create / join signals globally — without this flag, NetState
+## would claim GlobalChatState's create callback and route the user into
+## a "lobby room" they never actually opened.
+var _pending_create: bool = false
+## Steam lobby_id we're currently awaiting a `lobby_joined` callback for.
+## 0 = no NetState join in flight; any other value means "ignore joins
+## that don't match this id." Same disambiguation pattern as
+## _pending_create.
+var _pending_join_id: int = 0
 
 
 func _on_lobby_created(connect_status: int, new_lobby_id: int) -> void:
+	# Only claim creates we initiated — GlobalChatState also calls
+	# Steam.createLobby for the global chat room and shares this signal.
+	if not _pending_create:
+		return
+	_pending_create = false
 	# Steam's k_EResult enum: 1 = OK. Anything else is a failure (auth
 	# expired, no internet, lobby quota hit, etc.). We don't try to
 	# discriminate the failure modes here — the user retries from the UI.
@@ -289,9 +321,13 @@ func _on_lobby_created(connect_status: int, new_lobby_id: int) -> void:
 	# filter key.
 	Steam.setLobbyData(lobby_id, LOBBY_GAME_KEY, LOBBY_GAME_VALUE)
 	Steam.setLobbyData(lobby_id, LOBBY_HOST_KEY, SteamState.persona_name)
+	Steam.setLobbyData(lobby_id, LOBBY_HARDCORE_KEY, "1" if PlayerState.hardcore else "0")
 	if not _pending_lobby_name.is_empty():
 		Steam.setLobbyData(lobby_id, LOBBY_NAME_KEY, _pending_lobby_name)
+	if not _pending_lobby_password.is_empty():
+		Steam.setLobbyData(lobby_id, LOBBY_PASSWORD_KEY, _pending_lobby_password)
 	_pending_lobby_name = ""
+	_pending_lobby_password = ""
 	_refresh_members()
 	print("[NetState] Lobby created: %d (%s)" % [lobby_id, Steam.getLobbyData(lobby_id, LOBBY_NAME_KEY)])
 	lobby_created_result.emit(true, lobby_id)
@@ -299,6 +335,14 @@ func _on_lobby_created(connect_status: int, new_lobby_id: int) -> void:
 
 
 func _on_lobby_joined(joined_lobby_id: int, _permissions: int, _locked: bool, response: int) -> void:
+	# Only claim joins we initiated. GlobalChatState's chat-lobby join
+	# fires on the same Steam signal; without this filter NetState used
+	# to incorrectly claim the global-chat join, set lobby_id to it, and
+	# emit lobby_joined_result — which routed the startup screen into
+	# the lobby-room view instead of the global chat panel.
+	if _pending_join_id != joined_lobby_id:
+		return
+	_pending_join_id = 0
 	# response == 1 means joined successfully. Other values: the lobby is
 	# full, doesn't exist anymore, the user is banned, etc. Caller's UI
 	# should show a friendly "couldn't join" toast and bounce back.
@@ -323,7 +367,12 @@ func _on_lobby_joined(joined_lobby_id: int, _permissions: int, _locked: bool, re
 	lobby_state_changed.emit()
 
 
-func _on_lobby_chat_update(_changed_lobby_id: int, changed_id: int, _maker_id: int, change_state: int) -> void:
+func _on_lobby_chat_update(changed_lobby_id: int, changed_id: int, _maker_id: int, change_state: int) -> void:
+	# Steam fires this for every lobby the user is in. Filter out the
+	# global chat lobby (and any other future side-lobbies) so we only
+	# react to gameplay-lobby member churn here.
+	if changed_lobby_id != lobby_id:
+		return
 	# change_state values from Steam's k_EChatMemberStateChange flags:
 	#   1 = entered, 2 = left, 4 = disconnected, 8 = kicked, 16 = banned.
 	# We treat anything-but-entered as "left" — UI doesn't care why.
@@ -344,7 +393,11 @@ func _on_lobby_chat_update(_changed_lobby_id: int, changed_id: int, _maker_id: i
 	lobby_state_changed.emit()
 
 
-func _on_lobby_message(_received_lobby_id: int, sender_id: int, text: String, _chat_type: int) -> void:
+func _on_lobby_message(received_lobby_id: int, sender_id: int, text: String, _chat_type: int) -> void:
+	# Filter out global-chat / other side-lobby messages — gameplay-lobby
+	# chat is the only thing this signal feeds into.
+	if received_lobby_id != lobby_id:
+		return
 	var member_name: String = Steam.getFriendPersonaName(sender_id)
 	print("[NetState] Chat from %s (%d): %s" % [member_name, sender_id, text])
 	lobby_chat_received.emit(sender_id, member_name, text)
@@ -364,12 +417,17 @@ func _on_lobby_match_list(matched_lobbies: Array) -> void:
 			&"host": Steam.getLobbyData(lid, LOBBY_HOST_KEY),
 			&"member_count": Steam.getNumLobbyMembers(lid),
 			&"member_limit": Steam.getLobbyMemberLimit(lid),
+			&"hardcore": Steam.getLobbyData(lid, LOBBY_HARDCORE_KEY) == "1",
 		})
 	print("[NetState] Lobby list: %d result(s)" % infos.size())
 	lobby_match_list_updated.emit(infos)
 
 
-func _on_lobby_data_update(_arg0: int, _arg1: int, _arg2: int) -> void:
+func _on_lobby_data_update(updated_lobby_id: int, _member_id: int, _success: int) -> void:
+	# Side-lobby data updates (global chat member metadata) shouldn't
+	# trigger gameplay-lobby start-flag checks.
+	if updated_lobby_id != lobby_id:
+		return
 	_check_started_flag()
 
 

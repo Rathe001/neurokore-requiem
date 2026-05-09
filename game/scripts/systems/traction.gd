@@ -80,3 +80,20 @@ func reduce_ground_damage(amount: int, traction: int) -> int:
 ## TIER_SLOW / TIER_KNOCKDOWN / TIER_IMMUNE). Sugar over tier_for + compare.
 func has_immunity(tier: int) -> bool:
 	return tier_for(get_player_traction()) >= tier
+
+
+## Movement-speed multiplier under a slowing ground effect (e.g. liquid
+## pools). Full immunity once traction reaches TIER_SLOW; otherwise the
+## base 50% slow scales down step-by-step so a player part-way to the
+## immunity threshold still feels their boots helping.
+##   T0 (< 25)  → 0.50 (full -50% slow)
+##   T1 (25)    → 0.75 (-25% slow — half mitigated by partial traction)
+##   T2 (50+)   → 1.00 (immune)
+func slow_factor_for(traction: int) -> float:
+	var t := tier_for(traction)
+	if t >= TIER_SLOW:
+		return 1.0
+	# T0: 0% reduction (factor = 0.5). T1: 50% reduction (factor = 0.75).
+	var reduction := float(t) * 0.5
+	const FULL_SLOW_FACTOR := 0.5
+	return FULL_SLOW_FACTOR + (1.0 - FULL_SLOW_FACTOR) * reduction

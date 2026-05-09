@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="Skill" load_steps=2 format=3]
+
+; RPG primary fire — single rocket with a 4m blast on impact. Slower
+; cooldown, modest projectile speed (the rocket should be visible mid-
+; flight). 1–2 round magazine forces frequent reload commitment.
+
+[ext_resource type="Script" path="res://scripts/skills/skill.gd" id="1_skill_script"]
+
+[resource]
+script = ExtResource("1_skill_script")
+display_name = "Rocket"
+glyph = "}"
+damage = 50
+skill_range = 22.0
+cooldown = 1.2
+wind_up = 0.2
+resource_cost = 0
+targeting_mode = 2
+cone_deg = 0.0
+knockback = 5.0
+projectile_speed = 18.0
+blast_radius = 4.0
+icon_color = Color(1.0, 0.55, 0.25, 1.0)

@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="WeaponBase" load_steps=4 format=3]
+
+; RPG (2H) — single-rocket AoE launcher. 1–2 round magazine forces
+; reload between volleys. Alt-fire is the rpg_nuke.tres mini-nuke on a
+; long cooldown — same magazine, so each nuke costs one of your rare
+; rockets. Single-target DPS sits around the ~22 baseline; the AoE
+; blast multiplies effective DPS in crowds, which is the whole point.
+
+[ext_resource type="Script" path="res://scripts/items/weapon_base.gd" id="1_weapon_base"]
+[ext_resource type="Resource" path="res://resources/skills/rpg_rocket.tres" id="2_fire_skill"]
+[ext_resource type="Resource" path="res://resources/skills/rpg_nuke.tres" id="3_alt_fire"]
+
+[resource]
+script = ExtResource("1_weapon_base")
+id = &"rpg_2h"
+display_name = "RPG"
+glyph = "}"
+two_handed = true
+damage_min_range = Vector2(30, 45)
+damage_max_range = Vector2(55, 80)
+attack_speed_range = Vector2(0.4, 0.6)
+crit_chance_range = Vector2(0.0, 0.0)
+accuracy_range = Vector2(0.85, 0.95)
+weapon_range_range = Vector2(18.0, 22.0)
+fire_skill = ExtResource("2_fire_skill")
+alt_fire_skill = ExtResource("3_alt_fire")
+ammo_capacity_range = Vector2i(1, 2)
+reload_time = 5.0

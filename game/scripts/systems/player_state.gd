@@ -33,6 +33,10 @@ var avatar_id: int = 0
 var player_name: String = ""
 ## Hardcore mode — death is permanent. Set during character creation.
 var hardcore: bool = false
+## Roster bucket: &"sp" or &"mp". Characters created from the SP flow live
+## in the SP roster only, MP characters in the MP roster only — they are
+## not interchangeable. Set during character creation.
+var mode_id: StringName = &"sp"
 ## Stable UUID for this character — generated once at creation, never changes.
 ## Used as the persistent identity in multiplayer and cloud sync.
 var character_id: String = ""
@@ -100,6 +104,7 @@ func reset() -> void:
 	avatar_id = 0
 	player_name = ""
 	hardcore = false
+	mode_id = &"sp"
 	character_id = ""
 	active_save_id = ""
 	level = 1

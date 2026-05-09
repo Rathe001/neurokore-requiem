@@ -121,6 +121,19 @@ func get_inventory_capacity() -> int:
 	return min(BASE_INVENTORY_SIZE + bonus, MAX_INVENTORY_SIZE)
 
 
+## True when at least one inventory slot is empty within the current
+## capacity. Cheap pre-check used by pickup paths to bail on a full
+## inventory BEFORE a host RPC round-trip frees the world pickup —
+## without it, an MP client with a full bag would lose items the host
+## already queue_freed in good faith.
+func has_space() -> bool:
+	var cap := get_inventory_capacity()
+	for i in cap:
+		if inventory[i] == null:
+			return true
+	return false
+
+
 
 ## How many extra 1H weapon slots the player currently has unlocked, sourced
 ## from the Forged Amalgamation perk's `extra_weapon_slots` aggregate.

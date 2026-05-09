@@ -12,9 +12,9 @@ var _creation_panel: CharacterCreationPanel
 var _single_player_panel: ContinuePanel
 var _settings_panel: SettingsPanel
 var _multiplayer_panel: MultiplayerPanel
+var _global_chat_panel: GlobalChatPanel
 var _create_lobby_panel: CreateLobbyPanel
 var _browse_lobbies_panel: BrowseLobbiesPanel
-var _lobby_room_panel: LobbyRoomPanel
 var _mp_button: Button
 # What to do after the user picks (or creates) a character on the
 # ContinuePanel / CharacterCreationPanel: "sp" → load the save and
@@ -36,17 +36,21 @@ func _ready() -> void:
 	_build_version_stamp()
 	_show_main()
 	UIThemeState.changed.connect(_on_theme_changed)
-	# Lobby creation / join results route us into the LobbyRoom panel.
-	# Async because Steam answers these calls a few frames after the
-	# request — wiring through NetState signals keeps the UI flow
-	# synchronous-feeling without hard-coding timing.
+	# Lobby creation / join results drive the MP transition. The host's
+	# create-result triggers an immediate start_game (no waiting room);
+	# the joiner's join-result waits for game_starting to fire (host has
+	# already broadcast `started=1`), then drops them straight into the
+	# game scene. Both paths converge on _on_game_starting below — the
+	# old LobbyRoomPanel "wait until host clicks Start" interlude is gone.
 	NetState.lobby_created_result.connect(_on_lobby_created_result)
 	NetState.lobby_joined_result.connect(_on_lobby_joined_result)
+	NetState.game_starting.connect(_on_game_starting)
 
 func _exit_tree() -> void:
 	UIThemeState.changed.disconnect(_on_theme_changed)
 	NetState.lobby_created_result.disconnect(_on_lobby_created_result)
 	NetState.lobby_joined_result.disconnect(_on_lobby_joined_result)
+	NetState.game_starting.disconnect(_on_game_starting)
 	if SteamState.initialized_changed.is_connected(_on_steam_initialized_changed):
 		SteamState.initialized_changed.disconnect(_on_steam_initialized_changed)
 
@@ -66,22 +70,36 @@ func _build_multiplayer_panels() -> void:
 	_multiplayer_panel.browse_pressed.connect(_show_browse_lobbies)
 	add_child(_multiplayer_panel)
 
+	# Global chat is the new MP landing panel — character-selected players
+	# enter chat first, then choose Create Lobby / Browse Lobbies from
+	# inside it. The MultiplayerPanel above stays in the tree for callers
+	# that bypass the chat (currently none, but kept so we can reroute
+	# without rebuilding the tree).
+	_global_chat_panel = GlobalChatPanel.new()
+	_global_chat_panel.visible = false
+	_global_chat_panel.back_pressed.connect(_on_global_chat_back)
+	_global_chat_panel.create_lobby_pressed.connect(_show_create_lobby)
+	_global_chat_panel.browse_lobbies_pressed.connect(_show_browse_lobbies)
+	add_child(_global_chat_panel)
+
 	_create_lobby_panel = CreateLobbyPanel.new()
 	_create_lobby_panel.visible = false
-	_create_lobby_panel.back_pressed.connect(_show_multiplayer)
+	_create_lobby_panel.back_pressed.connect(_show_global_chat)
 	_create_lobby_panel.submit_pressed.connect(_on_create_submit)
 	add_child(_create_lobby_panel)
 
 	_browse_lobbies_panel = BrowseLobbiesPanel.new()
 	_browse_lobbies_panel.visible = false
-	_browse_lobbies_panel.back_pressed.connect(_show_multiplayer)
+	_browse_lobbies_panel.back_pressed.connect(_show_global_chat)
 	_browse_lobbies_panel.lobby_selected.connect(_on_browse_join)
 	add_child(_browse_lobbies_panel)
 
-	_lobby_room_panel = LobbyRoomPanel.new()
-	_lobby_room_panel.visible = false
-	_lobby_room_panel.leave_pressed.connect(_show_multiplayer)
-	add_child(_lobby_room_panel)
+	# LobbyRoomPanel intentionally NOT instantiated — we used to route
+	# through it as a "wait for host to start" interlude, but the new
+	# flow auto-starts on lobby create and auto-joins on lobby join.
+	# Keeping the panel in the tree caused a double scene-change race
+	# because its own _on_game_starting handler ran ahead of ours and
+	# left this StartupScreen detached when our deferred call fired.
 
 func _build_creation_panel() -> void:
 	_creation_panel = CharacterCreationPanel.new()
@@ -197,9 +215,9 @@ func _hide_all() -> void:
 	_single_player_panel.visible = false
 	_settings_panel.visible = false
 	_multiplayer_panel.visible = false
+	_global_chat_panel.visible = false
 	_create_lobby_panel.visible = false
 	_browse_lobbies_panel.visible = false
-	_lobby_room_panel.visible = false
 
 func _show_main() -> void:
 	_hide_all()
@@ -208,6 +226,11 @@ func _show_main() -> void:
 func _show_creation() -> void:
 	_hide_all()
 	_creation_panel.reset_state()
+	# Stamp the roster bucket BEFORE the panel becomes visible so any
+	# subsequent character writeback uses the right mode_id. SP and MP
+	# rosters are intentionally separate — a character created in one
+	# never appears in the other.
+	_creation_panel.mode_id = &"mp" if _post_select_target == "mp" else &"sp"
 	_creation_panel.visible = true
 
 func _show_settings() -> void:
@@ -240,9 +263,30 @@ func _show_multiplayer() -> void:
 	_multiplayer_panel.visible = true
 
 
+# New MP landing — show global chat. Auto-joins / creates the global
+# lobby if not already connected. Idempotent: re-showing the panel just
+# republishes the player's character data without re-joining.
+func _show_global_chat() -> void:
+	_hide_all()
+	GlobalChatState.ensure_in_global_chat()
+	_global_chat_panel.refresh()
+	_global_chat_panel.visible = true
+
+
+# Back from global chat = back to main menu. Drop out of the chat lobby
+# so the player frees their slot when they're not actively in MP.
+func _on_global_chat_back() -> void:
+	GlobalChatState.leave_global_chat()
+	_show_main()
+
+
 func _show_create_lobby() -> void:
 	_hide_all()
 	_create_lobby_panel.set_default_name("%s's Game" % SteamState.persona_name)
+	# Re-tint each show — the panel was built before any character was
+	# loaded, so the build-time accent is the neutral default. By the
+	# time we reach this screen the player has selected a class.
+	_create_lobby_panel.apply_theme()
 	_create_lobby_panel.visible = true
 
 
@@ -252,16 +296,16 @@ func _show_browse_lobbies() -> void:
 	_browse_lobbies_panel.refresh()
 
 
-func _show_lobby_room() -> void:
-	_hide_all()
-	_lobby_room_panel.visible = true
-	_lobby_room_panel.reset()
+# _show_lobby_room intentionally removed — the lobby room is no longer
+# part of the MP flow. Create / Join now auto-transition to the game
+# scene via NetState.game_starting → _on_game_starting below.
 
 
-func _on_create_submit(lobby_name: String, max_members: int, lobby_type: int) -> void:
-	NetState.create_lobby(lobby_name, max_members, lobby_type as NetState.LobbyType)
-	# Stay on the form until lobby_created_result fires — that handler
-	# decides whether to advance to the lobby room or surface an error.
+func _on_create_submit(lobby_name: String, max_members: int, lobby_type: int, password: String) -> void:
+	NetState.create_lobby(lobby_name, max_members, lobby_type as NetState.LobbyType, password)
+	# Stay on the form until lobby_created_result fires — _on_lobby_created_result
+	# fires start_game immediately and the game_starting signal swaps to
+	# the game scene from there.
 
 
 func _on_browse_join(target_lobby_id: int) -> void:
@@ -269,19 +313,57 @@ func _on_browse_join(target_lobby_id: int) -> void:
 
 
 func _on_lobby_created_result(success: bool, _new_lobby_id: int) -> void:
-	if success:
-		_show_lobby_room()
-	# On failure we just stay on the create form — the warning print
-	# from NetState lands in the editor output. A toast would be a Phase
-	# 1C polish pass.
+	if not success:
+		# On failure stay on the create form — the warning print from
+		# NetState lands in the editor output. A toast would be a polish
+		# pass; for now the user just clicks Create again.
+		return
+	# Host: kick the game off immediately. start_game() spins up the
+	# SteamMultiplayerPeer and stamps `started=1` on the lobby; the
+	# game_starting signal fires from the same call and our handler
+	# swaps to the game scene a frame later.
+	if not NetState.start_game():
+		push_warning("[StartupScreen] start_game failed after create — peer setup error.")
 
 
 func _on_lobby_joined_result(success: bool, _joined_lobby_id: int) -> void:
-	if success:
-		_show_lobby_room()
+	# Joiner stays on the global chat panel until the host's `started=1`
+	# is observed and game_starting fires (drop-in flow). No lobby room
+	# anymore — joiners drop straight into the game scene the instant
+	# the start signal lands.
+	if not success:
+		return
+
+
+func _on_game_starting() -> void:
+	# Defer one frame so the SteamMultiplayerPeer has settled into
+	# multiplayer.multiplayer_peer before the new scene's autoloads /
+	# nodes start querying it. Same rationale the old LobbyRoomPanel
+	# used; logic moved here so create / join paths converge.
+	call_deferred("_change_to_game_scene")
+
+
+func _change_to_game_scene() -> void:
+	# Defensive: the deferred dispatch can fire after the scene has
+	# already swapped (e.g. if anything else also handled game_starting
+	# and beat us to it). get_tree() returns null on a freed Control,
+	# so bail rather than null-deref.
+	var tree := get_tree()
+	if tree == null:
+		return
+	tree.change_scene_to_file(GAME_SCENE)
 
 func _show_single_player() -> void:
 	_hide_all()
+	# Reuse the same ContinuePanel instance for both flows but reconfigure
+	# its filter + title each time it appears so SP only ever lists
+	# &"sp" characters and MP only ever lists &"mp" characters.
+	if _post_select_target == "mp":
+		_single_player_panel.mode_filter = &"mp"
+		_single_player_panel.panel_title = "MENU_MULTIPLAYER"
+	else:
+		_single_player_panel.mode_filter = &"sp"
+		_single_player_panel.panel_title = "MENU_SINGLE_PLAYER"
 	_single_player_panel.refresh()
 	_single_player_panel.visible = true
 
@@ -290,7 +372,10 @@ func _on_character_selected(save_id: String) -> void:
 	if not SaveManager.load_game(save_id):
 		return
 	if _post_select_target == "mp":
-		_show_multiplayer()
+		# Land in global chat — character data is now loaded into
+		# PlayerState, which GlobalChatState reads when publishing the
+		# member-list metadata.
+		_show_global_chat()
 	else:
 		get_tree().change_scene_to_file(GAME_SCENE)
 
@@ -327,10 +412,11 @@ func _on_start_pressed() -> void:
 	PlayerState.character_id = _generate_uuid()
 	SaveManager.save_game()
 	# MP path skips the immediate game-scene launch — character is now
-	# saved and PlayerState populated, advance to the multiplayer panel
-	# so the user can host or browse with this fresh character.
+	# saved and PlayerState populated, advance to the global chat lobby
+	# (the new MP landing) so the user can socialize while choosing
+	# whether to host or browse.
 	if _post_select_target == "mp":
-		_show_multiplayer()
+		_show_global_chat()
 	else:
 		get_tree().change_scene_to_file(GAME_SCENE)
 

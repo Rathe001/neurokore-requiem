@@ -14,6 +14,15 @@ const PLAYER_LAYER_MASK := 4
 # Enemy-fired projectiles include this in their mask so they can hit
 # pets the same way they can hit the player.
 const CHARMED_ALLY_LAYER_MASK := 16
+# Decorative pillars sit on Layer 8 — physical obstacles that block
+# bullets the same as walls but stay transparent to LoS culling and
+# proximity lighting (which still raycast Layer 1 only).
+const PILLAR_LAYER_MASK := 128
+# Combined "blocks projectiles" world mask — walls/floors/ceilings on
+# Layer 1, decorative pillars on Layer 8. Used both for the per-frame
+# sweep raycast and for the active collision_mask alongside the target's
+# own layer.
+const PROJECTILE_WORLD_MASK := WORLD_LAYER_MASK | PILLAR_LAYER_MASK
 
 var direction: Vector3 = Vector3.FORWARD
 var speed: float = 14.0
@@ -40,6 +49,11 @@ var target_group: StringName = &"enemies"
 var blast_radius: float = 0.0
 ## Visual scale multiplier for the mesh + glow. 1.0 = default bolt size.
 var visual_scale: float = 1.0
+## True when the projectile represents a physical bullet (LMG, SMG, sniper,
+## RPG fire). Swaps the visual to a thin gray streak with a low-emissive
+## warble — reads as a heat-distortion trail rather than the energy bolts
+## of plasma/laser weapons. Set by the spawner before reset().
+var is_bullet: bool = false
 
 var _traveled: float = 0.0
 var _hit: bool = false
@@ -52,7 +66,33 @@ var _released: bool = false
 # SphereMesh from the .tscn so the heavier hit reads as a glowing orb.
 # The discriminator is `blast_radius > 0` set by the spawner before reset().
 const LASER_BOX_SIZE: Vector3 = Vector3(0.07, 0.07, 0.55)
+# Bullet visual is split into two pieces:
+#   • Visual (existing MeshInstance3D, used as the "head"): a small flat
+#     rectangle leading the projectile so the player sees a discrete
+#     round, not a glowing rod.
+#   • Trail (created at runtime, child of the projectile): a long thin
+#     box BEHIND the head running the shockwave shader, so the round
+#     leaves a wake of refracted screen pixels rather than a
+#     symmetrical bubble around itself. Bubble→trail collapses the
+#     screen footprint per bullet, which fixes the texture-flicker /
+#     vibration when many SMG rounds are in flight overlapping the
+#     world.
+const BULLET_HEAD_SIZE: Vector3 = Vector3(0.05, 0.05, 0.16)
+const BULLET_TRAIL_SIZE: Vector3 = Vector3(0.07, 0.07, 1.4)
+# Distortion / chroma values tuned smaller than the melee shockwave —
+# a per-bullet wake has to read at a glance from a single moving
+# round, so we trade intensity for clarity.
+const BULLET_DISTORTION := 0.045
+const BULLET_CHROMA := 0.008
+const BULLET_RIM_STRENGTH := 0.18
+const BULLET_BODY_ALPHA := 0.05
+const BULLET_RIM_ALPHA := 0.45
+const BULLET_SHADER: Shader = preload("res://scripts/prototype/shockwave_bubble.gdshader")
 static var _laser_mesh: BoxMesh = null
+static var _bullet_head_mesh: BoxMesh = null
+static var _bullet_trail_mesh: BoxMesh = null
+static var _bullet_head_material: StandardMaterial3D = null
+var _trail_node: MeshInstance3D = null
 # Cached on first reset so we can swap back to the authored sphere when an
 # AoE shot is acquired from the same pool slot that previously held a bullet.
 var _sphere_mesh_cache: Mesh = null
@@ -63,14 +103,50 @@ var _sphere_mesh_cache: Mesh = null
 # off the .tscn-defined material the first time a projectile resets.
 const PLAYER_PROJECTILE_COLOR: Color = Color(0.4, 0.85, 1.0, 1.0)
 const ENEMY_PROJECTILE_COLOR: Color = Color(1.0, 0.88, 0.15, 1.0)
+# Physical bullets — desaturated near-white tracer, very low emission so
+# the streak reads as motion blur / heat distortion rather than an energy
+# bolt. Same mesh footprint as the laser variant, just retinted.
+const BULLET_PROJECTILE_COLOR: Color = Color(0.92, 0.92, 0.88, 0.65)
 static var _player_material: StandardMaterial3D = null
 static var _enemy_material: StandardMaterial3D = null
+static var _bullet_material: ShaderMaterial = null
 
 static func _get_laser_mesh() -> BoxMesh:
 	if _laser_mesh == null:
 		_laser_mesh = BoxMesh.new()
 		_laser_mesh.size = LASER_BOX_SIZE
 	return _laser_mesh
+
+
+static func _get_bullet_head_mesh() -> BoxMesh:
+	if _bullet_head_mesh == null:
+		_bullet_head_mesh = BoxMesh.new()
+		_bullet_head_mesh.size = BULLET_HEAD_SIZE
+	return _bullet_head_mesh
+
+
+static func _get_bullet_trail_mesh() -> BoxMesh:
+	if _bullet_trail_mesh == null:
+		_bullet_trail_mesh = BoxMesh.new()
+		_bullet_trail_mesh.size = BULLET_TRAIL_SIZE
+	return _bullet_trail_mesh
+
+
+static func _get_bullet_head_material() -> StandardMaterial3D:
+	if _bullet_head_material == null:
+		# Solid but dim — barely visible "round" leading the trail.
+		# Unshaded so it reads the same in dark zones / under any
+		# lighting profile, no emission glow that would betray the
+		# physical-bullet identity.
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.albedo_color = Color(0.85, 0.82, 0.74, 0.85)
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.emission_enabled = true
+		m.emission = Color(0.95, 0.92, 0.85, 1.0)
+		m.emission_energy_multiplier = 0.25
+		_bullet_head_material = m
+	return _bullet_head_material
 
 # First call captures the authored cyan material as the player variant, then
 # clones+retints it for the enemy variant. Subsequent calls are free.
@@ -82,6 +158,45 @@ static func _ensure_side_materials(default_mat: StandardMaterial3D) -> void:
 		m.albedo_color = ENEMY_PROJECTILE_COLOR
 		m.emission = ENEMY_PROJECTILE_COLOR
 		_enemy_material = m
+	_get_bullet_trail_material()
+
+
+# Trail material — screen-space refraction shader (same shader the
+# melee shockwaves use). Applied to the wake box behind the bullet
+# head; the head itself uses the dim unshaded head material so the
+# round reads as a discrete object instead of a refraction blob.
+# Decoupled from _ensure_side_materials so callers (e.g. _ensure_trail_node)
+# can pull the trail material without depending on the projectile's
+# Visual having an authored StandardMaterial3D.
+static func _get_bullet_trail_material() -> ShaderMaterial:
+	if _bullet_material == null:
+		var b := ShaderMaterial.new()
+		b.shader = BULLET_SHADER
+		b.set_shader_parameter(&"distortion", BULLET_DISTORTION)
+		b.set_shader_parameter(&"chroma", BULLET_CHROMA)
+		b.set_shader_parameter(&"rim_strength", BULLET_RIM_STRENGTH)
+		b.set_shader_parameter(&"body_alpha", BULLET_BODY_ALPHA)
+		b.set_shader_parameter(&"rim_alpha_max", BULLET_RIM_ALPHA)
+		b.set_shader_parameter(&"intensity", 1.0)
+		_bullet_material = b
+	return _bullet_material
+
+
+func _ensure_trail_node() -> void:
+	if _trail_node != null:
+		return
+	var node := MeshInstance3D.new()
+	node.name = "Trail"
+	node.mesh = _get_bullet_trail_mesh()
+	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	node.material_override = _get_bullet_trail_material()
+	# +Z is "behind" the projectile after look_at (which faces -Z toward
+	# travel direction). Half the trail length back puts the front face
+	# of the trail box flush with the projectile origin and extends the
+	# wake away from the round's path of travel.
+	node.position = Vector3(0.0, 0.0, BULLET_TRAIL_SIZE.z * 0.5)
+	add_child(node)
+	_trail_node = node
 
 func _ready() -> void:
 	_connect_signal()
@@ -103,32 +218,65 @@ func reset() -> void:
 	# only the enemy layer — pets are filtered by the script-level
 	# is_player_friendly check in _on_body_entered.
 	var target_mask := (PLAYER_LAYER_MASK | CHARMED_ALLY_LAYER_MASK) if target_group == &"player" else ENEMY_LAYER_MASK
-	collision_mask = WORLD_LAYER_MASK | target_mask
+	collision_mask = PROJECTILE_WORLD_MASK | target_mask
 	# Swap visual based on shot type. AoE shots keep the authored sphere;
 	# regular bullets get the elongated laser box, oriented along travel
 	# (look_at on the projectile node so the box's Z axis aligns with
 	# direction and the streak reads as motion blur).
 	var enemy_fire := target_group == &"player"
-	var tint: Color = ENEMY_PROJECTILE_COLOR if enemy_fire else PLAYER_PROJECTILE_COLOR
+	# Tint priority: bullet visuals take precedence over the player/enemy
+	# laser tints — physical bullets read the same regardless of who fired.
+	var tint: Color
+	if is_bullet:
+		tint = BULLET_PROJECTILE_COLOR
+	elif enemy_fire:
+		tint = ENEMY_PROJECTILE_COLOR
+	else:
+		tint = PLAYER_PROJECTILE_COLOR
 	var vis := get_node_or_null(^"Visual") as MeshInstance3D
 	if vis != null:
 		if _sphere_mesh_cache == null:
 			_sphere_mesh_cache = vis.mesh
 		if blast_radius > 0.0:
 			vis.mesh = _sphere_mesh_cache
+			vis.position = Vector3.ZERO
+		elif is_bullet:
+			# Bullets: visual mesh becomes a small rectangular HEAD placed
+			# slightly ahead of the projectile origin (-Z is travel after
+			# the look_at below). The distortion TRAIL is a separate child
+			# (_trail_node) extending behind. This produces the
+			# rectangle-leading-a-trail look instead of a symmetrical
+			# bubble that overlaps walls and produces screen-shimmer.
+			vis.mesh = _get_bullet_head_mesh()
+			vis.position = Vector3(0.0, 0.0, -BULLET_HEAD_SIZE.z * 0.5)
 		else:
 			vis.mesh = _get_laser_mesh()
+			vis.position = Vector3.ZERO
 		vis.scale = Vector3.ONE * visual_scale
 		# Side-tint the material. The authored material on the .tscn becomes
 		# the player variant; the enemy variant is cloned-and-retinted on
-		# first need. Both are reused across pool acquires.
+		# first need. Bullet head uses a dim unshaded material; the
+		# distortion is on the trail node, not the head.
 		var src := vis.material_override as StandardMaterial3D
 		if src != null:
 			_ensure_side_materials(src)
-		if enemy_fire and _enemy_material != null:
+		if is_bullet:
+			vis.material_override = _get_bullet_head_material()
+		elif enemy_fire and _enemy_material != null:
 			vis.material_override = _enemy_material
 		elif _player_material != null:
 			vis.material_override = _player_material
+	# Distortion trail — created lazily so non-bullet projectiles in the
+	# pool never carry the extra node. For bullets, position behind the
+	# projectile origin and run the same screen-refraction shader the
+	# melee shockwaves use; the box's length defines the wake length.
+	if is_bullet:
+		_ensure_trail_node()
+		if _trail_node != null:
+			_trail_node.visible = true
+			_trail_node.scale = Vector3.ONE * visual_scale
+	elif _trail_node != null:
+		_trail_node.visible = false
 	if blast_radius <= 0.0 and direction.length_squared() > 0.0001:
 		# look_at requires a target distinct from current position; offset
 		# along direction (already-normalized at spawn). Up vector defaults
@@ -140,11 +288,20 @@ func reset() -> void:
 		rotation = Vector3.ZERO
 	var glow := get_node_or_null(^"Glow") as OmniLight3D
 	if glow != null:
-		glow.omni_range = 5.0 * visual_scale
-		glow.light_energy = 3.0 * visual_scale
-		# Drives _projectile_color() too — impact bursts and explosion VFX
-		# pick up the side color automatically.
-		glow.light_color = tint
+		# Bullets are PHYSICAL — no glow halo at all. This also kills the
+		# stale "fires-north" phantom seen in playtest where the laser
+		# Glow's prior position lingered for a frame on a re-acquired pool
+		# slot before reset overwrote it.
+		if is_bullet:
+			glow.visible = false
+			glow.light_energy = 0.0
+		else:
+			glow.visible = true
+			glow.omni_range = 5.0 * visual_scale
+			glow.light_energy = 3.0 * visual_scale
+			# Drives _projectile_color() too — impact bursts and explosion
+			# VFX pick up the side color automatically.
+			glow.light_color = tint
 	# body_entered only fires when a body crosses INTO the area on a later
 	# physics frame; if a target is already overlapping at spawn (close-
 	# range fire), the signal never triggers. Defer a sweep over current
@@ -175,6 +332,7 @@ func _pool_release() -> void:
 	ignore_melee_penalty = false
 	blast_radius = 0.0
 	visual_scale = 1.0
+	is_bullet = false
 
 func _physics_process(delta: float) -> void:
 	var step := speed * delta
@@ -189,7 +347,7 @@ func _physics_process(delta: float) -> void:
 	if space != null:
 		_ray_query.from = from
 		_ray_query.to = to
-		_ray_query.collision_mask = WORLD_LAYER_MASK
+		_ray_query.collision_mask = PROJECTILE_WORLD_MASK
 		_ray_query.collide_with_areas = false
 		_ray_query.collide_with_bodies = true
 		var hit := space.intersect_ray(_ray_query)
@@ -204,7 +362,10 @@ func _physics_process(delta: float) -> void:
 			# any targets clustered near the impact point.
 			if blast_radius > 0.0:
 				_explode(impact_pos)
-			else:
+			elif not is_bullet:
+				# Bullets are physical rounds — they punch holes, they don't
+				# detonate against walls. Skip the energy-burst flash that
+				# laser/plasma shots use for their wall-impact tell.
 				CombatVisuals.spawn_impact_burst(self, impact_pos, _projectile_color())
 			_release()
 			return
@@ -267,7 +428,12 @@ func _on_body_entered(body: Node3D) -> void:
 
 
 func _hit_single(body: Node3D, impact_pos: Vector3) -> void:
-	CombatVisuals.spawn_impact_burst(self, impact_pos, _projectile_color())
+	# Bullets don't burst — they're kinetic rounds, not energy. Damage
+	# numbers + the target's hit-flash are the feedback. Energy weapons
+	# (laser pistol / plasma rifle / etc.) keep the bright impact flash
+	# they've always had.
+	if not is_bullet:
+		CombatVisuals.spawn_impact_burst(self, impact_pos, _projectile_color())
 	var is_crit := _roll_crit()
 	var dmg := _roll_damage(is_crit)
 	if target_group == &"player":
@@ -297,6 +463,28 @@ func _explode(impact_pos: Vector3) -> void:
 			_apply_exile_curse_if_active(target)
 			_apply_mindlink(target, dmg, is_crit)
 			_try_spawn_isr_drone(target)
+	# Ragdoll corpses caught in the blast tumble away from impact_pos.
+	# Same falloff curve as the grenade's _detonate impulse so AoE shots
+	# (charged plasma, future explosive projectiles) feel consistent with
+	# thrown explosives.
+	for c in get_tree().get_nodes_in_group(&"ragdoll_corpses"):
+		var rb := c as PrototypeRagdollCorpse
+		if rb == null or not is_instance_valid(rb):
+			continue
+		var d := rb.global_position.distance_to(impact_pos)
+		if d > blast_radius:
+			continue
+		var t := d / blast_radius
+		var force: float = lerp(CORPSE_IMPULSE_MAX, CORPSE_IMPULSE_MIN, t)
+		rb.apply_explosion_impulse(impact_pos, force)
+
+
+# Linear-impulse force applied to ragdoll corpses caught in an AoE shot's
+# blast. Same scale as grenade explosions (CORPSE_IMPULSE_MAX/MIN in
+# prototype_grenade.gd) so a charged plasma shot and a frag grenade feel
+# similar at the corpse-physics level.
+const CORPSE_IMPULSE_MAX: float = 12.0
+const CORPSE_IMPULSE_MIN: float = 3.0
 
 
 # Duplicates PlayerCombat.EXILE_CURSE_DURATION rather than reaching across

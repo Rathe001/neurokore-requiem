@@ -20,7 +20,12 @@ class_name PrototypeCamera
 # Pitch is angle from vertical: 0 rad = camera straight overhead (top-down),
 # PI/2 = camera at target's height. Clamped well short of horizontal so the
 # floor doesn't disappear behind the player.
-const PITCH_MIN := 0.0
+# PITCH_MIN intentionally NOT 0 — at exactly straight-down, the camera
+# forward vector flattens to zero in PrototypePlayer's wish-dir math and
+# W/S input becomes ambiguous (read as "reversed"). 0.06 rad ≈ 3.4°
+# off vertical: visually indistinguishable from true top-down but keeps
+# basis.z non-degenerate in the horizontal plane.
+const PITCH_MIN := 0.06
 const PITCH_MAX := PI / 3.0  # 60° from vertical = 30° above the horizon
 
 # Tolerance for "at default pitch" — middle-mouse drags accumulate small

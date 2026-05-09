@@ -1,15 +1,17 @@
 extends Control
 class_name CharacterPanel
 
-const PANEL_SIZE := Vector2(380.0, 420.0)
-const SHEET_HEIGHT := 240.0
-const STATS_POS := Vector2(16.0, 34.0)
-const STATS_SIZE := Vector2(200.0, 200.0)
-const STAT_FONT_SIZE := 11
-const EQUIP_SLOT_SIZE := Vector2(38.0, 38.0)
-const EQUIP_GAP := 4.0
+const PANEL_SIZE := Vector2(420.0, 460.0)
+const SHEET_HEIGHT := 270.0
+const STATS_POS := Vector2(14.0, 34.0)
+const STATS_SIZE := Vector2(180.0, 230.0)
+const STAT_FONT_SIZE := 10
+const STAT_VALUE_FONT_SIZE := 10
+const EQUIP_SLOT_SIZE := Vector2(40.0, 40.0)
+const EQUIP_GAP := 5.0
 const EQUIP_COLS := 3
 const EQUIP_ROWS := 3
+const AVATAR_SIZE := Vector2(40.0, 40.0)
 const INV_SLOT_SIZE := Vector2(26.0, 26.0)
 const INV_GAP := 2.0
 const INV_COLS := 8
@@ -17,16 +19,22 @@ const INV_COLS := 8
 const BACKDROP_COLOR := Color(0.0, 0.0, 0.0, 0.55)
 
 
+# Standard ARPG arrangement around a central character avatar:
+#   [head ][chest ][hands ]      ← armor row (top)
+#   [weap ][AVATAR][offhd ]      ← combat hands row, avatar in middle
+#   [legs ][feet  ][backp ]      ← lower body + utility row
+# The center cell is reserved for the avatar/character-model preview, not
+# an item slot — id is empty so _build_character_sheet skips it.
 const EQUIP_SLOTS: Array[Dictionary] = [
-	{"row": 0, "col": 0, "label_key": "EQUIP_HEAD", "id": &"head", "accepts": &"head"},
-	{"row": 0, "col": 1, "label_key": "EQUIP_CHEST", "id": &"chest", "accepts": &"chest"},
-	{"row": 0, "col": 2, "label_key": "EQUIP_HANDS", "id": &"hands", "accepts": &"hands"},
-	{"row": 1, "col": 0, "label_key": "EQUIP_WEAPON", "id": &"weapon", "accepts": &"weapon"},
-	{"row": 1, "col": 1, "label_key": "EQUIP_BACKPACK", "id": &"backpack", "accepts": &"backpack"},
-	{"row": 1, "col": 2, "label_key": "EQUIP_OFFHAND", "id": &"offhand", "accepts": &"offhand"},
-	{"row": 2, "col": 0, "label_key": "EQUIP_LEGS", "id": &"legs", "accepts": &"legs"},
-	{"row": 2, "col": 1, "label_key": "EQUIP_FEET", "id": &"feet", "accepts": &"feet"},
-	{"row": 2, "col": 2, "label_key": "", "id": &"", "accepts": &""},
+	{"row": 0, "col": 0, "label_key": "EQUIP_HEAD",     "id": &"head",     "accepts": &"head"},
+	{"row": 0, "col": 1, "label_key": "EQUIP_CHEST",    "id": &"chest",    "accepts": &"chest"},
+	{"row": 0, "col": 2, "label_key": "EQUIP_HANDS",    "id": &"hands",    "accepts": &"hands"},
+	{"row": 1, "col": 0, "label_key": "EQUIP_WEAPON",   "id": &"weapon",   "accepts": &"weapon"},
+	{"row": 1, "col": 1, "label_key": "",               "id": &"",         "accepts": &""},
+	{"row": 1, "col": 2, "label_key": "EQUIP_OFFHAND",  "id": &"offhand",  "accepts": &"offhand"},
+	{"row": 2, "col": 0, "label_key": "EQUIP_LEGS",     "id": &"legs",     "accepts": &"legs"},
+	{"row": 2, "col": 1, "label_key": "EQUIP_FEET",     "id": &"feet",     "accepts": &"feet"},
+	{"row": 2, "col": 2, "label_key": "EQUIP_BACKPACK", "id": &"backpack", "accepts": &"backpack"},
 ]
 
 # Forged Amalgamation perk-gated extra weapon slots. Rendered on row 3 to
@@ -216,6 +224,10 @@ func _on_slot_right_clicked(slot: ItemSlot) -> void:
 		_quick_equip(slot)
 	else:
 		_quick_unequip(slot)
+	# Cursor didn't move but the slot's contents did — refresh the tooltip
+	# in-place so it reflects whatever item ends up under the cursor (the
+	# displaced piece when a 2H swap reuses this slot, or empty otherwise).
+	slot.refresh_tooltip()
 
 func _quick_equip(slot: ItemSlot) -> void:
 	var item := slot.current_item()
@@ -357,10 +369,14 @@ func _build_character_sheet(parent: Control) -> void:
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	parent.add_child(title)
 
+	# ── Stats column (compact) ─────────────────────────────────────────
+	# Identity rows on top (name/class/level), then live numbers (health/
+	# resource/credits), then a 2-column grid of combat stats so the
+	# whole block fits the slimmer sheet next to the equipment grid.
 	var stats := VBoxContainer.new()
 	stats.position = STATS_POS
 	stats.size = STATS_SIZE
-	stats.add_theme_constant_override(&"separation", 1)
+	stats.add_theme_constant_override(&"separation", 0)
 	parent.add_child(stats)
 	# Use the player's chosen name from character creation; fall back to the
 	# generic "Operator" label only when the prototype scene bypasses creation.
@@ -377,21 +393,37 @@ func _build_character_sheet(parent: Control) -> void:
 	_credits_label.add_theme_color_override(&"font_color", p.credits)
 	stats.add_child(_make_stat_row_with_value("CHARACTER_PANEL_CREDITS", _credits_label))
 
-	# Combat stats — updated via stats_changed signal from the player.
+	# Tiny separator before the combat-stat grid for breathing room.
+	var spacer := Control.new()
+	spacer.custom_minimum_size = Vector2(0.0, 4.0)
+	stats.add_child(spacer)
+
+	# Combat stats live in a 2-column GridContainer so the same vertical
+	# space holds twice as many rows. _make_stat_pair adds a Label + value
+	# Label as adjacent grid cells. Updated via stats_changed.
+	var combat_grid := GridContainer.new()
+	combat_grid.columns = 2
+	combat_grid.add_theme_constant_override(&"h_separation", 12)
+	combat_grid.add_theme_constant_override(&"v_separation", 1)
+	stats.add_child(combat_grid)
 	_dmg_red_label = _make_stat_value("0")
-	stats.add_child(_make_stat_row_with_value("Armor", _dmg_red_label))
-	_crit_label = _make_stat_value("0%")
-	stats.add_child(_make_stat_row_with_value("Crit", _crit_label))
-	_hit_label = _make_stat_value("100%")
-	stats.add_child(_make_stat_row_with_value("Accuracy", _hit_label))
-	_atk_spd_label = _make_stat_value("+0%")
-	stats.add_child(_make_stat_row_with_value("Atk Spd", _atk_spd_label))
+	_make_stat_pair(combat_grid, "Armor", _dmg_red_label)
+	_crit_label = _make_stat_value("—")
+	_make_stat_pair(combat_grid, "Crit", _crit_label)
+	_hit_label = _make_stat_value("—")
+	_make_stat_pair(combat_grid, "Accuracy", _hit_label)
+	_atk_spd_label = _make_stat_value("—")
+	_make_stat_pair(combat_grid, "Atk Spd", _atk_spd_label)
 	_move_spd_label = _make_stat_value("+0%")
-	stats.add_child(_make_stat_row_with_value("Move Spd", _move_spd_label))
+	_make_stat_pair(combat_grid, "Move Spd", _move_spd_label)
 	_cdr_label = _make_stat_value("0%")
-	stats.add_child(_make_stat_row_with_value("CDR", _cdr_label))
+	_make_stat_pair(combat_grid, "CDR", _cdr_label)
 
-
+	# ── Equipment + character avatar ──────────────────────────────────
+	# 3×3 grid centered on a TextureRect that shows the player's avatar
+	# (chosen in character creation). The center cell of EQUIP_SLOTS is
+	# the placeholder skipped in the slot loop below; we drop the avatar
+	# in there instead, sized to match a slot.
 	var equip_total_width := float(EQUIP_COLS) * EQUIP_SLOT_SIZE.x + float(EQUIP_COLS - 1) * EQUIP_GAP
 	var equip_total_height := float(EQUIP_ROWS) * EQUIP_SLOT_SIZE.y + float(EQUIP_ROWS - 1) * EQUIP_GAP
 	var equip := Control.new()
@@ -401,10 +433,13 @@ func _build_character_sheet(parent: Control) -> void:
 	parent.add_child(equip)
 	for entry in EQUIP_SLOTS:
 		var id: StringName = entry["id"]
-		if id == &"":
-			continue  # placeholder entry — skip
 		var row: int = entry["row"]
 		var col: int = entry["col"]
+		if id == &"":
+			# Center cell = avatar/character-model preview. Same dimensions
+			# as a slot so the surrounding equipment grid stays square.
+			_build_avatar_preview(equip, row, col)
+			continue
 		var label_key: String = entry.get("label_key", "")
 		var accepts: StringName = entry["accepts"]
 		var slot := ItemSlot.new()
@@ -444,6 +479,77 @@ func _build_character_sheet(parent: Control) -> void:
 		equip.add_child(slot)
 		_all_slots.append(slot)
 		_extra_weapon_slots.append(slot)
+
+
+# Drops a TextureRect at the (row, col) cell of the equipment grid showing
+# the player's chosen avatar. Falls back to the class glyph when no
+# avatar texture is loaded (legacy prototype-scene path that bypasses
+# character creation). Sized identical to the surrounding slots so the
+# 3×3 grid stays visually square.
+func _build_avatar_preview(equip: Control, row: int, col: int) -> void:
+	var p := UIThemeState.palette
+	# Tinted background frame so the avatar sits inside a cell that
+	# matches the equipment slots' silhouette (same border width, same bg).
+	var bg := ColorRect.new()
+	bg.color = p.slot_bg
+	bg.size = AVATAR_SIZE
+	bg.custom_minimum_size = AVATAR_SIZE
+	bg.position = Vector2(
+		float(col) * (EQUIP_SLOT_SIZE.x + EQUIP_GAP),
+		float(row) * (EQUIP_SLOT_SIZE.y + EQUIP_GAP),
+	)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	equip.add_child(bg)
+
+	var border := ReferenceRect.new()
+	border.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	border.border_color = Color(p.slot_border.r, p.slot_border.g, p.slot_border.b, 0.6)
+	border.border_width = 1.0
+	border.editor_only = false
+	border.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bg.add_child(border)
+
+	var tex := PlayerState.avatar_texture()
+	if tex != null:
+		var img := TextureRect.new()
+		img.texture = tex
+		img.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		img.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		img.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		img.offset_left = 2.0
+		img.offset_top = 2.0
+		img.offset_right = -2.0
+		img.offset_bottom = -2.0
+		img.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		bg.add_child(img)
+	else:
+		# No texture loaded — fall back to the class glyph centered.
+		var class_def: Dictionary = AttributeState.CLASS_DEFINITIONS.get(PlayerState.class_id, {})
+		var glyph: String = String(class_def.get(&"glyph", "?"))
+		var lbl := Label.new()
+		lbl.text = glyph
+		lbl.add_theme_font_size_override(&"font_size", 22)
+		lbl.add_theme_color_override(&"font_color", p.accent)
+		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		bg.add_child(lbl)
+
+
+# Adds a (label, value) pair as two adjacent cells in a GridContainer
+# (column count = 2). Label uses the small SubLabel theme variation so
+# both fit on a single 11-pt row.
+func _make_stat_pair(grid: GridContainer, label_text: String, value_label: Label) -> void:
+	var key := Label.new()
+	key.text = label_text
+	key.theme_type_variation = &"SubLabel"
+	key.add_theme_font_size_override(&"font_size", STAT_FONT_SIZE)
+	value_label.add_theme_font_size_override(&"font_size", STAT_VALUE_FONT_SIZE)
+	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	value_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	grid.add_child(key)
+	grid.add_child(value_label)
 
 
 
@@ -595,22 +701,32 @@ func _on_stats_changed() -> void:
 	var p_node: PrototypePlayer = _player as PrototypePlayer
 	if p_node == null:
 		return
+	# Damage reduction (armor) and gear-driven percentages are always
+	# valid — they don't depend on a weapon being equipped.
 	if _dmg_red_label != null:
-		_dmg_red_label.text = str(p_node._gear_damage_reduction)
-	if _crit_label != null:
-		var crit_pct: float = p_node._gear_crit_chance_bonus * 100.0
-		_crit_label.text = "%d%%" % int(round(crit_pct))
-	if _hit_label != null:
-		var hit_pct: float = 100.0 + p_node._gear_hit_chance_bonus * 100.0
-		_hit_label.text = "%d%%" % int(round(hit_pct))
-	if _atk_spd_label != null:
-		var atk_pct: float = p_node._gear_attack_speed_bonus * 100.0
-		_atk_spd_label.text = "+%d%%" % int(round(atk_pct))
+		_dmg_red_label.text = str(p_node.get_effective_armor())
 	if _move_spd_label != null:
-		_move_spd_label.text = "+%d%%" % p_node._gear_move_speed_bonus
+		_move_spd_label.text = "+%d%%" % p_node.get_effective_move_speed_pct()
 	if _cdr_label != null:
-		var cdr_pct: float = p_node._gear_cooldown_reduction * 100.0
-		_cdr_label.text = "%d%%" % int(round(cdr_pct))
+		_cdr_label.text = "%d%%" % p_node.get_effective_cdr_pct()
+	# Weapon-derived stats: render a dash when no weapon is equipped so
+	# the player sees "this stat depends on your weapon" instead of a
+	# misleading "0%". Helpers return -1 in that case.
+	if _crit_label != null:
+		var crit := p_node.get_effective_crit_pct()
+		_crit_label.text = "%d%%" % crit if crit >= 0 else "—"
+	if _hit_label != null:
+		var hit := p_node.get_effective_accuracy_pct()
+		_hit_label.text = "%d%%" % hit if hit >= 0 else "—"
+	if _atk_spd_label != null:
+		var atk := p_node.get_effective_atk_speed_delta_pct()
+		if atk == -1 and not p_node.has_main_weapon():
+			_atk_spd_label.text = "—"
+		else:
+			# Format with sign so 0% reads as "+0%" consistent with move
+			# speed; negative deltas show a minus.
+			var prefix := "+" if atk >= 0 else ""
+			_atk_spd_label.text = "%s%d%%" % [prefix, atk]
 
 func _class_label() -> String:
 	if PlayerState.spec_id != &"":

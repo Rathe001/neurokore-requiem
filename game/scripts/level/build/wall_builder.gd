@@ -101,12 +101,19 @@ static func build_corridor_walls(ctx: LevelBuildContext, center: Vector3, cd: Co
 	var thick := ctx.theme.wall_thickness
 	var hw := cd.width * 0.5
 	var wall_y := CORRIDOR_WALL_Y_BIAS
+	# Extend by ~thick (full room-wall-thickness) on each end instead of
+	# half. Previously the corridor wall reached only halfway into the
+	# room wall thickness, leaving a sub-pixel sliver between the wall
+	# end and the room's inner face that showed as a thin "gap" at every
+	# door opening. SEAM stays sub-millimetre so the now-larger overlap
+	# still avoids z-fight against the room geometry it abuts.
+	var ext := thick * 2.0 - SEAM * 2.0
 	if cd.axis == CorridorDef.Axis.Z:
-		create_wall(ctx, center + Vector3(hw, wall_y, 0), thick, cd.length + thick - SEAM, ctx.wall_material_alt)
-		create_wall(ctx, center + Vector3(-hw, wall_y, 0), thick, cd.length + thick - SEAM, ctx.wall_material_alt)
+		create_wall(ctx, center + Vector3(hw, wall_y, 0), thick, cd.length + ext, ctx.wall_material_alt)
+		create_wall(ctx, center + Vector3(-hw, wall_y, 0), thick, cd.length + ext, ctx.wall_material_alt)
 	else:
-		create_wall(ctx, center + Vector3(0, wall_y, hw), cd.length + thick - SEAM * 2.0, thick, ctx.wall_material_alt)
-		create_wall(ctx, center + Vector3(0, wall_y, -hw), cd.length + thick - SEAM * 2.0, thick, ctx.wall_material_alt)
+		create_wall(ctx, center + Vector3(0, wall_y, hw), cd.length + ext, thick, ctx.wall_material_alt)
+		create_wall(ctx, center + Vector3(0, wall_y, -hw), cd.length + ext, thick, ctx.wall_material_alt)
 
 
 # Full-height static column from floor to ceiling — architectural blocker
@@ -120,6 +127,13 @@ static func create_decorative_pillar(ctx: LevelBuildContext, pos: Vector3, size:
 	body.name = &"DecorativePillar"
 	body.input_ray_pickable = false
 	body.transform.origin = Vector3(pos.x, height * 0.5, pos.z)
+	# Layer 8 (Pillars) — its own physics layer so player/enemy/projectile
+	# movement + impacts ALL collide with pillars (their masks include
+	# Layer 8) while LoS culling and ProximityLighting (which mask Layer 1
+	# only) ignore them. End result: pillars block bullets and bodies
+	# without darkening the screen by eating proximity-light raycasts.
+	body.collision_layer = 128
+	body.collision_mask = 0
 
 	var col := CollisionShape3D.new()
 	col.shape = BoxShape3D.new()

@@ -143,13 +143,22 @@ func _on_hover_exit() -> void:
 
 ## Called by PrototypePlayer._interact_with_hovered after distance gating
 ## (and after the walk-to-interact path catches up if the click was made
-## from out of range). Returns silently if the inventory is full so the
-## drop sits on the floor instead of vanishing.
+## from out of range). Bails (item stays on ground) if the inventory is
+## full, surfacing a banner so the player knows why the pickup didn't
+## happen instead of failing silently.
 func interact(_user: Node) -> void:
 	if _popping:
 		return
 	# Non-owned items can't be picked up.
 	if not _is_owned_by_local_player():
+		return
+	# Bag full: drop the pickup back on the ground (no-op — the node is
+	# already there) and notify. The check has to happen BEFORE the MP
+	# client RPC path: the host accepts the pickup eagerly and queue_frees
+	# its world copy, so a client whose _confirm_item_pickup arrives with
+	# no space would lose the item entirely.
+	if not InventoryState.has_space():
+		_notify_inventory_full()
 		return
 	# SP or host: pick up directly.
 	if not NetState.is_in_lobby():
@@ -163,6 +172,19 @@ func interact(_user: Node) -> void:
 	var container := _find_pickups_container()
 	if container != null:
 		container.request_item_pickup.rpc_id(1, get_path())
+
+
+func _notify_inventory_full() -> void:
+	# In MP, the &"player" group holds avatars for every peer on this
+	# client. The HUD listens only on the LOCAL player's
+	# notification_requested signal — emitting on a remote avatar would
+	# deliver the banner to nobody. Find the local-authority player.
+	for node in get_tree().get_nodes_in_group(&"player"):
+		if not node.has_signal(&"notification_requested"):
+			continue
+		if node is Node and (node as Node).is_multiplayer_authority():
+			node.notification_requested.emit(tr(&"HUD_BANNER_INVENTORY_FULL"))
+			return
 
 
 func _do_local_pickup() -> void:

@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="Skill" load_steps=2 format=3]
+
+; Sniper primary fire — heavy single-shot damage, long range, highly
+; accurate (weapon base rolls 0.92–0.99). Slow cooldown rewards the
+; player for committing to each shot.
+
+[ext_resource type="Script" path="res://scripts/skills/skill.gd" id="1_skill_script"]
+
+[resource]
+script = ExtResource("1_skill_script")
+display_name = "Sniper Shot"
+glyph = "|"
+damage = 70
+skill_range = 30.0
+cooldown = 1.5
+wind_up = 0.4
+resource_cost = 0
+targeting_mode = 2
+cone_deg = 0.0
+knockback = 1.5
+projectile_speed = 50.0
+icon_color = Color(0.85, 0.78, 0.7, 1.0)

@@ -472,13 +472,19 @@ func _repaint() -> void:
 		_paint_row(row, unlocked)
 
 func _on_node_hovered(stat_id: StringName, tier: int, node_idx: int) -> void:
-	var stat_name: String = (stat_id as String).capitalize()
+	# Resolve the user-visible class name (Count, Survivalist, etc.) from
+	# the legacy 3-letter stat id. The 3-letter ids (ort/ing/amb/dev/opt/cla)
+	# are an internal artifact of the prior moral-stat system; never surface
+	# them in tooltip text — that was the "old attributes next to the name"
+	# bug players were seeing.
+	var class_id: StringName = AttributeState.STAT_TO_CLASS.get(stat_id, stat_id)
+	var class_name_str: String = (class_id as String).capitalize()
 	var node_def: TalentNode = TalentState.get_node_def(stat_id, tier, node_idx)
 	var heading: String
 	if node_def != null and node_def.label != "":
-		heading = "%s · %s %s" % [node_def.label, stat_name, AttributeState.TIER_ROMAN[tier]]
+		heading = "%s · %s %s" % [node_def.label, class_name_str, AttributeState.TIER_ROMAN[tier]]
 	else:
-		heading = "%s %s · Node %d" % [stat_name, AttributeState.TIER_ROMAN[tier], node_idx + 1]
+		heading = "%s %s · Node %d" % [class_name_str, AttributeState.TIER_ROMAN[tier], node_idx + 1]
 	var title := heading
 	var body: String
 	if node_def != null and node_def.description != "":

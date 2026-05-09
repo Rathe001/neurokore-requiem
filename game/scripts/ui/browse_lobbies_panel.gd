@@ -102,14 +102,22 @@ func _clear_list() -> void:
 func _on_match_list(lobbies: Array) -> void:
 	_clear_list()
 	_refresh_btn.disabled = false
-	if lobbies.is_empty():
+	# HC characters can only see/join HC lobbies and softcore can only see
+	# softcore — never let the two mix. The user has already picked a
+	# character before reaching this panel so PlayerState.hardcore is set.
+	var visible: Array = []
+	for info_variant in lobbies:
+		var info: Dictionary = info_variant
+		if bool(info.get(&"hardcore", false)) != PlayerState.hardcore:
+			continue
+		visible.append(info)
+	if visible.is_empty():
 		_empty_label.text = "MENU_MP_BROWSE_EMPTY"
 		_empty_label.visible = true
 		return
 	_empty_label.visible = false
-	for info_variant in lobbies:
-		var info: Dictionary = info_variant
-		_add_row(info)
+	for info_variant in visible:
+		_add_row(info_variant)
 
 
 func _add_row(info: Dictionary) -> void:
@@ -126,6 +134,7 @@ func _add_row(info: Dictionary) -> void:
 	# Empty / unset name falls back to the host's name so the row is
 	# never blank — Steam returns "" for lobby data that wasn't set.
 	var display_name: String = lobby_name if not lobby_name.is_empty() else "%s's Game" % host
-	btn.text = "%s   %s   %d/%d" % [display_name, host, member_count, member_limit]
+	var hc_tag: String = "  [HC]" if bool(info.get(&"hardcore", false)) else ""
+	btn.text = "%s%s   %s   %d/%d" % [display_name, hc_tag, host, member_count, member_limit]
 	btn.pressed.connect(func() -> void: lobby_selected.emit(lobby_id))
 	_list_box.add_child(btn)

@@ -252,19 +252,30 @@ static func spawn_explosion(host: Node3D, world_pos: Vector3, blast_radius: floa
 	var start_radius := blast_radius * 0.15
 	var end_radius := blast_radius * 0.7
 
+	# Bubble-of-energy look: thin translucent shell with bright edge glow,
+	# both faces visible (so the back of the shell is also seen as it
+	# expands past the camera). The low albedo + high emission rim reads
+	# as "expanding force field" instead of "solid colored sphere".
 	var mat := StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.albedo_color = Color(color.r, color.g, color.b, 0.85)
+	mat.albedo_color = Color(color.r, color.g, color.b, 0.18)
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.emission_enabled = true
 	mat.emission = color
-	mat.emission_energy_multiplier = 8.0
+	mat.emission_energy_multiplier = 3.5
+	# Render both faces so the back-side of the shell shows through the
+	# front as the bubble expands — gives volume without needing an inner
+	# sphere or a custom shader.
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	# Don't write depth so the bubble doesn't occlude itself or the
+	# enemies/corpses behind it.
+	mat.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
 
 	var mesh := SphereMesh.new()
 	mesh.radius = start_radius
 	mesh.height = start_radius * 2.0
-	mesh.radial_segments = 16
-	mesh.rings = 8
+	mesh.radial_segments = 24
+	mesh.rings = 12
 
 	var inst := MeshInstance3D.new()
 	inst.mesh = mesh

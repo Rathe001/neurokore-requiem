@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="Skill" load_steps=2 format=3]
+
+; LMG primary fire — high per-shot damage, slow individual cadence,
+; low accuracy. The sustained fire feel comes from the magazine size
+; (100–200 rounds rolled per drop) rather than a fast cooldown.
+; resource_cost = 0 because LMG is a bullet weapon — ammo gates fire.
+
+[ext_resource type="Script" path="res://scripts/skills/skill.gd" id="1_skill_script"]
+
+[resource]
+script = ExtResource("1_skill_script")
+display_name = "LMG Burst"
+glyph = "I"
+damage = 5
+skill_range = 18.0
+cooldown = 0.18
+wind_up = 0.0
+resource_cost = 0
+targeting_mode = 2
+cone_deg = 0.0
+knockback = 0.5
+projectile_speed = 30.0
+icon_color = Color(0.85, 0.78, 0.7, 1.0)

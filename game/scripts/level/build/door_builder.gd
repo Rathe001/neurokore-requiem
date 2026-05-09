@@ -27,8 +27,20 @@ static func build_door(ctx: LevelBuildContext, piece_id: StringName, rd: RoomDef
 		if side in rd.boss_unlock_doors:
 			pdoor.unlock_on_boss = true
 
+	# Deterministic name keyed on (piece_id, wall) so the door lives at the
+	# same NodePath on host AND client — the door's @rpc methods route by
+	# path, and Godot's auto-@N suffix rename can drift between peers if
+	# iteration order isn't byte-identical.
+	door.name = _door_node_name(piece_id, ctx.wall_keys[side])
 	ctx.root.add_child(door)
 	# Keyed by per-instance piece_id so generator-reused RoomDef templates
 	# don't collide on the doors registry. PuzzleBuilder maps this back from
 	# Connection.from_room (which is also a per-instance id).
 	ctx.doors[StringName("%s_%s" % [piece_id, ctx.wall_keys[side]])] = door
+
+
+# Build a Godot-safe deterministic node name from the door key. Same
+# stripping pattern as InteractableBuilder._slot_node_name.
+static func _door_node_name(piece_id: StringName, wall_name: String) -> String:
+	var raw := "Door_%s_%s" % [piece_id, wall_name]
+	return raw.replace("/", "_").replace(":", "_").replace("@", "_").replace(".", "_")

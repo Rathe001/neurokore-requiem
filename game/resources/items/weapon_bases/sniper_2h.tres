@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="WeaponBase" load_steps=4 format=3]
+
+; Sniper rifle (2H) — long-range bullet weapon. Each shot is a
+; commitment: low attack-speed (0.4–0.6× on a 1.5s base — roughly one
+; round every 3s), tight accuracy (0.92–0.99), and a small 5–20 round
+; magazine with a long reload (4s). Per-shot damage is heavy by design
+; (~70 avg) but DPS sits at ~22, in line with every other archetype —
+; the sniper sells precision and reach, not throughput. RMB alt-fire is
+; the Focus aim-hold buff (sniper_focus.tres) — pin in place, drain
+; resource, +50% crit on every shot until released or the pool empties.
+
+[ext_resource type="Script" path="res://scripts/items/weapon_base.gd" id="1_weapon_base"]
+[ext_resource type="Resource" path="res://resources/skills/sniper_shot.tres" id="2_fire_skill"]
+[ext_resource type="Resource" path="res://resources/skills/sniper_focus.tres" id="3_alt_fire"]
+
+[resource]
+script = ExtResource("1_weapon_base")
+id = &"sniper_2h"
+display_name = "Sniper Rifle"
+glyph = "|"
+two_handed = true
+damage_min_range = Vector2(40, 55)
+damage_max_range = Vector2(75, 105)
+attack_speed_range = Vector2(0.4, 0.6)
+crit_chance_range = Vector2(0.0, 0.0)
+accuracy_range = Vector2(0.92, 0.99)
+weapon_range_range = Vector2(24.0, 30.0)
+fire_skill = ExtResource("2_fire_skill")
+alt_fire_skill = ExtResource("3_alt_fire")
+ammo_capacity_range = Vector2i(5, 20)
+reload_time = 4.0

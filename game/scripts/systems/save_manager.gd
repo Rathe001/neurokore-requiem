@@ -30,10 +30,41 @@ func _ready() -> void:
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
-		if PlayerState.active_save_id != "":
-			save_game(PlayerState.active_save_id)
-		NetState.leave_lobby()
-		get_tree().quit()
+		_shutdown()
+
+
+# Ordered shutdown — addresses the AMD driver crash report (yesterday's
+# user). Tearing down Steam state and pooled GPU resources BEFORE the
+# engine's own teardown gives Vulkan a clean state to unwind from.
+# Without this, AMD's driver was hitting the swap chain destruction
+# while shockwave_bubble.gdshader / chromatic_aberration.gdshader still
+# held screen_tex sampler references on pooled projectiles.
+#
+# Order, top to bottom:
+#   1. Save — happens BEFORE any teardown that could mutate state.
+#   2. Leave global chat — low-impact lobby with no peer connections.
+#   3. Leave gameplay lobby — releases the SteamMultiplayerPeer.
+#   4. EntityPool.clear — frees pooled projectiles / VFX / lights so
+#      their ShaderMaterials drop screen_tex references before the
+#      renderer starts unwinding.
+#   5. Steam.run_callbacks — pumps a few frames so leave/disconnect
+#      packets actually flush instead of getting orphaned in the queue.
+#   6. quit.
+func _shutdown() -> void:
+	if PlayerState.active_save_id != "":
+		save_game(PlayerState.active_save_id)
+	if Engine.has_singleton(&"GlobalChatState") or get_node_or_null(^"/root/GlobalChatState") != null:
+		GlobalChatState.leave_global_chat()
+	NetState.leave_lobby()
+	EntityPool.clear()
+	# Pump Steam's callback queue a few times so the leave packets land
+	# before the engine destroys the runtime. run_callbacks() is normally
+	# ticked once per frame in SteamState — at WM_CLOSE_REQUEST we're
+	# past the last frame, so we pump it manually here.
+	if SteamState.initialized:
+		for _i in 4:
+			Steam.run_callbacks()
+	get_tree().quit()
 
 
 func _on_autosave() -> void:
@@ -213,6 +244,7 @@ func _serialize_player() -> Dictionary:
 		"avatar_id": PlayerState.avatar_id,
 		"player_name": PlayerState.player_name,
 		"hardcore": PlayerState.hardcore,
+		"mode_id": str(PlayerState.mode_id),
 		"level": PlayerState.level,
 		"xp": PlayerState.xp,
 		"xp_to_next": PlayerState.xp_to_next,
@@ -233,6 +265,9 @@ func _deserialize_player(data: Dictionary) -> void:
 	PlayerState.avatar_id = int(data.get("avatar_id", 0))
 	PlayerState.player_name = str(data.get("player_name", ""))
 	PlayerState.hardcore = bool(data.get("hardcore", false))
+	# Legacy saves predate the SP/MP split — default to "sp" so they
+	# stay in the single-player roster instead of leaking into MP.
+	PlayerState.mode_id = StringName(data.get("mode_id", "sp"))
 	PlayerState.level = int(data.get("level", 1))
 	PlayerState.xp = int(data.get("xp", 0))
 	PlayerState.xp_to_next = int(data.get("xp_to_next", PlayerState.STARTING_XP_TO_NEXT))
@@ -442,6 +477,7 @@ func _read_save_summary(path: String) -> Dictionary:
 		"spec_id": str(player.get("spec_id", "")),
 		"level": int(player.get("level", 1)),
 		"hardcore": bool(player.get("hardcore", false)),
+		"mode_id": str(player.get("mode_id", "sp")),
 		"avatar_id": int(player.get("avatar_id", 0)),
 		"gender": str(player.get("gender", "male")),
 	}

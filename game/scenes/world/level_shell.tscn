@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=11 format=3]
 
 ; Generic level scene: WorldEnvironment + LevelBuilder + EnemiesContainer +
 ; PlayersContainer + HUD + Camera. The LevelBuilder's `layout` export
@@ -15,6 +15,7 @@
 [ext_resource type="Script" path="res://scripts/prototype/pickups_container.gd" id="script_pickups_container"]
 [ext_resource type="Script" path="res://scripts/level/level_builder.gd" id="script_builder"]
 [ext_resource type="PackedScene" path="res://scenes/prototype/prototype_hud.tscn" id="scene_hud"]
+[ext_resource type="PackedScene" path="res://scenes/prototype/prototype_enemy.tscn" id="scene_enemy"]
 [ext_resource type="Resource" path="res://resources/level/layouts/procgen_demo.tres" id="layout"]
 
 [sub_resource type="Environment" id="env_test"]
@@ -69,10 +70,18 @@ layout = ExtResource("layout")
 unique_name_in_owner = true
 navigation_mesh = SubResource("navmesh_level")
 
-; EnemiesContainer holds all spawned enemies. In multiplayer, a
-; MultiplayerSpawner inside replicates spawn / despawn to all peers.
+; EnemiesContainer holds all spawned enemies. In multiplayer, the
+; MultiplayerSpawner child below replicates spawn / despawn to all peers.
+; The spawner is baked into the scene (not created at runtime) so it's
+; in the tree BEFORE LevelBuilder._ready() spawns enemies — otherwise
+; the host's first wave of enemies misses replication entirely (the
+; spawner only watches add_child events that happen after it exists).
 [node name="EnemiesContainer" type="Node3D" parent="."]
 script = ExtResource("script_enemies_container")
+
+[node name="MultiplayerSpawner" type="MultiplayerSpawner" parent="EnemiesContainer"]
+_spawnable_scenes = PackedStringArray("res://scenes/prototype/prototype_enemy.tscn")
+spawn_path = NodePath("..")
 
 ; PickupsContainer holds all world pickups (items + credits). In
 ; multiplayer, a MultiplayerSpawner with a custom spawn_function

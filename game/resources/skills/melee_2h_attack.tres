@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="Skill" load_steps=2 format=3]
+
+; 2H melee fire skill — distinct from basic_attack so 2H slugs (which fire
+; ~half as often as 1H blades) cost proportionally more per swing. Goal:
+; ~20 resource per second of sustained swinging across both weapon classes,
+; even though raw shot counts differ.
+
+[ext_resource type="Script" path="res://scripts/skills/skill.gd" id="1_skill_script"]
+
+[resource]
+script = ExtResource("1_skill_script")
+display_name = "Heavy Strike"
+glyph = "X"
+damage = 25
+skill_range = 3.5
+cooldown = 0.7
+wind_up = 0.22
+resource_cost = 20
+targeting_mode = 0
+cone_deg = 60.0
+knockback = 0.0
+icon_color = Color(0.7, 0.9, 1.0, 1.0)

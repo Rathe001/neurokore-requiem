@@ -38,8 +38,11 @@ const RING_EMISSION: float = 2.5
 
 const SCENE: PackedScene = preload("res://scenes/prototype/isr_drone.tscn")
 
-# Maps target instance_id → active ISRDrone so we enforce one-per-target.
-static var _active_drones: Dictionary = {}
+# Single global ISR drone — one out at a time. Subsequent procs while a
+# drone is already active either migrate it to a new target (and refresh
+# the timer) or just refresh if it's the same target. Stops the player's
+# screen from filling with green cones at horde scale.
+static var _active_drone: ISRDrone = null
 
 var _target: Node3D = null
 var _elapsed: float = 0.0
@@ -58,14 +61,12 @@ var _offset_dir: Vector3 = Vector3.ZERO
 static func spawn_on(target: Node3D) -> void:
 	if target == null or not is_instance_valid(target):
 		return
-	# One drone per target — ignore the proc if one is already active.
-	var tid := target.get_instance_id()
-	if _active_drones.has(tid):
-		var existing: ISRDrone = _active_drones[tid]
-		if is_instance_valid(existing) and not existing._released:
-			existing._elapsed = 0.0
-			return
-		_active_drones.erase(tid)
+	# Already an active drone? Migrate it to the new target (or just
+	# refresh the timer if it's already on this one). Strictly one drone
+	# in the world at any time.
+	if _active_drone != null and is_instance_valid(_active_drone) and not _active_drone._released:
+		_active_drone._migrate_to(target)
+		return
 	var drone: ISRDrone = EntityPool.acquire(SCENE)
 	if drone == null:
 		return
@@ -83,11 +84,33 @@ static func spawn_on(target: Node3D) -> void:
 	drone.global_position = target.global_position + Vector3(0.0, HOVER_HEIGHT, 0.0) + drone._offset_dir * HOVER_OFFSET
 	drone.visible = true
 	drone.set_process(true)
-	_active_drones[tid] = drone
+	_active_drone = drone
 	# Apply the vulnerability mark on the target.
 	if target.has_method(&"apply_isr_mark"):
 		target.apply_isr_mark()
 	drone._ensure_scan_cone()
+
+
+# Move the active drone to a new target without spawning a fresh one.
+# Lifts the ISR mark off the previous target (so it stops taking +25%
+# damage from random sources), applies it to the new one, and resets
+# the duration.
+func _migrate_to(new_target: Node3D) -> void:
+	if new_target == null or not is_instance_valid(new_target):
+		return
+	if _target == new_target:
+		_elapsed = 0.0
+		return
+	if _target != null and is_instance_valid(_target) and _target.has_method(&"remove_isr_mark"):
+		_target.remove_isr_mark()
+	_target = new_target
+	_elapsed = 0.0
+	# Re-randomize the lateral offset so the drone doesn't appear to teleport
+	# in a perfectly straight line above-and-behind the previous target.
+	var angle := randf() * TAU
+	_offset_dir = Vector3(cos(angle), 0.0, sin(angle))
+	if new_target.has_method(&"apply_isr_mark"):
+		new_target.apply_isr_mark()
 
 # ---------------------------------------------------------------------------
 # Lifecycle
@@ -112,11 +135,9 @@ func _release() -> void:
 	if _released:
 		return
 	_released = true
-	# Unregister from the one-per-target map.
+	if _active_drone == self:
+		_active_drone = null
 	if _target != null and is_instance_valid(_target):
-		var tid := _target.get_instance_id()
-		if _active_drones.get(tid) == self:
-			_active_drones.erase(tid)
 		if _target.has_method(&"remove_isr_mark"):
 			_target.remove_isr_mark()
 	_target = null

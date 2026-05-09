@@ -33,6 +33,56 @@ enum LightMod { NONE, FLASHLIGHT, RADIANT, SCANNER, UV }
 @export var weapon_range: float = 3.0
 @export var blast_radius: float = 0.0
 
+# Ammo / reload — populated for bullet weapons (LMG/SMG/sniper/RPG).
+# Weapons with ammo_max == 0 are energy weapons (laser pistol, plasma rifle,
+# melee) that pay resource per shot; weapons with ammo_max > 0 burn ammo
+# instead and trigger a reload when empty (or on R-key).
+@export var ammo_max: int = 0
+@export var ammo_current: int = 0
+@export var reload_time: float = 0.0
+
+
+## Bullet-weapon base ids — single source of truth for "does this archetype
+## use ammo / reload". Used by is_bullet_weapon for legacy-save migration.
+const BULLET_BASE_IDS: Array[StringName] = [
+	&"lmg_2h", &"smg_1h", &"sniper_2h", &"rpg_2h",
+]
+
+
+## True for bullet weapons (LMG/SMG/sniper/RPG). UI and combat code use
+## this to swap the resource-cost path for the ammo+reload path.
+##
+## Lazy-migrates pre-fix items: characters rolled before bullet ammo was
+## added saved with ammo_max=0 even on bullet weapons. The first call here
+## detects the legacy state via weapon_base_id and backfills from the
+## WeaponBase .tres so the rest of the code treats them as proper bullet
+## weapons without requiring a save/reload.
+func is_bullet_weapon() -> bool:
+	if ammo_max > 0:
+		return true
+	if weapon_base_id in BULLET_BASE_IDS:
+		_backfill_ammo_from_base()
+		return ammo_max > 0
+	return false
+
+
+func _backfill_ammo_from_base() -> void:
+	var base_path := "res://resources/items/weapon_bases/%s.tres" % weapon_base_id
+	if not ResourceLoader.exists(base_path):
+		return
+	var base := load(base_path) as WeaponBase
+	if base == null or base.ammo_capacity_range.y <= 0:
+		return
+	# Midpoint of the rolled range — pre-fix saves have no RNG seed for
+	# the missing field, so a deterministic mid-roll is the least
+	# surprising default. Magazine starts full so the player isn't
+	# punished with an immediate reload on the first shot post-migration.
+	var lo: int = mini(base.ammo_capacity_range.x, base.ammo_capacity_range.y)
+	var hi: int = maxi(base.ammo_capacity_range.x, base.ammo_capacity_range.y)
+	ammo_max = maxi(1, (lo + hi) / 2)
+	ammo_current = ammo_max
+	reload_time = base.reload_time
+
 @export_group("Mods")
 ## Behavior mod for head armor — determines the player's light source.
 @export var light_mod: LightMod = LightMod.NONE
@@ -155,6 +205,9 @@ func to_dict() -> Dictionary:
 	d[&"accuracy"] = accuracy
 	d[&"weapon_range"] = weapon_range
 	d[&"blast_radius"] = blast_radius
+	d[&"ammo_max"] = ammo_max
+	d[&"ammo_current"] = ammo_current
+	d[&"reload_time"] = reload_time
 	d[&"light_mod"] = int(light_mod)
 	d[&"light_energy"] = light_energy
 	d[&"light_range"] = light_range
@@ -191,6 +244,9 @@ static func from_dict(d: Dictionary) -> Item:
 	item.accuracy = float(d.get(&"accuracy", 1.0))
 	item.weapon_range = float(d.get(&"weapon_range", 3.0))
 	item.blast_radius = float(d.get(&"blast_radius", 0.0))
+	item.ammo_max = int(d.get(&"ammo_max", 0))
+	item.ammo_current = int(d.get(&"ammo_current", 0))
+	item.reload_time = float(d.get(&"reload_time", 0.0))
 	item.light_mod = int(d.get(&"light_mod", 0)) as LightMod
 	item.light_energy = float(d.get(&"light_energy", 1.2))
 	item.light_range = float(d.get(&"light_range", 12.0))

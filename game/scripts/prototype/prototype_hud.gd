@@ -37,6 +37,7 @@ const DEBUG_OVERLAY_INTERVAL := 0.1
 @onready var avatar_placeholder: Label = %AvatarPlaceholder
 @onready var level_label: Label = %LevelLabel
 @onready var buff_entries: HBoxContainer = %BuffEntries
+@onready var debuff_entries: HBoxContainer = %DebuffEntries
 @onready var recent_loot_label: Label = %RecentLootLabel
 @onready var flashlight_bg: ColorRect = %FBg
 @onready var flashlight_border: ReferenceRect = %FBorder
@@ -126,6 +127,15 @@ func _ready() -> void:
 		player.charm_count_changed.connect(_on_charm_count_changed)
 	if player.has_signal(&"shield_buff_changed"):
 		player.shield_buff_changed.connect(_on_shield_buff_changed)
+	if player.has_signal(&"slow_pool_changed"):
+		player.slow_pool_changed.connect(_on_slow_pool_changed)
+	if player.has_signal(&"weapon_ammo_changed"):
+		player.weapon_ammo_changed.connect(_on_weapon_ammo_changed)
+	# Equipment changes drive ammo widget visibility too — swapping to a
+	# laser pistol from an LMG should hide the count.
+	InventoryState.equipment_changed.connect(_on_ammo_equipment_changed)
+	_build_ammo_widget()
+	_refresh_ammo_widget()
 	if player.has_signal(&"credits_changed"):
 		_last_credits_seen = int(player.get_credits()) if player.has_method(&"get_credits") else 0
 		player.credits_changed.connect(_on_credits_changed)
@@ -278,6 +288,180 @@ func _update_buffs_bar() -> void:
 		_add_shield_buff_entry()
 
 
+# Rebuilds the right-aligned debuffs bar. Currently only the Slowed
+# debuff (slow-pool overlap) lives here, but the same pattern handles
+# any future negative status — burns, weakens, etc. would each add an
+# entry the same way.
+func _update_debuffs_bar() -> void:
+	if debuff_entries == null:
+		return
+	for child in debuff_entries.get_children():
+		child.queue_free()
+	var player := get_tree().get_first_node_in_group(&"player") as PrototypePlayer
+	if player == null or not is_instance_valid(player):
+		return
+	if player.is_in_slow_pool():
+		_add_slow_debuff_entry()
+
+
+func _on_slow_pool_changed(_in_pool: bool) -> void:
+	_update_debuffs_bar()
+
+
+# Ammo widget — yellow bar stacked above the resource bar. When a
+# bullet weapon is equipped both bars share the resource container 50/50;
+# when no bullet weapon is equipped the resource bar gets full height.
+# The yellow fill represents ammo remaining (current/max ratio); during
+# reload it instead sweeps 0→100% as the reload progresses.
+var _ammo_fill: ColorRect = null
+var _ammo_label: Label = null
+var _ammo_built: bool = false
+
+const _AMMO_FILL_COLOR := Color(0.95, 0.78, 0.25, 1.0)
+
+func _build_ammo_widget() -> void:
+	if _ammo_built or resource_fill == null:
+		return
+	var container := resource_fill.get_parent() as Control
+	if container == null:
+		return
+	var fill := ColorRect.new()
+	fill.name = "AmmoFill"
+	fill.color = _ammo_fill_color_for(false)
+	# Mirror ResourceFill positioning but anchor to the TOP half of the
+	# container (anchor_top=0, anchor_bottom=0.5). offset_left=2 / -2 keeps
+	# the fill inside the 1px border.
+	fill.anchor_left = 0.0
+	fill.anchor_right = 0.0
+	fill.anchor_top = 0.0
+	fill.anchor_bottom = 0.5
+	fill.offset_left = 2.0
+	fill.offset_right = 2.0
+	fill.offset_top = 2.0
+	fill.offset_bottom = 0.0
+	fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fill.visible = false
+	container.add_child(fill)
+	_ammo_fill = fill
+	var lbl := Label.new()
+	lbl.name = "AmmoLabel"
+	lbl.anchor_left = 0.0
+	lbl.anchor_right = 1.0
+	lbl.anchor_top = 0.0
+	lbl.anchor_bottom = 0.5
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	lbl.add_theme_font_size_override(&"font_size", 9)
+	lbl.add_theme_color_override(&"font_color", Color(1.0, 0.95, 0.85, 1.0))
+	lbl.add_theme_color_override(&"font_outline_color", Color(0, 0, 0, 1))
+	lbl.add_theme_constant_override(&"outline_size", 2)
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	lbl.visible = false
+	container.add_child(lbl)
+	_ammo_label = lbl
+	_ammo_built = true
+
+
+# Distinct colour while reloading so the bar reads as "filling up" vs
+# "draining as you fire". Both are yellow but the reload tone is dimmer
+# so a glance can tell them apart even without the label.
+func _ammo_fill_color_for(reloading: bool) -> Color:
+	if reloading:
+		return Color(0.85, 0.55, 0.15, 0.95)
+	return _AMMO_FILL_COLOR
+
+
+# Repaints the ammo widget to reflect the current main-weapon state.
+# Called on weapon_ammo_changed (shot fired / reload finished) and on
+# equipment_changed (weapon swap). When no bullet weapon is equipped
+# the ammo overlay hides and the resource bar reclaims full height.
+func _refresh_ammo_widget() -> void:
+	if not _ammo_built:
+		return
+	var w: Item = InventoryState.get_equipped(&"weapon")
+	var has_ammo := w != null and w.is_bullet_weapon()
+	# Resize resource fill / label vertically to share the container
+	# 50/50 with the ammo bar, or take the full container when no
+	# bullet weapon is equipped (so energy users see the unchanged bar).
+	resource_fill.anchor_top = 0.5 if has_ammo else 0.0
+	resource_fill.offset_top = 0.0 if has_ammo else 2.0
+	resource_label.anchor_top = 0.5 if has_ammo else 0.0
+	_ammo_fill.visible = has_ammo
+	_ammo_label.visible = has_ammo
+	if not has_ammo:
+		return
+	var player := get_tree().get_first_node_in_group(&"player") as PrototypePlayer
+	var reloading := player != null and player.is_reloading()
+	var ratio: float = 0.0
+	var text: String = ""
+	if reloading:
+		ratio = player.get_reload_progress()
+		text = "RELOADING"
+	else:
+		ratio = float(w.ammo_current) / float(maxi(1, w.ammo_max))
+		text = "%d / %d" % [w.ammo_current, w.ammo_max]
+	_ammo_fill.color = _ammo_fill_color_for(reloading)
+	_ammo_fill.offset_right = _ammo_fill.offset_left + RESOURCE_BAR_WIDTH * ratio
+	_ammo_label.text = text
+
+
+func _on_weapon_ammo_changed() -> void:
+	_refresh_ammo_widget()
+
+
+func _on_ammo_equipment_changed(slot: StringName) -> void:
+	if slot == &"weapon":
+		_refresh_ammo_widget()
+
+
+# Tick the reload-progress fill while reloading — the player emits
+# weapon_ammo_changed only on start/finish, so we poll _process for the
+# in-between fill animation. Cheap: just one width update per frame.
+func _process_ammo_fill() -> void:
+	if not _ammo_built or not _ammo_fill.visible:
+		return
+	var player := get_tree().get_first_node_in_group(&"player") as PrototypePlayer
+	if player == null or not player.is_reloading():
+		return
+	_ammo_fill.offset_right = _ammo_fill.offset_left + RESOURCE_BAR_WIDTH * player.get_reload_progress()
+
+
+# Slowed debuff entry: red "S" glyph with a Traction-aware tooltip body
+# so the player can see how much speed they're losing right now (which
+# scales with their boots' traction stat).
+func _add_slow_debuff_entry() -> void:
+	var entry := Control.new()
+	entry.custom_minimum_size = _BUFF_ENTRY_SIZE
+	entry.mouse_filter = Control.MOUSE_FILTER_STOP
+	entry.set_meta(&"buff_stat_id", &"slow_pool")
+	var label := Label.new()
+	label.text = "S"
+	label.add_theme_font_size_override(&"font_size", 12)
+	label.add_theme_color_override(&"font_color", Color(1.0, 0.5, 0.45, 1.0))
+	label.add_theme_color_override(&"font_outline_color", Color(0, 0, 0, 1))
+	label.add_theme_constant_override(&"outline_size", 1)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.anchor_right = 1.0
+	label.anchor_bottom = 1.0
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	entry.add_child(label)
+	entry.mouse_entered.connect(func() -> void:
+		var traction: int = Traction.get_player_traction()
+		var factor: float = Traction.slow_factor_for(traction)
+		var slow_pct: int = int(round((1.0 - factor) * 100.0))
+		var title := "Slowed"
+		var body: String
+		if slow_pct > 0:
+			body = "Move speed −%d%% from a liquid pool.\n• Traction: %d (more reduces this)" % [slow_pct, traction]
+		else:
+			body = "Standing in a liquid pool, but your traction fully mitigates the slow."
+		get_tree().call_group(&"interactable_tooltip", &"show_talent_node", title, body))
+	entry.mouse_exited.connect(func() -> void:
+		get_tree().call_group(&"interactable_tooltip", &"hide_tooltip"))
+	debuff_entries.add_child(entry)
+
+
 func _add_buff_entry(stat_id: StringName, tier: int, perk: Perk) -> void:
 	var stat_color: Color = AttributeState.color_for_id(stat_id)
 	# No background, no border — entry is just the tier roman painted in
@@ -426,6 +610,7 @@ func _unhandled_input(event: InputEvent) -> void:
 func _process(delta: float) -> void:
 	_position_controls_panel()
 	_pulse_talent_button(delta)
+	_process_ammo_fill()
 	var panel := debug_label.get_parent() as Control
 	var overlay_on := DebugState.config == null or DebugState.config.show_debug_overlay
 	if panel.visible != overlay_on:
@@ -780,7 +965,10 @@ func _on_shield_buff_changed(active: bool, pool: int, pool_max: int, reduction: 
 	_update_buffs_bar()
 
 func _on_notification_requested(text: String) -> void:
-	_show_banner(text, 2.5)
+	# Hold duration is fully-opaque time; the slow alpha fade-out adds
+	# another ~1.8s where the text is still readable. Total perceived
+	# read window ≈ 3.5 + 1.8 = ~5.3s.
+	_show_banner(text, 3.5)
 
 func _on_credits_changed(total: int) -> void:
 	# credits_changed carries the running total — diff against the previous
@@ -889,11 +1077,26 @@ func _buff_entry_for_stat(stat_id: StringName) -> Control:
 	return null
 
 
+## How long the banner takes to fade from full opacity to invisible AFTER
+## the hold duration ends. Slow on purpose so the player still has time to
+## read longer announcements (snark messages, level-up + talent line).
+const _BANNER_FADE_DURATION := 1.8
+
 func _show_banner(text: String, duration: float) -> void:
 	_banner_token += 1
 	var token := _banner_token
 	banner.text = text
+	banner.modulate.a = 1.0
 	banner.visible = true
 	await get_tree().create_timer(duration).timeout
-	if token == _banner_token:
-		banner.visible = false
+	if token != _banner_token:
+		return
+	var tween := create_tween()
+	tween.tween_property(banner, "modulate:a", 0.0, _BANNER_FADE_DURATION)
+	tween.tween_callback(func() -> void:
+		# Re-check the token at fade-end — a fresh banner that arrived
+		# during the fade would have bumped the token AND already reset
+		# alpha + visible itself, so we mustn't hide-and-clobber it.
+		if token == _banner_token:
+			banner.visible = false
+			banner.modulate.a = 1.0)

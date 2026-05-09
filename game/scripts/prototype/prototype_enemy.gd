@@ -721,7 +721,44 @@ func _setup_hover() -> void:
 	if not _hover_hooked:
 		mouse_entered.connect(_on_mouse_entered)
 		mouse_exited.connect(_on_mouse_exited)
+		_build_hover_zone()
 		_hover_hooked = true
+
+
+# Generous Area3D capsule that catches mouse-picking ahead of the body's
+# tighter physics capsule. Players reported it was hard to click enemies
+# — the body shape is sized for movement (0.6m radius), which leaves a
+# thin ring around each enemy that the cursor slips through. The hover
+# zone is roughly twice as wide so click and tooltip-lock-on land
+# reliably even on small enemies.
+const _HOVER_RADIUS: float = 1.1
+const _HOVER_HEIGHT: float = 2.2
+
+func _build_hover_zone() -> void:
+	var area := Area3D.new()
+	area.name = &"HoverZone"
+	# Pure picker — never detected by anything else's mask, never detects
+	# anything itself. Layer/mask both 0; input_ray_pickable=true is what
+	# makes physics_object_picking notice it.
+	area.collision_layer = 0
+	area.collision_mask = 0
+	area.monitoring = false
+	area.monitorable = false
+	area.input_ray_pickable = true
+	# Sit at chest height so the capsule covers the visible silhouette.
+	area.position = Vector3(0.0, 0.8, 0.0)
+	var shape := CollisionShape3D.new()
+	var cap := CapsuleShape3D.new()
+	cap.radius = _HOVER_RADIUS
+	cap.height = _HOVER_HEIGHT
+	shape.shape = cap
+	area.add_child(shape)
+	add_child(area)
+	# Forward Area3D mouse events into the same handlers the body uses,
+	# so &"tooltip_target" group membership, lock-on routing, and the
+	# outline highlight all "just work" via one path.
+	area.mouse_entered.connect(_on_mouse_entered)
+	area.mouse_exited.connect(_on_mouse_exited)
 
 func _collect_meshes(root: Node) -> void:
 	if root == null:
@@ -902,6 +939,12 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 	_update_health_bar()
 	var head := global_position + Vector3(0.0, 1.8, 0.0)
 	DamageNumber.spawn(get_parent(), head, amount, multistrike, is_crit)
+	# Snapshot the pre-hit state BEFORE the knockback transition so the
+	# aggro check below sees the original disposition. Without this, any
+	# IDLE enemy that gets knocked back loses the IDLE→aggro transition
+	# (state is now KNOCKBACK at the check) and 1-shot kills never alert
+	# their pack — both bugs masked the same way.
+	var pre_hit_state := _state
 	if knockback_strength > 0.0 and not returning:
 		var dir := global_position - knockback_from
 		dir.y = 0.0
@@ -913,7 +956,9 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 			_change_state(State.KNOCKBACK)
 	# Re-aggro on hit unless we're disengaging — getting nicked while heading
 	# back shouldn't yank the enemy toward the player; that defeats the leash.
-	if _state == State.IDLE:
+	# Fires even on a fatal hit (before _die below) so the dying enemy still
+	# alerts the pack — single-shot kills shouldn't silence group aggro.
+	if pre_hit_state == State.IDLE:
 		aggro()
 	_play_hit_squash()
 	_hit_flash_tween = HitFlash.play(self, visual, _hit_flash_tween)
@@ -1180,8 +1225,8 @@ func _clear_curse_marker() -> void:
 # as a red-dot-sight reticle in 3D — telegraphs the impending Exile auto-shot
 # without the visual weight of a hitscan beam. Built once, repositioned each
 # tick via _update_curse_laser; freed when the curse ends.
-const CURSE_LASER_RADIUS: float = 0.014
-const CURSE_LASER_COLOR: Color = Color(1.0, 0.12, 0.12, 0.9)
+const CURSE_LASER_RADIUS: float = 0.005
+const CURSE_LASER_COLOR: Color = Color(1.0, 0.18, 0.18, 0.25)
 const CURSE_LASER_PLAYER_OFFSET: Vector3 = Vector3(0.0, 1.0, 0.0)
 const CURSE_LASER_TARGET_OFFSET: Vector3 = Vector3(0.0, 1.0, 0.0)
 
@@ -1202,7 +1247,9 @@ func _show_curse_laser() -> void:
 	mat.albedo_color = CURSE_LASER_COLOR
 	mat.emission_enabled = true
 	mat.emission = Color(1.0, 0.25, 0.25, 1.0)
-	mat.emission_energy_multiplier = 2.5
+	# Low emission so the beam reads as a thin cue rather than a glow
+	# strip — anything brighter blooms out the bullet/laser cues nearby.
+	mat.emission_energy_multiplier = 0.6
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	# Don't cast shadows — a red shadow strip from a sight beam reads as a
 	# bug, not stylistic.
@@ -1245,15 +1292,19 @@ func _update_curse_laser() -> void:
 		return
 	_curse_laser.visible = true
 	_curse_laser.global_position = (p_pos + e_pos) * 0.5
-	_curse_laser.scale = Vector3(1.0, dist, 1.0)
 	var dir := diff / dist
+	# Order matters: assigning `basis` REPLACES the entire 3×3 matrix,
+	# including its scale component. So set rotation first, then scale, or
+	# the cylinder snaps back to unit length and never stretches between
+	# the endpoints.
 	# Quaternion(arc_from, arc_to) returns the shortest-arc rotation; safe
-	# for parallel vectors but degenerate when antiparallel — fall back to a
-	# 180° flip around X in that case.
+	# for parallel vectors but degenerate when antiparallel — fall back to
+	# a 180° flip around X in that case.
 	if dir.dot(Vector3.UP) < -0.9999:
 		_curse_laser.basis = Basis(Vector3(1.0, 0.0, 0.0), PI)
 	else:
 		_curse_laser.basis = Basis(Quaternion(Vector3.UP, dir))
+	_curse_laser.scale = Vector3(1.0, dist, 1.0)
 
 
 # ---------------------------------------------------------------------------
@@ -1304,11 +1355,23 @@ const _LAYER_PLAYER := 4
 # other body-block each other and stand still while swinging instead
 # of sliding through one another in a tug-of-war.
 const _LAYER_CHARMED_ALLY := 16
-const _DEFAULT_ENEMY_MASK := _LAYER_WORLD | _LAYER_ENEMY | _LAYER_PLAYER | _LAYER_CHARMED_ALLY  # 23
+# Layer 7 (Interactables) — chests, doors, switches, exit pads. Off the
+# World layer so projectiles + LoS rays pass straight through, but kept
+# in the movement masks below so player and enemies can't walk through
+# them. Same trade as monsters from a Diablo: solid to feet, transparent
+# to bullets.
+const _LAYER_INTERACTABLE := 64
+# Layer 8 (Pillars) — movement-blocking but LoS-transparent obstacles.
+# Player, enemy, projectile, and corpse masks all include this so pillars
+# physically interact like walls; LoSCuller + ProximityLighting (which
+# mask Layer 1 only) ignore them, preserving sightlines through nearby
+# columns.
+const _LAYER_PILLAR := 128
+const _DEFAULT_ENEMY_MASK := _LAYER_WORLD | _LAYER_ENEMY | _LAYER_PLAYER | _LAYER_CHARMED_ALLY | _LAYER_INTERACTABLE | _LAYER_PILLAR  # 215
 # Pets collide with world, hostile enemies, AND other pets (layer 16) —
 # but NOT the player. Including the ally bit means two pets can't stand
 # on top of each other; they push apart naturally via move_and_slide.
-const _CHARMED_PET_MASK := _LAYER_WORLD | _LAYER_ENEMY | _LAYER_CHARMED_ALLY         # 19
+const _CHARMED_PET_MASK := _LAYER_WORLD | _LAYER_ENEMY | _LAYER_CHARMED_ALLY | _LAYER_INTERACTABLE | _LAYER_PILLAR  # 211
 
 
 ## True for plain (normal-rarity) enemies that the Doomsayer aura is
@@ -1843,7 +1906,12 @@ func aggro(depth: int = 0) -> void:
 		return
 	if _state == State.RETURNING or _state == State.DEAD:
 		return
-	_change_state(State.CHASING)
+	# KNOCKBACK / STUNNED / GRABBED resolve to CHASING through their own
+	# tick functions — don't cut those animations short by force-swapping
+	# state here. The pack still gets alerted via the cascade below; this
+	# enemy will engage when its current animation lapses.
+	if _state != State.KNOCKBACK and _state != State.STUNNED and _state != State.GRABBED:
+		_change_state(State.CHASING)
 	if depth >= MAX_AGGRO_CASCADE:
 		return
 	for enode: Node3D in SpatialGrid.query_radius(global_position, GROUP_AGGRO_RANGE, &"enemies"):

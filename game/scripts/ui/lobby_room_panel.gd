@@ -16,8 +16,12 @@ signal start_pressed
 const GAME_SCENE := "res://scenes/world/level_shell.tscn"
 const TITLE_FONT_SIZE := 16
 const PANEL_WIDTH := 600.0
-const MEMBERS_HEIGHT := 140.0
-const CHAT_HEIGHT := 220.0
+# Sized to fit comfortably inside a 960×540 viewport with title/labels/footer.
+# Total content height ≈ 420px including separations, leaving room above and
+# below for centering on small screens (Steam Deck, 720p laptops). Outer
+# ScrollContainer is the safety net if a future addition pushes past 540.
+const MEMBERS_HEIGHT := 96.0
+const CHAT_HEIGHT := 140.0
 const SYSTEM_COLOR := Color(0.55, 0.62, 0.72, 0.9)
 
 var _title_label: Label
@@ -60,12 +64,28 @@ func reset() -> void:
 
 
 func _build_ui() -> void:
+	# ScrollContainer fills the screen and centers the inner vbox via
+	# CenterContainer. If the viewport is tall enough, no scroll appears.
+	# If a future addition (or a tiny window) pushes content past the
+	# viewport height, the player can scroll to reach the footer buttons
+	# instead of having them silently clipped — that's the bug we hit
+	# the first MP playtest, where the Start/Leave row sat below the
+	# bottom edge on shorter displays.
+	var scroll := ScrollContainer.new()
+	scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	add_child(scroll)
+
 	var center := CenterContainer.new()
-	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(center)
+	# CenterContainer needs its own min size to take the full viewport so
+	# the vbox actually centers horizontally inside the scroll viewport.
+	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	center.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.add_child(center)
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override(&"separation", 12)
+	vbox.add_theme_constant_override(&"separation", 10)
 	vbox.custom_minimum_size = Vector2(PANEL_WIDTH, 0.0)
 	center.add_child(vbox)
 

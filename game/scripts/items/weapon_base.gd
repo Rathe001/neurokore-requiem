@@ -41,3 +41,12 @@ class_name WeaponBase extends Resource
 # perks layer on top in combat resolution.
 @export var fire_skill: Skill
 @export var alt_fire_skill: Skill
+
+# ── Bullet weapons (LMG/SMG/sniper/RPG) ────────────────────────────────────
+# Set ammo_capacity_range to (0, 0) for energy weapons (laser pistol,
+# plasma rifle, melee). Anything else marks this base as a bullet weapon —
+# every drop rolls an ammo_max in the range, ammunition reserve is
+# infinite, and reload (auto on empty or R-key) replaces the resource cost
+# of the fire skill. Reload_time is in seconds.
+@export var ammo_capacity_range: Vector2i = Vector2i(0, 0)
+@export var reload_time: float = 0.0

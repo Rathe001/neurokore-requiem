@@ -28,11 +28,16 @@ const RARITY_SUFFIX_COUNT: Dictionary = {
 	&"common": 0, &"magic": 0, &"rare": 1, &"unique": 1,
 }
 
+## Rarity palette — shared by inventory glyphs, ground floating labels,
+## drag previews, and tooltip name labels (via prototype_tooltip's
+## _rarity_color, which mirrors these values). Keep all four entries in
+## sync if any one is retuned. D2-standard palette: white common,
+## blue magic, yellow rare, orange unique.
 const RARITY_COLOR: Dictionary = {
-	&"common": Color(1.00, 1.00, 1.00),
-	&"magic":  Color(0.35, 0.55, 1.00),
-	&"rare":   Color(0.70, 0.30, 1.00),
-	&"unique": Color(0.75, 0.50, 0.25),
+	&"common": Color(0.95, 0.95, 0.95),
+	&"magic":  Color(0.55, 0.75, 1.00),
+	&"rare":   Color(1.00, 0.85, 0.35),
+	&"unique": Color(1.00, 0.60, 0.20),
 }
 
 # Power budget multiplier per rarity tier. Higher rarity = more total budget.
@@ -41,17 +46,46 @@ const RARITY_BUDGET_MULT: Dictionary = {
 }
 
 
-# Registry of weapon bases keyed by main_type. The roller picks one at random
-# when generating a weapon, then rolls each stat range into the Item instance.
-const WEAPON_BASE_PATHS: Dictionary = {
+# Registry of weapon bases keyed by main_type, with per-base drop weights.
+# Picker normalizes weights at roll time, so the numbers are relative — bump
+# a base's weight to make it appear more often without rebalancing the rest.
+# All bases at 1.0 = uniform within their main_type pool. Per-archetype
+# absolute drop rate is equalised at the main_type layer below: 1H Weapon
+# carries weight 3 (matching its 3 bases), 2H carries weight 5 (matching
+# its 5 bases), so every weapon archetype lands at the same absolute
+# probability per random drop regardless of which pool it lives in.
+const WEAPON_BASE_DROPS: Dictionary = {
 	"1H Weapon": [
-		"res://resources/items/weapon_bases/melee_1h.tres",
-		"res://resources/items/weapon_bases/ranged_1h.tres",
+		{"path": "res://resources/items/weapon_bases/melee_1h.tres", "weight": 1.0},
+		{"path": "res://resources/items/weapon_bases/ranged_1h.tres", "weight": 1.0},
+		{"path": "res://resources/items/weapon_bases/smg_1h.tres", "weight": 1.0},
 	],
 	"2H Weapon": [
-		"res://resources/items/weapon_bases/melee_2h.tres",
-		"res://resources/items/weapon_bases/ranged_2h.tres",
+		{"path": "res://resources/items/weapon_bases/melee_2h.tres", "weight": 1.0},
+		{"path": "res://resources/items/weapon_bases/ranged_2h.tres", "weight": 1.0},
+		{"path": "res://resources/items/weapon_bases/lmg_2h.tres", "weight": 1.0},
+		{"path": "res://resources/items/weapon_bases/sniper_2h.tres", "weight": 1.0},
+		{"path": "res://resources/items/weapon_bases/rpg_2h.tres", "weight": 1.0},
 	],
+}
+
+# Main-type weights for roll_random. Weapon main_types carry weight equal
+# to their pool size so each weapon archetype lands at the same absolute
+# probability per drop as every armor slot — without this, 2H bases were
+# diluted across 5 archetypes (2.2% each) while 1H bases were diluted
+# across 3 (3.7% each). With these weights everything sits at ~6.7% per
+# random drop and a full set of 8 weapon archetypes shows up within the
+# first ~15 random drops. Armor / backpack / grenade keep weight 1 each.
+const MAIN_TYPE_WEIGHTS: Dictionary = {
+	"1H Weapon": 3.0,
+	"2H Weapon": 5.0,
+	"Head Armor": 1.0,
+	"Chest Armor": 1.0,
+	"Gloves": 1.0,
+	"Leg Armor": 1.0,
+	"Boots": 1.0,
+	"Backpack": 1.0,
+	"Grenade": 1.0,
 }
 
 const OFFHAND_BASE_PATHS: Array[String] = [
@@ -142,9 +176,28 @@ func roll_from_base(base: WeaponBase, item_level: int, rarity: StringName, rng: 
 
 func roll_random(item_level: int, rng: RandomNumberGenerator) -> Item:
 	var rarity := _roll_rarity(rng)
-	var pool := SlotRegistry.MAIN_TYPES
-	var main_type: String = pool[rng.randi_range(0, pool.size() - 1)]
+	var main_type := _pick_weighted_main_type(rng)
 	return roll(main_type, item_level, rarity, rng)
+
+
+# Weighted main-type picker. Iterates SlotRegistry.MAIN_TYPES (the
+# canonical eligible list) and applies weights from MAIN_TYPE_WEIGHTS.
+# Falls back to weight 1 for anything not explicitly weighted, so adding
+# a new main_type to SlotRegistry doesn't break the picker — it just
+# defaults to neutral weight until tuned here.
+func _pick_weighted_main_type(rng: RandomNumberGenerator) -> String:
+	var total := 0.0
+	for mt: String in SlotRegistry.MAIN_TYPES:
+		total += float(MAIN_TYPE_WEIGHTS.get(mt, 1.0))
+	if total <= 0.0:
+		return SlotRegistry.MAIN_TYPES[0]
+	var roll_val := rng.randf() * total
+	var accum := 0.0
+	for mt: String in SlotRegistry.MAIN_TYPES:
+		accum += float(MAIN_TYPE_WEIGHTS.get(mt, 1.0))
+		if roll_val < accum:
+			return mt
+	return SlotRegistry.MAIN_TYPES[SlotRegistry.MAIN_TYPES.size() - 1]
 
 
 ## Parse a debug loadout string like "Grenade:frag" or "1H Weapon:ranged_1h"
@@ -165,8 +218,9 @@ func roll_debug_entry(entry: String, item_level: int, rng: RandomNumberGenerator
 		return roll(main_type, item_level, &"common", rng)
 	# Weapon with specific base.
 	if (main_type == "1H Weapon" or main_type == "2H Weapon") and base_id != "":
-		var paths: Array = WEAPON_BASE_PATHS.get(main_type, [])
-		for path: String in paths:
+		var drops: Array = WEAPON_BASE_DROPS.get(main_type, [])
+		for drop: Dictionary in drops:
+			var path := String(drop.get("path", ""))
 			var base := load(path) as WeaponBase
 			if base != null and base.id == StringName(base_id):
 				return roll_from_base(base, item_level, &"common", rng)
@@ -261,15 +315,37 @@ func _apply_affix(item: Item, affix: ItemAffix) -> void:
 		item.stat_modifiers[k] = prior + int(affix.stat_modifiers[k])
 
 func _apply_weapon_base(item: Item, main_type: String, rng: RandomNumberGenerator) -> void:
-	var paths: Array = WEAPON_BASE_PATHS.get(main_type, [])
-	if paths.is_empty():
+	var drops: Array = WEAPON_BASE_DROPS.get(main_type, [])
+	var path := _pick_weighted_path(drops, rng)
+	if path == "":
 		return
-	var path: String = paths[rng.randi_range(0, paths.size() - 1)]
 	var base := load(path) as WeaponBase
 	if base == null:
 		push_warning("[ItemRoller] missing WeaponBase: %s" % path)
 		return
 	_apply_weapon_base_direct(item, base, rng)
+
+
+# Pick a path from a [{path, weight}] list weighted by the `weight` field.
+# Returns "" on an empty list. Total weight is summed each call (not cached)
+# because the drop list is short — keeping the picker stateless avoids
+# invalidation when weights are tuned at runtime later.
+func _pick_weighted_path(drops: Array, rng: RandomNumberGenerator) -> String:
+	if drops.is_empty():
+		return ""
+	var total := 0.0
+	for drop: Dictionary in drops:
+		total += float(drop.get("weight", 1.0))
+	if total <= 0.0:
+		return ""
+	var roll := rng.randf() * total
+	var accum := 0.0
+	for drop: Dictionary in drops:
+		accum += float(drop.get("weight", 1.0))
+		if roll < accum:
+			return String(drop.get("path", ""))
+	# Fallback for floating-point edge case at the boundary.
+	return String(drops[drops.size() - 1].get("path", ""))
 
 func _apply_weapon_base_direct(item: Item, base: WeaponBase, rng: RandomNumberGenerator) -> void:
 	item.weapon_base_id = base.id
@@ -289,6 +365,15 @@ func _apply_weapon_base_direct(item: Item, base: WeaponBase, rng: RandomNumberGe
 	item.crit_chance = rng.randf_range(base.crit_chance_range.x, base.crit_chance_range.y)
 	item.accuracy = rng.randf_range(base.accuracy_range.x, base.accuracy_range.y)
 	item.weapon_range = rng.randf_range(base.weapon_range_range.x, base.weapon_range_range.y)
+	# Bullet weapons: roll an ammo capacity in the base's range and start
+	# the magazine full. Energy weapons leave ammo_max == 0 and skip the
+	# reload mechanic entirely.
+	if base.ammo_capacity_range.y > 0:
+		var lo: int = mini(base.ammo_capacity_range.x, base.ammo_capacity_range.y)
+		var hi: int = maxi(base.ammo_capacity_range.x, base.ammo_capacity_range.y)
+		item.ammo_max = rng.randi_range(maxi(1, lo), maxi(1, hi))
+		item.ammo_current = item.ammo_max
+		item.reload_time = base.reload_time
 
 func _apply_offhand_base(item: Item, main_type: String, rng: RandomNumberGenerator) -> void:
 	if main_type != "Offhand":

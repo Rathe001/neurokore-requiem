@@ -1,7 +1,7 @@
 [gd_resource type="Resource" script_class="WeaponBase" load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/items/weapon_base.gd" id="1_weapon_base"]
-[ext_resource type="Resource" path="res://resources/skills/basic_attack.tres" id="2_fire_skill"]
+[ext_resource type="Resource" path="res://resources/skills/melee_2h_attack.tres" id="2_fire_skill"]
 [ext_resource type="Resource" path="res://resources/skills/aoe_burst.tres" id="3_alt_fire"]
 
 [resource]
@@ -10,8 +10,8 @@ id = &"melee_2h"
 display_name = "Sledgehammer"
 glyph = "‡"
 two_handed = true
-damage_min_range = Vector2(10, 14)
-damage_max_range = Vector2(16, 22)
+damage_min_range = Vector2(14, 18)
+damage_max_range = Vector2(22, 30)
 attack_speed_range = Vector2(0.6, 0.85)
 crit_chance_range = Vector2(0.0, 0.0)
 accuracy_range = Vector2(0.85, 0.94)

@@ -33,6 +33,10 @@ const WADE_PUSH_FORCE: float = 0.045
 # with Layer 6, so they pass through unimpeded.
 const LAYER_CORPSE: int = 32  # 1 << 5
 const MASK_WORLD: int = 1     # 1 << 0
+# Pillars on Layer 8 — physical obstacles like walls, just LoS-transparent.
+# Including them in the corpse's collision mask lets ragdolls bounce off
+# decorative columns instead of intersecting them.
+const MASK_PILLAR: int = 128  # 1 << 7
 # Player layer (Layer 3) — used by the Area3D sensor's collision_mask so it
 # detects only the player's body and not enemies/pickups/projectiles.
 const MASK_PLAYER: int = 4    # 1 << 2
@@ -50,7 +54,7 @@ var _wade_sensor: Area3D = null
 func _ready() -> void:
 	add_to_group(&"ragdoll_corpses")
 	collision_layer = LAYER_CORPSE
-	collision_mask = MASK_WORLD
+	collision_mask = MASK_WORLD | MASK_PILLAR
 	# Auto-sleep keeps resting bodies cheap — explosions / player push
 	# auto-wake on apply_central_impulse.
 	can_sleep = true

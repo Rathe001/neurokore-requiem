@@ -18,6 +18,16 @@ signal light_changed(is_on: bool)
 # changes. HUD listens to update the per-perk badge count.
 signal charm_count_changed(current: int, max_value: int)
 signal stats_changed
+# Fires when the slow-pool overlap count crosses 0 → 1 (entered first
+# pool, in_pool=true) or N → 0 (exited last pool, in_pool=false). HUD
+# listens to add/remove the Slowed debuff bar entry. Does not fire on
+# entering/exiting a SECOND simultaneous pool — only on the actual
+# state transition.
+signal slow_pool_changed(in_pool: bool)
+# Fires whenever the equipped main weapon's ammo state changes (shot
+# fired, reload finished, item swapped). HUD reads InventoryState +
+# is_reloading() / get_reload_progress() to repaint the ammo widget.
+signal weapon_ammo_changed
 
 const ITEM_PICKUP_SCENE: PackedScene = preload("res://scenes/prototype/prototype_item_pickup.tscn")
 
@@ -55,6 +65,9 @@ const ANIM_DEATH: Array[StringName] = [
 
 const CROUCH_SPEED_FACTOR := 0.45
 const SPRINT_SPEED_FACTOR := 1.6
+# Bullet-weapon reload drags movement so the reload window is a real
+# tactical pause, not a free reposition.
+const RELOAD_SPEED_FACTOR := 0.85
 const SPRINT_RESOURCE_PER_SEC := 8.0
 ## Penalty delay before resource regen starts after hitting 0 while sprinting.
 const SPRINT_EMPTY_REGEN_DELAY := 2.0
@@ -192,7 +205,11 @@ var _doomsayer: PlayerDoomsayer
 var _drone_swarm: PlayerDroneSwarm
 var _ied: PlayerIED
 var _spawn_position: Vector3 = Vector3.ZERO
-var _equipped_light: SpotLight3D
+# Could be a SpotLight3D (FLASHLIGHT / UV / SCANNER — directional, follows
+# cursor) or an OmniLight3D (RADIANT — omnidirectional bubble around the
+# player, no aiming). The aim/pitch helpers gate on `is SpotLight3D` so
+# omni mods don't pick up cursor tracking.
+var _equipped_light: Light3D
 var _anim_reverse: bool = false
 var _light_on: bool = false
 var _fps_mode: bool = false
@@ -230,6 +247,20 @@ var _level_hp_bonus: int = 0
 # Base resource pool max before stat bonuses.
 var _base_resource_max: int = 100
 # Gear-aggregated combat bonuses — recomputed on equipment change.
+# Bullet-weapon reload state. _reload_remain > 0 means the weapon is
+# currently reloading (firing is gated). _reload_target tracks the slot
+# that's being reloaded so a quick weapon swap mid-reload doesn't fill
+# the wrong magazine. Cleared when a fresh reload starts on a different
+# slot or the reload completes.
+var _reload_remain: float = 0.0
+var _reload_total: float = 0.0
+var _reload_target: StringName = &""
+
+# AIM_HOLD state — Tripod (LMG) and Focus (sniper) RMB-hold buffs.
+# While active, the configured Skill drains resource per tick and applies
+# its accuracy/crit bonuses to every shot fired. Releasing RMB or running
+# the resource dry exits the hold.
+var _aim_hold_skill: Skill = null
 var _gear_damage_reduction: int = 0
 var _gear_move_speed_bonus: int = 0
 var _gear_base_damage_bonus: int = 0
@@ -328,14 +359,10 @@ func _ready() -> void:
 	add_child(_grenade)
 	PerkState.perks_changed.connect(_doomsayer.reconcile)
 	# Put player meshes on an extra render layer so equipped lights can
-	# exclude it from shadow casting (no self-shadow under own flashlight).
+	# exclude it from shadow casting (no self-shadow under own flashlight,
+	# and no self-shadow under the omni-directional Radiant lamp).
 	if visual != null:
-		for child in visual.get_children():
-			if child is VisualInstance3D:
-				child.layers |= (1 << (PLAYER_VISUAL_LAYER - 1))
-			for grandchild in child.get_children():
-				if grandchild is VisualInstance3D:
-					grandchild.layers |= (1 << (PLAYER_VISUAL_LAYER - 1))
+		_apply_player_visual_layer_recursive(visual)
 	_base_max_health = max_health
 	if resource_pool != null:
 		_base_resource_max = resource_pool.max_value
@@ -390,13 +417,15 @@ func _ready_remote() -> void:
 	# Same shadow-layer trick as the authority path so equipped lights
 	# (added later, when we sync those) won't self-shadow on remotes.
 	if visual != null:
-		for child in visual.get_children():
-			if child is VisualInstance3D:
-				child.layers |= (1 << (PLAYER_VISUAL_LAYER - 1))
-			for grandchild in child.get_children():
-				if grandchild is VisualInstance3D:
-					grandchild.layers |= (1 << (PLAYER_VISUAL_LAYER - 1))
+		_apply_player_visual_layer_recursive(visual)
 	add_to_group(&"remote_player")
+
+
+func _apply_player_visual_layer_recursive(node: Node) -> void:
+	if node is VisualInstance3D:
+		(node as VisualInstance3D).layers |= (1 << (PLAYER_VISUAL_LAYER - 1))
+	for child in node.get_children():
+		_apply_player_visual_layer_recursive(child)
 
 
 # True when this Player instance represents another peer's avatar on
@@ -545,11 +574,13 @@ func _on_player_leveled_up(new_level: int, hp_gain: int) -> void:
 	_health = max_health
 	health_changed.emit(_health, max_health)
 	# Banner: "Level up!" plus a conditional second line when THIS level-up
-	# granted a talent point. The N in the line is the running unspent
-	# count (not "1 new"), so a player who already had unspent points sees
-	# the live tally and knows they have multiple to allocate.
+	# granted a talent point. Cadence must match PlayerState._do_level_up:
+	# points are granted on level 2, then every LEVELS_PER_TALENT_POINT
+	# after that — i.e. (level - 2) % cadence == 0. The previous check used
+	# `level % cadence == 0` which would have shown the banner on levels
+	# 3/6/9 instead of the actual grant levels 2/5/8/11.
 	var msg := tr("HUD_LEVEL_UP_FORMAT")
-	if new_level % PlayerState.LEVELS_PER_TALENT_POINT == 0:
+	if new_level >= 2 and (new_level - 2) % PlayerState.LEVELS_PER_TALENT_POINT == 0:
 		var unspent: int = PlayerState.talent_points_total - PlayerState.get_talent_points_spent()
 		if unspent > 0:
 			msg += "\n" + (tr("HUD_LEVEL_UP_TALENT_POINT") % unspent)
@@ -670,7 +701,10 @@ func _process(delta: float) -> void:
 func _tick_fps_mouse_mode() -> void:
 	if not _fps_mode or _fps_transitioning:
 		return
-	var want_captured := not _is_any_modal_open()
+	# Capture the cursor for normal FPS gameplay; release it whenever a
+	# modal is open OR the player is dead — without the dead check the
+	# death screen's Continue button would be unclickable in FPS mode.
+	var want_captured := _alive and not _is_any_modal_open()
 	var current := Input.get_mouse_mode()
 	if want_captured and current != Input.MOUSE_MODE_CAPTURED:
 		Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
@@ -699,6 +733,8 @@ func _physics_process(delta: float) -> void:
 	_doomsayer.tick(delta)
 	_grenade.tick(delta)
 	_ied.tick(delta)
+	_tick_reload(delta)
+	_tick_aim_hold(delta)
 
 	var on_floor := is_on_floor()
 
@@ -740,6 +776,16 @@ func _physics_process(delta: float) -> void:
 			_walk_to_interact_target = null
 			var ref_cam: Camera3D = _fps_camera if _fps_mode else _camera
 			var cam_forward := _flatten(-ref_cam.global_transform.basis.z)
+			if cam_forward.is_zero_approx():
+				# Top-down camera path: -basis.z is straight down at pitch=0,
+				# which flatten zeroes out — making W/S no-op or jitter on
+				# float precision at the boundary (perceived as "W and S
+				# reversed at exactly top-down"). basis.y still has the
+				# camera's "screen up" direction in the horizontal plane,
+				# which IS what W should map to. Iso clamps pitch ≥ 0 and
+				# FPS never reaches straight-down, so this fallback only
+				# fires for the top-down corner case.
+				cam_forward = _flatten(ref_cam.global_transform.basis.y)
 			var cam_right := _flatten(ref_cam.global_transform.basis.x)
 			wish_dir = (cam_right * input_vec.x - cam_forward * input_vec.y).normalized()
 		elif _walk_to_interact_target != null:
@@ -770,7 +816,18 @@ func _physics_process(delta: float) -> void:
 			var shield_factor: float = _shield.get_speed_factor()
 			var sprint_factor: float = SPRINT_SPEED_FACTOR if _sprinting else 1.0
 			var gear_speed_factor := 1.0 + float(_gear_move_speed_bonus) * 0.01
-			var speed := move_speed * (CROUCH_SPEED_FACTOR if _crouching else 1.0) * (0.5 if _backing else 1.0) * sprint_factor * shield_factor * gear_speed_factor
+			# Slow-pool effect: standing in a liquid puddle multiplies move
+			# speed by Traction.slow_factor_for(...) — full -50% at no
+			# traction, scaling to immune at TIER_SLOW (traction 50).
+			var pool_factor: float = _slow_pool_factor()
+			# Reloading drags movement by 15% — small enough that you can
+			# still reposition, large enough that mid-fight reloads feel
+			# costly and reward the "back off, then reload" rhythm.
+			var reload_factor: float = RELOAD_SPEED_FACTOR if is_reloading() else 1.0
+			# AIM_HOLD (Tripod / Focus) pins the player in place — that's
+			# the trade for the accuracy / crit buff.
+			var aim_hold_factor: float = 0.0 if aim_hold_locks_movement() else 1.0
+			var speed := move_speed * (CROUCH_SPEED_FACTOR if _crouching else 1.0) * (0.5 if _backing else 1.0) * sprint_factor * shield_factor * gear_speed_factor * pool_factor * reload_factor * aim_hold_factor
 			var flat := Vector2(velocity.x, velocity.z)
 			var target := Vector2(wish_dir.x, wish_dir.z) * speed
 			var step := accel * (1.0 if wish_dir.length_squared() > 0.0 else 2.5) * delta
@@ -870,6 +927,13 @@ func _unhandled_input(event: InputEvent) -> void:
 			_update_light_visibility()
 		else:
 			notification_requested.emit(tr("HUD_BANNER_NO_LIGHT"))
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed(&"reload"):
+		# Manual reload — only meaningful for bullet weapons. Auto-reload
+		# already triggers when the magazine empties on fire; this is the
+		# "I have one bullet left and want to top off before the firefight"
+		# convenience path.
+		start_reload()
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed(&"crouch"):
 		_set_crouch(true)
@@ -1096,7 +1160,9 @@ func _cast_lmb_combat() -> void:
 		if _combat.is_slot_on_cooldown(slot):
 			continue
 		var is_main := slot == &"weapon"
-		if is_main and skill.resource_cost > 0 and not infinite_resource and _resource_current < float(skill.resource_cost):
+		# Bullet weapons: ammo gates fire (and is_reloading() blocks). Energy
+		# weapons: resource cost gates fire. Helper centralises both checks.
+		if is_main and not _skill_can_fire(item, skill, true):
 			continue
 		ready_fires.append({"slot": slot, "item": item, "skill": skill, "is_main": is_main})
 
@@ -1140,8 +1206,9 @@ func _cast_lmb_combat() -> void:
 		# LMB slot reads cooldown the same way it always has.
 		if is_main:
 			_combat.start_cooldown(skill, atk_spd)
-			if skill.resource_cost > 0 and not infinite_resource:
-				_spend_resource(skill.resource_cost)
+			# Pay either resource (energy) or ammo (bullet); helper also
+			# fires the auto-reload trigger on the empty-magazine shot.
+			_skill_pay_cost(item, skill, true)
 		var fire_delay: float = float(i) * stagger
 		max_fire_delay = maxf(max_fire_delay, fire_delay)
 		var captured_skill := skill
@@ -1215,17 +1282,30 @@ func _cast_skill(skill: Skill) -> void:
 	# one-shot cone/aoe/projectile/hitscan model.
 	if skill.active_kind != Skill.ActiveKind.NONE:
 		match skill.active_kind:
+			Skill.ActiveKind.AIM_HOLD:
+				# RMB-press starts the hold; the tick handler watches for
+				# RMB-release and ends it. No cooldown — the resource
+				# drain is the cost gate.
+				_start_aim_hold(skill)
 			Skill.ActiveKind.SHIELD_BUFF, Skill.ActiveKind.SHIELD_HOLD:
 				_shield.activate_offhand_skill(skill)
 			Skill.ActiveKind.GRENADE:
 				if _grenade.is_on_cooldown():
+					return
+				# Compute the throw vector BEFORE spending resource — the
+				# grenade activate() bails on zero offset (FPS-mode used
+				# to drop here because _cursor_offset() relies on the iso
+				# camera's mouse-ray, which is meaningless when the cursor
+				# is captured). Bailing here keeps energy and cooldown in
+				# sync with whether a grenade actually leaves the hand.
+				var throw_dir := _grenade_throw_offset()
+				if throw_dir.length_squared() < 0.0001:
 					return
 				var infinite_res := DebugState.config != null and DebugState.config.infinite_resource
 				if skill.resource_cost > 0 and not infinite_res and _resource_current < float(skill.resource_cost):
 					return
 				if skill.resource_cost > 0:
 					_spend_resource(skill.resource_cost)
-				var throw_dir := _cursor_offset()
 				_face_direction(throw_dir)
 				_play_anim(ANIM_ATTACK, 1.4)
 				_grenade.activate(skill, throw_dir)
@@ -1235,19 +1315,21 @@ func _cast_skill(skill: Skill) -> void:
 	_interacting = false
 	if _combat.is_on_cooldown(skill):
 		return
-	var infinite_resource := DebugState.config != null and DebugState.config.infinite_resource
-	if skill.resource_cost > 0 and not infinite_resource and _resource_current < float(skill.resource_cost):
-		return
 	var aim := _aim_direction()
 	if aim == Vector3.ZERO:
 		return
 	var weapon := _combat.resolve_skill_source(skill)
+	# Treat the resolved weapon as the main-hand item for the cost gate
+	# so a bullet weapon's alt-fire (e.g. RPG nuke) burns ammo from the
+	# same magazine the LMB shot uses, and energy weapons keep the
+	# resource-cost path. Reload also blocks alt-fires.
+	if not _skill_can_fire(weapon, skill, true):
+		return
 	var atk_spd := weapon.effective_attack_speed() if weapon != null else 1.0
 	if atk_spd <= 0.0:
 		atk_spd = 1.0
 	_combat.start_cooldown(skill, atk_spd)
-	if skill.resource_cost > 0:
-		_spend_resource(skill.resource_cost)
+	_skill_pay_cost(weapon, skill, true)
 	_skill_busy = true
 	_attack_aim = aim
 	_attack_weapon = weapon
@@ -1400,6 +1482,239 @@ func add_credits(amount: int) -> void:
 func get_credits() -> int:
 	return _credits
 
+
+# ── Bullet weapon reload ────────────────────────────────────────────────────
+
+## True while the main weapon is mid-reload. Firing is blocked; HUD shows
+## a progress indicator instead of the ammo count.
+func is_reloading() -> bool:
+	return _reload_remain > 0.0
+
+## 0.0 → 1.0 progress through the current reload, or 0.0 when not
+## reloading. HUD uses this to paint a fill bar on the ammo widget.
+func get_reload_progress() -> float:
+	if _reload_total <= 0.0 or _reload_remain <= 0.0:
+		return 0.0
+	return clampf(1.0 - _reload_remain / _reload_total, 0.0, 1.0)
+
+## Start a reload of the main weapon if it's a bullet weapon, not full,
+## and not already reloading. No-op otherwise. Called automatically when
+## the magazine empties on fire AND on R-key press.
+func start_reload() -> void:
+	var w: Item = InventoryState.get_equipped(&"weapon")
+	if w == null or not w.is_bullet_weapon():
+		return
+	if w.ammo_current >= w.ammo_max:
+		return
+	if is_reloading():
+		return
+	_reload_total = maxf(w.reload_time, 0.05)
+	_reload_remain = _reload_total
+	_reload_target = &"weapon"
+	weapon_ammo_changed.emit()
+
+# ── AIM_HOLD (Tripod / Focus) ───────────────────────────────────────────────
+
+## True while the player is holding the LMG Tripod / Sniper Focus RMB
+## buff. Read by player_combat for accuracy + crit modifiers and by the
+## movement loop to lock the player in place if the skill demands it.
+func is_aim_holding() -> bool:
+	return _aim_hold_skill != null
+
+
+## Additive accuracy bonus from the active aim hold (0 when not holding).
+## player_combat folds this into _apply_aim_spread.
+func aim_hold_accuracy_bonus() -> float:
+	if _aim_hold_skill == null:
+		return 0.0
+	return _aim_hold_skill.aim_hold_accuracy_bonus
+
+
+## Additive crit chance from the active aim hold (0 when not holding).
+## player_combat folds this into _roll_crit.
+func aim_hold_crit_bonus() -> float:
+	if _aim_hold_skill == null:
+		return 0.0
+	return _aim_hold_skill.aim_hold_crit_bonus
+
+
+## Movement lock requested by the active aim hold. False when no hold is
+## active or when the active hold's skill explicitly allows movement.
+func aim_hold_locks_movement() -> bool:
+	return _aim_hold_skill != null and _aim_hold_skill.aim_hold_locks_movement
+
+
+# Begin or refresh the aim hold for the given skill. No-op if already
+# active for the same skill, or if the player is out of resource. Called
+# from _cast_skill on RMB-press of an AIM_HOLD skill.
+func _start_aim_hold(skill: Skill) -> void:
+	if skill == null or skill.active_kind != Skill.ActiveKind.AIM_HOLD:
+		return
+	# Need at least a sliver of resource to enter the stance — otherwise
+	# the next tick would just kick us straight back out.
+	var infinite_res := DebugState.config != null and DebugState.config.infinite_resource
+	if not infinite_res and _resource_current <= 0.0:
+		return
+	_aim_hold_skill = skill
+
+
+func _stop_aim_hold() -> void:
+	if _aim_hold_skill == null:
+		return
+	_aim_hold_skill = null
+
+
+func _tick_aim_hold(delta: float) -> void:
+	if _aim_hold_skill == null:
+		return
+	# Released? End the hold without spending any further resource on
+	# this frame. resolve_skill(1) returns the current RMB binding, which
+	# is the same skill we entered with as long as the weapon hasn't
+	# changed. A weapon swap mid-hold should also end the hold.
+	if not Input.is_action_pressed(&"alt_fire"):
+		_stop_aim_hold()
+		return
+	var rmb := resolve_skill(1)
+	if rmb != _aim_hold_skill:
+		_stop_aim_hold()
+		return
+	# Drain resource over time. Infinite-resource debug mode skips the
+	# spend (so the hold runs forever, intentional for testing).
+	var infinite_res := DebugState.config != null and DebugState.config.infinite_resource
+	if not infinite_res and resource_pool != null:
+		var drain: float = _aim_hold_skill.aim_hold_resource_drain * delta
+		if drain > 0.0:
+			_resource_current = maxf(0.0, _resource_current - drain)
+			_emit_resource_if_changed()
+		if _resource_current <= 0.0:
+			_stop_aim_hold()
+
+
+func _tick_reload(delta: float) -> void:
+	if _reload_remain <= 0.0:
+		return
+	_reload_remain -= delta
+	if _reload_remain > 0.0:
+		return
+	_reload_remain = 0.0
+	_reload_total = 0.0
+	# Refill the magazine on the slot we started the reload on. If the
+	# player swapped weapons mid-reload, the slot may be empty or carry
+	# a different item — bail rather than fill the wrong magazine.
+	if _reload_target != &"":
+		var w: Item = InventoryState.get_equipped(_reload_target)
+		if w != null and w.is_bullet_weapon():
+			w.ammo_current = w.ammo_max
+	_reload_target = &""
+	weapon_ammo_changed.emit()
+
+# Resource-cost gating for bullet vs energy weapons. Returns true when
+# the skill can fire RIGHT NOW given the item's ammo state and the
+# player's resource pool. Used by the LMB multi-fire path AND the
+# single-skill cast path so both gates apply consistently.
+func _skill_can_fire(item: Item, skill: Skill, is_main: bool) -> bool:
+	if not is_main:
+		return true  # extra arms always fire free (existing behaviour)
+	if item != null and item.is_bullet_weapon():
+		return item.ammo_current > 0 and not is_reloading()
+	if skill.resource_cost <= 0:
+		return true
+	var infinite_resource := DebugState.config != null and DebugState.config.infinite_resource
+	return infinite_resource or _resource_current >= float(skill.resource_cost)
+
+# Pay the cost of firing — either decrement ammo (bullet weapons) or
+# spend resource (energy weapons). Auto-triggers reload when the shot
+# empties the magazine.
+func _skill_pay_cost(item: Item, skill: Skill, is_main: bool) -> void:
+	if not is_main:
+		return
+	if item != null and item.is_bullet_weapon():
+		item.ammo_current = maxi(0, item.ammo_current - 1)
+		weapon_ammo_changed.emit()
+		if item.ammo_current == 0:
+			start_reload()
+		return
+	if skill.resource_cost <= 0:
+		return
+	var infinite_resource := DebugState.config != null and DebugState.config.infinite_resource
+	if not infinite_resource:
+		_spend_resource(skill.resource_cost)
+
+
+# ── Effective-stat readers (UI display) ──────────────────────────────────────
+# These combine the equipped main weapon's rolled stats with the gear-wide
+# bonus aggregates in _gear_* fields. The character panel reads these so
+# what the player sees matches what combat actually computes — accuracy
+# and crit in particular are mostly weapon-driven, with gear contributing
+# small offsets.
+
+## True when a main-hand weapon is equipped. Used by the character panel
+## to decide whether to render weapon-derived stats as concrete values
+## or as "—".
+func has_main_weapon() -> bool:
+	var w: Item = InventoryState.get_equipped(&"weapon")
+	return w != null and w.damage_max > 0
+
+
+## Effective accuracy as a percentage (0–100). Pure weapon stat times
+## (1 + gear_hit_chance_bonus); returns -1 when no weapon is equipped so
+## the UI can render a dash.
+func get_effective_accuracy_pct() -> int:
+	var w: Item = InventoryState.get_equipped(&"weapon")
+	if w == null or w.damage_max <= 0:
+		return -1
+	var acc := w.effective_accuracy() * (1.0 + _gear_hit_chance_bonus)
+	return int(round(clampf(acc, 0.0, 1.0) * 100.0))
+
+
+## Effective crit-chance as a percentage. Weapon's effective_crit_chance
+## (which is non-zero only if the weapon rolls crit) plus the gear-wide
+## crit_chance_bonus aggregate. Returns -1 when no weapon is equipped.
+func get_effective_crit_pct() -> int:
+	var w: Item = InventoryState.get_equipped(&"weapon")
+	if w == null or w.damage_max <= 0:
+		return -1
+	var crit := w.effective_crit_chance() + _gear_crit_chance_bonus
+	return int(round(maxf(crit, 0.0) * 100.0))
+
+
+## Effective attack-speed multiplier as a percentage delta from 1.0.
+## "+15%" means the player attacks 15% faster than the skill's base
+## cooldown. Returns -1 when no weapon is equipped.
+func get_effective_atk_speed_delta_pct() -> int:
+	var w: Item = InventoryState.get_equipped(&"weapon")
+	if w == null or w.damage_max <= 0:
+		return -1
+	var atk := w.effective_attack_speed() * (1.0 + _gear_attack_speed_bonus)
+	return int(round((atk - 1.0) * 100.0))
+
+
+## Weapon damage range as a Vector2i (min, max). Returns (-1, -1) when
+## no weapon is equipped — UI renders a dash in that case.
+func get_effective_damage_range() -> Vector2i:
+	var w: Item = InventoryState.get_equipped(&"weapon")
+	if w == null or w.damage_max <= 0:
+		return Vector2i(-1, -1)
+	return Vector2i(
+		w.effective_damage_min() + _gear_base_damage_bonus,
+		w.effective_damage_max() + _gear_base_damage_bonus,
+	)
+
+
+## Cooldown reduction percentage from gear (no weapon contribution).
+func get_effective_cdr_pct() -> int:
+	return int(round(_gear_cooldown_reduction * 100.0))
+
+
+## Move-speed bonus percentage from gear (additive to base 100%).
+func get_effective_move_speed_pct() -> int:
+	return _gear_move_speed_bonus
+
+
+## Damage reduction (armor) flat value from gear.
+func get_effective_armor() -> int:
+	return _gear_damage_reduction
+
 func get_cooldown_ratio(skill: Skill) -> float:
 	if skill != null and _shield != null and _shield.is_shield_skill(skill):
 		return _shield.get_cooldown_ratio(skill)
@@ -1517,6 +1832,25 @@ func _cursor_offset() -> Vector3:
 	var flat := (from + dir * t) - global_position
 	flat.y = 0.0
 	return flat
+
+
+# Grenade throw target relative to the player. Iso uses the cursor on the
+# ground plane (existing behaviour); FPS throws straight forward along the
+# camera's horizontal direction at ~3/4 of MAX_THROW_RANGE — far enough
+# to clear the player's near-camera blind spot, short enough to feel like
+# an aimed lob rather than a pitch.
+const _GRENADE_FPS_THROW_DISTANCE: float = 9.0
+
+func _grenade_throw_offset() -> Vector3:
+	if not _fps_mode:
+		return _cursor_offset()
+	if _fps_camera == null:
+		return Vector3.ZERO
+	var fwd := -_fps_camera.global_transform.basis.z
+	fwd.y = 0.0
+	if fwd.length_squared() < 0.0001:
+		return Vector3.ZERO
+	return fwd.normalized() * _GRENADE_FPS_THROW_DISTANCE
 
 func _aim_direction() -> Vector3:
 	if _fps_mode:
@@ -1638,6 +1972,13 @@ func _on_equipment_changed(slot: StringName) -> void:
 		_apply_light_item()
 	elif slot == &"weapon":
 		light_changed.emit(_light_on)
+		# Cancel any in-flight reload — the new weapon has its own
+		# magazine state. HUD repaints via the same signal it listens to
+		# for shots/finishes.
+		_reload_remain = 0.0
+		_reload_total = 0.0
+		_reload_target = &""
+		weapon_ammo_changed.emit()
 	elif slot == &"offhand":
 		# No stacking: removing the offhand drops every effect it
 		# granted. Re-equipping a different shield offhand requires
@@ -1668,7 +2009,7 @@ var _shield_visual: MeshInstance3D = null
 
 const SHIELD_VISUAL_RADIUS: float = 1.05
 const SHIELD_VISUAL_HEIGHT_OFFSET: float = 1.0
-const SHIELD_VISUAL_ALPHA: float = 0.18
+const SHIELD_VISUAL_ALPHA: float = 0.06
 
 func _build_shield_visual() -> void:
 	var mesh_inst := MeshInstance3D.new()
@@ -1752,36 +2093,49 @@ func _apply_light_item() -> void:
 		_light_on = false
 		light_changed.emit(false)
 		return
-	var spot := SpotLight3D.new()
-	spot.spot_angle = 50.0
-	spot.spot_attenuation = 1.0
-	spot.spot_angle_attenuation = 0.6
-	spot.shadow_enabled = true
-	spot.shadow_bias = 0.02
-	spot.shadow_normal_bias = 0.3
-	spot.light_color = head.light_color
-	spot.light_energy = head.light_energy
-	spot.spot_range = head.light_range
-	match head.light_mod:
-		Item.LightMod.FLASHLIGHT:
-			spot.light_energy *= 1.5
-			spot.spot_range *= 1.2
-		Item.LightMod.RADIANT:
-			spot.spot_angle = 90.0
-			spot.spot_attenuation = 1.6
-		Item.LightMod.UV:
-			spot.spot_angle = 45.0
-		Item.LightMod.SCANNER:
-			spot.spot_angle = 60.0
+	# RADIANT lamps are an ambient bubble around the player — an
+	# omnidirectional light that lives at the chest, no cursor tracking.
+	# Everything else (FLASHLIGHT / UV / SCANNER) is a SpotLight3D that
+	# the aim helpers point at the cursor each frame.
+	var light: Light3D
+	if head.light_mod == Item.LightMod.RADIANT:
+		var omni := OmniLight3D.new()
+		omni.omni_range = head.light_range
+		omni.omni_attenuation = 1.4
+		omni.shadow_enabled = true
+		omni.shadow_bias = 0.05
+		omni.light_color = head.light_color
+		omni.light_energy = head.light_energy
+		light = omni
+	else:
+		var spot := SpotLight3D.new()
+		spot.spot_angle = 50.0
+		spot.spot_attenuation = 1.0
+		spot.spot_angle_attenuation = 0.6
+		spot.shadow_enabled = true
+		spot.shadow_bias = 0.02
+		spot.shadow_normal_bias = 0.3
+		spot.light_color = head.light_color
+		spot.light_energy = head.light_energy
+		spot.spot_range = head.light_range
+		match head.light_mod:
+			Item.LightMod.FLASHLIGHT:
+				spot.light_energy *= 1.5
+				spot.spot_range *= 1.2
+			Item.LightMod.UV:
+				spot.spot_angle = 45.0
+			Item.LightMod.SCANNER:
+				spot.spot_angle = 60.0
+		light = spot
 	# Keep the player layer in light_cull_mask (player is lit) but remove
 	# it from shadow_caster_mask so the player model doesn't cast a shadow
 	# from their own headlamp.
-	spot.shadow_caster_mask &= ~(1 << (PLAYER_VISUAL_LAYER - 1))
-	spot.position = FLASHLIGHT_OFFSET
+	light.shadow_caster_mask &= ~(1 << (PLAYER_VISUAL_LAYER - 1))
+	light.position = FLASHLIGHT_OFFSET
 	_light_on = true
-	spot.visible = true
-	_equipped_light = spot
-	visual.add_child(spot)
+	light.visible = true
+	_equipped_light = light
+	visual.add_child(light)
 	_update_flashlight_pitch(0.0)
 	light_changed.emit(_light_on)
 
@@ -1789,6 +2143,47 @@ func _apply_light_item() -> void:
 func is_scanner_active() -> bool:
 	var head: Item = InventoryState.get_equipped(&"head")
 	return head != null and head.light_mod == Item.LightMod.SCANNER and _light_on
+
+
+# Number of slow-pool Area3Ds the player currently overlaps. Counted (not
+# bool) so overlapping puddles + corner cases where two body_entered fire
+# before any body_exited don't desync the slow.
+var _slow_pool_count: int = 0
+
+## Increments the slow-pool overlap count. Called by DecalBuilder's
+## puddle Area3D when the player walks in. Emits slow_pool_changed only
+## on the 0→1 transition so HUD listeners don't churn entries when the
+## player walks across overlapping pools.
+func enter_slow_pool() -> void:
+	var was_in := _slow_pool_count > 0
+	_slow_pool_count += 1
+	if not was_in:
+		slow_pool_changed.emit(true)
+
+## Decrements the slow-pool overlap count. Called on body_exited. Emits
+## slow_pool_changed only on the N→0 transition.
+func exit_slow_pool() -> void:
+	if _slow_pool_count <= 0:
+		return
+	_slow_pool_count -= 1
+	if _slow_pool_count == 0:
+		slow_pool_changed.emit(false)
+
+
+## True while the player is overlapping at least one slow-pool Area3D.
+## HUD reads this on slow_pool_changed to decide whether the Slowed
+## entry belongs in the debuffs bar.
+func is_in_slow_pool() -> bool:
+	return _slow_pool_count > 0
+
+## Move-speed multiplier from slow-pool overlap, modulated by Traction.
+## Returns 1.0 when not in any pool (no effect). When in a pool, returns
+## Traction.slow_factor_for(player_traction) — 0.5 at no traction, scaling
+## to 1.0 at TIER_SLOW (traction 50).
+func _slow_pool_factor() -> float:
+	if _slow_pool_count <= 0:
+		return 1.0
+	return Traction.slow_factor_for(Traction.get_player_traction())
 
 func _update_light_visibility() -> void:
 	if _equipped_light != null:
@@ -1866,7 +2261,10 @@ func _is_aim_input_held() -> bool:
 		# something non-aimed" RMB skill.
 		if action == &"alt_fire":
 			var rmb_skill := resolve_skill(1)
-			if rmb_skill != null and rmb_skill.active_kind == Skill.ActiveKind.SHIELD_HOLD:
+			if rmb_skill != null and (
+				rmb_skill.active_kind == Skill.ActiveKind.SHIELD_HOLD
+				or rmb_skill.active_kind == Skill.ActiveKind.AIM_HOLD
+			):
 				continue
 		return true
 	return false

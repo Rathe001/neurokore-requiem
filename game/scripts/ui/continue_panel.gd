@@ -20,6 +20,13 @@ const DELETE_CONFIRM_DELAY := 1.5
 var show_create_button: bool = false
 ## Override the panel title (default "Single Player").
 var panel_title: String = "MENU_SINGLE_PLAYER"
+## Restrict the roster to a single mode bucket. &"" = no filter, &"sp" =
+## single-player characters only, &"mp" = multiplayer characters only.
+var mode_filter: StringName = &""
+## Restrict the roster to a single hardcore mode. -1 = no filter, 0 =
+## softcore only, 1 = hardcore only. Used when joining an MP lobby with
+## a fixed difficulty so the player can't pick a mismatched character.
+var hardcore_filter: int = -1
 
 var _vbox: VBoxContainer
 var _rows_box: VBoxContainer
@@ -33,9 +40,18 @@ func _ready() -> void:
 func refresh() -> void:
 	_clear_rows()
 	var saves := SaveManager.list_saves()
+	var visible_saves: Array[Dictionary] = []
 	for save: Dictionary in saves:
+		if mode_filter != &"" and StringName(save.get("mode_id", "sp")) != mode_filter:
+			continue
+		if hardcore_filter == 0 and bool(save.get("hardcore", false)):
+			continue
+		if hardcore_filter == 1 and not bool(save.get("hardcore", false)):
+			continue
+		visible_saves.append(save)
+	for save: Dictionary in visible_saves:
 		_add_character_row(save)
-	if saves.is_empty():
+	if visible_saves.is_empty():
 		var empty := Label.new()
 		empty.text = "No saved characters found."
 		empty.add_theme_font_size_override(&"font_size", 12)

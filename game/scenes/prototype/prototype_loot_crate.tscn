@@ -24,6 +24,8 @@ material = SubResource("mat_lid")
 size = Vector3(1.05, 0.08, 0.75)
 
 [node name="LootCrate" type="StaticBody3D"]
+collision_layer = 64
+collision_mask = 0
 script = ExtResource("1_script")
 display_name = "Loot Crate"
 

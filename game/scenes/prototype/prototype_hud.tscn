@@ -146,6 +146,21 @@ alignment = 0
 theme_override_constants/separation = 3
 mouse_filter = 2
 
+; Debuffs flow from the right edge so positive (buffs) and negative
+; (debuffs) effects are spatially split — easy at-a-glance separation.
+; alignment = 2 = ALIGNMENT_END.
+[node name="DebuffEntries" type="HBoxContainer" parent="Root/BuffsBar"]
+unique_name_in_owner = true
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 2.0
+offset_top = 2.0
+offset_right = -2.0
+offset_bottom = -2.0
+alignment = 2
+theme_override_constants/separation = 3
+mouse_filter = 2
+
 [node name="HudPanel" type="Control" parent="Root"]
 anchor_left = 0.5
 anchor_right = 0.5

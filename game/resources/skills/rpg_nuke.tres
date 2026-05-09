@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="Skill" load_steps=2 format=3]
+
+; RPG alt-fire — mini-nuke on a long cooldown. Massive AoE, heavy
+; damage. Treat as a panic button: ~30s cooldown, blast_radius 9m.
+; Burns one ammo round same as the primary so the magazine is shared.
+
+[ext_resource type="Script" path="res://scripts/skills/skill.gd" id="1_skill_script"]
+
+[resource]
+script = ExtResource("1_skill_script")
+display_name = "Mini-Nuke"
+glyph = "*"
+damage = 200
+skill_range = 22.0
+cooldown = 30.0
+wind_up = 0.6
+resource_cost = 0
+targeting_mode = 2
+cone_deg = 0.0
+knockback = 12.0
+projectile_speed = 14.0
+blast_radius = 9.0
+damage_multiplier = 1.0
+icon_color = Color(1.0, 0.6, 0.15, 1.0)

@@ -66,6 +66,18 @@ func _on_mouse_exited() -> void:
 	if is_inside_tree():
 		get_tree().call_group(&"interactable_tooltip", &"hide_tooltip")
 
+
+## Public: re-evaluate the tooltip against the slot's current contents.
+## Called by CharacterPanel after right-click equip/unequip so the tooltip
+## swaps to the displaced item (or hides) without forcing the player to
+## move the cursor out of the slot and back in to retrigger mouse_entered.
+func refresh_tooltip() -> void:
+	var item := current_item()
+	if item != null:
+		get_tree().call_group(&"interactable_tooltip", &"show_item", item)
+	else:
+		get_tree().call_group(&"interactable_tooltip", &"hide_tooltip")
+
 func current_item() -> Item:
 	if role == Role.EQUIPMENT:
 		return InventoryState.get_equipped(slot_id)
