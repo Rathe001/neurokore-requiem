@@ -1434,6 +1434,28 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#cold-open" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cold Open
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#story-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Story Flow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#earth-facility-723" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1450,6 +1472,17 @@
     <span class="md-ellipsis">
       
         Layout
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-first-npc-exposition-handoff" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The first NPC — exposition handoff
       
     </span>
   </a>
@@ -1585,10 +1618,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#the-fight" class="md-nav__link">
+  <a href="#the-choice" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The fight
+        The choice
       
     </span>
   </a>
@@ -1705,18 +1738,71 @@
 
 <h1 id="narrative-bible">Narrative Bible<a class="headerlink" href="#narrative-bible" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status: Aspirational.</strong> None of the content in this doc is implemented in the playtest. It exists as a worldbuilding reference for future work — the EF-723 setting, the rep encounter structure, the Confrontation, the Sub-Level Zero categories. When in doubt about the world's <em>tone</em>, read this; when in doubt about what <em>currently runs</em>, read the code.</p>
+<p><strong>Status: Aspirational.</strong> None of the content in this doc is implemented in the playtest. It exists as a worldbuilding reference for future work — the EF-723 setting, the cold open, the rep encounter structure, the Confrontation, the Sub-Level Zero categories. When in doubt about the world's <em>tone</em>, read this; when in doubt about what <em>currently runs</em>, read the code.</p>
 </blockquote>
-<p>The starting-zone narrative (Earth Facility #723) is a 3-level scripted progression that ends in a class choice. It is the project's narrative spine — every later zone is shaped by what happens here.</p>
+<p>The starting-zone narrative (Earth Facility #723) is a four-level scripted progression that ends in a class choice. It is the project's narrative spine — every later zone is shaped by what happens here. <strong>Leveling is disabled in the starting zone</strong>; loot drops normally so the player can experiment with gear, but XP gain doesn't begin until they reach the first post-tutorial zone.</p>
+<h2 id="cold-open">Cold Open<a class="headerlink" href="#cold-open" title="Permanent link">&para;</a></h2>
+<p>The game opens cinematic-first. The player has no agency yet.</p>
+<p>A figure — the player character — is held under bright examination lights. Two operators inspect it: a heavily augmented cyborg and a baseline human in corporate uniform. The cyborg runs a diagnostic. The human consults a tablet. They speak in clinical shorthand. They agree on something. The word <em>"defective"</em> lands in the conversation without ceremony.</p>
+<p><strong>Character creation opens here.</strong> The player picks origin (Analog / Cyborg), gender, avatar, name. The selection panel reads as the operators' interface — the player is, in narrative terms, <em>being assigned</em> their origin, not choosing it.</p>
+<p>The cinematic resumes. The decision is made. One of the operators steps in with a device. The PC is zapped. The screen goes dark.</p>
+<p>When the screen comes back, the PC is alone — Cyborgs wake on a procedure table in their wing, Analogs in a detention cell in theirs. The operator who declared them defective is dead in the room with them. The corpse is searchable and contains the player's first weapon.</p>
+<blockquote>
+<p>Design intent: the cold open establishes that the player is <em>property</em>, not a hero. Everything afterward is escape from a system that already wrote them off.</p>
+</blockquote>
+<h2 id="story-flow">Story Flow<a class="headerlink" href="#story-flow" title="Permanent link">&para;</a></h2>
+<p>The starting zone runs five levels, structured around the rep encounters and class choice:</p>
+<table>
+<thead>
+<tr>
+<th>Level</th>
+<th>Beat</th>
+<th>Mechanics</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>1</strong></td>
+<td>First rep encounter — corridor escape, tough end-boss, rep intercepts</td>
+<td>XP off, loot on</td>
+</tr>
+<tr>
+<td><strong>2</strong></td>
+<td>Second rep encounter — different boss flavor (e.g., damage-immune)</td>
+<td>XP off, loot on</td>
+</tr>
+<tr>
+<td><strong>3</strong></td>
+<td>Third rep encounter — different boss flavor again (e.g., clone horde)</td>
+<td>XP off, loot on</td>
+</tr>
+<tr>
+<td><strong>4</strong></td>
+<td>Confrontation room — all three reps converge, class choice</td>
+<td>XP off, loot on</td>
+</tr>
+<tr>
+<td><strong>5</strong></td>
+<td>First post-tutorial zone — Sub-Level Zero begins</td>
+<td><strong>XP on</strong>, loot on</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Boss intercept rules.</strong> Each of levels 1–3 ends in a tough end-of-level boss. The boss is balanced to be <em>almost</em> unwinnable — the player's first taste of "you can't beat this on your own." When the boss reaches <strong>50% HP</strong> OR the boss reduces the player to 0 HP, the level's rep intercepts and one-shots it. The intervention is the rep's introduction. They explain who they are, hint at what they offer, and grant the player <strong>tier 1 of their perk</strong> as a working sample.</p>
+<p>This means the player walks into the Confrontation having already <em>played</em> with three different power fantasies. The choice isn't theoretical.</p>
+<p><strong>Boss flavor variation.</strong> Each level's boss should feel different so the rep intercept doesn't read as a copy-paste. Working ideas: Level 1 a hard-hitting bruiser the player has to whittle down; Level 2 a damage-immune target the player can't possibly beat (rep removes the immunity by killing it); Level 3 a horde the player gets buried under (rep clears the room).</p>
 <h2 id="earth-facility-723">Earth Facility #723<a class="headerlink" href="#earth-facility-723" title="Permanent link">&para;</a></h2>
-<p>A vast corporate complex that served simultaneously as a cutting-edge augmentation research center and a high-security detention facility. The same corporation that pioneered augmentation technology also imprisoned those who resisted it.</p>
+<blockquote>
+<p><strong>Design intent — the two-stage reveal.</strong> The "EF-" prefix is doing deliberate misdirection. Early NPCs and terminal flavor name the facility by its full designation ("Earth Facility 723", "EF-723") in a way that primes the player to read "Earth" as <em>location</em> — i.e., "this is the 723rd facility on Earth, NeuroKore is a big corp." The truth is that "Earth" modifies <em>Facility</em>, not location: an <em>Earth-class</em> facility is itself a manufactured planet, nanogeoformed to Earthlike conditions, used end-to-end as slave-production infrastructure. The number 723 is this facility's serial — it implies <em>at least</em> 723 such planets exist, possibly far more. The reveal lands when the player learns the entire planet they've been on IS the facility, and that there are 722+ siblings out there full of cloned slaves. <strong>Reveal timing is TBD</strong> — could land at the Confrontation room, just inside Sub-Level Zero, or later. Whichever beat we pick, all earlier dialogue and terminal flavor must support the misdirection without contradicting it. Do not casually drop "planet" or "world" in early lore.</p>
+</blockquote>
+<p>A vast corporate complex that served simultaneously as a cutting-edge augmentation research center and a high-security detention facility. The same corporation — <strong>NeuroKore</strong> — that pioneered augmentation technology also imprisoned those who resisted it.</p>
 <p>The facility has been abandoned. Not destroyed, not decommissioned with care — simply left. A memo recovered from a terminal near the entrance:</p>
 <blockquote>
 <p><em>"Re: EF-723 Operations Suspension</em></p>
 <p><em>Facility #723 has been flagged for decommission effective end of quarter. Current holdings represent ₩0.0000003% of Q3 portfolio. Operational costs no longer justify output. Asset recovery teams will not be dispatched. Regards, Resource Optimization Division."</em></p>
 </blockquote>
 <p>The people inside — patients, prisoners, staff, experiments — were not mentioned.</p>
-<p>The "Earth" prefix is intentional. There are other facilities. There are other planets. The corporation's scale is expressed in denominations that don't have common names.</p>
+<p>NeuroKore's scale is expressed in denominations that don't have common names. The number on this facility's designation is not a count of how many there are; it's a serial, and serials don't loop back.</p>
 <h3 id="layout">Layout<a class="headerlink" href="#layout" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code>[ AUGMENTATION WING ]          [ DETENTION WING ]
   Cyborg starting zone           Analog starting zone
@@ -1728,16 +1814,38 @@
                corridors / escape
 </code></pre></div>
 <p>The two paths converge in the facility's lower maintenance infrastructure — utilitarian tunnels neither wing's inhabitants would typically have reason to enter. This is where Cyborg and Analog players meet for the first time before escaping together into Sub-Level Zero.</p>
-<h2 id="the-representative-system">The Representative System<a class="headerlink" href="#the-representative-system" title="Permanent link">&para;</a></h2>
-<p>Each starting zone is 3 levels long — one per specialized class of that origin. Each level introduces one class representative. The rep saves the player once per level, in a moment that reflects their class's power, before the final Confrontation.</p>
-<p>This creates two things:</p>
+<h3 id="the-first-npc-exposition-handoff">The first NPC — exposition handoff<a class="headerlink" href="#the-first-npc-exposition-handoff" title="Permanent link">&para;</a></h3>
+<p>Shortly after escaping the starting room, the player encounters their first non-hostile presence. The encounter is class-specific in setting but identical in function: it delivers the core orientation dialogue.</p>
+<ul>
+<li><strong>Cyborg path:</strong> a mostly disassembled cyborg laid out on a medical examination table. Lower body gone, internals exposed, still talking. Has been watching the wing fail through one functional optical sensor since the lockdown.</li>
+<li><strong>Analog path:</strong> a prisoner whose cell door didn't open when the rest of the block went dark. Trapped behind a still-locked door. Gestures the player over to the intercom.</li>
+</ul>
+<p>The dialogue beats:</p>
 <ol>
-<li><strong>Debt</strong> — the player owes each rep their life by the time the choice arrives.</li>
-<li><strong>Betrayal</strong> — choosing one rep means fighting and killing the other two. They saved you. You know exactly what you're doing.</li>
+<li><em>Where you are:</em> "You're in EF-723. NeuroKore facility. They decommissioned us last quarter."</li>
+<li><em>What happened to the player:</em> "Surgery went sideways when the shutdown hit. Whatever they were putting in your head — your control module, the loyalty conditioning, the leash — it didn't take. That's why you're walking around with your own thoughts."</li>
+<li><em>What the player is:</em> "You're a cloned slave. Made here, raised here, processed for assignment. The defect is what makes you free."</li>
 </ol>
-<p>The saves are not subtle. They are designed to be memorable. Each save moment is also when the rep teaches the player their class skill and the skill tree opens for the first time.</p>
+<p>The NPC does not survive the conversation, or does not get to leave with the player — the medical-table cyborg fades during the exchange, the cell-locked prisoner can't be freed and sends the player on without them. This is the only character the player gets pure exposition from. Everything afterward is filtered through reps with agendas.</p>
+<h2 id="the-representative-system">The Representative System<a class="headerlink" href="#the-representative-system" title="Permanent link">&para;</a></h2>
+<p>Each starting zone is three rep-encounter levels (1–3) plus a Confrontation level (4). One specialized class rep per encounter level. The rep intervenes in a moment of genuine failure — at the level's end-of-zone boss — and the rescue is also when the player gets their first hands-on with the rep's power.</p>
+<p>The pattern, per encounter:</p>
+<ol>
+<li><strong>The level builds toward an end-boss the player can't reasonably beat</strong> — body horror in the augmentation wing, organized resistance in detention. The fight feels real; the player is not aware they're being set up.</li>
+<li><strong>At 50% boss HP, OR when the boss kills the player, the rep intercepts</strong> and one-shots the boss. The player either gets to almost-win and watches the rep finish it, or gets to lose and watches the rep undo their loss. Either way the rep arrives as someone who didn't need to and chose to.</li>
+<li><strong>The rep introduces themselves.</strong> Short. They explain what they are in a few lines. They want the player to consider becoming one too.</li>
+<li><strong>They grant tier 1 of their class perk</strong> as a working sample. The skill tree opens for the rep's class only — the player can spend a granted point and <em>play</em> with the perk through the rest of the zone.</li>
+</ol>
+<p>This pattern is repeated for the second and third reps with progressively more inventive boss flavor — see Story Flow above for the boss-variation idea.</p>
+<p>By the time the Confrontation arrives, the player has been saved three times and tasted three different power fantasies. The choice is informed, not theoretical.</p>
+<blockquote>
+<p>Design intent — debt without coercion. Each rep's intervention is a gift, not a contract. The player owes each of them their life, but no rep frames the future relationship as repayment. The choice in level 4 has to <em>feel</em> free even though the path of least resistance is to follow whichever rep most recently saved you.</p>
+</blockquote>
 <h2 id="cyborg-path-the-augmentation-wing">Cyborg path: the Augmentation Wing<a class="headerlink" href="#cyborg-path-the-augmentation-wing" title="Permanent link">&para;</a></h2>
 <p>The Cyborg player wakes mid-procedure on an operating table. The corp abandoned them during an augmentation operation. Their last procedure is half-finished. The wing has been deteriorating ever since — failed experiments roam the halls, black market operators occupy the lower levels, and something is still running in the experimental labs at the core.</p>
+<blockquote>
+<p>The flavor passages below are the rep's <em>introduction beat</em> — in the new flow, this is the boss-intercept moment at the end of each level (per Representative System above). The setting framing is per-rep; the mechanic underneath it is uniform.</p>
+</blockquote>
 <h3 id="level-1-the-ward">Level 1 — The Ward<a class="headerlink" href="#level-1-the-ward" title="Permanent link">&para;</a></h3>
 <p>Half-finished patients shamble through the corridors — people abandoned mid-augmentation, some fused to equipment, some with procedures that went catastrophically wrong. The game's first introduction to body horror.</p>
 <p><strong>Rep: The Forged.</strong> A former corporate security enforcer given a prototype heavy chassis. When the corp pulled out, he stayed — maintaining brutal order over whatever the ward became. He finds the player pinned under a collapsed augmentation rig.</p>
@@ -1759,6 +1867,9 @@
 <h2 id="analog-path-the-detention-wing">Analog path: the Detention Wing<a class="headerlink" href="#analog-path-the-detention-wing" title="Permanent link">&para;</a></h2>
 <p>The Analog player is an inmate in the facility's high-security detention block. The prison holds people who couldn't afford augmentation, refused it, or were flagged as threats to the corp's augmentation agenda. Many were destined for experimental procedures without consent.</p>
 <p>The power goes out. The cells open. The blackout originates from the deepest solitary block — something the Enculted rep did, or something drawn to her, or both. It is not entirely clear.</p>
+<blockquote>
+<p>Same as the Cyborg path: the flavor passages below are the rep's introduction at the end-of-level boss intercept, per the Representative System pattern. The setting framing varies; the mechanic is uniform.</p>
+</blockquote>
 <h3 id="level-1-the-cell-block">Level 1 — The Cell Block<a class="headerlink" href="#level-1-the-cell-block" title="Permanent link">&para;</a></h3>
 <p>Chaos. Inmates in the corridors, augmented guards cracking down, the facility's security systems going dark in rolling waves.</p>
 <p><strong>Rep: The Survivalist.</strong> A fellow prisoner who has been preparing for exactly this. Has spent months converting contraband into weapons and mapping guard rotations. He finds the player cornered in a stairwell.</p>
@@ -1778,31 +1889,31 @@
 <p><em>She steps out of her cell like she's been waiting. She doesn't explain the door. She doesn't explain the guard. She looks at you like she already knows what you're going to choose.</em></p>
 </blockquote>
 <h2 id="the-confrontation">The Confrontation<a class="headerlink" href="#the-confrontation" title="Permanent link">&para;</a></h2>
-<p>All three reps converge at the exit point — the threshold between the starting zone and Sub-Level Zero below.</p>
-<p>The reps do not present themselves calmly. They argue with each other first — each convinced their path is the obvious correct choice, each dismissive of the others. The player watches three people who just saved their life disagree about everything except one thing.</p>
-<p>Eventually they turn to the player. The player may ask about each class before deciding — this is the primary opportunity to understand what each path entails before committing. Questions can be directed at any rep; the others will react to the answers.</p>
-<p>When the player has heard enough, they make their choice. If they cannot decide, the reps make the decision for them:</p>
+<p>Level 4 of the starting zone. All three reps the player has met converge in a single chamber — a sealed room with a locked gateway on the far side. The gateway is the exit from the tutorial. None of them can leave through it alone; the player's choice is what unlocks it.</p>
+<p>The reps argue with each other first. Each is convinced their path is the obviously correct one, each dismissive of the others. The player watches three people who just saved their life disagree about everything except their belief that the player should follow them. The player can intervene in the conversation, ask each rep about themselves and the others, and direct the disagreement — this is the primary opportunity to understand each path before committing.</p>
+<p>Eventually the reps turn to the player and present the ultimatum:</p>
 <blockquote>
-<p><em>"You've seen what we can do. You know what's out there. Pick one of us, or we leave you here."</em></p>
+<p><em>"Pick one of us. Or stay an origin and walk this alone. But the gate doesn't open until you decide."</em></p>
 </blockquote>
-<p>The ultimatum is not a bluff. The violence that follows is not a punishment — it is the logical conclusion of three people who each believe, genuinely, that their way is the only way worth surviving.</p>
-<h3 id="the-fight">The fight<a class="headerlink" href="#the-fight" title="Permanent link">&para;</a></h3>
-<p><strong>Choose a rep → ally with them, fight the other two.</strong> The fight is the first true boss encounter. The chosen rep fights alongside the player; the other two fight together. The encounter is designed to showcase what the unchosen classes can do — players experience the roads not taken as threats rather than demonstrations.</p>
-<p>The two defeated reps are dead. Permanently. The world will reflect their absence.</p>
+<h3 id="the-choice">The choice<a class="headerlink" href="#the-choice" title="Permanent link">&para;</a></h3>
+<p>When the player picks a class (or commits to remaining an origin), the gateway unlocks. <strong>The unchosen reps leave through it.</strong> No fight, no parting violence — they're not the player's enemies. They each made a different bargain with NeuroKore's wreckage and they're walking back into the world to keep making it. The chosen rep stays behind for one more conversation — short, characterful, the start of the player-companion relationship — and then the two of them follow.</p>
+<p>The unchosen reps are gone for now. <strong>They are not dead.</strong> The world will reflect them living on parallel paths; later zones may surface one or both as ambient presences, news, allies of convenience, or eventual antagonists depending on how the player's chosen path drifts. Their lives continue without the player.</p>
+<blockquote>
+<p>Design note — this is a deliberate departure from the earlier bible draft, which had the Confrontation resolve as a 2v2 fight with the unchosen reps killed. The peaceful divergence makes the world feel populated by people with their own continuing stories, not props discarded after one use. Open question: what mechanical hook (if any) brings unchosen reps back into the player's path later? Reserved for whoever writes the second zone's narrative.</p>
+</blockquote>
 <h3 id="the-chosen-rep-after">The chosen rep, after<a class="headerlink" href="#the-chosen-rep-after" title="Permanent link">&para;</a></h3>
-<p>The chosen rep accompanies the player into Sub-Level Zero and through the exit. They become the player's <strong>representative companion</strong> going forward:</p>
+<p>The chosen rep accompanies the player through the gateway and into Sub-Level Zero. They become the player's <strong>representative companion</strong> going forward:</p>
 <ul>
 <li>They appear at designated level-up points throughout the game — leveling is not done on the fly.</li>
 <li>They join certain boss encounters where it makes thematic sense.</li>
 <li>Their dialogue reacts to the player's talent progression and class transformation — they are the character most sensitive to how deep the player has gone.</li>
 </ul>
 <h2 id="the-origin-class-path">The Origin Class path<a class="headerlink" href="#the-origin-class-path" title="Permanent link">&para;</a></h2>
-<p>The player may refuse all three reps.</p>
-<p>The refusal appears to be the independent choice. The three reps exchange a look and step aside. The fight begins anyway. Three-on-one, it becomes apparent around the three-quarter mark that this was a mistake.</p>
+<p>"Remain origin" is a fourth option in the ultimatum, and the reps know it. They don't approve, but they don't surprise the player with a fight either. When the player commits to staying origin, the three reps trade a look — disappointment, dismissal, or pity depending on the rep — and walk through the gateway. The room sits empty for a beat.</p>
 <p>Then a fourth figure enters.</p>
-<p><strong>The mystery rep</strong> — an Analog for Cyborg players, a Cyborg for Analog players. They intervene without explanation, turning a losing fight into a winnable one.</p>
-<p>After the battle, they introduce themselves. They are the rep of those who refused to sell themselves for power — the only path that costs you nothing and gives you nothing except yourself. They will fill the companion role going forward, same as any class rep.</p>
-<p>The difference: the player didn't choose this. They failed to choose anything, and were given something anyway. The mystery rep knows this. They don't mention it — but they know.</p>
+<p><strong>The mystery rep</strong> — an Analog for Cyborg players, a Cyborg for Analog players. They were never in the room before; the player has never seen them. They cross to the gateway and wait there for a moment before introducing themselves.</p>
+<p>They are the rep of those who refused to sell themselves twice — first to NeuroKore for augmentation, then to one of NeuroKore's broken survivors for a cause. The only path that costs the player nothing and gives them nothing except themselves. They will fill the companion role going forward, same as any class rep.</p>
+<p>The difference: the player didn't choose this. They refused to choose anything, and were given something anyway. The mystery rep knows this. They don't mention it — but they know.</p>
 <p><strong>The mystery rep is the morally "good" path.</strong> All six specialized classes represent a compromise. The origin class, under this companion, does not. This is reinforced by the origin class's breadth — they have access to all three specialist skill trees at shallow depth rather than one at full depth.</p>
 <h2 id="sub-level-zero">Sub-Level Zero<a class="headerlink" href="#sub-level-zero" title="Permanent link">&para;</a></h2>
 <p>The basement of Earth Facility #723. Below the augmentation wing. Below the detention block. Below everything. The first common zone after the Confrontation.</p>
