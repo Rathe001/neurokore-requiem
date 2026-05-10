@@ -151,8 +151,29 @@ func resolve_skill_hit(skill: Skill, aim: Vector3, weapon: Item, source_offset: 
 			# a melee swing. Skip the cone visual for those; damage
 			# resolution still runs.
 			var skip_cone_visual := skill.active_kind == Skill.ActiveKind.CHANNEL_BEAM
+			# Advance the melee combo at the top of the cast for melee
+			# weapons. Multistrike repeats below all share the resulting
+			# step (read via _host.melee_combo_step in _resolve_cone), so
+			# damage / cone width / status all stay consistent across
+			# the multistrike loop within a single click. Non-melee
+			# SINGLE_CONE casts (Accelerator stream, etc.) advance the
+			# helper too — it returns 0 and is harmless because the
+			# weapon isn't in MELEE_BASE_IDS.
+			_host.advance_melee_combo(weapon)
+			var visual_cone_deg := _melee_cone_deg_for_step(skill, _host.melee_combo_step())
+			# 2H hammer finisher (step 2) gets a layered radial shockwave
+			# on top of the cone so the swing reads as "ground slam"
+			# rather than just a wider sweep. 1H knife finisher keeps the
+			# cone alone — the wider arc + bleed status carries it.
+			var is_hammer_finisher: bool = (
+				weapon != null
+				and weapon.weapon_base_id == &"melee_2h"
+				and _host.melee_combo_step() == 2
+			)
 			if not skip_cone_visual:
-				CombatVisuals.spawn_hit_cone(_host, aim, eff_range, skill.cone_deg)
+				CombatVisuals.spawn_hit_cone(_host, aim, eff_range, visual_cone_deg)
+				if is_hammer_finisher:
+					CombatVisuals.spawn_hit_radial(_host, eff_range)
 			_resolve_cone(skill, aim, eff_range, weapon)
 			for extra in hits - 1:
 				var delay := MULTISTRIKE_STAGGER * float(extra + 1)
@@ -160,7 +181,7 @@ func resolve_skill_hit(skill: Skill, aim: Vector3, weapon: Item, source_offset: 
 					if not _host._alive:
 						return
 					if not skip_cone_visual:
-						CombatVisuals.spawn_hit_cone(_host, aim, eff_range, skill.cone_deg)
+						CombatVisuals.spawn_hit_cone(_host, aim, eff_range, visual_cone_deg)
 					_resolve_cone(skill, aim, eff_range, weapon)
 				, CONNECT_ONE_SHOT)
 		Skill.TargetingMode.AOE_RADIAL:
@@ -236,17 +257,67 @@ func _deal_damage(target: Node3D, amount: int, knockback_from: Vector3, knockbac
 	PrototypeEnemy.deal_damage(target, amount, knockback_from, knockback_strength, multistrike, is_crit)
 
 
+## Combo step → cone-width override. Step 0 uses the authored cone_deg,
+## step 1 widens to ~1.5×, step 2 sweeps almost full circle so the
+## finisher reads as "spin-strike all directions" without going to a
+## separate AOE_RADIAL targeting mode.
+func _melee_cone_deg_for_step(skill: Skill, step: int) -> float:
+	if not _is_melee_weapon_step(step):
+		return skill.cone_deg
+	match step:
+		1: return minf(180.0, skill.cone_deg * 1.5)
+		2: return 350.0
+	return skill.cone_deg
+
+
+# Damage / knockback multipliers applied per combo step. Step 0 is the
+# baseline (1.0 / 1.0); each subsequent step ramps the swing harder.
+const MELEE_COMBO_DAMAGE_MULTS: Array[float] = [1.0, 1.25, 1.6]
+const MELEE_COMBO_KNOCKBACK_MULTS: Array[float] = [1.0, 1.5, 2.5]
+
+
+# Returns true when the player is actively in a melee combo — i.e. the
+# combo step is meaningful for the current cast. Used to gate the
+# step-based modulation so non-melee SINGLE_CONE casts (Accelerator
+# stream) don't read step 0 and start applying combo math to themselves.
+func _is_melee_weapon_step(_step: int) -> bool:
+	var weapon: Item = _host._attack_weapon
+	if weapon == null:
+		weapon = InventoryState.get_equipped(&"weapon")
+	if weapon == null:
+		return false
+	return weapon.weapon_base_id in PrototypePlayer.MELEE_BASE_IDS
+
+
 func _resolve_cone(skill: Skill, aim: Vector3, eff_range: float, weapon: Item) -> void:
-	var half_cos := cos(deg_to_rad(skill.cone_deg * 0.5))
-	var kb := _knockback_for(skill, weapon)
+	var combo_step: int = _host.melee_combo_step()
+	var is_melee := _is_melee_weapon_step(combo_step)
+	# Combo widens the cone on hits 2/3 (step 1/2). Damage and knockback
+	# scale up too — a step-2 hammer swing hits 1.6× damage with 2.5×
+	# knockback, which sells the "wind-up finisher" feel.
+	var cone_deg: float = _melee_cone_deg_for_step(skill, combo_step) if is_melee else skill.cone_deg
+	var dmg_mult: float = MELEE_COMBO_DAMAGE_MULTS[combo_step] if is_melee else 1.0
+	var kb_mult: float = MELEE_COMBO_KNOCKBACK_MULTS[combo_step] if is_melee else 1.0
+	var half_cos := cos(deg_to_rad(cone_deg * 0.5))
+	var kb: float = _knockback_for(skill, weapon) * kb_mult
 	var apply_status: bool = skill.overcharge_status != &""
+	# Step-2 finisher applies a per-archetype status:
+	#   melee_1h → bleed (stacking %HP DoT)
+	#   melee_2h → stun (CC)
+	# Status durations baked here rather than on the skill since they're
+	# combo-driven, not authored-per-skill.
+	var apply_combo_status := is_melee and combo_step == 2
+	var any_hit := false
 	for enode: Node3D in SpatialGrid.query_cone(_host.global_position, aim, eff_range, half_cos, &"enemies"):
 		if not enode.has_method(&"take_damage"):
 			continue
 		if is_player_friendly(enode):
 			continue
 		var is_crit := _roll_crit(weapon)
-		var dmg := _crit_damage(_roll_skill_damage(skill, weapon), is_crit)
+		var raw_dmg := _roll_skill_damage(skill, weapon)
+		if dmg_mult != 1.0:
+			raw_dmg = int(round(float(raw_dmg) * dmg_mult))
+		var dmg := _crit_damage(raw_dmg, is_crit)
 		_deal_damage(enode, dmg, _host.global_position, kb, 1, is_crit)
 		_apply_exile_curse_if_active(enode)
 		_apply_mindlink(enode, dmg, is_crit)
@@ -257,6 +328,34 @@ func _resolve_cone(skill: Skill, aim: Vector3, eff_range: float, weapon: Item) -
 		# non-Overcharge cone skill).
 		if apply_status:
 			_apply_overcharge_status(enode, skill, weapon)
+		if apply_combo_status:
+			_apply_melee_combo_status(enode, weapon)
+		any_hit = true
+	# Hitstop on connect — only fires if at least one enemy actually
+	# took damage. Sells the "weight" of the swing without freezing the
+	# player on whiffs.
+	if any_hit and is_melee:
+		_host.trigger_melee_hitstop()
+
+
+# Per-archetype 3rd-hit status:
+#   • melee_1h (knives) → bleed: 1 stack per crit-or-not, 6s duration.
+#     Stacks across successive 3rd-hit finishers chained on the same
+#     target — pressure builds the longer the player stays engaged.
+#   • melee_2h (hammers) → stun: brief 0.6s, no stacking semantics.
+#     Long enough for one or two follow-up swings before the target
+#     re-aggros, short enough that horde fights don't lock targets out.
+const MELEE_COMBO_BLEED_DURATION: float = 6.0
+const MELEE_COMBO_STUN_DURATION: float = 0.6
+
+
+func _apply_melee_combo_status(enemy: Node, weapon: Item) -> void:
+	if weapon == null:
+		return
+	if weapon.weapon_base_id == &"melee_1h" and enemy.has_method(&"apply_bleed"):
+		enemy.apply_bleed(MELEE_COMBO_BLEED_DURATION, 1)
+	elif weapon.weapon_base_id == &"melee_2h" and enemy.has_method(&"apply_stun"):
+		enemy.apply_stun(MELEE_COMBO_STUN_DURATION)
 
 func _resolve_aoe(skill: Skill, eff_range: float, weapon: Item) -> void:
 	var kb := _knockback_for(skill, weapon)

@@ -194,6 +194,72 @@ func consume_click() -> void:
 # start so wind-up timing and hit resolution use the same stats even if the
 # player swaps gear mid-attack. Null for class skills.
 var _attack_weapon: Item = null
+
+# ── Melee 3-hit combo ───────────────────────────────────────────────────────
+# Tracks where in the 3-step swing chain the player currently is. Reset to 0
+# on idle (no melee swing for MELEE_COMBO_RESET_TIME seconds), weapon swap,
+# or weapon-archetype change. PlayerCombat reads this in _resolve_cone to
+# scale cone width / damage / knockback / 3rd-hit status (bleed for 1H,
+# stun for 2H). Hits 0/1/2 represent swing 1/2/3 of the chain.
+const MELEE_COMBO_RESET_TIME: float = 1.5
+const MELEE_BASE_IDS: Array[StringName] = [&"melee_1h", &"melee_2h"]
+var _melee_combo_step: int = 0
+var _melee_combo_last_t: float = -1000.0
+var _melee_combo_last_weapon_id: StringName = &""
+
+
+## Advances the melee combo step for the given weapon and returns the
+## new step (0/1/2). Resets to 0 on timeout, weapon swap, or non-melee
+## weapon. PlayerCombat calls this once per melee SINGLE_CONE cast at
+## the top of resolve_skill_hit; multistrike repeats within that same
+## cast all share the returned step.
+func advance_melee_combo(weapon: Item) -> int:
+	if weapon == null or not (weapon.weapon_base_id in MELEE_BASE_IDS):
+		_melee_combo_step = 0
+		_melee_combo_last_weapon_id = &""
+		return 0
+	var now: float = Time.get_ticks_msec() / 1000.0
+	var elapsed: float = now - _melee_combo_last_t
+	# Continuation: same weapon archetype within timeout → next step.
+	# Otherwise: reset to step 0 and start fresh.
+	if elapsed <= MELEE_COMBO_RESET_TIME and weapon.weapon_base_id == _melee_combo_last_weapon_id:
+		_melee_combo_step = (_melee_combo_step + 1) % 3
+	else:
+		_melee_combo_step = 0
+	_melee_combo_last_t = now
+	_melee_combo_last_weapon_id = weapon.weapon_base_id
+	return _melee_combo_step
+
+
+## Read-only accessor for the current combo step. Multistrike repeats
+## within a single cast all read this value so the visual + status
+## stay consistent across the multistrike loop.
+func melee_combo_step() -> int:
+	return _melee_combo_step
+
+
+# Hitstop — brief animation freeze when a melee swing connects with
+# any enemy. Sells the "weight" of the hit. Per-player (anim_player.
+# speed_scale, not Engine.time_scale), so MP-safe: each peer's hitstop
+# fires on their own avatar's hits independently. Resets via timer.
+const MELEE_HITSTOP_DURATION: float = 0.06
+var _hitstop_remain: float = 0.0
+var _hitstop_prev_speed_scale: float = 1.0
+
+
+func trigger_melee_hitstop() -> void:
+	if anim_player == null or _hitstop_remain > 0.0:
+		return
+	_hitstop_prev_speed_scale = anim_player.speed_scale
+	anim_player.speed_scale = 0.0
+	_hitstop_remain = MELEE_HITSTOP_DURATION
+	get_tree().create_timer(MELEE_HITSTOP_DURATION).timeout.connect(_release_melee_hitstop)
+
+
+func _release_melee_hitstop() -> void:
+	_hitstop_remain = 0.0
+	if anim_player != null:
+		anim_player.speed_scale = _hitstop_prev_speed_scale
 var _want_dir: Vector3 = Vector3.ZERO
 var _resource_current: float = 0.0
 var _resource_last_int: int = 0

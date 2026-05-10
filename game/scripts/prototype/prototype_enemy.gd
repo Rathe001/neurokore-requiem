@@ -358,6 +358,23 @@ var _ignite_remain: float = 0.0
 var _ignite_dps: float = 0.0
 var _ignite_tick_accum: float = 0.0
 const IGNITE_TICK_INTERVAL := 0.5
+
+# Bleed DoT — applied by 1H melee third-hit combo (and any future
+# weapon/affix that wants a "physical" DoT to differentiate from the
+# ignite/elemental side). Damage is computed as a fraction of the
+# enemy's max HP per tick rather than flat dps, so bleed scales
+# meaningfully across enemy tiers. Stacks via _bleed_stacks (each
+# stack adds the same per-tick fraction) so chained 3rd-hits compound.
+var _bleed_remain: float = 0.0
+var _bleed_stacks: int = 0
+var _bleed_tick_accum: float = 0.0
+const BLEED_TICK_INTERVAL := 0.5
+# Each stack ticks for this fraction of MAX HP per second — so 1 stack
+# is 2% / s, 4 stacks is 8% / s. Body-horror tone wants visible-but-
+# not-overwhelming bleed pressure; the % scaling keeps it relevant
+# against tank enemies where flat-dps DoTs become trivial.
+const BLEED_HP_PCT_PER_SEC: float = 0.02
+const BLEED_MAX_STACKS: int = 5
 var _charmed: bool = false
 var _charm_target: Node3D = null
 var _weaken_remain: float = 0.0
@@ -460,6 +477,9 @@ func _init_enemy() -> void:
 	_ignite_remain = 0.0
 	_ignite_dps = 0.0
 	_ignite_tick_accum = 0.0
+	_bleed_remain = 0.0
+	_bleed_stacks = 0
+	_bleed_tick_accum = 0.0
 	_charmed = false
 	_charm_target = null
 	_weaken_remain = 0.0
@@ -1341,6 +1361,17 @@ func apply_ignite(dps: float, duration: float) -> void:
 		_ignite_remain = duration
 
 
+## Apply or refresh bleed. Stacks (each call adds 1 stack up to BLEED_
+## MAX_STACKS); duration extends if longer. Tick damage scales with the
+## enemy's max HP so bleed stays meaningful against tank tiers.
+func apply_bleed(duration: float, stacks: int = 1) -> void:
+	if not _is_alive() or duration <= 0.0 or stacks <= 0:
+		return
+	_bleed_stacks = mini(BLEED_MAX_STACKS, _bleed_stacks + stacks)
+	if duration > _bleed_remain:
+		_bleed_remain = duration
+
+
 func apply_stun(duration: float) -> void:
 	if not _is_alive() or duration <= 0.0:
 		return
@@ -1570,6 +1601,22 @@ func _tick_afflictions(delta: float) -> void:
 			_ignite_remain = 0.0
 			_ignite_dps = 0.0
 			_ignite_tick_accum = 0.0
+	# Bleed DoT — % of max HP per second per stack, ticked at fixed
+	# intervals like ignite. Independent of ignite (a target can bleed
+	# AND burn) so 1H melee combo finishers stack with elemental
+	# weapons cleanly.
+	if _bleed_remain > 0.0 and _bleed_stacks > 0:
+		_bleed_remain -= delta
+		_bleed_tick_accum += delta
+		if _bleed_tick_accum >= BLEED_TICK_INTERVAL:
+			_bleed_tick_accum -= BLEED_TICK_INTERVAL
+			var per_tick_pct: float = BLEED_HP_PCT_PER_SEC * BLEED_TICK_INTERVAL * float(_bleed_stacks)
+			var tick_dmg: int = maxi(1, int(round(float(max_health) * per_tick_pct)))
+			take_damage(tick_dmg, global_position, 0.0, 1, false)
+		if _bleed_remain <= 0.0:
+			_bleed_remain = 0.0
+			_bleed_stacks = 0
+			_bleed_tick_accum = 0.0
 	# Re-pick the charm target every tick when the cached one is dead,
 	# null, OR has become an ally (charmed by the player too). Without
 	# the friendly check, a pet whose target gets charmed mid-fight
@@ -2727,6 +2774,9 @@ func _die(kill_from: Vector3 = Vector3.ZERO, kill_force: float = 0.0) -> void:
 	_ignite_remain = 0.0
 	_ignite_dps = 0.0
 	_ignite_tick_accum = 0.0
+	_bleed_remain = 0.0
+	_bleed_stacks = 0
+	_bleed_tick_accum = 0.0
 	_weaken_remain = 0.0
 	_weaken_mult = 0.0
 	_curse_remain = 0.0
