@@ -33,6 +33,8 @@ The whole setup lives under `C:\Users\<you>\Tools\` — keeps it portable and ou
    & "$dest\steamcmd.exe" +quit  # bootstraps the rest of SteamCMD's payload (~45MB)
    ```
 
+> **Heads-up on `setx` / `[Environment]::SetEnvironmentVariable("User")`**: both write to the persistent user environment but only affect shells opened **after** the write. Any terminal that was already open keeps its old env. After the step below — and after the `setx STEAM_USER ...` step further down — open a fresh terminal before running anything else, or the deploy script will look for `godot` / `steamcmd` / `STEAM_USER` and not find them.
+
 4. **Add both tools to your User PATH**:
    ```powershell
    $userPath = [Environment]::GetEnvironmentVariable("PATH", "User")

@@ -35,6 +35,46 @@ Ranged attacks (hitscan and projectile) check distance from fire origin to targe
 
 Counter-play differentiation: Survivalist sprints to disengage before firing; Count can spec the **Point Blank** talent to waive the penalty for player-fired shots only.
 
+### Signature quirks (per-archetype passives)
+
+Every weapon archetype has *one* iconic passive that fires automatically while equipped — a "thing the weapon does" beyond raw stat differences. Stats alone make weapons interchangeable; a quirk makes the pickup feel like an actual choice. Players don't need to memorize the list — the HUD's quirk reminder widget (under the minimap) surfaces the play tip for currently-equipped weapons.
+
+Design intent is that each quirk is *cheap to learn, possible to exploit*. A new player benefits passively; a learned player builds positioning + cadence around it.
+
+| Archetype | Quirk |
+|---|---|
+| 1H knife | **Backstab** — hits from behind enemy facing deal +50% |
+| 2H hammer | **Wind-Up** — first hit after 1s standing still deals +75% |
+| Laser pistol | **Charged Shot** — first shot after 1s+ idle deals 1.5× |
+| Plasma rifle | **Pierce** — bolts pass through one enemy |
+| SMG | **Penetration** — every 5th shot deals 2× |
+| LMG | **Heat** — sustained fire stacks +10%/shot, max +50%, decays after 1s of no fire |
+| Sniper | **First Mark** — first shot on a fresh target deals +50% (5s freshness window per target) |
+| RPG | **Concussive** — every enemy in the blast is staggered |
+| Shotgun | **Point Blank** — pellets hitting within 2m deal +50% |
+| Charged Arc Taser | **Static Build** — every 10th hit on an enemy releases at 3× (per-target counter) |
+| Energy Accelerator | **Resonance** — held stream ramps damage to +30%, resets on release |
+
+The canonical reminder strings live in `WeaponQuirkPanel.QUIRK_TIPS`. Implementation lives across `PlayerCombat` (per-shot or per-cast quirks), `PrototypePlayer` (player-side stack trackers like LMG heat / Accelerator resonance / hammer wind-up), `PrototypeEnemy` (per-target counters like Sniper First Mark / Taser Static Build), and `PrototypeProjectile` (bullet-level quirks like Plasma Pierce / Shotgun Point Blank distance).
+
+### Melee combo
+
+Each melee swing within 1.5s of the previous one advances a 3-step combo. The chain resets on timeout, weapon swap, or non-melee weapon switch.
+
+| Step | Cone width | Damage | Knockback | Finisher |
+|---|---|---|---|---|
+| 1 | authored | 1.0× | 1.0× | — |
+| 2 | 1.5× wider | 1.25× | 1.5× | — |
+| 3 | 350° (almost full sweep) | 1.6× | 2.5× | **status applied** |
+
+The step-3 finisher applies a status that differs by weapon kind:
+- **1H knives** stack a **bleed** debuff — % max-HP damage-over-time, stacks up to 5. Body-horror tone made explicit; pressure compounds the longer the player stays engaged on a single target.
+- **2H hammers** apply a brief **stun** (0.6s) plus a ground-impact ring visual + camera shake for the heavy-feel sell.
+
+Why a combo system at all: pre-combo melee was "spam LMB, hit cone, damage." The combo introduces a *rhythm* — staying engaged with one target builds toward the finisher, then resets. Encourages target selection over crowd-spam, gives 1H and 2H distinct identities at the finisher tier, and creates a natural cadence that makes melee feel weighted instead of mechanical.
+
+Plus **hitstop** on every melee connect: the swing animation freezes for ~60ms when a hit lands. Per-player (anim_player.speed_scale, not Engine.time_scale), so MP-safe. Sells the weight of every individual hit; without it, melee reads as "input → damage number" with no physical feedback.
+
 ## Itemization
 
 Every piece of gear should answer a question the player is already asking: *"How do I want to play?"* A drop is exciting when it changes behavior, not just when its numbers are bigger.

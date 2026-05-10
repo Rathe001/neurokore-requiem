@@ -39,6 +39,12 @@ var _default_pitch_rad: float = 0.0
 var _bearing_rad: float = 0.0
 var _distance: float = 1.0
 var _mw_held: bool = false
+# Camera shake — current jitter magnitude (in world units). Set by
+# shake() and tweened back to 0 over the requested duration. Applied
+# as a random Vector3 offset in _snap_to_target each frame. Per-camera
+# so MP-safe (every player's iso camera shakes independently on
+# their own hits).
+var _shake_intensity: float = 0.0
 
 func _ready() -> void:
 	if target_path != NodePath():
@@ -125,9 +131,33 @@ func _snap_to_target() -> void:
 	var cos_p := cos(_pitch_rad)
 	var dir_horiz := Vector3(sin(_bearing_rad), 0.0, cos(_bearing_rad))
 	var ofs := Vector3(0.0, _distance * cos_p, 0.0) + dir_horiz * (_distance * sin_p)
+	# Translational shake — adds a random offset to the camera's world
+	# position each frame while _shake_intensity > 0. look_at keeps the
+	# target centered, so the world appears to jolt in screen space
+	# without the view rotating. Stronger hits decay slower; see shake().
+	if _shake_intensity > 0.0:
+		ofs += Vector3(
+			randf_range(-_shake_intensity, _shake_intensity),
+			randf_range(-_shake_intensity, _shake_intensity),
+			randf_range(-_shake_intensity, _shake_intensity),
+		)
 	global_position = _target.global_position + ofs
 	# Up hint = horizontal direction *away* from the camera. Same look_at
 	# orientation as Vector3.UP at non-zero pitch (both vectors lie in the
 	# forward+true-up plane), but stays well-defined at pitch = 0 where
 	# Vector3.UP would be parallel to forward and degenerate the basis.
 	look_at(_target.global_position, -dir_horiz)
+
+
+## Trigger a brief camera shake. `intensity` is the peak random offset
+## (in world units) — 0.05 is subtle, 0.2 is heavy. `duration` is the
+## decay window; the shake eases out to zero over that time. Stronger
+## shake wins over an in-flight weaker one. Per-camera so MP-safe.
+func shake(intensity: float, duration: float) -> void:
+	if intensity <= 0.0 or duration <= 0.0:
+		return
+	if intensity > _shake_intensity:
+		_shake_intensity = intensity
+	var tween := create_tween()
+	tween.tween_property(self, "_shake_intensity", 0.0, duration) \
+		.set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)

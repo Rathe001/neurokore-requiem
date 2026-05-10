@@ -881,6 +881,12 @@ func _build_tooltip_body() -> String:
 		lines.append("Friendly (charmed)")
 	if _stun_remain > 0.0:
 		lines.append("Stunned · %.1fs" % _stun_remain)
+	if _bleed_remain > 0.0 and _bleed_stacks > 0:
+		# % HP per second from BLEED_HP_PCT_PER_SEC × stacks — shown as
+		# the rate so the player can reason about whether to keep
+		# stacking or move to a new target.
+		var bleed_pct := int(round(BLEED_HP_PCT_PER_SEC * 100.0 * float(_bleed_stacks)))
+		lines.append("Bleed ×%d (−%d%% HP/s) · %.1fs" % [_bleed_stacks, bleed_pct, _bleed_remain])
 	if _weaken_remain > 0.0:
 		var pct := int(round(_weaken_mult * 100.0))
 		lines.append("Weakened −%d%% dmg · %.1fs" % [pct, _weaken_remain])

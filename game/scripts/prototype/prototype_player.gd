@@ -352,8 +352,14 @@ var _hammer_wind_up_ready: bool = false
 # Called per physics frame from the player's tick. delta is per-frame time.
 # Movement detected via _want_dir; any non-zero direction resets the idle
 # accumulator. Once accumulator passes the threshold, ready flag flips on.
+#
+# Aim-hold skills that immobilize the player (LMG Tripod, Sniper Focus)
+# zero _want_dir incidentally, so without this gate a Tripod-equipped
+# LMG user would build hammer wind-up while holding RMB. Treat "idle by
+# immobilization" as ineligible — wind-up is only meant to reward
+# voluntary stillness, not forced stillness from a different weapon.
 func _tick_hammer_wind_up(delta: float) -> void:
-	if _want_dir.length_squared() > 0.01:
+	if _want_dir.length_squared() > 0.01 or aim_hold_locks_movement():
 		_hammer_wind_up_idle_t = 0.0
 		_hammer_wind_up_ready = false
 		return

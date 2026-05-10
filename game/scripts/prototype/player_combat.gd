@@ -176,7 +176,16 @@ func resolve_skill_hit(skill: Skill, aim: Vector3, weapon: Item, source_offset: 
 				else:
 					CombatVisuals.spawn_hit_cone(_host, aim, eff_range, visual_cone_deg)
 					if is_hammer_finisher:
-						CombatVisuals.spawn_hit_radial(_host, eff_range)
+						# Dedicated ground-impact ring (replaces the
+						# placeholder hit_radial layering used initially).
+						CombatVisuals.spawn_hammer_impact(_host)
+						# Camera shake on the finisher — per-player (local
+						# iso camera only), MP-safe. Intensity is small in
+						# world units; the iso distance amplifies it on
+						# screen so 0.1 reads as a meaningful jolt.
+						var cam := _host.get_viewport().get_camera_3d() as PrototypeCamera
+						if cam != null:
+							cam.shake(0.1, 0.25)
 			_resolve_cone(skill, aim, eff_range, weapon)
 			for extra in hits - 1:
 				var delay := MULTISTRIKE_STAGGER * float(extra + 1)

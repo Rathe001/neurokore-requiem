@@ -45,6 +45,6 @@ Always keep these in mind when making architecture or design decisions:
 
 ## Project Status
 
-Early prototype. **Steam playtest is live** (v0.1.1, 2026-05-06). The code under `game/scripts/` and `git log` are authoritative for what currently works — more accurate than any status writeup could stay.
+Early prototype. **Steam playtest is live** (v0.2.0, 2026-05-10). The code under `game/scripts/` and `git log` are authoritative for what currently works — more accurate than any status writeup could stay.
 
 Open design areas not derivable from code: origin-class perk ladders (Analog/Cyborg generalists), Polymath/Enculted resource models (both currently TBD), behavior-mod pools per slot (~4 each), end-game loop, death/failure model, economy and crafting, power-budget tuning at scale.

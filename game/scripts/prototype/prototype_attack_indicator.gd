@@ -690,6 +690,74 @@ static func spawn_hit_radial(host: Node3D, radius: float) -> void:
 	_spawn_shockwave(host, pos, _bubble_mesh(radius), Vector3.ZERO, SHOCKWAVE_DURATION_RADIAL)
 
 
+# ── Hammer ground-impact ring (2H hammer step-2 finisher visual) ────────────
+# Floor-flat ring that sweeps outward from the player's feet. Drawn on
+# a unit-disc PlaneMesh with hammer_impact.gdshader; the shader animates
+# via the `progress` uniform which the host tweens 0..1. Stacks on top
+# of the regular shockwave cone for the step-2 finisher so the cone
+# reads as the swing and the ring reads as the ground impact.
+
+const HAMMER_IMPACT_SHADER: Shader = preload("res://scripts/prototype/hammer_impact.gdshader")
+const HAMMER_IMPACT_DURATION: float = 0.35
+const HAMMER_IMPACT_RING_COLOR := Color(1.0, 0.7, 0.3, 1.0)
+# Ring grows out to this radius from the player. Sized to cover the
+# typical 2H hammer cone reach (~3-4m).
+const HAMMER_IMPACT_RADIUS: float = 4.0
+# Lift the ring barely above floor so it doesn't z-fight with the
+# floor mesh. Matches the airstrike marker's offset.
+const HAMMER_IMPACT_FLOOR_LIFT: float = 0.04
+
+static var _hammer_impact_mesh: PlaneMesh = null
+static var _hammer_impact_material_template: ShaderMaterial = null
+
+
+static func _get_hammer_impact_mesh() -> PlaneMesh:
+	if _hammer_impact_mesh == null:
+		_hammer_impact_mesh = PlaneMesh.new()
+		# 2 × radius for unit-disc UV mapping: world-space size becomes
+		# (2*radius, 2*radius), giving the shader a UV space where the
+		# unit circle is the full visible ring.
+		var d := HAMMER_IMPACT_RADIUS * 2.0
+		_hammer_impact_mesh.size = Vector2(d, d)
+	return _hammer_impact_mesh
+
+
+static func _get_hammer_impact_material_template() -> ShaderMaterial:
+	if _hammer_impact_material_template == null:
+		_hammer_impact_material_template = ShaderMaterial.new()
+		_hammer_impact_material_template.shader = HAMMER_IMPACT_SHADER
+		_hammer_impact_material_template.set_shader_parameter(
+			&"ring_color", Vector3(HAMMER_IMPACT_RING_COLOR.r, HAMMER_IMPACT_RING_COLOR.g, HAMMER_IMPACT_RING_COLOR.b))
+		_hammer_impact_material_template.set_shader_parameter(&"intensity", 3.5)
+		_hammer_impact_material_template.set_shader_parameter(&"thickness", 0.08)
+		_hammer_impact_material_template.set_shader_parameter(&"max_alpha", 0.85)
+		_hammer_impact_material_template.set_shader_parameter(&"progress", 0.0)
+	return _hammer_impact_material_template
+
+
+static func spawn_hammer_impact(host: Node3D) -> void:
+	if host == null:
+		return
+	var parent: Node = host.get_parent()
+	if parent == null:
+		parent = host
+	var mat: ShaderMaterial = _get_hammer_impact_material_template().duplicate()
+	mat.set_shader_parameter(&"progress", 0.0)
+	var inst := MeshInstance3D.new()
+	inst.mesh = _get_hammer_impact_mesh()
+	inst.material_override = mat
+	inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(inst)
+	# Position at the host's feet, just above the floor surface.
+	inst.global_position = host.global_position + Vector3(0.0, HAMMER_IMPACT_FLOOR_LIFT, 0.0)
+	# Tween progress 0 → 1 over the duration. Shader does the animation
+	# math; we just supply the time variable.
+	var tween := inst.create_tween()
+	tween.tween_property(mat, "shader_parameter/progress", 1.0, HAMMER_IMPACT_DURATION) \
+		.set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
+	tween.tween_callback(inst.queue_free)
+
+
 # ── Blade slash (1H knife / melee_1h hit visual) ────────────────────────────
 # Procedural arced slash drawn by blade_slash.gdshader on a flat plane
 # oriented to face the camera. Replaces the prior box-mesh approach
