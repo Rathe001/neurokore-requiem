@@ -25,4 +25,4 @@ weapon_range_range = Vector2(12.0, 14.0)
 fire_skill = ExtResource("2_fire_skill")
 ammo_capacity_range = Vector2i(10, 50)
 reload_time = 1.5
-model_names = Array[String](["VK-9 Stinger", "Murmur", "MX-22 Wasp", "Blacksite Compact", "TZR-4 Sliver"])
+model_names = Array[String](["VK-9 Stinger", "VKR-22 Wasp", "VKX-4 Sliver", "VKZ-7 Murmur", "VKM-3 Compact"])

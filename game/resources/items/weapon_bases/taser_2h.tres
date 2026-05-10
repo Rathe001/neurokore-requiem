@@ -33,4 +33,4 @@ weapon_range_range = Vector2(7.0, 9.0)
 fire_skill = ExtResource("2_fire_skill")
 alt_fire_skill = ExtResource("3_alt_fire")
 damage_type = &"electric"
-model_names = Array[String](["VR-12 Thresher", "Voltsong", "MX-77 Coil", "Static Hymn", "TZR-9 Arc"])
+model_names = Array[String](["AC-12 Thresher", "ACR-9 Coil", "ACX-77 Voltsong", "ACZ-3 Static Hymn", "ACV-22 Surge"])

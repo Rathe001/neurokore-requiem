@@ -26,4 +26,4 @@ fire_skill = ExtResource("2_fire_skill")
 alt_fire_skill = ExtResource("3_alt_fire")
 ammo_capacity_range = Vector2i(1, 2)
 reload_time = 5.0
-model_names = Array[String](["MX-9 Haymaker", "Pyre", "VR-1 Tactical", "Reckoning", "TR-66 Wrathmaker"])
+model_names = Array[String](["WR-9 Haymaker", "WRR-1 Tactical", "WRX-66 Wrathmaker", "WRZ-22 Reckoning", "WRM-3 Pyre"])
