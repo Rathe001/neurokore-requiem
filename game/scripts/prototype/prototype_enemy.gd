@@ -368,6 +368,46 @@ const IGNITE_TICK_INTERVAL := 0.5
 var _bleed_remain: float = 0.0
 var _bleed_stacks: int = 0
 var _bleed_tick_accum: float = 0.0
+
+# Sniper "First Mark" — timestamp of the last sniper round that hit
+# this enemy. The first sniper shot after FIRST_MARK_FRESH_INTERVAL
+# seconds of no sniper damage gets +50% damage. Subsequent shots
+# inside the window are normal. Resets the freshness clock on every
+# sniper hit, so rapid-fire sniping doesn't compound the bonus.
+var _sniper_last_hit_t: float = -1000.0
+const SNIPER_FIRST_MARK_FRESH_INTERVAL: float = 5.0
+const SNIPER_FIRST_MARK_BONUS_MULT: float = 1.5
+
+# Taser "Static Build" — every Nth taser tick on this enemy releases
+# at TASER_STATIC_RELEASE_MULT. Per-enemy counter so chain bounces +
+# hold-tase ticks compound independently on each target.
+var _taser_hit_count: int = 0
+const TASER_STATIC_INTERVAL: int = 10
+const TASER_STATIC_RELEASE_MULT: float = 3.0
+
+
+# Atomic check-and-advance for the Taser static-build bonus. Returns
+# the damage multiplier (3.0 on the Nth tick, 1.0 otherwise) and
+# advances the per-enemy hit counter.
+func consume_taser_static_build() -> float:
+	_taser_hit_count += 1
+	if _taser_hit_count % TASER_STATIC_INTERVAL == 0:
+		return TASER_STATIC_RELEASE_MULT
+	return 1.0
+
+
+# Atomic check-and-stamp for the sniper first-mark bonus. Returns the
+# damage multiplier (1.5 if "fresh" — no sniper hit in the last
+# FIRST_MARK_FRESH_INTERVAL seconds — otherwise 1.0) and updates the
+# stamp. Called by the projectile's hit handler before damage is
+# rolled.
+func consume_sniper_first_mark() -> float:
+	var now: float = Time.get_ticks_msec() / 1000.0
+	var bonus: float = 1.0
+	if now - _sniper_last_hit_t > SNIPER_FIRST_MARK_FRESH_INTERVAL:
+		bonus = SNIPER_FIRST_MARK_BONUS_MULT
+	_sniper_last_hit_t = now
+	return bonus
 const BLEED_TICK_INTERVAL := 0.5
 # Each stack ticks for this fraction of MAX HP per second — so 1 stack
 # is 2% / s, 4 stacks is 8% / s. Body-horror tone wants visible-but-

@@ -260,6 +260,118 @@ func _release_melee_hitstop() -> void:
 	_hitstop_remain = 0.0
 	if anim_player != null:
 		anim_player.speed_scale = _hitstop_prev_speed_scale
+
+
+# ── Per-archetype signature-quirk trackers ──────────────────────────────────
+# State for the per-weapon quirks that need shot-counting / stacks /
+# timestamps. PlayerCombat reads these in damage paths to apply the
+# right multiplier or follow-up effect.
+
+# LMG "Heat" — sustained fire stacks a damage bonus that decays after
+# 1s of no LMG fire. Each shot adds 1 stack, capped at LMG_HEAT_MAX.
+const LMG_HEAT_DECAY_TIME: float = 1.0
+const LMG_HEAT_MAX_STACKS: int = 5
+const LMG_HEAT_PCT_PER_STACK: float = 0.10
+var _lmg_heat_stacks: int = 0
+var _lmg_heat_last_fire_t: float = -1000.0
+
+# Accelerator "Resonance" — channel-tick stack that grows on consecutive
+# damage ticks; resets when the channel ends. +5% per tick, cap 6 = +30%.
+const ACCEL_RESONANCE_MAX_STACKS: int = 6
+const ACCEL_RESONANCE_PCT_PER_STACK: float = 0.05
+var _accel_resonance_stacks: int = 0
+
+# SMG "Penetration" — every Nth SMG shot deals 2× damage. Counter
+# advances on each SMG bullet spawn; the Nth shot's damage roll is
+# pre-multiplied at projectile spawn time.
+const SMG_PENETRATION_INTERVAL: int = 5
+const SMG_PENETRATION_MULT: float = 2.0
+var _smg_shot_count: int = 0
+
+# Laser pistol "Charged Shot" — first shot after >=1s of no laser fire
+# deals 1.5×. Pure timestamp check; no stacks.
+const LASER_CHARGED_IDLE_TIME: float = 1.0
+const LASER_CHARGED_MULT: float = 1.5
+var _laser_last_fire_t: float = -1000.0
+
+
+# Returns the LMG heat multiplier and advances the stack counter.
+# Stacks decay back to 0 once LMG_HEAT_DECAY_TIME has passed since the
+# last LMG fire — i.e. sustained fire keeps stacks; pausing resets.
+func consume_lmg_heat() -> float:
+	var now: float = Time.get_ticks_msec() / 1000.0
+	if now - _lmg_heat_last_fire_t > LMG_HEAT_DECAY_TIME:
+		_lmg_heat_stacks = 0
+	_lmg_heat_stacks = mini(LMG_HEAT_MAX_STACKS, _lmg_heat_stacks + 1)
+	_lmg_heat_last_fire_t = now
+	return 1.0 + LMG_HEAT_PCT_PER_STACK * float(_lmg_heat_stacks)
+
+
+# Bumps the Accelerator resonance counter and returns the current
+# damage multiplier. Called once per channel tick that resolves
+# damage. Reset on channel stop via reset_accel_resonance.
+func consume_accel_resonance() -> float:
+	_accel_resonance_stacks = mini(ACCEL_RESONANCE_MAX_STACKS, _accel_resonance_stacks + 1)
+	return 1.0 + ACCEL_RESONANCE_PCT_PER_STACK * float(_accel_resonance_stacks)
+
+
+func reset_accel_resonance() -> void:
+	_accel_resonance_stacks = 0
+
+
+# Returns the SMG penetration multiplier for THIS shot and advances
+# the counter. The 5th, 10th, 15th... shots return 2.0; everything
+# else returns 1.0.
+func consume_smg_penetration() -> float:
+	_smg_shot_count += 1
+	if _smg_shot_count % SMG_PENETRATION_INTERVAL == 0:
+		return SMG_PENETRATION_MULT
+	return 1.0
+
+
+# Returns the laser charged-shot multiplier for THIS shot and stamps
+# the timer. Bonus only fires on the first shot after >=1s idle.
+func consume_laser_charged_shot() -> float:
+	var now: float = Time.get_ticks_msec() / 1000.0
+	var bonus: float = 1.0
+	if now - _laser_last_fire_t >= LASER_CHARGED_IDLE_TIME:
+		bonus = LASER_CHARGED_MULT
+	_laser_last_fire_t = now
+	return bonus
+
+
+# ── Hammer Wind-Up ──────────────────────────────────────────────────────────
+# Tracks the player's "stillness" — once the player has been not-moving for
+# HAMMER_WIND_UP_TIME seconds, the next 2H melee hit deals +75% damage.
+# Consumed on hit (one-shot bonus, not per-target). Reset by any movement.
+const HAMMER_WIND_UP_TIME: float = 1.0
+var _hammer_wind_up_idle_t: float = 0.0
+var _hammer_wind_up_ready: bool = false
+
+
+# Called per physics frame from the player's tick. delta is per-frame time.
+# Movement detected via _want_dir; any non-zero direction resets the idle
+# accumulator. Once accumulator passes the threshold, ready flag flips on.
+func _tick_hammer_wind_up(delta: float) -> void:
+	if _want_dir.length_squared() > 0.01:
+		_hammer_wind_up_idle_t = 0.0
+		_hammer_wind_up_ready = false
+		return
+	_hammer_wind_up_idle_t += delta
+	if _hammer_wind_up_idle_t >= HAMMER_WIND_UP_TIME:
+		_hammer_wind_up_ready = true
+
+
+# Atomic check-and-clear for the wind-up bonus. PlayerCombat calls this
+# at the start of each 2H melee swing; returns true once per qualifying
+# swing, then resets to require a fresh idle window. This means a
+# wind-up swing buffs ONE swing, not a continuous stream.
+func consume_hammer_wind_up() -> bool:
+	if not _hammer_wind_up_ready:
+		return false
+	_hammer_wind_up_ready = false
+	_hammer_wind_up_idle_t = 0.0
+	return true
 var _want_dir: Vector3 = Vector3.ZERO
 var _resource_current: float = 0.0
 var _resource_last_int: int = 0
@@ -828,6 +940,7 @@ func _physics_process(delta: float) -> void:
 	_tick_reload(delta)
 	_tick_aim_hold(delta)
 	_tick_channel(delta)
+	_tick_hammer_wind_up(delta)
 
 	var on_floor := is_on_floor()
 
@@ -1800,6 +1913,10 @@ func _stop_channel() -> void:
 	_channel_skill = null
 	_channel_input_action = &""
 	_channel_tick_accum = 0.0
+	# Accelerator Resonance — reset stack so the next channel start
+	# rebuilds from zero. Without this, lifting LMB and immediately
+	# re-firing would skip past the ramp window.
+	reset_accel_resonance()
 	_hide_flame_visual()
 	# Only broadcast a stop if this was a flame channel — Taser hold's
 	# stop doesn't need an RPC because the lightning arcs were per-tick

@@ -298,6 +298,24 @@ func _resolve_cone(skill: Skill, aim: Vector3, eff_range: float, weapon: Item) -
 	var cone_deg: float = _melee_cone_deg_for_step(skill, combo_step) if is_melee else skill.cone_deg
 	var dmg_mult: float = MELEE_COMBO_DAMAGE_MULTS[combo_step] if is_melee else 1.0
 	var kb_mult: float = MELEE_COMBO_KNOCKBACK_MULTS[combo_step] if is_melee else 1.0
+	# Hammer "Wind-Up" — first hammer hit after 1s of standing still
+	# deals +75%. Drains the bonus on hit (one-shot, not per-target),
+	# so a wind-up finisher hits ONE enemy harder, not the whole cone.
+	# Reset by movement (handled in _physics_process via the player's
+	# stillness timer).
+	var wind_up_active: bool = (
+		is_melee
+		and weapon != null
+		and weapon.weapon_base_id == &"melee_2h"
+		and _host.consume_hammer_wind_up()
+	)
+	if wind_up_active:
+		dmg_mult *= 1.75
+	# Accelerator "Resonance" — held stream gains +5% damage per tick on
+	# target, capped at +30%. Counter advances on each cone tick that
+	# resolves; reset on channel stop in _stop_channel.
+	if weapon != null and weapon.weapon_base_id == &"accelerator_2h" and skill.active_kind == Skill.ActiveKind.CHANNEL_BEAM:
+		dmg_mult *= _host.consume_accel_resonance()
 	var half_cos := cos(deg_to_rad(cone_deg * 0.5))
 	var kb: float = _knockback_for(skill, weapon) * kb_mult
 	var apply_status: bool = skill.overcharge_status != &""
@@ -317,6 +335,19 @@ func _resolve_cone(skill: Skill, aim: Vector3, eff_range: float, weapon: Item) -
 		var raw_dmg := _roll_skill_damage(skill, weapon)
 		if dmg_mult != 1.0:
 			raw_dmg = int(round(float(raw_dmg) * dmg_mult))
+		# Knife "Backstab" — 1H melee hits from behind the enemy deal
+		# +50%. Compares the player→enemy direction to the enemy's
+		# facing: a high positive dot means the enemy is facing AWAY
+		# from where the hit came in (player is behind them).
+		if is_melee and weapon != null and weapon.weapon_base_id == &"melee_1h":
+			var enemy_facing: Vector3 = -enode.global_transform.basis.z
+			var hit_dir: Vector3 = enode.global_position - _host.global_position
+			hit_dir.y = 0.0
+			enemy_facing.y = 0.0
+			if hit_dir.length_squared() > 0.0001 and enemy_facing.length_squared() > 0.0001:
+				var alignment: float = hit_dir.normalized().dot(enemy_facing.normalized())
+				if alignment > 0.5:  # ~60° cone behind the enemy
+					raw_dmg = int(round(float(raw_dmg) * 1.5))
 		var dmg := _crit_damage(raw_dmg, is_crit)
 		_deal_damage(enode, dmg, _host.global_position, kb, 1, is_crit)
 		_apply_exile_curse_if_active(enode)
@@ -422,7 +453,7 @@ func _spawn_projectile(skill: Skill, aim: Vector3, eff_range: float, weapon: Ite
 	else:
 		proj.damage_min = skill.damage + _host._gear_base_damage_bonus
 		proj.damage_max = skill.damage + _host._gear_base_damage_bonus
-	proj.damage_mult = skill.damage_multiplier
+	proj.damage_mult = skill.damage_multiplier * _archetype_quirk_damage_mult(weapon)
 	if _overclock_active:
 		proj.damage_mult *= OVERCLOCK_DAMAGE_MULT
 	proj.blast_radius = skill.blast_radius
@@ -433,7 +464,12 @@ func _spawn_projectile(skill: Skill, aim: Vector3, eff_range: float, weapon: Ite
 	# Bullet weapons (LMG/SMG/sniper/RPG) flag the projectile so it
 	# renders as a tracer streak instead of an energy bolt.
 	proj.is_bullet = weapon != null and weapon.is_bullet_weapon()
+	proj.weapon_base_id = weapon.weapon_base_id if weapon != null else &""
 	proj.damage_type = weapon.effective_damage_type() if weapon != null else &""
+	# Plasma "Pierce" — plasma rifle bolts pass through 1 enemy before
+	# stopping. Set on the projectile so the hit handler decrements
+	# pierce_count and continues flight instead of releasing.
+	proj.pierce_count = _archetype_pierce_count(weapon)
 	_host.get_parent().add_child(proj)
 	proj.global_position = spawn_pos
 	proj.monitoring = true
@@ -442,6 +478,43 @@ func _spawn_projectile(skill: Skill, aim: Vector3, eff_range: float, weapon: Ite
 	# Damage stays host-authoritative; remote echoes are ghost projectiles.
 	CombatVisuals.broadcast_projectile(spawn_pos, aim_norm, proj.speed, proj.max_range,
 		proj.blast_radius, proj.visual_scale, proj.is_bullet, proj.damage_type, proj.target_group)
+
+
+# Pierce count by weapon archetype. Currently only the plasma rifle
+# (ranged_2h) pierces; everything else stops on first enemy. Returns
+# 0 for non-piercing weapons so the projectile resets cleanly between
+# pool reuses.
+func _archetype_pierce_count(weapon: Item) -> int:
+	if weapon == null:
+		return 0
+	if weapon.weapon_base_id == &"ranged_2h":
+		return 1
+	return 0
+
+
+# Per-archetype damage multiplier evaluated at projectile spawn time.
+# Each branch consumes the relevant tracker on the player so the
+# stack/timer state advances even if the shot misses (which keeps the
+# decay timing correct). Multipliers compose with skill.damage_multiplier
+# and overclock; the projectile's own roll then rolls flat damage_min/max.
+#
+#   • LMG_2h  → Heat: +10% per stack of sustained fire (max +50%)
+#   • SMG_1h  → Penetration: every 5th shot is 2.0×
+#   • Ranged_1h (laser) → Charged Shot: 1.5× after >=1s idle
+#
+# Sniper First Mark is per-target (consumed in projectile _hit_single
+# against the enemy), not per-shot, so it's not in this helper.
+func _archetype_quirk_damage_mult(weapon: Item) -> float:
+	if weapon == null:
+		return 1.0
+	match weapon.weapon_base_id:
+		&"lmg_2h":
+			return _host.consume_lmg_heat()
+		&"smg_1h":
+			return _host.consume_smg_penetration()
+		&"ranged_1h":
+			return _host.consume_laser_charged_shot()
+	return 1.0
 
 
 # Extra travel budget beyond skill.airstrike_fall_height so the
@@ -504,6 +577,7 @@ func _spawn_airstrike(skill: Skill, eff_range: float, weapon: Item) -> void:
 		vis_scale *= OVERCLOCK_VISUAL_SCALE
 	proj.visual_scale = vis_scale
 	proj.is_bullet = weapon != null and weapon.is_bullet_weapon()
+	proj.weapon_base_id = weapon.weapon_base_id if weapon != null else &""
 	proj.damage_type = weapon.effective_damage_type() if weapon != null else &""
 	_host.get_parent().add_child(proj)
 	proj.global_position = spawn_pos
@@ -594,6 +668,7 @@ func _spawn_projectile_exact(skill: Skill, aim_norm: Vector3, eff_range: float, 
 	proj.blast_radius = skill.blast_radius
 	proj.visual_scale = skill.damage_multiplier if skill.damage_multiplier > 1.0 else 1.0
 	proj.is_bullet = weapon != null and weapon.is_bullet_weapon()
+	proj.weapon_base_id = weapon.weapon_base_id if weapon != null else &""
 	proj.damage_type = weapon.effective_damage_type() if weapon != null else &""
 	_host.get_parent().add_child(proj)
 	proj.global_position = spawn_pos
@@ -688,7 +763,14 @@ func _spawn_shotgun_pellet(skill: Skill, dir: Vector3, eff_range: float, weapon:
 	proj.blast_radius = 0.0
 	proj.visual_scale = OVERCLOCK_VISUAL_SCALE if _overclock_active else 1.0
 	proj.is_bullet = true
+	proj.weapon_base_id = weapon.weapon_base_id if weapon != null else &""
 	proj.damage_type = weapon.effective_damage_type() if weapon != null else &""
+	# Shotgun "Point Blank" — pellets that land within 2m of the
+	# muzzle deal +50% damage. Reinforces the close-range commitment
+	# (the Point Blank talent waives accuracy penalty; this REWARDS
+	# taking the risk).
+	proj.point_blank_bonus_distance = 2.0
+	proj.point_blank_bonus_mult = 1.5
 	_host.get_parent().add_child(proj)
 	proj.global_position = origin
 	proj.monitoring = true
@@ -746,7 +828,18 @@ func _resolve_chain_lightning(skill: Skill, aim: Vector3, eff_range: float, weap
 	while current != null and damage >= min_damage:
 		hit_set[current] = true
 		var is_crit := _roll_crit(weapon)
-		var dmg := _crit_damage(damage, is_crit)
+		var per_enemy_dmg := damage
+		# Taser "Static Build" — every 10th Taser hit on an enemy deals
+		# 3× damage. Per-enemy counter so chain bounces and hold-tase
+		# ticks compound separately on each target. The first 9 hits
+		# build the static; the 10th releases.
+		if weapon != null and weapon.weapon_base_id == &"taser_2h":
+			var enemy := current as PrototypeEnemy
+			if enemy != null:
+				var static_mult := enemy.consume_taser_static_build()
+				if static_mult != 1.0:
+					per_enemy_dmg = int(round(float(per_enemy_dmg) * static_mult))
+		var dmg := _crit_damage(per_enemy_dmg, is_crit)
 		# No impact-burst on chain links — the lightning shader is the
 		# visual contract; an additional energy-burst on top read as
 		# noisy double-feedback. The arc itself terminating on each

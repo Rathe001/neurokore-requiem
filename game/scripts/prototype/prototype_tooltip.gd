@@ -374,6 +374,13 @@ func show_item(item: Item) -> void:
 	_dps_label.visible = false
 
 	var type_text := _build_type_text(item)
+	var tagline := _archetype_tagline(item)
+	if not tagline.is_empty():
+		# Tagline appended on a second line so it renders directly under
+		# the archetype line in the same muted grey style. Pure cosmetic
+		# identity — reinforces the weapon's "personality" at the moment
+		# of pickup without needing a dedicated label.
+		type_text = "%s\n%s" % [type_text, tagline]
 	_type_label.text = type_text
 	_type_label.visible = not type_text.is_empty()
 
@@ -529,6 +536,31 @@ func _rarity_color(rarity: StringName) -> Color:
 		&"unique":
 			return Color(1.0, 0.6, 0.2, 1.0)
 	return Color(0.95, 0.95, 0.95, 1.0)
+
+# Tagline by weapon archetype — one line of flavor that reinforces the
+# weapon's identity. Tone matches the cyberpunk + body-horror + 80s
+# sci-fi camp surface: clipped corp-shorthand for firearms, blunter
+# physical lines for melee, eerie evocative phrases for energy.
+const WEAPON_TAGLINES: Dictionary = {
+	&"melee_1h": "Quick, quiet, repeatable.",
+	&"melee_2h": "Subtle as a falling building.",
+	&"ranged_1h": "Pocket-sized, plenty loud.",
+	&"ranged_2h": "Bolts pass through. Things fall down.",
+	&"smg_1h": "Volume over precision.",
+	&"lmg_2h": "Suppress. Sustain. Survive.",
+	&"sniper_2h": "One shot. One thought.",
+	&"rpg_2h": "When subtlety has failed.",
+	&"shotgun_2h": "Get close. Get closer.",
+	&"taser_2h": "The hum before the scream.",
+	&"accelerator_2h": "Continuous. Element-fed. Patient.",
+}
+
+
+func _archetype_tagline(item: Item) -> String:
+	if item == null or item.weapon_base_id == &"":
+		return ""
+	return WEAPON_TAGLINES.get(item.weapon_base_id, "")
+
 
 func _build_type_text(item: Item) -> String:
 	if item.main_type.is_empty():

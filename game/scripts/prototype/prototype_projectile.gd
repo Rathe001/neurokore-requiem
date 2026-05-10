@@ -61,6 +61,23 @@ var is_bullet: bool = false
 ## reset() so the sweep still stops at walls but Area3D body_entered
 ## won't fire on enemies. Cleared by _pool_release().
 var is_ghost: bool = false
+## Plasma rifle "Pierce" — extra enemies the projectile passes through
+## before stopping. Each pierce decrements; when 0, the next hit
+## releases as normal. Bolts don't lose damage on pierce — every
+## pierced target takes full damage.
+var pierce_count: int = 0
+## Weapon archetype identifier — set by PlayerCombat from the firing
+## weapon's base id ("sniper_2h", "smg_1h", etc). Read by hit handlers
+## so per-archetype quirks (Sniper First Mark, SMG Penetration counter)
+## can fire from inside the projectile without a back-reference to
+## the firing weapon Item.
+var weapon_base_id: StringName = &""
+## Shotgun "Point Blank" — pellets that hit within this many meters of
+## their spawn point deal `point_blank_bonus_mult` × damage. Reinforces
+## the close-range commitment design: Point Blank talent waives the
+## accuracy penalty, this quirk REWARDS taking the risk. 0 = disabled.
+var point_blank_bonus_distance: float = 0.0
+var point_blank_bonus_mult: float = 1.0
 # Elemental damage type carried over from the firing weapon. Used by
 # AoE projectiles to spawn explosions in the matching element color
 # (cryo RPG → cyan blast, electric → violet, default → orange
@@ -523,6 +540,10 @@ func _pool_release() -> void:
 		_smoke_trail.emitting = false
 	is_bullet = false
 	is_ghost = false
+	pierce_count = 0
+	point_blank_bonus_distance = 0.0
+	point_blank_bonus_mult = 1.0
+	weapon_base_id = &""
 
 func _physics_process(delta: float) -> void:
 	var step := speed * delta
@@ -621,6 +642,13 @@ func _on_body_entered(body: Node3D) -> void:
 			_explode(impact_pos)
 		else:
 			_hit_single(body, impact_pos)
+			# Pierce — pass through this enemy and keep flying. Reset _hit
+			# so the next overlap fires body_entered again. AoE projectiles
+			# don't pierce (they detonated).
+			if pierce_count > 0:
+				pierce_count -= 1
+				_hit = false
+				return
 	_release()
 
 
@@ -633,6 +661,16 @@ func _hit_single(body: Node3D, impact_pos: Vector3) -> void:
 		CombatVisuals.spawn_impact_burst(self, impact_pos, _projectile_color())
 	var is_crit := _roll_crit()
 	var dmg := _roll_damage(is_crit)
+	# Sniper "First Mark" — first sniper round to hit a target after
+	# 5+ seconds of no sniper damage deals +50%. Per-target check via
+	# consume_sniper_first_mark on the enemy. Multiplier applied AFTER
+	# the standard damage roll so it stacks cleanly with crit.
+	if weapon_base_id == &"sniper_2h" and target_group == &"enemies":
+		var enemy := body as PrototypeEnemy
+		if enemy != null:
+			var first_mark_mult := enemy.consume_sniper_first_mark()
+			if first_mark_mult != 1.0:
+				dmg = int(round(float(dmg) * first_mark_mult))
 	if target_group == &"player":
 		body.take_damage(dmg, source_position, knockback_strength)
 	else:
@@ -667,6 +705,13 @@ func _explode(impact_pos: Vector3) -> void:
 			_apply_exile_curse_if_active(target)
 			_apply_mindlink(target, dmg, is_crit)
 			_try_spawn_isr_drone(target)
+			# RPG "Concussive" — every enemy caught in an RPG blast is
+			# briefly staggered (short stun). Reuses the stun status
+			# already wired for hammer combo / overcharge electric, so
+			# no new affliction plumbing is needed. 0.4s is enough for
+			# a follow-up shot before the wave re-engages.
+			if weapon_base_id == &"rpg_2h" and target.has_method(&"apply_stun"):
+				target.apply_stun(0.4)
 	# Ragdoll corpses caught in the blast tumble away from impact_pos.
 	# Same falloff curve as the grenade's _detonate impulse so AoE shots
 	# (charged plasma, future explosive projectiles) feel consistent with
@@ -760,6 +805,11 @@ func _roll_crit() -> bool:
 func _roll_damage(is_crit: bool) -> int:
 	var base := randi_range(damage_min, damage_max) if damage_max > 0 else 10
 	var dmg := int(round(float(base) * damage_mult))
+	# Shotgun Point Blank — pellets hitting within their bonus radius
+	# get a flat damage multiplier on top of the base roll. Applied
+	# pre-crit so a crit at point blank still scales correctly.
+	if point_blank_bonus_distance > 0.0 and _traveled < point_blank_bonus_distance:
+		dmg = int(round(float(dmg) * point_blank_bonus_mult))
 	if is_crit:
 		var mult := PROTO_BASE_CRIT_MULT + Effects.get_aggregate(&"crit_damage_pct")
 		dmg = int(round(float(dmg) * mult))
