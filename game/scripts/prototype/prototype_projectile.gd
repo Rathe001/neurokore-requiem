@@ -130,6 +130,19 @@ const ENEMY_PROJECTILE_COLOR: Color = Color(1.0, 0.88, 0.15, 1.0)
 # the streak reads as motion blur / heat distortion rather than an energy
 # bolt. Same mesh footprint as the laser variant, just retinted.
 const BULLET_PROJECTILE_COLOR: Color = Color(0.92, 0.92, 0.88, 0.65)
+
+# Linear-impulse force applied to ragdoll corpses caught in an AoE shot's
+# blast. Same scale as grenade explosions (CORPSE_IMPULSE_MAX/MIN in
+# prototype_grenade.gd) so a charged plasma shot and a frag grenade feel
+# similar at the corpse-physics level.
+const CORPSE_IMPULSE_MAX: float = 12.0
+const CORPSE_IMPULSE_MIN: float = 3.0
+
+# Duplicates PlayerCombat.EXILE_CURSE_DURATION rather than reaching across
+# class_names — the projectile doesn't otherwise depend on PlayerCombat
+# and a literal here keeps the projectile self-contained. Keep these in
+# sync if the curse window is ever retuned.
+const EXILE_CURSE_DURATION: float = 4.0
 static var _player_material: StandardMaterial3D = null
 static var _enemy_material: StandardMaterial3D = null
 static var _bullet_material: ShaderMaterial = null
@@ -665,21 +678,6 @@ func _explode(impact_pos: Vector3) -> void:
 		var t := d / blast_radius
 		var force: float = lerp(CORPSE_IMPULSE_MAX, CORPSE_IMPULSE_MIN, t)
 		rb.apply_explosion_impulse(impact_pos, force)
-
-
-# Linear-impulse force applied to ragdoll corpses caught in an AoE shot's
-# blast. Same scale as grenade explosions (CORPSE_IMPULSE_MAX/MIN in
-# prototype_grenade.gd) so a charged plasma shot and a frag grenade feel
-# similar at the corpse-physics level.
-const CORPSE_IMPULSE_MAX: float = 12.0
-const CORPSE_IMPULSE_MIN: float = 3.0
-
-
-# Duplicates PlayerCombat.EXILE_CURSE_DURATION rather than reaching across
-# class_names — the projectile doesn't otherwise depend on PlayerCombat
-# and a literal here keeps the projectile self-contained. Keep these in
-# sync if the curse window is ever retuned.
-const EXILE_CURSE_DURATION: float = 4.0
 
 
 func _apply_exile_curse_if_active(enemy: Node) -> void:

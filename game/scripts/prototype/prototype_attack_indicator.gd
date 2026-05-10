@@ -136,12 +136,44 @@ static func spawn(host: Node3D, skill: Skill, aim: Vector3, attack_range: float 
 			spawn_line(host, aim, eff_range, skill.wind_up)
 
 
-# Drop height for airstrike markers. Must match the value PlayerCombat
-# uses when actually spawning the rocket — they're decoupled here only
-# so the indicator can compute marker lifetime without a back-reference
-# to PlayerCombat. Update both if either changes.
-const AIRSTRIKE_FALL_HEIGHT: float = 30.0
 const MARKER_SHADER: Shader = preload("res://scripts/prototype/airstrike_marker.gdshader")
+# Airstrike marker dimensions. Plane is square; size is fixed across
+# all casts so we can share one PlaneMesh instance rather than
+# allocating per-cast. Per-marker variation lives in the per-instance
+# ShaderMaterial (tweened intensity).
+const AIRSTRIKE_MARKER_PLANE_SIZE: float = 3.2
+
+# Shared PlaneMesh for every airstrike marker — every cast reuses this
+# one mesh. The material can't be shared (per-instance intensity tween)
+# but is duplicated from a pre-resolved template, which is cheaper than
+# constructing one from scratch.
+static var _airstrike_marker_mesh: PlaneMesh = null
+static var _airstrike_marker_material_template: ShaderMaterial = null
+
+
+static func _get_airstrike_marker_mesh() -> PlaneMesh:
+	if _airstrike_marker_mesh == null:
+		_airstrike_marker_mesh = PlaneMesh.new()
+		_airstrike_marker_mesh.size = Vector2(
+			AIRSTRIKE_MARKER_PLANE_SIZE, AIRSTRIKE_MARKER_PLANE_SIZE)
+	return _airstrike_marker_mesh
+
+
+static func _get_airstrike_marker_material_template() -> ShaderMaterial:
+	if _airstrike_marker_material_template == null:
+		_airstrike_marker_material_template = ShaderMaterial.new()
+		_airstrike_marker_material_template.shader = MARKER_SHADER
+		# Constant params — every cast wants the same color / bar width /
+		# alpha; only intensity varies per-cast (tweened). Setting these
+		# on the template means duplicate() carries them and per-cast
+		# code only writes the param that changes.
+		_airstrike_marker_material_template.set_shader_parameter(
+			&"marker_color", Vector3(1.0, 0.25, 0.05))
+		_airstrike_marker_material_template.set_shader_parameter(
+			&"bar_width", 0.10)
+		_airstrike_marker_material_template.set_shader_parameter(
+			&"max_alpha", 0.30)
+	return _airstrike_marker_material_template
 
 
 # Paints a glowing red "X" decal on the floor at the cursor target,
@@ -183,19 +215,14 @@ static func spawn_airstrike_marker(host: Node3D, skill: Skill, eff_range: float)
 	# Single horizontal PlaneMesh with an X shader — reads as paint on
 	# the floor regardless of camera angle. Replaces the previous
 	# crossed-BoxMesh slabs which had vertical thickness and caught
-	# iso-camera perspective as 3D objects.
-	const MARKER_PLANE_SIZE := 3.2
-	var plane_mesh := PlaneMesh.new()
-	plane_mesh.size = Vector2(MARKER_PLANE_SIZE, MARKER_PLANE_SIZE)
-	var mat := ShaderMaterial.new()
-	mat.shader = MARKER_SHADER
-	mat.set_shader_parameter(&"marker_color", Vector3(1.0, 0.25, 0.05))
+	# iso-camera perspective as 3D objects. Mesh is shared across all
+	# casts; material is per-instance (intensity is tweened) but
+	# duplicated from a pre-resolved template.
+	var mat: ShaderMaterial = _get_airstrike_marker_material_template().duplicate()
 	mat.set_shader_parameter(&"intensity", 1.4)
-	mat.set_shader_parameter(&"bar_width", 0.10)
-	mat.set_shader_parameter(&"max_alpha", 0.30)
 	var node := MeshInstance3D.new()
 	node.name = "AirstrikeMarker"
-	node.mesh = plane_mesh
+	node.mesh = _get_airstrike_marker_mesh()
 	node.material_override = mat
 	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	host.get_parent().add_child(node)
@@ -207,7 +234,7 @@ static func spawn_airstrike_marker(host: Node3D, skill: Skill, eff_range: float)
 	# Lifetime covers windup (rocket hasn't spawned yet) + fall time
 	# (rocket falling from the sky) + a small buffer so the marker
 	# survives through the explosion frame.
-	var fall_time: float = AIRSTRIKE_FALL_HEIGHT / maxf(skill.projectile_speed, 0.001)
+	var fall_time: float = skill.airstrike_fall_height / maxf(skill.projectile_speed, 0.001)
 	var lifetime: float = skill.wind_up + fall_time + 0.25
 	# Pulse intensity so the X reads as an active target paint instead
 	# of a static decal. The kill tween auto-frees the node when its

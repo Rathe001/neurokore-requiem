@@ -601,6 +601,14 @@ func _resolve_fire_skill(item: Item) -> Skill:
 	if cached == null:
 		var path := "res://resources/items/weapon_bases/%s.tres" % item.weapon_base_id
 		if not ResourceLoader.exists(path):
+			# Silent null here would mean the tooltip's DPS formula
+			# falls back to the raw attack_speed multiplier without the
+			# cooldown / pellet_count / damage_multiplier corrections —
+			# subtly wrong numbers from a typo or renamed file. Surface
+			# the failure in editor logs instead of hiding it.
+			push_warning("[Tooltip] WeaponBase not found for id %s (path %s) — DPS fallback will be inaccurate." % [
+				item.weapon_base_id, path
+			])
 			return null
 		cached = load(path) as WeaponBase
 		if cached != null:

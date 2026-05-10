@@ -143,3 +143,9 @@ enum GrenadeType {
 ## high above that point falling straight down. Used by RPG Tactical
 ## Strike. Ignored unless targeting_mode == PROJECTILE.
 @export var is_airstrike: bool = false
+## Airstrike: meters above the strike point where the projectile spawns.
+## Combined with projectile_speed this defines the fall time the X
+## marker has to be visible before impact. Lives on the skill so the
+## marker spawner (PrototypeAttackIndicator) and the rocket spawner
+## (PlayerCombat) read the same value without duplication.
+@export var airstrike_fall_height: float = 30.0

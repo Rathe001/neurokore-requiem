@@ -1925,9 +1925,14 @@ func _apply_flame_transform(aim: Vector3, range_m: float) -> void:
 	# cone damage path uses for LoS).
 	var space := get_world_3d().direct_space_state
 	if space != null:
-		var ray := PhysicsRayQueryParameters3D.create(
-			muzzle, muzzle + aim_norm * range_m, 1)
-		var hit := space.intersect_ray(ray)
+		if _flame_ray_query == null:
+			_flame_ray_query = PhysicsRayQueryParameters3D.new()
+			_flame_ray_query.collision_mask = 1
+			_flame_ray_query.collide_with_areas = false
+			_flame_ray_query.collide_with_bodies = true
+		_flame_ray_query.from = muzzle
+		_flame_ray_query.to = muzzle + aim_norm * range_m
+		var hit := space.intersect_ray(_flame_ray_query)
 		if not hit.is_empty():
 			var wall_dist: float = muzzle.distance_to(hit["position"])
 			# Pull back slightly from the wall surface so the wide tip
@@ -1956,6 +1961,12 @@ func _apply_flame_transform(aim: Vector3, range_m: float) -> void:
 
 var _remote_flame_active: bool = false
 var _remote_flame_range: float = FLAME_DEFAULT_RANGE
+# Cached ray query for the flame's wall-clip raycast. Built once and
+# reused every channel tick — _apply_flame_transform runs every physics
+# frame while a flame channel is held, and PhysicsRayQueryParameters3D
+# is heavier than re-setting from/to/mask on an existing instance.
+# Same pattern as prototype_projectile.gd._ray_query.
+var _flame_ray_query: PhysicsRayQueryParameters3D = null
 
 
 @rpc("authority", "call_remote", "reliable")

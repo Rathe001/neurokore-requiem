@@ -345,14 +345,9 @@ func _spawn_projectile(skill: Skill, aim: Vector3, eff_range: float, weapon: Ite
 		proj.blast_radius, proj.visual_scale, proj.is_bullet, proj.damage_type, proj.target_group)
 
 
-# Drop height for airstrike projectiles. The rocket spawns this many
-# meters above the target marker, falling straight down. With the skill's
-# projectile_speed at 30, that yields a ~1.0s fall — long enough for the
-# X marker to register and short enough not to feel sluggish.
-const AIRSTRIKE_FALL_HEIGHT: float = 30.0
-# Extra travel budget beyond AIRSTRIKE_FALL_HEIGHT so the projectile's
-# max_range doesn't expire mid-air if the ground sits slightly below
-# the player's plane (e.g. pit edges, recessed rooms).
+# Extra travel budget beyond skill.airstrike_fall_height so the
+# projectile's max_range doesn't expire mid-air if the ground sits
+# slightly below the player's plane (e.g. pit edges, recessed rooms).
 const AIRSTRIKE_RANGE_PADDING: float = 8.0
 
 
@@ -383,10 +378,11 @@ func _spawn_airstrike(skill: Skill, eff_range: float, weapon: Item) -> void:
 	var proj: PrototypeProjectile = EntityPool.acquire(PROJECTILE_SCENE)
 	if proj == null:
 		return
-	var spawn_pos := ground + Vector3(0.0, AIRSTRIKE_FALL_HEIGHT, 0.0)
+	var fall_height: float = skill.airstrike_fall_height
+	var spawn_pos := ground + Vector3(0.0, fall_height, 0.0)
 	proj.direction = Vector3.DOWN
 	proj.speed = skill.projectile_speed
-	proj.max_range = AIRSTRIKE_FALL_HEIGHT + AIRSTRIKE_RANGE_PADDING
+	proj.max_range = fall_height + AIRSTRIKE_RANGE_PADDING
 	proj.knockback_strength = _knockback_for(skill, weapon)
 	proj.source_position = ground  # blast pushes outward from impact, not from player
 	if weapon != null and weapon.damage_max > 0:
