@@ -355,6 +355,10 @@ func _spawn_airstrike(skill: Skill, eff_range: float, weapon: Item) -> void:
 	# Resolve the strike point on the player's ground plane. Cursor is
 	# the source of truth; if it's not projectable (FPS / lock-target
 	# without a cursor) we fall back to the player's facing.
+	# NOTE: Airstrike intentionally skips _apply_aim_spread — Tactical
+	# Strike is a paint-target weapon, not an aimed shot, so weapon
+	# accuracy doesn't affect where the rocket lands. Don't "fix" the
+	# missing accuracy spread call here vs the regular projectile path.
 	var origin := _host.global_position
 	var target_xz := _host.cursor_world_position()
 	var ground: Vector3

@@ -561,6 +561,10 @@ func _compute_dps(item: Item) -> float:
 	var crit: float = item.effective_crit_chance() if item.crit_chance > 0.0 else 0.15
 	var crit_mult := 1.5
 	var crit_factor := 1.0 + crit * (crit_mult - 1.0)
+	# Multistrike rolls per cast, so DPS scales with E[hits]. Resolves
+	# to 1.0 with no multistrike sources equipped — unaffected weapons
+	# pass through cleanly.
+	var multistrike_factor: float = PerkState.expected_multistrike()
 
 	var fire_skill := _resolve_fire_skill(item)
 	var pellet_count := 1
@@ -572,11 +576,13 @@ func _compute_dps(item: Item) -> float:
 		# Channel beams: per-tick damage × ticks per second. Per-tick
 		# damage on a channel is `skill.damage` (the resource of an
 		# Accelerator stream defines its tick). The weapon's avg_dmg
-		# is irrelevant to actual stream output.
+		# is irrelevant to actual stream output. Multistrike still
+		# applies — each tick goes through resolve_skill_hit's
+		# multistrike loop, so per-tick output scales with E[hits].
 		if fire_skill.active_kind == Skill.ActiveKind.CHANNEL_BEAM:
 			var interval: float = maxf(fire_skill.channel_tick_interval, 0.05)
 			var per_tick := float(fire_skill.damage)
-			return per_tick * (1.0 / interval) * crit_factor
+			return per_tick * (1.0 / interval) * crit_factor * multistrike_factor
 		# Cooldown-driven fire rate. attack_speed scales the cooldown
 		# duration (start_cooldown divides by it), so casts/sec =
 		# atk_speed / cooldown. cooldown <= 0 falls back to atk_speed
@@ -585,7 +591,7 @@ func _compute_dps(item: Item) -> float:
 		if fire_skill.cooldown > 0.0:
 			fire_rate = spd / fire_skill.cooldown
 
-	return avg_dmg * float(pellet_count) * damage_mult * fire_rate * crit_factor
+	return avg_dmg * float(pellet_count) * damage_mult * fire_rate * crit_factor * multistrike_factor
 
 
 # Cached WeaponBase loads, keyed by weapon_base_id, so opening tooltips

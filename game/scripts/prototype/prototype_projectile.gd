@@ -484,8 +484,11 @@ func reset() -> void:
 	# body_entered only fires when a body crosses INTO the area on a later
 	# physics frame; if a target is already overlapping at spawn (close-
 	# range fire), the signal never triggers. Defer a sweep over current
-	# overlaps so we catch those.
-	call_deferred(&"_check_initial_overlaps")
+	# overlaps so we catch those. Ghosts have monitoring=false so they
+	# can never hit anything via Area3D — skip the deferred call to
+	# save the per-shot dispatch cost at MP scale.
+	if not is_ghost:
+		call_deferred(&"_check_initial_overlaps")
 
 
 func _check_initial_overlaps() -> void:

@@ -211,3 +211,15 @@ func roll_multistrike() -> int:
 	if roll < p_triple + p_double:
 		return 2
 	return 1
+
+
+# Expected hit count for tooltip DPS math. Returns the average number of
+# hits per cast given the current multistrike aggregates — 1.0 with no
+# sources, scaling toward 3.0 as triple-strike chance approaches 1.0.
+# Mirrors roll_multistrike's outcome distribution exactly:
+#   E[hits] = 3*p_triple + 2*p_double*(1-p_triple) + 1*(rest)
+#          = 1 + 2*p_triple + p_double*(1-p_triple)
+func expected_multistrike() -> float:
+	var p_triple: float = _aggregates.get(&"multistrike_triple_chance", 0.0)
+	var p_double: float = _aggregates.get(&"multistrike_double_chance", 0.0)
+	return 1.0 + 2.0 * p_triple + p_double * (1.0 - p_triple)
