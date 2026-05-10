@@ -97,7 +97,7 @@ Every item is generated against a power budget determined by item level and rari
 |---|---|---|
 | 1H Weapon | Pistol, Revolver, SMG, Combat Knife, Shock Baton | Weapon |
 | 2H Weapon | Assault Rifle, Shotgun, Sniper Rifle, Sledgehammer, Chainsaw | Weapon (locks offhand) |
-| Offhand | Buckler, Grenade, Sidearm, Shield Generator | Offhand |
+| Offhand | Grenade, Sidearm, Shield Generator | Offhand |
 | Head Armor | Helmet, Hood, Visor | Head |
 | Chest Armor | Vest, Jacket, Plate Rig, Hardsuit | Chest |
 | Hands | Work Gloves, Gauntlets, Interface Gloves | Hands |

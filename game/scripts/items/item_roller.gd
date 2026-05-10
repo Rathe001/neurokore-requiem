@@ -92,7 +92,6 @@ const MAIN_TYPE_WEIGHTS: Dictionary = {
 }
 
 const OFFHAND_BASE_PATHS: Array[String] = [
-	"res://resources/items/offhand_bases/buckler.tres",
 	"res://resources/items/offhand_bases/shield_generator.tres",
 	"res://resources/items/offhand_bases/active_shield.tres",
 ]
@@ -141,7 +140,7 @@ func roll(main_type: String, item_level: int, rarity: StringName, rng: RandomNum
 	# Universal secondary bonuses — every equippable item can roll +HP and +resource.
 	_roll_universal_bonuses(item, item_level, rarity, rng)
 
-	item.name_key = _build_name(main_type, item.sub_type, affix_labels)
+	item.name_key = _build_name(main_type, item.sub_type, affix_labels, rng)
 	return item
 
 func roll_from_base(base: WeaponBase, item_level: int, rarity: StringName, rng: RandomNumberGenerator) -> Item:
@@ -170,7 +169,7 @@ func roll_from_base(base: WeaponBase, item_level: int, rarity: StringName, rng: 
 		if affix != null and _apply_affix(item, affix):
 			affix_labels.append(affix.label)
 	_roll_universal_bonuses(item, item_level, rarity, rng)
-	item.name_key = _build_name(main_type, item.sub_type, affix_labels)
+	item.name_key = _build_name(main_type, item.sub_type, affix_labels, rng)
 	return item
 
 func roll_random(item_level: int, rng: RandomNumberGenerator) -> Item:
@@ -493,10 +492,34 @@ func _apply_head_light_mod(item: Item, main_type: String, item_level: int, rng: 
 			item.light_color = Color.WHITE
 
 
-func _build_name(main_type: String, sub_type: String, affix_labels: Array[String]) -> String:
+# Flavor adjectives applied to common-rarity items that rolled zero
+# affixes. Purely cosmetic — no stat impact, no gameplay meaning. The
+# point is so two whites dropped side-by-side ("Sledgehammer" /
+# "Sledgehammer") read as different items in the world. Rarity color
+# (grey for common) still does the actual quality signal; this just
+# breaks the visual repetition. Pool intentionally stays "low quality"
+# in tone so it doesn't muddle the rarity ladder — magic items and
+# above use real stat-affix prefixes which sound more impressive.
+const COMMON_FLAVOR_ADJECTIVES: Array[String] = [
+	"Worn", "Battered", "Old", "Plain", "Crude", "Salvaged",
+	"Standard", "Stock", "Spartan", "Bare", "Basic", "Refurbished",
+	"Issue-Grade", "Generic", "Mundane", "Unmarked",
+]
+
+
+func _build_name(main_type: String, sub_type: String, affix_labels: Array[String], rng: RandomNumberGenerator = null) -> String:
 	var noun := sub_type if sub_type != "" else main_type
 	if affix_labels.is_empty():
-		return noun
+		# Common-rarity drop with no affixes — give it a flavor adjective
+		# so it doesn't share its name with every other white of the same
+		# base. RNG nullable to keep callers that don't need determinism
+		# (debug spawners, tests) working without threading an RNG.
+		var idx: int
+		if rng != null:
+			idx = rng.randi_range(0, COMMON_FLAVOR_ADJECTIVES.size() - 1)
+		else:
+			idx = randi() % COMMON_FLAVOR_ADJECTIVES.size()
+		return "%s %s" % [COMMON_FLAVOR_ADJECTIVES[idx], noun]
 	var prefixes: Array[String] = []
 	var suffixes: Array[String] = []
 	for label in affix_labels:

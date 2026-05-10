@@ -1,6 +1,6 @@
 class_name OffhandBase extends Resource
 
-## Defines an offhand archetype (e.g. "Buckler", "Shield Generator").
+## Defines an offhand archetype (e.g. "Active Shield", "Shield Generator").
 ## Parallel to WeaponBase / GrenadeBase but for offhand items.
 
 @export var id: StringName = &""
