@@ -1478,6 +1478,28 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#signature-quirks-per-archetype-passives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Signature quirks (per-archetype passives)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#melee-combo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Melee combo
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1732,6 +1754,105 @@
 <h3 id="point-blank-ranged-penalty">Point-blank ranged penalty<a class="headerlink" href="#point-blank-ranged-penalty" title="Permanent link">&para;</a></h3>
 <p>Ranged attacks (hitscan and projectile) check distance from fire origin to target. Inside the melee threshold (~2.5m), accuracy is halved. Cone and AoE skills are exempt. Charging into a ranged enemy is a viable counter — their bolts miss more often.</p>
 <p>Counter-play differentiation: Survivalist sprints to disengage before firing; Count can spec the <strong>Point Blank</strong> talent to waive the penalty for player-fired shots only.</p>
+<h3 id="signature-quirks-per-archetype-passives">Signature quirks (per-archetype passives)<a class="headerlink" href="#signature-quirks-per-archetype-passives" title="Permanent link">&para;</a></h3>
+<p>Every weapon archetype has <em>one</em> iconic passive that fires automatically while equipped — a "thing the weapon does" beyond raw stat differences. Stats alone make weapons interchangeable; a quirk makes the pickup feel like an actual choice. Players don't need to memorize the list — the HUD's quirk reminder widget (under the minimap) surfaces the play tip for currently-equipped weapons.</p>
+<p>Design intent is that each quirk is <em>cheap to learn, possible to exploit</em>. A new player benefits passively; a learned player builds positioning + cadence around it.</p>
+<table>
+<thead>
+<tr>
+<th>Archetype</th>
+<th>Quirk</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1H knife</td>
+<td><strong>Backstab</strong> — hits from behind enemy facing deal +50%</td>
+</tr>
+<tr>
+<td>2H hammer</td>
+<td><strong>Wind-Up</strong> — first hit after 1s standing still deals +75%</td>
+</tr>
+<tr>
+<td>Laser pistol</td>
+<td><strong>Charged Shot</strong> — first shot after 1s+ idle deals 1.5×</td>
+</tr>
+<tr>
+<td>Plasma rifle</td>
+<td><strong>Pierce</strong> — bolts pass through one enemy</td>
+</tr>
+<tr>
+<td>SMG</td>
+<td><strong>Penetration</strong> — every 5th shot deals 2×</td>
+</tr>
+<tr>
+<td>LMG</td>
+<td><strong>Heat</strong> — sustained fire stacks +10%/shot, max +50%, decays after 1s of no fire</td>
+</tr>
+<tr>
+<td>Sniper</td>
+<td><strong>First Mark</strong> — first shot on a fresh target deals +50% (5s freshness window per target)</td>
+</tr>
+<tr>
+<td>RPG</td>
+<td><strong>Concussive</strong> — every enemy in the blast is staggered</td>
+</tr>
+<tr>
+<td>Shotgun</td>
+<td><strong>Point Blank</strong> — pellets hitting within 2m deal +50%</td>
+</tr>
+<tr>
+<td>Charged Arc Taser</td>
+<td><strong>Static Build</strong> — every 10th hit on an enemy releases at 3× (per-target counter)</td>
+</tr>
+<tr>
+<td>Energy Accelerator</td>
+<td><strong>Resonance</strong> — held stream ramps damage to +30%, resets on release</td>
+</tr>
+</tbody>
+</table>
+<p>The canonical reminder strings live in <code>WeaponQuirkPanel.QUIRK_TIPS</code>. Implementation lives across <code>PlayerCombat</code> (per-shot or per-cast quirks), <code>PrototypePlayer</code> (player-side stack trackers like LMG heat / Accelerator resonance / hammer wind-up), <code>PrototypeEnemy</code> (per-target counters like Sniper First Mark / Taser Static Build), and <code>PrototypeProjectile</code> (bullet-level quirks like Plasma Pierce / Shotgun Point Blank distance).</p>
+<h3 id="melee-combo">Melee combo<a class="headerlink" href="#melee-combo" title="Permanent link">&para;</a></h3>
+<p>Each melee swing within 1.5s of the previous one advances a 3-step combo. The chain resets on timeout, weapon swap, or non-melee weapon switch.</p>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>Cone width</th>
+<th>Damage</th>
+<th>Knockback</th>
+<th>Finisher</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>authored</td>
+<td>1.0×</td>
+<td>1.0×</td>
+<td>—</td>
+</tr>
+<tr>
+<td>2</td>
+<td>1.5× wider</td>
+<td>1.25×</td>
+<td>1.5×</td>
+<td>—</td>
+</tr>
+<tr>
+<td>3</td>
+<td>350° (almost full sweep)</td>
+<td>1.6×</td>
+<td>2.5×</td>
+<td><strong>status applied</strong></td>
+</tr>
+</tbody>
+</table>
+<p>The step-3 finisher applies a status that differs by weapon kind:
+- <strong>1H knives</strong> stack a <strong>bleed</strong> debuff — % max-HP damage-over-time, stacks up to 5. Body-horror tone made explicit; pressure compounds the longer the player stays engaged on a single target.
+- <strong>2H hammers</strong> apply a brief <strong>stun</strong> (0.6s) plus a ground-impact ring visual + camera shake for the heavy-feel sell.</p>
+<p>Why a combo system at all: pre-combo melee was "spam LMB, hit cone, damage." The combo introduces a <em>rhythm</em> — staying engaged with one target builds toward the finisher, then resets. Encourages target selection over crowd-spam, gives 1H and 2H distinct identities at the finisher tier, and creates a natural cadence that makes melee feel weighted instead of mechanical.</p>
+<p>Plus <strong>hitstop</strong> on every melee connect: the swing animation freezes for ~60ms when a hit lands. Per-player (anim_player.speed_scale, not Engine.time_scale), so MP-safe. Sells the weight of every individual hit; without it, melee reads as "input → damage number" with no physical feedback.</p>
 <h2 id="itemization">Itemization<a class="headerlink" href="#itemization" title="Permanent link">&para;</a></h2>
 <p>Every piece of gear should answer a question the player is already asking: <em>"How do I want to play?"</em> A drop is exciting when it changes behavior, not just when its numbers are bigger.</p>
 <blockquote>

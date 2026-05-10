@@ -1699,6 +1699,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#phase-8-coop-visibility-ux-v020" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 8 — Coop visibility + UX ✅ (v0.2.0)
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1820,7 +1831,7 @@
 
 <h1 id="multiplayer">Multiplayer<a class="headerlink" href="#multiplayer" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status: In progress.</strong> Phases 0 through 7 + 2C are shipped and on <code>main</code>. All planned networking phases are complete. See <a href="#implementation-phases">Implementation phases</a> below for the full sequence and what each one covers.</p>
+<p><strong>Status: In progress.</strong> Phases 0 through 8 + 2C are shipped and on <code>main</code>. All planned networking phases are complete; v0.2.0 added cross-client projectile + channel-beam visibility, in-game chat, and a graceful host-disconnect overlay. See <a href="#implementation-phases">Implementation phases</a> below for the full sequence and what each one covers.</p>
 <p><strong>Verification gap to keep in mind:</strong> local testing uses one Steam account in two processes (editor + <code>--mp-force-client</code> .exe), which is enough to verify lobby flow, scene transitions, and avatar spawning, but Steam P2P routing same-id-to-itself is undefined — actual cross-peer position sync, RPCs, and member-join callbacks need real two-account testing or shipping to playtest. Anything in Phase 2B+ that involves traffic between peers should be assumed <em>code-correct, runtime-unverified</em> until we get a second account into a lobby.</p>
 </blockquote>
 <h2 id="design-pillars">Design pillars<a class="headerlink" href="#design-pillars" title="Permanent link">&para;</a></h2>
@@ -2007,6 +2018,24 @@
 <p>Level reset (NG+ transition) is synchronized: host picks a seed, broadcasts <code>_client_reset_level(seed, is_procgen)</code> to all clients. Both peers clear enemies/corpses/pickups and rebuild: procgen path rebuilds geometry from the shared seed (deterministic layout), legacy path resets interactable states. Enemy spawning during rebuild is skipped on clients via an early return in <code>EnemySpawner.spawn_in_bounds</code> — enemies arrive from the host through <code>EnemiesContainer</code>'s <code>MultiplayerSpawner</code>. Both peers advance NG+ and reset the player independently.</p>
 <h3 id="phase-7-drop-in">Phase 7 — Drop-in ✅<a class="headerlink" href="#phase-7-drop-in" title="Permanent link">&para;</a></h3>
 <p>Mid-session join support. Three pieces: (1) <strong>NetState late-join plumbing</strong> — host calls <code>_peer.add_peer(new_id)</code> in <code>_on_lobby_chat_update</code> when a member joins during an active game, accepting their SteamMultiplayerPeer connection. The existing <code>_check_started_flag()</code> path already handles the client side (reads <code>started=1</code>, creates peer, fires <code>game_starting</code>). (2) <strong>Level seed sync</strong> — host stores the procgen seed in Steam lobby data (<code>LOBBY_SEED_KEY</code>) on initial build and every level reset. <code>LevelBuilder._ready()</code> reads it on the client side so late joiners build identical geometry. Host pins <code>rng_seed</code> to a captured value (not 0/time-fallback) so the seed is always deterministic and retrievable. (3) <strong>World state snapshot</strong> — after scene load, the late joiner sends <code>_request_snapshot.rpc_id(1)</code> to the host. Host responds with <code>_deliver_snapshot</code> containing all live enemies (position, rotation, health, state, level, boss flag, display name, node name), all pickups (item data or credit amount, position, owner_id, node name), and all interactable states (door locked/open/unlock-counter, switch used, exit locked). Joiner recreates enemies and pickups with matching node names so <code>MultiplayerSynchronizer</code> updates route correctly for ongoing play. <code>PlayersContainer._on_peer_connected</code> handles avatar spawning (already shipped in Phase 2B). Future spawns (enemies, pickups) arrive normally via <code>MultiplayerSpawner</code>.</p>
+<h3 id="phase-8-coop-visibility-ux-v020">Phase 8 — Coop visibility + UX ✅ (v0.2.0)<a class="headerlink" href="#phase-8-coop-visibility-ux-v020" title="Permanent link">&para;</a></h3>
+<p>Once enemies + combat + loot + drop-in were live, the remaining MP gap was <em>seeing what your teammates were doing</em>. Phase 8 closes that:</p>
+<ol>
+<li>
+<p><strong>Player projectile replication</strong> — every player-fired projectile (laser, plasma, SMG/LMG/sniper bullets, RPG rockets, shotgun pellets, airstrike rockets) broadcasts a <code>_rpc_projectile</code> (or <code>_rpc_shotgun_burst</code> for batched 9/18-pellet shotgun casts) via <code>CombatVisuals</code>. Remote peers spawn a <em>ghost projectile</em> (<code>PrototypeProjectile.is_ghost = true</code>) that runs the same mesh, trail, smoke, and look_at math as the host's projectile, but its collision mask is forced to world-only and damage fields are zeroed — visuals + travel only. Impact bursts and explosions arrive via their own one-shot replicated calls, so ghost projectiles release silently on wall contact to avoid double visuals. Shotgun pellet RPCs are batched into a single <code>PackedVector3Array</code> so a 9-pellet cast is one RPC, not nine.</p>
+</li>
+<li>
+<p><strong>Channel-beam visual replication</strong> — Energy Accelerator's flame is a <em>persistent</em> visual (not a one-shot like the lightning arcs the Taser already replicates), so it needs start/stop events plus per-frame orientation. The firing peer broadcasts <code>_rpc_channel_flame_start(damage_type, weapon_range)</code> on the player node itself (authority-routed RPC) on <code>_start_channel</code>, and <code>_rpc_channel_flame_stop</code> on <code>_stop_channel</code>. Remote peers attach a flame visual to that player's avatar; orientation tracks the remote player's facing direction (<code>visual.basis.-z</code>) since the cursor isn't replicated.</p>
+</li>
+<li>
+<p><strong>In-game chat</strong> — new <code>GameplayChatState</code> autoload mirrors the existing <code>GlobalChatState</code> pattern but scopes to <code>NetState.lobby_id</code>. Sends via <code>Steam.sendLobbyChatMsg</code>, receives via <code>Steam.lobby_message</code> (filtered by lobby_id), exposes a <code>chat_received(steam_id, name, text)</code> signal and a <code>typing: bool</code> flag the player input handler polls to gate movement / skill / hotkey input while the chat input is focused. UI panel <code>GameplayChatPanel</code> at the bottom-left of the HUD shows the last 6 lines, fades 8s after arrival, displays sender names in their class color. Each peer publishes their <code>class_id</code> (spec_id when specced, else origin) under the <code>class</code> member-data key on lobby join; remote class color is read from <code>Steam.getLobbyMemberData</code>.</p>
+</li>
+<li>
+<p><strong>Host-disconnect handling</strong> — when peer 1 disconnects mid-session, clients used to enter a frozen-but-running limbo (no enemy spawns, no state sync, no host snapshots). NetState now subscribes to <code>multiplayer.peer_disconnected</code> only on the client side (after <code>_create_client_peer</code>) and emits a <code>host_disconnected</code> signal when peer_id == 1. <code>PrototypeRoot</code> listens and spawns a <code>HostDisconnectedScreen</code> overlay — full-screen muted backdrop, "HOST DISCONNECTED" title, single "Return to Main Menu" button. NetState's <code>_teardown_peer</code> disconnects the handler before closing the peer so a deliberate <code>leave_lobby</code> doesn't trigger the overlay on its own client.</p>
+</li>
+</ol>
+<p>Performance hot paths addressed in the same phase: visual-replication anchors (the temporary Node3D <code>CombatVisuals</code> builds at each RPC's origin point) are pooled instead of allocated per RPC; lightning arc visuals reuse a cached unit PlaneMesh + templated ShaderMaterial; the airstrike marker mesh + material are cached; the Energy Accelerator's wall-clip raycast uses a member-cached <code>PhysicsRayQueryParameters3D</code> instead of allocating one per physics frame.</p>
+<p>Host migration remains out of scope. The architecture is a fixed peer-1 server model with no failover authority — when peer 1 drops, clients get the disconnect overlay and exit cleanly. Real migration would require Steam <code>setLobbyOwner</code> + reauthoring every per-entity <code>set_multiplayer_authority</code> + replaying host state into the new authority, which is a multi-week project on its own.</p>
 <h2 id="technical-decisions">Technical decisions<a class="headerlink" href="#technical-decisions" title="Permanent link">&para;</a></h2>
 <h3 id="why-host-authoritative-not-deterministic-lockstep">Why host-authoritative, not deterministic lockstep<a class="headerlink" href="#why-host-authoritative-not-deterministic-lockstep" title="Permanent link">&para;</a></h3>
 <p>Lockstep requires perfect determinism (RNG, floating point, frame timing) across peers and forces lockstep at the slowest peer's framerate. Host-authoritative is simpler, more permissive of jitter, and standard for coop PvE.</p>
