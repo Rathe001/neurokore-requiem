@@ -27,3 +27,4 @@ fire_skill = ExtResource("2_fire_skill")
 alt_fire_skill = ExtResource("3_alt_fire")
 ammo_capacity_range = Vector2i(100, 200)
 reload_time = 3.5
+model_names = Array[String](["TR-19 Reaper", "Bulwark", "MX-86 Suppressor", "Iron Choir", "VR-44 Roarcaster"])

@@ -140,7 +140,7 @@ func roll(main_type: String, item_level: int, rarity: StringName, rng: RandomNum
 	# Universal secondary bonuses — every equippable item can roll +HP and +resource.
 	_roll_universal_bonuses(item, item_level, rarity, rng)
 
-	item.name_key = _build_name(main_type, item.sub_type, affix_labels, rng)
+	item.name_key = _build_name(main_type, item.sub_type, affix_labels, rng, item.model_name)
 	return item
 
 func roll_from_base(base: WeaponBase, item_level: int, rarity: StringName, rng: RandomNumberGenerator) -> Item:
@@ -169,7 +169,7 @@ func roll_from_base(base: WeaponBase, item_level: int, rarity: StringName, rng: 
 		if affix != null and _apply_affix(item, affix):
 			affix_labels.append(affix.label)
 	_roll_universal_bonuses(item, item_level, rarity, rng)
-	item.name_key = _build_name(main_type, item.sub_type, affix_labels, rng)
+	item.name_key = _build_name(main_type, item.sub_type, affix_labels, rng, item.model_name)
 	return item
 
 func roll_random(item_level: int, rng: RandomNumberGenerator) -> Item:
@@ -413,6 +413,13 @@ func _apply_weapon_base_direct(item: Item, base: WeaponBase, rng: RandomNumberGe
 		item.damage_type = base.damage_type_pool[idx]
 	elif base.damage_type != &"":
 		item.damage_type = base.damage_type
+	# Model-name roll — pick one invented identity from the base's pool
+	# so two drops of the same archetype read as different items in the
+	# world. Empty pool leaves model_name blank and the display name
+	# falls back to sub_type (the archetype's display_name).
+	if base.model_names.size() > 0:
+		var midx := rng.randi_range(0, base.model_names.size() - 1)
+		item.model_name = base.model_names[midx]
 
 func _apply_offhand_base(item: Item, main_type: String, rng: RandomNumberGenerator) -> void:
 	if main_type != "Offhand":
@@ -507,8 +514,15 @@ const COMMON_FLAVOR_ADJECTIVES: Array[String] = [
 ]
 
 
-func _build_name(main_type: String, sub_type: String, affix_labels: Array[String], rng: RandomNumberGenerator = null) -> String:
-	var noun := sub_type if sub_type != "" else main_type
+func _build_name(main_type: String, sub_type: String, affix_labels: Array[String], rng: RandomNumberGenerator = null, model_name: String = "") -> String:
+	# Noun precedence: rolled model name (e.g. "MK-7 Voidcaster") wins
+	# over the archetype's display_name ("SMG"). Falls back to main_type
+	# for items without a sub_type at all (rare edge case).
+	var noun := main_type
+	if model_name != "":
+		noun = model_name
+	elif sub_type != "":
+		noun = sub_type
 	if affix_labels.is_empty():
 		# Common-rarity drop with no affixes — give it a flavor adjective
 		# so it doesn't share its name with every other white of the same

@@ -49,6 +49,14 @@ enum LightMod { NONE, FLASHLIGHT, RADIANT, SCANNER, UV }
 ##      weapon's identity reads at a glance — fire weapons paint red
 ##      cones, cryo weapons cyan, etc. See damage_type_color().
 @export var damage_type: StringName = &""
+## Invented model name rolled per drop from the WeaponBase's model_names
+## pool ("MK-7 Voidcaster", "Eulogy", etc). When set, the display name
+## uses this in place of the archetype's display_name so two SMG drops
+## of the same base read as different items in the world. The tooltip's
+## "type" line still shows the archetype (sub_type) for clarity. Empty
+## = fall back to sub_type (legacy items rolled before model_names
+## existed and any future non-weapon items).
+@export var model_name: String = ""
 
 
 ## Lookup table mapping elemental damage types to their visual tint
@@ -285,6 +293,7 @@ func to_dict() -> Dictionary:
 	d[&"ammo_current"] = ammo_current
 	d[&"reload_time"] = reload_time
 	d[&"damage_type"] = String(damage_type)
+	d[&"model_name"] = model_name
 	d[&"light_mod"] = int(light_mod)
 	d[&"light_energy"] = light_energy
 	d[&"light_range"] = light_range
@@ -325,6 +334,7 @@ static func from_dict(d: Dictionary) -> Item:
 	item.ammo_current = int(d.get(&"ammo_current", 0))
 	item.reload_time = float(d.get(&"reload_time", 0.0))
 	item.damage_type = StringName(d.get(&"damage_type", ""))
+	item.model_name = String(d.get(&"model_name", ""))
 	item.light_mod = int(d.get(&"light_mod", 0)) as LightMod
 	item.light_energy = float(d.get(&"light_energy", 1.2))
 	item.light_range = float(d.get(&"light_range", 12.0))

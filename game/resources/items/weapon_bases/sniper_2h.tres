@@ -29,3 +29,4 @@ fire_skill = ExtResource("2_fire_skill")
 alt_fire_skill = ExtResource("3_alt_fire")
 ammo_capacity_range = Vector2i(5, 20)
 reload_time = 4.0
+model_names = Array[String](["MK-7 Voidcaster", "Whisperer", "TR-3 Eulogy", "Deadhand", "VX-12 Quietus"])

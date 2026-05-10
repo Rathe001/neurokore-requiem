@@ -65,3 +65,12 @@ class_name WeaponBase extends Resource
 # weapon is neutral / kinetic and inherits the player's class color
 # for visual effects.
 @export var damage_type: StringName = &""
+
+# ── Model-name pool ───────────────────────────────────────────────────────
+# Per-archetype invented model names (e.g. "MK-7 Voidcaster", "Eulogy")
+# for the cyberpunk / corp-loot tone. The roller picks one entry per
+# drop and stores it on Item.model_name; the display name uses that
+# instead of the archetype's display_name so two SMGs read as
+# "MX-22 Wasp" / "VK-9 Stinger" instead of two identical "SMG" lines.
+# Empty list = fall back to display_name (current behaviour).
+@export var model_names: Array[String] = []
