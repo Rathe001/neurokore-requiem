@@ -33,9 +33,9 @@ const QUIRK_TIPS: Dictionary = {
 # a separate line keeps the per-archetype quirk uncluttered.
 const MELEE_COMBO_TIP: String = "3-hit combo: wider, stronger, finisher applies status"
 
-const PANEL_WIDTH: float = 380.0
-const HEADER_FONT_SIZE: int = 12
-const TIP_FONT_SIZE: int = 11
+const PANEL_WIDTH: float = 210.0
+const HEADER_FONT_SIZE: int = 9
+const TIP_FONT_SIZE: int = 8
 const HEADER_COLOR := Color(0.95, 0.85, 0.5, 1.0)
 const TIP_COLOR := Color(0.78, 0.78, 0.78, 0.85)
 const PANEL_BG := Color(0.0, 0.0, 0.0, 0.35)
@@ -45,14 +45,23 @@ var _vbox: VBoxContainer
 
 
 func _ready() -> void:
-	# Top-left, fixed-size panel. mouse_filter=IGNORE so it never eats
-	# clicks; the panel is purely informational. visible toggles with
-	# whether any equipped weapon has a known quirk.
+	# Top-right, anchored just under the minimap. The minimap's corner
+	# offset + size are exposed as constants on Minimap; we mirror them
+	# so this panel stays glued to the bottom edge of the map even if
+	# the map size changes. mouse_filter=IGNORE — purely informational.
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	anchor_left = 0.0
+	anchor_left = 1.0
+	anchor_right = 1.0
 	anchor_top = 0.0
-	offset_left = 12.0
-	offset_top = 12.0
+	anchor_bottom = 0.0
+	# Anchor offsets so right edge sits one margin in from screen edge
+	# and top sits just below the minimap. CORNER_MARGIN + CORNER_SIZE
+	# from Minimap match what the (former) controls panel used.
+	var map_margin := Minimap.CORNER_MARGIN
+	var map_size := Minimap.CORNER_SIZE
+	offset_left = -PANEL_WIDTH - map_margin
+	offset_right = -map_margin
+	offset_top = map_margin + map_size + 4.0
 	custom_minimum_size = Vector2(PANEL_WIDTH, 0.0)
 
 	_bg = ColorRect.new()
@@ -64,12 +73,12 @@ func _ready() -> void:
 	_vbox = VBoxContainer.new()
 	_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_vbox.add_theme_constant_override(&"separation", 2)
-	# Padding inside the bg.
-	_vbox.offset_left = 8.0
-	_vbox.offset_top = 4.0
-	_vbox.offset_right = -8.0
-	_vbox.offset_bottom = -4.0
+	_vbox.add_theme_constant_override(&"separation", 1)
+	# Tight padding — panel is small and lives in the corner.
+	_vbox.offset_left = 5.0
+	_vbox.offset_top = 3.0
+	_vbox.offset_right = -5.0
+	_vbox.offset_bottom = -3.0
 	add_child(_vbox)
 
 	InventoryState.equipment_changed.connect(_on_equipment_changed)
@@ -100,11 +109,11 @@ func refresh() -> void:
 		header.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_vbox.add_child(header)
 		var tip := Label.new()
-		tip.text = "  " + entry["tip"]
+		tip.text = entry["tip"]
 		tip.add_theme_font_size_override(&"font_size", TIP_FONT_SIZE)
 		tip.add_theme_color_override(&"font_color", TIP_COLOR)
 		tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		tip.custom_minimum_size = Vector2(PANEL_WIDTH - 16.0, 0.0)
+		tip.custom_minimum_size = Vector2(PANEL_WIDTH - 10.0, 0.0)
 		tip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_vbox.add_child(tip)
 	# Re-fit the BG to the new content height after children layout.

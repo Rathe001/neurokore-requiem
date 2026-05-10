@@ -755,15 +755,12 @@ func _build_controls_panel() -> void:
 func _position_controls_panel() -> void:
 	if _controls_panel == null or _controls_panel.size.x < 1.0:
 		return
-	var screen := get_viewport().get_visible_rect().size
 	var margin := Minimap.CORNER_MARGIN
-	var map_size := Minimap.CORNER_SIZE
-	var pw := _controls_panel.size.x
-	# Right-align with minimap, sit just below it.
-	_controls_panel.position = Vector2(
-		screen.x - pw - margin,
-		margin + map_size + 4.0,
-	)
+	# Top-left of the screen. The top-right slot under the minimap now
+	# belongs to the weapon-quirk reminder panel, which is the more
+	# frequently-read in-play widget; control hints are reference info
+	# and live better in the corner.
+	_controls_panel.position = Vector2(margin, margin)
 
 func _build_talents_panel() -> void:
 	var talents := TalentsPanel.new()
