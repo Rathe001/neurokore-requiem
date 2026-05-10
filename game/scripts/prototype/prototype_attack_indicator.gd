@@ -692,18 +692,27 @@ static func spawn_hit_radial(host: Node3D, radius: float) -> void:
 
 # ── Blade slash (1H knife / melee_1h hit visual) ────────────────────────────
 # Replaces the generic shockwave-bubble cone for knives so the swing
-# reads as "carved through them" instead of a dome puff. A thin
-# horizontal box is placed at the cone's midpoint, perpendicular to
-# aim, scaled to roughly cover the cone's chord at that range. Two
-# extra angled slashes spawn for combo step 2 (350° finisher) so the
-# omni-sweep finisher reads as multiple cuts at once.
+# reads as "carved through them" instead of a dome puff. A tall, thin,
+# paper-thin-depth slab is placed at the cone's midpoint, oriented so
+# its long axis crosses the aim direction diagonally — reads as a
+# diagonal sword cut sweeping through the air. Two extra angled
+# slashes spawn for combo step 2 (350° finisher) so the omni-sweep
+# reads as multiple cuts at once.
 
-const SLASH_DURATION: float = 0.16
-const SLASH_HEIGHT: float = 0.06
-const SLASH_DEPTH: float = 0.35
+const SLASH_DURATION: float = 0.18
+# Height = vertical extent (the slash is a TALL thin slab so the iso
+# camera sees it edge-on as a streak, not a flat paint mark).
+const SLASH_HEIGHT: float = 0.75
+# Depth = thickness along aim direction. Paper-thin so the slash reads
+# as motion, not a wall.
+const SLASH_DEPTH: float = 0.05
+# Diagonal tilt of the slash chord, in degrees away from horizontal.
+# Small positive values lean the cut down-left-to-up-right, which is
+# the canonical sword-cut feel from an iso camera.
+const SLASH_TILT_DEG: float = 25.0
 const SLASH_BASE_COLOR := Color(1.0, 0.96, 0.92, 0.95)
 const SLASH_EMISSION_COLOR := Color(1.0, 0.95, 0.85, 1.0)
-const SLASH_EMISSION_ENERGY: float = 5.0
+const SLASH_EMISSION_ENERGY: float = 8.0
 
 
 static func spawn_blade_slash(host: Node3D, aim: Vector3, attack_range: float, cone_deg: float) -> void:
@@ -733,6 +742,10 @@ static func _spawn_one_slash(host: Node3D, forward: Vector3, mid_dist: float, co
 	# Chord length at mid_dist for the given cone width. Adds a small
 	# minimum so very narrow cones still produce a visible streak.
 	var chord: float = maxf(0.8, 2.0 * mid_dist * sin(deg_to_rad(cone_deg * 0.5)))
+	# Box dimensions:
+	#   X = chord (the slash's long axis — the swept-through arc)
+	#   Y = SLASH_HEIGHT (vertical extent of the cut, ~0.75m)
+	#   Z = SLASH_DEPTH (paper-thin along aim — reads as a streak, not a wall)
 	mesh.size = Vector3(chord, SLASH_HEIGHT, SLASH_DEPTH)
 	var mat := StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -750,15 +763,22 @@ static func _spawn_one_slash(host: Node3D, forward: Vector3, mid_dist: float, co
 	# chest height so the slash sits where enemies actually take damage.
 	var midpoint: Vector3 = host.global_position + forward * mid_dist + Vector3(0.0, 1.0, 0.0)
 	inst.global_position = midpoint
-	# Basis: local +X = perpendicular to aim (the slash chord), local
-	# +Y = world up, local +Z = aim direction (depth). This makes the
-	# box's long axis cross the aim direction, reading as a horizontal
-	# cut from the iso camera.
-	var right_axis := Vector3.UP.cross(forward)
-	if right_axis.length_squared() < 0.0001:
-		right_axis = Vector3.RIGHT
-	right_axis = right_axis.normalized()
-	inst.basis = Basis(right_axis, Vector3.UP, forward)
+	# Basis construction:
+	#   • horizontal "right" relative to aim = UP × forward (chord axis)
+	#   • tilt the chord axis SLASH_TILT_DEG out of horizontal so the cut
+	#     reads as diagonal (down-left to up-right from iso view), not a
+	#     vertical wall
+	#   • normal axis (Z, depth along aim) = forward
+	#   • up axis = chord_axis × forward to keep the basis orthonormal
+	var horizontal_right := Vector3.UP.cross(forward)
+	if horizontal_right.length_squared() < 0.0001:
+		horizontal_right = Vector3.RIGHT
+	horizontal_right = horizontal_right.normalized()
+	# Tilt the chord axis upward by rotating around `forward` (the
+	# aim/depth axis). Positive tilt lifts the +X end up.
+	var chord_axis := horizontal_right.rotated(forward, deg_to_rad(SLASH_TILT_DEG))
+	var up_axis := chord_axis.cross(forward).normalized()
+	inst.basis = Basis(chord_axis, up_axis, forward)
 	# Quick fade: alpha + emission both ease out together so the streak
 	# tapers off cleanly instead of popping.
 	var tween := inst.create_tween().set_parallel(true)
