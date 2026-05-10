@@ -63,6 +63,21 @@ func _rpc_hit_cone(origin: Vector3, aim: Vector3, attack_range: float, cone_deg:
 	_release_anchor(anchor)
 
 
+# ── Blade slash (1H knife hit visual) ───────────────────────────
+
+static func spawn_blade_slash(host: Node3D, aim: Vector3, attack_range: float, cone_deg: float) -> void:
+	PrototypeAttackIndicator.spawn_blade_slash(host, aim, attack_range, cone_deg)
+	if NetState.is_in_lobby():
+		var cv: Node = host.get_node(_AUTOLOAD_PATH)
+		cv._rpc_blade_slash.rpc(host.global_position, aim, attack_range, cone_deg, host.is_in_group(&"player"))
+
+@rpc("any_peer", "call_remote", "unreliable")
+func _rpc_blade_slash(origin: Vector3, aim: Vector3, attack_range: float, cone_deg: float, is_player: bool) -> void:
+	var anchor := _acquire_anchor(origin, is_player)
+	PrototypeAttackIndicator.spawn_blade_slash(anchor, aim, attack_range, cone_deg)
+	_release_anchor(anchor)
+
+
 # ── Hit radial (AoE shockwave) ──────────────────────────────────
 
 static func spawn_hit_radial(host: Node3D, radius: float) -> void:

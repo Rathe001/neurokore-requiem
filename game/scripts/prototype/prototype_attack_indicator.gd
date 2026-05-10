@@ -689,6 +689,83 @@ static func spawn_hit_radial(host: Node3D, radius: float) -> void:
 	var pos := host.global_position + Vector3(0.0, SHOCKWAVE_BUBBLE_LIFT, 0.0)
 	_spawn_shockwave(host, pos, _bubble_mesh(radius), Vector3.ZERO, SHOCKWAVE_DURATION_RADIAL)
 
+
+# ── Blade slash (1H knife / melee_1h hit visual) ────────────────────────────
+# Replaces the generic shockwave-bubble cone for knives so the swing
+# reads as "carved through them" instead of a dome puff. A thin
+# horizontal box is placed at the cone's midpoint, perpendicular to
+# aim, scaled to roughly cover the cone's chord at that range. Two
+# extra angled slashes spawn for combo step 2 (350° finisher) so the
+# omni-sweep finisher reads as multiple cuts at once.
+
+const SLASH_DURATION: float = 0.16
+const SLASH_HEIGHT: float = 0.06
+const SLASH_DEPTH: float = 0.35
+const SLASH_BASE_COLOR := Color(1.0, 0.96, 0.92, 0.95)
+const SLASH_EMISSION_COLOR := Color(1.0, 0.95, 0.85, 1.0)
+const SLASH_EMISSION_ENERGY: float = 5.0
+
+
+static func spawn_blade_slash(host: Node3D, aim: Vector3, attack_range: float, cone_deg: float) -> void:
+	if host == null:
+		return
+	var forward := Vector3(aim.x, 0.0, aim.z)
+	if forward.length_squared() > 0.0001:
+		forward = forward.normalized()
+	else:
+		forward = -host.global_transform.basis.z
+	# For the wide combo-finisher cone (>=180°) spawn 3 angled slashes
+	# so the omni-sweep reads as multiple cuts. Otherwise just one
+	# slash centred on the cone bisector.
+	if cone_deg >= 180.0:
+		_spawn_one_slash(host, forward.rotated(Vector3.UP, deg_to_rad(-55.0)), attack_range * 0.7, cone_deg * 0.4)
+		_spawn_one_slash(host, forward, attack_range * 0.75, cone_deg * 0.5)
+		_spawn_one_slash(host, forward.rotated(Vector3.UP, deg_to_rad(55.0)), attack_range * 0.7, cone_deg * 0.4)
+	else:
+		_spawn_one_slash(host, forward, attack_range * 0.75, cone_deg)
+
+
+static func _spawn_one_slash(host: Node3D, forward: Vector3, mid_dist: float, cone_deg: float) -> void:
+	var parent: Node = host.get_parent()
+	if parent == null:
+		parent = host
+	var mesh := BoxMesh.new()
+	# Chord length at mid_dist for the given cone width. Adds a small
+	# minimum so very narrow cones still produce a visible streak.
+	var chord: float = maxf(0.8, 2.0 * mid_dist * sin(deg_to_rad(cone_deg * 0.5)))
+	mesh.size = Vector3(chord, SLASH_HEIGHT, SLASH_DEPTH)
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = SLASH_BASE_COLOR
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.emission_enabled = true
+	mat.emission = SLASH_EMISSION_COLOR
+	mat.emission_energy_multiplier = SLASH_EMISSION_ENERGY
+	var inst := MeshInstance3D.new()
+	inst.mesh = mesh
+	inst.material_override = mat
+	inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(inst)
+	# Position: in front of the host along aim by mid_dist, lifted to
+	# chest height so the slash sits where enemies actually take damage.
+	var midpoint: Vector3 = host.global_position + forward * mid_dist + Vector3(0.0, 1.0, 0.0)
+	inst.global_position = midpoint
+	# Basis: local +X = perpendicular to aim (the slash chord), local
+	# +Y = world up, local +Z = aim direction (depth). This makes the
+	# box's long axis cross the aim direction, reading as a horizontal
+	# cut from the iso camera.
+	var right_axis := Vector3.UP.cross(forward)
+	if right_axis.length_squared() < 0.0001:
+		right_axis = Vector3.RIGHT
+	right_axis = right_axis.normalized()
+	inst.basis = Basis(right_axis, Vector3.UP, forward)
+	# Quick fade: alpha + emission both ease out together so the streak
+	# tapers off cleanly instead of popping.
+	var tween := inst.create_tween().set_parallel(true)
+	tween.tween_property(mat, "albedo_color:a", 0.0, SLASH_DURATION).set_ease(Tween.EASE_IN)
+	tween.tween_property(mat, "emission_energy_multiplier", 0.0, SLASH_DURATION).set_ease(Tween.EASE_IN)
+	tween.chain().tween_callback(inst.queue_free)
+
 # Detached from host so the wave stays where it was unleashed even if the
 # host moves or rotates during the effect. forward == ZERO means no orientation
 # (radial sphere); otherwise the mesh's local -Z is aimed along forward.

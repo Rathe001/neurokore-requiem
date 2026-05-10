@@ -161,19 +161,22 @@ func resolve_skill_hit(skill: Skill, aim: Vector3, weapon: Item, source_offset: 
 			# weapon isn't in MELEE_BASE_IDS.
 			_host.advance_melee_combo(weapon)
 			var visual_cone_deg := _melee_cone_deg_for_step(skill, _host.melee_combo_step())
-			# 2H hammer finisher (step 2) gets a layered radial shockwave
-			# on top of the cone so the swing reads as "ground slam"
-			# rather than just a wider sweep. 1H knife finisher keeps the
-			# cone alone — the wider arc + bleed status carries it.
-			var is_hammer_finisher: bool = (
-				weapon != null
-				and weapon.weapon_base_id == &"melee_2h"
-				and _host.melee_combo_step() == 2
-			)
+			# Per-archetype melee visual:
+			#   • 1H knife → spawn_blade_slash (thin streak, reads as "cut")
+			#   • 2H hammer → spawn_hit_cone (shockwave dome) + radial on
+			#     the step-2 finisher ("ground slam")
+			#   • non-melee SINGLE_CONE (Accelerator stream skipped above
+			#     via skip_cone_visual) → no visual here
+			var is_knife: bool = weapon != null and weapon.weapon_base_id == &"melee_1h"
+			var is_hammer: bool = weapon != null and weapon.weapon_base_id == &"melee_2h"
+			var is_hammer_finisher: bool = is_hammer and _host.melee_combo_step() == 2
 			if not skip_cone_visual:
-				CombatVisuals.spawn_hit_cone(_host, aim, eff_range, visual_cone_deg)
-				if is_hammer_finisher:
-					CombatVisuals.spawn_hit_radial(_host, eff_range)
+				if is_knife:
+					CombatVisuals.spawn_blade_slash(_host, aim, eff_range, visual_cone_deg)
+				else:
+					CombatVisuals.spawn_hit_cone(_host, aim, eff_range, visual_cone_deg)
+					if is_hammer_finisher:
+						CombatVisuals.spawn_hit_radial(_host, eff_range)
 			_resolve_cone(skill, aim, eff_range, weapon)
 			for extra in hits - 1:
 				var delay := MULTISTRIKE_STAGGER * float(extra + 1)
@@ -181,7 +184,10 @@ func resolve_skill_hit(skill: Skill, aim: Vector3, weapon: Item, source_offset: 
 					if not _host._alive:
 						return
 					if not skip_cone_visual:
-						CombatVisuals.spawn_hit_cone(_host, aim, eff_range, visual_cone_deg)
+						if is_knife:
+							CombatVisuals.spawn_blade_slash(_host, aim, eff_range, visual_cone_deg)
+						else:
+							CombatVisuals.spawn_hit_cone(_host, aim, eff_range, visual_cone_deg)
 					_resolve_cone(skill, aim, eff_range, weapon)
 				, CONNECT_ONE_SHOT)
 		Skill.TargetingMode.AOE_RADIAL:
