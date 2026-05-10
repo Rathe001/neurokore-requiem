@@ -25,6 +25,12 @@ signal lobby_match_list_updated(lobbies: Array)
 ## the game scene. UI listens for this and calls change_scene_to_file —
 ## NetState never touches scenes directly.
 signal game_starting
+## Fires on CLIENTS only when the host (peer 1) disconnects mid-session.
+## Architecture is a fixed peer-1 server with no failover authority — when
+## peer 1 drops, clients can't continue (no enemy spawning, no state
+## sync, no host snapshots). The gameplay scene listens and shows the
+## host-disconnected overlay; players manually return to the main menu.
+signal host_disconnected
 
 enum Mode {
 	OFFLINE,  # No lobby, no peer — single player.
@@ -494,12 +500,33 @@ func _create_client_peer() -> bool:
 		return false
 	multiplayer.multiplayer_peer = peer
 	_peer = peer
+	# Watch for the host (peer 1) dropping out. Only clients connect
+	# this — the host doesn't need to react to its own disappearance.
+	# Connection is duplicated-safe; multiplayer.peer_disconnected lives on
+	# the SceneTree's MultiplayerAPI which persists across peer swaps.
+	if not multiplayer.peer_disconnected.is_connected(_on_multiplayer_peer_disconnected):
+		multiplayer.peer_disconnected.connect(_on_multiplayer_peer_disconnected)
 	return true
+
+
+# Client-only handler for Godot's MultiplayerAPI peer_disconnected signal.
+# Peer ID 1 is always the host in a fixed peer-1 server model. Anything
+# else is a peer-to-peer disconnect (another client) that doesn't break
+# the session — those are handled separately by PlayersContainer's own
+# despawn-and-toast flow.
+func _on_multiplayer_peer_disconnected(peer_id: int) -> void:
+	if peer_id == 1:
+		host_disconnected.emit()
 
 
 func _teardown_peer() -> void:
 	if _peer == null:
 		return
+	# Disconnect the host-disconnect handler before closing — closing the
+	# peer fires peer_disconnected for every active peer including peer 1,
+	# which would otherwise trigger our overlay during a deliberate quit.
+	if multiplayer.peer_disconnected.is_connected(_on_multiplayer_peer_disconnected):
+		multiplayer.peer_disconnected.disconnect(_on_multiplayer_peer_disconnected)
 	# Closing first triggers a clean disconnect for all peers; clearing
 	# multiplayer_peer afterwards drops the reference so a future
 	# create_host / create_client starts from scratch.

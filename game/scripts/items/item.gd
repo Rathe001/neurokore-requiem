@@ -40,12 +40,38 @@ enum LightMod { NONE, FLASHLIGHT, RADIANT, SCANNER, UV }
 @export var ammo_max: int = 0
 @export var ammo_current: int = 0
 @export var reload_time: float = 0.0
+## Damage element — set on weapons whose archetype has an elemental
+## identity (flame/cryo/electric/etc). Empty StringName = neutral
+## (kinetic / energy default). Two consumers:
+##   1. Status-application skills (Overcharge) pick the status from
+##      the element (flame→ignite, cryo→freeze, electric→stun).
+##   2. Visual systems tint weapon effects by element color so the
+##      weapon's identity reads at a glance — fire weapons paint red
+##      cones, cryo weapons cyan, etc. See damage_type_color().
+@export var damage_type: StringName = &""
+
+
+## Lookup table mapping elemental damage types to their visual tint
+## color. Used by combat visuals (cone, beam, burst, lightning arc)
+## to color weapon effects per the weapon's element. Returns zero-alpha
+## Color() for unknown / empty damage types — callers treat that as
+## "no override, use the class accent" the way they did before
+## elemental tinting existed.
+const ELEMENT_COLORS: Dictionary = {
+	&"flame": Color(1.0, 0.45, 0.15, 1.0),    # orange-red, hot
+	&"cryo": Color(0.45, 0.85, 1.0, 1.0),     # cyan, freezing
+	&"electric": Color(0.75, 0.55, 1.0, 1.0), # violet-white, arc
+}
+
+
+static func damage_type_color(element: StringName) -> Color:
+	return ELEMENT_COLORS.get(element, Color(0.0, 0.0, 0.0, 0.0))
 
 
 ## Bullet-weapon base ids — single source of truth for "does this archetype
 ## use ammo / reload". Used by is_bullet_weapon for legacy-save migration.
 const BULLET_BASE_IDS: Array[StringName] = [
-	&"lmg_2h", &"smg_1h", &"sniper_2h", &"rpg_2h",
+	&"lmg_2h", &"smg_1h", &"sniper_2h", &"rpg_2h", &"shotgun_2h",
 ]
 
 
@@ -82,6 +108,56 @@ func _backfill_ammo_from_base() -> void:
 	ammo_max = maxi(1, (lo + hi) / 2)
 	ammo_current = ammo_max
 	reload_time = base.reload_time
+
+
+## Process-wide cache of weapon_base_ids that have no element (no pool,
+## no fixed damage_type). Hit on the second `effective_damage_type` call
+## for any neutral weapon, so subsequent tooltips and projectile spawns
+## don't re-load the WeaponBase resource just to confirm "still neutral."
+## Without this cache, the migration path would re-load the .tres on
+## every shot for LMG/SMG/sniper/RPG (none have a pool), which means
+## a hot-loop ResourceLoader call inside every projectile spawn.
+static var _neutral_base_ids: Dictionary = {}
+
+
+## Returns the weapon's elemental damage_type, lazy-migrating it from
+## the WeaponBase's damage_type_pool when an empty field is detected
+## on a weapon whose base actually has a pool. Pre-fix saves rolled
+## without the pool wiring loaded with empty damage_type and would
+## otherwise stay neutral forever — this picks one (random, since
+## pre-fix items have no preserved RNG seed) and stores it back, so
+## subsequent reads are consistent and serialization carries it.
+##
+## Neutral weapons (those whose base has no pool and no fixed type)
+## short-circuit via the _neutral_base_ids cache after the first
+## lookup so this method stays O(1) on the hot path.
+func effective_damage_type() -> StringName:
+	if damage_type != &"":
+		return damage_type
+	if weapon_base_id == &"":
+		return &""
+	if _neutral_base_ids.has(weapon_base_id):
+		return &""
+	_backfill_damage_type_from_base()
+	# Migration ran but the base had nothing to give — record the verdict
+	# so future calls on this base skip the load entirely.
+	if damage_type == &"":
+		_neutral_base_ids[weapon_base_id] = true
+	return damage_type
+
+
+func _backfill_damage_type_from_base() -> void:
+	var base_path := "res://resources/items/weapon_bases/%s.tres" % weapon_base_id
+	if not ResourceLoader.exists(base_path):
+		return
+	var base := load(base_path) as WeaponBase
+	if base == null:
+		return
+	if base.damage_type_pool.size() > 0:
+		var idx: int = randi_range(0, base.damage_type_pool.size() - 1)
+		damage_type = base.damage_type_pool[idx]
+	elif base.damage_type != &"":
+		damage_type = base.damage_type
 
 @export_group("Mods")
 ## Behavior mod for head armor — determines the player's light source.
@@ -208,6 +284,7 @@ func to_dict() -> Dictionary:
 	d[&"ammo_max"] = ammo_max
 	d[&"ammo_current"] = ammo_current
 	d[&"reload_time"] = reload_time
+	d[&"damage_type"] = String(damage_type)
 	d[&"light_mod"] = int(light_mod)
 	d[&"light_energy"] = light_energy
 	d[&"light_range"] = light_range
@@ -247,6 +324,7 @@ static func from_dict(d: Dictionary) -> Item:
 	item.ammo_max = int(d.get(&"ammo_max", 0))
 	item.ammo_current = int(d.get(&"ammo_current", 0))
 	item.reload_time = float(d.get(&"reload_time", 0.0))
+	item.damage_type = StringName(d.get(&"damage_type", ""))
 	item.light_mod = int(d.get(&"light_mod", 0)) as LightMod
 	item.light_energy = float(d.get(&"light_energy", 1.2))
 	item.light_range = float(d.get(&"light_range", 12.0))

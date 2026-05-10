@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="Skill" load_steps=2 format=3]
+
+; Charged Arc Taser alt-fire — "High Voltage". Single-cast chain
+; lightning that jumps to 5 enemies (chain_jumps = 5) at full damage
+; (chain_falloff_pct = 0). Heavier per-target damage than Tase. Pays
+; resource_cost up front, on a long cooldown — the burst pick when
+; you need to clear a tight cluster.
+
+[ext_resource type="Script" path="res://scripts/skills/skill.gd" id="1_skill_script"]
+
+[resource]
+script = ExtResource("1_skill_script")
+display_name = "High Voltage"
+glyph = "Z"
+damage = 22
+skill_range = 9.0
+cooldown = 4.0
+wind_up = 0.2
+resource_cost = 40
+targeting_mode = 5
+cone_deg = 0.0
+knockback = 1.5
+projectile_speed = 0.0
+icon_color = Color(0.55, 0.85, 1.0, 1.0)
+chain_jumps = 5
+chain_jump_radius = 7.0
+chain_falloff_pct = 0.0
+chain_min_damage = 1

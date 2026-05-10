@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="Skill" load_steps=2 format=3]
+
+; Shotgun primary fire — "#00 Buckshot". 9 independent hitscan pellets
+; fan within cone_deg; each pellet rolls its own damage and crit. Each
+; round consumes 1 ammo. Per-pellet damage is intentionally low — the
+; payoff is when 5+ pellets land on a close target and stack into a
+; massive single-trigger burst. Pellets that fly past the target still
+; spawn impact effects on whatever they hit (wall, secondary enemy).
+
+[ext_resource type="Script" path="res://scripts/skills/skill.gd" id="1_skill_script"]
+
+[resource]
+script = ExtResource("1_skill_script")
+display_name = "Buckshot"
+glyph = "x"
+damage = 4
+skill_range = 9.0
+cooldown = 0.55
+wind_up = 0.0
+resource_cost = 0
+targeting_mode = 4
+cone_deg = 18.0
+knockback = 1.5
+projectile_speed = 0.0
+icon_color = Color(0.85, 0.78, 0.7, 1.0)
+ammo_cost = 1
+pellet_count = 9

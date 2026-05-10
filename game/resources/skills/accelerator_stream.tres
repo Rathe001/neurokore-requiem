@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="Skill" load_steps=2 format=3]
+
+; Energy Accelerator primary — "Accelerator". Hold LMB for a continuous
+; cone-shaped stream of damage. Resource drains continuously; tick rate
+; is fast (~8 ticks/sec) so per-tick damage feels smooth rather than
+; stair-stepped. Damage type (flame / cryo / electric) is rolled onto
+; the weapon, not the skill — the LMB stream just deals weapon damage;
+; status effects only fire on the RMB Overcharge.
+
+[ext_resource type="Script" path="res://scripts/skills/skill.gd" id="1_skill_script"]
+
+[resource]
+script = ExtResource("1_skill_script")
+display_name = "Accelerator"
+glyph = "~"
+damage = 3
+skill_range = 7.0
+cooldown = 0.0
+wind_up = 0.0
+resource_cost = 0
+targeting_mode = 0
+cone_deg = 32.0
+knockback = 0.0
+projectile_speed = 0.0
+icon_color = Color(1.0, 0.7, 0.4, 1.0)
+active_kind = 6
+channel_tick_interval = 0.12
+channel_resource_per_sec = 18.0

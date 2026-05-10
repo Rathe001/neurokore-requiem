@@ -261,6 +261,27 @@ var _reload_target: StringName = &""
 # its accuracy/crit bonuses to every shot fired. Releasing RMB or running
 # the resource dry exits the hold.
 var _aim_hold_skill: Skill = null
+# True when an aim-hold skill (LMG Tripod) forced the player into a
+# crouch posture. Cleared on _stop_aim_hold so we only uncrouch
+# automatically if the hold was the reason the player was crouched —
+# a manually-crouching player who triggers Tripod stays down after
+# the hold ends until they release Ctrl themselves.
+var _aim_hold_forced_crouch: bool = false
+
+# CHANNEL_BEAM state — Taser hold-tase, Accelerator stream. While the
+# bound input is held, the skill's targeting_mode resolves on a fixed
+# tick interval and resource drains continuously. Stops when the input
+# releases, the resource pool empties, or the player dies.
+var _channel_skill: Skill = null
+var _channel_input_action: StringName = &""
+var _channel_tick_accum: float = 0.0
+# Flame visual for SINGLE_CONE CHANNEL_BEAM weapons (Energy Accelerator).
+# Pivot Node3D parented to the player at chest height — yawed each tick
+# to face aim. Cylinder MeshInstance3D under the pivot runs the
+# jet_flame.gdshader. Created lazily on first channel start; hidden
+# between casts so the shader's noise time uniform stays warm.
+var _flame_visual: Node3D = null
+var _flame_material: ShaderMaterial = null
 var _gear_damage_reduction: int = 0
 var _gear_move_speed_bonus: int = 0
 var _gear_base_damage_bonus: int = 0
@@ -453,6 +474,11 @@ func _update_remote_anim() -> void:
 		_play_anim(ANIM_RUN, 1.0, 0.15)
 	else:
 		_play_anim(ANIM_IDLE, 1.0, 0.15)
+	# Per-frame flame orientation update for remote channels — the start
+	# RPC only latches the damage_type + range; the visual transform
+	# tracks the remote player's facing direction every tick.
+	if _remote_flame_active:
+		_update_remote_flame_visual()
 
 
 func _build_stat_vfx() -> void:
@@ -735,6 +761,7 @@ func _physics_process(delta: float) -> void:
 	_ied.tick(delta)
 	_tick_reload(delta)
 	_tick_aim_hold(delta)
+	_tick_channel(delta)
 
 	var on_floor := is_on_floor()
 
@@ -743,7 +770,7 @@ func _physics_process(delta: float) -> void:
 	elif not _is_airborne:
 		velocity.y = 0.0
 
-	if on_floor and not _crouching and Input.is_action_just_pressed(&"jump"):
+	if on_floor and not _crouching and not GameplayChatState.typing and Input.is_action_just_pressed(&"jump"):
 		_interacting = false
 		velocity.y = JUMP_VELOCITY
 		_is_airborne = true
@@ -765,10 +792,16 @@ func _physics_process(delta: float) -> void:
 		velocity.x = 0.0
 		velocity.z = 0.0
 	else:
-		var input_vec := Vector2(
-			Input.get_action_strength(&"move_right") - Input.get_action_strength(&"move_left"),
-			Input.get_action_strength(&"move_down") - Input.get_action_strength(&"move_up"),
-		)
+		# Suppress movement entirely while the chat input is open — Input.
+		# get_action_strength polls the action map regardless of UI focus,
+		# so without this gate typing "WASD" into chat would walk the
+		# character around behind the panel.
+		var input_vec := Vector2.ZERO
+		if not GameplayChatState.typing:
+			input_vec = Vector2(
+				Input.get_action_strength(&"move_right") - Input.get_action_strength(&"move_left"),
+				Input.get_action_strength(&"move_down") - Input.get_action_strength(&"move_up"),
+			)
 		var wish_dir := Vector3.ZERO
 		if input_vec.length_squared() > 0.0:
 			# Manual WASD cancels auto-walk-to-interact — the player took
@@ -846,7 +879,10 @@ func _physics_process(delta: float) -> void:
 	# Auto-uncrouch as soon as the key isn't held. Polls the physical key
 	# directly because Godot's action system can miss the release event for
 	# Ctrl when it's released while another key (e.g. WASD) is still held.
-	if _crouching and not Input.is_physical_key_pressed(KEY_CTRL):
+	# Aim-hold skills that lock movement (LMG Tripod) force a crouch posture
+	# while held; skip the auto-uncrouch in that case so the player stays
+	# down even though Ctrl isn't physically pressed.
+	if _crouching and not Input.is_physical_key_pressed(KEY_CTRL) and not aim_hold_locks_movement():
 		_set_crouch(false)
 
 	if _alive and not _is_attack_committed() and _knockback_remain <= 0.0:
@@ -914,6 +950,12 @@ func _physics_process(delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if _is_remote_player():
 		return
+	# Suppress single-press hotkeys (reload, light, inventory, etc) while
+	# the chat input is open. Godot's LineEdit consumes most printable
+	# keys before they reach _unhandled_input, but action keys bound to
+	# functional keys (Tab, F-keys) can still leak through.
+	if GameplayChatState.typing:
+		return
 	if not _alive:
 		return
 	if event.is_action_pressed(&"interact"):
@@ -961,6 +1003,10 @@ func _try_interact() -> void:
 		nearest.interact(self)
 
 func _handle_skill_input() -> void:
+	# Suppress all skill input while chat is being typed — number keys and
+	# Q/E would otherwise cast skills as the player types those characters.
+	if GameplayChatState.typing:
+		return
 	# No global commit-window gate — each input path self-blocks via its
 	# own busy flag (_lmb_busy / _skill_busy) so LMB-hold and RMB-hold
 	# operate independently. The loop visits every input each frame
@@ -1015,6 +1061,9 @@ func resolve_skill(index: int) -> Skill:
 		# but the slot icon shows the main weapon's cooldown.
 		return weapon.fire_skill if weapon != null else null
 	elif index == 1:
+		# Two-handed weapons own RMB via their alt_fire_skill. One-handed
+		# weapons leave RMB to the offhand — the design rule is that
+		# 1H+offhand always pairs as LMB+RMB, never weapon-only.
 		if weapon != null and weapon.two_handed:
 			return weapon.alt_fire_skill
 		var offhand: Item = InventoryState.get_equipped(&"offhand")
@@ -1139,6 +1188,18 @@ const ARM_OFFSET_VERTICAL := 1.0
 func _cast_lmb_combat() -> void:
 	if _lmb_busy:
 		return
+	# CHANNEL_BEAM main weapon (Taser tase, Accelerator stream) starts
+	# the channel held-state instead of going through the standard
+	# multi-arm volley for its own slot. _tick_channel ticks damage
+	# on its own and stops when the input releases. The volley loop
+	# below still runs so Forged Amalgamation extras keep firing —
+	# the main slot just gets skipped because it's running on a
+	# different code path. Without this, a Taser-as-main blocked
+	# every extra arm from firing.
+	var main_weapon: Item = InventoryState.get_equipped(&"weapon")
+	var main_is_channel := main_weapon != null and main_weapon.fire_skill != null and main_weapon.fire_skill.active_kind == Skill.ActiveKind.CHANNEL_BEAM
+	if main_is_channel and _channel_skill == null:
+		_start_channel(main_weapon.fire_skill, &"fire")
 	_lmb_busy = true
 	_interacting = false
 	var aim := _aim_direction()
@@ -1160,6 +1221,12 @@ func _cast_lmb_combat() -> void:
 		if _combat.is_slot_on_cooldown(slot):
 			continue
 		var is_main := slot == &"weapon"
+		# Skip the main slot when it's running as a CHANNEL_BEAM —
+		# the channel handles its own ticks via _tick_channel. Firing
+		# the standard volley path on top would double-resolve the
+		# damage every frame.
+		if is_main and main_is_channel:
+			continue
 		# Bullet weapons: ammo gates fire (and is_reloading() blocks). Energy
 		# weapons: resource cost gates fire. Helper centralises both checks.
 		if is_main and not _skill_can_fire(item, skill, true):
@@ -1287,6 +1354,22 @@ func _cast_skill(skill: Skill) -> void:
 				# RMB-release and ends it. No cooldown — the resource
 				# drain is the cost gate.
 				_start_aim_hold(skill)
+			Skill.ActiveKind.CHANNEL_BEAM:
+				# Hold-to-stream — start the channel if not already
+				# active. _tick_channel ticks damage and stops on release.
+				if _channel_skill == null:
+					# Detect which input was held — RMB if the bound
+					# skill matches resolve_skill(1), otherwise hotkey.
+					var input_action: StringName = &"alt_fire"
+					if resolve_skill(1) != skill:
+						# Hotkey channel — match by skill identity to
+						# the SKILL_INPUTS slot. Edge case; channels
+						# usually live on LMB or RMB.
+						for i in range(2, SKILL_INPUTS.size()):
+							if resolve_skill(i) == skill:
+								input_action = SKILL_INPUTS[i]
+								break
+					_start_channel(skill, input_action)
 			Skill.ActiveKind.SHIELD_BUFF, Skill.ActiveKind.SHIELD_HOLD:
 				_shield.activate_offhand_skill(skill)
 			Skill.ActiveKind.GRENADE:
@@ -1556,12 +1639,25 @@ func _start_aim_hold(skill: Skill) -> void:
 	if not infinite_res and _resource_current <= 0.0:
 		return
 	_aim_hold_skill = skill
+	# Movement-locking aim-holds (Tripod) drop the player into a crouch
+	# stance for the duration. Only forces it if the player isn't already
+	# crouched — if they are, leave their state alone so we don't yank
+	# them back up when the hold ends.
+	if skill.aim_hold_locks_movement and not _crouching:
+		_set_crouch(true)
+		_aim_hold_forced_crouch = _crouching  # may be false if a ceiling blocked the crouch
 
 
 func _stop_aim_hold() -> void:
 	if _aim_hold_skill == null:
 		return
 	_aim_hold_skill = null
+	if _aim_hold_forced_crouch:
+		_aim_hold_forced_crouch = false
+		# Only uncrouch if the player isn't manually holding crouch — they
+		# might be pressing Ctrl by the time the hold ends.
+		if not Input.is_physical_key_pressed(KEY_CTRL):
+			_set_crouch(false)
 
 
 func _tick_aim_hold(delta: float) -> void:
@@ -1590,6 +1686,312 @@ func _tick_aim_hold(delta: float) -> void:
 			_stop_aim_hold()
 
 
+# ── CHANNEL_BEAM (Taser hold, Accelerator stream) ───────────────────────────
+
+## True while the player is holding a CHANNEL_BEAM skill. Used by combat
+## visuals and movement code that wants to know "the player is mid-stream".
+func is_channeling() -> bool:
+	return _channel_skill != null
+
+
+## Begin a channeled cast — bound input is which input the player pressed
+## to start it (LMB or RMB). The hold continues until the input releases,
+## the resource pool empties, or the channel skill changes (weapon swap).
+func _start_channel(skill: Skill, input_action: StringName) -> void:
+	if skill == null or skill.active_kind != Skill.ActiveKind.CHANNEL_BEAM:
+		return
+	# Need at least a sliver of resource to begin — otherwise the next
+	# tick would just kick us straight back out.
+	var infinite_res := DebugState.config != null and DebugState.config.infinite_resource
+	if not infinite_res and _resource_current <= 0.0:
+		return
+	_channel_skill = skill
+	_channel_input_action = input_action
+	_channel_tick_accum = 0.0
+	# Flame visual is SINGLE_CONE-only — Taser (CHAIN_LIGHTNING) draws
+	# its own lightning arcs per tick, so it doesn't need the cone.
+	if skill.targeting_mode == Skill.TargetingMode.SINGLE_CONE:
+		_show_flame_visual()
+		# MP: tell every other peer to render the flame on our avatar
+		# too. Authority-routed RPC — only the firing peer (us) sends;
+		# remote peers' copies of this node receive and call
+		# _rpc_channel_flame_start. Range and damage_type are latched
+		# now so the remote update loop has consistent values without
+		# per-frame param replication.
+		if NetState.is_in_lobby():
+			var weapon: Item = InventoryState.get_equipped(&"weapon")
+			var damage_type: StringName = &""
+			var weapon_range: float = FLAME_DEFAULT_RANGE
+			if weapon != null:
+				damage_type = weapon.effective_damage_type()
+				if weapon.weapon_range > 0.0:
+					weapon_range = weapon.weapon_range
+			_rpc_channel_flame_start.rpc(damage_type, weapon_range)
+
+
+func _stop_channel() -> void:
+	var was_flame_channel := _channel_skill != null and _channel_skill.targeting_mode == Skill.TargetingMode.SINGLE_CONE
+	_channel_skill = null
+	_channel_input_action = &""
+	_channel_tick_accum = 0.0
+	_hide_flame_visual()
+	# Only broadcast a stop if this was a flame channel — Taser hold's
+	# stop doesn't need an RPC because the lightning arcs were per-tick
+	# (each one self-fades; nothing persistent to tear down on remotes).
+	if was_flame_channel and NetState.is_in_lobby():
+		_rpc_channel_flame_stop.rpc()
+
+
+func _tick_channel(delta: float) -> void:
+	if _channel_skill == null:
+		return
+	# End on input release, weapon swap (resolve_skill returns something
+	# different than what we started with), or death.
+	if not _alive:
+		_stop_channel()
+		return
+	if not Input.is_action_pressed(_channel_input_action):
+		_stop_channel()
+		return
+	# Re-resolve the bound skill from the current weapon — if the player
+	# swapped weapons mid-hold, the new fire/alt-fire is a different
+	# skill and we need to bail.
+	var current_skill: Skill = _resolve_channel_skill_for_input()
+	if current_skill != _channel_skill:
+		_stop_channel()
+		return
+	# Resource drain — continuous, not per-tick. Lets the resource bar
+	# read smoothly instead of stair-stepping at the tick interval.
+	var infinite_res := DebugState.config != null and DebugState.config.infinite_resource
+	if not infinite_res and resource_pool != null:
+		var drain: float = _channel_skill.channel_resource_per_sec * delta
+		if drain > 0.0:
+			_resource_current = maxf(0.0, _resource_current - drain)
+			_emit_resource_if_changed()
+		if _resource_current <= 0.0:
+			_stop_channel()
+			return
+	# Drive the flame visual every frame so it tracks the cursor in
+	# real-time, not just on damage ticks. Skipped if the flame isn't
+	# active (CHAIN_LIGHTNING channels never created it).
+	if _flame_visual != null and _flame_visual.visible:
+		_update_flame_visual()
+	# Damage tick — when accum exceeds the configured interval, resolve
+	# a hit via the skill's targeting_mode through the standard combat
+	# pipeline (so multistrike, talents, crits all apply).
+	_channel_tick_accum += delta
+	var interval: float = maxf(_channel_skill.channel_tick_interval, 0.05)
+	while _channel_tick_accum >= interval:
+		_channel_tick_accum -= interval
+		var aim := _aim_direction()
+		if aim == Vector3.ZERO:
+			continue
+		var weapon: Item = _combat.resolve_skill_source(_channel_skill)
+		_combat.resolve_skill_hit(_channel_skill, aim, weapon)
+
+
+# ── Channel flame visual (Energy Accelerator stream) ────────────────────────
+
+const FLAME_SHADER: Shader = preload("res://scripts/prototype/jet_flame.gdshader")
+# Cone shape matching the Accelerator's hit telegraph: narrow at the
+# muzzle, wide at the far end. Accelerator stream is cone_deg=32° at
+# range 7m → tan(16°) × 7 ≈ 2.0m half-width at the far end. Sizing
+# the mesh's far-end radius to that means the flame visual covers
+# exactly what the per-tick damage cone actually catches.
+const FLAME_BASE_RADIUS: float = 0.08  # at the muzzle (mesh -Y)
+const FLAME_TIP_RADIUS: float = 2.0    # at the far end (mesh +Y)
+const FLAME_DEFAULT_RANGE: float = 7.0
+# Chest-height offset for the muzzle. Player origin is at the floor,
+# so we lift the pivot to where the weapon would actually emit from.
+const FLAME_MUZZLE_HEIGHT: float = 1.0
+
+
+func _ensure_flame_visual() -> void:
+	if _flame_visual != null:
+		return
+	# Pivot Node3D placed in world space (top_level=true so player
+	# rotation/movement doesn't double-apply). Each tick we set the
+	# pivot's full transform: position at the player's chest, basis
+	# with local +Y aligned to aim direction. Cylinder mounted under
+	# pivot with its natural Y-up orientation — wide bottom at
+	# pivot.origin (the muzzle), narrow tip at +Y (aim direction).
+	var pivot := Node3D.new()
+	pivot.name = "ChannelFlamePivot"
+	pivot.top_level = true
+	add_child(pivot)
+	var mesh := CylinderMesh.new()
+	# Bottom (narrow muzzle) is at mesh -Y; top (wide far end) is at
+	# +Y. With the pivot's +Y axis aligned to aim each tick, the mesh
+	# extends FROM the pivot origin (player chest, narrow) AWAY along
+	# aim direction (wide end where the cone hits).
+	mesh.bottom_radius = FLAME_BASE_RADIUS
+	mesh.top_radius = FLAME_TIP_RADIUS
+	mesh.height = 1.0
+	mesh.radial_segments = 14
+	mesh.rings = 4
+	# Disable both caps — the muzzle cap is what was reading as a flat
+	# triangle at the player's feet, and the far-end cap is invisible
+	# anyway because the flame fades to transparent there. Side surface
+	# only keeps the visual a true open jet, not a closed solid.
+	mesh.cap_top = false
+	mesh.cap_bottom = false
+	var mat := ShaderMaterial.new()
+	mat.shader = FLAME_SHADER
+	var inst := MeshInstance3D.new()
+	inst.name = "ChannelFlameMesh"
+	inst.mesh = mesh
+	inst.material_override = mat
+	inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# Lift mesh by half its (unscaled) height so its bottom face sits
+	# at the pivot origin instead of straddling it. Scaled along Y
+	# each tick to match weapon range; we re-position the mesh in
+	# _update_flame_visual proportionally.
+	inst.position = Vector3(0.0, 0.5, 0.0)
+	pivot.add_child(inst)
+	pivot.visible = false
+	_flame_visual = pivot
+	_flame_material = mat
+
+
+func _show_flame_visual() -> void:
+	_ensure_flame_visual()
+	if _flame_visual == null:
+		return
+	var weapon: Item = InventoryState.get_equipped(&"weapon")
+	var elem_color := Color(1.0, 0.5, 0.1, 1.0)
+	if weapon != null:
+		var elem := weapon.effective_damage_type()
+		if elem != &"":
+			elem_color = Item.damage_type_color(elem)
+	_flame_material.set_shader_parameter(&"flame_color", Vector3(elem_color.r, elem_color.g, elem_color.b))
+	var core := elem_color.lerp(Color(1.0, 0.95, 0.7, 1.0), 0.65)
+	_flame_material.set_shader_parameter(&"inner_color", Vector3(core.r, core.g, core.b))
+	_flame_material.set_shader_parameter(&"intensity", 1.5)
+	_flame_visual.visible = true
+	_update_flame_visual()
+
+
+func _hide_flame_visual() -> void:
+	if _flame_visual == null:
+		return
+	_flame_visual.visible = false
+
+
+func _update_flame_visual() -> void:
+	if _flame_visual == null or _channel_skill == null:
+		return
+	var aim := _aim_direction()
+	if aim == Vector3.ZERO:
+		return
+	var weapon: Item = _combat.resolve_skill_source(_channel_skill)
+	var range_m := FLAME_DEFAULT_RANGE
+	if weapon != null and weapon.weapon_range > 0.0:
+		range_m = weapon.weapon_range
+	_apply_flame_transform(aim, range_m)
+
+
+# Update the flame on a REMOTE player's avatar. Aim comes from the
+# player's facing direction (visual.basis.-z) since remote peers don't
+# see the firing player's cursor. Range and damage_type were latched
+# at _rpc_channel_flame_start time. Called every physics tick from
+# _update_remote_anim while _remote_flame_active.
+func _update_remote_flame_visual() -> void:
+	if not _remote_flame_active or _flame_visual == null:
+		return
+	var aim := -visual.global_transform.basis.z
+	_apply_flame_transform(aim, _remote_flame_range)
+
+
+# Shared transform/scale logic for the flame pivot. Aim is flattened to
+# horizontal, wall-clipped via a raycast against world geometry, then
+# turned into an orthonormal basis with +Y = aim. The cylinder mesh
+# under the pivot is scaled along Y to range_m and re-offset so its
+# narrow base stays anchored at the pivot origin (the muzzle).
+func _apply_flame_transform(aim: Vector3, range_m: float) -> void:
+	# Force the flame to lie flat in the horizontal plane. _aim_direction
+	# can carry a vertical component (lock-target chest aim, FPS look
+	# pitch) which would tip the flame into the floor or ceiling. The
+	# cone hit detection itself uses the same horizontal projection so
+	# flattening here keeps the visual aligned with what deals damage.
+	var aim_flat := aim
+	aim_flat.y = 0.0
+	if aim_flat.length_squared() < 0.0001:
+		return
+	var aim_norm := aim_flat.normalized()
+	var muzzle := global_position + Vector3(0.0, FLAME_MUZZLE_HEIGHT, 0.0)
+	# Wall clip: raycast from muzzle along aim and cap the flame's
+	# length at the first wall hit so the cone doesn't punch through
+	# into the next room. Layer 1 is walls/structures (same mask the
+	# cone damage path uses for LoS).
+	var space := get_world_3d().direct_space_state
+	if space != null:
+		var ray := PhysicsRayQueryParameters3D.create(
+			muzzle, muzzle + aim_norm * range_m, 1)
+		var hit := space.intersect_ray(ray)
+		if not hit.is_empty():
+			var wall_dist: float = muzzle.distance_to(hit["position"])
+			# Pull back slightly from the wall surface so the wide tip
+			# doesn't intersect/clip into wall geometry.
+			range_m = maxf(0.5, wall_dist - 0.2)
+	# Build an orthonormal basis with +Y = aim. Mesh's narrow base
+	# sits at pivot origin (muzzle); mesh's wide top extends along +Y.
+	var ref_up := Vector3.UP
+	var x_axis := aim_norm.cross(ref_up).normalized()
+	var z_axis := x_axis.cross(aim_norm).normalized()
+	var basis := Basis(x_axis, aim_norm, z_axis)
+	_flame_visual.global_transform = Transform3D(basis, muzzle)
+	var mesh_inst := _flame_visual.get_node_or_null(^"ChannelFlameMesh") as MeshInstance3D
+	if mesh_inst != null:
+		mesh_inst.scale = Vector3(1.0, range_m, 1.0)
+		mesh_inst.position = Vector3(0.0, range_m * 0.5, 0.0)
+
+
+# ── Remote channel-flame replication ────────────────────────────────────────
+# Local player's _start_channel / _stop_channel call these RPCs to tell
+# every other peer's copy of THIS player node to show/hide a flame
+# attached to its avatar. Authority routes the call: only the firing
+# player sends; every other peer receives. The visual orientation is
+# updated each frame by _update_remote_flame_visual using the remote
+# player's facing direction (the cursor isn't replicated).
+
+var _remote_flame_active: bool = false
+var _remote_flame_range: float = FLAME_DEFAULT_RANGE
+
+
+@rpc("authority", "call_remote", "reliable")
+func _rpc_channel_flame_start(damage_type: StringName, weapon_range: float) -> void:
+	_remote_flame_active = true
+	_remote_flame_range = weapon_range if weapon_range > 0.0 else FLAME_DEFAULT_RANGE
+	_ensure_flame_visual()
+	var elem_color := Color(1.0, 0.5, 0.1, 1.0)
+	if damage_type != &"":
+		elem_color = Item.damage_type_color(damage_type)
+	_flame_material.set_shader_parameter(&"flame_color", Vector3(elem_color.r, elem_color.g, elem_color.b))
+	var core := elem_color.lerp(Color(1.0, 0.95, 0.7, 1.0), 0.65)
+	_flame_material.set_shader_parameter(&"inner_color", Vector3(core.r, core.g, core.b))
+	_flame_material.set_shader_parameter(&"intensity", 1.5)
+	_flame_visual.visible = true
+
+
+@rpc("authority", "call_remote", "reliable")
+func _rpc_channel_flame_stop() -> void:
+	_remote_flame_active = false
+	if _flame_visual != null:
+		_flame_visual.visible = false
+
+
+# Look up the skill currently bound to the channel's input action so we
+# can detect weapon swaps mid-hold. LMB = main weapon's fire_skill, RMB
+# follows the same resolve_skill(1) path used by the cast loop.
+func _resolve_channel_skill_for_input() -> Skill:
+	if _channel_input_action == &"fire":
+		var weapon: Item = InventoryState.get_equipped(&"weapon")
+		return weapon.fire_skill if weapon != null else null
+	if _channel_input_action == &"alt_fire":
+		return resolve_skill(1)
+	return null
+
+
 func _tick_reload(delta: float) -> void:
 	if _reload_remain <= 0.0:
 		return
@@ -1616,22 +2018,36 @@ func _skill_can_fire(item: Item, skill: Skill, is_main: bool) -> bool:
 	if not is_main:
 		return true  # extra arms always fire free (existing behaviour)
 	if item != null and item.is_bullet_weapon():
-		return item.ammo_current > 0 and not is_reloading()
+		# Skill.ammo_cost defaults to 1; shotgun's double-barrel sets it
+		# to 2 so the gate refuses to fire without a full pair available.
+		var cost: int = maxi(1, skill.ammo_cost)
+		return item.ammo_current >= cost and not is_reloading()
 	if skill.resource_cost <= 0:
 		return true
 	var infinite_resource := DebugState.config != null and DebugState.config.infinite_resource
 	return infinite_resource or _resource_current >= float(skill.resource_cost)
 
 # Pay the cost of firing — either decrement ammo (bullet weapons) or
-# spend resource (energy weapons). Auto-triggers reload when the shot
-# empties the magazine.
+# spend resource (energy weapons). Auto-triggers reload when the magazine
+# can no longer afford the next shot's ammo_cost (so a 2-cost double-
+# barrel reload trips when 1 round remains, not 0).
 func _skill_pay_cost(item: Item, skill: Skill, is_main: bool) -> void:
 	if not is_main:
 		return
 	if item != null and item.is_bullet_weapon():
-		item.ammo_current = maxi(0, item.ammo_current - 1)
+		var cost: int = maxi(1, skill.ammo_cost)
+		item.ammo_current = maxi(0, item.ammo_current - cost)
 		weapon_ammo_changed.emit()
-		if item.ammo_current == 0:
+		# Reload trigger looks at NEXT-shot affordability rather than
+		# strict empty: a shotgun with 1 round can't fire double-barrel,
+		# so we kick a reload pre-emptively in that case too. Uses the
+		# fire skill (LMB primary) as the cost-floor reference; if the
+		# main weapon's primary fire is single-cost, this collapses to
+		# the prior "reload at empty" behaviour.
+		var min_next_cost: int = 1
+		if item.fire_skill != null:
+			min_next_cost = maxi(1, item.fire_skill.ammo_cost)
+		if item.ammo_current < min_next_cost:
 			start_reload()
 		return
 	if skill.resource_cost <= 0:
@@ -1817,6 +2233,18 @@ func respawn() -> void:
 	health_changed.emit(_health, max_health)
 	respawned.emit()
 	_play_anim(ANIM_IDLE)
+
+## World position of the cursor on the player's Y plane. Used by
+## chain lightning's magnet-target picker to find the enemy nearest
+## the cursor rather than the enemy nearest the aim ray. Returns the
+## player's own position when the cursor isn't projectable (FPS mode,
+## camera missing, etc.) so callers don't have to special-case ZERO.
+func cursor_world_position() -> Vector3:
+	var offset := _cursor_offset()
+	if offset.length_squared() < 0.0001:
+		return global_position
+	return global_position + offset
+
 
 func _cursor_offset() -> Vector3:
 	if _camera == null:

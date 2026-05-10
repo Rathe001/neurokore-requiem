@@ -538,14 +538,74 @@ func _build_type_text(item: Item) -> String:
 	return "%s - %s" % [item.main_type, item.sub_type]
 
 func _compute_dps(item: Item) -> float:
+	# Returns the weapon's expected raw single-target DPS — what the
+	# weapon outputs when every shot lands and the damage roll is
+	# average. Accuracy is intentionally NOT in the formula: scattered
+	# shots still hit nearby enemies in the cone, and a shotgun pellet
+	# that "misses" the cursor target often hits a different one in
+	# the spread. The number is "weapon power" not "expected DPS to a
+	# specific cursor-target."
+	#
+	# Formula (single-shot weapons):
+	#   DPS = avg_dmg × pellet_count × damage_multiplier × fire_rate × crit_factor
+	# where:
+	#   fire_rate = atk_speed / skill.cooldown   (casts per second)
+	#   crit_factor = 1 + crit × (crit_mult - 1)
+	#
+	# Channel weapons (CHANNEL_BEAM, e.g. Energy Accelerator stream)
+	# bypass cooldown and tick by `channel_tick_interval` instead;
+	# their per-tick damage is the *skill*'s damage value, not the
+	# weapon roll. Weapon roll still drives the displayed Damage line.
 	var avg_dmg := float(item.effective_damage_min() + item.effective_damage_max()) * 0.5
 	var spd := item.effective_attack_speed()
-	var acc := clampf(item.effective_accuracy(), 0.0, 1.0)
-	# Use weapon crit if present, otherwise the global base chance.
-	var crit := item.effective_crit_chance() if item.crit_chance > 0.0 else 0.15
+	var crit: float = item.effective_crit_chance() if item.crit_chance > 0.0 else 0.15
 	var crit_mult := 1.5
-	# eDPS = avg_damage × speed × accuracy × (1 + crit × (crit_mult - 1))
-	return avg_dmg * spd * acc * (1.0 + crit * (crit_mult - 1.0))
+	var crit_factor := 1.0 + crit * (crit_mult - 1.0)
+
+	var fire_skill := _resolve_fire_skill(item)
+	var pellet_count := 1
+	var damage_mult := 1.0
+	var fire_rate := spd  # fallback when no fire_skill or cooldown=0 and not a channel
+	if fire_skill != null:
+		pellet_count = maxi(1, fire_skill.pellet_count)
+		damage_mult = maxf(0.01, fire_skill.damage_multiplier)
+		# Channel beams: per-tick damage × ticks per second. Per-tick
+		# damage on a channel is `skill.damage` (the resource of an
+		# Accelerator stream defines its tick). The weapon's avg_dmg
+		# is irrelevant to actual stream output.
+		if fire_skill.active_kind == Skill.ActiveKind.CHANNEL_BEAM:
+			var interval: float = maxf(fire_skill.channel_tick_interval, 0.05)
+			var per_tick := float(fire_skill.damage)
+			return per_tick * (1.0 / interval) * crit_factor
+		# Cooldown-driven fire rate. attack_speed scales the cooldown
+		# duration (start_cooldown divides by it), so casts/sec =
+		# atk_speed / cooldown. cooldown <= 0 falls back to atk_speed
+		# alone (e.g. zero-cooldown skills that effectively re-fire as
+		# fast as the weapon's animation allows).
+		if fire_skill.cooldown > 0.0:
+			fire_rate = spd / fire_skill.cooldown
+
+	return avg_dmg * float(pellet_count) * damage_mult * fire_rate * crit_factor
+
+
+# Cached WeaponBase loads, keyed by weapon_base_id, so opening tooltips
+# for many items doesn't churn the resource loader. Cleared only on
+# script reload — these are tiny resources and there are <20 of them.
+static var _weapon_base_cache: Dictionary = {}
+
+
+func _resolve_fire_skill(item: Item) -> Skill:
+	if item == null or item.weapon_base_id == &"":
+		return null
+	var cached: WeaponBase = _weapon_base_cache.get(item.weapon_base_id, null)
+	if cached == null:
+		var path := "res://resources/items/weapon_bases/%s.tres" % item.weapon_base_id
+		if not ResourceLoader.exists(path):
+			return null
+		cached = load(path) as WeaponBase
+		if cached != null:
+			_weapon_base_cache[item.weapon_base_id] = cached
+	return cached.fire_skill if cached != null else null
 
 # Builds the stats-block text for an item. Only DPS shows an inline
 # comparison arrow against `equipped` — everything else is bare. The
@@ -603,6 +663,18 @@ func _build_stats_text(item: Item, equipped: Item = null) -> String:
 		lines.append("Accuracy: %.1f%%" % (item.effective_accuracy() * 100.0))
 	if item.weapon_range > 0.0 and item.damage_max > 0:
 		lines.append("Range: %.1f m" % item.weapon_range)
+	# Element — for weapons whose archetype has an elemental identity
+	# (Energy Accelerator's flame/cryo/electric, Taser's electric, etc).
+	# Tints the weapon's effects in combat AND drives Overcharge-style
+	# status effects, so worth surfacing to the player.
+	# effective_damage_type() lazy-migrates pre-fix saves whose
+	# damage_type field never got rolled (Accelerator pre-pool wiring).
+	var elem_type := item.effective_damage_type()
+	if elem_type != &"":
+		var elem_label := (elem_type as String).capitalize()
+		var elem_color := Item.damage_type_color(elem_type)
+		var elem_hex := "#%02x%02x%02x" % [int(elem_color.r * 255), int(elem_color.g * 255), int(elem_color.b * 255)]
+		lines.append("Element: [color=%s]%s[/color]" % [elem_hex, elem_label])
 	# Head light mod
 	if item.light_mod != Item.LightMod.NONE:
 		var mod_name := "Light"
@@ -744,6 +816,47 @@ func _build_skill_stats_text(skill: Skill, source: Item) -> String:
 					lines.append("[color=#bb88ff]Cluster: splits into 3 sub-grenades[/color]")
 				Skill.GrenadeType.STUN:
 					lines.append("[color=#88aaff]Stun: staggers enemies[/color]")
+		Skill.ActiveKind.AIM_HOLD:
+			# Held-buff skills (Sniper Focus, LMG Tripod). They don't
+			# deal their own damage and aren't fired; showing weapon
+			# damage / speed / accuracy here was misleading. Show the
+			# buff effects + drain rate + movement-lock instead.
+			lines.append("[color=#aaccff]Hold: drains resource for combat buffs[/color]")
+			if skill.aim_hold_accuracy_bonus > 0.0:
+				lines.append("+%.0f%% Accuracy" % (skill.aim_hold_accuracy_bonus * 100.0))
+			if skill.aim_hold_crit_bonus > 0.0:
+				lines.append("+%.0f%% Crit Chance" % (skill.aim_hold_crit_bonus * 100.0))
+			if skill.aim_hold_resource_drain > 0.0:
+				lines.append("Drain: %.0f/sec" % skill.aim_hold_resource_drain)
+			if skill.aim_hold_locks_movement:
+				lines.append("[color=#ff8866]Locks Movement[/color]")
+		Skill.ActiveKind.CHANNEL_BEAM:
+			# Held-damage skills (Taser Tase, Accelerator Stream). The
+			# weapon's per-shot damage is the per-tick damage here, so
+			# leading with damage range is fair — but cooldown/accuracy
+			# don't apply to a continuous channel, so we skip them.
+			# Targeting-specific lines (chain jump radius, cone deg)
+			# follow.
+			lines.append("[color=#aaccff]Hold: continuous damage channel[/color]")
+			if source != null and source.damage_max > 0:
+				lines.append("Damage / tick: %d–%d" % [source.effective_damage_min(), source.effective_damage_max()])
+			elif skill.damage > 0:
+				lines.append("Damage / tick: %d" % skill.damage)
+			if skill.channel_tick_interval > 0.0:
+				lines.append("Ticks: %.1f/sec" % (1.0 / skill.channel_tick_interval))
+			if skill.channel_resource_per_sec > 0.0:
+				lines.append("Drain: %.0f/sec" % skill.channel_resource_per_sec)
+			var ch_range := source.weapon_range if source != null and source.weapon_range > 0.0 else skill.skill_range
+			if ch_range > 0.0:
+				lines.append("Range: %.1f m" % ch_range)
+			match skill.targeting_mode:
+				Skill.TargetingMode.SINGLE_CONE:
+					lines.append("Targeting: Cone %d°" % int(skill.cone_deg))
+				Skill.TargetingMode.CHAIN_LIGHTNING:
+					if skill.chain_falloff_pct > 0.0:
+						lines.append("Chain: bounces with %.0f%% falloff" % skill.chain_falloff_pct)
+					else:
+						lines.append("Chain: %d targets" % skill.chain_jumps)
 		_:
 			# Standard weapon skill (cone, aoe, projectile, hitscan).
 			var dmg_mult := skill.damage_multiplier

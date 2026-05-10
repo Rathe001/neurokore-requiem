@@ -1,0 +1,38 @@
+[gd_resource type="Resource" script_class="WeaponBase" load_steps=4 format=3]
+
+; Energy Accelerator (2H) — flamethrower-class continuous-stream weapon.
+; Each drop rolls one of three damage types from damage_type_pool:
+;   • flame    → Overcharge ignites enemies (DoT)
+;   • cryo     → Overcharge freezes (CC reuse of stun)
+;   • electric → Overcharge stuns
+;
+; LMB streams the same weapon damage regardless of element — only the
+; RMB Overcharge cares about the rolled type. Mid-range (~7m); shorter
+; than the Taser's chain reach because the cone has to be navigable
+; without sweeping into walls.
+;
+; DPS math (LMB single-target, full cone overlap): per-tick avg ~7;
+; channel_tick_interval 0.12 = 8.3 ticks/sec; ~58 DPS on a centered
+; target. Cone-overlap means multi-enemy DPS scales linearly with
+; targets in cone — equivalent of melee_2h's cleave but ranged and
+; sustained, balanced by the resource drain.
+
+[ext_resource type="Script" path="res://scripts/items/weapon_base.gd" id="1_weapon_base"]
+[ext_resource type="Resource" path="res://resources/skills/accelerator_stream.tres" id="2_fire_skill"]
+[ext_resource type="Resource" path="res://resources/skills/accelerator_overcharge.tres" id="3_alt_fire"]
+
+[resource]
+script = ExtResource("1_weapon_base")
+id = &"accelerator_2h"
+display_name = "Energy Accelerator"
+glyph = "v"
+two_handed = true
+damage_min_range = Vector2(5, 8)
+damage_max_range = Vector2(8, 12)
+attack_speed_range = Vector2(0.95, 1.10)
+crit_chance_range = Vector2(0.0, 0.0)
+accuracy_range = Vector2(0.85, 0.95)
+weapon_range_range = Vector2(6.0, 8.0)
+fire_skill = ExtResource("2_fire_skill")
+alt_fire_skill = ExtResource("3_alt_fire")
+damage_type_pool = Array[StringName]([&"flame", &"cryo", &"electric"])

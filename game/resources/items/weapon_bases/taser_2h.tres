@@ -1,0 +1,35 @@
+[gd_resource type="Resource" script_class="WeaponBase" load_steps=4 format=3]
+
+; Charged Arc Taser (2H) — chain lightning weapon. Two-handed because
+; the design rule is that 1H weapons leave RMB to the offhand; the
+; Taser's RMB High Voltage skill needs to live on the weapon itself,
+; so the weapon needs to be 2H. Held LMB ticks small damage that
+; bounces between enemies with 15% per-jump falloff; RMB single-blast
+; chains to 5 targets at full damage. Resource-driven (no ammo).
+; Mid-range (4.5–6m).
+;
+; DPS math (LMB, single target, no chain): per-tick avg ~3;
+; channel_tick_interval 0.15 = 6.67 ticks/sec; ~20 raw DPS on the
+; primary target. Chain bounces add on top per jump until falloff
+; kills it. Multi-target DPS scales with crowd size — that's the
+; trade for the steep resource drain.
+
+[ext_resource type="Script" path="res://scripts/items/weapon_base.gd" id="1_weapon_base"]
+[ext_resource type="Resource" path="res://resources/skills/taser_tase.tres" id="2_fire_skill"]
+[ext_resource type="Resource" path="res://resources/skills/taser_high_voltage.tres" id="3_alt_fire"]
+
+[resource]
+script = ExtResource("1_weapon_base")
+id = &"taser_2h"
+display_name = "Charged Arc Taser"
+glyph = "y"
+two_handed = true
+damage_min_range = Vector2(1, 2)
+damage_max_range = Vector2(2, 4)
+attack_speed_range = Vector2(0.95, 1.10)
+crit_chance_range = Vector2(0.0, 0.0)
+accuracy_range = Vector2(1.0, 1.0)
+weapon_range_range = Vector2(7.0, 9.0)
+fire_skill = ExtResource("2_fire_skill")
+alt_fire_skill = ExtResource("3_alt_fire")
+damage_type = &"electric"

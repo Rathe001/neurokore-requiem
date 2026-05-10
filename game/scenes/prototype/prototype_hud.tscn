@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/prototype/prototype_hud.gd" id="script_hud"]
 [ext_resource type="PackedScene" path="res://scenes/ui/skill_slot.tscn" id="scene_skill_slot"]
@@ -6,6 +6,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/main_menu.tscn" id="scene_main_menu"]
 [ext_resource type="PackedScene" path="res://scenes/ui/debug_panel.tscn" id="scene_debug_panel"]
 [ext_resource type="Script" path="res://scripts/prototype/prototype_tooltip.gd" id="script_tooltip"]
+[ext_resource type="Script" path="res://scripts/ui/gameplay_chat_panel.gd" id="script_gameplay_chat"]
 
 [node name="PrototypeHUD" type="CanvasLayer"]
 script = ExtResource("script_hud")
@@ -474,6 +475,13 @@ color = Color(1.0, 0.85, 0.4, 0.95)
 unique_name_in_owner = true
 
 [node name="DebugOverlay" parent="Root" instance=ExtResource("scene_debug_panel")]
+
+[node name="GameplayChatPanel" type="Control" parent="Root"]
+unique_name_in_owner = true
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+script = ExtResource("script_gameplay_chat")
 
 [node name="Tooltip" type="Control" parent="Root"]
 script = ExtResource("script_tooltip")

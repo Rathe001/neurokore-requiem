@@ -28,6 +28,10 @@ func _ready() -> void:
 	_register_keys(&"toggle_view", [KEY_V])
 	_register_keys(&"toggle_minimap", [KEY_TAB])
 	_register_keys(&"toggle_talents", [KEY_N])
+	# Both Enter keys toggle the in-game MP chat. Numpad enter is included
+	# so users on full-size keyboards can type with their right hand without
+	# stretching to the main return key.
+	_register_keys(&"chat_toggle", [KEY_ENTER, KEY_KP_ENTER])
 	_register_keys(&"toggle_fullscreen", [KEY_F11])
 	_register_keys(&"toggle_debug_panel", [KEY_F3])
 	_register_keys(&"debug_horde_spawn", [KEY_F1])

@@ -12,6 +12,11 @@ enum Kind { OOZE, SPIKES, BOTTOMLESS }
 # regardless (it sits at y = -10).
 const BOTTOMLESS_DEPTH := 10.0
 
+# Acid-pool shader — animated Gerstner-style surface for OOZE pits.
+# Theme provides the color (default green, amber-theme orange) so this
+# is reusable across zones without per-zone shader variants.
+const ACID_POOL_SHADER: Shader = preload("res://scripts/level/acid_pool.gdshader")
+
 # Pillar visuals sit a hair below the corridor's floor bias (-0.0015) so the
 # corridor floor wins in the overlap zone where pillars at room openings
 # overlap the corridor's FLOOR_OVERLAP extension into the room. Keeping
@@ -188,31 +193,54 @@ static func _create_pit_jump_links(ctx: LevelBuildContext, center: Vector3, rd: 
 
 
 static func _create_pit_wall(ctx: LevelBuildContext, pos: Vector3, sx: float, sy: float, sz: float, mat: Material = null) -> void:
+	# StaticBody wraps both the mesh and a matching BoxShape3D so the
+	# pit walls actually catch the player during the fall. The bare
+	# MeshInstance approach this used to follow had no collision —
+	# mid-fall the player could drift sideways through the pit's
+	# inner walls and out into the void, ending up dying to the
+	# global kill plane outside the pit instead of bouncing along the
+	# shaft on the way down.
+	var body := StaticBody3D.new()
+	body.position = pos
+
 	var mesh_inst := MeshInstance3D.new()
 	mesh_inst.mesh = BoxMesh.new()
 	(mesh_inst.mesh as BoxMesh).size = Vector3(sx, sy, sz)
 	var wall_mat := mat if mat != null else ctx.wall_material
 	if wall_mat != null:
 		mesh_inst.material_override = wall_mat
-	mesh_inst.position = pos
-	ctx.root.add_child(mesh_inst)
-	mesh_inst.add_to_group(&"structures")
+	body.add_child(mesh_inst)
+
+	var col := CollisionShape3D.new()
+	col.shape = BoxShape3D.new()
+	(col.shape as BoxShape3D).size = Vector3(sx, sy, sz)
+	body.add_child(col)
+
+	ctx.root.add_child(body)
+	body.add_to_group(&"structures")
 
 
 static func _build_pit_floor_ooze(ctx: LevelBuildContext, center: Vector3, inner_x: float, inner_z: float, depth: float) -> void:
 	var t := ctx.theme
-	# Glowing ooze surface at the bottom of the pit.
+	# Glowing ooze surface at the bottom of the pit. Uses a custom
+	# acid_pool.gdshader for procedural Gerstner waves + animated FBM
+	# ripple — the surface visibly flows instead of being a flat
+	# emissive plane. Theme-driven color/energy uniforms preserve the
+	# per-zone palette (default green; amber theme overrides to orange).
 	var ooze_y := -depth + 0.02
-	var ooze_mat := StandardMaterial3D.new()
-	ooze_mat.albedo_color = t.pit_ooze_color
-	ooze_mat.emission_enabled = true
-	ooze_mat.emission = t.pit_ooze_color
-	ooze_mat.emission_energy_multiplier = t.pit_ooze_energy
-	ooze_mat.metallic = 0.0
-	ooze_mat.roughness = 0.2
+	var ooze_mat := ShaderMaterial.new()
+	ooze_mat.shader = ACID_POOL_SHADER
+	ooze_mat.set_shader_parameter(&"acid_color", Vector3(t.pit_ooze_color.r, t.pit_ooze_color.g, t.pit_ooze_color.b))
+	ooze_mat.set_shader_parameter(&"emission_energy", t.pit_ooze_energy)
 
+	# Subdivisions matter — the vertex displacement in the shader needs
+	# enough vertices to actually wave. The shader's wavelengths are
+	# ~0.7–1.4m, so we want ~3 vertices per wavelength for smooth
+	# swells. 16×16 covers a typical 5m pit with ~3 vertices/m.
 	var ooze_mesh := PlaneMesh.new()
 	ooze_mesh.size = Vector2(inner_x, inner_z)
+	ooze_mesh.subdivide_width = 16
+	ooze_mesh.subdivide_depth = 16
 	ooze_mesh.material = ooze_mat
 
 	var ooze_inst := MeshInstance3D.new()

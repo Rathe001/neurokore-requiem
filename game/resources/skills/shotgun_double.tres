@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="Skill" load_steps=2 format=3]
+
+; Shotgun alt-fire — "Double Barrel". 18 hitscan pellets in a single
+; trigger pull — a one-cast burst that fires both barrels at once. Costs
+; 2 ammo (gated at fire-time via Skill.ammo_cost). Same per-pellet damage
+; as Buckshot, but double the pellet count means catastrophic damage at
+; close range and a magazine that empties in 4 trigger pulls instead of
+; 8. Slightly slower cooldown reflects the heavier kick.
+
+[ext_resource type="Script" path="res://scripts/skills/skill.gd" id="1_skill_script"]
+
+[resource]
+script = ExtResource("1_skill_script")
+display_name = "Double Barrel"
+glyph = "X"
+damage = 4
+skill_range = 9.0
+cooldown = 0.85
+wind_up = 0.0
+resource_cost = 0
+targeting_mode = 4
+cone_deg = 22.0
+knockback = 3.5
+projectile_speed = 0.0
+icon_color = Color(0.85, 0.78, 0.7, 1.0)
+ammo_cost = 2
+pellet_count = 18

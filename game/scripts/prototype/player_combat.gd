@@ -145,14 +145,22 @@ func resolve_skill_hit(skill: Skill, aim: Vector3, weapon: Item, source_offset: 
 	var hits := PerkState.roll_multistrike()
 	match skill.targeting_mode:
 		Skill.TargetingMode.SINGLE_CONE:
-			CombatVisuals.spawn_hit_cone(_host, aim, eff_range, skill.cone_deg)
+			# CHANNEL_BEAM cones (Energy Accelerator stream) draw a
+			# persistent flame visual via the player's flame node — the
+			# per-tick shockwave-bubble cone would double up and read as
+			# a melee swing. Skip the cone visual for those; damage
+			# resolution still runs.
+			var skip_cone_visual := skill.active_kind == Skill.ActiveKind.CHANNEL_BEAM
+			if not skip_cone_visual:
+				CombatVisuals.spawn_hit_cone(_host, aim, eff_range, skill.cone_deg)
 			_resolve_cone(skill, aim, eff_range, weapon)
 			for extra in hits - 1:
 				var delay := MULTISTRIKE_STAGGER * float(extra + 1)
 				_host.get_tree().create_timer(delay).timeout.connect(func() -> void:
 					if not _host._alive:
 						return
-					CombatVisuals.spawn_hit_cone(_host, aim, eff_range, skill.cone_deg)
+					if not skip_cone_visual:
+						CombatVisuals.spawn_hit_cone(_host, aim, eff_range, skill.cone_deg)
 					_resolve_cone(skill, aim, eff_range, weapon)
 				, CONNECT_ONE_SHOT)
 		Skill.TargetingMode.AOE_RADIAL:
@@ -174,6 +182,12 @@ func resolve_skill_hit(skill: Skill, aim: Vector3, weapon: Item, source_offset: 
 			for i in hits:
 				_resolve_hitscan(skill, aim, eff_range, weapon, source_offset)
 			_try_double_tap(skill, aim, eff_range, weapon, source_offset)
+		Skill.TargetingMode.SHOTGUN_SPREAD:
+			for i in hits:
+				_resolve_shotgun(skill, aim, eff_range, weapon, source_offset)
+		Skill.TargetingMode.CHAIN_LIGHTNING:
+			for i in hits:
+				_resolve_chain_lightning(skill, aim, eff_range, weapon, source_offset)
 	_overclock_active = false
 
 # ---------------------------------------------------------------------------
@@ -225,6 +239,7 @@ func _deal_damage(target: Node3D, amount: int, knockback_from: Vector3, knockbac
 func _resolve_cone(skill: Skill, aim: Vector3, eff_range: float, weapon: Item) -> void:
 	var half_cos := cos(deg_to_rad(skill.cone_deg * 0.5))
 	var kb := _knockback_for(skill, weapon)
+	var apply_status: bool = skill.overcharge_status != &""
 	for enode: Node3D in SpatialGrid.query_cone(_host.global_position, aim, eff_range, half_cos, &"enemies"):
 		if not enode.has_method(&"take_damage"):
 			continue
@@ -236,6 +251,12 @@ func _resolve_cone(skill: Skill, aim: Vector3, eff_range: float, weapon: Item) -
 		_apply_exile_curse_if_active(enode)
 		_apply_mindlink(enode, dmg, is_crit)
 		_try_spawn_isr_drone(enode)
+		# Energy Accelerator Overcharge — applies ignite / freeze / stun
+		# to every enemy in the cone based on the weapon's rolled
+		# damage_type. Skipped when overcharge_status is empty (every
+		# non-Overcharge cone skill).
+		if apply_status:
+			_apply_overcharge_status(enode, skill, weapon)
 
 func _resolve_aoe(skill: Skill, eff_range: float, weapon: Item) -> void:
 	var kb := _knockback_for(skill, weapon)
@@ -264,6 +285,14 @@ func is_player_friendly(target: Node) -> bool:
 const EXTRA_ARM_SPREAD_RAD := 0.04
 
 func _spawn_projectile(skill: Skill, aim: Vector3, eff_range: float, weapon: Item, source_offset: Vector3 = Vector3.ZERO) -> void:
+	# Airstrike skills paint an X at the cursor and rain the projectile
+	# straight down — a different spawn flow that reuses everything below
+	# from `proj.knockback_strength` onward. Routed here (rather than as
+	# a new TargetingMode) so source_offset / extras / multistrike all
+	# still apply: each "hit" of the cast plants its own X.
+	if skill.is_airstrike:
+		_spawn_airstrike(skill, eff_range, weapon)
+		return
 	var proj: PrototypeProjectile = EntityPool.acquire(PROJECTILE_SCENE)
 	if proj == null:
 		return
@@ -305,10 +334,86 @@ func _spawn_projectile(skill: Skill, aim: Vector3, eff_range: float, weapon: Ite
 	# Bullet weapons (LMG/SMG/sniper/RPG) flag the projectile so it
 	# renders as a tracer streak instead of an energy bolt.
 	proj.is_bullet = weapon != null and weapon.is_bullet_weapon()
+	proj.damage_type = weapon.effective_damage_type() if weapon != null else &""
 	_host.get_parent().add_child(proj)
 	proj.global_position = spawn_pos
 	proj.monitoring = true
 	proj.reset()
+	# MP: replicate the projectile spawn so other peers see it travel.
+	# Damage stays host-authoritative; remote echoes are ghost projectiles.
+	CombatVisuals.broadcast_projectile(spawn_pos, aim_norm, proj.speed, proj.max_range,
+		proj.blast_radius, proj.visual_scale, proj.is_bullet, proj.damage_type, proj.target_group)
+
+
+# Drop height for airstrike projectiles. The rocket spawns this many
+# meters above the target marker, falling straight down. With the skill's
+# projectile_speed at 30, that yields a ~1.0s fall — long enough for the
+# X marker to register and short enough not to feel sluggish.
+const AIRSTRIKE_FALL_HEIGHT: float = 30.0
+# Extra travel budget beyond AIRSTRIKE_FALL_HEIGHT so the projectile's
+# max_range doesn't expire mid-air if the ground sits slightly below
+# the player's plane (e.g. pit edges, recessed rooms).
+const AIRSTRIKE_RANGE_PADDING: float = 8.0
+
+
+func _spawn_airstrike(skill: Skill, eff_range: float, weapon: Item) -> void:
+	# Resolve the strike point on the player's ground plane. Cursor is
+	# the source of truth; if it's not projectable (FPS / lock-target
+	# without a cursor) we fall back to the player's facing.
+	var origin := _host.global_position
+	var target_xz := _host.cursor_world_position()
+	var ground: Vector3
+	if target_xz == origin:
+		var facing := -_host.global_transform.basis.z
+		facing.y = 0.0
+		if facing.length_squared() < 0.0001:
+			facing = Vector3.FORWARD
+		ground = origin + facing.normalized() * eff_range
+	else:
+		var to_target := target_xz - origin
+		to_target.y = 0.0
+		if to_target.length() > eff_range:
+			to_target = to_target.normalized() * eff_range
+		ground = origin + to_target
+	ground.y = origin.y
+	# Rocket — falls from the sky directly above the marker. The X
+	# marker itself is painted by PrototypeAttackIndicator.spawn at click
+	# time (before the wind_up await), so the player sees the target
+	# paint immediately, not after the windup completes.
+	var proj: PrototypeProjectile = EntityPool.acquire(PROJECTILE_SCENE)
+	if proj == null:
+		return
+	var spawn_pos := ground + Vector3(0.0, AIRSTRIKE_FALL_HEIGHT, 0.0)
+	proj.direction = Vector3.DOWN
+	proj.speed = skill.projectile_speed
+	proj.max_range = AIRSTRIKE_FALL_HEIGHT + AIRSTRIKE_RANGE_PADDING
+	proj.knockback_strength = _knockback_for(skill, weapon)
+	proj.source_position = ground  # blast pushes outward from impact, not from player
+	if weapon != null and weapon.damage_max > 0:
+		proj.damage_min = weapon.effective_damage_min() + _host._gear_base_damage_bonus
+		proj.damage_max = weapon.effective_damage_max() + _host._gear_base_damage_bonus
+		proj.crit_chance = weapon.effective_crit_chance() + _host._gear_crit_chance_bonus
+	else:
+		proj.damage_min = skill.damage + _host._gear_base_damage_bonus
+		proj.damage_max = skill.damage + _host._gear_base_damage_bonus
+	proj.damage_mult = skill.damage_multiplier
+	if _overclock_active:
+		proj.damage_mult *= OVERCLOCK_DAMAGE_MULT
+	proj.blast_radius = skill.blast_radius
+	var vis_scale := skill.damage_multiplier if skill.damage_multiplier > 1.0 else 1.0
+	if _overclock_active:
+		vis_scale *= OVERCLOCK_VISUAL_SCALE
+	proj.visual_scale = vis_scale
+	proj.is_bullet = weapon != null and weapon.is_bullet_weapon()
+	proj.damage_type = weapon.effective_damage_type() if weapon != null else &""
+	_host.get_parent().add_child(proj)
+	proj.global_position = spawn_pos
+	proj.monitoring = true
+	proj.reset()
+	# MP: replicate the airstrike rocket so peers see it falling.
+	CombatVisuals.broadcast_projectile(spawn_pos, Vector3.DOWN, proj.speed, proj.max_range,
+		proj.blast_radius, proj.visual_scale, proj.is_bullet, proj.damage_type, proj.target_group)
+
 
 func _resolve_hitscan(skill: Skill, aim: Vector3, eff_range: float, weapon: Item, source_offset: Vector3 = Vector3.ZERO) -> void:
 	var origin := _host.global_position + Vector3(0.0, 1.0, 0.0) + source_offset
@@ -353,9 +458,10 @@ func _resolve_hitscan(skill: Skill, aim: Vector3, eff_range: float, weapon: Item
 	var beam_end := wall_dist
 	if hit_target != null:
 		beam_end = minf(beam_end, origin.distance_to(hit_target.global_position))
-	CombatVisuals.spawn_beam(_host, aim_norm, beam_end, source_offset)
+	var hitscan_tint := _weapon_tint(weapon)
+	CombatVisuals.spawn_beam(_host, aim_norm, beam_end, source_offset, hitscan_tint)
 	if hit_target != null:
-		CombatVisuals.spawn_impact_burst(_host, hit_target.global_position + Vector3(0.0, 0.9, 0.0))
+		CombatVisuals.spawn_impact_burst(_host, hit_target.global_position + Vector3(0.0, 0.9, 0.0), hitscan_tint)
 		var is_crit := _roll_crit(weapon)
 		var dmg := _crit_damage(_roll_skill_damage(skill, weapon), is_crit)
 		_deal_damage(hit_target, dmg, _host.global_position, _knockback_for(skill, weapon), 1, is_crit)
@@ -389,10 +495,308 @@ func _spawn_projectile_exact(skill: Skill, aim_norm: Vector3, eff_range: float, 
 	proj.blast_radius = skill.blast_radius
 	proj.visual_scale = skill.damage_multiplier if skill.damage_multiplier > 1.0 else 1.0
 	proj.is_bullet = weapon != null and weapon.is_bullet_weapon()
+	proj.damage_type = weapon.effective_damage_type() if weapon != null else &""
 	_host.get_parent().add_child(proj)
 	proj.global_position = spawn_pos
 	proj.monitoring = true
 	proj.reset()
+	# MP: replicate the Double Tap follow-up shot.
+	CombatVisuals.broadcast_projectile(spawn_pos, aim_norm, proj.speed, proj.max_range,
+		proj.blast_radius, proj.visual_scale, proj.is_bullet, proj.damage_type, proj.target_group)
+
+
+## Shotgun spread — fires N independent hitscan pellets within a cone.
+## Each pellet rolls its own random angular offset, casts a hitscan ray,
+## and rolls damage + crit independently. Same enemy can eat multiple
+## pellets at close range; pellets can land on different enemies at
+## mid-range; some pellets miss entirely. Knockback is divided evenly
+## across pellets so all-hits-on-one-target sums to roughly the skill's
+## nominal knockback.
+##
+## Pellets fire as PrototypeProjectile instances (`is_bullet = true`) so
+## they reuse the SMG/LMG kinetic-bullet visual — head + distortion trail
+## per pellet. The previous hitscan + single-cone visual read as a wave
+## front; physical projectiles read as buckshot. Each pellet rolls
+## damage / crit / exile-curse / mindlink / ISR via the projectile's own
+## `_hit_single` path, identical to a single-pellet hitscan.
+func _resolve_shotgun(skill: Skill, aim: Vector3, eff_range: float, weapon: Item, source_offset: Vector3 = Vector3.ZERO) -> void:
+	var origin := _host.global_position + Vector3(0.0, 1.0, 0.0) + source_offset
+	var aim_norm := aim.normalized()
+	if source_offset != Vector3.ZERO:
+		var target_point := _host.global_position + Vector3(0.0, 1.0, 0.0) + aim_norm * eff_range
+		aim_norm = (target_point - origin).normalized()
+	# Point-blank penalty applies once for the whole blast — pellets
+	# fanning into close-range targets still inherit the wider spread.
+	var acc_mult := 1.0
+	var ignore_penalty := Effects.get_aggregate(&"ignore_point_blank_penalty") > 0.0
+	if not ignore_penalty:
+		for enode: Node3D in SpatialGrid.query_radius(origin, MELEE_RANGE_THRESHOLD, &"enemies"):
+			if enode.has_method(&"take_damage") and not is_player_friendly(enode):
+				acc_mult = MELEE_RANGE_ACCURACY_MULT
+				break
+	var pellets: int = maxi(1, skill.pellet_count)
+	var cone_half_rad := deg_to_rad(maxf(skill.cone_deg, 1.0) * 0.5)
+	var per_pellet_kb := _knockback_for(skill, weapon) / float(pellets)
+	# Collect pellet directions so we can broadcast a SINGLE RPC after the
+	# local spawn loop — broadcasting per pellet was sending 9-18 separate
+	# _rpc_projectile calls per cast. The MP wire saves N-1 round trips.
+	var pellet_dirs := PackedVector3Array()
+	pellet_dirs.resize(pellets)
+	for p in pellets:
+		var yaw_offset := randf_range(-cone_half_rad, cone_half_rad)
+		var pellet_dir := aim_norm.rotated(Vector3.UP, yaw_offset)
+		# Apply per-pellet aim spread so accuracy still matters — each
+		# pellet rolls its own hit/spread independently of the others.
+		pellet_dir = _apply_aim_spread(pellet_dir, weapon, acc_mult)
+		pellet_dirs[p] = pellet_dir
+		_spawn_shotgun_pellet(skill, pellet_dir, eff_range, weapon, origin, per_pellet_kb)
+	# Single batched RPC for the whole burst. Common params (speed, range,
+	# damage_type) are encoded once instead of per pellet.
+	var damage_type := weapon.effective_damage_type() if weapon != null else &""
+	var visual_scale := OVERCLOCK_VISUAL_SCALE if _overclock_active else 1.0
+	CombatVisuals.broadcast_shotgun_burst(
+		origin, pellet_dirs, SHOTGUN_PELLET_SPEED, eff_range,
+		visual_scale, damage_type, &"enemies")
+
+
+# Shotgun pellets fly as kinetic bullet projectiles (one per pellet).
+# Speed is high enough that travel time at shotgun ranges (~6m) reads
+# as instant to the player, but slow enough that the kinetic-bullet
+# tracer + distortion trail are visible mid-flight. blast_radius=0
+# keeps each pellet a single-target hit (no AoE per pellet).
+const SHOTGUN_PELLET_SPEED: float = 38.0
+
+
+func _spawn_shotgun_pellet(skill: Skill, dir: Vector3, eff_range: float, weapon: Item, origin: Vector3, per_pellet_kb: float) -> void:
+	var proj: PrototypeProjectile = EntityPool.acquire(PROJECTILE_SCENE)
+	if proj == null:
+		return
+	proj.direction = dir
+	proj.speed = SHOTGUN_PELLET_SPEED
+	proj.max_range = eff_range
+	proj.knockback_strength = per_pellet_kb
+	proj.source_position = _host.global_position
+	if weapon != null and weapon.damage_max > 0:
+		proj.damage_min = weapon.effective_damage_min() + _host._gear_base_damage_bonus
+		proj.damage_max = weapon.effective_damage_max() + _host._gear_base_damage_bonus
+		proj.crit_chance = weapon.effective_crit_chance() + _host._gear_crit_chance_bonus
+	else:
+		proj.damage_min = skill.damage + _host._gear_base_damage_bonus
+		proj.damage_max = skill.damage + _host._gear_base_damage_bonus
+	proj.damage_mult = skill.damage_multiplier
+	if _overclock_active:
+		proj.damage_mult *= OVERCLOCK_DAMAGE_MULT
+	proj.blast_radius = 0.0
+	proj.visual_scale = OVERCLOCK_VISUAL_SCALE if _overclock_active else 1.0
+	proj.is_bullet = true
+	proj.damage_type = weapon.effective_damage_type() if weapon != null else &""
+	_host.get_parent().add_child(proj)
+	proj.global_position = origin
+	proj.monitoring = true
+	proj.reset()
+	# MP replication is handled by the caller via a single batched
+	# broadcast_shotgun_burst RPC after the whole pellet loop completes.
+
+
+## Chain lightning — pick a primary target, damage it, then bounce to the
+## nearest unhit enemy within chain_jump_radius. Each bounce optionally
+## reduces damage by chain_falloff_pct. Stops when chain_jumps cap is
+## reached, or (when chain_jumps == 0) when running damage falls below
+## chain_min_damage. Used by both Taser variants — RMB High Voltage
+## sets chain_jumps=5, falloff=0; LMB Tase ticks repeatedly with
+## chain_jumps=0, falloff=15.
+func _resolve_chain_lightning(skill: Skill, aim: Vector3, eff_range: float, weapon: Item, source_offset: Vector3 = Vector3.ZERO) -> void:
+	var origin := _host.global_position + Vector3(0.0, 1.0, 0.0) + source_offset
+	var aim_norm := aim.normalized()
+	# Acquire the primary target — closest enemy within range along aim,
+	# inside a generous targeting cone (chain weapons aren't precision
+	# tools). Falls back to the nearest enemy in skill_range if the cone
+	# is empty. Walls block both the primary acquisition and the chain
+	# jumps below — chain lightning isn't an x-ray weapon.
+	var primary: Node3D = _pick_chain_primary(origin, aim_norm, eff_range)
+	# LoS check: if a wall is between origin and the picked primary, the
+	# arc shouldn't reach. Treat as a miss and clip the cosmetic arc
+	# at the wall.
+	if primary != null and not _has_los(origin, primary.global_position + Vector3(0.0, 0.9, 0.0)):
+		primary = null
+	var tint := _weapon_tint(weapon)
+	if primary == null:
+		# No enemy in range (or LoS-blocked) — fire a cosmetic arc to a
+		# point along the aim ray at max range OR the wall hit, whichever
+		# is closer. No damage, no chain. Held channels rely on this so
+		# the bolt persists while sweeping the cursor.
+		var miss_target := origin + aim_norm * eff_range
+		miss_target = _clip_to_wall(origin, miss_target)
+		CombatVisuals.spawn_lightning_arc(_host, origin, miss_target, PrototypeAttackIndicator.LIGHTNING_ARC_DURATION, tint)
+		return
+	# Lightning arc from origin to primary — uses the FBM lightning
+	# shader on a thin stretched plane. Lightning_arc_duration matches
+	# the chain skill's tick cadence so a held tase produces a near-
+	# continuous arc with a tiny flicker between ticks (which actually
+	# helps it read as electricity).
+	var primary_chest := primary.global_position + Vector3(0.0, 0.9, 0.0)
+	var origin_chest := origin
+	CombatVisuals.spawn_lightning_arc(_host, origin_chest, primary_chest, PrototypeAttackIndicator.LIGHTNING_ARC_DURATION, tint)
+	var hit_set: Dictionary = {}
+	var current: Node3D = primary
+	var damage: int = _roll_skill_damage(skill, weapon)
+	var falloff: float = clampf(skill.chain_falloff_pct, 0.0, 100.0) / 100.0
+	var max_jumps: int = skill.chain_jumps
+	var min_damage: int = maxi(1, skill.chain_min_damage)
+	var jumps_left: int = max_jumps if max_jumps > 0 else 32  # absolute cap when "until depleted"
+	while current != null and damage >= min_damage:
+		hit_set[current] = true
+		var is_crit := _roll_crit(weapon)
+		var dmg := _crit_damage(damage, is_crit)
+		# No impact-burst on chain links — the lightning shader is the
+		# visual contract; an additional energy-burst on top read as
+		# noisy double-feedback. The arc itself terminating on each
+		# enemy is the hit telegraph.
+		_deal_damage(current, dmg, _host.global_position, _knockback_for(skill, weapon) * 0.25, 1, is_crit)
+		_apply_exile_curse_if_active(current)
+		_apply_mindlink(current, dmg, is_crit)
+		if max_jumps > 0:
+			jumps_left -= 1
+			if jumps_left <= 0:
+				break
+		else:
+			jumps_left -= 1
+			if jumps_left <= 0:
+				break  # safety cap
+		# Apply falloff for the next link.
+		if falloff > 0.0:
+			damage = int(round(float(damage) * (1.0 - falloff)))
+			if damage < min_damage:
+				break
+		# Find the next bounce target — nearest unhit enemy within
+		# chain_jump_radius of the current link, with line-of-sight from
+		# the current link's chest. LoS gating prevents chain links from
+		# tunneling through walls into adjacent rooms.
+		var next: Node3D = null
+		var best_d2 := skill.chain_jump_radius * skill.chain_jump_radius
+		var current_chest_for_los := current.global_position + Vector3(0.0, 0.9, 0.0)
+		for enode: Node3D in SpatialGrid.query_radius(current.global_position, skill.chain_jump_radius, &"enemies"):
+			if hit_set.has(enode):
+				continue
+			if not enode.has_method(&"take_damage"):
+				continue
+			if is_player_friendly(enode):
+				continue
+			var d2 := current.global_position.distance_squared_to(enode.global_position)
+			if d2 >= best_d2:
+				continue
+			if not _has_los(current_chest_for_los, enode.global_position + Vector3(0.0, 0.9, 0.0)):
+				continue
+			best_d2 = d2
+			next = enode
+		if next == null:
+			break
+		# Visual link from current to next — same lightning shader as
+		# the primary arc so the entire chain reads as one connected
+		# discharge pattern, not a sequence of separate hits.
+		var current_chest := current.global_position + Vector3(0.0, 0.9, 0.0)
+		var next_chest := next.global_position + Vector3(0.0, 0.9, 0.0)
+		CombatVisuals.spawn_lightning_arc(current, current_chest, next_chest, PrototypeAttackIndicator.LIGHTNING_ARC_DURATION, tint)
+		current = next
+
+
+# Pick the primary chain target — magnet-snap to the enemy nearest the
+# CURSOR position, gated on player range. Chain lightning is an arc
+# weapon, not a precision aim — the player drags the cursor toward the
+# rough area they want to fry and the bolt finds the closest enemy in
+# that area. Distance is computed from the cursor's world point, not
+# from the player; that's the difference between "snap to closest in
+# aim cone" (the prior behaviour) and "magnet to closest under cursor".
+# `aim_norm` is unused here but kept in the signature so the call sites
+# don't have to branch.
+func _pick_chain_primary(origin: Vector3, aim_norm: Vector3, eff_range: float) -> Node3D:
+	# Cursor world position drives the snap target. Falls back to a
+	# point along aim at half-range when the cursor isn't projectable
+	# (FPS mode, lock-target without a cursor) so the picker still
+	# works in those modes.
+	var cursor_pos := _host.cursor_world_position()
+	if cursor_pos == _host.global_position:
+		cursor_pos = origin + aim_norm * (eff_range * 0.5)
+	var best: Node3D = null
+	var best_d2 := INF
+	for enode: Node3D in SpatialGrid.query_radius(origin, eff_range, &"enemies"):
+		if not enode.has_method(&"take_damage"):
+			continue
+		if is_player_friendly(enode):
+			continue
+		# Snap-distance is from CURSOR to enemy — not from player to
+		# enemy. So an enemy directly under the cursor wins over a
+		# closer-to-player enemy that's off to the side.
+		var d2 := cursor_pos.distance_squared_to(enode.global_position)
+		if d2 < best_d2:
+			best_d2 = d2
+			best = enode
+	return best
+
+
+## Elemental tint for weapon effects — returns the configured element
+## color when the weapon has a damage_type set, or zero-alpha (which
+## visual spawners interpret as "use class accent") when the weapon
+## is neutral. Plumbed through every visual call in resolve so
+## flame weapons paint red beams / red impact bursts / red lightning
+## etc., regardless of which class the player is.
+func _weapon_tint(weapon: Item) -> Color:
+	if weapon == null:
+		return Color(0.0, 0.0, 0.0, 0.0)
+	var elem := weapon.effective_damage_type()
+	if elem == &"":
+		return Color(0.0, 0.0, 0.0, 0.0)
+	return Item.damage_type_color(elem)
+
+
+## Line-of-sight check between two world points. Casts a ray over the
+## world-collision layer (mask 1, same as hitscan). Returns true when
+## the ray is unobstructed — used by chain lightning to prevent arcs
+## tunneling through walls.
+func _has_los(from_pos: Vector3, to_pos: Vector3) -> bool:
+	var space := _host.get_world_3d().direct_space_state
+	var query := PhysicsRayQueryParameters3D.create(from_pos, to_pos, 1)
+	var result := space.intersect_ray(query)
+	return result.is_empty()
+
+
+## Clip a target point to the first wall along the ray from origin.
+## Returns the original target when nothing's in the way; otherwise the
+## hit position. Used by the chain lightning miss-arc so the cosmetic
+## bolt stops at a wall instead of passing through it.
+func _clip_to_wall(origin: Vector3, target: Vector3) -> Vector3:
+	var space := _host.get_world_3d().direct_space_state
+	var query := PhysicsRayQueryParameters3D.create(origin, target, 1)
+	var result := space.intersect_ray(query)
+	if result.is_empty():
+		return target
+	return result["position"]
+
+
+## Apply Overcharge status effect to a target. Resolves the status name
+## from the skill (or from weapon.damage_type when set to
+## &"weapon_default") and routes to the matching enemy method. Used by
+## Energy Accelerator's RMB to apply ignite/freeze/stun based on the
+## weapon's rolled damage type.
+func _apply_overcharge_status(target: Node, skill: Skill, weapon: Item) -> void:
+	if target == null or not is_instance_valid(target):
+		return
+	var status_name: StringName = skill.overcharge_status
+	if status_name == &"weapon_default" and weapon != null:
+		match weapon.effective_damage_type():
+			&"flame": status_name = &"ignite"
+			&"cryo": status_name = &"freeze"
+			&"electric": status_name = &"stun"
+			_: status_name = &""
+	match status_name:
+		&"ignite":
+			if target.has_method(&"apply_ignite"):
+				target.apply_ignite(skill.overcharge_status_dps, skill.overcharge_status_duration)
+		&"freeze", &"stun":
+			# Freeze and stun share the engine path — both lock the
+			# enemy in place via the existing apply_stun helper.
+			if target.has_method(&"apply_stun"):
+				target.apply_stun(skill.overcharge_status_duration)
 
 
 func _resolve_hitscan_exact(skill: Skill, aim_norm: Vector3, eff_range: float, weapon: Item, source_offset: Vector3) -> void:
@@ -419,9 +823,10 @@ func _resolve_hitscan_exact(skill: Skill, aim_norm: Vector3, eff_range: float, w
 	var beam_end := wall_dist
 	if hit_target != null:
 		beam_end = minf(beam_end, origin.distance_to(hit_target.global_position))
-	CombatVisuals.spawn_beam(_host, aim_norm, beam_end, source_offset)
+	var hitscan_exact_tint := _weapon_tint(weapon)
+	CombatVisuals.spawn_beam(_host, aim_norm, beam_end, source_offset, hitscan_exact_tint)
 	if hit_target != null:
-		CombatVisuals.spawn_impact_burst(_host, hit_target.global_position + Vector3(0.0, 0.9, 0.0))
+		CombatVisuals.spawn_impact_burst(_host, hit_target.global_position + Vector3(0.0, 0.9, 0.0), hitscan_exact_tint)
 		var is_crit := _roll_crit(weapon)
 		var dmg := _crit_damage(_roll_skill_damage(skill, weapon), is_crit)
 		_deal_damage(hit_target, dmg, _host.global_position, _knockback_for(skill, weapon), 1, is_crit)
@@ -448,6 +853,14 @@ const VERTICAL_SPREAD_RATIO: float = 0.5
 ## visibly goes wide rather than grazing the target.
 const MISS_MIN_SPREAD: float = 0.06
 
+## Tiny natural-look jitter applied to ALL shots that pass the accuracy
+## hit roll. Shots used to be perfectly straight on a hit, which read
+## as robotic — every projectile flew the exact same line. 0.5° in
+## radians (~0.0087) gives a barely-visible per-shot wobble that adds
+## organic variance without losing accuracy at engagement range:
+## sin(0.5°) × 30m = ~26cm deviation, well inside an enemy hitbox.
+const NATURAL_JITTER_RAD: float = 0.0087
+
 ## Accuracy is a hit/miss roll: 75% accuracy = 75% of shots fly true,
 ## 25% get visible spread applied. accuracy_mult handles situational
 ## modifiers (e.g. point-blank penalty). Misses spread in both yaw and
@@ -462,9 +875,13 @@ func _apply_aim_spread(aim: Vector3, weapon: Item, accuracy_mult: float = 1.0) -
 	acc += _host.aim_hold_accuracy_bonus()
 	acc *= accuracy_mult
 	acc = clampf(acc, 0.0, 1.0)
-	# Hit roll — accurate shots fly straight at the target.
+	# Hit roll — accurate shots fly to the target with a small natural
+	# jitter so consecutive shots don't all trace the same line. The
+	# jitter is small enough that even at 30m the shot still hits an
+	# enemy-sized hitbox; it's purely a "feels alive" cosmetic.
 	if randf() < acc:
-		return aim
+		var jitter := randf_range(-NATURAL_JITTER_RAD, NATURAL_JITTER_RAD)
+		return aim.rotated(Vector3.UP, jitter)
 	# Miss — apply spread. Range is [MISS_MIN_SPREAD, INACCURACY_SPREAD_MAX]
 	# so misses always visibly go wide, never graze.
 	var yaw := atan2(aim.x, aim.z)

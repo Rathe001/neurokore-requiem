@@ -19,16 +19,32 @@ const _AUTOLOAD_PATH := ^"/root/CombatVisuals"
 
 # ── Beam (hitscan) ──────────────────────────────────────────────
 
-static func spawn_beam(host: Node3D, aim: Vector3, length: float, source_offset: Vector3 = Vector3.ZERO) -> void:
-	PrototypeAttackIndicator.spawn_beam(host, aim, length, source_offset)
+static func spawn_beam(host: Node3D, aim: Vector3, length: float, source_offset: Vector3 = Vector3.ZERO, tint_override: Color = Color(0.0, 0.0, 0.0, 0.0)) -> void:
+	PrototypeAttackIndicator.spawn_beam(host, aim, length, source_offset, tint_override)
 	if NetState.is_in_lobby():
 		var cv: Node = host.get_node(_AUTOLOAD_PATH)
-		cv._rpc_beam.rpc(host.global_position, aim, length, source_offset, host.is_in_group(&"player"))
+		cv._rpc_beam.rpc(host.global_position, aim, length, source_offset, host.is_in_group(&"player"), tint_override)
 
 @rpc("any_peer", "call_remote", "unreliable")
-func _rpc_beam(origin: Vector3, aim: Vector3, length: float, source_offset: Vector3, is_player: bool) -> void:
+func _rpc_beam(origin: Vector3, aim: Vector3, length: float, source_offset: Vector3, is_player: bool, tint_override: Color = Color(0.0, 0.0, 0.0, 0.0)) -> void:
 	var anchor := _make_anchor(origin, is_player)
-	PrototypeAttackIndicator.spawn_beam(anchor, aim, length, source_offset)
+	PrototypeAttackIndicator.spawn_beam(anchor, aim, length, source_offset, tint_override)
+	_free_anchor_deferred(anchor)
+
+
+# ── Lightning arc (chain lightning) ─────────────────────────────
+
+static func spawn_lightning_arc(host: Node3D, from_pos: Vector3, to_pos: Vector3, duration: float = PrototypeAttackIndicator.LIGHTNING_ARC_DURATION, tint_override: Color = Color(0.0, 0.0, 0.0, 0.0)) -> void:
+	PrototypeAttackIndicator.spawn_lightning_arc(host, from_pos, to_pos, duration, tint_override)
+	if NetState.is_in_lobby():
+		var cv: Node = host.get_node(_AUTOLOAD_PATH)
+		cv._rpc_lightning_arc.rpc(from_pos, to_pos, duration, host.is_in_group(&"player"), tint_override)
+
+
+@rpc("any_peer", "call_remote", "unreliable")
+func _rpc_lightning_arc(from_pos: Vector3, to_pos: Vector3, duration: float, is_player: bool, tint_override: Color = Color(0.0, 0.0, 0.0, 0.0)) -> void:
+	var anchor := _make_anchor((from_pos + to_pos) * 0.5, is_player)
+	PrototypeAttackIndicator.spawn_lightning_arc(anchor, from_pos, to_pos, duration, tint_override)
 	_free_anchor_deferred(anchor)
 
 
@@ -79,16 +95,16 @@ func _rpc_impact_burst(origin: Vector3, world_pos: Vector3, color_override: Colo
 
 # ── Explosion ───────────────────────────────────────────────────
 
-static func spawn_explosion(host: Node3D, world_pos: Vector3, blast_radius: float, color_override: Color = Color(0, 0, 0, 0)) -> void:
-	PrototypeAttackIndicator.spawn_explosion(host, world_pos, blast_radius, color_override)
+static func spawn_explosion(host: Node3D, world_pos: Vector3, blast_radius: float, color_override: Color = Color(0, 0, 0, 0), damage_type: StringName = &"") -> void:
+	PrototypeAttackIndicator.spawn_explosion(host, world_pos, blast_radius, color_override, damage_type)
 	if NetState.is_in_lobby():
 		var cv: Node = host.get_node(_AUTOLOAD_PATH)
-		cv._rpc_explosion.rpc(host.global_position, world_pos, blast_radius, color_override, host.is_in_group(&"player"))
+		cv._rpc_explosion.rpc(host.global_position, world_pos, blast_radius, color_override, host.is_in_group(&"player"), damage_type)
 
 @rpc("any_peer", "call_remote", "unreliable")
-func _rpc_explosion(origin: Vector3, world_pos: Vector3, blast_radius: float, color_override: Color, is_player: bool) -> void:
+func _rpc_explosion(origin: Vector3, world_pos: Vector3, blast_radius: float, color_override: Color, is_player: bool, damage_type: StringName = &"") -> void:
 	var anchor := _make_anchor(origin, is_player)
-	PrototypeAttackIndicator.spawn_explosion(anchor, world_pos, blast_radius, color_override)
+	PrototypeAttackIndicator.spawn_explosion(anchor, world_pos, blast_radius, color_override, damage_type)
 	_free_anchor_deferred(anchor)
 
 
@@ -122,6 +138,103 @@ func _rpc_radial(origin: Vector3, radius: float, wind_up: float, is_player: bool
 	var anchor := _make_anchor(origin, is_player)
 	PrototypeAttackIndicator.spawn_radial(anchor, radius, wind_up)
 	_free_anchor_delayed(anchor, wind_up + 0.2)
+
+
+# ── Projectile (player-fired) ───────────────────────────────────
+# Replicates a projectile's spawn so every peer sees it travel through
+# the world. Damage stays host-authoritative on the firing peer; the
+# remote echoes are GHOSTS — they render the mesh + trail + glow and
+# travel along the same arc but apply no damage and don't double up on
+# impact bursts / explosions (those replicate via their own RPCs).
+#
+# Caller spawns the live projectile locally as before, then calls
+# this with the projectile's configured params. Skip the broadcast
+# for non-player-fired bolts (enemy fire — damage is host-side, and
+# host already replicates enemies via the enemy sync layer).
+
+const _PROJECTILE_SCENE: PackedScene = preload("res://scenes/prototype/prototype_projectile.tscn")
+
+
+static func broadcast_projectile(spawn_pos: Vector3, direction: Vector3, speed: float, max_range: float,
+		blast_radius: float, visual_scale: float, is_bullet: bool, damage_type: StringName,
+		target_group: StringName) -> void:
+	if not NetState.is_in_lobby():
+		return
+	var cv: Node = Engine.get_main_loop().root.get_node(_AUTOLOAD_PATH)
+	cv._rpc_projectile.rpc(spawn_pos, direction, speed, max_range, blast_radius,
+		visual_scale, is_bullet, damage_type, target_group)
+
+
+@rpc("any_peer", "call_remote", "unreliable")
+func _rpc_projectile(spawn_pos: Vector3, direction: Vector3, speed: float, max_range: float,
+		blast_radius: float, visual_scale: float, is_bullet: bool, damage_type: StringName,
+		target_group: StringName) -> void:
+	_spawn_ghost_projectile(spawn_pos, direction, speed, max_range, blast_radius,
+		visual_scale, is_bullet, damage_type, target_group)
+
+
+# Shared internal helper — both _rpc_projectile (single bolt) and
+# _rpc_shotgun_burst (N-pellet batch) build identical ghost projectiles
+# from per-pellet params. Damage fields stay zero so even if the ghost
+# somehow reached _on_body_entered (it can't — collision_mask is forced
+# to world-only on reset for ghosts) the damage roll would land at 0.
+func _spawn_ghost_projectile(spawn_pos: Vector3, direction: Vector3, speed: float,
+		max_range: float, blast_radius: float, visual_scale: float, is_bullet: bool,
+		damage_type: StringName, target_group: StringName) -> void:
+	var proj: PrototypeProjectile = EntityPool.acquire(_PROJECTILE_SCENE)
+	if proj == null:
+		return
+	proj.is_ghost = true
+	proj.target_group = target_group
+	proj.direction = direction
+	proj.speed = speed
+	proj.max_range = max_range
+	proj.blast_radius = blast_radius
+	proj.visual_scale = visual_scale
+	proj.is_bullet = is_bullet
+	proj.damage_type = damage_type
+	proj.damage_min = 0
+	proj.damage_max = 0
+	proj.damage_mult = 1.0
+	proj.crit_chance = 0.0
+	proj.knockback_strength = 0.0
+	get_tree().current_scene.add_child(proj)
+	proj.global_position = spawn_pos
+	proj.monitoring = false
+	proj.reset()
+
+
+# ── Shotgun burst (N pellets in one RPC) ────────────────────────
+# Shotgun casts fire 9 (LMB) or 18 (RMB) pellets per trigger pull. Each
+# pellet is a single-target bullet projectile with shared speed / range /
+# damage_type / target_group; only direction varies. broadcast_projectile
+# would send N separate RPCs, so a 4-player coop with shotgun spam was
+# pushing ~144 RPCs/sec just on buckshot. broadcast_shotgun_burst sends
+# ONE RPC carrying a PackedVector3Array of directions + the common
+# params; the receiving peer iterates and spawns N ghost projectiles.
+
+static func broadcast_shotgun_burst(origin: Vector3, dirs: PackedVector3Array,
+		speed: float, max_range: float, visual_scale: float,
+		damage_type: StringName, target_group: StringName) -> void:
+	if not NetState.is_in_lobby():
+		return
+	if dirs.is_empty():
+		return
+	var cv: Node = Engine.get_main_loop().root.get_node(_AUTOLOAD_PATH)
+	cv._rpc_shotgun_burst.rpc(origin, dirs, speed, max_range, visual_scale,
+		damage_type, target_group)
+
+
+@rpc("any_peer", "call_remote", "unreliable")
+func _rpc_shotgun_burst(origin: Vector3, dirs: PackedVector3Array,
+		speed: float, max_range: float, visual_scale: float,
+		damage_type: StringName, target_group: StringName) -> void:
+	# Shotgun pellets are always bullets with no AoE — those are baked
+	# into the per-pellet params here rather than transmitted, since
+	# they're invariant across every shotgun cast.
+	for direction in dirs:
+		_spawn_ghost_projectile(origin, direction, speed, max_range,
+			0.0, visual_scale, true, damage_type, target_group)
 
 
 # ── Internals ───────────────────────────────────────────────────

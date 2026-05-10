@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="Skill" load_steps=2 format=3]
+
+; Energy Accelerator alt-fire — "Overcharge". Single cone blast that
+; applies a status effect to every enemy it hits. The status comes
+; from the weapon's rolled damage_type:
+;   • flame   → ignite (DoT for overcharge_status_duration seconds)
+;   • cryo    → freeze (locks enemy in place; reuses stun mechanic)
+;   • electric → stun  (same lock, different visuals)
+;
+; overcharge_status = "weapon_default" reads weapon.damage_type at
+; resolve time — one skill .tres covers all three element variants.
+
+[ext_resource type="Script" path="res://scripts/skills/skill.gd" id="1_skill_script"]
+
+[resource]
+script = ExtResource("1_skill_script")
+display_name = "Overcharge"
+glyph = "*"
+damage = 12
+skill_range = 8.0
+cooldown = 4.0
+wind_up = 0.25
+resource_cost = 25
+targeting_mode = 0
+cone_deg = 38.0
+knockback = 1.0
+projectile_speed = 0.0
+icon_color = Color(1.0, 0.7, 0.4, 1.0)
+overcharge_status = &"weapon_default"
+overcharge_status_duration = 3.0
+overcharge_status_dps = 8.0

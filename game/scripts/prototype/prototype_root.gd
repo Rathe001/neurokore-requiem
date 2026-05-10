@@ -18,6 +18,7 @@ const BOSS_SCENE: PackedScene = preload("res://scenes/prototype/prototype_enemy.
 var _corpses: Array[Node3D] = []
 var _corpse_head: int = 0
 var _spec_overlay: SpecSelectOverlay
+var _host_disconnected_screen: HostDisconnectedScreen = null
 @onready var _enemies_container: Node3D = get_node_or_null("EnemiesContainer") as Node3D
 @onready var _pickups_container: PickupsContainer = get_node_or_null("PickupsContainer") as PickupsContainer
 
@@ -49,6 +50,20 @@ func _ready() -> void:
 	# so enemies, pickups, and interactable states match the running game.
 	if NetState.is_in_lobby() and NetState.is_client() and NetState.game_started:
 		call_deferred(&"_request_world_snapshot")
+	# Show the host-disconnected overlay if the host drops mid-session.
+	# Clients only — the host doesn't get this signal (NetState only
+	# subscribes on the client side).
+	NetState.host_disconnected.connect(_on_host_disconnected)
+
+
+func _on_host_disconnected() -> void:
+	# Idempotent — multiple disconnects in flight (rare, but possible if
+	# the peer fires duplicate events) shouldn't stack overlays.
+	if _host_disconnected_screen != null and is_instance_valid(_host_disconnected_screen):
+		return
+	_host_disconnected_screen = HostDisconnectedScreen.new()
+	add_child(_host_disconnected_screen)
+	_host_disconnected_screen.show_disconnected()
 
 
 # If the level placed a PrototypePlayerSpawn marker (via a player_spawn slot

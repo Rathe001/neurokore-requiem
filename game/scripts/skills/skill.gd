@@ -6,6 +6,8 @@ enum TargetingMode {
 	AOE_RADIAL,
 	PROJECTILE,
 	HITSCAN,
+	SHOTGUN_SPREAD,  # N independent hitscan pellets fanned within cone_deg; each pellet rolls damage + crit independently
+	CHAIN_LIGHTNING, # Damage primary target + jump to nearby enemies, optional damage falloff per jump (Taser)
 }
 
 # Active offhand archetypes. NONE = the skill fires through the normal
@@ -21,6 +23,7 @@ enum ActiveKind {
 	SHIELD_BUFF,    # click RMB → buff player with N% damage reduction; cooldown after pool drains
 	SECOND_WIND,    # instant self-cast → refill resource bar, then cooldown
 	AIM_HOLD,       # hold RMB → buff accuracy/crit while drains resource (LMG Tripod, Sniper Focus)
+	CHANNEL_BEAM,   # hold LMB/RMB → tick damage via skill.targeting_mode; drains resource per second (Taser hold, Accelerator stream)
 }
 
 enum GrenadeType {
@@ -46,6 +49,51 @@ enum GrenadeType {
 ## 1.0 = weapon damage as-is. Values > 1.0 make the skill hit harder than
 ## a normal attack (e.g. Charged Plasma at 2.5× weapon damage).
 @export var damage_multiplier: float = 1.0
+
+## Ammo consumed per cast on bullet weapons. Default 1; shotgun's double-
+## barrel uses 2. Energy weapons ignore this entirely (resource_cost
+## handles their gate).
+@export var ammo_cost: int = 1
+
+## Number of independent hits fired per cast for SHOTGUN_SPREAD targeting.
+## Each pellet rolls its own direction within cone_deg and its own damage
+## and crit. Ignored by every other targeting mode.
+@export var pellet_count: int = 1
+
+# ── Chain lightning (CHAIN_LIGHTNING targeting) ────────────────────────────
+## Maximum number of bounces from the primary target. 5 = 1 primary + 5
+## additional jumps for 6 total enemies struck. 0 with damage_falloff_pct
+## > 0 means "chain until damage drops to ~zero" (the held-Taser pattern).
+@export var chain_jumps: int = 0
+## Damage radius around each link — the bounce searches for the nearest
+## enemy within this radius that hasn't been struck yet.
+@export var chain_jump_radius: float = 5.0
+## Per-jump damage reduction in percent. 15 = each jump deals 15% less than
+## the previous. 0 = no falloff (the RMB High-Voltage pattern).
+@export var chain_falloff_pct: float = 0.0
+## When chain_jumps == 0 and falloff > 0, the chain keeps bouncing while
+## the running damage stays at or above this absolute floor. Stops the
+## hold-Taser from infinite-chaining around a horde.
+@export var chain_min_damage: int = 1
+
+# ── CHANNEL_BEAM (held-to-damage) ──────────────────────────────────────────
+## Seconds between damage ticks while the hold is active. Lower = smoother
+## damage numbers, higher = more legible per-hit feedback.
+@export var channel_tick_interval: float = 0.15
+## Resource drained per second while the hold is active. Hold ends when
+## resource pool empties or the user releases the bound input.
+@export var channel_resource_per_sec: float = 12.0
+
+# ── Overcharge / status-on-hit ─────────────────────────────────────────────
+## Status to apply on hit. &"" = no status. &"weapon_default" = pick the
+## status from the weapon's damage_type field (flame→ignite, cryo→freeze,
+## electric→stun). Specific names override the weapon's element.
+@export var overcharge_status: StringName = &""
+## How long the applied status lasts in seconds.
+@export var overcharge_status_duration: float = 3.0
+## Damage-per-second for ignite-type status applications. Ignored by stun
+## and freeze (which are pure CC, not DoT).
+@export var overcharge_status_dps: float = 8.0
 
 @export_group("Active Offhand")
 ## Set to anything other than NONE to make this skill an "active offhand"
@@ -88,3 +136,10 @@ enum GrenadeType {
 ## mobility for the buff so the hold reads as a deliberate stance, not
 ## a free always-on benefit.
 @export var aim_hold_locks_movement: bool = true
+
+## Airstrike-style PROJECTILE delivery. When true, the projectile is
+## NOT fired from the player — instead, an X marker is painted at the
+## cursor position (clamped to skill_range) and the projectile spawns
+## high above that point falling straight down. Used by RPG Tactical
+## Strike. Ignored unless targeting_mode == PROJECTILE.
+@export var is_airstrike: bool = false

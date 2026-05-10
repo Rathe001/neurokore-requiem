@@ -54,6 +54,18 @@ var visual_scale: float = 1.0
 ## warble — reads as a heat-distortion trail rather than the energy bolts
 ## of plasma/laser weapons. Set by the spawner before reset().
 var is_bullet: bool = false
+## Multiplayer replication flag. When true, this projectile is a visual
+## echo of another peer's shot — it travels and renders, but never applies
+## damage and never spawns its own impact_burst / explosion (the firing
+## peer's RPCs handle those). collision_mask is forced to world-only on
+## reset() so the sweep still stops at walls but Area3D body_entered
+## won't fire on enemies. Cleared by _pool_release().
+var is_ghost: bool = false
+# Elemental damage type carried over from the firing weapon. Used by
+# AoE projectiles to spawn explosions in the matching element color
+# (cryo RPG → cyan blast, electric → violet, default → orange
+# fireball). Empty StringName for kinetic / neutral.
+var damage_type: StringName = &""
 
 var _traveled: float = 0.0
 var _hit: bool = false
@@ -92,7 +104,18 @@ static var _laser_mesh: BoxMesh = null
 static var _bullet_head_mesh: BoxMesh = null
 static var _bullet_trail_mesh: BoxMesh = null
 static var _bullet_head_material: StandardMaterial3D = null
+# Rocket mesh — capsule shape used by AoE bullet projectiles (RPG).
+# Distinguishes the rocket visually from the sphere meshes that
+# energy AoE shots (charged plasma) use, so the player reads
+# "incoming rocket" at a glance from the projectile silhouette.
+static var _rocket_mesh: CapsuleMesh = null
+static var _rocket_material: StandardMaterial3D = null
 var _trail_node: MeshInstance3D = null
+# Smoke trail — only created on demand for AoE bullet projectiles.
+# GPUParticles3D in world-space (not local) so emitted puffs stay
+# where the rocket WAS while the rocket itself flies forward,
+# producing the visible drag-trail.
+var _smoke_trail: GPUParticles3D = null
 # Cached on first reset so we can swap back to the authored sphere when an
 # AoE shot is acquired from the same pool slot that previously held a bullet.
 var _sphere_mesh_cache: Mesh = null
@@ -148,6 +171,33 @@ static func _get_bullet_head_material() -> StandardMaterial3D:
 		_bullet_head_material = m
 	return _bullet_head_material
 
+
+static func _get_rocket_mesh() -> CapsuleMesh:
+	if _rocket_mesh == null:
+		_rocket_mesh = CapsuleMesh.new()
+		_rocket_mesh.radius = 0.06
+		_rocket_mesh.height = 0.36
+		_rocket_mesh.radial_segments = 10
+		_rocket_mesh.rings = 3
+	return _rocket_mesh
+
+
+static func _get_rocket_material() -> StandardMaterial3D:
+	if _rocket_material == null:
+		# Dark metallic body with a faint orange-red glow at the
+		# bottom — matches the rear thruster of a fired rocket. Fully
+		# shaded (not unshaded) so the pit / wall lights actually
+		# illuminate the moving warhead instead of it reading flat.
+		var m := StandardMaterial3D.new()
+		m.albedo_color = Color(0.22, 0.22, 0.24, 1.0)
+		m.metallic = 0.6
+		m.roughness = 0.35
+		m.emission_enabled = true
+		m.emission = Color(1.0, 0.5, 0.15, 1.0)
+		m.emission_energy_multiplier = 0.4
+		_rocket_material = m
+	return _rocket_material
+
 # First call captures the authored cyan material as the player variant, then
 # clones+retints it for the enemy variant. Subsequent calls are free.
 static func _ensure_side_materials(default_mat: StandardMaterial3D) -> void:
@@ -198,6 +248,63 @@ func _ensure_trail_node() -> void:
 	add_child(node)
 	_trail_node = node
 
+
+func _ensure_smoke_trail() -> void:
+	if _smoke_trail != null:
+		return
+	var ps := GPUParticles3D.new()
+	ps.name = "SmokeTrail"
+	# Particles in WORLD space — emitted at the rocket's current
+	# position but their motion is independent. As the rocket moves
+	# forward, fresh puffs spawn ahead while older ones stay where
+	# they were emitted, which IS the trail.
+	ps.local_coords = false
+	ps.amount = 28
+	ps.lifetime = 0.6
+	ps.fixed_fps = 30
+	ps.emitting = false  # toggled on per-cast in reset() for RPG only
+	# Process material — slow upward drift, mild outward spread, gray
+	# smoke fading to transparent over particle lifetime.
+	var pm := ParticleProcessMaterial.new()
+	pm.direction = Vector3(0.0, 0.5, 0.0)  # smoke rises slightly
+	pm.spread = 25.0
+	pm.initial_velocity_min = 0.4
+	pm.initial_velocity_max = 1.0
+	pm.gravity = Vector3(0.0, 0.6, 0.0)  # additional upward float
+	pm.damping_min = 0.5
+	pm.damping_max = 1.0
+	pm.scale_min = 0.25
+	pm.scale_max = 0.45
+	pm.color = Color(0.55, 0.55, 0.55, 0.7)
+	# Color ramp: mid-gray on spawn → darker as smoke disperses,
+	# alpha tweens to zero over lifetime so puffs fade out cleanly.
+	var ramp := GradientTexture1D.new()
+	var grad := Gradient.new()
+	grad.colors = PackedColorArray([
+		Color(0.65, 0.65, 0.65, 0.85),
+		Color(0.4, 0.4, 0.4, 0.4),
+		Color(0.2, 0.2, 0.2, 0.0),
+	])
+	grad.offsets = PackedFloat32Array([0.0, 0.5, 1.0])
+	ramp.gradient = grad
+	pm.color_ramp = ramp
+	ps.process_material = pm
+	# Draw mesh — small sphere with unshaded material that uses
+	# vertex color so the per-particle ramp drives the look.
+	var mesh := SphereMesh.new()
+	mesh.radius = 0.12
+	mesh.height = 0.24
+	mesh.radial_segments = 6
+	mesh.rings = 3
+	var draw_mat := StandardMaterial3D.new()
+	draw_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	draw_mat.vertex_color_use_as_albedo = true
+	draw_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mesh.material = draw_mat
+	ps.draw_pass_1 = mesh
+	add_child(ps)
+	_smoke_trail = ps
+
 func _ready() -> void:
 	_connect_signal()
 
@@ -219,6 +326,15 @@ func reset() -> void:
 	# is_player_friendly check in _on_body_entered.
 	var target_mask := (PLAYER_LAYER_MASK | CHARMED_ALLY_LAYER_MASK) if target_group == &"player" else ENEMY_LAYER_MASK
 	collision_mask = PROJECTILE_WORLD_MASK | target_mask
+	# Ghost projectiles (MP visual echoes of another peer's shot) drop
+	# their target mask so Area3D body_entered never fires for them —
+	# the per-frame world raycast still stops them at walls, but they
+	# can't trigger _on_body_entered on enemies / players. Damage is
+	# host-authoritative; impact bursts + explosions arrive via the
+	# firing peer's separate replicated calls, so the ghost just
+	# travels and silently releases.
+	if is_ghost:
+		collision_mask = PROJECTILE_WORLD_MASK
 	# Swap visual based on shot type. AoE shots keep the authored sphere;
 	# regular bullets get the elongated laser box, oriented along travel
 	# (look_at on the projectile node so the box's Z axis aligns with
@@ -233,13 +349,29 @@ func reset() -> void:
 		tint = ENEMY_PROJECTILE_COLOR
 	else:
 		tint = PLAYER_PROJECTILE_COLOR
+	# is_rocket: AoE bullet (RPG variants). Three-way mesh swap:
+	#   • is_rocket → capsule mesh, oriented horizontally, smoke trail
+	#   • bullet (kinetic, no AoE) → small head mesh + distortion trail
+	#   • non-bullet AoE → authored sphere (charged plasma etc.)
+	#   • non-bullet non-AoE → laser box (default energy bolt)
+	var is_rocket := is_bullet and blast_radius > 0.0
 	var vis := get_node_or_null(^"Visual") as MeshInstance3D
 	if vis != null:
 		if _sphere_mesh_cache == null:
 			_sphere_mesh_cache = vis.mesh
-		if blast_radius > 0.0:
+		if is_rocket:
+			# Rocket: capsule body. CapsuleMesh's height runs along
+			# local Y by default — we rotate the visual mesh so its
+			# Y aligns with the projectile's -Z (travel direction)
+			# and the rocket's nose points forward. Rotation is set
+			# below after the mesh swap so we don't fight the look_at.
+			vis.mesh = _get_rocket_mesh()
+			vis.position = Vector3.ZERO
+			vis.rotation = Vector3(deg_to_rad(-90.0), 0.0, 0.0)
+		elif blast_radius > 0.0:
 			vis.mesh = _sphere_mesh_cache
 			vis.position = Vector3.ZERO
+			vis.rotation = Vector3.ZERO
 		elif is_bullet:
 			# Bullets: visual mesh becomes a small rectangular HEAD placed
 			# slightly ahead of the projectile origin (-Z is travel after
@@ -249,42 +381,76 @@ func reset() -> void:
 			# bubble that overlaps walls and produces screen-shimmer.
 			vis.mesh = _get_bullet_head_mesh()
 			vis.position = Vector3(0.0, 0.0, -BULLET_HEAD_SIZE.z * 0.5)
+			vis.rotation = Vector3.ZERO
 		else:
 			vis.mesh = _get_laser_mesh()
 			vis.position = Vector3.ZERO
+			vis.rotation = Vector3.ZERO
 		vis.scale = Vector3.ONE * visual_scale
 		# Side-tint the material. The authored material on the .tscn becomes
 		# the player variant; the enemy variant is cloned-and-retinted on
 		# first need. Bullet head uses a dim unshaded material; the
-		# distortion is on the trail node, not the head.
+		# rocket gets its own metallic body material; the distortion lives
+		# on the trail node, not the head.
 		var src := vis.material_override as StandardMaterial3D
 		if src != null:
 			_ensure_side_materials(src)
-		if is_bullet:
+		if is_rocket:
+			vis.material_override = _get_rocket_material()
+		elif is_bullet:
 			vis.material_override = _get_bullet_head_material()
 		elif enemy_fire and _enemy_material != null:
 			vis.material_override = _enemy_material
 		elif _player_material != null:
 			vis.material_override = _player_material
-	# Distortion trail — created lazily so non-bullet projectiles in the
-	# pool never carry the extra node. For bullets, position behind the
-	# projectile origin and run the same screen-refraction shader the
-	# melee shockwaves use; the box's length defines the wake length.
-	if is_bullet:
+		# Shadow casting: rockets are physical projectiles, not energy,
+		# so they should drop a shadow on the floor as they fly. Authored
+		# default on the .tscn is OFF (laser bolts wouldn't cast shadows
+		# and updating shadow maps for many bolts a frame is expensive),
+		# so toggle ON for rockets and back OFF for every other variant
+		# in case a pool slot is reused.
+		if is_rocket:
+			vis.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		else:
+			vis.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# Distortion trail — for KINETIC bullets only (not rockets, which
+	# get the smoke trail instead). Created lazily so non-bullet
+	# projectiles in the pool never carry the extra node.
+	if is_bullet and not is_rocket:
 		_ensure_trail_node()
 		if _trail_node != null:
 			_trail_node.visible = true
 			_trail_node.scale = Vector3.ONE * visual_scale
 	elif _trail_node != null:
 		_trail_node.visible = false
-	if blast_radius <= 0.0 and direction.length_squared() > 0.0001:
-		# look_at requires a target distinct from current position; offset
-		# along direction (already-normalized at spawn). Up vector defaults
-		# to world Y — fine since fire trajectories are near-horizontal.
-		look_at(global_position + direction, Vector3.UP)
+	# Smoke trail — rockets only. World-space particle system that
+	# emits gray puffs as the rocket flies; particles stay where they
+	# were emitted while the rocket moves on, producing the visible
+	# drag-trail. Toggled emission so non-rocket pool reuses don't
+	# carry over puffing.
+	if is_rocket:
+		_ensure_smoke_trail()
+		if _smoke_trail != null:
+			_smoke_trail.emitting = true
+			_smoke_trail.restart()
+	elif _smoke_trail != null:
+		_smoke_trail.emitting = false
+	# Orient toward travel direction for everything except non-rocket AoE
+	# (charged plasma spheres look the same from every angle, so the
+	# look_at is skipped and rotation zeroed to keep the basis tidy).
+	# Rockets are AoE *and* directional — the capsule has a clear nose/
+	# tail, so they need look_at even though blast_radius > 0.
+	if direction.length_squared() > 0.0001 and (blast_radius <= 0.0 or is_rocket):
+		# Pick an up vector NOT parallel to direction. Airstrike rockets
+		# travel along world Y (Vector3.DOWN), so the default Vector3.UP
+		# is colinear with the target — Godot logs a warning and the
+		# basis is undefined. Vector3.FORWARD (or any horizontal axis)
+		# works for vertical travel; UP works for horizontal travel.
+		var up := Vector3.UP
+		if absf(direction.y) > 0.95:
+			up = Vector3.FORWARD
+		look_at(global_position + direction, up)
 	else:
-		# Reset rotation for sphere shots so a previous bullet's basis
-		# doesn't leak through (visually irrelevant but keeps the node tidy).
 		rotation = Vector3.ZERO
 	var glow := get_node_or_null(^"Glow") as OmniLight3D
 	if glow != null:
@@ -332,7 +498,15 @@ func _pool_release() -> void:
 	ignore_melee_penalty = false
 	blast_radius = 0.0
 	visual_scale = 1.0
+	damage_type = &""
+	# Stop the smoke trail emitting on pool release — without this the
+	# rocket's puffs continue spawning at the projectile's last
+	# position (which moves to the pool holder) until the next
+	# acquire. Looks like a frozen smoke trail in the void.
+	if _smoke_trail != null:
+		_smoke_trail.emitting = false
 	is_bullet = false
+	is_ghost = false
 
 func _physics_process(delta: float) -> void:
 	var step := speed * delta
@@ -356,6 +530,13 @@ func _physics_process(delta: float) -> void:
 			global_position = impact_pos
 			_traveled += from.distance_to(impact_pos)
 			_hit = true
+			# Ghost projectiles release silently — impact_burst and
+			# explosion visuals come from the firing peer's separate
+			# replicated calls; doubling them up here would show two
+			# bursts per shot.
+			if is_ghost:
+				_release()
+				return
 			# Spawn the impact visual on the wall surface so the bolt
 			# doesn't just vanish. AoE shots detonate their full explosion
 			# against the wall — query_radius from impact_pos still catches
@@ -446,7 +627,14 @@ func _hit_single(body: Node3D, impact_pos: Vector3) -> void:
 
 
 func _explode(impact_pos: Vector3) -> void:
-	CombatVisuals.spawn_explosion(self, impact_pos, blast_radius, _projectile_color())
+	# Bullet projectiles (RPG, future kinetic AoE) route to the
+	# procedural fireball path by passing zero-alpha color_override.
+	# Energy projectiles (charged plasma) keep their class-tinted
+	# bubble look. damage_type then picks the fireball palette
+	# (orange / cyan / violet) — passed through both branches so a
+	# future cryo RPG would still color-tint correctly.
+	var color_override := Color(0.0, 0.0, 0.0, 0.0) if is_bullet else _projectile_color()
+	CombatVisuals.spawn_explosion(self, impact_pos, blast_radius, color_override, damage_type)
 	var targets: Array[Node3D] = SpatialGrid.query_radius(
 		global_position, blast_radius, target_group)
 	for target: Node3D in targets:

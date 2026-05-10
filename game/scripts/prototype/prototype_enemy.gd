@@ -350,6 +350,14 @@ var _curse_laser: MeshInstance3D = null
 # AND weakened); charm is BOOLEAN — held by PrototypePlayer's FIFO charm
 # list, released only when the player dies or a new charm bumps it out.
 var _stun_remain: float = 0.0
+# Ignite DoT — flame-type weapon overcharge applies. Damage ticks every
+# IGNITE_TICK_INTERVAL seconds at _ignite_dps for _ignite_remain
+# seconds. Reusable for any future fire/poison/bleed DoT — the field
+# names stay generic enough that "ignite" is just the first consumer.
+var _ignite_remain: float = 0.0
+var _ignite_dps: float = 0.0
+var _ignite_tick_accum: float = 0.0
+const IGNITE_TICK_INTERVAL := 0.5
 var _charmed: bool = false
 var _charm_target: Node3D = null
 var _weaken_remain: float = 0.0
@@ -449,6 +457,9 @@ func _init_enemy() -> void:
 	_clear_curse_marker()
 	_clear_curse_laser()
 	_stun_remain = 0.0
+	_ignite_remain = 0.0
+	_ignite_dps = 0.0
+	_ignite_tick_accum = 0.0
 	_charmed = false
 	_charm_target = null
 	_weaken_remain = 0.0
@@ -1316,6 +1327,20 @@ func _update_curse_laser() -> void:
 ## post-windup _state check bails on its own. Refreshes to the longer of
 ## current vs new so a fresh proc never shortens an active stun. RETURNING
 ## enemies (leashed) ignore — leash is treated as CC immune.
+## Apply or refresh ignite. Higher dps wins (don't replace strong burn
+## with weak); duration extends if longer. Damage ticks via
+## _tick_afflictions every IGNITE_TICK_INTERVAL seconds.
+func apply_ignite(dps: float, duration: float) -> void:
+	if dps <= 0.0 or duration <= 0.0:
+		return
+	if not _is_alive():
+		return
+	if dps > _ignite_dps:
+		_ignite_dps = dps
+	if duration > _ignite_remain:
+		_ignite_remain = duration
+
+
 func apply_stun(duration: float) -> void:
 	if not _is_alive() or duration <= 0.0:
 		return
@@ -1530,6 +1555,21 @@ func _tick_afflictions(delta: float) -> void:
 			# death may have already moved us out.
 			if _state == State.STUNNED:
 				_change_state(State.IDLE)
+	# Ignite DoT. Tick at fixed intervals (smoother damage numbers than
+	# per-frame), countdown decrements continuously. Damage routes
+	# through take_damage so curse / vulnerability / leash multipliers
+	# all apply.
+	if _ignite_remain > 0.0:
+		_ignite_remain -= delta
+		_ignite_tick_accum += delta
+		if _ignite_tick_accum >= IGNITE_TICK_INTERVAL:
+			_ignite_tick_accum -= IGNITE_TICK_INTERVAL
+			var tick_dmg: int = maxi(1, int(round(_ignite_dps * IGNITE_TICK_INTERVAL)))
+			take_damage(tick_dmg, global_position, 0.0, 1, false)
+		if _ignite_remain <= 0.0:
+			_ignite_remain = 0.0
+			_ignite_dps = 0.0
+			_ignite_tick_accum = 0.0
 	# Re-pick the charm target every tick when the cached one is dead,
 	# null, OR has become an ally (charmed by the player too). Without
 	# the friendly check, a pet whose target gets charmed mid-fight
@@ -2684,6 +2724,9 @@ func _die(kill_from: Vector3 = Vector3.ZERO, kill_force: float = 0.0) -> void:
 	_clear_curse_marker()
 	_clear_curse_laser()
 	_stun_remain = 0.0
+	_ignite_remain = 0.0
+	_ignite_dps = 0.0
+	_ignite_tick_accum = 0.0
 	_weaken_remain = 0.0
 	_weaken_mult = 0.0
 	_curse_remain = 0.0

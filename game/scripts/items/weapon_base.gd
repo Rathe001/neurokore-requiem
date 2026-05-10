@@ -50,3 +50,18 @@ class_name WeaponBase extends Resource
 # of the fire skill. Reload_time is in seconds.
 @export var ammo_capacity_range: Vector2i = Vector2i(0, 0)
 @export var reload_time: float = 0.0
+
+# ── Damage-type pool (Energy Accelerator family) ──────────────────────────
+# When non-empty, the rolled item picks one entry at random and stores
+# it on Item.damage_type. Skills that care (Overcharge) branch their
+# status-effect application on the rolled type. Empty = no rolled type;
+# falls through to damage_type below.
+@export var damage_type_pool: Array[StringName] = []
+
+# Fixed elemental identity for weapons whose element doesn't roll —
+# the Taser is always electric, a future flamethrower would always be
+# flame, etc. Skipped when damage_type_pool is non-empty (the pool
+# wins so the random roll happens). Empty StringName here means the
+# weapon is neutral / kinetic and inherits the player's class color
+# for visual effects.
+@export var damage_type: StringName = &""

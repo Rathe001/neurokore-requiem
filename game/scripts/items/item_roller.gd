@@ -66,6 +66,9 @@ const WEAPON_BASE_DROPS: Dictionary = {
 		{"path": "res://resources/items/weapon_bases/lmg_2h.tres", "weight": 1.0},
 		{"path": "res://resources/items/weapon_bases/sniper_2h.tres", "weight": 1.0},
 		{"path": "res://resources/items/weapon_bases/rpg_2h.tres", "weight": 1.0},
+		{"path": "res://resources/items/weapon_bases/shotgun_2h.tres", "weight": 1.0},
+		{"path": "res://resources/items/weapon_bases/accelerator_2h.tres", "weight": 1.0},
+		{"path": "res://resources/items/weapon_bases/taser_2h.tres", "weight": 1.0},
 	],
 }
 
@@ -78,7 +81,7 @@ const WEAPON_BASE_DROPS: Dictionary = {
 # first ~15 random drops. Armor / backpack / grenade keep weight 1 each.
 const MAIN_TYPE_WEIGHTS: Dictionary = {
 	"1H Weapon": 3.0,
-	"2H Weapon": 5.0,
+	"2H Weapon": 8.0,
 	"Head Armor": 1.0,
 	"Chest Armor": 1.0,
 	"Gloves": 1.0,
@@ -127,14 +130,12 @@ func roll(main_type: String, item_level: int, rarity: StringName, rng: RandomNum
 	var prefix_count: int = RARITY_PREFIX_COUNT.get(rarity, 0)
 	for _i in prefix_count:
 		var affix := AffixTable.roll_prefix(main_type, item_level, rng)
-		if affix != null:
-			_apply_affix(item, affix)
+		if affix != null and _apply_affix(item, affix):
 			affix_labels.append(affix.label)
 	var suffix_count: int = RARITY_SUFFIX_COUNT.get(rarity, 0)
 	for _i in suffix_count:
 		var affix := AffixTable.roll_suffix(main_type, item_level, rng)
-		if affix != null:
-			_apply_affix(item, affix)
+		if affix != null and _apply_affix(item, affix):
 			affix_labels.append(affix.label)
 
 	# Universal secondary bonuses — every equippable item can roll +HP and +resource.
@@ -161,14 +162,12 @@ func roll_from_base(base: WeaponBase, item_level: int, rarity: StringName, rng: 
 	var prefix_count: int = RARITY_PREFIX_COUNT.get(rarity, 0)
 	for _i in prefix_count:
 		var affix := AffixTable.roll_prefix(main_type, item_level, rng)
-		if affix != null:
-			_apply_affix(item, affix)
+		if affix != null and _apply_affix(item, affix):
 			affix_labels.append(affix.label)
 	var suffix_count: int = RARITY_SUFFIX_COUNT.get(rarity, 0)
 	for _i in suffix_count:
 		var affix := AffixTable.roll_suffix(main_type, item_level, rng)
-		if affix != null:
-			_apply_affix(item, affix)
+		if affix != null and _apply_affix(item, affix):
 			affix_labels.append(affix.label)
 	_roll_universal_bonuses(item, item_level, rarity, rng)
 	item.name_key = _build_name(main_type, item.sub_type, affix_labels)
@@ -280,6 +279,14 @@ func _make_debug_offhand(skill: Skill, label: String) -> Item:
 ## Roll universal +HP and +resource bonuses. Every equippable item can get these.
 ## The amount scales with item level; chance scales with rarity.
 func _roll_universal_bonuses(item: Item, item_level: int, rarity: StringName, rng: RandomNumberGenerator) -> void:
+	# Weapons skip universal HP / resource bonuses entirely — those are
+	# incidental "vitality" stats that belong on armor and backpacks,
+	# not on a weapon. A sword shouldn't roll +15 Max Health any more
+	# than a chestpiece should roll +8 Damage. Weapons get their power
+	# from the prefix/suffix tables (damage, crit, attack-speed, etc.)
+	# and from their base weapon stats (damage_min/max, accuracy, etc).
+	if item.main_type == "1H Weapon" or item.main_type == "2H Weapon":
+		return
 	var bonus_chance: float = 0.3
 	match rarity:
 		&"magic": bonus_chance = 0.5
@@ -309,10 +316,35 @@ func _roll_rarity(rng: RandomNumberGenerator) -> StringName:
 			return r
 	return &"common"
 
-func _apply_affix(item: Item, affix: ItemAffix) -> void:
+## Applies the affix's stat_modifiers to the item, filtering out any
+## stats that don't make sense for this specific item. Returns true if
+## at least one stat actually applied — caller uses the return value
+## to decide whether to add the affix's label to the item name (a
+## skipped-entirely affix shouldn't show up as a prefix/suffix in the
+## item's display name either).
+func _apply_affix(item: Item, affix: ItemAffix) -> bool:
+	var applied_any := false
 	for k in affix.stat_modifiers:
+		if not _stat_applies_to_item(item, k):
+			continue
 		var prior: int = int(item.stat_modifiers.get(k, 0))
 		item.stat_modifiers[k] = prior + int(affix.stat_modifiers[k])
+		applied_any = true
+	return applied_any
+
+
+# Per-stat eligibility check — drops stats from an affix when they're
+# meaningless on the rolled item. The item-types filter on the affix
+# table itself handles broad gating (weapon vs armor); this layer
+# handles sub-type quirks like "bullet weapons don't pay resource."
+func _stat_applies_to_item(item: Item, stat_id: StringName) -> bool:
+	# resource_cost_reduction does nothing on bullet weapons — they
+	# burn ammo, not the resource pool. The "of Efficiency" suffix
+	# would otherwise read as a useful weapon stat the player can't
+	# actually benefit from.
+	if stat_id == &"resource_cost_reduction" and item.is_bullet_weapon():
+		return false
+	return true
 
 func _apply_weapon_base(item: Item, main_type: String, rng: RandomNumberGenerator) -> void:
 	var drops: Array = WEAPON_BASE_DROPS.get(main_type, [])
@@ -374,6 +406,14 @@ func _apply_weapon_base_direct(item: Item, base: WeaponBase, rng: RandomNumberGe
 		item.ammo_max = rng.randi_range(maxi(1, lo), maxi(1, hi))
 		item.ammo_current = item.ammo_max
 		item.reload_time = base.reload_time
+	# Damage-type resolution — pool first (random roll, e.g. Accelerator),
+	# then fixed type (e.g. Taser is always electric). Empty for both
+	# leaves damage_type at default neutral.
+	if base.damage_type_pool.size() > 0:
+		var idx := rng.randi_range(0, base.damage_type_pool.size() - 1)
+		item.damage_type = base.damage_type_pool[idx]
+	elif base.damage_type != &"":
+		item.damage_type = base.damage_type
 
 func _apply_offhand_base(item: Item, main_type: String, rng: RandomNumberGenerator) -> void:
 	if main_type != "Offhand":

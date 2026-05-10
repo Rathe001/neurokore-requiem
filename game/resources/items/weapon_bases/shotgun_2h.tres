@@ -1,0 +1,38 @@
+[gd_resource type="Resource" script_class="WeaponBase" load_steps=4 format=3]
+
+; Shotgun (2H) — mid-range bullet weapon. 8-round magazine, 9-pellet
+; buckshot per LMB trigger pull, 18-pellet double-barrel on RMB. Per-
+; pellet damage is small; the weapon's reputation comes from how much
+; of the cone you can land in a single target's hitbox. Mid-range
+; (~9m effective) — falls off fast at distance because pellets spread
+; out and only a few will still be on target.
+;
+; DPS math (LMB): per-pellet avg 1.25; 9 pellets × 1.25 = 11.25 max
+; per cast; cooldown 0.55s, atk_speed mid 1.0 → fire_rate 1.82/s →
+; raw all-pellets-hit DPS ~22, the same baseline every other weapon
+; archetype hits. Per-pellet damage is intentionally tiny because
+; the weapon's identity is the BURST-PER-CAST shape, not the
+; single-pellet damage — landing all 9 in a target's hitbox at
+; close range delivers heavy front-loaded damage; the formula
+; itself is already comparable across the roster.
+
+[ext_resource type="Script" path="res://scripts/items/weapon_base.gd" id="1_weapon_base"]
+[ext_resource type="Resource" path="res://resources/skills/shotgun_buckshot.tres" id="2_fire_skill"]
+[ext_resource type="Resource" path="res://resources/skills/shotgun_double.tres" id="3_alt_fire"]
+
+[resource]
+script = ExtResource("1_weapon_base")
+id = &"shotgun_2h"
+display_name = "Shotgun"
+glyph = "U"
+two_handed = true
+damage_min_range = Vector2(1, 1)
+damage_max_range = Vector2(1, 2)
+attack_speed_range = Vector2(0.85, 1.15)
+crit_chance_range = Vector2(0.0, 0.0)
+accuracy_range = Vector2(0.7, 0.85)
+weapon_range_range = Vector2(8.0, 11.0)
+fire_skill = ExtResource("2_fire_skill")
+alt_fire_skill = ExtResource("3_alt_fire")
+ammo_capacity_range = Vector2i(8, 8)
+reload_time = 2.5

@@ -73,6 +73,13 @@ func _detonate() -> void:
 	if _trail != null:
 		_trail.emitting = false
 	CombatVisuals.spawn_hit_radial(self, blast_radius)
+	# Procedural fireball alongside the shockwave ring — grenades are
+	# kinetic explosions, so they get the fireball treatment per the
+	# "non-energy explosions look like fireballs" rule. Stun grenades
+	# skip the fireball since they're flashbangs, not bombs — the
+	# shockwave ring carries their visual identity already.
+	if grenade_type != Skill.GrenadeType.STUN:
+		CombatVisuals.spawn_explosion(self, global_position, blast_radius)
 	var eff_knockback := knockback
 	match grenade_type:
 		Skill.GrenadeType.INCENDIARY:

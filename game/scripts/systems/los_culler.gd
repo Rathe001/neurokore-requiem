@@ -161,6 +161,13 @@ func _physics_process(_delta: float) -> void:
 	# Uses cached group array refreshed on cell change (corpses aren't in
 	# SpatialGrid since they're inert post-death entities).
 	for c in _corpses_cache:
+		# Cache is refreshed only on cell-change, so entries can go stale
+		# between frames if a corpse is freed (despawn, despawned post-
+		# death-hold). is_instance_valid catches both null and freed —
+		# the bare null check missed freed-but-not-null and crashed
+		# downstream when the cast tried to read global_position.
+		if not is_instance_valid(c):
+			continue
 		var corpse := c as Node3D
 		if corpse == null:
 			continue
@@ -182,6 +189,12 @@ func _physics_process(_delta: float) -> void:
 	# as corpses since they're tied to floor-level features.
 	# Uses cached group array refreshed on cell change.
 	for s in _static_glows_cache:
+		# Guard against freed objects — same pattern as the corpses
+		# loop above. The cache is refreshed on cell change, but a glow
+		# can be freed mid-cell when its parent room teardown runs;
+		# the cast below would crash on the freed instance.
+		if not is_instance_valid(s):
+			continue
 		var glow := s as Node3D
 		if glow == null:
 			continue

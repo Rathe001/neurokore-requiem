@@ -1,0 +1,33 @@
+[gd_resource type="Resource" script_class="Skill" load_steps=2 format=3]
+
+; Charged Arc Taser primary — "Tase". Hold LMB to channel a chained
+; lightning arc. Each tick damages the primary target and bounces to
+; the nearest unstruck enemy within chain_jump_radius, with a 15%
+; damage falloff per jump. Chain stops when running damage drops
+; below chain_min_damage. No jump cap (chain_jumps = 0) — the falloff
+; itself terminates the bounce. Resource drains continuously while
+; held; stops on release or empty pool.
+
+[ext_resource type="Script" path="res://scripts/skills/skill.gd" id="1_skill_script"]
+
+[resource]
+script = ExtResource("1_skill_script")
+display_name = "Tase"
+glyph = "z"
+damage = 2
+skill_range = 8.0
+cooldown = 0.0
+wind_up = 0.0
+resource_cost = 0
+targeting_mode = 5
+cone_deg = 0.0
+knockback = 0.0
+projectile_speed = 0.0
+icon_color = Color(0.55, 0.85, 1.0, 1.0)
+active_kind = 6
+channel_tick_interval = 0.15
+channel_resource_per_sec = 28.0
+chain_jumps = 0
+chain_jump_radius = 6.0
+chain_falloff_pct = 15.0
+chain_min_damage = 1
