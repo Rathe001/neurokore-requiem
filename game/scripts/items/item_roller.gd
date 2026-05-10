@@ -103,6 +103,23 @@ const GRENADE_BASE_PATHS: Array[String] = [
 	"res://resources/items/grenade_bases/stun.tres",
 ]
 
+# Per-armor-slot model names — picked at roll time and stored on
+# item.sub_type so the drop reads as "Vest" / "Overcoat" / "Shirt"
+# instead of the generic archetype "Chest Armor". Same affix and
+# flavor-prefix logic in _build_name handles the rest, so a magic
+# rare drop becomes "Vicious Carbon Vest" instead of "Vicious Chest
+# Armor". Pools intentionally mix mundane near-future ("Vest", "Cap")
+# with corp / tactical ("Hardsuit", "Headset", "Greaves") to match the
+# cyberpunk + body-horror tone without leaning too far either way.
+const ARMOR_MODEL_NAMES: Dictionary = {
+	"Head Armor": ["Helmet", "Hood", "Visor", "Cap", "Headset", "Mask", "Goggles"],
+	"Chest Armor": ["Vest", "Overcoat", "Shirt", "Jacket", "Hardsuit", "Plate Rig", "Trenchcoat", "Tunic"],
+	"Gloves": ["Gloves", "Gauntlets", "Mitts", "Hand Wraps", "Knuckle Guards", "Cuffs"],
+	"Leg Armor": ["Greaves", "Cargo Pants", "Trousers", "Leggings", "Chaps", "Britches", "Cargos"],
+	"Boots": ["Boots", "Stompers", "Treads", "Sneakers", "Footguards", "Slip-ons"],
+	"Backpack": ["Pack", "Rucksack", "Satchel", "Duffel", "Knapsack", "Sling Bag"],
+}
+
 
 func roll(main_type: String, item_level: int, rarity: StringName, rng: RandomNumberGenerator) -> Item:
 	var item := Item.new()
@@ -123,6 +140,7 @@ func roll(main_type: String, item_level: int, rarity: StringName, rng: RandomNum
 	_apply_weapon_base(item, main_type, rng)
 	_apply_offhand_base(item, main_type, rng)
 	_apply_grenade_base(item, main_type, rng)
+	_apply_armor_model_name(item, main_type, rng)
 	_apply_head_light_mod(item, main_type, item_level, rng)
 
 	var affix_labels: Array[String] = []
@@ -420,6 +438,22 @@ func _apply_weapon_base_direct(item: Item, base: WeaponBase, rng: RandomNumberGe
 	if base.model_names.size() > 0:
 		var midx := rng.randi_range(0, base.model_names.size() - 1)
 		item.model_name = base.model_names[midx]
+
+# Pick a per-slot armor name from ARMOR_MODEL_NAMES and store it on
+# item.sub_type. Display name resolution then uses sub_type as the
+# noun (no model_name pool for armor — the slot name IS the variant)
+# so a magic chest drop reads as "Vicious Vest" instead of "Vicious
+# Chest Armor". Skipped for non-armor main_types and for armor slots
+# missing from the pool dictionary (defensive — keeps roll() working
+# if a new slot is added without updating the pool yet).
+func _apply_armor_model_name(item: Item, main_type: String, rng: RandomNumberGenerator) -> void:
+	if not ARMOR_MODEL_NAMES.has(main_type):
+		return
+	var pool: Array = ARMOR_MODEL_NAMES[main_type]
+	if pool.is_empty():
+		return
+	item.sub_type = String(pool[rng.randi_range(0, pool.size() - 1)])
+
 
 func _apply_offhand_base(item: Item, main_type: String, rng: RandomNumberGenerator) -> void:
 	if main_type != "Offhand":
