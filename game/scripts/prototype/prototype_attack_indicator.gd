@@ -691,28 +691,46 @@ static func spawn_hit_radial(host: Node3D, radius: float) -> void:
 
 
 # ── Blade slash (1H knife / melee_1h hit visual) ────────────────────────────
-# Replaces the generic shockwave-bubble cone for knives so the swing
-# reads as "carved through them" instead of a dome puff. A tall, thin,
-# paper-thin-depth slab is placed at the cone's midpoint, oriented so
-# its long axis crosses the aim direction diagonally — reads as a
-# diagonal sword cut sweeping through the air. Two extra angled
-# slashes spawn for combo step 2 (350° finisher) so the omni-sweep
-# reads as multiple cuts at once.
+# Procedural arced slash drawn by blade_slash.gdshader on a flat plane
+# oriented to face the camera. Replaces the prior box-mesh approach
+# which read as rectangles from the iso angle. The shader handles the
+# curve + taper + glow falloff; host code positions + scales + tweens
+# `intensity` from full to 0 over SLASH_DURATION.
 
-const SLASH_DURATION: float = 0.18
-# Height = vertical extent (the slash is a TALL thin slab so the iso
-# camera sees it edge-on as a streak, not a flat paint mark).
-const SLASH_HEIGHT: float = 0.75
-# Depth = thickness along aim direction. Paper-thin so the slash reads
-# as motion, not a wall.
-const SLASH_DEPTH: float = 0.05
+const SLASH_SHADER: Shader = preload("res://scripts/prototype/blade_slash.gdshader")
+const SLASH_DURATION: float = 0.20
+# Half-height of the bow box relative to chord length. The shader's
+# arc reaches `curvature` of UV space (-1..1), so the world-space
+# bow needs proportional vertical headroom.
+const SLASH_BOW_RATIO: float = 0.35
+const SLASH_INTENSITY: float = 6.0
 # Diagonal tilt of the slash chord, in degrees away from horizontal.
-# Small positive values lean the cut down-left-to-up-right, which is
-# the canonical sword-cut feel from an iso camera.
-const SLASH_TILT_DEG: float = 25.0
-const SLASH_BASE_COLOR := Color(1.0, 0.96, 0.92, 0.95)
-const SLASH_EMISSION_COLOR := Color(1.0, 0.95, 0.85, 1.0)
-const SLASH_EMISSION_ENERGY: float = 8.0
+# Lifts the +X end of the chord up so the cut reads as a diagonal
+# saber stroke (down-left → up-right) instead of a flat horizontal line.
+const SLASH_TILT_DEG: float = 22.0
+
+# Shared unit-square PlaneMesh — every slash uses this one mesh,
+# scaled per spawn. ShaderMaterial is per-instance (intensity is
+# tweened individually) but duplicated from a pre-resolved template.
+static var _slash_mesh: PlaneMesh = null
+static var _slash_material_template: ShaderMaterial = null
+
+
+static func _get_slash_mesh() -> PlaneMesh:
+	if _slash_mesh == null:
+		_slash_mesh = PlaneMesh.new()
+		_slash_mesh.size = Vector2(1.0, 1.0)
+		# FACE_Z so the plane's normal is its local +Z; host orients the
+		# inst so +Z faces the camera and the slash is fully visible.
+		_slash_mesh.orientation = PlaneMesh.FACE_Z
+	return _slash_mesh
+
+
+static func _get_slash_material_template() -> ShaderMaterial:
+	if _slash_material_template == null:
+		_slash_material_template = ShaderMaterial.new()
+		_slash_material_template.shader = SLASH_SHADER
+	return _slash_material_template
 
 
 static func spawn_blade_slash(host: Node3D, aim: Vector3, attack_range: float, cone_deg: float) -> void:
@@ -738,53 +756,57 @@ static func _spawn_one_slash(host: Node3D, forward: Vector3, mid_dist: float, co
 	var parent: Node = host.get_parent()
 	if parent == null:
 		parent = host
-	var mesh := BoxMesh.new()
 	# Chord length at mid_dist for the given cone width. Adds a small
 	# minimum so very narrow cones still produce a visible streak.
 	var chord: float = maxf(0.8, 2.0 * mid_dist * sin(deg_to_rad(cone_deg * 0.5)))
-	# Box dimensions:
-	#   X = chord (the slash's long axis — the swept-through arc)
-	#   Y = SLASH_HEIGHT (vertical extent of the cut, ~0.75m)
-	#   Z = SLASH_DEPTH (paper-thin along aim — reads as a streak, not a wall)
-	mesh.size = Vector3(chord, SLASH_HEIGHT, SLASH_DEPTH)
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.albedo_color = SLASH_BASE_COLOR
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.emission_enabled = true
-	mat.emission = SLASH_EMISSION_COLOR
-	mat.emission_energy_multiplier = SLASH_EMISSION_ENERGY
-	var inst := MeshInstance3D.new()
-	inst.mesh = mesh
-	inst.material_override = mat
-	inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	parent.add_child(inst)
-	# Position: in front of the host along aim by mid_dist, lifted to
-	# chest height so the slash sits where enemies actually take damage.
+	var bow: float = chord * SLASH_BOW_RATIO
+	# Camera-facing orientation. The plane's normal points at the
+	# camera so the procedural arc is fully visible; the chord axis is
+	# whichever in-plane direction best matches "horizontal-perpendicular
+	# to the swing", tilted SLASH_TILT_DEG for the saber-stroke feel.
+	var camera: Camera3D = null
+	if host.is_inside_tree():
+		camera = host.get_viewport().get_camera_3d()
 	var midpoint: Vector3 = host.global_position + forward * mid_dist + Vector3(0.0, 1.0, 0.0)
-	inst.global_position = midpoint
-	# Basis construction:
-	#   • horizontal "right" relative to aim = UP × forward (chord axis)
-	#   • tilt the chord axis SLASH_TILT_DEG out of horizontal so the cut
-	#     reads as diagonal (down-left to up-right from iso view), not a
-	#     vertical wall
-	#   • normal axis (Z, depth along aim) = forward
-	#   • up axis = chord_axis × forward to keep the basis orthonormal
+	var to_camera := Vector3.UP
+	if camera != null:
+		to_camera = camera.global_position - midpoint
+		if to_camera.length_squared() < 0.0001:
+			to_camera = Vector3.UP
+		else:
+			to_camera = to_camera.normalized()
+	# Project the "horizontal-perpendicular to aim" axis onto the plane
+	# perpendicular to to_camera so the basis stays orthonormal AND the
+	# slash chord runs across the swing direction as expected.
 	var horizontal_right := Vector3.UP.cross(forward)
 	if horizontal_right.length_squared() < 0.0001:
 		horizontal_right = Vector3.RIGHT
 	horizontal_right = horizontal_right.normalized()
-	# Tilt the chord axis upward by rotating around `forward` (the
-	# aim/depth axis). Positive tilt lifts the +X end up.
-	var chord_axis := horizontal_right.rotated(forward, deg_to_rad(SLASH_TILT_DEG))
-	var up_axis := chord_axis.cross(forward).normalized()
-	inst.basis = Basis(chord_axis, up_axis, forward)
-	# Quick fade: alpha + emission both ease out together so the streak
-	# tapers off cleanly instead of popping.
-	var tween := inst.create_tween().set_parallel(true)
-	tween.tween_property(mat, "albedo_color:a", 0.0, SLASH_DURATION).set_ease(Tween.EASE_IN)
-	tween.tween_property(mat, "emission_energy_multiplier", 0.0, SLASH_DURATION).set_ease(Tween.EASE_IN)
-	tween.chain().tween_callback(inst.queue_free)
+	var chord_axis: Vector3 = horizontal_right - to_camera * horizontal_right.dot(to_camera)
+	if chord_axis.length_squared() < 0.0001:
+		chord_axis = Vector3.RIGHT - to_camera * to_camera.x
+	chord_axis = chord_axis.normalized()
+	# Tilt the chord around the plane normal (to_camera) for the
+	# saber-stroke diagonal. Bow axis stays orthogonal in-plane.
+	chord_axis = chord_axis.rotated(to_camera, deg_to_rad(SLASH_TILT_DEG))
+	var bow_axis: Vector3 = to_camera.cross(chord_axis).normalized()
+	var mat: ShaderMaterial = _get_slash_material_template().duplicate()
+	mat.set_shader_parameter(&"intensity", SLASH_INTENSITY)
+	var inst := MeshInstance3D.new()
+	inst.mesh = _get_slash_mesh()
+	inst.material_override = mat
+	inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(inst)
+	inst.global_position = midpoint
+	# Basis: scaled directly along the in-plane axes so the unit plane
+	# becomes the full chord × bow size. Plane normal (Z) faces camera.
+	inst.basis = Basis(chord_axis * chord, bow_axis * bow, to_camera)
+	# Fade by tweening the shader's `intensity` to 0. The shader's
+	# alpha follows brightness, so this single property drives both
+	# the visible streak and its transparency in one ease.
+	var tween := inst.create_tween()
+	tween.tween_property(mat, "shader_parameter/intensity", 0.0, SLASH_DURATION).set_ease(Tween.EASE_IN)
+	tween.tween_callback(inst.queue_free)
 
 # Detached from host so the wave stays where it was unleashed even if the
 # host moves or rotates during the effect. forward == ZERO means no orientation
