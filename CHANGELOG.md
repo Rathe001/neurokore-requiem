@@ -13,6 +13,45 @@ are mandatory.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-10
+
+### Added
+
+- **Seven new weapons**: SMG, LMG, Sniper Rifle, RPG, Shotgun, Charged Arc Taser, Energy Accelerator. Bullet weapons use a magazine + reload (R key, auto on empty); energy weapons keep the resource-pool cost model.
+- **RPG Tactical Strike** (RMB) — paint an X on the ground at your cursor, the rocket falls from the sky onto it. Massive AoE, ~30s cooldown.
+- **Signature passive per weapon archetype** — each weapon now has one iconic quirk: Knife Backstab (+50% from behind), Hammer Wind-Up (+75% after 1s still), Plasma Pierce (bolts pass through 1 enemy), SMG Penetration (every 5th shot 2×), LMG Heat (+10%/shot, max +50%), Sniper First Mark (+50% on a fresh target), RPG Concussive (blast staggers), Shotgun Point Blank (+50% at <2m), Taser Static Build (every 10th hit 3×), Accelerator Resonance (held stream ramps to +30%), Laser Charged Shot (+50% after 1s idle).
+- **3-hit melee combo** — each swing widens the cone, hits harder, and the 3rd-hit finisher applies a status: 1H knives stack bleed (a per-tier % HP DoT), 2H hammers stun briefly.
+- **Hitstop** — animations briefly freeze on melee connect; sells the weight of every hit.
+- **Procedural blade slash visual** for 1H knives — replaces the generic cone with a tapered, glowing arc.
+- **HUD quirk reminder panel** — small always-visible widget under the minimap showing the play tip for each equipped weapon, so you don't have to memorize the table.
+- **In-game multiplayer chat** — press Enter to open, type, Enter to send, Esc to cancel. Sender names are colored by class.
+- **Persistent global multiplayer lobby** — players who enter MP join a shared global chat room separate from any active coop session.
+- **Host-disconnect screen** — clients get a graceful "Session Ended" overlay with a "Return to Main Menu" button when the host drops mid-game (previously froze the game in an unplayable state).
+- **Cross-client projectile visibility** — peers now see each other's shots and projectile trails in coop.
+- **Cross-client channel-beam visibility** — Energy Accelerator flame visual replicates to other peers.
+- **Invented sci-fi model names per archetype** — every weapon drop rolls a name like "VK-9 Stinger" / "MK-7 Voidcaster" / "TR-19 Reaper" (family codes per archetype: VK=SMG, MK=sniper, TR=LMG, etc.). Melee uses real-world type names (Stiletto, Karambit, Sledgehammer, Maul).
+- **Per-slot armor names** — armor drops now read as "Vest" / "Trenchcoat" / "Stompers" / "Knuckle Guards" instead of "Chest Armor" / "Boots" / etc.
+
+### Changed
+
+- **Weapon DPS normalized to ~22 base** across all archetypes (shotgun damage cut to 1-2 per pellet × 9 pellets; everything else was already in the band).
+- **DPS tooltip formula now accurate** — factors fire rate, pellet count, multistrike expectation, channel tick rate, and damage multipliers.
+- **MP and SP character rosters fully isolated** — MP characters never appear in SP and vice versa; hardcore/normal are also segregated.
+- **Tripod (LMG RMB) visually crouches the player** for the duration of the aim hold.
+- **Common-rarity drops now roll a flavor adjective** ("Worn", "Battered", "Salvaged", etc.) so two whites of the same base don't share a name in the loot pile.
+- **HUD layout**: controls hint moved to the top-left corner; the top-right under-minimap slot now hosts the quirk reminder panel.
+- **Removed the Buckler offhand** — was stat-less and added no value to the drop pool.
+
+### Fixed
+
+- **Energy Accelerator** now reliably rolls an elemental type (flame/cryo/electric), the flame visual respects walls, and the cone aligns with the player's aim direction.
+- **Shotgun now uses ammo** (8-shot magazine, 2.5s reload) like every other bullet weapon.
+- **Airstrike rocket** no longer prints a "colinear vectors" warning when falling straight down; orientation correctly tracks travel direction.
+- **Airstrike X marker** appears the instant you press RMB (was delayed until after the windup); rendered as a true floor decal instead of floating geometry.
+- **Host disconnect** no longer leaves clients in a frozen-but-running session — they see a clear "Session Ended" screen and can return to the menu.
+- **LoS culler** no longer crashes when a static emissive glow is freed mid-frame.
+- **Various MP performance hot paths**: shotgun pellet RPCs batched into a single message (was 9-18 per cast), lightning arc visuals reuse a cached mesh + material template (was allocating per tick), visual-replication anchors pooled instead of allocated per RPC.
+
 ## [0.1.3] - 2026-05-08
 
 ### Added
