@@ -46,6 +46,19 @@ var _mw_held: bool = false
 # their own hits).
 var _shake_intensity: float = 0.0
 
+# ── Cursor look-ahead ──────────────────────────────────────────────────────
+# Camera focus blends toward the player's cursor by LOOKAHEAD_PCT of
+# the player→cursor offset, clamped to LOOKAHEAD_MAX_DIST. Smooths via
+# a lerp on the held offset so the camera doesn't snap on fast cursor
+# motion. Makes the iso view feel responsive to aim direction —
+# Diablo / Lost Ark style.
+const LOOKAHEAD_PCT: float = 0.18
+const LOOKAHEAD_MAX_DIST: float = 3.0
+# Lower = snappier camera; higher = more drag. 0.12 is "noticeable but
+# not floaty" at 60Hz.
+const LOOKAHEAD_SMOOTH: float = 0.12
+var _lookahead_offset: Vector3 = Vector3.ZERO
+
 func _ready() -> void:
 	if target_path != NodePath():
 		_target = get_node_or_null(target_path) as Node3D
@@ -120,9 +133,10 @@ func _input(event: InputEvent) -> void:
 		_pitch_rad = clampf(_pitch_rad + mm.relative.y * pitch_drag_sensitivity, PITCH_MIN, PITCH_MAX)
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if _target == null:
 		return
+	_update_lookahead(delta)
 	_snap_to_target()
 
 
@@ -141,12 +155,39 @@ func _snap_to_target() -> void:
 			randf_range(-_shake_intensity, _shake_intensity),
 			randf_range(-_shake_intensity, _shake_intensity),
 		)
-	global_position = _target.global_position + ofs
+	# Cursor look-ahead — blend the camera's focus point toward the
+	# player's cursor by LOOKAHEAD_PCT. _lookahead_offset is smoothed
+	# via lerp so fast cursor flicks don't whip the view; the camera
+	# trails the cursor by a few frames of inertia.
+	var focal := _target.global_position + _lookahead_offset
+	global_position = focal + ofs
 	# Up hint = horizontal direction *away* from the camera. Same look_at
 	# orientation as Vector3.UP at non-zero pitch (both vectors lie in the
 	# forward+true-up plane), but stays well-defined at pitch = 0 where
 	# Vector3.UP would be parallel to forward and degenerate the basis.
-	look_at(_target.global_position, -dir_horiz)
+	look_at(focal, -dir_horiz)
+
+
+# Update the smoothed look-ahead offset toward the player's cursor.
+# Called per-frame from _process. Reads cursor_world_position from the
+# target if available (PrototypePlayer exposes it); other targets just
+# get zero look-ahead. Y is forced flat so the camera doesn't tilt
+# vertically when the cursor hits a wall at a different height.
+func _update_lookahead(delta: float) -> void:
+	if _target == null or not _target.has_method(&"cursor_world_position"):
+		_lookahead_offset = _lookahead_offset.lerp(Vector3.ZERO, LOOKAHEAD_SMOOTH)
+		return
+	var cursor_pos: Vector3 = _target.call(&"cursor_world_position")
+	var target_pos: Vector3 = _target.global_position
+	var raw_offset: Vector3 = (cursor_pos - target_pos) * LOOKAHEAD_PCT
+	raw_offset.y = 0.0
+	if raw_offset.length() > LOOKAHEAD_MAX_DIST:
+		raw_offset = raw_offset.normalized() * LOOKAHEAD_MAX_DIST
+	# Frame-rate-independent smoothing. The smoothing constant
+	# represents "how far toward the target per 1/60s", scaled by
+	# delta for variable frame timing.
+	var t: float = clampf(LOOKAHEAD_SMOOTH * delta * 60.0, 0.0, 1.0)
+	_lookahead_offset = _lookahead_offset.lerp(raw_offset, t)
 
 
 ## Trigger a brief camera shake. `intensity` is the peak random offset

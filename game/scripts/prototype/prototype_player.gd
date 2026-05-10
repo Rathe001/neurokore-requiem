@@ -340,6 +340,42 @@ func consume_laser_charged_shot() -> float:
 	return bonus
 
 
+# Footstep emission tick — runs each frame for both local and remote
+# player instances. Accumulates horizontal distance from the last
+# emission point; when it exceeds FOOTSTEP_DISTANCE, spawn a puff at
+# the player's feet and reset. The position-delta approach means
+# remote peers' replicated positions naturally drive their puffs
+# too — no replication needed.
+func _tick_footsteps() -> void:
+	var pos := global_position
+	# First-tick init / teleport handling — large jump means we just
+	# spawned or crossed level boundaries, so reset without emitting.
+	if _footstep_last_pos == Vector3.ZERO:
+		_footstep_last_pos = pos
+		return
+	var delta_v := pos - _footstep_last_pos
+	delta_v.y = 0.0  # horizontal distance only
+	var d_sqr := delta_v.length_squared()
+	# Speed floor skips emissions from MultiplayerSynchronizer's tiny
+	# corrective jitter on idle remote players (the floor is per-frame
+	# squared distance, not absolute speed, so it scales naturally
+	# with frame rate).
+	if d_sqr < FOOTSTEP_MIN_SPEED_SQR * 0.0001:
+		_footstep_last_pos = pos
+		return
+	# Airborne skip — feet aren't on the ground.
+	if not is_on_floor():
+		_footstep_last_pos = pos
+		return
+	_footstep_distance_accum += sqrt(d_sqr)
+	_footstep_last_pos = pos
+	if _footstep_distance_accum >= FOOTSTEP_DISTANCE:
+		_footstep_distance_accum = 0.0
+		var parent: Node = get_parent()
+		if parent != null:
+			PrototypeAttackIndicator.spawn_footstep_puff(parent, pos)
+
+
 # ── Hammer Wind-Up ──────────────────────────────────────────────────────────
 # Tracks the player's "stillness" — once the player has been not-moving for
 # HAMMER_WIND_UP_TIME seconds, the next 2H melee hit deals +75% damage.
@@ -459,6 +495,21 @@ var _aim_hold_forced_crouch: bool = false
 var _channel_skill: Skill = null
 var _channel_input_action: StringName = &""
 var _channel_tick_accum: float = 0.0
+# ── Footstep dust puffs ─────────────────────────────────────────────────────
+# Position-based footstep emission. Each frame we accumulate the
+# horizontal distance moved since the last puff; once it crosses
+# FOOTSTEP_DISTANCE, we spawn a small puff at the player's feet and
+# reset. Tracked PER PLAYER NODE (every PrototypePlayer instance has
+# its own accumulator), so remote peers' avatars emit footsteps too
+# as their replicated positions update — no RPC needed. Skipped when
+# airborne or below the speed floor so jumping / standing-still
+# doesn't dribble puffs.
+const FOOTSTEP_DISTANCE: float = 1.4
+const FOOTSTEP_MIN_SPEED_SQR: float = 0.04  # ignore micro-jitter from sync
+var _footstep_distance_accum: float = 0.0
+var _footstep_last_pos: Vector3 = Vector3.ZERO
+
+
 # Flame visual for SINGLE_CONE CHANNEL_BEAM weapons (Energy Accelerator).
 # Pivot Node3D parented to the player at chest height — yawed each tick
 # to face aim. Cylinder MeshInstance3D under the pivot runs the
@@ -927,6 +978,7 @@ func _physics_process(delta: float) -> void:
 	# chosen from the synced net_moving flag.
 	if _is_remote_player():
 		_update_remote_anim()
+		_tick_footsteps()
 		return
 	if not _alive:
 		velocity = Vector3.ZERO
@@ -947,6 +999,7 @@ func _physics_process(delta: float) -> void:
 	_tick_aim_hold(delta)
 	_tick_channel(delta)
 	_tick_hammer_wind_up(delta)
+	_tick_footsteps()
 
 	var on_floor := is_on_floor()
 

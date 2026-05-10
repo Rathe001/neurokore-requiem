@@ -5,11 +5,17 @@ class_name DamageNumber extends Node3D
 # per hit was visible in profiler. Free instances are kept on a static stack
 # and rebound to a new world parent on reuse.
 
-const DURATION: float = 0.7
-const RISE: float = 1.0
+const DURATION: float = 0.85
+const RISE: float = 1.2
 const SPREAD: float = 0.35
 const PIXEL_SIZE: float = 0.004
 const POOL_LIMIT: int = 64
+# Pop-in: numbers spawn larger and quickly settle to 1.0 — gives every
+# hit a momentary "punch" on screen. Crit hits pop bigger so they read
+# as distinct visual events even when the color difference is missed.
+const POP_SCALE_NORMAL: float = 1.25
+const POP_SCALE_CRIT: float = 1.55
+const POP_DURATION: float = 0.14
 
 const FONT_NORMAL: int = 56
 const FONT_MULTISTRIKE: int = 78
@@ -33,24 +39,33 @@ static var _pool: Array[DamageNumber] = []
 var _label: Label3D
 var _shake: float = 0.0
 var _elapsed: float = 0.0
+var _pop_scale: float = 1.0
 var _tween: Tween
 
 static func spawn(world: Node, pos: Vector3, amount: int, multistrike: int = 1, is_crit: bool = false) -> void:
-	_spawn_internal(world, pos, str(amount) + (" ×%d" % multistrike if multistrike > 1 else ""),
+	# Crits add a "!" suffix on top of color + scale to triple-up the
+	# visual hierarchy. Multistrike "×N" pushes onto the same line.
+	var text := str(amount)
+	if is_crit:
+		text += "!"
+	if multistrike > 1:
+		text += " ×%d" % multistrike
+	_spawn_internal(world, pos, text,
 		_font_for(multistrike, is_crit),
 		COLOR_CRIT if is_crit else COLOR_NORMAL,
-		_shake_for(multistrike, is_crit))
+		_shake_for(multistrike, is_crit),
+		POP_SCALE_CRIT if is_crit else POP_SCALE_NORMAL)
 
 
 static func spawn_miss(world: Node, pos: Vector3) -> void:
-	_spawn_internal(world, pos, "Miss!", FONT_NORMAL, COLOR_MISS, SHAKE_NONE)
+	_spawn_internal(world, pos, "Miss!", FONT_NORMAL, COLOR_MISS, SHAKE_NONE, POP_SCALE_NORMAL)
 
 
 static func spawn_heal(world: Node, pos: Vector3, amount: int) -> void:
-	_spawn_internal(world, pos, "+" + str(amount), FONT_NORMAL, COLOR_HEAL, SHAKE_NONE)
+	_spawn_internal(world, pos, "+" + str(amount), FONT_NORMAL, COLOR_HEAL, SHAKE_NONE, POP_SCALE_NORMAL)
 
 
-static func _spawn_internal(world: Node, pos: Vector3, text: String, font_size: int, color: Color, shake: float) -> void:
+static func _spawn_internal(world: Node, pos: Vector3, text: String, font_size: int, color: Color, shake: float, pop_scale: float) -> void:
 	var n: DamageNumber = _acquire()
 	var label := n._label
 	label.text = text
@@ -59,6 +74,7 @@ static func _spawn_internal(world: Node, pos: Vector3, text: String, font_size: 
 	label.position = Vector3.ZERO
 	n._shake = shake
 	n._elapsed = 0.0
+	n._pop_scale = pop_scale
 
 	var current_parent := n.get_parent()
 	if current_parent != world:
@@ -115,14 +131,24 @@ func _animate() -> void:
 	var start := global_position
 	var end := start + Vector3(0.0, RISE, 0.0)
 	_label.modulate.a = 1.0
+	# Start the label scaled up; it pops down to 1.0 quickly. Crits use
+	# a higher start scale so they read as a heavier impact.
+	scale = Vector3.ONE * _pop_scale
 	_tween = create_tween().set_parallel(true)
-	_tween.tween_property(self, ^"global_position", end, DURATION).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	_tween.tween_property(_label, ^"modulate:a", 0.0, DURATION).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN).set_delay(DURATION * 0.35)
+	# Rise — BACK trans on the way up gives a tiny overshoot for the
+	# "leap off the target" feel before settling into its arc.
+	_tween.tween_property(self, ^"global_position", end, DURATION).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	# Scale pop — quickly snap back to 1.0 (front-loaded into the
+	# first POP_DURATION seconds).
+	_tween.tween_property(self, ^"scale", Vector3.ONE, POP_DURATION).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_tween.tween_property(_label, ^"modulate:a", 0.0, DURATION).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN).set_delay(DURATION * 0.4)
 	_tween.chain().tween_callback(_release)
 
 func _release() -> void:
 	_tween = null
 	_shake = 0.0
+	_pop_scale = 1.0
+	scale = Vector3.ONE  # reset for next acquire — tween left us at 1, but defensive
 	if _pool.size() < POOL_LIMIT:
 		var parent := get_parent()
 		if parent != null:

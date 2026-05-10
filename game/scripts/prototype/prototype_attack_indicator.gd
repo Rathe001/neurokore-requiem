@@ -758,6 +758,65 @@ static func spawn_hammer_impact(host: Node3D) -> void:
 	tween.tween_callback(inst.queue_free)
 
 
+# ── Footstep dust puffs ─────────────────────────────────────────────────────
+# Small flat circle on the floor at the player's feet, briefly visible
+# and tweened out. Triggered by PrototypePlayer every FOOTSTEP_DISTANCE
+# meters of movement (per-player so each peer tracks their own + remote
+# peers' avatars locally — no RPC). Visually the puff is a thin
+# horizontal CylinderMesh with an unshaded translucent material that
+# fades + grows over the lifetime.
+
+const FOOTSTEP_DURATION: float = 0.45
+const FOOTSTEP_START_RADIUS: float = 0.18
+const FOOTSTEP_END_RADIUS: float = 0.45
+const FOOTSTEP_LIFT: float = 0.03
+const FOOTSTEP_BASE_COLOR := Color(0.85, 0.78, 0.65, 0.45)
+
+# Shared unit-radius cylinder for footstep puffs (scaled per-spawn).
+# Cheap to cache vs allocating one per step — at 4 players walking
+# constantly this fires ~10-20 puffs/sec.
+static var _footstep_mesh: CylinderMesh = null
+
+
+static func _get_footstep_mesh() -> CylinderMesh:
+	if _footstep_mesh == null:
+		_footstep_mesh = CylinderMesh.new()
+		_footstep_mesh.top_radius = 1.0
+		_footstep_mesh.bottom_radius = 1.0
+		_footstep_mesh.height = 0.02
+		_footstep_mesh.radial_segments = 12
+		_footstep_mesh.rings = 1
+		_footstep_mesh.cap_top = true
+		_footstep_mesh.cap_bottom = false
+	return _footstep_mesh
+
+
+static func spawn_footstep_puff(parent: Node3D, world_pos: Vector3) -> void:
+	if parent == null:
+		return
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = FOOTSTEP_BASE_COLOR
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var inst := MeshInstance3D.new()
+	inst.mesh = _get_footstep_mesh()
+	inst.material_override = mat
+	inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	inst.scale = Vector3(FOOTSTEP_START_RADIUS, 1.0, FOOTSTEP_START_RADIUS)
+	parent.add_child(inst)
+	inst.global_position = world_pos + Vector3(0.0, FOOTSTEP_LIFT, 0.0)
+	# Grow + fade over the lifetime. Out-quad ease on scale gives the
+	# initial puff a bit of weight; in-cubic on alpha keeps the early
+	# frames opaque before the dust dissipates.
+	var tween := inst.create_tween().set_parallel(true)
+	tween.tween_property(inst, "scale", Vector3(FOOTSTEP_END_RADIUS, 1.0, FOOTSTEP_END_RADIUS), FOOTSTEP_DURATION) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.tween_property(mat, "albedo_color:a", 0.0, FOOTSTEP_DURATION) \
+		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+	tween.chain().tween_callback(inst.queue_free)
+
+
 # ── Blade slash (1H knife / melee_1h hit visual) ────────────────────────────
 # Procedural arced slash drawn by blade_slash.gdshader on a flat plane
 # oriented to face the camera. Replaces the prior box-mesh approach
