@@ -13,6 +13,7 @@ var empty_label_text: String = ""
 
 var _empty_label: Label
 var _glyph: Label
+var _icon: TextureRect
 var _is_drag_source: bool = false
 var _bg: ColorRect
 var _border: ReferenceRect
@@ -118,6 +119,19 @@ func _build_visuals() -> void:
 	_glyph.visible = false
 	add_child(_glyph)
 
+	# Icon — shown when the item has icon_path set. Glyph label stays
+	# as the fallback for items that don't (legacy saves, archetypes
+	# without art yet). expand_mode KEEP_ASPECT_CENTERED preserves the
+	# icon's aspect ratio inside the slot square; modulate is tinted
+	# by rarity color to keep the at-a-glance quality signal.
+	_icon = TextureRect.new()
+	_icon.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	_icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_icon.mouse_filter = MOUSE_FILTER_IGNORE
+	_icon.visible = false
+	add_child(_icon)
+
 func set_highlight(color: Color) -> void:
 	if _border != null:
 		_border.border_color = color
@@ -153,10 +167,23 @@ func _refresh() -> void:
 	var has_item := item != null
 	_empty_label.visible = not has_item and empty_label_text != ""
 	_empty_label.text = empty_label_text
-	_glyph.visible = has_item
-	if has_item:
-		_glyph.text = item.glyph
-		_glyph.modulate = item.glyph_color
+	# Icon takes precedence when the item has one and the file loads;
+	# fall back to the unicode glyph label otherwise. Rarity color
+	# tints both paths so the quality signal survives the swap.
+	var icon_tex: Texture2D = null
+	if has_item and item.icon_path != "":
+		icon_tex = load(item.icon_path) as Texture2D
+	if icon_tex != null:
+		_icon.texture = icon_tex
+		_icon.modulate = item.glyph_color
+		_icon.visible = true
+		_glyph.visible = false
+	else:
+		_icon.visible = false
+		_glyph.visible = has_item
+		if has_item:
+			_glyph.text = item.glyph
+			_glyph.modulate = item.glyph_color
 
 func _on_equipment_changed(slot: StringName) -> void:
 	if role == Role.EQUIPMENT and slot == slot_id:
@@ -205,13 +232,29 @@ func _get_drag_data(_pos: Vector2) -> Variant:
 	if item == null:
 		return null
 	_is_drag_source = true
-	var preview := Label.new()
-	preview.text = item.glyph
-	preview.theme_type_variation = &"DragPreview"
-	preview.modulate = item.glyph_color
-	preview.custom_minimum_size = Vector2(32, 32)
-	preview.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	preview.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	# Drag preview prefers the icon when the item has one; falls back
+	# to the glyph label otherwise. Same precedence as the in-slot
+	# display so the cursor matches the source visually mid-drag.
+	var preview: Control = null
+	if item.icon_path != "":
+		var icon_tex := load(item.icon_path) as Texture2D
+		if icon_tex != null:
+			var icon_preview := TextureRect.new()
+			icon_preview.texture = icon_tex
+			icon_preview.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+			icon_preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			icon_preview.modulate = item.glyph_color
+			icon_preview.custom_minimum_size = Vector2(48, 48)
+			preview = icon_preview
+	if preview == null:
+		var label := Label.new()
+		label.text = item.glyph
+		label.theme_type_variation = &"DragPreview"
+		label.modulate = item.glyph_color
+		label.custom_minimum_size = Vector2(32, 32)
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		preview = label
 	set_drag_preview(preview)
 	return {"item": item, "source": self}
 

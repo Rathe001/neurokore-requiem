@@ -103,6 +103,20 @@ const GRENADE_BASE_PATHS: Array[String] = [
 	"res://resources/items/grenade_bases/stun.tres",
 ]
 
+# Icon-path mapping for the Energy Accelerator's five model variants.
+# Each model_name in the WeaponBase pool maps 1:1 to one of the five
+# energy-accelerator{N}.png art files — keeps the icon visually
+# consistent per variant so players associate a specific look with
+# "EMX-8 Thrush" vs "EMV-9 Promethean".
+const ACCELERATOR_ICON_BY_MODEL: Dictionary = {
+	"EM-22 Lance": "res://assets/ui/items/weapons/energy-accelerator1.png",
+	"EMR-1 Emitter": "res://assets/ui/items/weapons/energy-accelerator2.png",
+	"EMX-8 Thrush": "res://assets/ui/items/weapons/energy-accelerator3.png",
+	"EMZ-3 Solstice": "res://assets/ui/items/weapons/energy-accelerator4.png",
+	"EMV-9 Promethean": "res://assets/ui/items/weapons/energy-accelerator5.png",
+}
+
+
 # Per-armor-slot model names — picked at roll time and stored on
 # item.sub_type so the drop reads as "Vest" / "Overcoat" / "Shirt"
 # instead of the generic archetype "Chest Armor". Same affix and
@@ -142,6 +156,7 @@ func roll(main_type: String, item_level: int, rarity: StringName, rng: RandomNum
 	_apply_grenade_base(item, main_type, rng)
 	_apply_armor_model_name(item, main_type, rng)
 	_apply_head_light_mod(item, main_type, item_level, rng)
+	_apply_icon_path(item)
 
 	var affix_labels: Array[String] = []
 	var prefix_count: int = RARITY_PREFIX_COUNT.get(rarity, 0)
@@ -187,6 +202,7 @@ func roll_from_base(base: WeaponBase, item_level: int, rarity: StringName, rng: 
 		if affix != null and _apply_affix(item, affix):
 			affix_labels.append(affix.label)
 	_roll_universal_bonuses(item, item_level, rarity, rng)
+	_apply_icon_path(item)
 	item.name_key = _build_name(main_type, item.sub_type, affix_labels, rng, item.model_name)
 	return item
 
@@ -453,6 +469,33 @@ func _apply_armor_model_name(item: Item, main_type: String, rng: RandomNumberGen
 	if pool.is_empty():
 		return
 	item.sub_type = String(pool[rng.randi_range(0, pool.size() - 1)])
+
+
+# Resolve the item's icon path from its weapon_base_id / sub_type /
+# model_name. Energy Accelerator routes through ACCELERATOR_ICON_BY_MODEL
+# (1:1 per model variant); everything else uses sub_type → kebab-case
+# slug lookup in the armor folder (covers armor pieces, offhands,
+# grenades — anything with a player-facing sub_type whose slug matches
+# a supplied icon file). Skipped silently when no matching file exists
+# so the item falls back to glyph rendering.
+func _apply_icon_path(item: Item) -> void:
+	if item == null:
+		return
+	# Energy Accelerator: variant icons keyed by rolled model_name.
+	if item.weapon_base_id == &"accelerator_2h" and item.model_name != "":
+		var accel_path: String = ACCELERATOR_ICON_BY_MODEL.get(item.model_name, "")
+		if accel_path != "" and ResourceLoader.exists(accel_path):
+			item.icon_path = accel_path
+		return
+	# Everything else: slug from sub_type. Slug rules: lowercase,
+	# spaces and underscores → hyphens. "Cargo Pants" → "cargo-pants",
+	# "Sling Bag" → "sling-bag", "Frag Grenade" → "frag-grenade".
+	if item.sub_type == "":
+		return
+	var slug: String = item.sub_type.to_lower().replace(" ", "-").replace("_", "-")
+	var path: String = "res://assets/ui/items/armor/%s1.png" % slug
+	if ResourceLoader.exists(path):
+		item.icon_path = path
 
 
 func _apply_offhand_base(item: Item, main_type: String, rng: RandomNumberGenerator) -> void:

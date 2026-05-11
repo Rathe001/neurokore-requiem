@@ -13,6 +13,12 @@ enum LightMod { NONE, FLASHLIGHT, RADIANT, SCANNER, UV }
 @export var rarity: StringName = &"common"
 @export var glyph: String = "?"
 @export var glyph_color: Color = Color(1, 1, 1, 1)
+## Optional path to an icon texture (PNG). When set, ItemSlot renders
+## the icon instead of the glyph character. Empty = glyph fallback,
+## which keeps legacy saves working and lets archetypes without art
+## drop in without crashing. Set during item roll based on archetype
+## / sub_type / model_name; persisted across save/load.
+@export var icon_path: String = ""
 ## Item level (rolled at generation time). Drives the effectiveness curve:
 ## items below the player's level decay smoothly, items above the player's
 ## level scale upward. 0 marks starter gear (intentionally below every drop).
@@ -279,6 +285,7 @@ func to_dict() -> Dictionary:
 	d[&"rarity"] = String(rarity)
 	d[&"glyph"] = glyph
 	d[&"glyph_color"] = [glyph_color.r, glyph_color.g, glyph_color.b, glyph_color.a]
+	d[&"icon_path"] = icon_path
 	d[&"item_level"] = item_level
 	d[&"two_handed"] = two_handed
 	d[&"weapon_base_id"] = String(weapon_base_id)
@@ -320,6 +327,7 @@ static func from_dict(d: Dictionary) -> Item:
 	item.glyph = d.get(&"glyph", "?")
 	var gc: Array = d.get(&"glyph_color", [1, 1, 1, 1])
 	item.glyph_color = Color(gc[0], gc[1], gc[2], gc[3])
+	item.icon_path = String(d.get(&"icon_path", ""))
 	item.item_level = int(d.get(&"item_level", 1))
 	item.two_handed = d.get(&"two_handed", false)
 	item.weapon_base_id = StringName(d.get(&"weapon_base_id", ""))
