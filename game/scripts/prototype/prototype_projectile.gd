@@ -689,6 +689,14 @@ func _explode(impact_pos: Vector3) -> void:
 	# future cryo RPG would still color-tint correctly.
 	var color_override := Color(0.0, 0.0, 0.0, 0.0) if is_bullet else _projectile_color()
 	CombatVisuals.spawn_explosion(self, impact_pos, blast_radius, color_override, damage_type)
+	# RPG impact shake — big, distance-scaled jolt for the local camera.
+	# Fires here (not at launch) so the boom hits when the shell lands,
+	# matching the visual fireball and the player's expectation that
+	# "explosions shake the screen, not muzzle blasts." Other AoE
+	# projectiles (charged plasma) intentionally skip — they're energy
+	# bubbles, not kinetic detonations.
+	if weapon_base_id == &"rpg_2h":
+		PrototypeCamera.shake_at(self, impact_pos, 1.40, 0.65)
 	var targets: Array[Node3D] = SpatialGrid.query_radius(
 		global_position, blast_radius, target_group)
 	for target: Node3D in targets:

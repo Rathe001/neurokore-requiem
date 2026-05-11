@@ -80,6 +80,10 @@ func _detonate() -> void:
 	# shockwave ring carries their visual identity already.
 	if grenade_type != Skill.GrenadeType.STUN:
 		CombatVisuals.spawn_explosion(self, global_position, blast_radius)
+	# Grenade impact shake — same heavy jolt as RPG, distance-scaled to
+	# the local camera. Stun grenades still shake (the concussion is the
+	# whole point of a flashbang), they just skip the fireball visual.
+	PrototypeCamera.shake_at(self, global_position, 1.40, 0.65)
 	var eff_knockback := knockback
 	match grenade_type:
 		Skill.GrenadeType.INCENDIARY:

@@ -275,11 +275,19 @@ const LMG_HEAT_PCT_PER_STACK: float = 0.10
 var _lmg_heat_stacks: int = 0
 var _lmg_heat_last_fire_t: float = -1000.0
 
-# Accelerator "Resonance" — channel-tick stack that grows on consecutive
-# damage ticks; resets when the channel ends. +5% per tick, cap 6 = +30%.
-const ACCEL_RESONANCE_MAX_STACKS: int = 6
-const ACCEL_RESONANCE_PCT_PER_STACK: float = 0.05
-var _accel_resonance_stacks: int = 0
+# Accelerator "Resonance" — time-based damage ramp while channeling.
+# Multiplier lerps from 1.0× at channel start to ACCEL_RAMP_MAX_MULT
+# over ACCEL_RAMP_DURATION seconds, then sustains at peak. Resets to
+# 0 when the channel ends, so a fresh tap restarts the ramp.
+#
+# Old system was stack-based (+5% per damage tick, cap +30%): too
+# shallow to feel meaningful and reached cap in <1s. The new ramp is
+# slower to build but pays off heavily for sustained channels, which
+# is the fantasy of the weapon — "wind-up beam that melts whatever
+# stays in front of it."
+const ACCEL_RAMP_DURATION: float = 2.5
+const ACCEL_RAMP_MAX_MULT: float = 2.5
+var _accel_channel_elapsed: float = 0.0
 
 # SMG "Penetration" — every Nth SMG shot deals 2× damage. Counter
 # advances on each SMG bullet spawn; the Nth shot's damage roll is
@@ -307,16 +315,25 @@ func consume_lmg_heat() -> float:
 	return 1.0 + LMG_HEAT_PCT_PER_STACK * float(_lmg_heat_stacks)
 
 
-# Bumps the Accelerator resonance counter and returns the current
-# damage multiplier. Called once per channel tick that resolves
-# damage. Reset on channel stop via reset_accel_resonance.
-func consume_accel_resonance() -> float:
-	_accel_resonance_stacks = mini(ACCEL_RESONANCE_MAX_STACKS, _accel_resonance_stacks + 1)
-	return 1.0 + ACCEL_RESONANCE_PCT_PER_STACK * float(_accel_resonance_stacks)
+# Advance the channel ramp timer by `delta`. Called every frame from
+# _tick_channel while the Accelerator is firing. Separate from the
+# read accessor below so multiple damage rolls per tick (multistrike)
+# don't accidentally double-advance the ramp.
+func tick_accel_resonance(delta: float) -> void:
+	_accel_channel_elapsed += delta
+
+
+# Current damage multiplier for the channel ramp. Lerp from 1.0 to
+# ACCEL_RAMP_MAX_MULT across ACCEL_RAMP_DURATION seconds of sustained
+# channel, clamped so post-peak ticks stay at the ceiling. Side-effect
+# free — called from PlayerCombat._roll_skill_damage for every tick.
+func accel_resonance_mult() -> float:
+	var ratio: float = clampf(_accel_channel_elapsed / ACCEL_RAMP_DURATION, 0.0, 1.0)
+	return lerp(1.0, ACCEL_RAMP_MAX_MULT, ratio)
 
 
 func reset_accel_resonance() -> void:
-	_accel_resonance_stacks = 0
+	_accel_channel_elapsed = 0.0
 
 
 # Returns the SMG penetration multiplier for THIS shot and advances
@@ -2018,6 +2035,12 @@ func _tick_channel(delta: float) -> void:
 	# active (CHAIN_LIGHTNING channels never created it).
 	if _flame_visual != null and _flame_visual.visible:
 		_update_flame_visual()
+	# Accelerator damage ramp — advance the elapsed timer every frame
+	# so the multiplier lerps smoothly toward peak even between damage
+	# ticks. Gated to the flame channel (accelerator stream) — Taser
+	# tase uses CHAIN_LIGHTNING and doesn't have its own ramp.
+	if _channel_skill.targeting_mode == Skill.TargetingMode.SINGLE_CONE:
+		tick_accel_resonance(delta)
 	# Damage tick — when accum exceeds the configured interval, resolve
 	# a hit via the skill's targeting_mode through the standard combat
 	# pipeline (so multistrike, talents, crits all apply).

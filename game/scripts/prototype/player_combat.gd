@@ -142,6 +142,18 @@ func resolve_skill_hit(skill: Skill, aim: Vector3, weapon: Item, source_offset: 
 	_overclock_active = oc_chance > 0.0 and randf() < oc_chance
 	if _overclock_active:
 		eff_range *= OVERCLOCK_RANGE_MULT
+	# Kinetic-weapon recoil shake. Fires once per fire press (multistrike /
+	# shotgun spreads / double-tap follow-ups don't restack). Energy weapons
+	# (laser pistol, plasma rifle, accelerator) and melee skip — the hammer
+	# finisher has its own dedicated shake further down. RPG launches a
+	# heavy explosive shell and gets a much bigger jolt than the small-arms.
+	_apply_kinetic_recoil_shake(weapon)
+	# Energy-weapon push. Distinct visual from kinetic recoil — instead of
+	# random jitter the camera drifts away from aim direction, simulating
+	# the beam's pressure pushing the wielder back. Channel beams (Energy
+	# Accelerator) tick-call this repeatedly so the push accumulates while
+	# the player holds fire, springs back when they release.
+	_apply_energy_push(weapon, aim)
 	var hits := PerkState.roll_multistrike()
 	match skill.targeting_mode:
 		Skill.TargetingMode.SINGLE_CONE:
@@ -160,7 +172,8 @@ func resolve_skill_hit(skill: Skill, aim: Vector3, weapon: Item, source_offset: 
 			# helper too — it returns 0 and is harmless because the
 			# weapon isn't in MELEE_BASE_IDS.
 			_host.advance_melee_combo(weapon)
-			var visual_cone_deg := _melee_cone_deg_for_step(skill, _host.melee_combo_step())
+			var combo_step := _host.melee_combo_step()
+			var visual_cone_deg := _melee_cone_deg_for_step(skill, combo_step)
 			# Per-archetype melee visual:
 			#   • 1H knife → spawn_blade_slash (thin streak, reads as "cut")
 			#   • 2H hammer → spawn_hit_cone (shockwave dome) + radial on
@@ -169,7 +182,7 @@ func resolve_skill_hit(skill: Skill, aim: Vector3, weapon: Item, source_offset: 
 			#     via skip_cone_visual) → no visual here
 			var is_knife: bool = weapon != null and weapon.weapon_base_id == &"melee_1h"
 			var is_hammer: bool = weapon != null and weapon.weapon_base_id == &"melee_2h"
-			var is_hammer_finisher: bool = is_hammer and _host.melee_combo_step() == 2
+			var is_hammer_finisher: bool = is_hammer and combo_step == 2
 			if not skip_cone_visual:
 				if is_knife:
 					CombatVisuals.spawn_blade_slash(_host, aim, eff_range, visual_cone_deg)
@@ -179,13 +192,13 @@ func resolve_skill_hit(skill: Skill, aim: Vector3, weapon: Item, source_offset: 
 						# Dedicated ground-impact ring (replaces the
 						# placeholder hit_radial layering used initially).
 						CombatVisuals.spawn_hammer_impact(_host)
-						# Camera shake on the finisher — per-player (local
-						# iso camera only), MP-safe. Intensity is small in
-						# world units; the iso distance amplifies it on
-						# screen so 0.1 reads as a meaningful jolt.
-						var cam := _host.get_viewport().get_camera_3d() as PrototypeCamera
-						if cam != null:
-							cam.shake(0.1, 0.25)
+			# Per-archetype melee combo shake — escalates with each step
+			# of the 3-hit chain. 2H hits harder than 1H at every step,
+			# step 2 is a finisher punch (1H bleed flick / 2H ground
+			# slam). The shake() envelope's "stronger wins" overlap means
+			# rapid combo swings build cleanly without cutting each
+			# other short.
+			_apply_melee_combo_shake(weapon, combo_step)
 			_resolve_cone(skill, aim, eff_range, weapon)
 			for extra in hits - 1:
 				var delay := MULTISTRIKE_STAGGER * float(extra + 1)
@@ -225,6 +238,108 @@ func resolve_skill_hit(skill: Skill, aim: Vector3, weapon: Item, source_offset: 
 			for i in hits:
 				_resolve_chain_lightning(skill, aim, eff_range, weapon, source_offset)
 	_overclock_active = false
+
+
+# ---------------------------------------------------------------------------
+# Kinetic recoil — local camera shake on bullet-weapon fire, tuned per
+# archetype. Per-camera so MP-safe (every player's iso shakes only on
+# their own shots). RPG is intentionally NOT here — its big shake fires
+# at impact time, not on launch, since the shell's boom comes when it
+# lands. Grenades are the same story: the shake happens in _detonate.
+# Energy and melee weapons skip entirely (the hammer finisher carries
+# its own dedicated shake further down the SINGLE_CONE branch).
+# ---------------------------------------------------------------------------
+
+# (intensity, duration) per kinetic archetype. Tuned against the
+# hammer-finisher reference (0.10, 0.25) — SMG sits well below that
+# so rapid-fire bursts don't dominate; sniper/shotgun sit clearly
+# above so the single big shot feels meaningful.
+const RECOIL_SHAKE_BY_BASE_ID: Dictionary = {
+	# Durations are deliberately long relative to each weapon's fire
+	# cadence so the camera's hold-phase keeps refreshing during a
+	# burst — without enough headroom, decay kicks in between shots
+	# and the shake pulses visibly. SMG fires ~8/sec; 0.40s window
+	# means each shot lands well inside the next shot's hold.
+	&"smg_1h":     Vector2(0.14, 0.40),   # tiny — sustained across full-auto
+	&"lmg_2h":     Vector2(0.30, 0.40),   # larger — sustained chatter
+	&"sniper_2h":  Vector2(0.65, 0.50),   # large — heavy bolt-action recoil
+	&"shotgun_2h": Vector2(0.60, 0.45),   # large — pump-action kick
+	# rpg_2h: deliberately absent — impact shake (in prototype_projectile
+	# ._explode) handles it instead. Adding fire-time recoil here would
+	# stack with the impact shake and feel like double-firing.
+}
+
+
+func _apply_kinetic_recoil_shake(weapon: Item) -> void:
+	if weapon == null:
+		return
+	if not RECOIL_SHAKE_BY_BASE_ID.has(weapon.weapon_base_id):
+		return
+	var cam := _host.get_viewport().get_camera_3d() as PrototypeCamera
+	if cam == null:
+		return
+	var params: Vector2 = RECOIL_SHAKE_BY_BASE_ID[weapon.weapon_base_id]
+	cam.shake(params.x, params.y)
+
+
+# Energy-weapon impulse table — per-archetype velocity kick fed to
+# PrototypeCamera.push_at. Tuned for the firing cadence of each:
+# accelerator is small per-tick because it channel-fires continuously
+# and the spring would otherwise drift to the clamp ceiling; plasma
+# rifle is heavy per-shot since each bolt is a discrete release;
+# laser pistol and taser sit in between.
+const ENERGY_PUSH_BY_BASE_ID: Dictionary = {
+	&"ranged_1h":      1.4,   # laser pistol — fast cadence, light pressure
+	&"ranged_2h":      3.0,   # plasma rifle — slow heavy bolts
+	&"accelerator_2h": 1.6,   # accelerator stream — tick-fires, push accumulates fast
+	&"taser_2h":       4.0,   # taser — single zap, strong kick
+}
+
+
+func _apply_energy_push(weapon: Item, aim: Vector3) -> void:
+	if weapon == null:
+		return
+	if not ENERGY_PUSH_BY_BASE_ID.has(weapon.weapon_base_id):
+		return
+	var impulse: float = ENERGY_PUSH_BY_BASE_ID[weapon.weapon_base_id]
+	PrototypeCamera.push_at(_host, aim, impulse)
+
+
+# Melee combo shake — per-step intensity/duration for 1H knife and 2H
+# hammer. Each combo step ramps the shake; 2H hits noticeably harder
+# than 1H at every step (heavier weapon, slower swing). Step 2 is the
+# finisher (knife bleed flick / hammer ground slam) and carries the
+# heaviest jolt. The shake envelope's stronger-wins overlap means
+# back-to-back combo hits build cleanly instead of cutting each other.
+const MELEE_SHAKE_BY_STEP_1H: Array[Vector2] = [
+	Vector2(0.10, 0.22),  # step 0 — light flick
+	Vector2(0.22, 0.28),  # step 1 — bigger swing
+	Vector2(0.45, 0.38),  # step 2 — bleed-finisher punch
+]
+const MELEE_SHAKE_BY_STEP_2H: Array[Vector2] = [
+	Vector2(0.28, 0.28),  # step 0 — heavy swing baseline
+	Vector2(0.55, 0.38),  # step 1 — wider hammer arc
+	Vector2(0.95, 0.55),  # step 2 — ground slam finisher
+]
+
+
+func _apply_melee_combo_shake(weapon: Item, step: int) -> void:
+	if weapon == null:
+		return
+	var table: Array
+	if weapon.weapon_base_id == &"melee_1h":
+		table = MELEE_SHAKE_BY_STEP_1H
+	elif weapon.weapon_base_id == &"melee_2h":
+		table = MELEE_SHAKE_BY_STEP_2H
+	else:
+		return
+	var idx: int = clampi(step, 0, table.size() - 1)
+	var params: Vector2 = table[idx]
+	var cam := _host.get_viewport().get_camera_3d() as PrototypeCamera
+	if cam == null:
+		return
+	cam.shake(params.x, params.y)
+
 
 # ---------------------------------------------------------------------------
 # Double Tap — Count talent: chance to fire a consecutive follow-up shot
@@ -326,11 +441,12 @@ func _resolve_cone(skill: Skill, aim: Vector3, eff_range: float, weapon: Item) -
 	)
 	if wind_up_active:
 		dmg_mult *= 1.75
-	# Accelerator "Resonance" — held stream gains +5% damage per tick on
-	# target, capped at +30%. Counter advances on each cone tick that
-	# resolves; reset on channel stop in _stop_channel.
+	# Accelerator "Resonance" — time-based damage ramp while the stream
+	# is sustained. Multiplier lerps from 1.0× to ACCEL_RAMP_MAX_MULT
+	# over ACCEL_RAMP_DURATION seconds (advanced per-frame from
+	# _tick_channel). Reset on channel stop in _stop_channel.
 	if weapon != null and weapon.weapon_base_id == &"accelerator_2h" and skill.active_kind == Skill.ActiveKind.CHANNEL_BEAM:
-		dmg_mult *= _host.consume_accel_resonance()
+		dmg_mult *= _host.accel_resonance_mult()
 	var half_cos := cos(deg_to_rad(cone_deg * 0.5))
 	var kb: float = _knockback_for(skill, weapon) * kb_mult
 	var apply_status: bool = skill.overcharge_status != &""

@@ -39,25 +39,39 @@ var _default_pitch_rad: float = 0.0
 var _bearing_rad: float = 0.0
 var _distance: float = 1.0
 var _mw_held: bool = false
-# Camera shake — current jitter magnitude (in world units). Set by
-# shake() and tweened back to 0 over the requested duration. Applied
-# as a random Vector3 offset in _snap_to_target each frame. Per-camera
-# so MP-safe (every player's iso camera shakes independently on
-# their own hits).
-var _shake_intensity: float = 0.0
+# ── Camera shake ──────────────────────────────────────────────────────────
+# Decayed manually in _process (was a Tween — but tweens captured the
+# property's *current* value at activation, so rapid-fire calls layered
+# tweens whose new starts were the OLD tween's decayed value. Result:
+# SMG bursts collapsed instead of sustaining. Manual envelope below
+# fixes that — each shake() call resets the timer to whichever path
+# is *longer* and intensity to whichever is *louder*, so a tiny SMG
+# burst on top of a heavy grenade shake doesn't shorten the grenade.
+#
+# Envelope shape: SHAKE_HOLD_FRAC of the duration is held at full peak,
+# the remainder decays with quadratic ease-out. The hold phase is what
+# makes burst fire feel sustained — each new shake() during a burst
+# resets the timer, so the hold keeps refreshing.
+const SHAKE_HOLD_FRAC: float = 0.25
 
-# ── Cursor look-ahead ──────────────────────────────────────────────────────
-# Camera focus blends toward the player's cursor by LOOKAHEAD_PCT of
-# the player→cursor offset, clamped to LOOKAHEAD_MAX_DIST. Smooths via
-# a lerp on the held offset so the camera doesn't snap on fast cursor
-# motion. Makes the iso view feel responsive to aim direction —
-# Diablo / Lost Ark style.
-const LOOKAHEAD_PCT: float = 0.18
-const LOOKAHEAD_MAX_DIST: float = 3.0
-# Lower = snappier camera; higher = more drag. 0.12 is "noticeable but
-# not floaty" at 60Hz.
-const LOOKAHEAD_SMOOTH: float = 0.12
-var _lookahead_offset: Vector3 = Vector3.ZERO
+var _shake_intensity: float = 0.0  # current applied magnitude (random ±this per frame)
+var _shake_initial: float = 0.0    # peak captured at last shake() call
+var _shake_remaining: float = 0.0
+var _shake_total: float = 0.0
+
+# ── Energy-weapon push ────────────────────────────────────────────────────
+# Directional camera offset that drifts AWAY from aim on fire, then
+# springs back to neutral. Distinct from shake() — that's chaotic random
+# jitter for impacts/recoil; push() is smooth pressure that reads as
+# "energy is pushing me back," with no per-frame randomness. Modeled as
+# velocity + position with simple damping/recovery so per-tick channel
+# beams (Energy Accelerator) accumulate smoothly without snapping.
+const PUSH_DAMPING: float = 10.0   # how fast velocity bleeds off (1/sec)
+const PUSH_RECOVERY: float = 7.0   # how fast position springs back to 0 (1/sec)
+const PUSH_MAX: float = 1.4        # clamp ceiling so accelerator stream can't drift forever
+var _push_offset: Vector3 = Vector3.ZERO
+var _push_velocity: Vector3 = Vector3.ZERO
+
 
 func _ready() -> void:
 	if target_path != NodePath():
@@ -134,10 +148,58 @@ func _input(event: InputEvent) -> void:
 
 
 func _process(delta: float) -> void:
+	_tick_shake(delta)
+	_tick_push(delta)
 	if _target == null:
 		return
-	_update_lookahead(delta)
 	_snap_to_target()
+
+
+# Integrate the push spring. Position advances by velocity then springs
+# back toward zero; velocity damps each frame. Clamps offset magnitude
+# so a sustained channel-beam can't drift the camera off the player.
+func _tick_push(delta: float) -> void:
+	if _push_offset == Vector3.ZERO and _push_velocity == Vector3.ZERO:
+		return
+	_push_offset += _push_velocity * delta
+	if _push_offset.length() > PUSH_MAX:
+		_push_offset = _push_offset.normalized() * PUSH_MAX
+	var pos_t: float = clampf(PUSH_RECOVERY * delta, 0.0, 1.0)
+	var vel_t: float = clampf(PUSH_DAMPING * delta, 0.0, 1.0)
+	_push_offset = _push_offset.lerp(Vector3.ZERO, pos_t)
+	_push_velocity = _push_velocity.lerp(Vector3.ZERO, vel_t)
+	# Snap to zero past a tiny epsilon so the spring doesn't oscillate
+	# forever at imperceptible magnitudes.
+	if _push_offset.length() < 0.001 and _push_velocity.length() < 0.001:
+		_push_offset = Vector3.ZERO
+		_push_velocity = Vector3.ZERO
+
+
+# Tick the shake envelope. Hold at peak for SHAKE_HOLD_FRAC of total,
+# then quadratic-ease-out to zero. Returns early when no shake is in
+# flight so the common path is one branch.
+func _tick_shake(delta: float) -> void:
+	if _shake_remaining <= 0.0:
+		if _shake_intensity > 0.0:
+			_shake_intensity = 0.0
+		return
+	_shake_remaining -= delta
+	if _shake_remaining <= 0.0:
+		_shake_intensity = 0.0
+		_shake_initial = 0.0
+		_shake_total = 0.0
+		return
+	var elapsed: float = _shake_total - _shake_remaining
+	var hold_time: float = _shake_total * SHAKE_HOLD_FRAC
+	if elapsed < hold_time:
+		_shake_intensity = _shake_initial
+		return
+	var decay_total: float = _shake_total - hold_time
+	if decay_total <= 0.0:
+		_shake_intensity = 0.0
+		return
+	var ratio: float = _shake_remaining / decay_total
+	_shake_intensity = _shake_initial * ratio * ratio
 
 
 func _snap_to_target() -> void:
@@ -155,11 +217,14 @@ func _snap_to_target() -> void:
 			randf_range(-_shake_intensity, _shake_intensity),
 			randf_range(-_shake_intensity, _shake_intensity),
 		)
-	# Cursor look-ahead — blend the camera's focus point toward the
-	# player's cursor by LOOKAHEAD_PCT. _lookahead_offset is smoothed
-	# via lerp so fast cursor flicks don't whip the view; the camera
-	# trails the cursor by a few frames of inertia.
-	var focal := _target.global_position + _lookahead_offset
+	# Energy-weapon push — directional offset (computed in _tick_push)
+	# that drifts the camera opposite aim then springs back. Distinct
+	# from shake() above: smooth, directional, "pressure" rather than
+	# "impact." Adding to `ofs` (camera position) instead of the focal
+	# means look_at still tracks the player; the world appears to lurch
+	# toward the aim direction as the camera kicks back from it.
+	ofs += _push_offset
+	var focal := _target.global_position
 	global_position = focal + ofs
 	# Up hint = horizontal direction *away* from the camera. Same look_at
 	# orientation as Vector3.UP at non-zero pitch (both vectors lie in the
@@ -168,37 +233,94 @@ func _snap_to_target() -> void:
 	look_at(focal, -dir_horiz)
 
 
-# Update the smoothed look-ahead offset toward the player's cursor.
-# Called per-frame from _process. Reads cursor_world_position from the
-# target if available (PrototypePlayer exposes it); other targets just
-# get zero look-ahead. Y is forced flat so the camera doesn't tilt
-# vertically when the cursor hits a wall at a different height.
-func _update_lookahead(delta: float) -> void:
-	if _target == null or not _target.has_method(&"cursor_world_position"):
-		_lookahead_offset = _lookahead_offset.lerp(Vector3.ZERO, LOOKAHEAD_SMOOTH)
+
+
+## Apply a directional push impulse to the camera — used by energy
+## weapons to fake "muzzle pressure" without the random jitter of
+## shake(). `aim_direction` is the world-space firing direction; the
+## camera kicks OPPOSITE (i.e., the player feels pushed back). Y is
+## flattened so the camera stays in the ground plane. `impulse` is
+## velocity in world units / sec; the spring tick converts that into
+## a brief offset that springs back to zero.
+##
+## Static entry — call sites don't need a PrototypeCamera reference.
+static func push_at(source: Node, aim_direction: Vector3, impulse: float) -> void:
+	if source == null or impulse <= 0.0:
 		return
-	var cursor_pos: Vector3 = _target.call(&"cursor_world_position")
-	var target_pos: Vector3 = _target.global_position
-	var raw_offset: Vector3 = (cursor_pos - target_pos) * LOOKAHEAD_PCT
-	raw_offset.y = 0.0
-	if raw_offset.length() > LOOKAHEAD_MAX_DIST:
-		raw_offset = raw_offset.normalized() * LOOKAHEAD_MAX_DIST
-	# Frame-rate-independent smoothing. The smoothing constant
-	# represents "how far toward the target per 1/60s", scaled by
-	# delta for variable frame timing.
-	var t: float = clampf(LOOKAHEAD_SMOOTH * delta * 60.0, 0.0, 1.0)
-	_lookahead_offset = _lookahead_offset.lerp(raw_offset, t)
+	var vp := source.get_viewport()
+	if vp == null:
+		return
+	var cam := vp.get_camera_3d() as PrototypeCamera
+	if cam == null:
+		return
+	var dir := aim_direction
+	dir.y = 0.0
+	if dir.length_squared() < 0.0001:
+		return
+	dir = dir.normalized()
+	# Push goes OPPOSITE the aim — player gets shoved back by the beam.
+	cam._push_velocity -= dir * impulse
+
+
+## Impact-shake helper — applies shake() to the LOCAL camera, scaled
+## by distance from the blast. Use this for world-positioned events
+## (explosions, ground slams) so a far-away RPG hit produces a smaller
+## jolt than one detonating at the player's feet. `source` is any node
+## in the tree; we walk up to its viewport to find the active camera.
+## Linear falloff out to `falloff_radius`; past that, no shake. Static
+## entry point so call sites don't need a PrototypeCamera reference.
+##
+## Distance is measured from the camera's FOCAL point (= player), not
+## the camera's own global position. The iso camera sits ~14u away
+## from the player at all times, so camera-position-distance would
+## report ~14 for a blast at the player's feet — exactly the falloff
+## edge — and feel broken. Focal-distance is the proximity the player
+## actually perceives.
+static func shake_at(source: Node, world_pos: Vector3, peak: float, duration: float, falloff_radius: float = 16.0) -> void:
+	if source == null:
+		return
+	var vp := source.get_viewport()
+	if vp == null:
+		return
+	var cam := vp.get_camera_3d() as PrototypeCamera
+	if cam == null:
+		return
+	var dist: float = cam.focal_position().distance_to(world_pos)
+	if dist >= falloff_radius:
+		return
+	var t: float = clampf(1.0 - dist / falloff_radius, 0.0, 1.0)
+	cam.shake(peak * t, duration)
+
+
+## Returns the world-space focal point of the camera (the spot the
+## camera looks at). Used by proximity-based systems (impact shake)
+## that need "near the player" semantics rather than "near the physical
+## camera," since the iso camera always sits a fixed distance off the
+## floor.
+func focal_position() -> Vector3:
+	if _target == null:
+		return global_position
+	return _target.global_position
 
 
 ## Trigger a brief camera shake. `intensity` is the peak random offset
-## (in world units) — 0.05 is subtle, 0.2 is heavy. `duration` is the
-## decay window; the shake eases out to zero over that time. Stronger
-## shake wins over an in-flight weaker one. Per-camera so MP-safe.
+## (in world units) — 0.05 is subtle, 1.0+ is heavy. `duration` is the
+## envelope window: SHAKE_HOLD_FRAC at full peak, then quadratic decay.
+## Per-camera so MP-safe (every player's iso camera shakes only on
+## their own hits).
+##
+## Overlap semantics: peak intensity becomes max(currently-applied,
+## requested) and remaining time becomes max(currently-remaining,
+## requested duration). Using *currently-applied* (the live decayed
+## value) means a small rapid-fire shake doesn't artificially boost a
+## heavier in-flight one mid-decay; using *currently-remaining* means
+## a small shake on top of a heavy one doesn't shorten the heavy one.
 func shake(intensity: float, duration: float) -> void:
 	if intensity <= 0.0 or duration <= 0.0:
 		return
-	if intensity > _shake_intensity:
-		_shake_intensity = intensity
-	var tween := create_tween()
-	tween.tween_property(self, "_shake_intensity", 0.0, duration) \
-		.set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
+	var new_initial: float = maxf(_shake_intensity, intensity)
+	var new_remaining: float = maxf(_shake_remaining, duration)
+	_shake_initial = new_initial
+	_shake_intensity = new_initial
+	_shake_remaining = new_remaining
+	_shake_total = new_remaining
