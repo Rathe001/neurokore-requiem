@@ -530,12 +530,61 @@ func _rarity_color(rarity: StringName) -> Color:
 			return Color(1.0, 0.6, 0.2, 1.0)
 	return Color(0.95, 0.95, 0.95, 1.0)
 
+# Tooltip's secondary line — broad category + slot/archetype. The
+# specific model ("Chaps", "Vest", "MKR-12 Quietus") already lives in
+# the item's display name at the top of the tooltip, so repeating it
+# here as the sub_type was redundant and pushed the actually-useful
+# slot information off-screen. Format: "${category} - ${slot}".
+const _CATEGORY_BY_MAIN_TYPE: Dictionary = {
+	"Head Armor":  "Armor",
+	"Chest Armor": "Armor",
+	"Leg Armor":   "Armor",
+	"Gloves":      "Armor",
+	"Boots":       "Armor",
+	"1H Weapon":   "Weapon",
+	"2H Weapon":   "Weapon",
+}
+
+# Armor slot display names — singular for one-of body parts (Head,
+# Chest), plural for paired (Legs, Hands, Feet). The slot, not the
+# `&"head"`/`&"chest"` StringName, is what the player sees in-game.
+const _ARMOR_SLOT_LABEL: Dictionary = {
+	"Head Armor":  "Head",
+	"Chest Armor": "Chest",
+	"Leg Armor":   "Legs",
+	"Gloves":      "Hands",
+	"Boots":       "Feet",
+}
+
+
 func _build_type_text(item: Item) -> String:
 	if item.main_type.is_empty():
 		return ""
-	if item.sub_type.is_empty():
-		return item.main_type
-	return "%s - %s" % [item.main_type, item.sub_type]
+	var category: String = _CATEGORY_BY_MAIN_TYPE.get(item.main_type, item.main_type)
+	var subtype: String = _resolve_type_subtype(item)
+	if subtype.is_empty():
+		return category
+	return "%s - %s" % [category, subtype]
+
+
+# Choose what goes after the dash. Armor pieces show the slot; weapons
+# show the archetype (`sub_type` is the WeaponBase's display_name like
+# "SMG" or "Sniper Rifle"); grenades / offhands / backpacks fall back
+# to sub_type with the category suffix stripped to avoid "Grenade -
+# Frag Grenade" repeating "Grenade."
+func _resolve_type_subtype(item: Item) -> String:
+	if _ARMOR_SLOT_LABEL.has(item.main_type):
+		return _ARMOR_SLOT_LABEL[item.main_type]
+	if item.main_type == "1H Weapon" or item.main_type == "2H Weapon":
+		return item.sub_type
+	# Backpack / Grenade / Offhand — strip the redundant trailing category
+	# word ("Frag Grenade" → "Frag" when category is "Grenade").
+	var st := item.sub_type
+	var category: String = _CATEGORY_BY_MAIN_TYPE.get(item.main_type, item.main_type)
+	var suffix := " " + category
+	if st.ends_with(suffix):
+		st = st.substr(0, st.length() - suffix.length())
+	return st
 
 func _compute_dps(item: Item) -> float:
 	# Returns the weapon's expected raw single-target DPS — what the
