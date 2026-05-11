@@ -13,6 +13,13 @@ static func build(item: Item) -> Node3D:
 	if item == null:
 		_build_fallback(root)
 		return root
+	# Prefer the 2D icon when one's assigned. A billboarded quad with the
+	# inventory icon makes pickups read the same in-world as in the slot
+	# — players spot loot by silhouette without needing to learn what each
+	# procedural primitive means. Falls back to the per-type primitive
+	# build below when no icon is set (legacy items, missing art).
+	if item.icon_path != "" and _build_icon_billboard(root, item):
+		return root
 	match item.main_type:
 		"1H Weapon":   _build_sword(root, false)
 		"2H Weapon":   _build_sword(root, true)
@@ -26,6 +33,36 @@ static func build(item: Item) -> Node3D:
 		"Grenade":     _build_grenade(root)
 		_:             _build_fallback(root)
 	return root
+
+
+# Build a billboarded textured quad showing item.icon_path. Returns true
+# on success, false if the texture failed to load (caller falls back to
+# the per-type procedural build). Size is fixed in world units so icons
+# at different source resolutions read at consistent in-world scale.
+const ICON_PICKUP_SIZE: float = 0.7
+
+static func _build_icon_billboard(root: Node3D, item: Item) -> bool:
+	var tex := load(item.icon_path) as Texture2D
+	if tex == null:
+		return false
+	var quad := QuadMesh.new()
+	quad.size = Vector2(ICON_PICKUP_SIZE, ICON_PICKUP_SIZE)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_texture = tex
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.albedo_color = item.glyph_color
+	mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	mat.billboard_keep_scale = true
+	# Light is dim in many zones — disable depth-test on the rim of the
+	# transparency so the icon never disappears behind its own bob path.
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var mi := MeshInstance3D.new()
+	mi.mesh = quad
+	mi.material_override = mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(mi)
+	return true
 
 # ── Materials ────────────────────────────────────────────────────────────────
 

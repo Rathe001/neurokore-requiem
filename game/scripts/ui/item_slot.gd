@@ -241,10 +241,13 @@ func _get_drag_data(_pos: Vector2) -> Variant:
 		if icon_tex != null:
 			var icon_preview := TextureRect.new()
 			icon_preview.texture = icon_tex
-			icon_preview.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+			# EXPAND_IGNORE_SIZE so the texture's intrinsic dimensions
+			# can't inflate the rect — STRETCH_KEEP_ASPECT_CENTERED fits
+			# the icon into the explicit size while preserving aspect.
+			icon_preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 			icon_preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 			icon_preview.modulate = item.glyph_color
-			icon_preview.custom_minimum_size = Vector2(48, 48)
+			icon_preview.custom_minimum_size = Vector2(32, 32)
 			preview = icon_preview
 	if preview == null:
 		var label := Label.new()

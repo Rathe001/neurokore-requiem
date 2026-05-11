@@ -357,6 +357,7 @@ func _serialize_item(item: Item) -> Dictionary:
 		"rarity": str(item.rarity),
 		"glyph": item.glyph,
 		"glyph_color": _color_to_array(item.glyph_color),
+		"icon_path": item.icon_path,
 		"item_level": item.item_level,
 		"two_handed": item.two_handed,
 		"fire_skill": item.fire_skill.resource_path if item.fire_skill != null else "",
@@ -369,6 +370,11 @@ func _serialize_item(item: Item) -> Dictionary:
 		"accuracy": item.accuracy,
 		"weapon_range": item.weapon_range,
 		"blast_radius": item.blast_radius,
+		"ammo_max": item.ammo_max,
+		"ammo_current": item.ammo_current,
+		"reload_time": item.reload_time,
+		"damage_type": str(item.damage_type),
+		"model_name": item.model_name,
 		"light_mod": int(item.light_mod),
 		"light_energy": item.light_energy,
 		"light_range": item.light_range,
@@ -391,6 +397,7 @@ func _deserialize_item(data: Dictionary) -> Item:
 	item.rarity = StringName(data.get("rarity", "common"))
 	item.glyph = str(data.get("glyph", "?"))
 	item.glyph_color = _array_to_color(data.get("glyph_color", [1, 1, 1, 1]))
+	item.icon_path = str(data.get("icon_path", ""))
 	item.item_level = int(data.get("item_level", 1))
 	item.two_handed = bool(data.get("two_handed", false))
 
@@ -407,6 +414,11 @@ func _deserialize_item(data: Dictionary) -> Item:
 	item.accuracy = float(data.get("accuracy", 1.0))
 	item.weapon_range = float(data.get("weapon_range", 3.0))
 	item.blast_radius = float(data.get("blast_radius", 0.0))
+	item.ammo_max = int(data.get("ammo_max", 0))
+	item.ammo_current = int(data.get("ammo_current", 0))
+	item.reload_time = float(data.get("reload_time", 0.0))
+	item.damage_type = StringName(data.get("damage_type", ""))
+	item.model_name = str(data.get("model_name", ""))
 
 	var lm: int = int(data.get("light_mod", 0))
 	item.light_mod = lm as Item.LightMod if lm >= 0 and lm <= 4 else Item.LightMod.NONE
@@ -414,6 +426,12 @@ func _deserialize_item(data: Dictionary) -> Item:
 	item.light_range = float(data.get("light_range", 12.0))
 	item.light_color = _array_to_color(data.get("light_color", [1, 1, 1, 1]))
 	item.stat_modifiers = _deserialize_stat_modifiers(data.get("stat_modifiers", {}))
+	# Legacy save backfill — items rolled before icon_path existed
+	# load with the field empty. Re-derive it from sub_type using the
+	# same slug rule as the roller so old characters get icons too,
+	# instead of waiting for every armor piece to be replaced.
+	if item.icon_path == "":
+		item.icon_path = ItemRoller.resolve_icon_path(item)
 	return item
 
 

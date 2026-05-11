@@ -481,21 +481,43 @@ func _apply_armor_model_name(item: Item, main_type: String, rng: RandomNumberGen
 func _apply_icon_path(item: Item) -> void:
 	if item == null:
 		return
-	# Energy Accelerator: variant icons keyed by rolled model_name.
+	var resolved := resolve_icon_path(item)
+	if resolved != "":
+		item.icon_path = resolved
+
+
+## Public resolver — given an item's current weapon_base_id / sub_type /
+## model_name, return the icon path that *would* be assigned at roll time.
+## Returns "" when nothing matches. Used both by the roller (at item
+## creation) and by SaveManager (to backfill icon_path on legacy saves
+## that predate the icon system). Single source of truth for the slug
+## rule keeps roll-time and load-time in lockstep.
+func resolve_icon_path(item: Item) -> String:
+	if item == null:
+		return ""
 	if item.weapon_base_id == &"accelerator_2h" and item.model_name != "":
 		var accel_path: String = ACCELERATOR_ICON_BY_MODEL.get(item.model_name, "")
 		if accel_path != "" and ResourceLoader.exists(accel_path):
-			item.icon_path = accel_path
-		return
-	# Everything else: slug from sub_type. Slug rules: lowercase,
-	# spaces and underscores → hyphens. "Cargo Pants" → "cargo-pants",
-	# "Sling Bag" → "sling-bag", "Frag Grenade" → "frag-grenade".
+			return accel_path
+		# Fall through to slug check so accelerator drops with a missing
+		# model variant icon can still pick up a generic energy-accelerator
+		# icon if one exists.
+	# Slug from sub_type. Slug rules: lowercase, spaces and underscores →
+	# hyphens. "Cargo Pants" → "cargo-pants", "Sling Bag" → "sling-bag",
+	# "Frag Grenade" → "frag-grenade", "Laser Pistol" → "laser-pistol".
+	# Check the weapons/ folder for weapon items, armor/ for everything
+	# else (armor pieces, offhands, grenades, backpacks). Items whose
+	# main_type doesn't match either domain fall through and stay glyph-
+	# only.
 	if item.sub_type == "":
-		return
+		return ""
 	var slug: String = item.sub_type.to_lower().replace(" ", "-").replace("_", "-")
-	var path: String = "res://assets/ui/items/armor/%s1.png" % slug
+	var is_weapon: bool = item.main_type == "1H Weapon" or item.main_type == "2H Weapon"
+	var folder: String = "weapons" if is_weapon else "armor"
+	var path: String = "res://assets/ui/items/%s/%s1.png" % [folder, slug]
 	if ResourceLoader.exists(path):
-		item.icon_path = path
+		return path
+	return ""
 
 
 func _apply_offhand_base(item: Item, main_type: String, rng: RandomNumberGenerator) -> void:
