@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="EnemyClass" load_steps=4 format=3]
+[gd_resource type="Resource" script_class="EnemyClass" load_steps=5 format=3]
 
 ; Ranged + taser — rapid electric bolts at close range. 3-round burst of
 ; fast energy projectiles. Short range forces the enemy into close quarters
@@ -7,6 +7,7 @@
 [ext_resource type="Script" path="res://scripts/enemies/enemy_class.gd" id="script"]
 [ext_resource type="PackedScene" path="res://scenes/prototype/prototype_projectile.tscn" id="projectile_scene"]
 [ext_resource type="Resource" path="res://resources/enemies/skills/taser_attack.tres" id="basic_attack"]
+[ext_resource type="Resource" path="res://resources/enemies/skills/multi_shot.tres" id="multi_shot"]
 
 [resource]
 script = ExtResource("script")
@@ -14,7 +15,7 @@ id = &"ranged_taser"
 label = "Shock Trooper"
 weapon_id = &"taser"
 basic_attack = ExtResource("basic_attack")
-skill_pool = []
+skill_pool = [ExtResource("multi_shot")]
 attack_mode = 1
 attack_range = 8.0
 attack_cooldown = 0.8

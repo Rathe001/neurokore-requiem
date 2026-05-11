@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="EnemyClass" load_steps=4 format=3]
+[gd_resource type="Resource" script_class="EnemyClass" load_steps=5 format=3]
 
 ; Ranged + accelerator — close-range energy spray. Fires bursts of 3 energy
 ; bolts in a tight cone, deadly up close but scatters at range. Kites close
@@ -7,6 +7,7 @@
 [ext_resource type="Script" path="res://scripts/enemies/enemy_class.gd" id="script"]
 [ext_resource type="PackedScene" path="res://scenes/prototype/prototype_projectile.tscn" id="projectile_scene"]
 [ext_resource type="Resource" path="res://resources/enemies/skills/accelerator_attack.tres" id="basic_attack"]
+[ext_resource type="Resource" path="res://resources/enemies/skills/multi_shot.tres" id="multi_shot"]
 
 [resource]
 script = ExtResource("script")
@@ -14,7 +15,7 @@ id = &"ranged_accelerator"
 label = "Incinerator"
 weapon_id = &"accelerator"
 basic_attack = ExtResource("basic_attack")
-skill_pool = []
+skill_pool = [ExtResource("multi_shot")]
 attack_mode = 1
 attack_range = 8.0
 attack_cooldown = 1.0
