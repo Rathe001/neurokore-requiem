@@ -77,6 +77,10 @@ const RETURN_STUCK_PROGRESS_SQ := 2.0  # must close 1.4m in 3s or stuck
 # and skip knockback entirely. Stops the player from kiting an enemy past
 # its leash and then sniping it on the walk back.
 const RETURNING_DAMAGE_MULT := 0.05
+# When an enemy takes damage while idle, the leash extends to reach the
+# attacker so sniping from beyond 15m doesn't look like a no-op. The
+# extended leash decays when the enemy returns to idle or dies.
+const HIT_LEASH_PADDING := 5.0  # extra metres past attacker distance
 
 # Crouch: shrinks the capsule when an overhead probe finds a low ceiling
 # (crouch corridors). Restores when overhead clears. The navmesh is baked
@@ -441,6 +445,7 @@ var _generation: int = 0
 var _spawn_position: Vector3 = Vector3.ZERO
 var _return_stuck_timer: float = 0.0
 var _return_last_dist_sq: float = 0.0
+var _hit_leash_extend_sq: float = 0.0
 
 # Networking: synced by the MultiplayerSynchronizer to clients. Authority
 # (host) writes these each physics tick; clients read them for visuals.
@@ -766,6 +771,7 @@ func reset() -> void:
 	# capturing here gives us the correct spawn point even when the enemy
 	# is reused from the pool at a new location.
 	_spawn_position = global_position
+	_hit_leash_extend_sq = 0.0
 	# Note: `affixes` is set by the spawner BEFORE reset() in pack-spawn
 	# paths, and cleared (re-set to []) by the spawner for non-pack spawns,
 	# so a pool-recycled body never inherits the previous owner's modifiers.
@@ -1036,6 +1042,13 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 	# Fires even on a fatal hit (before _die below) so the dying enemy still
 	# alerts the pack — single-shot kills shouldn't silence group aggro.
 	if pre_hit_state == State.IDLE:
+		# Extend leash so the enemy can actually reach a long-range attacker
+		# (sniper/RPG from beyond the default 15m leash). The padding gives
+		# a few extra metres so the enemy doesn't leash the instant it reaches
+		# the player's former position.
+		if _player_ref != null and is_instance_valid(_player_ref):
+			var dist_to_player := _spawn_position.distance_to(_player_ref.global_position) + HIT_LEASH_PADDING
+			_hit_leash_extend_sq = maxf(_hit_leash_extend_sq, dist_to_player * dist_to_player)
 		aggro()
 	_play_hit_squash()
 	_hit_flash_tween = HitFlash.play(self, visual, _hit_flash_tween)
@@ -1808,6 +1821,8 @@ func _change_state(new_state: State) -> void:
 	if _state == new_state:
 		return
 	_state = new_state
+	if new_state == State.IDLE:
+		_hit_leash_extend_sq = 0.0
 
 
 func _play_hit_squash() -> void:
@@ -2082,7 +2097,9 @@ func _chase_tick() -> void:
 	var spawn_dist_sq := global_position.distance_squared_to(_spawn_position)
 	var player_dist_sq := global_position.distance_squared_to(player.global_position)
 	var player_close := player_dist_sq <= KEEP_CHASE_PLAYER_RANGE_SQ
-	if _state == State.CHASING and spawn_dist_sq > MAX_CHASE_FROM_SPAWN_SQ and not player_close:
+	var effective_leash_sq := maxf(MAX_CHASE_FROM_SPAWN_SQ, _hit_leash_extend_sq)
+	if _state == State.CHASING and spawn_dist_sq > effective_leash_sq and not player_close:
+		_hit_leash_extend_sq = 0.0
 		_change_state(State.RETURNING)
 		_return_stuck_timer = 0.0
 		_return_last_dist_sq = spawn_dist_sq
