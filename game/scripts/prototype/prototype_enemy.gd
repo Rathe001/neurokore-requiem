@@ -2605,7 +2605,7 @@ func _cast_skill_projectile(target: Node3D, aim: Vector3, skill: EnemySkill) -> 
 	for burst_i in burst:
 		if burst_i > 0:
 			await get_tree().create_timer(burst_delay).timeout
-			if not is_inside_tree() or _generation != gen or not _alive:
+			if not is_inside_tree() or _generation != gen or not _is_alive():
 				return
 			if not is_instance_valid(target):
 				return
