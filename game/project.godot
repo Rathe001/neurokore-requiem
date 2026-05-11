@@ -57,6 +57,7 @@ CombatVisuals="*res://scripts/systems/combat_visuals.gd"
 RoomAcoustics="*res://scripts/audio/room_acoustics.gd"
 SFX="*res://scripts/audio/sfx.gd"
 WeaponSounds="*res://scripts/audio/weapon_sounds.gd"
+Music="*res://scripts/audio/music.gd"
 
 [display]
 

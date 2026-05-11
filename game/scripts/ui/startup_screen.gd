@@ -27,6 +27,9 @@ var _post_select_target: String = "sp"
 func _ready() -> void:
 	theme = UIThemeState.theme
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	# Title screen BGM. No-op if Music autoload reports the same track
+	# is already playing (e.g., returning to title from settings).
+	Music.play_track("res://resources/audio/music/title.mp3")
 	_build_background()
 	_build_main_panel()
 	_build_creation_panel()
