@@ -3,7 +3,7 @@ class_name SettingsPanel
 
 signal back_pressed
 
-const PANEL_SIZE := Vector2(360.0, 600.0)
+const PANEL_SIZE := Vector2(420.0, 480.0)
 const BUTTON_SIZE := Vector2(168.0, 32.0)
 const ROW_LABEL_WIDTH := 130.0
 const OPTION_WIDTH := 170.0
@@ -37,42 +37,21 @@ func _ready() -> void:
 	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(title)
 
-	var body := VBoxContainer.new()
-	body.add_theme_constant_override(&"separation", 8)
-	body.position = Vector2(18.0, 48.0)
-	body.size = Vector2(PANEL_SIZE.x - 36.0, PANEL_SIZE.y - 110.0)
-	add_child(body)
+	# TabContainer hosts four pages: Game, Display, Audio, Accessibility.
+	# Tab titles are localised in _localise_tabs() after add_child (Godot's
+	# TabContainer reads child node names by default; we override with tr()
+	# so the strings.csv keys drive the UI text).
+	var tabs := TabContainer.new()
+	tabs.position = Vector2(18.0, 44.0)
+	tabs.size = Vector2(PANEL_SIZE.x - 36.0, PANEL_SIZE.y - 110.0)
+	tabs.clip_tabs = false
+	add_child(tabs)
 
-	body.add_child(_make_section_label("MENU_SETTINGS_DISPLAY"))
-	_window_mode_option = _make_window_mode_option()
-	body.add_child(_make_option_row("MENU_SETTINGS_WINDOW_MODE", _window_mode_option))
-	_resolution_option = _make_resolution_option()
-	body.add_child(_make_option_row("MENU_SETTINGS_RESOLUTION", _resolution_option))
-	_msaa_option = _make_msaa_option()
-	body.add_child(_make_option_row("MENU_SETTINGS_MSAA", _msaa_option))
-	_fxaa_option = _make_fxaa_option()
-	body.add_child(_make_option_row("MENU_SETTINGS_FXAA", _fxaa_option))
-	_taa_option = _make_taa_option()
-	body.add_child(_make_option_row("MENU_SETTINGS_TAA", _taa_option))
-	_bloom_option = _make_bloom_option()
-	body.add_child(_make_option_row("MENU_SETTINGS_BLOOM", _bloom_option))
-
-	body.add_child(_make_section_label("MENU_SETTINGS_AUDIO"))
-	_music_slider = _make_volume_slider(AudioState.config.music_volume if AudioState.config != null else 0.6)
-	body.add_child(_make_percent_slider_row("MENU_SETTINGS_VOLUME_MUSIC", _music_slider))
-	_music_slider.value_changed.connect(AudioState.set_music_volume)
-	_sfx_slider = _make_volume_slider(AudioState.config.sfx_volume if AudioState.config != null else 0.85)
-	body.add_child(_make_percent_slider_row("MENU_SETTINGS_VOLUME_SFX", _sfx_slider))
-	_sfx_slider.value_changed.connect(AudioState.set_sfx_volume)
-	_ambient_slider = _make_volume_slider(AudioState.config.ambient_volume if AudioState.config != null else 0.7)
-	body.add_child(_make_percent_slider_row("MENU_SETTINGS_VOLUME_AMBIENT", _ambient_slider))
-	_ambient_slider.value_changed.connect(AudioState.set_ambient_volume)
-
-	body.add_child(_make_section_label("MENU_SETTINGS_CONTROLS"))
-	_sensitivity_slider = _make_sensitivity_slider()
-	body.add_child(_make_slider_row("MENU_SETTINGS_MOUSE_SENSITIVITY", _sensitivity_slider))
-
-	body.add_child(_make_section_label("MENU_SETTINGS_ACCESSIBILITY"))
+	tabs.add_child(_build_game_tab())
+	tabs.add_child(_build_display_tab())
+	tabs.add_child(_build_audio_tab())
+	tabs.add_child(_build_accessibility_tab())
+	_localise_tabs(tabs)
 
 	var back := Button.new()
 	back.text = "COMMON_BACK"
@@ -91,6 +70,83 @@ func _ready() -> void:
 
 func _exit_tree() -> void:
 	DisplayState.changed.disconnect(_refresh_display_options)
+
+
+# ── Tab builders ───────────────────────────────────────────────────────────
+# Each builder returns a VBoxContainer that becomes a tab page. The tab
+# title is set via TabContainer.set_tab_title in _localise_tabs; the node
+# `name` is kept as the English fallback so dev-time debugging is clear.
+
+func _build_game_tab() -> VBoxContainer:
+	var page := _make_tab_page("Game")
+	_sensitivity_slider = _make_sensitivity_slider()
+	page.add_child(_make_slider_row("MENU_SETTINGS_MOUSE_SENSITIVITY", _sensitivity_slider))
+	return page
+
+
+func _build_display_tab() -> VBoxContainer:
+	var page := _make_tab_page("Display")
+	_window_mode_option = _make_window_mode_option()
+	page.add_child(_make_option_row("MENU_SETTINGS_WINDOW_MODE", _window_mode_option))
+	_resolution_option = _make_resolution_option()
+	page.add_child(_make_option_row("MENU_SETTINGS_RESOLUTION", _resolution_option))
+	_msaa_option = _make_msaa_option()
+	page.add_child(_make_option_row("MENU_SETTINGS_MSAA", _msaa_option))
+	_fxaa_option = _make_fxaa_option()
+	page.add_child(_make_option_row("MENU_SETTINGS_FXAA", _fxaa_option))
+	_taa_option = _make_taa_option()
+	page.add_child(_make_option_row("MENU_SETTINGS_TAA", _taa_option))
+	_bloom_option = _make_bloom_option()
+	page.add_child(_make_option_row("MENU_SETTINGS_BLOOM", _bloom_option))
+	return page
+
+
+func _build_audio_tab() -> VBoxContainer:
+	var page := _make_tab_page("Audio")
+	_music_slider = _make_volume_slider(AudioState.config.music_volume if AudioState.config != null else 0.6)
+	page.add_child(_make_percent_slider_row("MENU_SETTINGS_VOLUME_MUSIC", _music_slider))
+	_music_slider.value_changed.connect(AudioState.set_music_volume)
+	_sfx_slider = _make_volume_slider(AudioState.config.sfx_volume if AudioState.config != null else 0.85)
+	page.add_child(_make_percent_slider_row("MENU_SETTINGS_VOLUME_SFX", _sfx_slider))
+	_sfx_slider.value_changed.connect(AudioState.set_sfx_volume)
+	_ambient_slider = _make_volume_slider(AudioState.config.ambient_volume if AudioState.config != null else 0.7)
+	page.add_child(_make_percent_slider_row("MENU_SETTINGS_VOLUME_AMBIENT", _ambient_slider))
+	_ambient_slider.value_changed.connect(AudioState.set_ambient_volume)
+	return page
+
+
+func _build_accessibility_tab() -> VBoxContainer:
+	var page := _make_tab_page("Accessibility")
+	# Placeholder hint while the accessibility section has no controls.
+	# Replace this with real toggles (reduce camera effects, etc.) as
+	# they land.
+	var hint := Label.new()
+	hint.text = "MENU_SETTINGS_ACCESSIBILITY_HINT"
+	hint.theme_type_variation = &"SubLabel"
+	hint.modulate = Color(1.0, 1.0, 1.0, 0.6)
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	page.add_child(hint)
+	return page
+
+
+func _make_tab_page(node_name: String) -> VBoxContainer:
+	var page := VBoxContainer.new()
+	page.name = node_name
+	page.add_theme_constant_override(&"separation", 8)
+	# Inner padding so the first row doesn't sit flush against the tab strip.
+	var spacer := Control.new()
+	spacer.custom_minimum_size = Vector2(0.0, 6.0)
+	page.add_child(spacer)
+	return page
+
+
+func _localise_tabs(tabs: TabContainer) -> void:
+	# Map order matches the order tabs are added in _ready. Using indices
+	# avoids relying on child node names matching the translation keys.
+	tabs.set_tab_title(0, tr("MENU_SETTINGS_TAB_GAME"))
+	tabs.set_tab_title(1, tr("MENU_SETTINGS_TAB_DISPLAY"))
+	tabs.set_tab_title(2, tr("MENU_SETTINGS_TAB_AUDIO"))
+	tabs.set_tab_title(3, tr("MENU_SETTINGS_TAB_ACCESSIBILITY"))
 
 
 func _make_option_row(label_key: String, option: OptionButton) -> HBoxContainer:
