@@ -2,6 +2,25 @@
 
 This file is committed to the repo so context is available on any machine. It is intentionally brief — the docs are the source of truth.
 
+## Claude memory sync (multi-machine)
+
+This project is worked on across multiple machines. `.claude/memory/` is the
+git-tracked mirror of Claude's per-machine auto-memory. Two sync directions
+Claude is expected to handle automatically:
+
+- **After `git pull`** (or any operation that brings in remote changes —
+  `pull`, `fetch` + `rebase/merge`, `checkout` of a branch with different
+  memory): copy `.claude/memory/*.md` to the canonical per-machine memory
+  location (the path provided in the session header — `~/.claude/projects/
+  <encoded-path>/memory/`). Do this immediately without asking, then re-read
+  `MEMORY.md` so newly-synced memories are loaded for the rest of the session.
+- **Writing a memory**: write to the canonical per-machine location (per the
+  auto-memory schema) AND mirror to `.claude/memory/`. Stage the mirror file
+  with the related code commit so memory updates land alongside the work that
+  motivated them.
+
+`.claude/memory/README.md` has the OS-specific copy commands.
+
 ## How to Work on This Project
 
 - **Two sources of truth, with a clear split.**
