@@ -450,6 +450,19 @@ const IMPACT_DURATION := 0.22
 const IMPACT_RADIUS_START := 0.18
 const IMPACT_RADIUS_END := 0.55
 
+static var _impact_mesh_cache: SphereMesh = null
+
+static func _get_impact_mesh() -> SphereMesh:
+	if _impact_mesh_cache != null:
+		return _impact_mesh_cache
+	var m := SphereMesh.new()
+	m.radius = IMPACT_RADIUS_START
+	m.height = IMPACT_RADIUS_START * 2.0
+	m.radial_segments = 12
+	m.rings = 6
+	_impact_mesh_cache = m
+	return m
+
 static func spawn_impact_burst(host: Node3D, world_pos: Vector3, color_override: Color = Color(0, 0, 0, 0)) -> void:
 	if host == null:
 		return
@@ -460,22 +473,11 @@ static func spawn_impact_burst(host: Node3D, world_pos: Vector3, color_override:
 	if color.a == 0.0:
 		color = _color_for_host(host)
 
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.albedo_color = Color(color.r, color.g, color.b, 0.95)
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.emission_enabled = true
-	mat.emission = color
-	mat.emission_energy_multiplier = 4.0
-
-	var mesh := SphereMesh.new()
-	mesh.radius = IMPACT_RADIUS_START
-	mesh.height = IMPACT_RADIUS_START * 2.0
-	mesh.radial_segments = 12
-	mesh.rings = 6
+	var mat := _build_material(color)
+	mat.albedo_color.a = 0.95
 
 	var inst := MeshInstance3D.new()
-	inst.mesh = mesh
+	inst.mesh = _get_impact_mesh()
 	inst.material_override = mat
 	parent.add_child(inst)
 	inst.global_position = world_pos
@@ -574,6 +576,20 @@ static func spawn_explosion(host: Node3D, world_pos: Vector3, blast_radius: floa
 # and age 0→1 to drive the color shift to smoke and the alpha fade.
 # Damage type picks the color palette: empty / flame → orange fireball,
 # cryo → cyan ice burst, electric → violet arc burst.
+static var _fireball_mesh_cache: Dictionary = {}
+
+static func _get_fireball_mesh(start_radius: float) -> SphereMesh:
+	var cached: SphereMesh = _fireball_mesh_cache.get(start_radius)
+	if cached != null:
+		return cached
+	var m := SphereMesh.new()
+	m.radius = start_radius
+	m.height = start_radius * 2.0
+	m.radial_segments = 24
+	m.rings = 12
+	_fireball_mesh_cache[start_radius] = m
+	return m
+
 static func _spawn_fireball_explosion(parent: Node, world_pos: Vector3, blast_radius: float, damage_type: StringName = &"") -> void:
 	var start_radius := blast_radius * 0.15
 	var end_radius := blast_radius * 0.7
@@ -588,11 +604,7 @@ static func _spawn_fireball_explosion(parent: Node, world_pos: Vector3, blast_ra
 	mat.set_shader_parameter(&"outer_color", palette["outer"])
 	mat.set_shader_parameter(&"smoke_color", palette["smoke"])
 
-	var mesh := SphereMesh.new()
-	mesh.radius = start_radius
-	mesh.height = start_radius * 2.0
-	mesh.radial_segments = 24
-	mesh.rings = 12
+	var mesh := _get_fireball_mesh(start_radius)
 
 	var inst := MeshInstance3D.new()
 	inst.mesh = mesh
