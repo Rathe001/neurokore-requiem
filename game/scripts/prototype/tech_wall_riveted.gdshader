@@ -16,10 +16,15 @@ uniform float seam_width : hint_range(0.0, 0.1) = 0.05;
 uniform float rivet_radius : hint_range(0.0, 0.1) = 0.03;
 uniform float rivet_spacing : hint_range(0.05, 0.5) = 0.14;
 uniform float panel_variation : hint_range(0.0, 0.1) = 0.022;
-uniform float metallic_val : hint_range(0.0, 1.0) = 0.4;
-uniform float roughness_base : hint_range(0.0, 1.0) = 0.55;
-uniform float roughness_seam : hint_range(0.0, 1.0) = 0.85;
-uniform float bump_strength : hint_range(0.0, 5.0) = 1.0;
+// Specular-shimmer guards: low metallic + high roughness floor + soft
+// bump keep the procedural normal map from aliasing under camera motion.
+// Previous values (metallic 0.4 / roughness 0.55 / bump 1.0) read as
+// nice gloss when still but boiled per-pixel as soon as the camera
+// lookahead + shake started moving sub-pixel each frame.
+uniform float metallic_val : hint_range(0.0, 1.0) = 0.18;
+uniform float roughness_base : hint_range(0.0, 1.0) = 0.74;
+uniform float roughness_seam : hint_range(0.0, 1.0) = 0.92;
+uniform float bump_strength : hint_range(0.0, 5.0) = 0.55;
 uniform float grit_strength : hint_range(0.0, 1.0) = 0.18;
 uniform bool fade_enabled = false;
 uniform float fade_inner : hint_range(0.0, 5.0) = 1.0;

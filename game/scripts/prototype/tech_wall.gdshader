@@ -10,10 +10,13 @@ uniform float seam_width : hint_range(0.0, 0.1) = 0.045;
 uniform float accent_band_pos : hint_range(0.0, 1.0) = 0.35;
 uniform float accent_band_width : hint_range(0.0, 0.5) = 0.06;
 uniform float panel_variation : hint_range(0.0, 0.1) = 0.025;
-uniform float metallic_val : hint_range(0.0, 1.0) = 0.35;
-uniform float roughness_base : hint_range(0.0, 1.0) = 0.55;
-uniform float roughness_seam : hint_range(0.0, 1.0) = 0.85;
-uniform float bump_strength : hint_range(0.0, 5.0) = 0.9;
+// Specular-shimmer guards: low metallic + high roughness floor + soft
+// bump keep the procedural normal map from aliasing under camera
+// motion. See tech_wall_riveted for the same reasoning.
+uniform float metallic_val : hint_range(0.0, 1.0) = 0.15;
+uniform float roughness_base : hint_range(0.0, 1.0) = 0.74;
+uniform float roughness_seam : hint_range(0.0, 1.0) = 0.92;
+uniform float bump_strength : hint_range(0.0, 5.0) = 0.5;
 uniform float grit_strength : hint_range(0.0, 1.0) = 0.20;
 uniform bool fade_enabled = false;
 uniform float fade_inner : hint_range(0.0, 5.0) = 1.0;

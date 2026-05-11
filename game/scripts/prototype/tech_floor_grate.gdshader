@@ -12,10 +12,15 @@ uniform float seam_width : hint_range(0.0, 0.1) = 0.035;
 uniform float tread_count : hint_range(1.0, 8.0) = 4.0;
 uniform float tread_size : hint_range(0.1, 0.5) = 0.32;
 uniform float panel_variation : hint_range(0.0, 0.1) = 0.022;
-uniform float metallic_val : hint_range(0.0, 1.0) = 0.55;
-uniform float roughness_base : hint_range(0.0, 1.0) = 0.5;
-uniform float roughness_seam : hint_range(0.0, 1.0) = 0.85;
-uniform float bump_strength : hint_range(0.0, 5.0) = 1.4;
+// Specular-shimmer guards — see tech_wall_riveted. The grate's diamond
+// pattern + previous metallic 0.55 made this the worst shimmer surface
+// in the level; the high bump strength meant tiny normal perturbations
+// produced large per-pixel specular swings under camera motion. Cut
+// metallic and bump_strength aggressively here.
+uniform float metallic_val : hint_range(0.0, 1.0) = 0.22;
+uniform float roughness_base : hint_range(0.0, 1.0) = 0.72;
+uniform float roughness_seam : hint_range(0.0, 1.0) = 0.92;
+uniform float bump_strength : hint_range(0.0, 5.0) = 0.70;
 uniform float grit_strength : hint_range(0.0, 1.0) = 0.22;
 
 varying vec3 world_pos;

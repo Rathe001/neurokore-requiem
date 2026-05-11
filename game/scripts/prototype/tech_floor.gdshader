@@ -8,10 +8,14 @@ uniform float seam_width : hint_range(0.0, 0.1) = 0.04;
 uniform float bolt_radius : hint_range(0.0, 0.1) = 0.04;
 uniform float bolt_inset : hint_range(0.0, 0.3) = 0.12;
 uniform float panel_variation : hint_range(0.0, 0.1) = 0.03;
-uniform float metallic_val : hint_range(0.0, 1.0) = 0.25;
-uniform float roughness_base : hint_range(0.0, 1.0) = 0.65;
-uniform float roughness_seam : hint_range(0.0, 1.0) = 0.95;
-uniform float bump_strength : hint_range(0.0, 5.0) = 1.1;
+// Specular-shimmer guards — see tech_wall_riveted. Floor is viewed at
+// glancing angle from the iso camera, which is exactly the worst case
+// for specular aliasing on procedural normal maps. Cutting metallic
+// and bump_strength is more impactful here than on walls.
+uniform float metallic_val : hint_range(0.0, 1.0) = 0.12;
+uniform float roughness_base : hint_range(0.0, 1.0) = 0.80;
+uniform float roughness_seam : hint_range(0.0, 1.0) = 0.96;
+uniform float bump_strength : hint_range(0.0, 5.0) = 0.60;
 uniform float grit_strength : hint_range(0.0, 1.0) = 0.25;
 
 varying vec3 world_pos;
