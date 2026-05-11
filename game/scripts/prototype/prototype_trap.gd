@@ -121,6 +121,7 @@ func _detonate() -> void:
 	# to self so the ring scales correctly even if the trap was nudged by
 	# physics (it isn't, but cheap insurance).
 	CombatVisuals.spawn_hit_radial(self, BLAST_RADIUS)
+	PrototypeCamera.shake_at(self, global_position, 0.35, 0.4)
 	var dmg := int(round(float(BASE_DAMAGE) * _captured_damage_mult))
 	for n in SpatialGrid.query_radius(global_position, BLAST_RADIUS, &"enemies"):
 		if not (n is Node3D) or not is_instance_valid(n):

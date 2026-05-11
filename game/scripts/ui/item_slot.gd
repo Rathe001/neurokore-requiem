@@ -16,7 +16,9 @@ var _glyph: Label
 var _icon: TextureRect
 var _is_drag_source: bool = false
 var _bg: ColorRect
-var _border: ReferenceRect
+var _border_overlay: Control
+var _border_color: Color = Color.TRANSPARENT
+var _border_width: int = 0
 
 func configure_equipment(id: StringName, empty_text: String, accepts: StringName = &"") -> void:
 	role = Role.EQUIPMENT
@@ -53,10 +55,9 @@ func _on_theme_changed() -> void:
 	var p := UIThemeState.palette
 	if _bg != null:
 		_bg.color = p.slot_bg
-	if _border != null:
-		_border.border_color = p.slot_border
 	if _empty_label != null:
 		_empty_label.add_theme_color_override(&"font_color", Color(p.text_dim.r, p.text_dim.g, p.text_dim.b, 0.85))
+	_refresh()
 
 func _on_mouse_entered() -> void:
 	var item := current_item()
@@ -92,14 +93,6 @@ func _build_visuals() -> void:
 	_bg.mouse_filter = MOUSE_FILTER_IGNORE
 	add_child(_bg)
 
-	_border = ReferenceRect.new()
-	_border.border_color = p.slot_border
-	_border.border_width = 1.0
-	_border.editor_only = false
-	_border.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
-	_border.mouse_filter = MOUSE_FILTER_IGNORE
-	add_child(_border)
-
 	_empty_label = Label.new()
 	_empty_label.text = empty_label_text
 	_empty_label.theme_type_variation = &"StatLabel"
@@ -119,11 +112,6 @@ func _build_visuals() -> void:
 	_glyph.visible = false
 	add_child(_glyph)
 
-	# Icon — shown when the item has icon_path set. Glyph label stays
-	# as the fallback for items that don't (legacy saves, archetypes
-	# without art yet). expand_mode KEEP_ASPECT_CENTERED preserves the
-	# icon's aspect ratio inside the slot square; modulate is tinted
-	# by rarity color to keep the at-a-glance quality signal.
 	_icon = TextureRect.new()
 	_icon.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	_icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
@@ -132,15 +120,37 @@ func _build_visuals() -> void:
 	_icon.visible = false
 	add_child(_icon)
 
+	# Border overlay — last child so it draws ON TOP of icon/glyph.
+	# Uses _draw() via draw signal to render the border outline directly.
+	_border_overlay = Control.new()
+	_border_overlay.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	_border_overlay.mouse_filter = MOUSE_FILTER_IGNORE
+	_border_overlay.draw.connect(_on_border_draw)
+	add_child(_border_overlay)
+
+func _on_border_draw() -> void:
+	if _border_width <= 0 or _border_color.a <= 0.0:
+		return
+	var s := _border_overlay.size
+	var w := float(_border_width)
+	# Draw four filled rects forming the border frame so it's crisp at any size.
+	_border_overlay.draw_rect(Rect2(0, 0, s.x, w), _border_color)              # top
+	_border_overlay.draw_rect(Rect2(0, s.y - w, s.x, w), _border_color)        # bottom
+	_border_overlay.draw_rect(Rect2(0, w, w, s.y - 2 * w), _border_color)      # left
+	_border_overlay.draw_rect(Rect2(s.x - w, w, w, s.y - 2 * w), _border_color) # right
+
+func _set_border(color: Color, w: int) -> void:
+	_border_color = color
+	_border_width = w
+	if _border_overlay != null:
+		_border_overlay.queue_redraw()
+
 func set_highlight(color: Color) -> void:
-	if _border != null:
-		_border.border_color = color
-		_border.border_width = 2.0 if color != UIThemeState.palette.slot_border else 1.0
+	var w: int = 2 if color != UIThemeState.palette.slot_border else 1
+	_set_border(color, w)
 
 func clear_highlight() -> void:
-	if _border != null:
-		_border.border_color = UIThemeState.palette.slot_border
-		_border.border_width = 1.0
+	_refresh_border()
 
 func can_accept_item(item: Item) -> bool:
 	if item == null:
@@ -184,6 +194,16 @@ func _refresh() -> void:
 		if has_item:
 			_glyph.text = item.glyph
 			_glyph.modulate = item.glyph_color
+	_refresh_border()
+
+func _refresh_border() -> void:
+	var item := current_item()
+	if item != null and item.rarity != &"common":
+		_set_border(item.glyph_color, 2)
+		_bg.color = Color(item.glyph_color, 0.15)
+	else:
+		_set_border(UIThemeState.palette.slot_border, 1)
+		_bg.color = UIThemeState.palette.slot_bg
 
 func _on_equipment_changed(slot: StringName) -> void:
 	if role == Role.EQUIPMENT and slot == slot_id:

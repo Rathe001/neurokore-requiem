@@ -70,7 +70,7 @@ func _build_name_label(p_item: Item) -> void:
 	_name_label.outline_size = 12
 	_name_label.modulate = p_item.glyph_color
 	_name_label.outline_modulate = Color(0, 0, 0, 1.0)
-	_name_label.position = Vector3(0, 0.9, 0)
+	_name_label.position = Vector3(0, 1.3, 0)
 	_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	add_child(_name_label)
 
