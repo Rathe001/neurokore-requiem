@@ -36,3 +36,8 @@
 - [SaveManager schema must mirror Item](feedback_savemanager_schema_drift.md) — adding an Item field without updating _serialize_item silently strips it on save/load
 - [Tech-shader specular shimmer](project_specular_shimmer.md) — procedural normal maps + iso angle = aliasing; keep metallic/bump low + roughness high
 - [HUD top-right panel stack](project_hud_panel_stack.md) — WeaponQuirkPanel + MissionsPanel docked under minimap, signal-coupled
+- [No camera lerp](feedback_no_camera_lerp.md) — Fixed isometric camera must snap, not smooth-follow
+- [Faction dynamic](project_faction_dynamic.md) — Analog/Cyborg oppose each other but unite against the corporation
+- [Itemization revamp](project_itemization_revamp.md) — Removing attributes, gear gets direct bonuses + behavior mods, 5 perk tiers via talents
+- [Audio architecture](project_audio_architecture.md) — bus layout, room-aware reverb, SFX pool, WeaponSounds registry; silent until assets added
+- [Project: Neurokore Requiem](project_neurokore_requiem.md) — Game design project: "Neurokore: Requiem"
