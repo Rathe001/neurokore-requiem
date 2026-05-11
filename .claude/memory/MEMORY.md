@@ -1,0 +1,38 @@
+# Memory Index
+
+- [User background](user_background.md) — Josh is a UI/JS dev new to game engines and systems languages; explain via web analogies
+- [Enemy spawning model](project_enemy_spawning_model.md) — D2-style: pre-placed at level load, no runtime respawn, fully clearable (current spawner is a temporary stress-test)
+- [3D pivot](project_3d_pivot.md) — game is now fixed-camera low-poly 3D with PBR + realistic lighting (was isometric pixel art)
+- [Death animations and corpses](project_death_animations.md) — future: sprite-based death animation + persistent corpses that remain where enemy died
+- [Talent point system](project_attribute_system.md) — 6 stat-keyed trees (5 tiers × 8 nodes), point-threshold gating, file naming uses stat_id (amb.tres) not class_id. Replaced the gear-driven moral-stat allocation entirely.
+- [Weapon-driven combat stats](project_attack_speed_model.md) — speed/damage/crit/accuracy roll onto Item from WeaponBase; Skill is action shape only
+- [Steam Playtest live](project_steam_playtest.md) — playtest live since 2026-05-05, v0.1.1 hotfix shipped 2026-05-06. Deploy infra in tools/steam/ (CHANGELOG-driven, prepare_build.py, deploy.sh/.bat); per-machine setup in DEPLOY.md
+- [Level builder shader-overlap trap](project_level_builder_overlap.md) — corridor & room walls/floors geometrically overlap by design; using different shaders per piece causes z-fight flicker
+- [Level system architecture roadmap](project_level_architecture.md) — 3 layers: modular builders (done), declarative graph (done), procgen (deferred); new levels should use LevelGraph not pieces[]
+- [Zone lighting profiles](project_lighting_profiles.md) — proximity dim / global light behavior should be driven by per-zone profiles, not hardcoded constants (outdoor ≠ indoor)
+- [Enemy navigation systems](project_enemy_navigation.md) — crouch tunnels, pit-pillar nav links, leash override; navmesh agent_height MUST stay synced with enemy CROUCH_HEIGHT
+- [Enemy state machine pattern](project_enemy_state_machine.md) — enum State with _change_state() helper; new behaviours extend the enum, never add flags
+- [Item modifier dict](project_item_modifiers.md) — Item.stat_modifiers (StringName-keyed) is the single home for ALL numeric bonuses; read via Item.get_modifier()
+- [ID registries](project_id_registries.md) — SlotRegistry owns slot/main_type IDs; AttributeState.CLASS_DEFINITIONS/ORIGIN_DEFINITIONS own class metadata; do not duplicate
+- [Perk Resources](project_perk_resources.md) — perks live in res://resources/perks/{stat_id}.tres; add new perks via the editor, not GDScript
+- [EnemyClass Resource](project_enemy_class_resource.md) — enemy archetypes live in res://resources/enemies/classes/{id}.tres; melee, ranged, and support overlays all wired (combinations like melee+heal, ranged+buff are first-class)
+- [Monster packs (MonsterAffix)](project_monster_packs.md) — rare-pack modifiers in res://resources/enemies/affixes/; EnemySpawner rolls per spawn point, leader + companions share affix list, new spawn paths MUST set affixes=[] to avoid pool leaks
+- [Named monsters (NamedMonster)](project_named_monsters.md) — named encounters in res://resources/enemies/named/; 0.5% per spawn, preempts pack, forced identity + drop rarity floor
+- [Forged Amalgamation](project_amalgamation.md) — perk-gated extra weapon slots; LMB fires every equipped weapon with per-slot cooldowns + stagger. Pattern for any future perk that adds equipment slots
+- [Kore terminology](project_kore_terminology.md) — same-origin stats are "kore" (not "team"); identifiers: TIERS_KORE_SPEC, ANALOG_KORE_STATS, &"kore" relationship key, etc.
+- [Aura wall clipping](project_aura_wall_clipping.md) — player-aura visuals contained by walls need shadow-casting OmniLight3D to do the actual clipping; mesh alone fails depth test on iso camera
+- [Resource loader gotcha](project_resource_loader_gotcha.md) — DirAccess directory enumeration over res:// fails silently in exported Godot 4 builds. Use ResourceLoader.exists() with explicit file lists. Bit us 4 times before getting fixed.
+- [Item ilvl effectiveness curve](project_item_ilvl_scaling.md) — items carry an item_level; combat power stats scale by Item.effective_multiplier (asymptotic decay below player level, linear boost above). Storage/feel stats stay raw.
+- [Traction stat](project_traction_stat.md) — boots-only 0–100 stat, breakpoints at 25/50/75/100 unlock movement immunities AND DoT damage reduction in lockstep. Single-source by design (no cross-slot stacking).
+- [Point-blank ranged penalty](project_point_blank_penalty.md) — ranged attacks within 2.5m of fire origin halve accuracy. Count "Point Blank" talent waives via ignore_point_blank_penalty aggregate. Encourages sprint-disengage.
+- [Multiplayer plan](project_multiplayer_plan.md) — Steam P2P, host-authoritative coop PvE, 4-player cap, drop-in, instanced loot with manual-drop sharing. Full plan in docs/multiplayer.md.
+- [No usernames in committed scripts](feedback_no_secrets_in_committed_scripts.md) — placeholders in deploy/build scripts must use env-var-respecting defaults; never substitute personal values into the committed file
+- [MP and SP must both work](feedback_mp_sp_parity.md) — every feature/fix must be reasoned through for both SP and MP paths before declaring done; flag MP risk in the response when the user can't immediately verify
+- [Estimates in minutes, not human-dev weeks](feedback_estimates_in_minutes.md) — give time estimates calibrated to MY completion time, not what a developer would quote
+- [Weapon signature quirks](project_weapon_quirks.md) — per-archetype passive that fires automatically while equipped; canonical catalog in WeaponQuirkPanel.QUIRK_TIPS
+- [Commit proactively at breakpoints](feedback_proactive_commits.md) — don't wait for "please commit"; group by intent, one commit per logical change
+- [Camera feedback layers](project_camera_feedback_layers.md) — shake (impact), push (energy pressure), no lookahead; per-archetype tables in player_combat.gd
+- [Item icon system](project_item_icons.md) — Item.icon_path drives slots/drag/pickup; resolver in ItemRoller is single source of truth
+- [SaveManager schema must mirror Item](feedback_savemanager_schema_drift.md) — adding an Item field without updating _serialize_item silently strips it on save/load
+- [Tech-shader specular shimmer](project_specular_shimmer.md) — procedural normal maps + iso angle = aliasing; keep metallic/bump low + roughness high
+- [HUD top-right panel stack](project_hud_panel_stack.md) — WeaponQuirkPanel + MissionsPanel docked under minimap, signal-coupled
