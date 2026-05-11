@@ -759,62 +759,125 @@ static func spawn_hammer_impact(host: Node3D) -> void:
 
 
 # ── Footstep dust puffs ─────────────────────────────────────────────────────
-# Small flat circle on the floor at the player's feet, briefly visible
-# and tweened out. Triggered by PrototypePlayer every FOOTSTEP_DISTANCE
-# meters of movement (per-player so each peer tracks their own + remote
-# peers' avatars locally — no RPC). Visually the puff is a thin
-# horizontal CylinderMesh with an unshaded translucent material that
-# fades + grows over the lifetime.
+# Footstep dust puff. Triggered by PrototypePlayer every FOOTSTEP_DISTANCE
+# meters of movement (per-player; remote peers' avatars also tick locally,
+# so no RPC). Implemented as a one-shot CPUParticles3D burst of small
+# billboarded quads with a soft-circle gradient texture. Each particle
+# rises slightly off the ground and drifts outward as it fades — reads
+# as kicked-up dust rather than a painted disc.
 
-const FOOTSTEP_DURATION: float = 0.45
-const FOOTSTEP_START_RADIUS: float = 0.18
-const FOOTSTEP_END_RADIUS: float = 0.45
-const FOOTSTEP_LIFT: float = 0.03
-const FOOTSTEP_BASE_COLOR := Color(0.85, 0.78, 0.65, 0.45)
+const FOOTSTEP_LIFETIME: float = 0.40
+const FOOTSTEP_PARTICLE_COUNT: int = 5
+# Albedo tint applied to the soft-circle texture. Very low alpha — the
+# whole point is "barely there." color_ramp on the particle system fades
+# this further to zero over each particle's lifetime.
+const FOOTSTEP_BASE_COLOR := Color(0.85, 0.80, 0.68, 0.14)
+const FOOTSTEP_LIFT: float = 0.04
 
-# Shared unit-radius cylinder for footstep puffs (scaled per-spawn).
-# Cheap to cache vs allocating one per step — at 4 players walking
-# constantly this fires ~10-20 puffs/sec.
-static var _footstep_mesh: CylinderMesh = null
+# Shared resources — generated once, reused across every footstep spawn.
+# The texture is a 64×64 soft radial gradient that gives each billboarded
+# particle a smooth disc silhouette instead of a visible square. The
+# material's BILLBOARD_PARTICLES mode orients each quad toward the camera
+# at render time so the dust always reads as facing the viewer.
+static var _footstep_quad_mesh: QuadMesh = null
+static var _footstep_material: StandardMaterial3D = null
+static var _footstep_texture: ImageTexture = null
+static var _footstep_color_ramp: Gradient = null
 
 
-static func _get_footstep_mesh() -> CylinderMesh:
-	if _footstep_mesh == null:
-		_footstep_mesh = CylinderMesh.new()
-		_footstep_mesh.top_radius = 1.0
-		_footstep_mesh.bottom_radius = 1.0
-		_footstep_mesh.height = 0.02
-		_footstep_mesh.radial_segments = 12
-		_footstep_mesh.rings = 1
-		_footstep_mesh.cap_top = true
-		_footstep_mesh.cap_bottom = false
-	return _footstep_mesh
+static func _get_footstep_texture() -> ImageTexture:
+	if _footstep_texture != null:
+		return _footstep_texture
+	var size := 64
+	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
+	var center := Vector2(float(size) * 0.5, float(size) * 0.5)
+	var max_r := float(size) * 0.5
+	for y in size:
+		for x in size:
+			var d: float = Vector2(float(x), float(y)).distance_to(center) / max_r
+			var a: float = 0.0
+			if d < 1.0:
+				# Soft falloff — pow shapes the gradient so the disc is
+				# mostly translucent with a slightly stronger center.
+				# Exponent 2.5 keeps the edge feathery without going
+				# fully transparent in the middle.
+				a = pow(1.0 - d, 2.5)
+			img.set_pixel(x, y, Color(1.0, 1.0, 1.0, a))
+	_footstep_texture = ImageTexture.create_from_image(img)
+	return _footstep_texture
+
+
+static func _get_footstep_quad_mesh() -> QuadMesh:
+	if _footstep_quad_mesh == null:
+		_footstep_quad_mesh = QuadMesh.new()
+		_footstep_quad_mesh.size = Vector2(1.0, 1.0)
+	return _footstep_quad_mesh
+
+
+static func _get_footstep_material() -> StandardMaterial3D:
+	if _footstep_material == null:
+		var mat := StandardMaterial3D.new()
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+		mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+		mat.billboard_keep_scale = true
+		mat.albedo_color = FOOTSTEP_BASE_COLOR
+		mat.albedo_texture = _get_footstep_texture()
+		_footstep_material = mat
+	return _footstep_material
+
+
+static func _get_footstep_color_ramp() -> Gradient:
+	if _footstep_color_ramp == null:
+		var g := Gradient.new()
+		g.set_color(0, Color(1, 1, 1, 1))
+		g.set_color(1, Color(1, 1, 1, 0))
+		g.set_offset(0, 0.0)
+		g.set_offset(1, 1.0)
+		_footstep_color_ramp = g
+	return _footstep_color_ramp
 
 
 static func spawn_footstep_puff(parent: Node3D, world_pos: Vector3) -> void:
 	if parent == null:
 		return
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.albedo_color = FOOTSTEP_BASE_COLOR
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	var inst := MeshInstance3D.new()
-	inst.mesh = _get_footstep_mesh()
-	inst.material_override = mat
-	inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	inst.scale = Vector3(FOOTSTEP_START_RADIUS, 1.0, FOOTSTEP_START_RADIUS)
-	parent.add_child(inst)
-	inst.global_position = world_pos + Vector3(0.0, FOOTSTEP_LIFT, 0.0)
-	# Grow + fade over the lifetime. Out-quad ease on scale gives the
-	# initial puff a bit of weight; in-cubic on alpha keeps the early
-	# frames opaque before the dust dissipates.
-	var tween := inst.create_tween().set_parallel(true)
-	tween.tween_property(inst, "scale", Vector3(FOOTSTEP_END_RADIUS, 1.0, FOOTSTEP_END_RADIUS), FOOTSTEP_DURATION) \
-		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tween.tween_property(mat, "albedo_color:a", 0.0, FOOTSTEP_DURATION) \
-		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
-	tween.chain().tween_callback(inst.queue_free)
+	var p := CPUParticles3D.new()
+	p.amount = FOOTSTEP_PARTICLE_COUNT
+	p.lifetime = FOOTSTEP_LIFETIME
+	p.one_shot = true
+	p.explosiveness = 1.0
+	p.local_coords = false
+	p.mesh = _get_footstep_quad_mesh()
+	p.material_override = _get_footstep_material()
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# Emit from a small disc just above the foot, biased upward but
+	# with enough spread that particles fan out around the step rather
+	# than rocketing straight up.
+	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE_SURFACE
+	p.emission_sphere_radius = 0.06
+	p.direction = Vector3(0, 1, 0)
+	p.spread = 65.0
+	p.flatness = 0.6
+	p.initial_velocity_min = 0.15
+	p.initial_velocity_max = 0.40
+	p.gravity = Vector3(0, -0.25, 0)
+	p.damping_min = 1.5
+	p.damping_max = 2.5
+	# Tiny particles — peak is ~0.10 world units per side. Combined with
+	# the soft gradient texture this reads as a wisp of dust rather than
+	# a circle on the ground.
+	p.scale_amount_min = 0.06
+	p.scale_amount_max = 0.10
+	p.color_ramp = _get_footstep_color_ramp()
+	parent.add_child(p)
+	p.global_position = world_pos + Vector3(0.0, FOOTSTEP_LIFT, 0.0)
+	p.emitting = true
+	# Free the node once the burst has finished. lifetime + small grace
+	# so the very last frame renders before tear-down.
+	var t := p.create_tween()
+	t.tween_interval(FOOTSTEP_LIFETIME + 0.15)
+	t.tween_callback(p.queue_free)
 
 
 # ── Blade slash (1H knife / melee_1h hit visual) ────────────────────────────
