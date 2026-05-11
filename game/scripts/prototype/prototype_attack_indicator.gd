@@ -1048,14 +1048,27 @@ static func _cone_mesh(radius: float, angle_deg: float) -> ArrayMesh:
 	if cached != null:
 		return cached
 	var half := deg_to_rad(angle_deg * 0.5)
+	# Build a filled triangle-fan wedge so the telegraph is visible from
+	# the isometric camera (the old line strip was 1 px wide — invisible).
 	var verts := PackedVector3Array()
+	var indices := PackedInt32Array()
+	# Vertex 0 = apex (origin)
 	verts.append(Vector3.ZERO)
 	for i in range(CONE_SEGMENTS + 1):
 		var t := float(i) / float(CONE_SEGMENTS)
 		var angle: float = lerp(-half, half, t)
 		verts.append(Vector3(sin(angle) * radius, 0.0, -cos(angle) * radius))
-	verts.append(Vector3.ZERO)
-	var mesh := _make_line_mesh(verts)
+	# Triangle fan: apex → arc[i] → arc[i+1]
+	for i in range(CONE_SEGMENTS):
+		indices.append(0)
+		indices.append(i + 1)
+		indices.append(i + 2)
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_INDEX] = indices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	_cone_cache[key] = mesh
 	return mesh
 

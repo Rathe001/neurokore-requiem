@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="EnemySkill" load_steps=3 format=3]
+
+; Taser basic attack — rapid electric bolts at close range. Approximates the
+; player's channeled chain lightning as a fast burst of projectiles. Very short
+; range forces the enemy into close quarters. Energy weapon visual.
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_skill.gd" id="script"]
+[ext_resource type="PackedScene" path="res://scenes/prototype/prototype_projectile.tscn" id="projectile_scene"]
+
+[resource]
+script = ExtResource("script")
+id = &"taser_attack"
+display_name = "Taser Bolt"
+targeting_mode = 2
+damage_mult = 0.5
+skill_range = 8.0
+cooldown = 0.8
+wind_up = 0.1
+projectile_scene = ExtResource("projectile_scene")
+projectile_speed = 24.0
+projectile_max_range = 10.0
+projectile_count = 1
+burst_count = 3
+burst_delay = 0.06

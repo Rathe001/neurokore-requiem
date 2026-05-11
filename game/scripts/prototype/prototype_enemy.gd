@@ -2523,6 +2523,15 @@ func _cast_skill_cone(target: Node3D, aim: Vector3, skill: EnemySkill) -> void:
 	await get_tree().create_timer(skill.wind_up).timeout
 	if not is_inside_tree() or _generation != gen or _state != State.CASTING:
 		return
+	# Weapon-matched hit VFX on impact — same routing as _cast_melee_attack.
+	var wid: StringName = enemy_class.weapon_id if enemy_class != null else &""
+	if wid == &"blade":
+		CombatVisuals.spawn_blade_slash(self, aim, skill.skill_range, skill.cone_deg)
+	elif wid == &"sledgehammer":
+		CombatVisuals.spawn_hit_cone(self, aim, skill.skill_range, skill.cone_deg)
+		CombatVisuals.spawn_hammer_impact(self)
+	else:
+		CombatVisuals.spawn_hit_cone(self, aim, skill.skill_range, skill.cone_deg)
 	_change_state(State.CHASING)
 	if not is_instance_valid(target):
 		return
@@ -2591,25 +2600,35 @@ func _cast_skill_projectile(target: Node3D, aim: Vector3, skill: EnemySkill) -> 
 		return
 	if not LosCuller.has_los_to_player(self):
 		return
-	# Re-aim at target's current position (they may have strafed during windup).
-	# Full 3D aim from enemy chest to target chest.
-	var origin := global_position + Vector3(0.0, 1.4, 0.0)
-	var to_p: Vector3 = (target.global_position + Vector3(0.0, 1.0, 0.0)) - origin
-	var dist := to_p.length()
-	if dist < 0.001:
-		return
-	var center_aim := to_p / dist
-	if skill.projectile_count <= 1:
-		_spawn_skill_projectile(center_aim, skill)
-	else:
-		# Multi-shot: symmetric spread around center aim.
-		var spread_rad := deg_to_rad(skill.projectile_spread_deg)
-		var count := skill.projectile_count
-		var half := (count - 1) * 0.5
-		for i in count:
-			var offset_angle := (float(i) - half) * spread_rad
-			var rotated_aim := center_aim.rotated(Vector3.UP, offset_angle)
-			_spawn_skill_projectile(rotated_aim, skill)
+	var burst: int = skill.burst_count if skill.burst_count > 1 else 1
+	var burst_delay: float = skill.burst_delay if skill.burst_delay > 0.0 else 0.1
+	for burst_i in burst:
+		if burst_i > 0:
+			await get_tree().create_timer(burst_delay).timeout
+			if not is_inside_tree() or _generation != gen or not _alive:
+				return
+			if not is_instance_valid(target):
+				return
+		# Re-aim at target's current position (they may have strafed during windup).
+		# Full 3D aim from enemy chest to target chest.
+		var origin := global_position + Vector3(0.0, 1.4, 0.0)
+		var to_p: Vector3 = (target.global_position + Vector3(0.0, 1.0, 0.0)) - origin
+		var dist := to_p.length()
+		if dist < 0.001:
+			return
+		var center_aim := to_p / dist
+		_face_direction(Vector3(center_aim.x, 0.0, center_aim.z).normalized())
+		if skill.projectile_count <= 1:
+			_spawn_skill_projectile(center_aim, skill)
+		else:
+			# Multi-shot: symmetric spread around center aim.
+			var spread_rad := deg_to_rad(skill.projectile_spread_deg)
+			var count := skill.projectile_count
+			var half := (count - 1) * 0.5
+			for i in count:
+				var offset_angle := (float(i) - half) * spread_rad
+				var rotated_aim := center_aim.rotated(Vector3.UP, offset_angle)
+				_spawn_skill_projectile(rotated_aim, skill)
 
 
 func _spawn_skill_projectile(aim: Vector3, skill: EnemySkill) -> void:
@@ -2675,6 +2694,8 @@ func _cast_melee_attack(player: Node3D, aim: Vector3) -> void:
 	var range_now := _attack_range()
 	var cone_now := _melee_cone_deg()
 	var windup_now := _attack_windup()
+	# Telegraph (ground cone outline) during windup, then weapon-matched
+	# hit VFX on impact — same visuals the player sees for the same weapon.
 	CombatVisuals.spawn_cone(self, aim, range_now, cone_now, windup_now)
 	var gen := _generation
 	await get_tree().create_timer(windup_now).timeout
@@ -2683,6 +2704,15 @@ func _cast_melee_attack(player: Node3D, aim: Vector3) -> void:
 	# the state check catches in-lifetime preemptions.
 	if not is_inside_tree() or _generation != gen or _state != State.CASTING:
 		return
+	# Weapon-matched impact VFX — mirrors player_combat.gd melee visuals.
+	var wid: StringName = enemy_class.weapon_id if enemy_class != null else &""
+	if wid == &"blade":
+		CombatVisuals.spawn_blade_slash(self, aim, range_now, cone_now)
+	elif wid == &"sledgehammer":
+		CombatVisuals.spawn_hit_cone(self, aim, range_now, cone_now)
+		CombatVisuals.spawn_hammer_impact(self)
+	else:
+		CombatVisuals.spawn_hit_cone(self, aim, range_now, cone_now)
 	_change_state(State.CHASING)
 	if not is_instance_valid(player):
 		return
@@ -2722,23 +2752,52 @@ func _cast_ranged_attack(player: Node3D, aim: Vector3) -> void:
 	await get_tree().create_timer(windup_now).timeout
 	if not is_inside_tree() or _generation != gen or _state != State.CASTING:
 		return
-	_change_state(State.CHASING)
 	if not is_instance_valid(player):
+		_change_state(State.CHASING)
 		return
 	if not LosCuller.has_los_to_player(self):
+		_change_state(State.CHASING)
 		return
-	# Re-aim at the player's CURRENT position — they may have strafed during
-	# the windup. Full 3D aim from enemy chest to player chest so shots angle
-	# up/down when the player is on a different elevation.
-	var origin := global_position + Vector3(0.0, 1.4, 0.0)
-	var to_p: Vector3 = (player.global_position + Vector3(0.0, 1.0, 0.0)) - origin
-	var dist := to_p.length()
-	if dist < 0.001:
-		return
-	_spawn_enemy_projectile(to_p / dist)
+	# Read burst / pellet config from the basic_attack skill.
+	var ba: EnemySkill = enemy_class.basic_attack if enemy_class != null else null
+	var burst: int = ba.burst_count if ba != null and ba.burst_count > 1 else 1
+	var burst_delay: float = ba.burst_delay if ba != null else 0.1
+	var pellets: int = ba.projectile_count if ba != null and ba.projectile_count > 1 else 1
+	var spread_deg: float = ba.projectile_spread_deg if ba != null else 15.0
+	var ba_dmg_mult: float = ba.damage_mult if ba != null else 1.0
+	var ba_blast: float = ba.projectile_blast_radius if ba != null else 0.0
+	# Fire burst_count rounds, re-aiming each round at the player's
+	# current position. Each round can be a single projectile or a
+	# multi-pellet spread (shotgun).
+	for burst_i in burst:
+		if burst_i > 0:
+			await get_tree().create_timer(burst_delay).timeout
+			if not is_inside_tree() or _generation != gen:
+				return
+			if not is_instance_valid(player):
+				break
+		# Re-aim each burst round at the player's CURRENT position.
+		var origin := global_position + Vector3(0.0, 1.4, 0.0)
+		var to_p: Vector3 = (player.global_position + Vector3(0.0, 1.0, 0.0)) - origin
+		var dist := to_p.length()
+		if dist < 0.001:
+			break
+		var center_aim := to_p / dist
+		_face_direction(Vector3(center_aim.x, 0.0, center_aim.z).normalized())
+		if pellets <= 1:
+			_spawn_enemy_projectile(center_aim, ba_dmg_mult, ba_blast)
+		else:
+			# Multi-pellet spread (shotgun): symmetric fan around center aim.
+			var spread_rad := deg_to_rad(spread_deg)
+			var half := (pellets - 1) * 0.5
+			for i in pellets:
+				var offset_angle := (float(i) - half) * spread_rad
+				var rotated_aim := center_aim.rotated(Vector3.UP, offset_angle)
+				_spawn_enemy_projectile(rotated_aim, ba_dmg_mult, ba_blast)
+	_change_state(State.CHASING)
 
 
-func _spawn_enemy_projectile(aim: Vector3) -> void:
+func _spawn_enemy_projectile(aim: Vector3, skill_damage_mult: float = 1.0, blast_radius: float = 0.0) -> void:
 	# Pool/level teardown can free the enemy from the tree between the
 	# windup-await resume and here. Bail rather than read global_position
 	# off a detached node and crash on get_parent().add_child(...).
@@ -2752,8 +2811,10 @@ func _spawn_enemy_projectile(aim: Vector3) -> void:
 	proj.speed = enemy_class.projectile_speed
 	proj.max_range = enemy_class.projectile_max_range
 	proj.knockback_strength = 0.0  # no knockback on default ranged attacks — reserve for special skills
+	proj.is_bullet = enemy_class.projectile_is_bullet
+	proj.blast_radius = blast_radius
 	proj.source_position = global_position
-	var dmg := int(round(float(_attack_damage) * _outgoing_damage_mult()))
+	var dmg := int(round(float(_attack_damage) * skill_damage_mult * _outgoing_damage_mult()))
 	proj.damage_min = dmg
 	proj.damage_max = dmg
 	proj.damage_mult = 1.0

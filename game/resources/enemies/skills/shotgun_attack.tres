@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="EnemySkill" load_steps=3 format=3]
+
+; Shotgun basic attack — 6-pellet spread at close range. Each pellet is its
+; own projectile with independent aim spread. Devastating if the enemy is
+; close, but pellets scatter at range. Mirrors the player shotgun's buckshot.
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_skill.gd" id="script"]
+[ext_resource type="PackedScene" path="res://scenes/prototype/prototype_projectile.tscn" id="projectile_scene"]
+
+[resource]
+script = ExtResource("script")
+id = &"shotgun_attack"
+display_name = "Shotgun Blast"
+targeting_mode = 2
+damage_mult = 0.35
+skill_range = 8.0
+cooldown = 2.2
+wind_up = 0.4
+projectile_scene = ExtResource("projectile_scene")
+projectile_speed = 14.0
+projectile_max_range = 10.0
+projectile_count = 6
+projectile_spread_deg = 4.0

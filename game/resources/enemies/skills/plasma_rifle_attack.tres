@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="EnemySkill" load_steps=3 format=3]
+
+; Plasma rifle basic attack — slow, heavy shot from distance. Long cooldown
+; and moderate windup telegraph the shot so the player can strafe. Each hit
+; hurts enough that you respect the range.
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_skill.gd" id="script"]
+[ext_resource type="PackedScene" path="res://scenes/prototype/prototype_projectile.tscn" id="projectile_scene"]
+
+[resource]
+script = ExtResource("script")
+id = &"plasma_rifle_attack"
+display_name = "Plasma Bolt"
+targeting_mode = 2
+damage_mult = 1.0
+skill_range = 16.0
+cooldown = 2.0
+wind_up = 0.5
+projectile_scene = ExtResource("projectile_scene")
+projectile_speed = 15.0
+projectile_max_range = 18.0
+projectile_count = 1

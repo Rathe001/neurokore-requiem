@@ -13,6 +13,7 @@
 script = ExtResource("script")
 id = &"ranged_laser"
 label = "Laser Trooper"
+weapon_id = &"laser_pistol"
 basic_attack = ExtResource("basic_attack")
 skill_pool = []
 attack_mode = 1

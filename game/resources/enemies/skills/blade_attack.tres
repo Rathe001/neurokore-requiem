@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="EnemySkill" load_steps=2 format=3]
+
+; Blade basic attack — fast slashing with a narrow cone. Quick cooldown and
+; short windup make the rhythm feel like a flurry of cuts.
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_skill.gd" id="script"]
+
+[resource]
+script = ExtResource("script")
+id = &"blade_attack"
+display_name = "Blade Slash"
+targeting_mode = 0
+damage_mult = 1.0
+skill_range = 2.2
+cooldown = 1.4
+wind_up = 0.3
+cone_deg = 70.0
+knockback = 0.0

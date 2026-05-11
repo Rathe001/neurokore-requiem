@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="EnemySkill" load_steps=3 format=3]
+
+; Sniper rifle basic attack — very slow, very accurate, very punishing. The
+; long cooldown and heavy windup telegraph the shot so the player can sprint
+; to cover. Standing still is a death sentence.
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_skill.gd" id="script"]
+[ext_resource type="PackedScene" path="res://scenes/prototype/prototype_projectile.tscn" id="projectile_scene"]
+
+[resource]
+script = ExtResource("script")
+id = &"sniper_rifle_attack"
+display_name = "Sniper Shot"
+targeting_mode = 2
+damage_mult = 1.0
+skill_range = 20.0
+cooldown = 3.5
+wind_up = 0.8
+projectile_scene = ExtResource("projectile_scene")
+projectile_speed = 35.0
+projectile_max_range = 22.0
+projectile_count = 1

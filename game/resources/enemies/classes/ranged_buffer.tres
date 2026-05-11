@@ -7,13 +7,14 @@
 
 [ext_resource type="Script" path="res://scripts/enemies/enemy_class.gd" id="script"]
 [ext_resource type="PackedScene" path="res://scenes/prototype/prototype_projectile.tscn" id="projectile_scene"]
-[ext_resource type="Resource" path="res://resources/enemies/skills/basic_ranged_attack.tres" id="basic_attack"]
 [ext_resource type="Resource" path="res://resources/enemies/skills/multi_shot.tres" id="multi_shot"]
+[ext_resource type="Resource" path="res://resources/enemies/skills/laser_pistol_attack.tres" id="basic_attack"]
 
 [resource]
 script = ExtResource("script")
 id = &"ranged_buffer"
 label = "Tactical Officer"
+weapon_id = &"laser_pistol"
 basic_attack = ExtResource("basic_attack")
 skill_pool = [ExtResource("multi_shot")]
 attack_mode = 1

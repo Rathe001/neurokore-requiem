@@ -19,34 +19,11 @@ class_name EnemySpawner
 
 const ENEMY_SCENE_DEFAULT: PackedScene = preload("res://scenes/prototype/prototype_enemy.tscn")
 
-# Default mixed-pack composition used when a room/corridor doesn't
-# specify its own enemy_classes pool. Loaded lazily on first use so a
-# missing .tres at startup doesn't crash the autoload chain. Order
-# doesn't matter — each spawn samples uniformly. To narrow what spawns
-# in a specific zone, set RoomDef.enemy_classes (overrides this list).
-const _DEFAULT_CLASS_PATHS: Array[String] = [
-	"res://resources/enemies/classes/basic_melee.tres",
-	"res://resources/enemies/classes/basic_ranged.tres",
-	"res://resources/enemies/classes/ranged_laser.tres",
-	"res://resources/enemies/classes/melee_healer.tres",
-	"res://resources/enemies/classes/ranged_buffer.tres",
-]
-static var _default_class_pool: Array[EnemyClass] = []
-static var _default_pool_loaded: bool = false
-
-
+# Default mixed-pack composition — delegates to EnemyClassTable autoload
+# which owns the explicit file list (same pattern as MonsterAffixTable).
+# To narrow what spawns in a specific zone, set RoomDef.enemy_classes.
 static func _get_default_class_pool() -> Array[EnemyClass]:
-	if _default_pool_loaded:
-		return _default_class_pool
-	_default_pool_loaded = true
-	for path in _DEFAULT_CLASS_PATHS:
-		if not ResourceLoader.exists(path):
-			push_warning("[EnemySpawner] missing default class .tres: %s" % path)
-			continue
-		var c := load(path) as EnemyClass
-		if c != null:
-			_default_class_pool.append(c)
-	return _default_class_pool
+	return EnemyClassTable.get_all()
 
 # Pack tuning. PACK_CHANCE is per spawn point — at 6%, an 8-enemy room hits
 # at least one pack ~40% of the time (1 - 0.94^8). PACK_*_AFFIXES bounds

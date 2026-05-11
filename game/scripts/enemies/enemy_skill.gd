@@ -39,9 +39,17 @@ enum TargetingMode {
 @export var projectile_speed: float = 10.0
 @export var projectile_max_range: float = 14.0
 ## Number of projectiles per cast. >1 spawns a symmetric spread around the
-## aim vector, each offset by projectile_spread_deg.
+## aim vector, each offset by projectile_spread_deg (shotgun pellets).
 @export var projectile_count: int = 1
 @export var projectile_spread_deg: float = 15.0
+## Burst fire: fire burst_count rounds with burst_delay between each.
+## burst_count=1 (default) is a single shot. burst_count=3 + burst_delay=0.1
+## fires three rapid rounds over 0.2s then waits for the full cooldown.
+## Burst rounds re-aim at the player's current position each shot.
+@export var burst_count: int = 1
+@export var burst_delay: float = 0.1
+## AoE blast radius on impact. >0 makes the projectile explode (RPG).
+@export var projectile_blast_radius: float = 0.0
 
 @export_group("AoE")
 @export var aoe_radius: float = 3.0

@@ -14,6 +14,7 @@
 script = ExtResource("script")
 id = &"basic_melee"
 label = "Basic Melee"
+weapon_id = &"blade"
 basic_attack = ExtResource("basic_attack")
 skill_pool = [ExtResource("ground_slam"), ExtResource("enrage")]
 attack_mode = 0

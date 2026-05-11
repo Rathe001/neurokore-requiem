@@ -24,6 +24,9 @@ enum SupportRole {
 
 @export var id: StringName = &""
 @export var label: String = ""
+## Weapon archetype this class carries (e.g. &"smg", &"plasma_rifle",
+## &"blade"). Used for future visual attachment and identity.
+@export var weapon_id: StringName = &""
 
 @export_group("Attack")
 @export var attack_mode: AttackMode = AttackMode.MELEE
@@ -54,6 +57,10 @@ enum SupportRole {
 ## Distance the enemy tries to keep from the player while firing — closer
 ## triggers a backpedal, farther triggers normal chase.
 @export var ranged_kite_distance: float = 8.0
+## True for kinetic weapons (SMG, shotgun, sniper). Switches the projectile
+## visual from a glowing energy bolt to a physical bullet trail (heat
+## distortion). Energy weapons (laser pistol, plasma rifle) leave this false.
+@export var projectile_is_bullet: bool = false
 
 @export_group("Skills")
 ## Basic attack skill — replaces the inline attack params above when set.

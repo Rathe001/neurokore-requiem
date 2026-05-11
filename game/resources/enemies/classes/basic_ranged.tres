@@ -18,6 +18,7 @@
 script = ExtResource("script")
 id = &"basic_ranged"
 label = "Basic Ranged"
+weapon_id = &"smg"
 basic_attack = ExtResource("basic_attack")
 skill_pool = [ExtResource("multi_shot")]
 attack_mode = 1
@@ -30,4 +31,5 @@ projectile_speed = 17.0
 projectile_max_range = 14.0
 accuracy = 0.72
 ranged_kite_distance = 8.0
+projectile_is_bullet = true
 support_role = 0

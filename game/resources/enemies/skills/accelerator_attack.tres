@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="EnemySkill" load_steps=3 format=3]
+
+; Accelerator basic attack — short burst of 3 energy bolts in a tight spread.
+; Approximates the player's channeled beam as a rapid-fire cone spray. Close
+; to mid-range; the spread makes it deadly up close but inaccurate at distance.
+; Energy weapon visual (glowing bolts, not bullets).
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_skill.gd" id="script"]
+[ext_resource type="PackedScene" path="res://scenes/prototype/prototype_projectile.tscn" id="projectile_scene"]
+
+[resource]
+script = ExtResource("script")
+id = &"accelerator_attack"
+display_name = "Accelerator Burst"
+targeting_mode = 2
+damage_mult = 0.6
+skill_range = 8.0
+cooldown = 1.0
+wind_up = 0.15
+projectile_scene = ExtResource("projectile_scene")
+projectile_speed = 18.0
+projectile_max_range = 10.0
+projectile_count = 3
+projectile_spread_deg = 6.0
+burst_count = 1

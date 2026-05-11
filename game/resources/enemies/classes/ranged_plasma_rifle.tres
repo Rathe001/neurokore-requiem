@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="EnemyClass" load_steps=5 format=3]
+
+; Ranged + plasma rifle — slow, heavy shots from distance. Each hit is
+; punishing but the long cooldown and slower projectile give the player time
+; to dodge. The "you WILL respect this enemy's range" archetype.
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_class.gd" id="script"]
+[ext_resource type="PackedScene" path="res://scenes/prototype/prototype_projectile.tscn" id="projectile_scene"]
+[ext_resource type="Resource" path="res://resources/enemies/skills/plasma_rifle_attack.tres" id="basic_attack"]
+[ext_resource type="Resource" path="res://resources/enemies/skills/multi_shot.tres" id="multi_shot"]
+
+[resource]
+script = ExtResource("script")
+id = &"ranged_plasma_rifle"
+label = "Plasma Rifleman"
+weapon_id = &"plasma_rifle"
+basic_attack = ExtResource("basic_attack")
+skill_pool = [ExtResource("multi_shot")]
+attack_mode = 1
+attack_range = 16.0
+attack_cooldown = 2.0
+attack_windup = 0.5
+attack_damage_mult = 1.1
+projectile_scene = ExtResource("projectile_scene")
+projectile_speed = 15.0
+projectile_max_range = 18.0
+accuracy = 0.78
+ranged_kite_distance = 10.0
+support_role = 0

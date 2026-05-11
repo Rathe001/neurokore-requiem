@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="EnemyClass" load_steps=4 format=3]
+
+; Ranged + shotgun — close-range burst, inaccurate but punishing if you let
+; them close. Short kite distance (5m) means they rush in like melee but open
+; fire at point-blank. The long cooldown between blasts gives the player a
+; window to dodge or kite backward. Pairs with SMG grunts as aggressive
+; flankers that force you to keep moving.
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_class.gd" id="script"]
+[ext_resource type="PackedScene" path="res://scenes/prototype/prototype_projectile.tscn" id="projectile_scene"]
+[ext_resource type="Resource" path="res://resources/enemies/skills/shotgun_attack.tres" id="basic_attack"]
+
+[resource]
+script = ExtResource("script")
+id = &"ranged_shotgun"
+label = "Shotgunner"
+weapon_id = &"shotgun"
+basic_attack = ExtResource("basic_attack")
+skill_pool = []
+attack_mode = 1
+attack_range = 8.0
+attack_cooldown = 2.2
+attack_windup = 0.4
+attack_damage_mult = 1.3
+projectile_scene = ExtResource("projectile_scene")
+projectile_speed = 14.0
+projectile_max_range = 10.0
+accuracy = 0.60
+ranged_kite_distance = 5.0
+projectile_is_bullet = true
+support_role = 0
