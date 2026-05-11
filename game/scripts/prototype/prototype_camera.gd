@@ -72,6 +72,14 @@ const PUSH_MAX: float = 1.4        # clamp ceiling so accelerator stream can't d
 var _push_offset: Vector3 = Vector3.ZERO
 var _push_velocity: Vector3 = Vector3.ZERO
 
+# Audio listener — top-level so its transform is independent of the
+# camera's own (shake / push must not affect audio panning). Position
+# tracks the player each frame; orientation is locked once at _ready
+# to match the camera's horizontal bearing, so panning is permanently
+# screen-relative no matter what the player character is doing. This is
+# the FPS-feel anchor: what you see is what you hear.
+var _audio_listener: AudioListener3D
+
 
 func _ready() -> void:
 	if target_path != NodePath():
@@ -84,10 +92,35 @@ func _ready() -> void:
 		_target = _resolve_local_player()
 	_init_orbit_from_offset()
 	_default_pitch_rad = _pitch_rad
+	_build_audio_listener()
 	if _target != null:
 		_snap_to_target()
 	else:
 		look_at(Vector3.ZERO, Vector3.UP)
+
+
+# Create the AudioListener3D as a top-level child of this camera, with
+# orientation derived from the (fixed) camera bearing so screen-right
+# always corresponds to audio-right. Position is updated per-frame
+# from _snap_to_target. current=true overrides Godot's default-to-
+# active-camera listener pick.
+func _build_audio_listener() -> void:
+	_audio_listener = AudioListener3D.new()
+	_audio_listener.top_level = true
+	add_child(_audio_listener)
+	# Listener forward = camera's horizontal forward (from camera toward
+	# target, flattened). dir_horiz_to_camera = sin(b), 0, cos(b) — so
+	# camera-to-target horizontal is its negation. Up stays world-up.
+	var fwd := Vector3(-sin(_bearing_rad), 0.0, -cos(_bearing_rad))
+	# look_at_from_position uses the +Z-forward convention; pass the
+	# listener's own position plus the forward as the look-at target.
+	# Calling immediately so the rotation is set before any sound plays.
+	if _target != null:
+		_audio_listener.global_position = _target.global_position
+	else:
+		_audio_listener.global_position = Vector3.ZERO
+	_audio_listener.look_at(_audio_listener.global_position + fwd, Vector3.UP)
+	_audio_listener.current = true
 
 
 func _resolve_local_player() -> Node3D:
@@ -231,6 +264,11 @@ func _snap_to_target() -> void:
 	# forward+true-up plane), but stays well-defined at pitch = 0 where
 	# Vector3.UP would be parallel to forward and degenerate the basis.
 	look_at(focal, -dir_horiz)
+	# Listener tracks the player position only — orientation stays locked
+	# to the bearing-aligned basis set in _build_audio_listener so panning
+	# is purely screen-relative and never wobbles with camera shake/push.
+	if _audio_listener != null:
+		_audio_listener.global_position = focal
 
 
 

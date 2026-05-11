@@ -584,16 +584,6 @@ func _ready() -> void:
 	_fps_fill_light.shadow_enabled = false
 	_fps_fill_light.visible = false
 	_fps_camera.add_child(_fps_fill_light)
-	# Audio listener — parented to the player root so positional audio
-	# pans + attenuates relative to the character, not the iso camera
-	# (which sits ~14u above and offset, making sounds at the player's
-	# feet feel quieter and off-center). current=true overrides Godot's
-	# default-to-active-camera listener behaviour. Stays valid through
-	# the V-key FPS toggle: the FPS camera also sits at the player, so
-	# the listener at the player root remains correctly co-located.
-	var listener := AudioListener3D.new()
-	listener.current = true
-	add_child(listener)
 	var _fade_canvas := CanvasLayer.new()
 	_fade_canvas.layer = 100
 	_fade_rect = ColorRect.new()
