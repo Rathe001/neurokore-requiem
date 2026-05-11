@@ -31,6 +31,9 @@ enum Wall { NORTH, SOUTH, EAST, WEST }
 ## class is set on enemy_scene.
 @export var enemy_classes: Array[EnemyClass] = []
 
+@export_group("Audio")
+@export var acoustic_profile: AcousticProfile
+
 @export_group("Decals")
 # Number of randomly-placed reflective puddles on the room floor. Picked from
 # a deterministic randomization so re-entering the room doesn't shuffle them.

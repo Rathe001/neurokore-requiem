@@ -1022,6 +1022,7 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 	_update_health_bar()
 	var head := global_position + Vector3(0.0, 1.8, 0.0)
 	DamageNumber.spawn(get_parent(), head, amount, multistrike, is_crit)
+	WeaponSounds.play_generic(&"hit_flesh", global_position)
 	# Snapshot the pre-hit state BEFORE the knockback transition so the
 	# aggro check below sees the original disposition. Without this, any
 	# IDLE enemy that gets knocked back loses the IDLE→aggro transition
@@ -2549,6 +2550,7 @@ func _cast_skill_cone(target: Node3D, aim: Vector3, skill: EnemySkill) -> void:
 		CombatVisuals.spawn_hammer_impact(self)
 	else:
 		CombatVisuals.spawn_hit_cone(self, aim, skill.skill_range, skill.cone_deg)
+	WeaponSounds.play_fire(wid, global_position)
 	_change_state(State.CHASING)
 	if not is_instance_valid(target):
 		return
@@ -2730,6 +2732,7 @@ func _cast_melee_attack(player: Node3D, aim: Vector3) -> void:
 		CombatVisuals.spawn_hammer_impact(self)
 	else:
 		CombatVisuals.spawn_hit_cone(self, aim, range_now, cone_now)
+	WeaponSounds.play_fire(wid, global_position)
 	_change_state(State.CHASING)
 	if not is_instance_valid(player):
 		return
@@ -2841,6 +2844,8 @@ func _spawn_enemy_projectile(aim: Vector3, skill_damage_mult: float = 1.0, blast
 	proj.global_position = global_position + Vector3(0.0, 1.4, 0.0)
 	proj.monitoring = true
 	proj.reset()
+	var proj_wid: StringName = enemy_class.weapon_id if enemy_class != null else &""
+	WeaponSounds.play_fire(proj_wid, proj.global_position)
 
 
 ## Minimum horizontal spread on a miss (radians) — same as player.

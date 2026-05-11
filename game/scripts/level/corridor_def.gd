@@ -18,6 +18,9 @@ enum Axis { X, Z }
 ## corridor its own distinct look.
 @export var theme_override: LevelTheme
 
+@export_group("Audio")
+@export var acoustic_profile: AcousticProfile
+
 @export_group("Enemies")
 @export var enemy_count: int = 0
 @export var enemy_scene: PackedScene

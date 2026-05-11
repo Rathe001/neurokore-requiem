@@ -155,6 +155,8 @@ func resolve_skill_hit(skill: Skill, aim: Vector3, weapon: Item, source_offset: 
 	# the player holds fire, springs back when they release.
 	_apply_energy_push(weapon, aim)
 	var hits := PerkState.roll_multistrike()
+	var wb_id: StringName = weapon.weapon_base_id if weapon != null else &""
+	WeaponSounds.play_fire(wb_id, _host.global_position)
 	match skill.targeting_mode:
 		Skill.TargetingMode.SINGLE_CONE:
 			# CHANNEL_BEAM cones (Energy Accelerator stream) draw a

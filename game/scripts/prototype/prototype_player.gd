@@ -837,6 +837,7 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 	_out_of_combat_t = 0.0
 	_hp_regen_accum = 0.0
 	_hit_flash_tween = HitFlash.play(self, visual, _hit_flash_tween)
+	WeaponSounds.play_generic(&"hit_player", global_position)
 	if knockback_strength > 0.0:
 		var dir := global_position - knockback_from
 		dir.y = 0.0

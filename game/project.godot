@@ -18,6 +18,10 @@ config/name="Neurokore: Requiem"
 run/main_scene="res://scenes/ui/startup_screen.tscn"
 config/features=PackedStringArray("4.6", "Forward Plus")
 
+[audio]
+
+buses/default_bus_layout="res://resources/audio/default_bus_layout.tres"
+
 [autoload]
 
 BuildInfo="*res://scripts/systems/build_info.gd"
@@ -50,6 +54,9 @@ OverhangFader="*res://scripts/systems/overhang_fader.gd"
 Traction="*res://scripts/systems/traction.gd"
 SaveManager="*res://scripts/systems/save_manager.gd"
 CombatVisuals="*res://scripts/systems/combat_visuals.gd"
+RoomAcoustics="*res://scripts/audio/room_acoustics.gd"
+SFX="*res://scripts/audio/sfx.gd"
+WeaponSounds="*res://scripts/audio/weapon_sounds.gd"
 
 [display]
 

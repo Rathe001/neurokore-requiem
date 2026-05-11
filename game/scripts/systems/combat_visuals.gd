@@ -127,6 +127,7 @@ func _rpc_impact_burst(origin: Vector3, world_pos: Vector3, color_override: Colo
 
 static func spawn_explosion(host: Node3D, world_pos: Vector3, blast_radius: float, color_override: Color = Color(0, 0, 0, 0), damage_type: StringName = &"") -> void:
 	PrototypeAttackIndicator.spawn_explosion(host, world_pos, blast_radius, color_override, damage_type)
+	WeaponSounds.play_generic(&"explosion", world_pos)
 	if NetState.is_in_lobby():
 		var cv: Node = host.get_node(_AUTOLOAD_PATH)
 		cv._rpc_explosion.rpc(host.global_position, world_pos, blast_radius, color_override, host.is_in_group(&"player"), damage_type)

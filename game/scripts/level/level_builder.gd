@@ -83,6 +83,7 @@ func _build_level() -> void:
 	# BuildContext. For generator-mode the graph is transient (not stored on
 	# layout); BuildContext + PuzzleBuilder both need it for door indexing
 	# and puzzle dispatch.
+	RoomAcoustics.clear_zones()
 	var active_graph := _resolve_graph()
 	_pieces = _pieces_from_graph(active_graph)
 	_ctx = LevelBuildContext.create(self, layout, active_graph)
@@ -208,6 +209,11 @@ func _build_room(piece: LevelPiece) -> void:
 	var enemy_count: int = piece.enemy_count_override if piece.enemy_count_override >= 0 else rd.enemy_count
 	EnemySpawner.spawn_in_bounds(_ctx, piece, center, hx, hz, enemy_count, rd.enemy_scene, piece.enemy_level_range, rd.enemy_classes)
 
+	var ap: AcousticProfile = rd.acoustic_profile
+	if ap == null:
+		ap = AcousticProfile.from_area(rd.size.x * rd.size.y)
+	RoomAcoustics.register_zone(center, Vector2(hx, hz), ap)
+
 
 # Per-wall collision bodies and door instances. Wall *visuals* come from the
 # single procedural room mesh; this loop only materialises physics + doors.
@@ -269,6 +275,11 @@ func _build_corridor(piece: LevelPiece) -> void:
 	LightingBuilder.create_fill_light(_ctx, center, fog_x, fog_z)
 	LightingBuilder.create_fog_volume(_ctx, center, fog_x, fog_z)
 	EnemySpawner.spawn_in_bounds(_ctx, piece, center, hx, hz, cd.enemy_count, cd.enemy_scene, Vector2i.ZERO, cd.enemy_classes)
+
+	var ap: AcousticProfile = cd.acoustic_profile
+	if ap == null:
+		ap = AcousticProfile.from_area(cd.width * cd.length)
+	RoomAcoustics.register_zone(center, Vector2(hx, hz), ap)
 
 
 # ── Public API ────────────────────────────────────────────────────────────
