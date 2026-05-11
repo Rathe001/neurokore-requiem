@@ -25,7 +25,7 @@ const QUIRK_TIPS: Dictionary = {
 	&"rpg_2h": "Blast staggers every enemy caught in it",
 	&"shotgun_2h": "Pellets at point-blank (<2m) deal +50%",
 	&"taser_2h": "Every 10th hit on an enemy releases 3× damage",
-	&"accelerator_2h": "Hold the stream — damage ramps up to +30%",
+	&"accelerator_2h": "Hold the stream — damage ramps to 2.5× over 2.5s",
 }
 
 # Universal melee combo reminder shown alongside the per-archetype tip
@@ -34,14 +34,22 @@ const QUIRK_TIPS: Dictionary = {
 const MELEE_COMBO_TIP: String = "3-hit combo: wider, stronger, finisher applies status"
 
 const PANEL_WIDTH: float = 210.0
+const PANEL_TITLE: String = "Combat Effects"
+const TITLE_FONT_SIZE: int = 11
 const HEADER_FONT_SIZE: int = 9
 const TIP_FONT_SIZE: int = 8
+const TITLE_COLOR := Color(0.95, 0.92, 0.85, 1.0)
 const HEADER_COLOR := Color(0.95, 0.85, 0.5, 1.0)
 const TIP_COLOR := Color(0.78, 0.78, 0.78, 0.85)
-const PANEL_BG := Color(0.0, 0.0, 0.0, 0.35)
+const PANEL_BG := Color(0.0, 0.0, 0.0, 0.55)
+const TITLE_DIVIDER_COLOR := Color(0.95, 0.85, 0.5, 0.35)
 
 var _bg: ColorRect
 var _vbox: VBoxContainer
+# Public so MissionsPanel can stack underneath, accounting for
+# this panel's variable height (collapses when no quirks active).
+var bottom_edge_y: float = 0.0
+signal layout_changed
 
 
 func _ready() -> void:
@@ -81,6 +89,10 @@ func _ready() -> void:
 	_vbox.offset_bottom = -3.0
 	add_child(_vbox)
 
+	# MissionsPanel finds us via this group so it can dock just below
+	# our bottom edge regardless of where we land in the scene tree.
+	add_to_group(&"weapon_quirk_panel")
+
 	InventoryState.equipment_changed.connect(_on_equipment_changed)
 	refresh()
 
@@ -99,8 +111,26 @@ func refresh() -> void:
 	var entries: Array = _gather_active_quirks()
 	if entries.is_empty():
 		visible = false
+		bottom_edge_y = position.y
+		layout_changed.emit()
 		return
 	visible = true
+	# Title label at the top — frames the panel as "Combat Effects" so
+	# the player knows the section identity without having to read the
+	# weapon quirks themselves.
+	var title := Label.new()
+	title.text = PANEL_TITLE
+	title.add_theme_font_size_override(&"font_size", TITLE_FONT_SIZE)
+	title.add_theme_color_override(&"font_color", TITLE_COLOR)
+	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_vbox.add_child(title)
+	# Thin divider line under the title — visual separator between the
+	# section header and the per-weapon entries.
+	var divider := ColorRect.new()
+	divider.color = TITLE_DIVIDER_COLOR
+	divider.custom_minimum_size = Vector2(0.0, 1.0)
+	divider.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_vbox.add_child(divider)
 	for entry in entries:
 		var header := Label.new()
 		header.text = entry["header"]
@@ -124,6 +154,8 @@ func refresh() -> void:
 func _resize_to_content() -> void:
 	custom_minimum_size.y = _vbox.size.y + 8.0
 	size.y = custom_minimum_size.y
+	bottom_edge_y = position.y + size.y
+	layout_changed.emit()
 
 
 # Build the list of active quirks for currently-equipped weapons. Each

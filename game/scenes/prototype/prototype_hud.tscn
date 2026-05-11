@@ -8,6 +8,7 @@
 [ext_resource type="Script" path="res://scripts/prototype/prototype_tooltip.gd" id="script_tooltip"]
 [ext_resource type="Script" path="res://scripts/ui/gameplay_chat_panel.gd" id="script_gameplay_chat"]
 [ext_resource type="Script" path="res://scripts/ui/weapon_quirk_panel.gd" id="script_weapon_quirk"]
+[ext_resource type="Script" path="res://scripts/ui/missions_panel.gd" id="script_missions_panel"]
 [ext_resource type="Shader" path="res://scripts/prototype/vignette.gdshader" id="shader_vignette"]
 
 [sub_resource type="ShaderMaterial" id="mat_vignette"]
@@ -495,6 +496,11 @@ unique_name_in_owner = true
 unique_name_in_owner = true
 mouse_filter = 2
 script = ExtResource("script_weapon_quirk")
+
+[node name="MissionsPanel" type="Control" parent="Root"]
+unique_name_in_owner = true
+mouse_filter = 2
+script = ExtResource("script_missions_panel")
 
 [node name="GameplayChatPanel" type="Control" parent="Root"]
 unique_name_in_owner = true
