@@ -103,17 +103,16 @@ const GRENADE_BASE_PATHS: Array[String] = [
 	"res://resources/items/grenade_bases/stun.tres",
 ]
 
-# Icon-path mapping for the Energy Accelerator's five model variants.
-# Each model_name in the WeaponBase pool maps 1:1 to one of the five
-# energy-accelerator{N}.png art files — keeps the icon visually
-# consistent per variant so players associate a specific look with
-# "EMX-8 Thrush" vs "EMV-9 Promethean".
-const ACCELERATOR_ICON_BY_MODEL: Dictionary = {
-	"EM-22 Lance": "res://assets/ui/items/weapons/energy-accelerator1.png",
-	"EMR-1 Emitter": "res://assets/ui/items/weapons/energy-accelerator2.png",
-	"EMX-8 Thrush": "res://assets/ui/items/weapons/energy-accelerator3.png",
-	"EMZ-3 Solstice": "res://assets/ui/items/weapons/energy-accelerator4.png",
-	"EMV-9 Promethean": "res://assets/ui/items/weapons/energy-accelerator5.png",
+# Per-armor-slot icon paths. Armor has one icon per slot (not per model
+# name), so this maps main_type → fixed path instead of slugifying the
+# randomly rolled sub_type.
+const ARMOR_ICON_BY_TYPE: Dictionary = {
+	"Head Armor":  "res://assets/ui/items/armor/head1.png",
+	"Chest Armor": "res://assets/ui/items/armor/chest1.png",
+	"Gloves":      "res://assets/ui/items/armor/hands1.png",
+	"Leg Armor":   "res://assets/ui/items/armor/legs1.png",
+	"Boots":       "res://assets/ui/items/armor/feet.png",
+	"Backpack":    "res://assets/ui/items/armor/backpack1.png",
 }
 
 
@@ -471,13 +470,10 @@ func _apply_armor_model_name(item: Item, main_type: String, rng: RandomNumberGen
 	item.sub_type = String(pool[rng.randi_range(0, pool.size() - 1)])
 
 
-# Resolve the item's icon path from its weapon_base_id / sub_type /
-# model_name. Energy Accelerator routes through ACCELERATOR_ICON_BY_MODEL
-# (1:1 per model variant); everything else uses sub_type → kebab-case
-# slug lookup in the armor folder (covers armor pieces, offhands,
-# grenades — anything with a player-facing sub_type whose slug matches
-# a supplied icon file). Skipped silently when no matching file exists
-# so the item falls back to glyph rendering.
+# Resolve the item's icon path. Armor uses ARMOR_ICON_BY_TYPE (one icon
+# per slot); weapons, grenades, and offhands use sub_type → kebab-case
+# slug. Skipped silently when no matching file exists so the item falls
+# back to glyph rendering.
 func _apply_icon_path(item: Item) -> void:
 	if item == null:
 		return
@@ -495,26 +491,26 @@ func _apply_icon_path(item: Item) -> void:
 func resolve_icon_path(item: Item) -> String:
 	if item == null:
 		return ""
-	if item.weapon_base_id == &"accelerator_2h" and item.model_name != "":
-		var accel_path: String = ACCELERATOR_ICON_BY_MODEL.get(item.model_name, "")
-		if accel_path != "" and ResourceLoader.exists(accel_path):
-			return accel_path
-		# Fall through to slug check so accelerator drops with a missing
-		# model variant icon can still pick up a generic energy-accelerator
-		# icon if one exists.
-	# Slug from sub_type. Slug rules: lowercase, spaces and underscores →
-	# hyphens. "Cargo Pants" → "cargo-pants", "Sling Bag" → "sling-bag",
-	# "Frag Grenade" → "frag-grenade", "Laser Pistol" → "laser-pistol".
-	# Check the weapons/ folder for weapon items, armor/ for everything
-	# else (armor pieces, offhands, grenades, backpacks). Items whose
-	# main_type doesn't match either domain fall through and stay glyph-
-	# only.
+	# Armor pieces have one icon per slot, not per model name.
+	var armor_path: String = ARMOR_ICON_BY_TYPE.get(item.main_type, "")
+	if armor_path != "":
+		if ResourceLoader.exists(armor_path):
+			return armor_path
+		return ""
+	# Weapons, offhands, and grenades use a slug from sub_type.
+	# Slug rules: lowercase, spaces and underscores → hyphens.
+	# "Laser Pistol" → "laser-pistol", "Frag Grenade" → "frag-grenade".
+	# Weapons and grenades live in weapons/, offhands in armor/.
 	if item.sub_type == "":
 		return ""
 	var slug: String = item.sub_type.to_lower().replace(" ", "-").replace("_", "-")
-	var is_weapon: bool = item.main_type == "1H Weapon" or item.main_type == "2H Weapon"
+	var is_weapon: bool = item.main_type in ["1H Weapon", "2H Weapon", "Grenade"]
 	var folder: String = "weapons" if is_weapon else "armor"
+	# Try {slug}1.png first (most icons), then {slug}.png (shotgun, etc.).
 	var path: String = "res://assets/ui/items/%s/%s1.png" % [folder, slug]
+	if ResourceLoader.exists(path):
+		return path
+	path = "res://assets/ui/items/%s/%s.png" % [folder, slug]
 	if ResourceLoader.exists(path):
 		return path
 	return ""

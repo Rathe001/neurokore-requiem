@@ -199,8 +199,18 @@ func apply_wade_nudge(direction: Vector3, impulse_mag: float) -> void:
 	))
 
 
+## Floor Y below which we assume the corpse fell into a pit. Slightly below
+## zero so corpses on ramps / uneven terrain don't false-trigger, but well
+## above the pit kill areas so we clean up before landing on WorldBottom.
+const PIT_DESPAWN_Y: float = -1.5
+
 func _physics_process(delta: float) -> void:
 	if _expired:
+		return
+	# Corpse fell off the level (pit, gap in geometry) — despawn immediately.
+	if global_position.y < PIT_DESPAWN_Y:
+		_expired = true
+		queue_free()
 		return
 	_age += delta
 	if _age >= LIFETIME:
