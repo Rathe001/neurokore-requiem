@@ -3,15 +3,18 @@ class_name CharacterPanel
 
 const PANEL_SIZE := Vector2(420.0, 460.0)
 const SHEET_HEIGHT := 270.0
-const STATS_POS := Vector2(14.0, 34.0)
-const STATS_SIZE := Vector2(180.0, 230.0)
+# Avatar portrait lives at the panel's left edge; stats text starts right of it.
+const AVATAR_POS := Vector2(14.0, 34.0)
+const AVATAR_SIZE := Vector2(60.0, 80.0)
+const AVATAR_STATS_GAP := 10.0
+const STATS_POS := Vector2(AVATAR_POS.x + AVATAR_SIZE.x + AVATAR_STATS_GAP, 34.0)
+const STATS_SIZE := Vector2(170.0, 230.0)
 const STAT_FONT_SIZE := 10
 const STAT_VALUE_FONT_SIZE := 10
 const EQUIP_SLOT_SIZE := Vector2(40.0, 40.0)
 const EQUIP_GAP := 5.0
 const EQUIP_COLS := 3
 const EQUIP_ROWS := 3
-const AVATAR_SIZE := Vector2(40.0, 40.0)
 const INV_SLOT_SIZE := Vector2(26.0, 26.0)
 const INV_GAP := 2.0
 const INV_COLS := 8
@@ -19,22 +22,24 @@ const INV_COLS := 8
 const BACKDROP_COLOR := Color(0.0, 0.0, 0.0, 0.55)
 
 
-# Standard ARPG arrangement around a central character avatar:
-#   [head ][chest ][hands ]      ← armor row (top)
-#   [weap ][AVATAR][offhd ]      ← combat hands row, avatar in middle
-#   [legs ][feet  ][backp ]      ← lower body + utility row
-# The center cell is reserved for the avatar/character-model preview, not
-# an item slot — id is empty so _build_character_sheet skips it.
+# Inventory slot grid layout:
+#   [backpack][head  ][      ]      ← utility + head; top-right blank
+#   [weapon  ][chest ][offhd ]      ← combat hands wrap chest
+#   [legs    ][feet  ][hands ]      ← lower body + gloves
+# Cells with empty id are intentional gaps — the (0,2) slot has no
+# equipment paired with it in this arrangement; _build_character_sheet
+# skips that cell entirely. Avatar lives in the stats column to the
+# left of the panel, not inside the grid.
 const EQUIP_SLOTS: Array[Dictionary] = [
-	{"row": 0, "col": 0, "label_key": "EQUIP_HEAD",     "id": &"head",     "accepts": &"head"},
-	{"row": 0, "col": 1, "label_key": "EQUIP_CHEST",    "id": &"chest",    "accepts": &"chest"},
-	{"row": 0, "col": 2, "label_key": "EQUIP_HANDS",    "id": &"hands",    "accepts": &"hands"},
+	{"row": 0, "col": 0, "label_key": "EQUIP_BACKPACK", "id": &"backpack", "accepts": &"backpack"},
+	{"row": 0, "col": 1, "label_key": "EQUIP_HEAD",     "id": &"head",     "accepts": &"head"},
+	{"row": 0, "col": 2, "label_key": "",               "id": &"",         "accepts": &""},
 	{"row": 1, "col": 0, "label_key": "EQUIP_WEAPON",   "id": &"weapon",   "accepts": &"weapon"},
-	{"row": 1, "col": 1, "label_key": "",               "id": &"",         "accepts": &""},
+	{"row": 1, "col": 1, "label_key": "EQUIP_CHEST",    "id": &"chest",    "accepts": &"chest"},
 	{"row": 1, "col": 2, "label_key": "EQUIP_OFFHAND",  "id": &"offhand",  "accepts": &"offhand"},
 	{"row": 2, "col": 0, "label_key": "EQUIP_LEGS",     "id": &"legs",     "accepts": &"legs"},
 	{"row": 2, "col": 1, "label_key": "EQUIP_FEET",     "id": &"feet",     "accepts": &"feet"},
-	{"row": 2, "col": 2, "label_key": "EQUIP_BACKPACK", "id": &"backpack", "accepts": &"backpack"},
+	{"row": 2, "col": 2, "label_key": "EQUIP_HANDS",    "id": &"hands",    "accepts": &"hands"},
 ]
 
 # Forged Amalgamation perk-gated extra weapon slots. Rendered on row 3 to
@@ -69,7 +74,7 @@ var _panel_node: Panel = null
 var _divider_node: ColorRect = null
 var _held_item: Item = null
 var _held_source: ItemSlot = null
-var _held_cursor: Label = null
+var _held_cursor: Control = null  # TextureRect when icon_path loads, Label otherwise
 var _all_slots: Array[ItemSlot] = []
 
 func _ready() -> void:
@@ -281,10 +286,35 @@ func _clear_held() -> void:
 func _show_held_cursor(item: Item) -> void:
 	if _held_cursor != null:
 		_held_cursor.queue_free()
-	_held_cursor = Label.new()
-	_held_cursor.text = item.glyph
-	_held_cursor.theme_type_variation = &"DragPreview"
-	_held_cursor.modulate = item.glyph_color
+		_held_cursor = null
+	# Match ItemSlot's drag-preview precedence: try the icon texture
+	# first, fall back to the glyph label only when no icon loads. Same
+	# size envelope so the cursor visually matches what's in the slot.
+	if item.icon_path != "":
+		var tex := load(item.icon_path) as Texture2D
+		if tex != null:
+			var icon_preview := TextureRect.new()
+			icon_preview.texture = tex
+			# EXPAND_IGNORE_SIZE so the texture's intrinsic dimensions don't
+			# force the rect to grow — without this, tall icons made the
+			# held cursor inflate well past the slot size and feel huge.
+			# STRETCH_KEEP_ASPECT_CENTERED fits the texture inside the
+			# explicit size while preserving its aspect ratio.
+			icon_preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			icon_preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			icon_preview.modulate = item.glyph_color
+			# Match the inventory slot footprint (26×26) so the cursor reads
+			# as "the slot lifted off and following the mouse," not a
+			# floating zoom-in. Adds a couple pixels for visibility.
+			icon_preview.custom_minimum_size = Vector2(28, 28)
+			icon_preview.size = Vector2(28, 28)
+			_held_cursor = icon_preview
+	if _held_cursor == null:
+		var label := Label.new()
+		label.text = item.glyph
+		label.theme_type_variation = &"DragPreview"
+		label.modulate = item.glyph_color
+		_held_cursor = label
 	_held_cursor.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_held_cursor.z_index = 100
 	add_child(_held_cursor)
@@ -369,6 +399,13 @@ func _build_character_sheet(parent: Control) -> void:
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	parent.add_child(title)
 
+	# ── Character avatar (portrait to the left of the stats text) ────
+	# Sized as a tall portrait, not a square slot — gives the panel a
+	# proper character-sheet feel where the player sees who they're
+	# playing alongside the stats, instead of buried in the equipment
+	# grid where it competed with item icons for attention.
+	_build_avatar_portrait(parent)
+
 	# ── Stats column (compact) ─────────────────────────────────────────
 	# Identity rows on top (name/class/level), then live numbers (health/
 	# resource/credits), then a 2-column grid of combat stats so the
@@ -419,11 +456,11 @@ func _build_character_sheet(parent: Control) -> void:
 	_cdr_label = _make_stat_value("0%")
 	_make_stat_pair(combat_grid, "CDR", _cdr_label)
 
-	# ── Equipment + character avatar ──────────────────────────────────
-	# 3×3 grid centered on a TextureRect that shows the player's avatar
-	# (chosen in character creation). The center cell of EQUIP_SLOTS is
-	# the placeholder skipped in the slot loop below; we drop the avatar
-	# in there instead, sized to match a slot.
+	# ── Equipment grid ────────────────────────────────────────────────
+	# 3×3 of equipment slots. Avatar lives in the stats column to the
+	# left, not inside the grid (see _build_avatar_preview call earlier
+	# in this method). Cells with empty id (top-right by current layout)
+	# are intentional gaps and just skip.
 	var equip_total_width := float(EQUIP_COLS) * EQUIP_SLOT_SIZE.x + float(EQUIP_COLS - 1) * EQUIP_GAP
 	var equip_total_height := float(EQUIP_ROWS) * EQUIP_SLOT_SIZE.y + float(EQUIP_ROWS - 1) * EQUIP_GAP
 	var equip := Control.new()
@@ -436,9 +473,6 @@ func _build_character_sheet(parent: Control) -> void:
 		var row: int = entry["row"]
 		var col: int = entry["col"]
 		if id == &"":
-			# Center cell = avatar/character-model preview. Same dimensions
-			# as a slot so the surrounding equipment grid stays square.
-			_build_avatar_preview(equip, row, col)
 			continue
 		var label_key: String = entry.get("label_key", "")
 		var accepts: StringName = entry["accepts"]
@@ -481,25 +515,22 @@ func _build_character_sheet(parent: Control) -> void:
 		_extra_weapon_slots.append(slot)
 
 
-# Drops a TextureRect at the (row, col) cell of the equipment grid showing
-# the player's chosen avatar. Falls back to the class glyph when no
+# Portrait-style avatar panel positioned at AVATAR_POS — to the left
+# of the stats text column. Taller than wide so it reads as a character
+# portrait, not a square icon. Falls back to the class glyph when no
 # avatar texture is loaded (legacy prototype-scene path that bypasses
-# character creation). Sized identical to the surrounding slots so the
-# 3×3 grid stays visually square.
-func _build_avatar_preview(equip: Control, row: int, col: int) -> void:
+# character creation).
+func _build_avatar_portrait(parent: Control) -> void:
 	var p := UIThemeState.palette
-	# Tinted background frame so the avatar sits inside a cell that
-	# matches the equipment slots' silhouette (same border width, same bg).
+	# Tinted background frame mirroring the equipment-slot look so the
+	# portrait reads as part of the same panel language.
 	var bg := ColorRect.new()
 	bg.color = p.slot_bg
 	bg.size = AVATAR_SIZE
 	bg.custom_minimum_size = AVATAR_SIZE
-	bg.position = Vector2(
-		float(col) * (EQUIP_SLOT_SIZE.x + EQUIP_GAP),
-		float(row) * (EQUIP_SLOT_SIZE.y + EQUIP_GAP),
-	)
+	bg.position = AVATAR_POS
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	equip.add_child(bg)
+	parent.add_child(bg)
 
 	var border := ReferenceRect.new()
 	border.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -523,12 +554,11 @@ func _build_avatar_preview(equip: Control, row: int, col: int) -> void:
 		img.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		bg.add_child(img)
 	else:
-		# No texture loaded — fall back to the class glyph centered.
 		var class_def: Dictionary = AttributeState.CLASS_DEFINITIONS.get(PlayerState.class_id, {})
 		var glyph: String = String(class_def.get(&"glyph", "?"))
 		var lbl := Label.new()
 		lbl.text = glyph
-		lbl.add_theme_font_size_override(&"font_size", 22)
+		lbl.add_theme_font_size_override(&"font_size", 28)
 		lbl.add_theme_color_override(&"font_color", p.accent)
 		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
