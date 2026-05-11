@@ -3,7 +3,7 @@ class_name SettingsPanel
 
 signal back_pressed
 
-const PANEL_SIZE := Vector2(360.0, 500.0)
+const PANEL_SIZE := Vector2(360.0, 600.0)
 const BUTTON_SIZE := Vector2(168.0, 32.0)
 const ROW_LABEL_WIDTH := 130.0
 const OPTION_WIDTH := 170.0
@@ -15,6 +15,9 @@ var _fxaa_option: OptionButton
 var _taa_option: OptionButton
 var _bloom_option: OptionButton
 var _sensitivity_slider: HSlider
+var _music_slider: HSlider
+var _sfx_slider: HSlider
+var _ambient_slider: HSlider
 
 func _ready() -> void:
 	custom_minimum_size = PANEL_SIZE
@@ -53,6 +56,17 @@ func _ready() -> void:
 	body.add_child(_make_option_row("MENU_SETTINGS_TAA", _taa_option))
 	_bloom_option = _make_bloom_option()
 	body.add_child(_make_option_row("MENU_SETTINGS_BLOOM", _bloom_option))
+
+	body.add_child(_make_section_label("MENU_SETTINGS_AUDIO"))
+	_music_slider = _make_volume_slider(AudioState.config.music_volume if AudioState.config != null else 0.6)
+	body.add_child(_make_percent_slider_row("MENU_SETTINGS_VOLUME_MUSIC", _music_slider))
+	_music_slider.value_changed.connect(AudioState.set_music_volume)
+	_sfx_slider = _make_volume_slider(AudioState.config.sfx_volume if AudioState.config != null else 0.85)
+	body.add_child(_make_percent_slider_row("MENU_SETTINGS_VOLUME_SFX", _sfx_slider))
+	_sfx_slider.value_changed.connect(AudioState.set_sfx_volume)
+	_ambient_slider = _make_volume_slider(AudioState.config.ambient_volume if AudioState.config != null else 0.7)
+	body.add_child(_make_percent_slider_row("MENU_SETTINGS_VOLUME_AMBIENT", _ambient_slider))
+	_ambient_slider.value_changed.connect(AudioState.set_ambient_volume)
 
 	body.add_child(_make_section_label("MENU_SETTINGS_CONTROLS"))
 	_sensitivity_slider = _make_sensitivity_slider()
@@ -142,6 +156,39 @@ func _make_bloom_option() -> OptionButton:
 	option.add_item(tr("COMMON_ON"), 1)
 	option.item_selected.connect(_on_bloom_selected)
 	return option
+
+func _make_volume_slider(initial: float) -> HSlider:
+	var slider := HSlider.new()
+	slider.min_value = 0.0
+	slider.max_value = 1.0
+	slider.step = 0.01
+	slider.value = initial
+	slider.custom_minimum_size = Vector2(OPTION_WIDTH - 40.0, 26.0)
+	return slider
+
+
+# Slider row with a percent-formatted value label. Audio sliders are
+# linear [0,1]; showing "0.700" reads as gibberish, "70%" is the convention
+# every player expects.
+func _make_percent_slider_row(label_key: String, slider: HSlider) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override(&"separation", 8)
+	var label := Label.new()
+	label.text = label_key
+	label.theme_type_variation = &"SubLabel"
+	label.custom_minimum_size = Vector2(ROW_LABEL_WIDTH, 0.0)
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(label)
+	row.add_child(slider)
+	var value_label := Label.new()
+	value_label.theme_type_variation = &"BodyLabel"
+	value_label.custom_minimum_size = Vector2(36.0, 0.0)
+	value_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	value_label.text = "%d%%" % int(round(slider.value * 100.0))
+	slider.value_changed.connect(func(v: float) -> void: value_label.text = "%d%%" % int(round(v * 100.0)))
+	row.add_child(value_label)
+	return row
+
 
 func _make_sensitivity_slider() -> HSlider:
 	var slider := HSlider.new()
