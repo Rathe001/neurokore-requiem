@@ -128,25 +128,45 @@ func _ensure_loaded() -> void:
 	if _loaded:
 		return
 	_loaded = true
-	# Register empty sound sets for every known weapon archetype. When you
-	# add audio assets, preload them and append to the appropriate array.
-	#
-	# Example (once you have assets):
-	#   _register(&"melee_1h", {
-	#       fire = [preload("res://resources/audio/sfx/weapons/melee_1h/slash_01.wav")],
-	#       impact = [preload("res://resources/audio/sfx/weapons/melee_1h/hit_01.wav")],
-	#   })
+	# Register sound sets per archetype. `_streams()` filters out any path
+	# whose .wav/.ogg / .import sidecar isn't present yet, so partially-
+	# populated folders don't crash the autoload — missing files just
+	# degrade to silence for that category.
 	_register(&"melee_1h", {})
 	_register(&"melee_2h", {})
 	_register(&"ranged_1h", {})
-	_register(&"ranged_2h", {})
-	_register(&"smg_1h", {})
-	_register(&"sniper_2h", {})
+	_register(&"ranged_2h", {
+		fire = _streams(["res://resources/audio/sfx/weapons/plasma-rifle.wav"]),
+	})
+	_register(&"smg_1h", {
+		fire = _streams(["res://resources/audio/sfx/weapons/smg.wav"]),
+	})
+	_register(&"sniper_2h", {
+		fire = _streams(["res://resources/audio/sfx/weapons/sniper-rifle.wav"]),
+	})
 	_register(&"shotgun_2h", {})
 	_register(&"rpg_2h", {})
-	_register(&"lmg_2h", {})
+	_register(&"lmg_2h", {
+		fire = _streams(["res://resources/audio/sfx/weapons/lmg.wav"]),
+	})
 	_register(&"accelerator_2h", {})
 	_register(&"taser_2h", {})
+
+
+# Load each path at runtime; skip any that fail to resolve (file missing,
+# .import sidecar not generated yet, type mismatch). Returns the filtered
+# AudioStream array — empty when nothing loaded, which the player path
+# already handles as "play nothing." Keeps the autoload robust against
+# the typical drop-files-then-test iteration loop.
+func _streams(paths: Array) -> Array[AudioStream]:
+	var out: Array[AudioStream] = []
+	for path: String in paths:
+		if not ResourceLoader.exists(path):
+			continue
+		var stream := load(path) as AudioStream
+		if stream != null:
+			out.append(stream)
+	return out
 
 
 func _register(key: StringName, set: Dictionary) -> void:
