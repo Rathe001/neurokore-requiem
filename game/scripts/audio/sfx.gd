@@ -7,7 +7,7 @@ extends Node
 ## the chain pulls them all into a consistent character so they feel like
 ## they belong in the game rather than stitched-in audition clips.
 
-const POOL_SIZE := 16
+const POOL_SIZE := 24
 const DEFAULT_BUS := &"SFX"
 
 # Distance filter — far-away sounds lose their high end. Cheap fake of
@@ -81,13 +81,32 @@ func _has_effect(bus_idx: int, class_name_str: String) -> bool:
 ## Play a sound at a world position. Returns the player so the caller can
 ## tweak pitch_scale / volume_db after the fact if needed.
 func play_at(stream: AudioStream, pos: Vector3, volume_db: float = 0.0) -> AudioStreamPlayer3D:
-	var player := _pool[_idx]
-	_idx = (_idx + 1) % POOL_SIZE
+	var player := _claim_player()
 	player.stream = stream
 	player.global_position = pos
 	player.volume_db = volume_db
 	player.play()
 	return player
+
+
+# Pick a pool slot, preferring idle players over busy ones. Pure round-
+# robin (the original implementation) evicted whatever slot _idx pointed
+# at, even mid-sample — so a long sniper sound got clobbered by the
+# 16th rapid SMG shot wrapping around. Walks the ring from _idx once
+# looking for `playing == false`; falls back to the oldest slot when
+# every player is in flight. Worst case 24 cheap bool checks per shot.
+func _claim_player() -> AudioStreamPlayer3D:
+	for offset in POOL_SIZE:
+		var slot := (_idx + offset) % POOL_SIZE
+		var p := _pool[slot]
+		if not p.playing:
+			_idx = (slot + 1) % POOL_SIZE
+			return p
+	# All busy — evict the oldest. Advance _idx so the next call hits a
+	# different slot, distributing the "we ran out" pain across the pool.
+	var fallback := _pool[_idx]
+	_idx = (_idx + 1) % POOL_SIZE
+	return fallback
 
 
 ## Non-positional shortcut for UI sounds (menu clicks, notifications, etc.).
