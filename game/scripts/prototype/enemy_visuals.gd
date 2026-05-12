@@ -138,7 +138,7 @@ func _build_tooltip_body() -> String:
 		lines.append("[color=#ff4444]Enraged %.1fs[/color]" % combat._self_buff_remain)
 	for affix: MonsterAffix in _host.affixes:
 		if affix != null:
-			lines.append("[color=#ddaa22]%s[/color]" % affix.display_name)
+			lines.append("[color=#ddaa22]%s[/color]" % affix.label)
 	for skill: EnemySkill in _host._special_skills:
 		if skill != null:
 			var cd: float = combat._skill_cooldowns.get(skill, 0.0)
