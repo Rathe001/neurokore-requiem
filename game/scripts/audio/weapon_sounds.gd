@@ -285,7 +285,13 @@ func _ensure_loaded() -> void:
 		"res://resources/audio/sfx/weapons/reload_06.wav",
 	])
 	_register(&"ranged_1h", {
-		fire = _streams(["res://resources/audio/sfx/weapons/laser-pistol.wav"]),
+		fire = _streams([
+			"res://resources/audio/sfx/weapons/laser_pistol_fire_01.wav",
+			"res://resources/audio/sfx/weapons/laser_pistol_fire_02.wav",
+			"res://resources/audio/sfx/weapons/laser_pistol_fire_03.wav",
+			"res://resources/audio/sfx/weapons/laser_pistol_fire_04.wav",
+			"res://resources/audio/sfx/weapons/laser_pistol_fire_05.wav",
+		]),
 		reload = _reloads,
 	})
 	_register(&"ranged_2h", {
