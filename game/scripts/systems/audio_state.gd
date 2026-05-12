@@ -14,6 +14,13 @@ const SAVE_PATH := "user://audio.tres"
 const MUSIC_BUS := &"Music"
 const SFX_BUS := &"SFX"
 const AMBIENT_BUS := &"Ambient"
+# Music slider value gets multiplied by this before linear_to_db, so the
+# slider's whole 0..1 range maps to a much quieter window than the other
+# buses. With 0.10 scale, slider 50% = effective linear 0.05 = -26 dB
+# (which playtesting found is where music feels ambient rather than
+# competing with combat audio). 100% on the slider = effective 0.10 =
+# -20 dB, the realistic loud-end ceiling for BGM.
+const MUSIC_VOLUME_SCALE: float = 0.10
 
 var config: AudioConfig
 
@@ -73,6 +80,10 @@ func apply() -> void:
 # Convert linear [0,1] → dB and apply to a bus. linear_to_db(0) returns
 # -inf which Godot handles, but muting the bus avoids per-sample work
 # on a permanently-silent bus. Bus muted exactly at 0, unmuted otherwise.
+#
+# Music gets pre-scaled by MUSIC_VOLUME_SCALE so the slider's 0..1 range
+# maps to a quieter effective window than the other buses — BGM should
+# sit under combat audio, not compete with it.
 func _apply_bus(bus_name: StringName, linear: float) -> void:
 	var idx := AudioServer.get_bus_index(bus_name)
 	if idx < 0:
@@ -82,7 +93,8 @@ func _apply_bus(bus_name: StringName, linear: float) -> void:
 		AudioServer.set_bus_mute(idx, true)
 		return
 	AudioServer.set_bus_mute(idx, false)
-	AudioServer.set_bus_volume_db(idx, linear_to_db(linear))
+	var effective: float = linear * MUSIC_VOLUME_SCALE if bus_name == MUSIC_BUS else linear
+	AudioServer.set_bus_volume_db(idx, linear_to_db(effective))
 
 
 func save() -> void:
