@@ -375,6 +375,18 @@ func _ensure_loaded() -> void:
 	# &"footstep_metal" (default) or &"footstep_grate" (when standing on
 	# a floor in the &"floor_grate" group). Add more floor types here as
 	# level themes expand (e.g. &"footstep_stone", &"footstep_dirt").
+	# Flesh hit — quiet, subliminal layer that fires every time any weapon
+	# damages any enemy. Volume is set at the call site (-15 dB in
+	# prototype_enemy.gd) rather than baked into the samples so it can be
+	# tuned without re-editing the wavs.
+	register_generic(&"hit_flesh", _streams([
+		"res://resources/audio/sfx/enemies/hit_flesh_01.wav",
+		"res://resources/audio/sfx/enemies/hit_flesh_02.wav",
+		"res://resources/audio/sfx/enemies/hit_flesh_03.wav",
+		"res://resources/audio/sfx/enemies/hit_flesh_04.wav",
+		"res://resources/audio/sfx/enemies/hit_flesh_05.wav",
+	]))
+
 	# Explosion — generic blast sound. Triggered from combat_visuals.spawn_explosion
 	# for any grenade detonation or AoE projectile (RPG, charged plasma, etc).
 	# Random pick per blast + per-play pitch jitter for natural variety. Pos
