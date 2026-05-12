@@ -328,7 +328,12 @@ func _ensure_loaded() -> void:
 		reload = _reloads,
 	})
 	_register(&"rpg_2h", {
-		fire = _streams(["res://resources/audio/sfx/weapons/rpg.wav"]),
+		fire = _streams([
+			"res://resources/audio/sfx/weapons/rpg_fire_01.wav",
+			"res://resources/audio/sfx/weapons/rpg_fire_02.wav",
+			"res://resources/audio/sfx/weapons/rpg_fire_03.wav",
+			"res://resources/audio/sfx/weapons/rpg_fire_04.wav",
+		]),
 		impact = _streams(["res://resources/audio/sfx/weapons/rpg-impact.wav"]),
 		reload = _reloads,
 	})
