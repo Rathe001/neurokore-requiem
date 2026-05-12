@@ -8,6 +8,10 @@ site/
 # otherwise this swallows source dirs named "build/" like game/scripts/level/build/.
 /build/
 
+# Claude / yt-extract scratch space. Audio splitting, downloaded
+# sources, anything ephemeral that shouldn't enter version control.
+/.tmp/
+
 # macOS
 .DS_Store
 
