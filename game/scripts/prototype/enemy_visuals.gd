@@ -35,7 +35,7 @@ func reset() -> void:
 # ── Hover & Outline ────────────────────────────────────────────────────────
 
 func setup_hover() -> void:
-	_collect_meshes()
+	collect_meshes()
 
 func collect_meshes() -> void:
 	_outlined_meshes.clear()
