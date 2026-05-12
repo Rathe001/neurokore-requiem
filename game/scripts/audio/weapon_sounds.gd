@@ -372,13 +372,28 @@ func _ensure_loaded() -> void:
 	})
 
 	# ── Footstep sounds ────────────────────────────────────────────────────
-	# Currently silenced — both available sample sets (step_metal_*.wav and
-	# step_grate_*.wav) read as harshly metallic and were drawing attention
-	# away from combat audio. Footstep visuals (dust puff) still spawn;
-	# WeaponSounds.play_generic no-ops gracefully on missing keys. Wire
-	# new samples here when softer / less metallic ones land:
-	#   register_generic(&"footstep_metal", _streams([...]))
-	#   register_generic(&"footstep_grate", _streams([...]))
+	# Keyed by floor material. Player's _detect_floor_type() returns
+	# &"footstep_metal" (default) or &"footstep_grate" (when standing on
+	# a floor in the &"floor_grate" group). Add more floor types here as
+	# level themes expand (e.g. &"footstep_stone", &"footstep_dirt").
+	register_generic(&"footstep_metal", _streams([
+		"res://resources/audio/sfx/player/step_metal_01.wav",
+		"res://resources/audio/sfx/player/step_metal_02.wav",
+		"res://resources/audio/sfx/player/step_metal_03.wav",
+		"res://resources/audio/sfx/player/step_metal_04.wav",
+		"res://resources/audio/sfx/player/step_metal_05.wav",
+		"res://resources/audio/sfx/player/step_metal_06.wav",
+		"res://resources/audio/sfx/player/step_metal_07.wav",
+		"res://resources/audio/sfx/player/step_metal_08.wav",
+		"res://resources/audio/sfx/player/step_metal_09.wav",
+		"res://resources/audio/sfx/player/step_metal_10.wav",
+	]))
+	register_generic(&"footstep_grate", _streams([
+		"res://resources/audio/sfx/player/step_grate_01.wav",
+		"res://resources/audio/sfx/player/step_grate_02.wav",
+		"res://resources/audio/sfx/player/step_grate_03.wav",
+		"res://resources/audio/sfx/player/step_grate_04.wav",
+	]))
 
 	# ── Player hit grunts ─────────────────────────────────────────────────
 	# Played at listener when the player takes damage. Random selection
