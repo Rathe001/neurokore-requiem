@@ -31,14 +31,6 @@ const INACCURACY_SPREAD_MAX: float = 0.25
 # range 10 ≈ 0.7m, matching the 0.75m enemy collision radius.
 const HITSCAN_CONE_HALF_DEG: float = 4.0
 
-# Count Exile constants. EXILE_CURSE_DURATION is the medium-long window
-# the curse persists after the FIRST hit. Subsequent hits while the curse
-# is active do NOT refresh the timer — the window is fixed from the moment
-# of application, so the player has to commit damage inside it. When the
-# timer expires on a still-alive target, fire_exile_shot lands a fixed
-# massive shot that isn't tied to any equipped weapon (works barehanded /
-# mid-reload). Damage scales with gear bonuses.
-const EXILE_CURSE_DURATION: float = 4.0
 const EXILE_AUTO_SHOT_BASE_DAMAGE: int = 60
 const EXILE_AUTO_SHOT_KNOCKBACK: float = 4.0
 
@@ -48,9 +40,6 @@ const OVERCLOCK_DAMAGE_MULT: float = 1.25
 const OVERCLOCK_RANGE_MULT: float = 0.75
 const OVERCLOCK_VISUAL_SCALE: float = 1.25
 
-# Mindlink — Polymath talent. When active, each hit echoes full damage to
-# the nearest other enemy within this radius of the primary target.
-const MINDLINK_RADIUS: float = 6.0
 
 var _host: PrototypePlayer
 var _cooldowns: Dictionary = {}
@@ -60,8 +49,6 @@ var _last_resolved_aim: Vector3 = Vector3.FORWARD
 # Per-attack overclock state — set at the top of resolve_skill_hit, read
 # by damage rolling and visual spawn functions during that same call.
 var _overclock_active: bool = false
-# Guard flag so Mindlink echoes don't trigger further echoes.
-var _mindlink_echoing: bool = false
 # Per-equipment-slot cooldowns for the multi-weapon LMB path. Two identical
 # weapons in different slots (Forged Amalgamation) have independent timers
 # because the key is the slot StringName, not the Skill resource. Non-LMB
@@ -540,12 +527,8 @@ func _resolve_aoe(skill: Skill, eff_range: float, weapon: Item) -> void:
 		_try_spawn_isr_drone(enode)
 
 
-# Cheap duck-typed check — charmed enemies expose is_player_friendly()
-# returning true. Anything that doesn't have the method is treated as
-# a normal target. Centralised so the player-friendly skip rule lives
-# in one place across all damage paths.
 func is_player_friendly(target: Node) -> bool:
-	return target.has_method(&"is_player_friendly") and target.is_player_friendly()
+	return CombatEffects.is_player_friendly(target)
 
 ## Random spread (radians) applied to extra-arm projectiles so they
 ## converge toward the main-hand target without looking perfectly identical.
@@ -1249,13 +1232,7 @@ func _crit_damage(base: int, is_crit: bool) -> int:
 # ---------------------------------------------------------------------------
 
 func _apply_exile_curse_if_active(enemy: Node) -> void:
-	var pct: float = Effects.get_aggregate(&"exile_curse_damage_pct")
-	if pct <= 0.0:
-		return
-	if enemy == null or not is_instance_valid(enemy):
-		return
-	if enemy.has_method(&"apply_curse"):
-		enemy.apply_curse(pct, EXILE_CURSE_DURATION)
+	CombatEffects.apply_exile_curse_if_active(enemy)
 
 
 func fire_exile_shot(target: Node3D) -> void:
@@ -1290,36 +1267,8 @@ func fire_exile_shot(target: Node3D) -> void:
 # ---------------------------------------------------------------------------
 
 func _apply_mindlink(primary: Node3D, dmg: int, is_crit: bool) -> void:
-	if _mindlink_echoing:
-		return
-	if Effects.get_aggregate(&"mindlink_active") <= 0.0:
-		return
-	if primary == null or not is_instance_valid(primary):
-		return
-	var best: Node3D = null
-	var best_d2 := MINDLINK_RADIUS * MINDLINK_RADIUS
-	for n: Node3D in SpatialGrid.query_radius(primary.global_position, MINDLINK_RADIUS, &"enemies"):
-		if n == primary:
-			continue
-		if not n.has_method(&"take_damage"):
-			continue
-		if is_player_friendly(n):
-			continue
-		var d2 := primary.global_position.distance_squared_to(n.global_position)
-		if d2 < best_d2:
-			best_d2 = d2
-			best = n
-	if best == null:
-		return
-	# Visual: beam from primary to echo target so the link reads clearly.
-	var link_dir := best.global_position - primary.global_position
-	var link_dist := link_dir.length()
-	if link_dist > 0.001:
-		CombatVisuals.spawn_beam(primary, link_dir.normalized(), link_dist)
-	CombatVisuals.spawn_impact_burst(_host, best.global_position + Vector3(0.0, 0.9, 0.0))
-	_mindlink_echoing = true
-	_deal_damage(best, dmg, _host.global_position, 0.0, 1, is_crit)
-	_mindlink_echoing = false
+	CombatEffects.apply_mindlink(primary, dmg, is_crit, _host.global_position,
+		_deal_damage, true)
 
 
 # ---------------------------------------------------------------------------
@@ -1327,11 +1276,4 @@ func _apply_mindlink(primary: Node3D, dmg: int, is_crit: bool) -> void:
 # ---------------------------------------------------------------------------
 
 func _try_spawn_isr_drone(enemy: Node3D) -> void:
-	var chance := Effects.get_aggregate(&"isr_drone_chance")
-	if chance <= 0.0 or randf() >= chance:
-		return
-	if enemy == null or not is_instance_valid(enemy):
-		return
-	if is_player_friendly(enemy):
-		return
-	ISRDrone.spawn_on(enemy)
+	CombatEffects.try_spawn_isr_drone(enemy)

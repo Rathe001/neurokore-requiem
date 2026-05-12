@@ -31,7 +31,7 @@ signal weapon_ammo_changed
 
 const ITEM_PICKUP_SCENE: PackedScene = preload("res://scenes/prototype/prototype_item_pickup.tscn")
 
-const KNOCKBACK_DURATION := 0.22
+const KNOCKBACK_DURATION := CombatConstants.KNOCKBACK_DURATION
 const DEATH_HOLD := 0.9
 const INTERACT_RANGE_SQ := 4.0  # 2.0m — player must stand close to interact
 const PLAYER_WORLD_POS_PARAM := &"player_world_pos"
@@ -47,21 +47,17 @@ const SKILL_INPUTS: Array[StringName] = [
 	&"skill_e",
 ]
 
-const ANIM_IDLE: Array[StringName] = [&"Idle", &"Idle_Loop", &"Idle_Normal"]
-const ANIM_RUN: Array[StringName] = [&"Jog_Fwd", &"Jog_Fwd_Loop"]
+const ANIM_IDLE := CombatConstants.ANIM_IDLE
+const ANIM_RUN := CombatConstants.ANIM_RUN
 const ANIM_WALK_BACK: Array[StringName] = [&"Walk"]
-const ANIM_CROUCH_IDLE: Array[StringName] = [&"Crouch_Idle", &"Crouch_Idle_Loop"]
+const ANIM_CROUCH_IDLE := CombatConstants.ANIM_CROUCH_IDLE
 const ANIM_CROUCH_MOVE: Array[StringName] = [&"Crouch_Fwd", &"Crouch_Fwd_Loop"]
-const ANIM_ATTACK: Array[StringName] = [&"Sword_Attack", &"Punch_Cross"]
+const ANIM_ATTACK := CombatConstants.ANIM_ATTACK
 const ANIM_JUMP_START: Array[StringName] = [&"Jump_Start"]
 const ANIM_JUMP_AIR: Array[StringName] = [&"Jump"]
 const ANIM_JUMP_LAND: Array[StringName] = [&"Jump_Land"]
 const ANIM_INTERACT: Array[StringName] = [&"Interact"]
-const ANIM_DEATH: Array[StringName] = [
-	&"Death01", &"Death_1", &"Death_2", &"Death_A", &"Death_B", &"Death",
-	&"Dying_A", &"Dying_B", &"Die",
-	&"DEATH_1", &"DEATH_2", &"DEATH",
-]
+const ANIM_DEATH := CombatConstants.ANIM_DEATH
 
 const CROUCH_SPEED_FACTOR := 0.45
 const SPRINT_SPEED_FACTOR := 1.6
@@ -94,7 +90,7 @@ const HP_REGEN_MIN_DELAY := 0.5
 # block + still being able to attack. SHIELD_BUFF doesn't apply.
 const STAND_HEIGHT := 1.6
 const CROUCH_HEIGHT := 0.9
-const GRAVITY := 22.0
+const GRAVITY := CombatConstants.GRAVITY
 const JUMP_VELOCITY := 6.5
 
 # Body rotation rates. Aim turns are snappier so kiting stays responsive.
@@ -366,35 +362,10 @@ func consume_laser_charged_shot() -> float:
 # remote peers' replicated positions naturally drive their puffs
 # too — no replication needed.
 func _tick_footsteps() -> void:
-	var pos := global_position
-	# First-tick init / teleport handling — large jump means we just
-	# spawned or crossed level boundaries, so reset without emitting.
-	if _footstep_last_pos == Vector3.ZERO:
-		_footstep_last_pos = pos
-		return
-	var delta_v := pos - _footstep_last_pos
-	delta_v.y = 0.0  # horizontal distance only
-	var d_sqr := delta_v.length_squared()
-	# Speed floor skips emissions from MultiplayerSynchronizer's tiny
-	# corrective jitter on idle remote players (the floor is per-frame
-	# squared distance, not absolute speed, so it scales naturally
-	# with frame rate).
-	if d_sqr < FOOTSTEP_MIN_SPEED_SQR * 0.0001:
-		_footstep_last_pos = pos
-		return
-	# Airborne skip — feet aren't on the ground.
-	if not is_on_floor():
-		_footstep_last_pos = pos
-		return
-	_footstep_distance_accum += sqrt(d_sqr)
-	_footstep_last_pos = pos
-	if _footstep_distance_accum >= FOOTSTEP_DISTANCE:
-		_footstep_distance_accum = 0.0
-		var scene := get_tree().current_scene
-		if scene != null:
-			PrototypeAttackIndicator.spawn_footstep_puff(scene, pos)
-		var floor_key := _detect_floor_type()
-		WeaponSounds.play_generic(floor_key, pos, -14.0, true)
+	var result := Footsteps.tick(self, _footstep_distance_accum, _footstep_last_pos,
+		FOOTSTEP_DISTANCE, -14.0, true, true)
+	_footstep_distance_accum = result[0]
+	_footstep_last_pos = result[1]
 
 
 # ── Hammer Wind-Up ──────────────────────────────────────────────────────────
@@ -546,19 +517,6 @@ const FOOTSTEP_MIN_SPEED_SQR: float = 0.04  # ignore micro-jitter from sync
 var _footstep_distance_accum: float = 0.0
 var _footstep_last_pos: Vector3 = Vector3.ZERO
 
-## Check the floor body under the player for a material-type group.
-## Returns &"footstep_grate" or &"footstep_metal" (the generic sound
-## key WeaponSounds resolves). Falls back to metal when no floor body
-## is found or it has no floor_* group.
-func _detect_floor_type() -> StringName:
-	for i in get_slide_collision_count():
-		var col := get_slide_collision(i)
-		if col.get_normal().y < 0.5:
-			continue  # wall / ramp, not floor
-		var body := col.get_collider()
-		if body is Node and body.is_in_group(&"floor_grate"):
-			return &"footstep_grate"
-	return &"footstep_metal"
 
 
 # Flame visual for SINGLE_CONE CHANNEL_BEAM weapons (Energy Accelerator).

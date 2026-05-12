@@ -155,11 +155,6 @@ const BULLET_PROJECTILE_COLOR: Color = Color(0.92, 0.92, 0.88, 0.65)
 const CORPSE_IMPULSE_MAX: float = 12.0
 const CORPSE_IMPULSE_MIN: float = 3.0
 
-# Duplicates PlayerCombat.EXILE_CURSE_DURATION rather than reaching across
-# class_names — the projectile doesn't otherwise depend on PlayerCombat
-# and a literal here keeps the projectile self-contained. Keep these in
-# sync if the curse window is ever retuned.
-const EXILE_CURSE_DURATION: float = 4.0
 static var _player_material: StandardMaterial3D = null
 static var _enemy_material: StandardMaterial3D = null
 static var _bullet_material: ShaderMaterial = null
@@ -742,58 +737,18 @@ func _explode(impact_pos: Vector3) -> void:
 
 
 func _apply_exile_curse_if_active(enemy: Node) -> void:
-	var pct: float = Effects.get_aggregate(&"exile_curse_damage_pct")
-	if pct <= 0.0:
-		return
-	if enemy.has_method(&"apply_curse"):
-		enemy.apply_curse(pct, EXILE_CURSE_DURATION)
+	CombatEffects.apply_exile_curse_if_active(enemy)
 
-
-# Duplicates PlayerCombat.MINDLINK_RADIUS — same self-contained rationale
-# as the exile curse above. Keep in sync.
-const MINDLINK_RADIUS: float = 6.0
-# Static guard so projectile mindlink echoes don't chain.
-static var _mindlink_echoing: bool = false
 
 func _apply_mindlink(primary: Node3D, dmg: int, is_crit: bool) -> void:
-	if _mindlink_echoing:
-		return
-	if Effects.get_aggregate(&"mindlink_active") <= 0.0:
-		return
-	if primary == null or not is_instance_valid(primary):
-		return
-	var best: Node3D = null
-	var best_d2 := MINDLINK_RADIUS * MINDLINK_RADIUS
-	for n: Node3D in SpatialGrid.query_radius(primary.global_position, MINDLINK_RADIUS, &"enemies"):
-		if n == primary:
-			continue
-		if not n.has_method(&"take_damage"):
-			continue
-		if n.has_method(&"is_player_friendly") and n.is_player_friendly():
-			continue
-		var d2 := primary.global_position.distance_squared_to(n.global_position)
-		if d2 < best_d2:
-			best_d2 = d2
-			best = n
-	if best == null:
-		return
-	CombatVisuals.spawn_impact_burst(primary, best.global_position + Vector3(0.0, 0.9, 0.0))
-	_mindlink_echoing = true
-	PrototypeEnemy.deal_damage(best, dmg, source_position, 0.0, 1, is_crit)
-	_mindlink_echoing = false
+	CombatEffects.apply_mindlink(primary, dmg, is_crit, source_position,
+		PrototypeEnemy.deal_damage, false)
 
 
 func _try_spawn_isr_drone(enemy: Node3D) -> void:
 	if target_group != &"enemies":
 		return
-	var chance := Effects.get_aggregate(&"isr_drone_chance")
-	if chance <= 0.0 or randf() >= chance:
-		return
-	if enemy == null or not is_instance_valid(enemy):
-		return
-	if enemy.has_method(&"is_player_friendly") and enemy.is_player_friendly():
-		return
-	ISRDrone.spawn_on(enemy)
+	CombatEffects.try_spawn_isr_drone(enemy)
 
 
 func _release() -> void:
