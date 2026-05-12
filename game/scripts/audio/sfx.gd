@@ -79,12 +79,15 @@ func _has_effect(bus_idx: int, class_name_str: String) -> bool:
 
 
 ## Play a sound at a world position. Returns the player so the caller can
-## tweak pitch_scale / volume_db after the fact if needed.
-func play_at(stream: AudioStream, pos: Vector3, volume_db: float = 0.0) -> AudioStreamPlayer3D:
+## tweak it after the fact if needed. `pitch_scale` is reset every call
+## so the previous shot's pitch doesn't leak into a pool slot when it
+## gets reused.
+func play_at(stream: AudioStream, pos: Vector3, volume_db: float = 0.0, pitch_scale: float = 1.0) -> AudioStreamPlayer3D:
 	var player := _claim_player()
 	player.stream = stream
 	player.global_position = pos
 	player.volume_db = volume_db
+	player.pitch_scale = pitch_scale
 	player.play()
 	return player
 

@@ -43,6 +43,19 @@ const FIRE_DB := 0.0
 const IMPACT_DB := -3.0
 const MISS_DB := -6.0
 
+# Per-play variance — gives every shot a slightly different timbre so
+# repeated fires don't read as a mechanical pulse, and enemies sound
+# audibly distinct from the player so the mix doesn't blur when both
+# are shooting.
+#
+# Pitch: player stays close to 1.0 (subtle variance), enemies are
+# consistently lower so the player's "voice" carries above incoming
+# fire. Range is per-shot, so each tick / enemy / volley gets fresh
+# randomisation.
+const PLAYER_PITCH_RANGE := Vector2(0.96, 1.04)
+const ENEMY_PITCH_RANGE := Vector2(0.78, 0.92)
+const VOLUME_JITTER_DB := 1.5  # ± this many dB on top of the category offset
+
 # Mapping from enemy weapon_id → player weapon_base_id so enemies reuse the
 # same sound sets. Enemies that carry a weapon with no player equivalent
 # (e.g. a future unique boss weapon) can be added as their own key in _SOUNDS.
@@ -76,28 +89,36 @@ func _resolve_key(weapon_key: StringName) -> StringName:
 
 ## Play a weapon fire sound at `pos`. `weapon_key` is weapon_base_id or
 ## enemy weapon_id. No-ops gracefully when no sound is registered.
+## Enemy IDs (the keys of _ENEMY_TO_BASE) automatically get the lower
+## pitch range so enemy fire reads distinct from player fire.
 func play_fire(weapon_key: StringName, pos: Vector3) -> void:
-	_play_random(_resolve_key(weapon_key), &"fire", pos, FIRE_DB)
+	_play_random(_resolve_key(weapon_key), &"fire", pos, FIRE_DB, _is_enemy_key(weapon_key))
 
 
 ## Play an impact sound at the hit location.
 func play_impact(weapon_key: StringName, pos: Vector3) -> void:
-	_play_random(_resolve_key(weapon_key), &"impact", pos, IMPACT_DB)
+	_play_random(_resolve_key(weapon_key), &"impact", pos, IMPACT_DB, _is_enemy_key(weapon_key))
 
 
 ## Play a miss/whiff sound at the attack origin.
 func play_miss(weapon_key: StringName, pos: Vector3) -> void:
-	_play_random(_resolve_key(weapon_key), &"miss", pos, MISS_DB)
+	_play_random(_resolve_key(weapon_key), &"miss", pos, MISS_DB, _is_enemy_key(weapon_key))
 
 
 ## Play a reload sound at the weapon holder's position.
 func play_reload(weapon_key: StringName, pos: Vector3) -> void:
-	_play_random(_resolve_key(weapon_key), &"reload", pos, FIRE_DB)
+	_play_random(_resolve_key(weapon_key), &"reload", pos, FIRE_DB, _is_enemy_key(weapon_key))
 
 
 ## Play alt-fire sound.
 func play_alt_fire(weapon_key: StringName, pos: Vector3) -> void:
-	_play_random(_resolve_key(weapon_key), &"alt_fire", pos, FIRE_DB)
+	_play_random(_resolve_key(weapon_key), &"alt_fire", pos, FIRE_DB, _is_enemy_key(weapon_key))
+
+
+# True when `weapon_key` is an enemy weapon_id (key of _ENEMY_TO_BASE)
+# rather than a player weapon_base_id. Drives the lower pitch range.
+func _is_enemy_key(weapon_key: StringName) -> bool:
+	return _ENEMY_TO_BASE.has(weapon_key)
 
 
 # ── Channel weapons (taser hold, future accelerator hold) ──────────────────
@@ -120,7 +141,7 @@ func is_channel_weapon(weapon_key: StringName) -> bool:
 ## a dedicated "engage" sound (e.g. taser's initial pop) without
 ## doubling up on the hold loop.
 func play_channel_start(weapon_key: StringName, pos: Vector3) -> void:
-	_play_random(_resolve_key(weapon_key), &"fire", pos, FIRE_DB)
+	_play_random(_resolve_key(weapon_key), &"fire", pos, FIRE_DB, _is_enemy_key(weapon_key))
 
 
 ## Spawn a looping AudioStreamPlayer3D for the channel hold sound,
@@ -151,6 +172,11 @@ func play_channel_loop(weapon_key: StringName, parent_node: Node3D) -> AudioStre
 	p.max_distance = 30.0
 	p.attenuation_model = AudioStreamPlayer3D.ATTENUATION_INVERSE_DISTANCE
 	p.volume_db = -40.0
+	# Stable per-channel pitch so the held loop has a consistent tone
+	# the whole time. Player gets a tiny variance for character; enemies
+	# sit clearly lower so the hum is identifiable as theirs.
+	var range := ENEMY_PITCH_RANGE if _is_enemy_key(weapon_key) else PLAYER_PITCH_RANGE
+	p.pitch_scale = randf_range(range.x, range.y)
 	parent_node.add_child(p)
 	p.play()
 	# Brief fade-in so the engagement reads as building rather than
@@ -189,7 +215,7 @@ func register_generic(sound_name: StringName, streams: Array[AudioStream]) -> vo
 
 # ── Internals ───────────────────────────────────────────────────────────────
 
-func _play_random(base_key: StringName, category: StringName, pos: Vector3, db: float) -> void:
+func _play_random(base_key: StringName, category: StringName, pos: Vector3, db: float, is_enemy: bool = false) -> void:
 	if base_key == &"":
 		return
 	var set: Dictionary = _sounds.get(base_key, {})
@@ -197,7 +223,14 @@ func _play_random(base_key: StringName, category: StringName, pos: Vector3, db: 
 	if pool.is_empty():
 		return
 	var stream: AudioStream = pool[randi() % pool.size()]
-	SFX.play_at(stream, pos, db)
+	# Per-play variance: pitch from the side-appropriate range, volume
+	# jittered around the category default. The pitch range carries
+	# enough of the "this is enemy fire" signal that the player can
+	# subconsciously parse who's shooting without looking.
+	var range := ENEMY_PITCH_RANGE if is_enemy else PLAYER_PITCH_RANGE
+	var pitch: float = randf_range(range.x, range.y)
+	var vol_jitter: float = randf_range(-VOLUME_JITTER_DB, VOLUME_JITTER_DB)
+	SFX.play_at(stream, pos, db + vol_jitter, pitch)
 
 
 func _ensure_loaded() -> void:
