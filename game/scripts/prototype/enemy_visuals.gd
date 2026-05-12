@@ -201,10 +201,13 @@ func apply_floor_ring_tint_color(color: Color) -> void:
 		_floor_ring_mat = StandardMaterial3D.new()
 		_floor_ring_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		_floor_ring_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		_floor_ring_mat.vertex_color_use_as_albedo = true
+		# Transparent-black albedo so ONLY the emission shows — without
+		# this, the default opaque white albedo dominates and the ring
+		# reads as a solid white disc under every enemy.
+		_floor_ring_mat.albedo_color = Color(0, 0, 0, 0)
 		_floor_ring_mat.emission_enabled = true
+		_floor_ring_mat.emission_energy_multiplier = 4.0
 	_floor_ring_mat.emission = color
-	_floor_ring_mat.emission_energy_multiplier = 1.5
 	_host.floor_ring.material_override = _floor_ring_mat
 
 
