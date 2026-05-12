@@ -103,7 +103,7 @@ func _build_display_tab() -> VBoxContainer:
 
 func _build_audio_tab() -> VBoxContainer:
 	var page := _make_tab_page("Audio")
-	_music_slider = _make_volume_slider(AudioState.config.music_volume if AudioState.config != null else 0.3)
+	_music_slider = _make_volume_slider(AudioState.config.music_volume if AudioState.config != null else 0.12)
 	page.add_child(_make_percent_slider_row("MENU_SETTINGS_VOLUME_MUSIC", _music_slider))
 	_music_slider.value_changed.connect(AudioState.set_music_volume)
 	_sfx_slider = _make_volume_slider(AudioState.config.sfx_volume if AudioState.config != null else 0.85)

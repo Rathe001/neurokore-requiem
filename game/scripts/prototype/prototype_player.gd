@@ -1536,8 +1536,21 @@ func _cast_lmb_combat() -> void:
 			# Pay either resource (energy) or ammo (bullet); helper also
 			# fires the auto-reload trigger on the empty-magazine shot.
 			_skill_pay_cost(item, skill, true)
-		var fire_delay: float = float(i) * stagger
+		# Each fire's projectile spawn is delayed by:
+		#   (i * stagger)              — multi-arm visual stagger
+		# + (skill.wind_up / atk_spd)  — per-skill wind-up
+		# So a 1s-wind-up weapon (RPG) launches its projectile a full
+		# second after LMB press, matching the baked-in pre-roll of
+		# its fire SFX. Stagger applies on top so extras still cascade.
+		var wind_up_delay: float = (skill.wind_up / atk_spd) if skill.wind_up > 0.0 else 0.0
+		var fire_delay: float = float(i) * stagger + wind_up_delay
 		max_fire_delay = maxf(max_fire_delay, fire_delay)
+		# Fire SFX plays synchronously at LMB-press (now), NOT inside the
+		# timer callback — so wind-up weapons' audio pre-roll starts now
+		# and the launch transient lands when the projectile spawns
+		# `wind_up_delay` later. Channel weapons skip (own SFX path).
+		if item != null and not WeaponSounds.is_channel_weapon(item.weapon_base_id):
+			WeaponSounds.play_fire(item.weapon_base_id, global_position)
 		var captured_skill := skill
 		var captured_item := item
 		var captured_offset := _arm_offset_for_slot(slot, aim_right)
@@ -1552,11 +1565,6 @@ func _cast_lmb_combat() -> void:
 				var refreshed := _aim_direction()
 				if refreshed != Vector3.ZERO:
 					fire_aim = refreshed
-			# Multi-arm fire SFX — each arm produces its own discrete shot,
-			# so play_fire fires here at the staggered timer callback.
-			# Channel weapons skip (their own SFX path handles them).
-			if captured_item != null and not WeaponSounds.is_channel_weapon(captured_item.weapon_base_id):
-				WeaponSounds.play_fire(captured_item.weapon_base_id, global_position)
 			_combat.resolve_skill_hit(captured_skill, fire_aim, captured_item, captured_offset)
 		, CONNECT_ONE_SHOT)
 
