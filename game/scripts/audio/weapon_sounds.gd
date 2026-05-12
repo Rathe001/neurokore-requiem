@@ -375,6 +375,18 @@ func _ensure_loaded() -> void:
 	# &"footstep_metal" (default) or &"footstep_grate" (when standing on
 	# a floor in the &"floor_grate" group). Add more floor types here as
 	# level themes expand (e.g. &"footstep_stone", &"footstep_dirt").
+	# Explosion — generic blast sound. Triggered from combat_visuals.spawn_explosion
+	# for any grenade detonation or AoE projectile (RPG, charged plasma, etc).
+	# Random pick per blast + per-play pitch jitter for natural variety. Pos
+	# is the world impact point; play_at handles 3D attenuation from there.
+	register_generic(&"explosion", _streams([
+		"res://resources/audio/sfx/weapons/explosion_01.wav",
+		"res://resources/audio/sfx/weapons/explosion_02.wav",
+		"res://resources/audio/sfx/weapons/explosion_03.wav",
+		"res://resources/audio/sfx/weapons/explosion_04.wav",
+		"res://resources/audio/sfx/weapons/explosion_05.wav",
+	]))
+
 	register_generic(&"footstep_metal", _streams([
 		"res://resources/audio/sfx/player/step_metal_01.wav",
 		"res://resources/audio/sfx/player/step_metal_02.wav",
