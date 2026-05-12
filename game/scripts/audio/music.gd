@@ -46,6 +46,10 @@ var _loop_path: String = ""
 # 15s fade; title/menu uses the standard 1.5s).
 var _loop_fade_in_sec: float = FADE_TIME
 var _loop_timer: Timer
+# Shuffled level playlist — filled by play_level_track(), advanced by
+# _on_loop_timer(). Empty when playing non-level music (title screen).
+var _level_queue: Array[String] = []
+var _level_queue_idx: int = 0
 
 
 func _ready() -> void:
@@ -100,15 +104,16 @@ func play_track(path: String, fade_in_sec: float = FADE_TIME) -> void:
 	_start_crossfade(fade_in_sec)
 
 
-## Cycle helper for level BGM. `index` is treated as a monotonic counter
-## (level number, NG+ count, etc.) and wraps modulo the track count.
-## Always uses the long level fade-in so re-entering a level on a fresh
-## load feels gradual rather than slamming the music in.
-func play_level_track(index: int) -> void:
+## Shuffle-play all level tracks. Builds a randomised playlist from
+## LEVEL_TRACKS and starts the first one; when each track finishes the
+## loop-gap timer advances to the next in the shuffle. Once the queue
+## is exhausted it re-shuffles so you never hear the same order twice
+## in a row.
+func play_level_track(_index: int = 0) -> void:
 	if LEVEL_TRACKS.is_empty():
 		return
-	var i: int = posmod(index, LEVEL_TRACKS.size())
-	play_track(LEVEL_TRACKS[i], LEVEL_FADE_IN_SEC)
+	_build_level_queue()
+	play_track(_level_queue[0], LEVEL_FADE_IN_SEC)
 
 
 ## Fade out and stop. Use for moments where silence reads better than a
@@ -116,6 +121,7 @@ func play_level_track(index: int) -> void:
 ## a silent state and fade up cleanly.
 func stop(fade: float = FADE_TIME) -> void:
 	_loop_path = ""
+	_level_queue.clear()
 	_cancel_loop_timer()
 	if _tween != null and _tween.is_valid():
 		_tween.kill()
@@ -161,16 +167,24 @@ func _on_track_finished() -> void:
 func _on_loop_timer() -> void:
 	if _loop_path.is_empty():
 		return
-	# Re-play the captured path with the same fade-in as the original
-	# entrance — level tracks ease back up over 15s, menu tracks snap
-	# back at 1.5s. play_track stages on _next and crossfades from the
-	# (silent) _active so the entrance fades up smoothly rather than
-	# starting at full volume.
+	# Level playlist: advance to the next shuffled track. When the queue
+	# is exhausted, re-shuffle so the rotation never repeats the same
+	# order back-to-back.
+	if not _level_queue.is_empty():
+		_level_queue_idx += 1
+		if _level_queue_idx >= _level_queue.size():
+			_build_level_queue()
+		var path := _level_queue[_level_queue_idx]
+		var fade := _loop_fade_in_sec
+		# Clear the no-op guard so play_track doesn't skip on "same stream
+		# already active" — the active player is stopped at this point but
+		# its `stream` reference still matches.
+		_loop_path = ""
+		play_track(path, fade)
+		return
+	# Non-level track: replay the same path (title screen, etc.).
 	var path := _loop_path
 	var fade := _loop_fade_in_sec
-	# Clear the no-op guard so play_track doesn't skip on "same stream
-	# already active" — the active player is stopped at this point but
-	# its `stream` reference still matches.
 	_loop_path = ""
 	play_track(path, fade)
 
@@ -178,3 +192,15 @@ func _on_loop_timer() -> void:
 func _cancel_loop_timer() -> void:
 	if _loop_timer != null and not _loop_timer.is_stopped():
 		_loop_timer.stop()
+
+
+## Build a fresh shuffled copy of LEVEL_TRACKS and reset the index.
+func _build_level_queue() -> void:
+	_level_queue = LEVEL_TRACKS.duplicate()
+	# Fisher-Yates shuffle.
+	for i in range(_level_queue.size() - 1, 0, -1):
+		var j := randi() % (i + 1)
+		var tmp := _level_queue[i]
+		_level_queue[i] = _level_queue[j]
+		_level_queue[j] = tmp
+	_level_queue_idx = 0

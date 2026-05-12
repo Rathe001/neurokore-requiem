@@ -55,6 +55,7 @@ const MISS_DB := -6.0
 const PLAYER_PITCH_RANGE := Vector2(0.96, 1.04)
 const ENEMY_PITCH_RANGE := Vector2(0.78, 0.92)
 const VOLUME_JITTER_DB := 1.5  # ± this many dB on top of the category offset
+const ENEMY_ATTEN_DB := -6.0   # blanket cut so enemy fire sits behind player SFX
 
 # Mapping from enemy weapon_id → player weapon_base_id so enemies reuse the
 # same sound sets. Enemies that carry a weapon with no player equivalent
@@ -68,6 +69,9 @@ const _ENEMY_TO_BASE: Dictionary = {
 	&"sniper_rifle": &"sniper_2h",
 	&"shotgun": &"shotgun_2h",
 	&"taser": &"taser_2h",
+	&"rpg": &"rpg_2h",
+	&"lmg": &"lmg_2h",
+	&"accelerator": &"accelerator_2h",
 }
 
 
@@ -144,21 +148,14 @@ func play_channel_start(weapon_key: StringName, pos: Vector3) -> void:
 	_play_random(_resolve_key(weapon_key), &"fire", pos, FIRE_DB, _is_enemy_key(weapon_key))
 
 
-## Spawn a looping AudioStreamPlayer (non-3D) for the channel hold sound.
-## Parented to the WeaponSounds autoload so it lives independently of the
-## player node's MP authority / lifecycle quirks. Returns the player (null
-## when no hold loop is registered) so the caller can stop on channel end.
-##
-## Non-3D was chosen after AudioStreamPlayer3D parented to PrototypePlayer
-## reported playing=true at +12dB / no attenuation / distance=0 from the
-## listener but produced no audible output. The pool players (also 3D, but
-## parented to SFX autoload) work fine, so the failure was specific to
-## parenting under the player node. Until that's understood, channel
-## loops are non-positional and play "everywhere."
-const CHANNEL_LOOP_BUS := &"SFX"
-const CHANNEL_FADE_OUT := 0.20
+## Start a looping hold sound using a reserved SFX pool player (same
+## AudioStreamPlayer3D nodes that produce audible one-shots). The pool
+## player is marked reserved so rapid fire sounds can't evict it.
+## Returns the player (null when no hold loop registered) — caller stores
+## it and passes to stop_channel_loop on release.
+const CHANNEL_FADE_OUT := 0.35
 
-func play_channel_loop(weapon_key: StringName, parent_node: Node3D) -> AudioStreamPlayer:
+func play_channel_loop(weapon_key: StringName, parent_node: Node3D) -> AudioStreamPlayer3D:
 	var key := _resolve_key(weapon_key)
 	if key == &"":
 		return null
@@ -166,31 +163,33 @@ func play_channel_loop(weapon_key: StringName, parent_node: Node3D) -> AudioStre
 	var stream = set.get(&"hold_loop", null) as AudioStream
 	if stream == null:
 		return null
-	# WAV needs LOOP_FORWARD on the stream itself for the player to repeat.
-	# Always set (don't trust import setting).
-	if stream is AudioStreamWAV:
-		var wav := stream as AudioStreamWAV
-		wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
-		wav.loop_begin = 0
-	var p := AudioStreamPlayer.new()
-	p.bus = CHANNEL_LOOP_BUS
-	p.stream = stream
-	p.volume_db = 0.0
-	var range := ENEMY_PITCH_RANGE if _is_enemy_key(weapon_key) else PLAYER_PITCH_RANGE
-	p.pitch_scale = randf_range(range.x, range.y)
-	add_child(p)
-	p.play()
-	return p
+	# OGG files loop natively via import settings (loop=true). DO NOT
+	# modify the stream resource at runtime — it's a shared cached object
+	# and mutating it can break playback for all users of that resource.
+	var is_enemy := _is_enemy_key(weapon_key)
+	var pitch_range := ENEMY_PITCH_RANGE if is_enemy else PLAYER_PITCH_RANGE
+	var pitch := randf_range(pitch_range.x, pitch_range.y)
+	if is_enemy:
+		return SFX.claim_reserved(stream, parent_node.global_position, 0.0, pitch)
+	else:
+		return SFX.claim_reserved_at_listener(stream, 0.0, pitch)
 
 
-## Stop a previously-claimed channel-loop player. Fades out then frees.
-## Safe to call with null (no-op) so callers can stop unconditionally.
-func stop_channel_loop(player: AudioStreamPlayer) -> void:
+## Reposition a channel-loop player to follow its source. Called each
+## frame by _tick_channel so the 3D sound tracks the wielder.
+func update_channel_position(player: AudioStreamPlayer3D, pos: Vector3) -> void:
+	if player != null and is_instance_valid(player):
+		player.global_position = pos
+
+
+## Stop a previously-claimed channel-loop player. Fades out then releases
+## the reserved pool slot. Safe to call with null (no-op).
+func stop_channel_loop(player: AudioStreamPlayer3D) -> void:
 	if player == null or not is_instance_valid(player):
 		return
 	var tw := player.create_tween()
 	tw.tween_property(player, "volume_db", -40.0, CHANNEL_FADE_OUT)
-	tw.tween_callback(player.queue_free)
+	tw.tween_callback(SFX.release_player.bind(player))
 
 
 # ── Generic sounds (not weapon-specific) ────────────────────────────────────
@@ -198,16 +197,31 @@ func stop_channel_loop(player: AudioStreamPlayer) -> void:
 var _generic: Dictionary = {}  # StringName → Array[AudioStream]
 
 ## Play a generic named sound (e.g. &"explosion", &"level_up", &"pickup").
-## Register via register_generic().
-func play_generic(sound_name: StringName, pos: Vector3, volume_db: float = 0.0) -> void:
+## Register via register_generic(). Pass at_listener=true for player-
+## originated sounds (footsteps) so movement doesn't shift volume.
+func play_generic(sound_name: StringName, pos: Vector3, volume_db: float = 0.0, at_listener: bool = false) -> void:
 	var pool: Array = _generic.get(sound_name, [])
 	if pool.is_empty():
 		return
-	SFX.play_at(pool[randi() % pool.size()], pos, volume_db)
+	var stream: AudioStream = pool[randi() % pool.size()]
+	if at_listener:
+		SFX.play_at_listener(stream, volume_db)
+	else:
+		SFX.play_at(stream, pos, volume_db)
 
 
 func register_generic(sound_name: StringName, streams: Array[AudioStream]) -> void:
 	_generic[sound_name] = streams
+
+
+## Play a random UI sound on the UI bus (non-positional).
+## Usage: WeaponSounds.play_ui(&"ui_click")
+func play_ui(sound_name: StringName, volume_db: float = 0.0) -> void:
+	var pool: Array = _generic.get(sound_name, [])
+	if pool.is_empty():
+		return
+	var stream: AudioStream = pool[randi() % pool.size()]
+	SFX.play_ui(stream, volume_db)
 
 
 # ── Internals ───────────────────────────────────────────────────────────────
@@ -227,7 +241,12 @@ func _play_random(base_key: StringName, category: StringName, pos: Vector3, db: 
 	var range := ENEMY_PITCH_RANGE if is_enemy else PLAYER_PITCH_RANGE
 	var pitch: float = randf_range(range.x, range.y)
 	var vol_jitter: float = randf_range(-VOLUME_JITTER_DB, VOLUME_JITTER_DB)
-	SFX.play_at(stream, pos, db + vol_jitter, pitch)
+	if is_enemy:
+		SFX.play_at(stream, pos, db + vol_jitter + ENEMY_ATTEN_DB, pitch)
+	else:
+		# Player sounds play at the listener so isometric camera distance
+		# doesn't shift volume or panning with movement.
+		SFX.play_at_listener(stream, db + vol_jitter, pitch)
 
 
 func _ensure_loaded() -> void:
@@ -238,27 +257,91 @@ func _ensure_loaded() -> void:
 	# whose .wav/.ogg / .import sidecar isn't present yet, so partially-
 	# populated folders don't crash the autoload — missing files just
 	# degrade to silence for that category.
-	_register(&"melee_1h", {})
-	_register(&"melee_2h", {})
+	var _blade_swings := _streams([
+		"res://resources/audio/sfx/weapons/blade_swing_01.wav",
+		"res://resources/audio/sfx/weapons/blade_swing_02.wav",
+		"res://resources/audio/sfx/weapons/blade_swing_03.wav",
+		"res://resources/audio/sfx/weapons/blade_swing_04.wav",
+		"res://resources/audio/sfx/weapons/blade_swing_05.wav",
+		"res://resources/audio/sfx/weapons/blade_swing_06.wav",
+		"res://resources/audio/sfx/weapons/blade_swing_07.wav",
+		"res://resources/audio/sfx/weapons/blade_swing_08.wav",
+	])
+	_register(&"melee_1h", { fire = _blade_swings })
+	_register(&"melee_2h", {
+		fire = _streams([
+			"res://resources/audio/sfx/weapons/sledge_hit_01.wav",
+			"res://resources/audio/sfx/weapons/sledge_hit_02.wav",
+			"res://resources/audio/sfx/weapons/sledge_hit_03.wav",
+			"res://resources/audio/sfx/weapons/sledge_hit_04.wav",
+		]),
+	})
+	var _reloads := _streams([
+		"res://resources/audio/sfx/weapons/reload_01.wav",
+		"res://resources/audio/sfx/weapons/reload_02.wav",
+		"res://resources/audio/sfx/weapons/reload_03.wav",
+		"res://resources/audio/sfx/weapons/reload_04.wav",
+		"res://resources/audio/sfx/weapons/reload_05.wav",
+		"res://resources/audio/sfx/weapons/reload_06.wav",
+	])
 	_register(&"ranged_1h", {
 		fire = _streams(["res://resources/audio/sfx/weapons/laser-pistol.wav"]),
+		reload = _reloads,
 	})
 	_register(&"ranged_2h", {
 		fire = _streams(["res://resources/audio/sfx/weapons/plasma-rifle.wav"]),
+		reload = _reloads,
 	})
 	_register(&"smg_1h", {
-		fire = _streams(["res://resources/audio/sfx/weapons/smg.wav"]),
+		fire = _streams([
+			"res://resources/audio/sfx/weapons/smg_fire_01.wav",
+			"res://resources/audio/sfx/weapons/smg_fire_02.wav",
+			"res://resources/audio/sfx/weapons/smg_fire_03.wav",
+			"res://resources/audio/sfx/weapons/smg_fire_04.wav",
+			"res://resources/audio/sfx/weapons/smg_fire_05.wav",
+			"res://resources/audio/sfx/weapons/smg_fire_06.wav",
+		]),
+		reload = _reloads,
 	})
 	_register(&"sniper_2h", {
-		fire = _streams(["res://resources/audio/sfx/weapons/sniper-rifle.wav"]),
+		fire = _streams([
+			"res://resources/audio/sfx/weapons/sniper_fire_01.wav",
+			"res://resources/audio/sfx/weapons/sniper_fire_02.wav",
+			"res://resources/audio/sfx/weapons/sniper_fire_03.wav",
+			"res://resources/audio/sfx/weapons/sniper_fire_04.wav",
+			"res://resources/audio/sfx/weapons/sniper_fire_05.wav",
+			"res://resources/audio/sfx/weapons/sniper_fire_06.wav",
+		]),
+		reload = _reloads,
 	})
-	_register(&"shotgun_2h", {})
+	_register(&"shotgun_2h", {
+		fire = _streams([
+			"res://resources/audio/sfx/weapons/shotgun_fire_01.wav",
+			"res://resources/audio/sfx/weapons/shotgun_fire_02.wav",
+			"res://resources/audio/sfx/weapons/shotgun_fire_03.wav",
+			"res://resources/audio/sfx/weapons/shotgun_fire_04.wav",
+			"res://resources/audio/sfx/weapons/shotgun_fire_05.wav",
+			"res://resources/audio/sfx/weapons/shotgun_fire_06.wav",
+			"res://resources/audio/sfx/weapons/shotgun_fire_07.wav",
+			"res://resources/audio/sfx/weapons/shotgun_fire_08.wav",
+		]),
+		reload = _reloads,
+	})
 	_register(&"rpg_2h", {
 		fire = _streams(["res://resources/audio/sfx/weapons/rpg.wav"]),
 		impact = _streams(["res://resources/audio/sfx/weapons/rpg-impact.wav"]),
+		reload = _reloads,
 	})
 	_register(&"lmg_2h", {
-		fire = _streams(["res://resources/audio/sfx/weapons/lmg.wav"]),
+		fire = _streams([
+			"res://resources/audio/sfx/weapons/lmg_fire_01.wav",
+			"res://resources/audio/sfx/weapons/lmg_fire_02.wav",
+			"res://resources/audio/sfx/weapons/lmg_fire_03.wav",
+			"res://resources/audio/sfx/weapons/lmg_fire_04.wav",
+			"res://resources/audio/sfx/weapons/lmg_fire_05.wav",
+			"res://resources/audio/sfx/weapons/lmg_fire_06.wav",
+		]),
+		reload = _reloads,
 	})
 	# Accelerator: same channel pattern as taser — punchy zap at engage
 	# (clip_11) + continuous beam loop for the duration of the stream.
@@ -266,7 +349,7 @@ func _ensure_loaded() -> void:
 	# in player_combat.resolve_skill_hit.
 	_register(&"accelerator_2h", {
 		fire = _streams(["res://resources/audio/sfx/weapons/energy-accelerator.wav"]),
-		hold_loop = _load_one("res://resources/audio/sfx/weapons/energy-accelerator-hold.wav"),
+		hold_loop = _load_one("res://resources/audio/sfx/weapons/energy-accelerator-hold.ogg"),
 	})
 	# Taser: per-attack zap on the fire array, continuous crackle on
 	# hold_loop. is_channel_weapon() returns true for it, so callers
@@ -274,8 +357,79 @@ func _ensure_loaded() -> void:
 	# the hold loop + the channel-start zap.
 	_register(&"taser_2h", {
 		fire = _streams(["res://resources/audio/sfx/weapons/charged-arc-taser.wav"]),
-		hold_loop = _load_one("res://resources/audio/sfx/weapons/charged-arc-taser-hold.wav"),
+		hold_loop = _load_one("res://resources/audio/sfx/weapons/charged-arc-taser-hold.ogg"),
 	})
+
+	# ── Footstep sounds ────────────────────────────────────────────────────
+	# Keyed by floor material. Player's _detect_floor_type() returns
+	# &"footstep_metal" or &"footstep_grate"; add more floor types here
+	# as level themes expand (e.g. &"footstep_stone", &"footstep_dirt").
+	# Drop .wav files into resources/audio/sfx/player/ and register below.
+	register_generic(&"footstep_metal", _streams([
+		"res://resources/audio/sfx/player/step_metal_01.wav",
+		"res://resources/audio/sfx/player/step_metal_02.wav",
+		"res://resources/audio/sfx/player/step_metal_03.wav",
+		"res://resources/audio/sfx/player/step_metal_04.wav",
+		"res://resources/audio/sfx/player/step_metal_05.wav",
+		"res://resources/audio/sfx/player/step_metal_06.wav",
+		"res://resources/audio/sfx/player/step_metal_07.wav",
+		"res://resources/audio/sfx/player/step_metal_08.wav",
+		"res://resources/audio/sfx/player/step_metal_09.wav",
+		"res://resources/audio/sfx/player/step_metal_10.wav",
+	]))
+	register_generic(&"footstep_grate", _streams([
+		"res://resources/audio/sfx/player/step_grate_01.wav",
+		"res://resources/audio/sfx/player/step_grate_02.wav",
+		"res://resources/audio/sfx/player/step_grate_03.wav",
+		"res://resources/audio/sfx/player/step_grate_04.wav",
+	]))
+
+	# ── Player hit grunts ─────────────────────────────────────────────────
+	# Played at listener when the player takes damage. Random selection
+	# from the pool so repeated hits don't sound identical.
+	register_generic(&"hit_grunt", _streams([
+		"res://resources/audio/sfx/player/hit_grunt_01.wav",
+		"res://resources/audio/sfx/player/hit_grunt_02.wav",
+		"res://resources/audio/sfx/player/hit_grunt_03.wav",
+		"res://resources/audio/sfx/player/hit_grunt_04.wav",
+		"res://resources/audio/sfx/player/hit_grunt_05.wav",
+		"res://resources/audio/sfx/player/hit_grunt_06.wav",
+		"res://resources/audio/sfx/player/hit_grunt_07.wav",
+		"res://resources/audio/sfx/player/hit_grunt_08.wav",
+		"res://resources/audio/sfx/player/hit_grunt_09.wav",
+		"res://resources/audio/sfx/player/hit_grunt_10.wav",
+	]))
+
+	# ── UI sounds ──────────────────────────────────────────────────────────
+	# Played via SFX.play_ui() on the UI bus. Each category has a small
+	# pool for random selection so menus don't sound robotic.
+	register_generic(&"ui_click", _streams([
+		"res://resources/audio/sfx/ui/ui_click_01.wav",
+		"res://resources/audio/sfx/ui/ui_click_02.wav",
+		"res://resources/audio/sfx/ui/ui_click_03.wav",
+	]))
+	register_generic(&"ui_hover", _streams([
+		"res://resources/audio/sfx/ui/ui_hover_01.wav",
+		"res://resources/audio/sfx/ui/ui_hover_02.wav",
+		"res://resources/audio/sfx/ui/ui_hover_03.wav",
+	]))
+	register_generic(&"ui_confirm", _streams([
+		"res://resources/audio/sfx/ui/ui_confirm_01.wav",
+		"res://resources/audio/sfx/ui/ui_confirm_02.wav",
+	]))
+	register_generic(&"ui_back", _streams([
+		"res://resources/audio/sfx/ui/ui_back_01.wav",
+		"res://resources/audio/sfx/ui/ui_back_02.wav",
+	]))
+	register_generic(&"ui_navigate", _streams([
+		"res://resources/audio/sfx/ui/ui_navigate_01.wav",
+		"res://resources/audio/sfx/ui/ui_navigate_02.wav",
+		"res://resources/audio/sfx/ui/ui_navigate_03.wav",
+		"res://resources/audio/sfx/ui/ui_navigate_04.wav",
+	]))
+	register_generic(&"ui_open", _streams([
+		"res://resources/audio/sfx/ui/ui_open_01.wav",
+	]))
 
 
 # Load a single AudioStream by path, null if missing. For hold_loop where
@@ -287,8 +441,6 @@ func _load_one(path: String) -> AudioStream:
 	var stream := load(path) as AudioStream
 	if stream == null:
 		push_warning("[WeaponSounds] _load_one: loaded null for ", path)
-	else:
-		print("[WeaponSounds] _load_one: ", path, " → ", stream.get_class(), " len=", stream.get_length())
 	return stream
 
 
