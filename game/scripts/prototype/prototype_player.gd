@@ -513,9 +513,10 @@ var _channel_skill: Skill = null
 var _channel_input_action: StringName = &""
 var _channel_tick_accum: float = 0.0
 # Hold-loop SFX player spawned in _start_channel for channel weapons
-# (taser); null otherwise. _stop_channel fades + frees it via
-# WeaponSounds.stop_channel_loop, which tolerates null.
-var _channel_hold_player: AudioStreamPlayer3D = null
+# (taser, accelerator); null otherwise. _stop_channel fades + frees it
+# via WeaponSounds.stop_channel_loop, which tolerates null. Non-3D for
+# now — see comment in WeaponSounds.play_channel_loop for why.
+var _channel_hold_player: AudioStreamPlayer = null
 # ── Footstep dust puffs ─────────────────────────────────────────────────────
 # Position-based footstep emission. Each frame we accumulate the
 # horizontal distance moved since the last puff; once it crosses

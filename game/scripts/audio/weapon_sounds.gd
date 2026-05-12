@@ -144,75 +144,48 @@ func play_channel_start(weapon_key: StringName, pos: Vector3) -> void:
 	_play_random(_resolve_key(weapon_key), &"fire", pos, FIRE_DB, _is_enemy_key(weapon_key))
 
 
-## Spawn a looping AudioStreamPlayer3D for the channel hold sound,
-## parented to `parent_node` so it follows the firer automatically.
-## Returns the player (null when no hold loop is registered) so the
-## caller can fade-in / fade-out / stop on channel end.
+## Spawn a looping AudioStreamPlayer (non-3D) for the channel hold sound.
+## Parented to the WeaponSounds autoload so it lives independently of the
+## player node's MP authority / lifecycle quirks. Returns the player (null
+## when no hold loop is registered) so the caller can stop on channel end.
+##
+## Non-3D was chosen after AudioStreamPlayer3D parented to PrototypePlayer
+## reported playing=true at +12dB / no attenuation / distance=0 from the
+## listener but produced no audible output. The pool players (also 3D, but
+## parented to SFX autoload) work fine, so the failure was specific to
+## parenting under the player node. Until that's understood, channel
+## loops are non-positional and play "everywhere."
 const CHANNEL_LOOP_BUS := &"SFX"
-const CHANNEL_FADE_IN := 0.10
 const CHANNEL_FADE_OUT := 0.20
 
-func play_channel_loop(weapon_key: StringName, parent_node: Node3D) -> AudioStreamPlayer3D:
+func play_channel_loop(weapon_key: StringName, parent_node: Node3D) -> AudioStreamPlayer:
 	var key := _resolve_key(weapon_key)
-	print("[WeaponSounds] play_channel_loop called: weapon_key=", weapon_key, " resolved=", key)
 	if key == &"":
-		push_warning("[WeaponSounds] no resolved key for ", weapon_key)
 		return null
 	var set: Dictionary = _sounds.get(key, {})
 	var stream = set.get(&"hold_loop", null) as AudioStream
-	print("[WeaponSounds] hold_loop stream=", stream, " class=", stream.get_class() if stream != null else "null")
-	if stream == null or parent_node == null:
-		push_warning("[WeaponSounds] stream or parent_node null — bailing")
+	if stream == null:
 		return null
 	# WAV needs LOOP_FORWARD on the stream itself for the player to repeat.
-	# Always set (don't trust import setting); loop_end at 0 means "to
-	# end of sample" in Godot.
+	# Always set (don't trust import setting).
 	if stream is AudioStreamWAV:
 		var wav := stream as AudioStreamWAV
-		print("[WeaponSounds] wav loop_mode before=", wav.loop_mode, " loop_begin=", wav.loop_begin, " loop_end=", wav.loop_end, " format=", wav.format)
 		wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
 		wav.loop_begin = 0
-	var p := AudioStreamPlayer3D.new()
+	var p := AudioStreamPlayer.new()
 	p.bus = CHANNEL_LOOP_BUS
 	p.stream = stream
-	# Massively boost max_distance + unit_size so attenuation is
-	# basically a no-op while debugging.
-	p.max_distance = 100.0
-	p.unit_size = 50.0
-	p.attenuation_model = AudioStreamPlayer3D.ATTENUATION_DISABLED
-	# Boost way past normal so the loop is unmistakeable if it's playing
-	# at all. Restore after confirmation.
-	p.volume_db = 12.0
+	p.volume_db = 0.0
 	var range := ENEMY_PITCH_RANGE if _is_enemy_key(weapon_key) else PLAYER_PITCH_RANGE
 	p.pitch_scale = randf_range(range.x, range.y)
-	parent_node.add_child(p)
+	add_child(p)
 	p.play()
-	# Find the active AudioListener3D so we can verify the player and
-	# listener are co-located (and therefore audible).
-	var listener := _find_listener(parent_node)
-	var lp := listener.global_position if listener != null else Vector3.INF
-	print("[WeaponSounds] player created, playing=", p.playing, " volume_db=", p.volume_db, " bus=", p.bus, " stream_len=", stream.get_length() if stream != null else "?")
-	print("[WeaponSounds]   player pos=", p.global_position, " listener pos=", lp, " dist=", p.global_position.distance_to(lp) if listener != null else "?")
 	return p
-
-
-func _find_listener(any_node: Node) -> AudioListener3D:
-	if any_node == null:
-		return null
-	for n in any_node.get_tree().get_nodes_in_group(&"audio_listener"):
-		if n is AudioListener3D and (n as AudioListener3D).current:
-			return n as AudioListener3D
-	# Fall back to a tree-wide hunt for any current listener.
-	var root := any_node.get_tree().root
-	for c in root.find_children("*", "AudioListener3D", true, false):
-		if (c as AudioListener3D).current:
-			return c as AudioListener3D
-	return null
 
 
 ## Stop a previously-claimed channel-loop player. Fades out then frees.
 ## Safe to call with null (no-op) so callers can stop unconditionally.
-func stop_channel_loop(player: AudioStreamPlayer3D) -> void:
+func stop_channel_loop(player: AudioStreamPlayer) -> void:
 	if player == null or not is_instance_valid(player):
 		return
 	var tw := player.create_tween()
