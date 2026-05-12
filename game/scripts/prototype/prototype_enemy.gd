@@ -710,11 +710,10 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 	_visuals.update_health_bar()
 	var head := global_position + Vector3(0.0, 1.8, 0.0)
 	DamageNumber.spawn(get_parent(), head, amount, multistrike, is_crit)
-	# Cranked to +6 dB for diagnosis — if you hear it now, the issue was
-	# just that -15 dB on top of the SFX bus volume was inaudible. Drop
-	# back toward -10 / -15 once the volume balance is dialled in.
-	print("[hit_flesh] play_generic firing at ", global_position)
-	WeaponSounds.play_generic(&"hit_flesh", global_position, 6.0)
+	# Subliminal "this is landing" layer. -15 dB was inaudible against the
+	# weapon fire mix; -3 dB sits just under the weapon fire volume so the
+	# pop reads as a confirmation rather than competing for attention.
+	WeaponSounds.play_generic(&"hit_flesh", global_position, -3.0)
 	# Snapshot the pre-hit state BEFORE the knockback transition so the
 	# aggro check below sees the original disposition. Without this, any
 	# IDLE enemy that gets knocked back loses the IDLE→aggro transition
