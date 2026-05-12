@@ -175,17 +175,39 @@ func play_channel_loop(weapon_key: StringName, parent_node: Node3D) -> AudioStre
 	var p := AudioStreamPlayer3D.new()
 	p.bus = CHANNEL_LOOP_BUS
 	p.stream = stream
-	p.max_distance = 30.0
-	p.attenuation_model = AudioStreamPlayer3D.ATTENUATION_INVERSE_DISTANCE
-	# Start at full volume (no fade-in) so we can hear whether the
-	# stream is playing at all. Restore the fade once confirmed working.
-	p.volume_db = 0.0
+	# Massively boost max_distance + unit_size so attenuation is
+	# basically a no-op while debugging.
+	p.max_distance = 100.0
+	p.unit_size = 50.0
+	p.attenuation_model = AudioStreamPlayer3D.ATTENUATION_DISABLED
+	# Boost way past normal so the loop is unmistakeable if it's playing
+	# at all. Restore after confirmation.
+	p.volume_db = 12.0
 	var range := ENEMY_PITCH_RANGE if _is_enemy_key(weapon_key) else PLAYER_PITCH_RANGE
 	p.pitch_scale = randf_range(range.x, range.y)
 	parent_node.add_child(p)
 	p.play()
+	# Find the active AudioListener3D so we can verify the player and
+	# listener are co-located (and therefore audible).
+	var listener := _find_listener(parent_node)
+	var lp := listener.global_position if listener != null else Vector3.INF
 	print("[WeaponSounds] player created, playing=", p.playing, " volume_db=", p.volume_db, " bus=", p.bus, " stream_len=", stream.get_length() if stream != null else "?")
+	print("[WeaponSounds]   player pos=", p.global_position, " listener pos=", lp, " dist=", p.global_position.distance_to(lp) if listener != null else "?")
 	return p
+
+
+func _find_listener(any_node: Node) -> AudioListener3D:
+	if any_node == null:
+		return null
+	for n in any_node.get_tree().get_nodes_in_group(&"audio_listener"):
+		if n is AudioListener3D and (n as AudioListener3D).current:
+			return n as AudioListener3D
+	# Fall back to a tree-wide hunt for any current listener.
+	var root := any_node.get_tree().root
+	for c in root.find_children("*", "AudioListener3D", true, false):
+		if (c as AudioListener3D).current:
+			return c as AudioListener3D
+	return null
 
 
 ## Stop a previously-claimed channel-loop player. Fades out then frees.
