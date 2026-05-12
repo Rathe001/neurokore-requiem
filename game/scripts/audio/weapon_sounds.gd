@@ -154,35 +154,37 @@ const CHANNEL_FADE_OUT := 0.20
 
 func play_channel_loop(weapon_key: StringName, parent_node: Node3D) -> AudioStreamPlayer3D:
 	var key := _resolve_key(weapon_key)
+	print("[WeaponSounds] play_channel_loop called: weapon_key=", weapon_key, " resolved=", key)
 	if key == &"":
+		push_warning("[WeaponSounds] no resolved key for ", weapon_key)
 		return null
 	var set: Dictionary = _sounds.get(key, {})
 	var stream = set.get(&"hold_loop", null) as AudioStream
+	print("[WeaponSounds] hold_loop stream=", stream, " class=", stream.get_class() if stream != null else "null")
 	if stream == null or parent_node == null:
+		push_warning("[WeaponSounds] stream or parent_node null — bailing")
 		return null
 	# WAV needs LOOP_FORWARD on the stream itself for the player to repeat.
-	# Done lazily on first use; loop_end stays at 0 which Godot treats as
-	# "to end of sample". The Godot editor lets you set this per-import
-	# instead — either path works, runtime set is just more portable.
-	if stream is AudioStreamWAV and (stream as AudioStreamWAV).loop_mode == AudioStreamWAV.LOOP_DISABLED:
-		(stream as AudioStreamWAV).loop_mode = AudioStreamWAV.LOOP_FORWARD
+	# Always set (don't trust import setting); loop_end at 0 means "to
+	# end of sample" in Godot.
+	if stream is AudioStreamWAV:
+		var wav := stream as AudioStreamWAV
+		print("[WeaponSounds] wav loop_mode before=", wav.loop_mode, " loop_begin=", wav.loop_begin, " loop_end=", wav.loop_end, " format=", wav.format)
+		wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
+		wav.loop_begin = 0
 	var p := AudioStreamPlayer3D.new()
 	p.bus = CHANNEL_LOOP_BUS
 	p.stream = stream
 	p.max_distance = 30.0
 	p.attenuation_model = AudioStreamPlayer3D.ATTENUATION_INVERSE_DISTANCE
-	p.volume_db = -40.0
-	# Stable per-channel pitch so the held loop has a consistent tone
-	# the whole time. Player gets a tiny variance for character; enemies
-	# sit clearly lower so the hum is identifiable as theirs.
+	# Start at full volume (no fade-in) so we can hear whether the
+	# stream is playing at all. Restore the fade once confirmed working.
+	p.volume_db = 0.0
 	var range := ENEMY_PITCH_RANGE if _is_enemy_key(weapon_key) else PLAYER_PITCH_RANGE
 	p.pitch_scale = randf_range(range.x, range.y)
 	parent_node.add_child(p)
 	p.play()
-	# Brief fade-in so the engagement reads as building rather than
-	# hard-cutting in over the start zap.
-	var tw := p.create_tween()
-	tw.tween_property(p, "volume_db", 0.0, CHANNEL_FADE_IN)
+	print("[WeaponSounds] player created, playing=", p.playing, " volume_db=", p.volume_db, " bus=", p.bus, " stream_len=", stream.get_length() if stream != null else "?")
 	return p
 
 
@@ -282,8 +284,14 @@ func _ensure_loaded() -> void:
 # we need a single stream (not an array of random alternates).
 func _load_one(path: String) -> AudioStream:
 	if not ResourceLoader.exists(path):
+		push_warning("[WeaponSounds] _load_one: resource doesn't exist at ", path)
 		return null
-	return load(path) as AudioStream
+	var stream := load(path) as AudioStream
+	if stream == null:
+		push_warning("[WeaponSounds] _load_one: loaded null for ", path)
+	else:
+		print("[WeaponSounds] _load_one: ", path, " → ", stream.get_class(), " len=", stream.get_length())
+	return stream
 
 
 # Load each path at runtime; skip any that fail to resolve (file missing,
