@@ -243,7 +243,9 @@ func _ensure_loaded() -> void:
 	# degrade to silence for that category.
 	_register(&"melee_1h", {})
 	_register(&"melee_2h", {})
-	_register(&"ranged_1h", {})
+	_register(&"ranged_1h", {
+		fire = _streams(["res://resources/audio/sfx/weapons/laser-pistol.wav"]),
+	})
 	_register(&"ranged_2h", {
 		fire = _streams(["res://resources/audio/sfx/weapons/plasma-rifle.wav"]),
 	})
