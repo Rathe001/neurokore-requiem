@@ -512,6 +512,10 @@ var _aim_hold_forced_crouch: bool = false
 var _channel_skill: Skill = null
 var _channel_input_action: StringName = &""
 var _channel_tick_accum: float = 0.0
+# Hold-loop SFX player spawned in _start_channel for channel weapons
+# (taser); null otherwise. _stop_channel fades + frees it via
+# WeaponSounds.stop_channel_loop, which tolerates null.
+var _channel_hold_player: AudioStreamPlayer3D = null
 # ── Footstep dust puffs ─────────────────────────────────────────────────────
 # Position-based footstep emission. Each frame we accumulate the
 # horizontal distance moved since the last puff; once it crosses
@@ -1964,6 +1968,15 @@ func _start_channel(skill: Skill, input_action: StringName) -> void:
 	_channel_skill = skill
 	_channel_input_action = input_action
 	_channel_tick_accum = 0.0
+	# Channel-weapon SFX: one-shot zap at start + continuous hold loop
+	# parented to this player so it follows positionally. Stored on
+	# _channel_hold_player so _stop_channel can fade it out cleanly.
+	# is_channel_weapon() returns true only for weapons with a hold_loop
+	# registered in WeaponSounds (currently just the taser).
+	var weapon_for_channel: Item = InventoryState.get_equipped(&"weapon")
+	if weapon_for_channel != null and WeaponSounds.is_channel_weapon(weapon_for_channel.weapon_base_id):
+		WeaponSounds.play_channel_start(weapon_for_channel.weapon_base_id, global_position)
+		_channel_hold_player = WeaponSounds.play_channel_loop(weapon_for_channel.weapon_base_id, self)
 	# Flame visual is SINGLE_CONE-only — Taser (CHAIN_LIGHTNING) draws
 	# its own lightning arcs per tick, so it doesn't need the cone.
 	if skill.targeting_mode == Skill.TargetingMode.SINGLE_CONE:
@@ -1994,6 +2007,9 @@ func _stop_channel() -> void:
 	# rebuilds from zero. Without this, lifting LMB and immediately
 	# re-firing would skip past the ramp window.
 	reset_accel_resonance()
+	# Fade out + free the hold-loop SFX (no-op when nothing was playing).
+	WeaponSounds.stop_channel_loop(_channel_hold_player)
+	_channel_hold_player = null
 	_hide_flame_visual()
 	# Only broadcast a stop if this was a flame channel — Taser hold's
 	# stop doesn't need an RPC because the lightning arcs were per-tick

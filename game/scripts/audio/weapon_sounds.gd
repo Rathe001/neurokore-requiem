@@ -29,7 +29,13 @@ extends Node
 # array is empty, so the game runs silently until you drop files in.
 
 var _loaded: bool = false
-var _sounds: Dictionary = {}  # StringName → { fire: Array[AudioStream], impact: Array[AudioStream], ... }
+var _sounds: Dictionary = {}  # StringName → { fire: Array[AudioStream], impact: Array[AudioStream], hold_loop: AudioStream, ... }
+
+# Channel-loop hold sounds — a single continuous AudioStream per weapon
+# that plays for as long as the player holds fire. Kept off the per-tick
+# fire path because retriggering a 2-second clip seven times a second
+# (taser tick rate) produces chaos. is_channel_weapon() is used by the
+# fire-time path to suppress play_fire in favor of these.
 
 # Volume offsets per category (dB). Tune these so weapons sit right in the mix
 # without touching individual asset gains.
@@ -94,6 +100,76 @@ func play_alt_fire(weapon_key: StringName, pos: Vector3) -> void:
 	_play_random(_resolve_key(weapon_key), &"alt_fire", pos, FIRE_DB)
 
 
+# ── Channel weapons (taser hold, future accelerator hold) ──────────────────
+
+## True when this weapon plays a continuous hold loop (gated via
+## is_channel_weapon) instead of per-tick fire sounds. Callers that
+## drive channel ticks should skip play_fire and rely on the loop +
+## the channel-start zap.
+func is_channel_weapon(weapon_key: StringName) -> bool:
+	var key := _resolve_key(weapon_key)
+	if key == &"":
+		return false
+	var set: Dictionary = _sounds.get(key, {})
+	var loop = set.get(&"hold_loop", null)
+	return loop is AudioStream
+
+
+## One-shot zap that fires when the channel starts. Same routing as
+## play_fire but kept as a separate API so the channel start can play
+## a dedicated "engage" sound (e.g. taser's initial pop) without
+## doubling up on the hold loop.
+func play_channel_start(weapon_key: StringName, pos: Vector3) -> void:
+	_play_random(_resolve_key(weapon_key), &"fire", pos, FIRE_DB)
+
+
+## Spawn a looping AudioStreamPlayer3D for the channel hold sound,
+## parented to `parent_node` so it follows the firer automatically.
+## Returns the player (null when no hold loop is registered) so the
+## caller can fade-in / fade-out / stop on channel end.
+const CHANNEL_LOOP_BUS := &"SFX"
+const CHANNEL_FADE_IN := 0.10
+const CHANNEL_FADE_OUT := 0.20
+
+func play_channel_loop(weapon_key: StringName, parent_node: Node3D) -> AudioStreamPlayer3D:
+	var key := _resolve_key(weapon_key)
+	if key == &"":
+		return null
+	var set: Dictionary = _sounds.get(key, {})
+	var stream = set.get(&"hold_loop", null) as AudioStream
+	if stream == null or parent_node == null:
+		return null
+	# WAV needs LOOP_FORWARD on the stream itself for the player to repeat.
+	# Done lazily on first use; loop_end stays at 0 which Godot treats as
+	# "to end of sample". The Godot editor lets you set this per-import
+	# instead — either path works, runtime set is just more portable.
+	if stream is AudioStreamWAV and (stream as AudioStreamWAV).loop_mode == AudioStreamWAV.LOOP_DISABLED:
+		(stream as AudioStreamWAV).loop_mode = AudioStreamWAV.LOOP_FORWARD
+	var p := AudioStreamPlayer3D.new()
+	p.bus = CHANNEL_LOOP_BUS
+	p.stream = stream
+	p.max_distance = 30.0
+	p.attenuation_model = AudioStreamPlayer3D.ATTENUATION_INVERSE_DISTANCE
+	p.volume_db = -40.0
+	parent_node.add_child(p)
+	p.play()
+	# Brief fade-in so the engagement reads as building rather than
+	# hard-cutting in over the start zap.
+	var tw := p.create_tween()
+	tw.tween_property(p, "volume_db", 0.0, CHANNEL_FADE_IN)
+	return p
+
+
+## Stop a previously-claimed channel-loop player. Fades out then frees.
+## Safe to call with null (no-op) so callers can stop unconditionally.
+func stop_channel_loop(player: AudioStreamPlayer3D) -> void:
+	if player == null or not is_instance_valid(player):
+		return
+	var tw := player.create_tween()
+	tw.tween_property(player, "volume_db", -40.0, CHANNEL_FADE_OUT)
+	tw.tween_callback(player.queue_free)
+
+
 # ── Generic sounds (not weapon-specific) ────────────────────────────────────
 
 var _generic: Dictionary = {}  # StringName → Array[AudioStream]
@@ -150,7 +226,22 @@ func _ensure_loaded() -> void:
 		fire = _streams(["res://resources/audio/sfx/weapons/lmg.wav"]),
 	})
 	_register(&"accelerator_2h", {})
-	_register(&"taser_2h", {})
+	# Taser: per-attack zap on the fire array, continuous crackle on
+	# hold_loop. is_channel_weapon() returns true for it, so callers
+	# in the channel-tick path skip the per-tick play_fire and rely on
+	# the hold loop + the channel-start zap.
+	_register(&"taser_2h", {
+		fire = _streams(["res://resources/audio/sfx/weapons/charged-arc-taser.wav"]),
+		hold_loop = _load_one("res://resources/audio/sfx/weapons/charged-arc-taser-hold.wav"),
+	})
+
+
+# Load a single AudioStream by path, null if missing. For hold_loop where
+# we need a single stream (not an array of random alternates).
+func _load_one(path: String) -> AudioStream:
+	if not ResourceLoader.exists(path):
+		return null
+	return load(path) as AudioStream
 
 
 # Load each path at runtime; skip any that fail to resolve (file missing,
