@@ -778,13 +778,12 @@ static func spawn_hammer_impact(host: Node3D) -> void:
 # rises slightly off the ground and drifts outward as it fades — reads
 # as kicked-up dust rather than a painted disc.
 
-const FOOTSTEP_LIFETIME: float = 0.40
-const FOOTSTEP_PARTICLE_COUNT: int = 5
-# Albedo tint applied to the soft-circle texture. Very low alpha — the
-# whole point is "barely there." color_ramp on the particle system fades
-# this further to zero over each particle's lifetime.
-const FOOTSTEP_BASE_COLOR := Color(0.85, 0.80, 0.68, 0.14)
-const FOOTSTEP_LIFT: float = 0.04
+const FOOTSTEP_LIFETIME: float = 0.35
+const FOOTSTEP_PARTICLE_COUNT: int = 4
+# Albedo tint — warm dust, barely-there. Should register subconsciously
+# without drawing the eye away from combat.
+const FOOTSTEP_BASE_COLOR := Color(0.85, 0.80, 0.68, 0.22)
+const FOOTSTEP_LIFT: float = 0.06
 
 # Shared resources — generated once, reused across every footstep spawn.
 # The texture is a 64×64 soft radial gradient that gives each billboarded
@@ -843,7 +842,7 @@ static func _get_footstep_material() -> StandardMaterial3D:
 static func _get_footstep_color_ramp() -> Gradient:
 	if _footstep_color_ramp == null:
 		var g := Gradient.new()
-		g.set_color(0, Color(1, 1, 1, 1))
+		g.set_color(0, Color(1, 1, 1, 0.6))
 		g.set_color(1, Color(1, 1, 1, 0))
 		g.set_offset(0, 0.0)
 		g.set_offset(1, 1.0)
@@ -871,19 +870,20 @@ static func spawn_footstep_puff(parent: Node3D, world_pos: Vector3) -> void:
 	p.direction = Vector3(0, 1, 0)
 	p.spread = 65.0
 	p.flatness = 0.6
-	p.initial_velocity_min = 0.15
-	p.initial_velocity_max = 0.40
-	p.gravity = Vector3(0, -0.25, 0)
-	p.damping_min = 1.5
-	p.damping_max = 2.5
-	# Tiny particles — peak is ~0.10 world units per side. Combined with
-	# the soft gradient texture this reads as a wisp of dust rather than
-	# a circle on the ground.
+	p.initial_velocity_min = 0.12
+	p.initial_velocity_max = 0.30
+	p.gravity = Vector3(0, -0.2, 0)
+	p.damping_min = 2.0
+	p.damping_max = 3.5
 	p.scale_amount_min = 0.06
 	p.scale_amount_max = 0.10
 	p.color_ramp = _get_footstep_color_ramp()
+	# Set position BEFORE add_child so the transform is resolved
+	# correctly on tree entry — setting global_position post-add can
+	# read stale parent transforms and place the emitter at the origin.
+	p.top_level = true
+	p.position = world_pos + Vector3(0.0, FOOTSTEP_LIFT, 0.0)
 	parent.add_child(p)
-	p.global_position = world_pos + Vector3(0.0, FOOTSTEP_LIFT, 0.0)
 	p.emitting = true
 	# Free the node once the burst has finished. lifetime + small grace
 	# so the very last frame renders before tear-down.

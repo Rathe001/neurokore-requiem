@@ -55,6 +55,10 @@ static func build_exact_floor(ctx: LevelBuildContext, center: Vector3, size_x: f
 	# and aren't safe to walk on. Pillars (jump platforms inside pits)
 	# are also skipped; they're too small to read at minimap scale.
 	body.add_to_group(&"minimap_walkable")
+	# Floor-type tag for material-specific footstep audio. Alt material
+	# (corridors) = grate; primary (rooms) = metal plating.
+	var is_alt := mat != null and mat == ctx.floor_material_alt
+	body.add_to_group(&"floor_grate" if is_alt else &"floor_metal")
 
 
 static func build_corridor_floor(ctx: LevelBuildContext, center: Vector3, cd: CorridorDef) -> void:

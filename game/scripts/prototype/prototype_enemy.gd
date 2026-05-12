@@ -100,6 +100,12 @@ const CROUCH_PROBE_INTERVAL := 0.25
 # stand-height capsule (earlier bug) intersected the floor underneath the
 # enemy and reported "blocked" every tick, locking everyone into crouch.
 const CROUCH_PROBE_HEIGHT := STAND_HEIGHT - CROUCH_HEIGHT  # 0.7
+
+# ── Footstep SFX ────────────────────────────────────────────────────────────
+const ENEMY_FOOTSTEP_DISTANCE: float = 1.8
+const ENEMY_FOOTSTEP_DB: float = -14.0  # quieter than player steps
+var _footstep_accum: float = 0.0
+var _footstep_last_pos: Vector3 = Vector3.ZERO
 const CROUCH_PROBE_CENTER_Y := CROUCH_HEIGHT + CAPSULE_BOTTOM_Y + CROUCH_PROBE_HEIGHT * 0.5  # 1.30
 const CROUCH_PROBE_RADIUS := 0.5  # < capsule radius (0.6) so a brushed wall doesn't trip the probe
 # Distance ahead of the enemy to also probe — long enough to clear the
@@ -772,6 +778,8 @@ func reset() -> void:
 	# is reused from the pool at a new location.
 	_spawn_position = global_position
 	_hit_leash_extend_sq = 0.0
+	_footstep_accum = 0.0
+	_footstep_last_pos = Vector3.ZERO
 	# Note: `affixes` is set by the spawner BEFORE reset() in pack-spawn
 	# paths, and cleared (re-set to []) by the spawner for non-pack spawns,
 	# so a pool-recycled body never inherits the previous owner's modifiers.
@@ -1946,6 +1954,7 @@ func _physics_process(delta: float) -> void:
 	# player's 0.4m so enemies can't path up onto things the player wouldn't
 	# expect them to (decorative crates, etc.) — still enough for pit fences.
 	StepUp.try(self, wish_horiz, 0.3, delta)
+	_tick_footsteps()
 
 	# Animation update — CASTING and KNOCKBACK own their own clips. JUMPING
 	# plays the airborne pose. CROUCHING swaps in the crouch idle/walk pair.
@@ -3037,6 +3046,42 @@ func _spawn_ragdoll_corpse(kill_from: Vector3, kill_force: float) -> void:
 		if d.length_squared() > 0.0001:
 			dir = d.normalized()
 	corpse.apply_death_impulse(dir, kill_force)
+
+
+# ── Footstep SFX ────────────────────────────────────────────────────────────
+# Distance-based footstep sounds, same pattern as the player. Enemies use
+# the world-position path (not at-listener) so steps have spatial presence.
+
+func _tick_footsteps() -> void:
+	var pos := global_position
+	if _footstep_last_pos == Vector3.ZERO:
+		_footstep_last_pos = pos
+		return
+	if not is_on_floor():
+		_footstep_last_pos = pos
+		return
+	var delta_v := pos - _footstep_last_pos
+	delta_v.y = 0.0
+	var d := delta_v.length()
+	_footstep_last_pos = pos
+	if d < 0.001:
+		return
+	_footstep_accum += d
+	if _footstep_accum >= ENEMY_FOOTSTEP_DISTANCE:
+		_footstep_accum = 0.0
+		var floor_key := _detect_floor_type()
+		WeaponSounds.play_generic(floor_key, pos, ENEMY_FOOTSTEP_DB)
+
+
+func _detect_floor_type() -> StringName:
+	for i in get_slide_collision_count():
+		var col := get_slide_collision(i)
+		if col.get_normal().y < 0.5:
+			continue
+		var body := col.get_collider()
+		if body is Node and body.is_in_group(&"floor_grate"):
+			return &"footstep_grate"
+	return &"footstep_metal"
 
 
 # Capsule sizing for the ragdoll. Matches the enemy's authored CapsuleShape3D
