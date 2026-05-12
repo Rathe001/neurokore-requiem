@@ -36,6 +36,10 @@ const ITEM_DROP_ILVL_OFFSET_MAX: int = 1
 # the same rules — designers tune the feel via EnemyClass.accuracy.
 const ENEMY_INACCURACY_SPREAD_MAX: float = 0.25
 const ENEMY_VERTICAL_SPREAD_RATIO: float = 0.5
+# Floor on the spread roll — a fully-missing shot still gets at least
+# this much angular variance so misses don't all line up on the same
+# vector. Lost during the enemy module extraction; restored here.
+const ENEMY_MISS_MIN_SPREAD: float = 0.06
 
 const GRAVITY := CombatConstants.GRAVITY
 const CHASE_SPEED := 3.2
