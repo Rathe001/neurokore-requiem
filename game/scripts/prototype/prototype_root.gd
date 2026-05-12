@@ -39,11 +39,10 @@ func _ready() -> void:
 	add_to_group(&"corpse_manager")
 	add_to_group(&"level_reset_handler")
 	get_viewport().physics_object_picking = true
-	# Level BGM — crossfades from the title track when entering the
-	# scene. level2.mp3 also exists in the music folder; switch the
-	# path here (or add random selection) if a second level track is
-	# wanted.
-	Music.play_track("res://resources/audio/music/level1.mp3")
+	# Level BGM — cycles through 5 tracks keyed off PlayerState.new_game_plus
+	# so successive NG+ runs hear different music. Music autoload handles
+	# the modulo wrap, plays with a 30s silent gap before re-looping.
+	Music.play_level_track(PlayerState.new_game_plus)
 	EntityPool.warmup(ENEMY_SCENE, SPAWN_BATCH)
 	_wire_switches()
 	_move_player_to_spawn()
