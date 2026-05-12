@@ -316,7 +316,6 @@ func _ensure_loaded() -> void:
 			"res://resources/audio/sfx/weapons/sniper_fire_03.wav",
 			"res://resources/audio/sfx/weapons/sniper_fire_04.wav",
 			"res://resources/audio/sfx/weapons/sniper_fire_05.wav",
-			"res://resources/audio/sfx/weapons/sniper_fire_06.wav",
 		]),
 		reload = _reloads,
 	})
