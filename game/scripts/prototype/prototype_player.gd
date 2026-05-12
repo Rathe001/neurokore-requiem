@@ -1552,6 +1552,11 @@ func _cast_lmb_combat() -> void:
 				var refreshed := _aim_direction()
 				if refreshed != Vector3.ZERO:
 					fire_aim = refreshed
+			# Multi-arm fire SFX — each arm produces its own discrete shot,
+			# so play_fire fires here at the staggered timer callback.
+			# Channel weapons skip (their own SFX path handles them).
+			if captured_item != null and not WeaponSounds.is_channel_weapon(captured_item.weapon_base_id):
+				WeaponSounds.play_fire(captured_item.weapon_base_id, global_position)
 			_combat.resolve_skill_hit(captured_skill, fire_aim, captured_item, captured_offset)
 		, CONNECT_ONE_SHOT)
 
@@ -1679,6 +1684,14 @@ func _cast_skill(skill: Skill) -> void:
 	_face_direction(aim)
 	_play_anim(ANIM_ATTACK, 1.4)
 	PrototypeAttackIndicator.spawn(self, skill, aim, _combat.effective_range(skill, weapon))
+	# Fire SFX plays at LMB press, NOT at projectile spawn. For wind-up
+	# weapons like the RPG the .wav has a baked-in "charging" pre-roll;
+	# starting the audio here means that pre-roll lines up with the
+	# wind-up wait, and the launch transient of the .wav lands at the
+	# moment resolve_skill_hit spawns the projectile. Channel weapons
+	# (taser/accelerator hold) have their own SFX path and skip this.
+	if weapon != null and not WeaponSounds.is_channel_weapon(weapon.weapon_base_id):
+		WeaponSounds.play_fire(weapon.weapon_base_id, global_position)
 	if skill.wind_up > 0.0:
 		await get_tree().create_timer(skill.wind_up / atk_spd).timeout
 	_skill_busy = false

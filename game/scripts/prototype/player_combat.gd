@@ -155,13 +155,12 @@ func resolve_skill_hit(skill: Skill, aim: Vector3, weapon: Item, source_offset: 
 	# the player holds fire, springs back when they release.
 	_apply_energy_push(weapon, aim)
 	var hits := PerkState.roll_multistrike()
-	var wb_id: StringName = weapon.weapon_base_id if weapon != null else &""
-	# Channel weapons (taser hold) have a continuous hold-loop SFX wired
-	# in WeaponSounds and a one-shot zap played at channel start; skip the
-	# per-tick fire so we don't retrigger the zap dozens of times per
-	# second while the player holds the button.
-	if not WeaponSounds.is_channel_weapon(wb_id):
-		WeaponSounds.play_fire(wb_id, _host.global_position)
+	# Fire SFX is NOT triggered here — it moved to fire-press time
+	# (PrototypePlayer's main fire path + multi-arm timer callback) so
+	# weapons with wind-up audio (RPG) have their sound start at LMB
+	# press, not at projectile-spawn. The launch-impact moment of the
+	# baked-in sound lines up with the actual projectile spawn that
+	# way. Channel weapons handle their own SFX via play_channel_*.
 	match skill.targeting_mode:
 		Skill.TargetingMode.SINGLE_CONE:
 			# CHANNEL_BEAM cones (Energy Accelerator stream) draw a

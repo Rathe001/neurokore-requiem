@@ -697,6 +697,11 @@ func _explode(impact_pos: Vector3) -> void:
 	# bubbles, not kinetic detonations.
 	if weapon_base_id == &"rpg_2h":
 		PrototypeCamera.shake_at(self, impact_pos, 1.40, 0.65)
+	# Impact SFX — fires for any projectile that has an impact sound
+	# registered. WeaponSounds.play_impact no-ops gracefully if nothing
+	# is wired for this archetype, so the call is safe to make always.
+	if weapon_base_id != &"":
+		WeaponSounds.play_impact(weapon_base_id, impact_pos)
 	var targets: Array[Node3D] = SpatialGrid.query_radius(
 		global_position, blast_radius, target_group)
 	for target: Node3D in targets:

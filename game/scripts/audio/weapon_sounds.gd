@@ -258,7 +258,10 @@ func _ensure_loaded() -> void:
 		fire = _streams(["res://resources/audio/sfx/weapons/sniper-rifle.wav"]),
 	})
 	_register(&"shotgun_2h", {})
-	_register(&"rpg_2h", {})
+	_register(&"rpg_2h", {
+		fire = _streams(["res://resources/audio/sfx/weapons/rpg.wav"]),
+		impact = _streams(["res://resources/audio/sfx/weapons/rpg-impact.wav"]),
+	})
 	_register(&"lmg_2h", {
 		fire = _streams(["res://resources/audio/sfx/weapons/lmg.wav"]),
 	})
