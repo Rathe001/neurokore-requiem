@@ -104,12 +104,14 @@ const TURN_RATE_AIM := 30.0   # rad/s — near-instant when an attack is held
 # so the player keeps their facing during a coast-to-stop instead of yanking
 # back to the last input direction.
 const FACE_BY_VELOCITY_MIN := 0.5
-# Scales the run animation playback rate. The source clip is calibrated for a
-# slower travel speed than our 6 m/s default, so feet skate without this. Tune
-# by eye — at full sprint feet should plant cleanly with no slide.
-const RUN_ANIM_SPEED_FACTOR := 1.5
-const RUN_ANIM_SPEED_MIN := 0.6
-const RUN_ANIM_SPEED_MAX := 1.9
+# Scales the run animation playback rate so foot-plants align with the
+# distance-based footstep SFX cadence. At move_speed 6.0 and
+# FOOTSTEP_DISTANCE 1.4, a step fires every ~0.23s — so we need the jog
+# cycle (~1s source clip, 2 contacts) to complete in ~0.47s → factor ~2.6.
+# Tune by eye: feet should plant cleanly with no slide at full sprint.
+const RUN_ANIM_SPEED_FACTOR := 1.8
+const RUN_ANIM_SPEED_MIN := 1.0
+const RUN_ANIM_SPEED_MAX := 3.2
 
 @export var move_speed: float = 6.0
 @export var accel: float = 30.0
@@ -388,9 +390,11 @@ func _tick_footsteps() -> void:
 	_footstep_last_pos = pos
 	if _footstep_distance_accum >= FOOTSTEP_DISTANCE:
 		_footstep_distance_accum = 0.0
-		var parent: Node = get_parent()
-		if parent != null:
-			PrototypeAttackIndicator.spawn_footstep_puff(parent, pos)
+		var scene := get_tree().current_scene
+		if scene != null:
+			PrototypeAttackIndicator.spawn_footstep_puff(scene, pos)
+		var floor_key := _detect_floor_type()
+		WeaponSounds.play_generic(floor_key, pos, -14.0, true)
 
 
 # ── Hammer Wind-Up ──────────────────────────────────────────────────────────
@@ -514,9 +518,16 @@ var _channel_input_action: StringName = &""
 var _channel_tick_accum: float = 0.0
 # Hold-loop SFX player spawned in _start_channel for channel weapons
 # (taser, accelerator); null otherwise. _stop_channel fades + frees it
-# via WeaponSounds.stop_channel_loop, which tolerates null. Non-3D for
-# now — see comment in WeaponSounds.play_channel_loop for why.
-var _channel_hold_player: AudioStreamPlayer = null
+# via WeaponSounds.stop_channel_loop, which tolerates null.
+var _channel_hold_player: AudioStreamPlayer3D = null
+# Cooldown after channel stops due to resource depletion. Prevents the
+# instant start→stop→start stutter when LMB is still held but the pool
+# is empty. Counts down each frame in _tick_channel; _start_channel
+# refuses to begin while > 0.
+const CHANNEL_DEPLETED_COOLDOWN := 0.5
+var _channel_depleted_cd: float = 0.0
+const GRUNT_COOLDOWN := 0.4
+var _grunt_cd: float = 0.0
 # ── Footstep dust puffs ─────────────────────────────────────────────────────
 # Position-based footstep emission. Each frame we accumulate the
 # horizontal distance moved since the last puff; once it crosses
@@ -526,10 +537,28 @@ var _channel_hold_player: AudioStreamPlayer = null
 # as their replicated positions update — no RPC needed. Skipped when
 # airborne or below the speed floor so jumping / standing-still
 # doesn't dribble puffs.
-const FOOTSTEP_DISTANCE: float = 1.4
+const FOOTSTEP_DISTANCE: float = 1.7
+# Target move speed this frame (after all modifiers). Written by the
+# movement block, read by the animation block to keep legs pumping at
+# the intended cadence rather than dipping during accel ramps.
+var _target_move_speed: float = 0.0
 const FOOTSTEP_MIN_SPEED_SQR: float = 0.04  # ignore micro-jitter from sync
 var _footstep_distance_accum: float = 0.0
 var _footstep_last_pos: Vector3 = Vector3.ZERO
+
+## Check the floor body under the player for a material-type group.
+## Returns &"footstep_grate" or &"footstep_metal" (the generic sound
+## key WeaponSounds resolves). Falls back to metal when no floor body
+## is found or it has no floor_* group.
+func _detect_floor_type() -> StringName:
+	for i in get_slide_collision_count():
+		var col := get_slide_collision(i)
+		if col.get_normal().y < 0.5:
+			continue  # wall / ramp, not floor
+		var body := col.get_collider()
+		if body is Node and body.is_in_group(&"floor_grate"):
+			return &"footstep_grate"
+	return &"footstep_metal"
 
 
 # Flame visual for SINGLE_CONE CHANNEL_BEAM weapons (Energy Accelerator).
@@ -843,6 +872,9 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 	_hp_regen_accum = 0.0
 	_hit_flash_tween = HitFlash.play(self, visual, _hit_flash_tween)
 	WeaponSounds.play_generic(&"hit_player", global_position)
+	if _grunt_cd <= 0.0:
+		_grunt_cd = GRUNT_COOLDOWN
+		WeaponSounds.play_generic(&"hit_grunt", global_position, -4.0, true)
 	if knockback_strength > 0.0:
 		var dir := global_position - knockback_from
 		dir.y = 0.0
@@ -1007,6 +1039,8 @@ func _physics_process(delta: float) -> void:
 		velocity = Vector3.ZERO
 		net_moving = false
 		return
+	if _grunt_cd > 0.0:
+		_grunt_cd -= delta
 	if not Input.is_action_pressed(SKILL_INPUTS[0]):
 		_click_consumed = false
 	_update_lock_target()
@@ -1087,7 +1121,12 @@ func _physics_process(delta: float) -> void:
 		_want_dir = wish_dir
 		if _interacting and wish_dir.length_squared() > 0.01:
 			_interacting = false
-		_backing = not _is_airborne and wish_dir.length_squared() > 0.01 and wish_dir.dot(-visual.global_transform.basis.z) < -0.3
+		# Hysteresis on backing detection — use a tighter threshold to enter
+		# backing (-0.4) and a looser one to exit (-0.2) so the flag doesn't
+		# flicker when movement is near-perpendicular to facing direction.
+		var _back_dot := wish_dir.dot(-visual.global_transform.basis.z)
+		var _back_threshold := -0.2 if _backing else -0.4
+		_backing = not _is_airborne and wish_dir.length_squared() > 0.01 and _back_dot < _back_threshold
 		if not _is_airborne:
 			# Sprint: hold shift while moving to spend resource for a speed burst.
 			# Can't sprint while crouching, backing, airborne, or out of resource.
@@ -1122,6 +1161,7 @@ func _physics_process(delta: float) -> void:
 			# the trade for the accuracy / crit buff.
 			var aim_hold_factor: float = 0.0 if aim_hold_locks_movement() else 1.0
 			var speed := move_speed * (CROUCH_SPEED_FACTOR if _crouching else 1.0) * (0.5 if _backing else 1.0) * sprint_factor * shield_factor * gear_speed_factor * pool_factor * reload_factor * aim_hold_factor
+			_target_move_speed = speed
 			var flat := Vector2(velocity.x, velocity.z)
 			var target := Vector2(wish_dir.x, wish_dir.z) * speed
 			var step := accel * (1.0 if wish_dir.length_squared() > 0.0 else 2.5) * delta
@@ -1185,15 +1225,18 @@ func _physics_process(delta: float) -> void:
 				_play_anim(ANIM_JUMP_AIR, 1.0, 0.15)
 		elif not _interacting:
 			if _want_dir.length_squared() > 0.01:
-				# Match feet to travel speed so animation tracks reality during
-				# the accel ramp instead of looking like skating.
-				var flat_speed := Vector2(velocity.x, velocity.z).length()
-				var run_ratio := (flat_speed / move_speed) * RUN_ANIM_SPEED_FACTOR
-				anim_player.speed_scale = clampf(run_ratio, RUN_ANIM_SPEED_MIN, RUN_ANIM_SPEED_MAX)
+				# Fixed animation speed — sprint and backing are the only
+				# modifiers. All speed control goes through speed_scale
+				# (never custom_speed in _play_anim) so the rate can't
+				# flicker when _backing toggles at the dot-product boundary.
+				var anim_speed := RUN_ANIM_SPEED_FACTOR
+				if _sprinting:
+					anim_speed *= SPRINT_SPEED_FACTOR
+				elif _backing:
+					anim_speed *= 0.5
+				anim_player.speed_scale = clampf(anim_speed, RUN_ANIM_SPEED_MIN, RUN_ANIM_SPEED_MAX)
 				if _crouching:
 					_play_anim(ANIM_CROUCH_MOVE, 1.0, 0.15)
-				elif _backing:
-					_play_anim(ANIM_RUN, 0.5, 0.15)
 				else:
 					_play_anim(ANIM_RUN, 1.0, 0.15)
 			else:
@@ -1876,6 +1919,7 @@ func start_reload() -> void:
 	_reload_total = maxf(w.reload_time, 0.05)
 	_reload_remain = _reload_total
 	_reload_target = &"weapon"
+	WeaponSounds.play_reload(w.weapon_base_id, global_position)
 	weapon_ammo_changed.emit()
 
 # ── AIM_HOLD (Tripod / Focus) ───────────────────────────────────────────────
@@ -1982,6 +2026,10 @@ func is_channeling() -> bool:
 func _start_channel(skill: Skill, input_action: StringName) -> void:
 	if skill == null or skill.active_kind != Skill.ActiveKind.CHANNEL_BEAM:
 		return
+	# Cooldown after resource depletion — prevents the glitchy start/stop
+	# stutter when LMB is held but the resource pool just emptied.
+	if _channel_depleted_cd > 0.0:
+		return
 	# Need at least a sliver of resource to begin — otherwise the next
 	# tick would just kick us straight back out.
 	var infinite_res := DebugState.config != null and DebugState.config.infinite_resource
@@ -2041,6 +2089,8 @@ func _stop_channel() -> void:
 
 
 func _tick_channel(delta: float) -> void:
+	if _channel_depleted_cd > 0.0:
+		_channel_depleted_cd -= delta
 	if _channel_skill == null:
 		return
 	# End on input release, weapon swap (resolve_skill returns something
@@ -2067,8 +2117,12 @@ func _tick_channel(delta: float) -> void:
 			_resource_current = maxf(0.0, _resource_current - drain)
 			_emit_resource_if_changed()
 		if _resource_current <= 0.0:
+			_channel_depleted_cd = CHANNEL_DEPLETED_COOLDOWN
 			_stop_channel()
 			return
+	# Channel-loop audio plays at the listener (not world-position) so
+	# isometric movement doesn't shift volume/panning. No position
+	# update needed — the listener already tracks the player.
 	# Drive the flame visual every frame so it tracks the cursor in
 	# real-time, not just on damage ticks. Skipped if the flame isn't
 	# active (CHAIN_LIGHTNING channels never created it).
