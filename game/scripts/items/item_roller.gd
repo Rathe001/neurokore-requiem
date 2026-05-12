@@ -375,8 +375,17 @@ func _stat_applies_to_item(item: Item, stat_id: StringName) -> bool:
 		return false
 	return true
 
-func _roll_damage(item: Item, base: WeaponBase, rng: RandomNumberGenerator) -> void:
-	_roll_damage(item, base, rng)
+# Roll the item's damage min/max from the base's damage_min_range and
+# damage_max_range. Both WeaponBase and GrenadeBase expose those same
+# two Vector2 fields, so the parameter is typed as Resource and duck-
+# typed inside — typing as WeaponBase specifically would reject
+# legitimate GrenadeBase calls from _roll_grenade_from_base.
+# mini/maxi reorder so a max-roll under a min-roll doesn't invert.
+func _roll_damage(item: Item, base: Resource, rng: RandomNumberGenerator) -> void:
+	var dmin: int = int(round(rng.randf_range(base.damage_min_range.x, base.damage_min_range.y)))
+	var dmax: int = int(round(rng.randf_range(base.damage_max_range.x, base.damage_max_range.y)))
+	item.damage_min = mini(dmin, dmax)
+	item.damage_max = maxi(dmin, dmax)
 
 func _apply_weapon_base(item: Item, main_type: String, rng: RandomNumberGenerator) -> void:
 	var drops: Array = WEAPON_BASE_DROPS.get(main_type, [])
