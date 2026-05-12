@@ -225,7 +225,14 @@ func _ensure_loaded() -> void:
 	_register(&"lmg_2h", {
 		fire = _streams(["res://resources/audio/sfx/weapons/lmg.wav"]),
 	})
-	_register(&"accelerator_2h", {})
+	# Accelerator: same channel pattern as taser — punchy zap at engage
+	# (clip_11) + continuous beam loop for the duration of the stream.
+	# is_channel_weapon() returns true so per-tick fire is suppressed
+	# in player_combat.resolve_skill_hit.
+	_register(&"accelerator_2h", {
+		fire = _streams(["res://resources/audio/sfx/weapons/energy-accelerator.wav"]),
+		hold_loop = _load_one("res://resources/audio/sfx/weapons/energy-accelerator-hold.wav"),
+	})
 	# Taser: per-attack zap on the fire array, continuous crackle on
 	# hold_loop. is_channel_weapon() returns true for it, so callers
 	# in the channel-tick path skip the per-tick play_fire and rely on
