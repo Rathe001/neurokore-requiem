@@ -284,10 +284,7 @@ func _roll_grenade_from_base(base: GrenadeBase, item_level: int, rng: RandomNumb
 	item.fire_skill = base.fire_skill
 	if base.glyph != "":
 		item.glyph = base.glyph
-	var dmin := int(round(rng.randf_range(base.damage_min_range.x, base.damage_min_range.y)))
-	var dmax := int(round(rng.randf_range(base.damage_max_range.x, base.damage_max_range.y)))
-	item.damage_min = mini(dmin, dmax)
-	item.damage_max = maxi(dmin, dmax)
+	_roll_damage(item, base, rng)
 	item.crit_chance = rng.randf_range(base.crit_chance_range.x, base.crit_chance_range.y)
 	item.blast_radius = rng.randf_range(base.blast_radius_range.x, base.blast_radius_range.y)
 	item.name_key = base.display_name
@@ -378,6 +375,9 @@ func _stat_applies_to_item(item: Item, stat_id: StringName) -> bool:
 		return false
 	return true
 
+func _roll_damage(item: Item, base: WeaponBase, rng: RandomNumberGenerator) -> void:
+	_roll_damage(item, base, rng)
+
 func _apply_weapon_base(item: Item, main_type: String, rng: RandomNumberGenerator) -> void:
 	var drops: Array = WEAPON_BASE_DROPS.get(main_type, [])
 	var path := _pick_weighted_path(drops, rng)
@@ -420,11 +420,7 @@ func _apply_weapon_base_direct(item: Item, base: WeaponBase, rng: RandomNumberGe
 	var main_type := "2H Weapon" if base.two_handed else "1H Weapon"
 	if item.glyph == SlotRegistry.glyph_for_type(main_type) and base.glyph != "":
 		item.glyph = base.glyph
-	# Damage roll: ensure max >= min so combat damage rolls aren't inverted.
-	var dmin := int(round(rng.randf_range(base.damage_min_range.x, base.damage_min_range.y)))
-	var dmax := int(round(rng.randf_range(base.damage_max_range.x, base.damage_max_range.y)))
-	item.damage_min = mini(dmin, dmax)
-	item.damage_max = maxi(dmin, dmax)
+	_roll_damage(item, base, rng)
 	item.attack_speed = rng.randf_range(base.attack_speed_range.x, base.attack_speed_range.y)
 	item.crit_chance = rng.randf_range(base.crit_chance_range.x, base.crit_chance_range.y)
 	item.accuracy = rng.randf_range(base.accuracy_range.x, base.accuracy_range.y)
@@ -546,10 +542,7 @@ func _apply_grenade_base(item: Item, main_type: String, rng: RandomNumberGenerat
 	item.fire_skill = base.fire_skill
 	if base.glyph != "":
 		item.glyph = base.glyph
-	var dmin := int(round(rng.randf_range(base.damage_min_range.x, base.damage_min_range.y)))
-	var dmax := int(round(rng.randf_range(base.damage_max_range.x, base.damage_max_range.y)))
-	item.damage_min = mini(dmin, dmax)
-	item.damage_max = maxi(dmin, dmax)
+	_roll_damage(item, base, rng)
 	item.crit_chance = rng.randf_range(base.crit_chance_range.x, base.crit_chance_range.y)
 	item.blast_radius = rng.randf_range(base.blast_radius_range.x, base.blast_radius_range.y)
 
