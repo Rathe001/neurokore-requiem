@@ -363,7 +363,7 @@ func consume_laser_charged_shot() -> float:
 # too — no replication needed.
 func _tick_footsteps() -> void:
 	var result := Footsteps.tick(self, _footstep_distance_accum, _footstep_last_pos,
-		FOOTSTEP_DISTANCE, -14.0, true, true)
+		FOOTSTEP_DISTANCE, -20.0, true, true)
 	_footstep_distance_accum = result[0]
 	_footstep_last_pos = result[1]
 

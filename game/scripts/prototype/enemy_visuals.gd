@@ -108,7 +108,10 @@ func push_tooltip() -> void:
 		return
 	var title := "%s  Level %d" % [_host.display_name, _host.level]
 	var body := _build_tooltip_body()
-	_host.get_tree().call_group(&"interactable_tooltip", &"show_enemy", title, body)
+	# show_talent_node is the generic title+body method on prototype_tooltip
+	# — same shape as enemy tooltips need. Name's a misnomer but it's the
+	# pre-refactor entry point; renaming would touch the talent panel too.
+	_host.get_tree().call_group(&"interactable_tooltip", &"show_talent_node", title, body)
 
 
 func _build_tooltip_body() -> String:
@@ -251,18 +254,18 @@ func play_hit_squash() -> void:
 
 
 func update_health_bar() -> void:
+	# health_bar is a MeshInstance3D whose mesh uses health_bar.gdshader.
+	# Pre-refactor logic used instance shader parameters (`fill_ratio` and
+	# `fill_color`) to drive the visual — the post-refactor scale.x +
+	# StandardMaterial3D override clobbered the shader and broke the bar
+	# entirely. Restored to the shader-param approach.
 	if _host.health_bar == null:
 		return
-	if not _host._is_alive() or _host._health >= _host.max_health:
-		_host.health_bar.visible = false
-		return
-	_host.health_bar.visible = true
-	var ratio := float(_host._health) / float(_host.max_health)
-	_host.health_bar.scale.x = ratio
-	var mat := _host.health_bar.get_surface_override_material(0)
-	if mat == null:
-		mat = StandardMaterial3D.new()
-		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		_host.health_bar.set_surface_override_material(0, mat)
-	if mat is StandardMaterial3D:
-		mat.albedo_color = Color(0.2, 0.9, 0.3) if _host._afflictions._charmed else Color(0.9, 0.15, 0.15)
+	var ratio := clampf(float(_host._health) / float(_host.max_health), 0.0, 1.0)
+	_host.health_bar.visible = _host._is_alive() and ratio < 1.0
+	_host.health_bar.set_instance_shader_parameter(&"fill_ratio", ratio)
+	# Charmed pets fight FOR the player; their bar reads green so the
+	# player can scan a knot of bodies and tell allies from hostiles
+	# without inspecting each one.
+	var color: Color = PrototypeEnemy._HP_BAR_FRIENDLY if _host._afflictions._charmed else PrototypeEnemy._HP_BAR_HOSTILE
+	_host.health_bar.set_instance_shader_parameter(&"fill_color", color)

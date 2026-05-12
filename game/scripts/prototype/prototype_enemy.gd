@@ -41,6 +41,14 @@ const ENEMY_VERTICAL_SPREAD_RATIO: float = 0.5
 # vector. Lost during the enemy module extraction; restored here.
 const ENEMY_MISS_MIN_SPREAD: float = 0.06
 
+# Health bar fill colors — passed to the health_bar.gdshader via
+# instance shader parameters. Hostile = red, friendly (charmed pets) =
+# green so the player can scan a knot of bodies and tell allies from
+# hostiles without inspecting each one. Lost during the visuals
+# extraction; restored here.
+const _HP_BAR_HOSTILE := Color(1.0, 0.28, 0.32, 1.0)
+const _HP_BAR_FRIENDLY := Color(0.30, 1.0, 0.45, 1.0)
+
 const GRAVITY := CombatConstants.GRAVITY
 const CHASE_SPEED := 3.2
 const AGGRO_RANGE := 10.0
@@ -107,7 +115,7 @@ const CROUCH_PROBE_HEIGHT := STAND_HEIGHT - CROUCH_HEIGHT  # 0.7
 
 # ── Footstep SFX ────────────────────────────────────────────────────────────
 const ENEMY_FOOTSTEP_DISTANCE: float = 1.8
-const ENEMY_FOOTSTEP_DB: float = -14.0  # quieter than player steps
+const ENEMY_FOOTSTEP_DB: float = -24.0  # quieter than player steps (-20 dB)
 var _footstep_accum: float = 0.0
 var _footstep_last_pos: Vector3 = Vector3.ZERO
 const CROUCH_PROBE_CENTER_Y := CROUCH_HEIGHT + CAPSULE_BOTTOM_Y + CROUCH_PROBE_HEIGHT * 0.5  # 1.30
