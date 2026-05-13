@@ -45,6 +45,30 @@ const RARITY_BUDGET_MULT: Dictionary = {
 	&"common": 1.0, &"magic": 1.15, &"rare": 1.3, &"unique": 1.5,
 }
 
+# Power-curve exponents per rarity for stat rolls. Higher exponent biases
+# the roll toward the low end of the range — perfect rolls become rarer.
+# Common items cluster near the floor; unique items have a much flatter
+# distribution so high rolls are attainable but still not guaranteed.
+const RARITY_ROLL_CURVE: Dictionary = {
+	&"common": 2.5, &"magic": 2.0, &"rare": 1.5, &"unique": 1.2,
+}
+
+# Curved integer roll in [lo, hi]. Uses a power curve: t = rand^exponent
+# so values near `lo` are common and values near `hi` are rare. Exponent
+# 1.0 = flat/uniform. Higher = steeper bias toward floor.
+static func _curved_randi(lo: int, hi: int, rng: RandomNumberGenerator, exponent: float = 2.0) -> int:
+	if lo >= hi:
+		return lo
+	var t: float = pow(rng.randf(), exponent)
+	return lo + int(round(t * float(hi - lo)))
+
+# Same curve for float ranges.
+static func _curved_randf(lo: float, hi: float, rng: RandomNumberGenerator, exponent: float = 2.0) -> float:
+	if lo >= hi:
+		return lo
+	var t: float = pow(rng.randf(), exponent)
+	return lo + t * (hi - lo)
+
 
 # Registry of weapon bases keyed by main_type, with per-base drop weights.
 # Picker normalizes weights at roll time, so the numbers are relative — bump
@@ -153,7 +177,7 @@ func roll(main_type: String, item_level: int, rarity: StringName, rng: RandomNum
 	_apply_weapon_base(item, main_type, rarity, rng)
 	_roll_weapon_signature(item, rarity, rng)
 	_apply_offhand_base(item, main_type, rng)
-	_apply_grenade_base(item, main_type, rng)
+	_apply_grenade_base(item, main_type, rarity, rng)
 	_apply_armor_model_name(item, main_type, rng)
 	_apply_head_light_mod(item, main_type, item_level, rng)
 	_apply_icon_path(item)
@@ -373,9 +397,10 @@ func _roll_weapon_signature(item: Item, rarity: StringName, rng: RandomNumberGen
 	if sigs.is_empty():
 		return
 	var mult: float = float(RARITY_BUDGET_MULT.get(rarity, 1.0))
+	var curve: float = float(RARITY_ROLL_CURVE.get(rarity, 2.0))
 	for sig: Dictionary in sigs:
 		var base_range: Vector2i = sig["base"]
-		var base_val := rng.randi_range(base_range.x, base_range.y)
+		var base_val := _curved_randi(base_range.x, base_range.y, rng, curve)
 		var final_val: int
 		if sig.get("inverse", false):
 			final_val = int(round(float(base_val) / mult))
@@ -485,9 +510,9 @@ func _stat_applies_to_item(item: Item, stat_id: StringName) -> bool:
 # typed inside — typing as WeaponBase specifically would reject
 # legitimate GrenadeBase calls from _roll_grenade_from_base.
 # mini/maxi reorder so a max-roll under a min-roll doesn't invert.
-func _roll_damage(item: Item, base: Resource, rng: RandomNumberGenerator) -> void:
-	var dmin: int = int(round(rng.randf_range(base.damage_min_range.x, base.damage_min_range.y)))
-	var dmax: int = int(round(rng.randf_range(base.damage_max_range.x, base.damage_max_range.y)))
+func _roll_damage(item: Item, base: Resource, rng: RandomNumberGenerator, curve: float = 2.0) -> void:
+	var dmin: int = int(round(_curved_randf(base.damage_min_range.x, base.damage_min_range.y, rng, curve)))
+	var dmax: int = int(round(_curved_randf(base.damage_max_range.x, base.damage_max_range.y, rng, curve)))
 	item.damage_min = mini(dmin, dmax)
 	item.damage_max = maxi(dmin, dmax)
 
@@ -533,18 +558,19 @@ func _apply_weapon_base_direct(item: Item, base: WeaponBase, rarity: StringName,
 	var main_type := "2H Weapon" if base.two_handed else "1H Weapon"
 	if item.glyph == SlotRegistry.glyph_for_type(main_type) and base.glyph != "":
 		item.glyph = base.glyph
-	_roll_damage(item, base, rng)
-	item.attack_speed = rng.randf_range(base.attack_speed_range.x, base.attack_speed_range.y)
-	item.crit_chance = rng.randf_range(base.crit_chance_range.x, base.crit_chance_range.y)
-	item.accuracy = rng.randf_range(base.accuracy_range.x, base.accuracy_range.y)
-	item.weapon_range = rng.randf_range(base.weapon_range_range.x, base.weapon_range_range.y)
+	var curve: float = float(RARITY_ROLL_CURVE.get(rarity, 2.0))
+	_roll_damage(item, base, rng, curve)
+	item.attack_speed = _curved_randf(base.attack_speed_range.x, base.attack_speed_range.y, rng, curve)
+	item.crit_chance = _curved_randf(base.crit_chance_range.x, base.crit_chance_range.y, rng, curve)
+	item.accuracy = _curved_randf(base.accuracy_range.x, base.accuracy_range.y, rng, curve)
+	item.weapon_range = _curved_randf(base.weapon_range_range.x, base.weapon_range_range.y, rng, curve)
 	# Bullet weapons: roll an ammo capacity in the base's range, scaled by
 	# rarity (higher rarity = more rounds in the mag). Energy weapons leave
 	# ammo_max == 0 and skip the reload mechanic entirely.
 	if base.ammo_capacity_range.y > 0:
 		var lo: int = mini(base.ammo_capacity_range.x, base.ammo_capacity_range.y)
 		var hi: int = maxi(base.ammo_capacity_range.x, base.ammo_capacity_range.y)
-		var base_ammo := rng.randi_range(maxi(1, lo), maxi(1, hi))
+		var base_ammo := _curved_randi(maxi(1, lo), maxi(1, hi), rng, curve)
 		var rarity_mult: float = float(RARITY_BUDGET_MULT.get(rarity, 1.0))
 		item.ammo_max = maxi(1, int(round(float(base_ammo) * rarity_mult)))
 		item.ammo_current = item.ammo_max
@@ -642,7 +668,7 @@ func _apply_offhand_base(item: Item, main_type: String, rng: RandomNumberGenerat
 	if base.glyph != "":
 		item.glyph = base.glyph
 
-func _apply_grenade_base(item: Item, main_type: String, rng: RandomNumberGenerator) -> void:
+func _apply_grenade_base(item: Item, main_type: String, rarity: StringName, rng: RandomNumberGenerator) -> void:
 	if main_type != "Grenade":
 		return
 	if GRENADE_BASE_PATHS.is_empty():
@@ -657,9 +683,10 @@ func _apply_grenade_base(item: Item, main_type: String, rng: RandomNumberGenerat
 	item.fire_skill = base.fire_skill
 	if base.glyph != "":
 		item.glyph = base.glyph
-	_roll_damage(item, base, rng)
-	item.crit_chance = rng.randf_range(base.crit_chance_range.x, base.crit_chance_range.y)
-	item.blast_radius = rng.randf_range(base.blast_radius_range.x, base.blast_radius_range.y)
+	var curve: float = float(RARITY_ROLL_CURVE.get(rarity, 2.0))
+	_roll_damage(item, base, rng, curve)
+	item.crit_chance = _curved_randf(base.crit_chance_range.x, base.crit_chance_range.y, rng, curve)
+	item.blast_radius = _curved_randf(base.blast_radius_range.x, base.blast_radius_range.y, rng, curve)
 
 ## Head armor rolls a light mod. Most helmets get a flashlight; rarer mods
 ## (scanner, UV) appear at higher item levels. Light stats scale with level.
