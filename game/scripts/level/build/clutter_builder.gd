@@ -53,6 +53,15 @@ const MARGIN := 1.5           ## min distance from wall edge
 const OPENING_CLEARANCE := 1.0 ## extra clearance around openings
 const MIN_SPACING := 1.0      ## min distance between placed props
 const EMISSION_ENERGY := 0.3  ## subtle cyberpunk glow
+## Destructible collision height. Player projectiles spawn at chest level
+## (~1.0m, see PlayerCombat._spawn_projectile) and travel horizontally; a
+## 0.4–0.9m visual prop never intersects them with mesh-sized collision, so
+## "I aim at the barrel and the bullet flies right over" was the dominant
+## complaint. Extending collision upward gives the prop an invisible
+## bullet-catch column while the visual mesh stays short. Side effect:
+## cover props now block enemy fire at standing height as well as crouch —
+## intentional given the same shape sits on the PILLAR layer.
+const DESTRUCTIBLE_COLLISION_HEIGHT := 1.6
 
 
 static func scatter_clutter(ctx: LevelBuildContext, center: Vector3, hx: float, hz: float, rd: RoomDef, room_id: StringName = &"") -> void:
@@ -121,8 +130,10 @@ static func _create_destructible(ctx: LevelBuildContext, pos: Vector3, def: Dict
 
 	var col := CollisionShape3D.new()
 	col.name = &"Collision"
-	col.shape = _make_shape(def)
-	col.position = Vector3(0, mesh_height * 0.5 + y_offset, 0)
+	col.shape = _make_destructible_shape(def)
+	# Anchor the bullet-catch column at the ground so it intercepts both
+	# horizontal player fire at 1.0m and downward enemy fire from 1.4m.
+	col.position = Vector3(0, DESTRUCTIBLE_COLLISION_HEIGHT * 0.5, 0)
 	body.add_child(col)
 
 	body.position = pos
@@ -218,6 +229,25 @@ static func _make_shape(def: Dictionary) -> Shape3D:
 	else:  # box
 		var s := BoxShape3D.new()
 		s.size = def["size"] as Vector3
+		return s
+
+
+# Same footprint as _make_shape, but with the vertical extent stretched to
+# DESTRUCTIBLE_COLLISION_HEIGHT so the prop is bullet-catchable at standing
+# fire height. Used only for destructibles — indestructibles keep their
+# mesh-sized shape via _make_shape (their height varies by design, e.g.
+# server racks are already 1.8m).
+static func _make_destructible_shape(def: Dictionary) -> Shape3D:
+	var kind: String = def["mesh"]
+	if kind == "cylinder":
+		var s := CylinderShape3D.new()
+		s.radius = float(def["radius"])
+		s.height = DESTRUCTIBLE_COLLISION_HEIGHT
+		return s
+	else:  # box — covers everything not cylinder; no plane destructibles exist
+		var s := BoxShape3D.new()
+		var orig: Vector3 = def["size"] as Vector3
+		s.size = Vector3(orig.x, DESTRUCTIBLE_COLLISION_HEIGHT, orig.z)
 		return s
 
 
