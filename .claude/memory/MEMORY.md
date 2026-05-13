@@ -40,4 +40,5 @@
 - [Faction dynamic](project_faction_dynamic.md) — Analog/Cyborg oppose each other but unite against the corporation
 - [Itemization revamp](project_itemization_revamp.md) — Removing attributes, gear gets direct bonuses + behavior mods, 5 perk tiers via talents
 - [Audio architecture](project_audio_architecture.md) — bus layout, room-aware reverb, SFX pool, WeaponSounds registry; silent until assets added
+- [SFX gaps](project_sfx_gaps.md) — what audio still needs wiring as of 2026-05-12 (hit_player, per-weapon impacts, plasma variants, etc.)
 - [Project: Neurokore Requiem](project_neurokore_requiem.md) — Game design project: "Neurokore: Requiem"
