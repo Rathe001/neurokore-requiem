@@ -109,6 +109,17 @@ func generate() -> LevelGraph:
 		occupied[next] = true
 		frontier.append(next)
 
+	# ── Step 1b: Pick a dead-end leaf as spawn ────────────────────────────
+	# The carve origin (grid center) typically has multiple exits, putting
+	# the player at a busy intersection. Instead, pick a random 1-opening
+	# leaf so the player spawns in a quiet cul-de-sac with a single door.
+	var leaves: Array[Vector2i] = []
+	for cell: Vector2i in occupied.keys():
+		if GridGenerator._openings_for(cell, occupied).size() == 1:
+			leaves.append(cell)
+	if not leaves.is_empty():
+		start_cell = leaves[rng.randi() % leaves.size()]
+
 	# ── Step 2: BFS distances for difficulty scaling + boss placement ──────
 	var distances := _bfs_distances(start_cell, occupied)
 	var boss_cell := _pick_boss_cell(occupied, distances, rng)
@@ -201,6 +212,7 @@ func generate() -> LevelGraph:
 				RoomDef.Wall.EAST, RoomDef.Wall.WEST, east_corridor)
 			if cell == start_cell or east == start_cell:
 				c_east.enemy_count_override = 0
+				c_east.has_door = true
 			graph.connections.append(c_east)
 		var south := Vector2i(cell.x, cell.y + 1)
 		if occupied.has(south):
@@ -210,6 +222,7 @@ func generate() -> LevelGraph:
 				RoomDef.Wall.SOUTH, RoomDef.Wall.NORTH, south_corridor)
 			if cell == start_cell or south == start_cell:
 				c_south.enemy_count_override = 0
+				c_south.has_door = true
 			graph.connections.append(c_south)
 
 	# ── Step 5: Optional switch puzzle on boss connections ─────────────────

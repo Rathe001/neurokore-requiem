@@ -432,13 +432,28 @@ static func spawn_beam(host: Node3D, aim: Vector3, length: float, source_offset:
 	impact_light.position = Vector3(0.0, 0.0, -length)
 	node.add_child(impact_light)
 
+	# Mid-beam light so the entire laser line illuminates nearby geometry,
+	# not just the impact point. Placed at the beam's midpoint with a
+	# wider range to cover the full corridor.
+	var mid_light := _acquire_light()
+	mid_light.light_color = color
+	mid_light.light_energy = 1.8
+	mid_light.omni_range = 3.0
+	mid_light.omni_attenuation = 2.0
+	mid_light.shadow_enabled = false
+	mid_light.light_volumetric_fog_energy = 0.0
+	mid_light.position = Vector3(0.0, 0.0, -length * 0.5)
+	node.add_child(mid_light)
+
 	var tween := node.create_tween().set_parallel(true)
 	tween.tween_property(core_mat, "albedo_color:a", 0.0, BEAM_FADE).set_ease(Tween.EASE_IN)
 	tween.tween_property(glow_mat, "albedo_color:a", 0.0, BEAM_FADE).set_ease(Tween.EASE_IN)
 	tween.tween_property(core_mat, "emission_energy_multiplier", 0.0, BEAM_FADE)
 	tween.tween_property(glow_mat, "emission_energy_multiplier", 0.0, BEAM_FADE)
 	tween.tween_property(impact_light, "light_energy", 0.0, BEAM_FADE).set_ease(Tween.EASE_IN)
+	tween.tween_property(mid_light, "light_energy", 0.0, BEAM_FADE).set_ease(Tween.EASE_IN)
 	tween.chain().tween_callback(_release_light.bind(impact_light))
+	tween.chain().tween_callback(_release_light.bind(mid_light))
 	tween.chain().tween_callback(node.queue_free)
 
 # Brief impact flash spawned at a hit point — small emissive sphere that
@@ -1193,8 +1208,8 @@ static func _beam_glow_mesh(length: float) -> CylinderMesh:
 	if cached != null:
 		return cached
 	var m := CylinderMesh.new()
-	m.top_radius = BEAM_RADIUS * 3.0
-	m.bottom_radius = BEAM_RADIUS * 3.0
+	m.top_radius = BEAM_RADIUS * 8.0
+	m.bottom_radius = BEAM_RADIUS * 8.0
 	m.height = length
 	m.radial_segments = 6
 	m.rings = 1

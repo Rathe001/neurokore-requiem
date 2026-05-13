@@ -20,7 +20,10 @@ extends Node
 ## - Fade lerp runs every render frame, raycasts run on the physics tick.
 
 const WORLD_LAYER_MASK := 1  # physics layer 1 ("World") — walls + floors
+const PILLAR_LAYER_MASK := 128  # props/pillars — block LoS when crouching
+const COVER_MASK := WORLD_LAYER_MASK | PILLAR_LAYER_MASK
 const RAY_HEIGHT := 1.0      # chest-height sample so the ray clears floor/ceiling colliders
+const RAY_HEIGHT_CROUCH := 0.5  # crouched ray — low enough for medium props to block
 const PICKUP_RAY_HEIGHT := 0.5  # pickups settle low; sample closer to ground
 # Squared distance beyond which targets are forced invisible without a raycast.
 # The fixed isometric camera frustum tops out around 30m on the diagonal — past
@@ -46,8 +49,13 @@ const FADE_RATE := 12.0
 const HIDE_THRESHOLD := 0.98
 
 var _query := PhysicsRayQueryParameters3D.new()
-# node -> bool: target LoS (written by physics, read by process)
+# node -> bool: visual LoS — walls only (written by physics, read by process)
 var _target_los: Dictionary = {}
+# node -> bool: combat LoS — walls + cover props. Only populated for enemies
+# that have visual LoS; if visual LoS is false, combat LoS is implicitly false.
+# has_los_to_player() reads this for AI gating so cover blocks attacks without
+# hiding enemies from the player's screen.
+var _combat_los: Dictionary = {}
 # node -> float: current transparency [0=opaque, 1=invisible], lerped each frame
 var _transparency: Dictionary = {}
 # node -> Array[GeometryInstance3D]: cached descendants we apply transparency to.
@@ -73,6 +81,7 @@ var _player_cache: Node3D = null
 # cell change — acceptable lag for static/quasi-static entities.
 var _corpses_cache: Array = []
 var _static_glows_cache: Array = []
+var _clutter_cache: Array = []
 
 func _ready() -> void:
 	_query.collision_mask = WORLD_LAYER_MASK
@@ -101,6 +110,10 @@ func _physics_process(_delta: float) -> void:
 	var player_pos := player.global_position
 	var from := player_pos + Vector3(0, RAY_HEIGHT, 0)
 	var pickup_from := player_pos + Vector3(0, PICKUP_RAY_HEIGHT, 0)
+	# Enemy-specific cover ray: crouching lowers the origin so medium props
+	# (barrels, crates) block the cast — giving the player cover while ducked.
+	var crouching: bool = player.has_method(&"is_crouching") and player.is_crouching()
+	var enemy_from := player_pos + Vector3(0, RAY_HEIGHT_CROUCH if crouching else RAY_HEIGHT, 0)
 	var player_cell := Vector2i(
 		int(floor(player_pos.x * _INV_CELL_SIZE)),
 		int(floor(player_pos.z * _INV_CELL_SIZE)),
@@ -118,6 +131,7 @@ func _physics_process(_delta: float) -> void:
 		# Refresh cached group arrays for categories not in SpatialGrid.
 		_corpses_cache = get_tree().get_nodes_in_group(&"corpses")
 		_static_glows_cache = get_tree().get_nodes_in_group(&"static_glows")
+		_clutter_cache = get_tree().get_nodes_in_group(&"clutter")
 
 	var stagger := _stagger_frame
 	_stagger_frame = (_stagger_frame + 1) % STAGGER_GROUPS
@@ -126,6 +140,12 @@ func _physics_process(_delta: float) -> void:
 	# Iterate SpatialGrid's flat membership set (no per-frame allocation).
 	# Newly seen enemies (no cache entry) are tested immediately so their target
 	# state is correct from frame 0.
+	#
+	# Two LoS values per enemy:
+	#   visual_los  — WORLD_LAYER_MASK only (walls). Drives rendering show/hide.
+	#   combat_los  — COVER_MASK (walls + cover props). Drives has_los_to_player()
+	#                 for enemy AI gating. Only tested when visual_los is true
+	#                 (if a wall blocks, cover is irrelevant).
 	var enemy_members: Dictionary = SpatialGrid.get_members(&"enemies")
 	var index := 0
 	for e in enemy_members:
@@ -134,15 +154,30 @@ func _physics_process(_delta: float) -> void:
 			continue
 		var first_seen := not _target_los.has(enemy)
 		if first_seen or (index + stagger) % STAGGER_GROUPS == 0:
-			var enemy_los: bool
+			var visual_los: bool
+			var combat_los: bool
 			if enemy.global_position.distance_squared_to(player_pos) > MAX_DIST_SQ:
-				enemy_los = false
+				visual_los = false
+				combat_los = false
 			else:
+				# Visual ray — walls only.
+				_query.collision_mask = WORLD_LAYER_MASK
 				_query.exclude = []
 				_query.from = from
 				_query.to = Vector3(enemy.global_position.x, from.y, enemy.global_position.z)
-				enemy_los = space.intersect_ray(_query).is_empty()
-			_set_target(enemy, enemy_los)
+				visual_los = space.intersect_ray(_query).is_empty()
+				# Combat ray — walls + cover. Only needed when the enemy is
+				# visible; skipped for destructible props (they don't have AI).
+				if visual_los and not enemy.is_in_group(&"structures"):
+					_query.collision_mask = COVER_MASK
+					_query.from = enemy_from
+					_query.to = Vector3(enemy.global_position.x, enemy_from.y, enemy.global_position.z)
+					combat_los = space.intersect_ray(_query).is_empty()
+					_query.collision_mask = WORLD_LAYER_MASK
+				else:
+					combat_los = visual_los
+			_set_target(enemy, visual_los)
+			_combat_los[enemy] = combat_los
 		index += 1
 	# Pickups are intentionally NOT LoS-culled — loot should always be visible
 	# so players can see what's in a level even before clearing it. We still
@@ -210,6 +245,34 @@ func _physics_process(_delta: float) -> void:
 			_query.to = Vector3(glow.global_position.x, pickup_from.y, glow.global_position.z)
 			glow_los = space.intersect_ray(_query).is_empty()
 		_set_target(glow, glow_los)
+	# Clutter — indestructible props (barriers, server racks, pipes, grates).
+	# Uses the dedicated &"clutter" group (NOT &"structures", which includes
+	# walls, floors, ceilings — all level geometry). Static after placement;
+	# cell-cached like corpses/glows. Destructible props are already culled
+	# via the enemies loop, so this only covers indestructibles.
+	for st in _clutter_cache:
+		if not is_instance_valid(st):
+			continue
+		var structure := st as Node3D
+		if structure == null:
+			continue
+		if structure.is_in_group(&"enemies"):
+			continue
+		var struct_first := not _target_los.has(structure)
+		if not (cell_changed or struct_first):
+			continue
+		var struct_los: bool
+		if structure.global_position.distance_squared_to(player_pos) > MAX_DIST_SQ:
+			struct_los = false
+		else:
+			if structure is CollisionObject3D:
+				_query.exclude = [(structure as CollisionObject3D).get_rid()]
+			else:
+				_query.exclude = []
+			_query.from = from
+			_query.to = Vector3(structure.global_position.x, from.y, structure.global_position.z)
+			struct_los = space.intersect_ray(_query).is_empty()
+		_set_target(structure, struct_los)
 	# Interactibles — static (doors, switches, crates). Re-raycast only when the
 	# player crosses a cell boundary, since neither side is moving otherwise.
 	# Iterate SpatialGrid's flat membership set (no per-frame allocation).
@@ -327,6 +390,7 @@ func _process(delta: float) -> void:
 			settled.append(key)
 	for k in to_remove:
 		_target_los.erase(k)
+		_combat_los.erase(k)
 		_transparency.erase(k)
 		_geom_cache.erase(k)
 		_transitioning.erase(k)
@@ -345,6 +409,7 @@ func _process(delta: float) -> void:
 				stale.append(key)
 		for k in stale:
 			_target_los.erase(k)
+			_combat_los.erase(k)
 			_transparency.erase(k)
 			_geom_cache.erase(k)
 			_transitioning.erase(k)
@@ -378,8 +443,11 @@ func _collect_geom(node: Node) -> Array:
 		out.append_array(_collect_geom(child))
 	return out
 
-## True if `node` had line of sight to the player as of the most recent physics
-## tick. Returns false for nodes that haven't been tested yet — callers should
-## treat "unknown" as occluded, which is the safe default for AI gates.
+## True if `node` has combat line of sight to the player — accounts for cover
+## props (PILLAR layer) when the player is crouching. Used by enemy AI to gate
+## attacks. Falls back to visual LoS for nodes without a combat entry (pickups,
+## structures, etc.).
 func has_los_to_player(node: Node) -> bool:
+	if _combat_los.has(node):
+		return _combat_los[node]
 	return _target_los.get(node, false)

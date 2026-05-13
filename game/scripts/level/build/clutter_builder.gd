@@ -12,33 +12,41 @@ class_name ClutterBuilder
 const DESTRUCTIBLE_POOL: Array[Dictionary] = [
 	{ "name": "Barrel",   "mesh": "cylinder", "radius": 0.4, "height": 0.9,
 	  "hp": 10, "loot": true,  "credits": true,  "credit_min": 1, "credit_max": 3,
-	  "color": Color(0.55, 0.35, 0.15), "weight": 3 },
+	  "color": Color(0.55, 0.35, 0.15), "weight": 3, "cover": true,
+	  "texture": &"barrel" },
 	{ "name": "Crate",    "mesh": "box", "size": Vector3(0.7, 0.7, 0.7),
 	  "hp": 15, "loot": true,  "credits": true,  "credit_min": 1, "credit_max": 4,
-	  "color": Color(0.50, 0.40, 0.20), "weight": 3 },
+	  "color": Color(0.50, 0.40, 0.20), "weight": 3, "cover": true,
+	  "texture": &"crate" },
 	{ "name": "Monitor",  "mesh": "box", "size": Vector3(0.5, 0.4, 0.1),
 	  "hp": 5,  "loot": false, "credits": false, "credit_min": 0, "credit_max": 0,
-	  "color": Color(0.20, 0.20, 0.25), "weight": 2, "y_offset": 0.5 },
-	{ "name": "Chair",    "mesh": "box", "size": Vector3(0.4, 0.5, 0.4),
+	  "color": Color(0.20, 0.20, 0.25), "weight": 2, "y_offset": 0.5, "cover": true,
+	  "texture": &"screen" },
+	{ "name": "Chair",    "mesh": "box", "size": Vector3(0.4, 0.4, 0.4),
 	  "hp": 5,  "loot": false, "credits": false, "credit_min": 0, "credit_max": 0,
-	  "color": Color(0.30, 0.30, 0.30), "weight": 2 },
+	  "color": Color(0.30, 0.30, 0.30), "weight": 2, "cover": false,
+	  "texture": &"metal" },
 	{ "name": "Terminal",  "mesh": "box", "size": Vector3(0.4, 0.6, 0.3),
 	  "hp": 8,  "loot": false, "credits": true,  "credit_min": 1, "credit_max": 2,
-	  "color": Color(0.15, 0.22, 0.15), "weight": 1 },
+	  "color": Color(0.15, 0.22, 0.15), "weight": 1, "cover": true,
+	  "texture": &"screen" },
 ]
 
 # ── Indestructible prop pool ──────────────────────────────────────────────
 
 const INDESTRUCTIBLE_POOL: Array[Dictionary] = [
 	{ "name": "Barrier",    "mesh": "box", "size": Vector3(1.2, 0.6, 0.5),
-	  "blocking": true,  "color": Color(0.40, 0.40, 0.40), "weight": 2 },
+	  "blocking": true,  "color": Color(0.40, 0.40, 0.40), "weight": 2,
+	  "texture": &"hazard" },
 	{ "name": "ServerRack", "mesh": "box", "size": Vector3(0.6, 1.8, 0.5),
-	  "blocking": true,  "color": Color(0.15, 0.15, 0.22), "weight": 2 },
+	  "blocking": true,  "color": Color(0.15, 0.15, 0.22), "weight": 2,
+	  "texture": &"server" },
 	{ "name": "HeavyPipe",  "mesh": "cylinder", "radius": 0.2, "height": 2.0,
-	  "blocking": true,  "color": Color(0.35, 0.30, 0.25), "weight": 1,
-	  "horizontal": true },
+	  "blocking": false,  "color": Color(0.35, 0.30, 0.25), "weight": 1,
+	  "horizontal": true, "texture": &"metal" },
 	{ "name": "FloorGrate", "mesh": "plane", "size": Vector2(1.0, 1.0),
-	  "blocking": false, "color": Color(0.25, 0.25, 0.25), "weight": 2 },
+	  "blocking": false, "color": Color(0.25, 0.25, 0.25), "weight": 2,
+	  "texture": &"grate" },
 ]
 
 const MARGIN := 1.5           ## min distance from wall edge
@@ -47,11 +55,14 @@ const MIN_SPACING := 1.0      ## min distance between placed props
 const EMISSION_ENERGY := 0.3  ## subtle cyberpunk glow
 
 
-static func scatter_clutter(ctx: LevelBuildContext, center: Vector3, hx: float, hz: float, rd: RoomDef) -> void:
+static func scatter_clutter(ctx: LevelBuildContext, center: Vector3, hx: float, hz: float, rd: RoomDef, room_id: StringName = &"") -> void:
 	if rd.clutter_density <= 0:
 		return
 
-	var seed_hash := _hash_id(rd.id)
+	# Per-instance room_id gives each room unique clutter even when they
+	# share the same RoomDef template. Falls back to rd.id for legacy callers.
+	var id_for_seed: StringName = room_id if room_id != &"" else rd.id
+	var seed_hash := _hash_id(id_for_seed)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_hash if seed_hash != 0 else 1
 
@@ -91,6 +102,13 @@ static func _create_destructible(ctx: LevelBuildContext, pos: Vector3, def: Dict
 	body.credit_range = Vector2i(int(def["credit_min"]), int(def["credit_max"]))
 	body.prop_color = def["color"] as Color
 	body.input_ray_pickable = false
+	# Cover props sit on ENEMY + PILLAR — blocks enemy projectiles and LoS
+	# rays when the player crouches behind them. Non-cover props (chairs) are
+	# ENEMY-only and short enough for StepUp to clear.
+	var is_cover: bool = def.get("cover", false)
+	body.provides_cover = is_cover
+	body.collision_layer = (2 | 128) if is_cover else 2
+	body.collision_mask = 0
 
 	var y_offset: float = def.get("y_offset", 0.0)
 	var mesh_inst := MeshInstance3D.new()
@@ -125,6 +143,7 @@ static func _create_indestructible(ctx: LevelBuildContext, pos: Vector3, def: Di
 		mesh_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		ctx.root.add_child(mesh_inst)
 		mesh_inst.add_to_group(&"structures")
+		mesh_inst.add_to_group(&"clutter")
 		return
 
 	# Blocking: StaticBody3D on PILLAR layer (128).
@@ -139,9 +158,14 @@ static func _create_indestructible(ctx: LevelBuildContext, pos: Vector3, def: Di
 	mesh_inst.name = &"Mesh"
 	mesh_inst.mesh = _make_mesh(def)
 	mesh_inst.material_override = _make_material(def)
-	mesh_inst.position = Vector3(0, mesh_height * 0.5, 0)
 	if horizontal:
+		# Horizontal cylinders lie on the ground — center at radius height,
+		# not half the cylinder length. Otherwise a 2m-long pipe sits at
+		# y=1.0 and blocks LoS rays at chest height.
+		var radius: float = def.get("radius", 0.2)
 		mesh_inst.rotation_degrees.z = 90.0
+		mesh_inst.position = Vector3(0, radius, 0)
+	else:
 		mesh_inst.position = Vector3(0, mesh_height * 0.5, 0)
 	body.add_child(mesh_inst)
 
@@ -156,6 +180,7 @@ static func _create_indestructible(ctx: LevelBuildContext, pos: Vector3, def: Di
 	body.position = pos
 	ctx.root.add_child(body)
 	body.add_to_group(&"structures")
+	body.add_to_group(&"clutter")
 
 
 # ── Mesh / shape / material factories ─────────────────────────────────────
@@ -204,6 +229,15 @@ static func _make_material(def: Dictionary) -> StandardMaterial3D:
 	mat.emission = c
 	mat.emission_energy_multiplier = EMISSION_ENERGY
 	mat.roughness = 0.85
+	var tex_id: StringName = def.get("texture", &"")
+	if tex_id != &"":
+		var tex := _get_texture(tex_id)
+		if tex != null:
+			mat.albedo_texture = tex
+			mat.uv1_scale = Vector3(1, 1, 1)
+			# Screens get stronger emission from the texture itself.
+			if tex_id == &"screen":
+				mat.emission_energy_multiplier = 1.5
 	return mat
 
 
@@ -286,3 +320,160 @@ static func _weighted_pick(pool: Array[Dictionary], weights: Array[int], rng: Ra
 		if roll < cum:
 			return pool[i]
 	return pool[pool.size() - 1]
+
+
+# ── Procedural textures ──────────────────────────────────────────────────
+# Small textures generated once and cached. Each gives a prop type visual
+# detail (rivets, grating, scan lines, etc.) without external image files.
+# Textures multiply with albedo_color so they darken/lighten the base hue.
+
+const TEX_SIZE := 64
+static var _texture_cache: Dictionary = {}
+
+
+static func _get_texture(id: StringName) -> ImageTexture:
+	if _texture_cache.has(id):
+		return _texture_cache[id]
+	var img: Image = null
+	match id:
+		&"barrel":  img = _gen_barrel_tex()
+		&"crate":   img = _gen_crate_tex()
+		&"screen":  img = _gen_screen_tex()
+		&"metal":   img = _gen_metal_tex()
+		&"hazard":  img = _gen_hazard_tex()
+		&"server":  img = _gen_server_tex()
+		&"grate":   img = _gen_grate_tex()
+	if img == null:
+		return null
+	var tex := ImageTexture.create_from_image(img)
+	_texture_cache[id] = tex
+	return tex
+
+
+# Barrel: horizontal bands with rivet dots.
+static func _gen_barrel_tex() -> Image:
+	var img := Image.create(TEX_SIZE, TEX_SIZE, false, Image.FORMAT_RGBA8)
+	for y in TEX_SIZE:
+		for x in TEX_SIZE:
+			var v := 0.85
+			# Horizontal bands every 8px — darkened grooves.
+			if y % 16 < 2:
+				v = 0.55
+			# Rivet dots at band intersections.
+			if y % 16 < 2 and x % 12 < 3:
+				v = 1.0
+			# Subtle vertical grain.
+			if x % 4 == 0:
+				v *= 0.95
+			img.set_pixel(x, y, Color(v, v, v))
+	return img
+
+
+# Crate: plank grid lines with corner brackets.
+static func _gen_crate_tex() -> Image:
+	var img := Image.create(TEX_SIZE, TEX_SIZE, false, Image.FORMAT_RGBA8)
+	for y in TEX_SIZE:
+		for x in TEX_SIZE:
+			var v := 0.82
+			# Plank seams: vertical and horizontal dividers.
+			if x % 32 < 2 or y % 32 < 2:
+				v = 0.50
+			# Corner reinforcement brackets (L-shapes in each corner quadrant).
+			var cx: int = x if x < 32 else TEX_SIZE - 1 - x
+			var cy: int = y if y < 32 else TEX_SIZE - 1 - y
+			if (cx < 6 and cy < 2) or (cx < 2 and cy < 6):
+				v = 1.0
+			# Wood grain noise (simple striping).
+			if (x + y * 3) % 7 == 0:
+				v *= 0.92
+			img.set_pixel(x, y, Color(v, v, v))
+	return img
+
+
+# Screen: horizontal scan lines with a bright center glow.
+static func _gen_screen_tex() -> Image:
+	var img := Image.create(TEX_SIZE, TEX_SIZE, false, Image.FORMAT_RGBA8)
+	var half := TEX_SIZE * 0.5
+	for y in TEX_SIZE:
+		for x in TEX_SIZE:
+			# Distance from center for vignette.
+			var dx: float = (float(x) - half) / half
+			var dy: float = (float(y) - half) / half
+			var d: float = sqrt(dx * dx + dy * dy)
+			var vignette: float = clampf(1.0 - d * 0.4, 0.5, 1.0)
+			# Scan lines — alternating bright/dim rows.
+			var scan: float = 0.9 if y % 4 < 2 else 1.1
+			# Combine: bright center, dimmer edges, scan line modulation.
+			var v: float = clampf(vignette * scan, 0.0, 1.3)
+			# Slight green/cyan tint for CRT feel (via separate channels).
+			img.set_pixel(x, y, Color(v * 0.8, v, v * 0.9))
+	return img
+
+
+# Metal: brushed steel with scratches.
+static func _gen_metal_tex() -> Image:
+	var img := Image.create(TEX_SIZE, TEX_SIZE, false, Image.FORMAT_RGBA8)
+	for y in TEX_SIZE:
+		for x in TEX_SIZE:
+			var v := 0.78
+			# Horizontal brushing.
+			if (x * 7 + y) % 11 < 2:
+				v = 0.68
+			# Occasional bright scratch.
+			if (x * 13 + y * 7) % 67 == 0:
+				v = 1.0
+			# Subtle grid.
+			if x % 32 < 1 or y % 32 < 1:
+				v *= 0.80
+			img.set_pixel(x, y, Color(v, v, v))
+	return img
+
+
+# Hazard: diagonal warning stripes (yellow-on-dark).
+static func _gen_hazard_tex() -> Image:
+	var img := Image.create(TEX_SIZE, TEX_SIZE, false, Image.FORMAT_RGBA8)
+	for y in TEX_SIZE:
+		for x in TEX_SIZE:
+			var stripe: int = (x + y) % 16
+			if stripe < 8:
+				# Yellow-ish stripe (multiplied with gray albedo → muted amber).
+				img.set_pixel(x, y, Color(1.2, 1.1, 0.5))
+			else:
+				img.set_pixel(x, y, Color(0.45, 0.45, 0.45))
+	return img
+
+
+# Server rack: vertical LED columns with blinking dots.
+static func _gen_server_tex() -> Image:
+	var img := Image.create(TEX_SIZE, TEX_SIZE, false, Image.FORMAT_RGBA8)
+	for y in TEX_SIZE:
+		for x in TEX_SIZE:
+			var v := 0.6
+			# Vertical dividers (rack unit seams).
+			if y % 16 < 1:
+				v = 0.35
+			# LED indicator dots — bright green/cyan spots.
+			if x % 8 == 3 and y % 8 == 4:
+				img.set_pixel(x, y, Color(0.4, 1.4, 0.8))
+				continue
+			# Ventilation slots.
+			if x % 4 < 2 and y % 16 > 12:
+				v = 0.45
+			img.set_pixel(x, y, Color(v, v, v * 1.1))
+	return img
+
+
+# Floor grate: grid of holes (dark squares in a lighter frame).
+static func _gen_grate_tex() -> Image:
+	var img := Image.create(TEX_SIZE, TEX_SIZE, false, Image.FORMAT_RGBA8)
+	for y in TEX_SIZE:
+		for x in TEX_SIZE:
+			var gx: int = x % 8
+			var gy: int = y % 8
+			# Hole: inner 5×5 of each 8×8 cell is dark.
+			if gx >= 1 and gx <= 5 and gy >= 1 and gy <= 5:
+				img.set_pixel(x, y, Color(0.25, 0.25, 0.25))
+			else:
+				# Frame bars — lighter metal.
+				img.set_pixel(x, y, Color(0.95, 0.95, 0.90))
+	return img

@@ -175,21 +175,21 @@ const LEVEL_HP_RANGE: Array[Vector2i] = [
 ]
 const LEVEL_DAMAGE_RANGE: Array[Vector2i] = [
 	Vector2i(0, 0),     # 0 — unused
-	Vector2i(6, 11),    # 1
-	Vector2i(8, 14),    # 2
-	Vector2i(10, 17),   # 3
-	Vector2i(12, 20),   # 4
-	Vector2i(7, 12),    # 5
-	Vector2i(9, 15),    # 6
-	Vector2i(10, 18),   # 7
-	Vector2i(12, 21),   # 8
-	Vector2i(15, 25),   # 9
-	Vector2i(18, 30),   # 10
-	Vector2i(21, 36),   # 11
-	Vector2i(26, 43),   # 12
-	Vector2i(31, 52),   # 13
-	Vector2i(37, 62),   # 14
-	Vector2i(44, 75),   # 15
+	Vector2i(3, 5),     # 1
+	Vector2i(4, 7),     # 2
+	Vector2i(5, 9),     # 3
+	Vector2i(6, 10),    # 4
+	Vector2i(4, 6),     # 5
+	Vector2i(5, 8),     # 6
+	Vector2i(5, 9),     # 7
+	Vector2i(6, 11),    # 8
+	Vector2i(8, 13),    # 9
+	Vector2i(9, 15),    # 10
+	Vector2i(11, 18),   # 11
+	Vector2i(13, 22),   # 12
+	Vector2i(16, 26),   # 13
+	Vector2i(19, 31),   # 14
+	Vector2i(22, 38),   # 15
 ]
 # Floor-ring emission color per level. Higher levels glow hotter so a player
 # can read threat at a glance from across the room. Levels beyond the array

@@ -18,6 +18,9 @@ const PARTICLE_LIFETIME := 0.4
 @export var credit_range: Vector2i = Vector2i(1, 3)
 ## Base color for the mesh material. Set by ClutterBuilder on creation.
 @export var prop_color: Color = Color(0.5, 0.5, 0.5)
+## When true, this prop also sits on the PILLAR layer (128) so it blocks
+## enemy projectiles and LOS rays — acting as cover when the player crouches.
+@export var provides_cover: bool = false
 
 var _health: int
 var _alive: bool = true
@@ -26,23 +29,34 @@ var _visual: MeshInstance3D
 
 
 func _ready() -> void:
-	collision_layer = 2   # ENEMY — projectiles mask for this
-	collision_mask = 0    # props don't need to detect anything
+	collision_layer = (2 | 128) if provides_cover else 2  # ENEMY + PILLAR for cover props
+	collision_mask = 0
 	add_to_group(&"enemies")
 	add_to_group(&"structures")
-	SpatialGrid.register(self, &"enemies")
 	_health = max_health
 	# Find child mesh for hit flash.
 	for child in get_children():
 		if child is MeshInstance3D:
 			_visual = child
 			break
+	# Defer SpatialGrid registration so global_position reflects the
+	# final scene-tree transform — programmatically-created nodes added
+	# during level build may not have their global transform resolved
+	# until after the current tree-change batch completes.
+	_register_spatial.call_deferred()
+
+
+func _register_spatial() -> void:
+	if not is_inside_tree():
+		return
+	SpatialGrid.register(self, &"enemies")
 
 
 func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_strength: float = 0.0, multistrike: int = 1, is_crit: bool = false) -> void:
 	if not _alive:
 		return
 	_health -= amount
+	push_warning("[DestructibleProp] %s took %d dmg → hp=%d  pos=%s" % [name, amount, _health, global_position])
 	# Damage number above the prop.
 	var head := global_position + Vector3(0.0, 0.8, 0.0)
 	DamageNumber.spawn(get_parent(), head, amount, multistrike, is_crit)
