@@ -690,7 +690,13 @@ func _build_stats_text(item: Item, equipped: Item = null) -> String:
 		lines.append("Item Level: %d (%d%% effective)" % [item.item_level, pct])
 	# DPS summary — single most important number for weapon comparison.
 	# Factors in accuracy and crit so it reflects real expected output.
-	if item.damage_max > 0 and item.attack_speed > 0.0:
+	# Restricted to actual weapons: grenades have damage + attack_speed too,
+	# but they're thrown one-at-a-time, "DPS" doesn't read meaningfully, and
+	# the lookup _compute_dps does via _resolve_fire_skill would log a
+	# spurious "WeaponBase not found for cluster" warning since grenade
+	# bases live in their own folder.
+	var is_weapon: bool = item.main_type == "1H Weapon" or item.main_type == "2H Weapon"
+	if is_weapon and item.damage_max > 0 and item.attack_speed > 0.0:
 		var new_dps := _compute_dps(item)
 		var line := "[color=#ffe680]DPS: %.1f[/color]" % new_dps
 		if equipped != null and equipped.damage_max > 0 and equipped.attack_speed > 0.0:

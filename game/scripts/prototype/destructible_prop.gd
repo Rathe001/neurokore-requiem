@@ -125,15 +125,19 @@ func _play_break_local() -> void:
 	_alive = false
 	SpatialGrid.unregister(self)
 	remove_from_group(&"enemies")
-	# Remove collision shapes so the scale-to-zero tween doesn't produce
-	# degenerate transforms (det == 0 physics errors). Disable immediately
-	# (queue_free doesn't take effect until end of frame, so the tween can
-	# shrink the shape before it's actually gone).
-	collision_layer = 0
-	collision_mask = 0
+	# Disable collision shapes so the scale-to-zero tween doesn't produce
+	# degenerate transforms (det == 0 physics errors). Deferred because
+	# _play_break_local commonly runs from a physics callback (projectile
+	# _on_body_entered → take_damage → _break) — Godot refuses to mutate
+	# physics state during a query flush, so direct assignment trips
+	# "Can't change this state while flushing queries." queue_free() is
+	# already deferred internally, so the shape lingers one frame either
+	# way — the disabled flag is what stops collision in that window.
+	set_deferred("collision_layer", 0)
+	set_deferred("collision_mask", 0)
 	for child in get_children():
 		if child is CollisionShape3D:
-			child.disabled = true
+			child.set_deferred("disabled", true)
 			child.queue_free()
 
 	_spawn_break_particles()
