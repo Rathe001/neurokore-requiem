@@ -1,7 +1,7 @@
 "appbuild"
 {
 	"appid"			"4689320"
-	"desc"			"v0.2.0 · a6fe27a · **Seven new weapons**: SMG, LMG, Sniper Rifle, RPG, Shotg..."
+	"desc"			"v0.2.1 · 2a5da64 · **Spatial audio system** — every weapon now has fire SFX..."
 
 	// Where SteamPipe writes its build logs and intermediate state.
 	// Created on first run. Safe to .gitignore.

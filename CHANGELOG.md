@@ -13,6 +13,47 @@ are mandatory.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-05-12
+
+### Added
+
+- **Spatial audio system** — every weapon now has fire SFX with multi-sample variants and per-play pitch/volume variance, so repeated shots don't sound mechanical and enemy fire sits audibly distinct from the player's. Includes room-aware reverb (small hallway vs. large room) and a 24-slot positional audio pool with prefer-idle eviction.
+- **Channel-beam audio** — Charged Arc Taser and Energy Accelerator each get a one-shot engage zap plus a continuous hold loop while LMB is held.
+- **Explosion SFX** — every grenade detonation and RPG impact now plays a randomized blast sound with full-camera shake.
+- **Hit-flesh layer** — quiet pop on every enemy hit that confirms damage landing without competing with the weapon fire.
+- **Footsteps** — metal and grate variants for both player and enemies; player gets a subtle dust puff per step.
+- **Player damage grunts** — 10-sample pool plays when you take damage.
+- **UI sounds** — automatic click / hover / confirm / back / navigate / open feedback on all buttons and tabs.
+- **Music system** — title theme, 5 level tracks cycling per NG+ run with shuffle, 15s fade-in on level entry, 30-second silent gap before re-looping so the mood resets.
+- **Audio settings tab** — Music / Sound Effects / Ambience volume sliders, persisted across sessions. Settings panel is now tabbed (Game / Display / Audio / Accessibility).
+- **Item icons replace unicode glyphs** everywhere: inventory grid, drag preview, ground pickups (billboarded textured plane), and the click-to-move held cursor. Icons are slot-based (one Head icon, one Chest icon, etc.) and rarity-tinted via modulate.
+- **Combat Effects + Missions HUD panels** — under the minimap, with a slight black background and gold-trim title. Combat Effects shows your equipped-weapon quirk tips; Missions is a placeholder for the eventual quest UI.
+- **Camera shake & push system** — distinct from each other and per-archetype: SMG/LMG/sniper/shotgun get random-jitter recoil at fire time, RPG/grenades get distance-scaled impact shake, energy weapons (laser pistol/plasma rifle/accelerator/taser) get a directional "pressure" push that springs back. Melee combo shake escalates per step and the 2H hammer finisher hits with a ground-slam jolt.
+- **Per-archetype enemy weapons** — full set of enemy classes (blade, sledge, SMG, LMG, sniper, shotgun, plasma rifle, laser pistol, RPG, taser, accelerator, plus healer / damage-buffer support roles) with their own attack routines, VFX, and audio.
+- **Enemy footsteps and hit grunts** — enemies now make their presence heard as they move and take damage.
+
+### Changed
+
+- **RPG wind-up now actually delays the projectile** (0.4s) — previously it only froze the player while the rocket fired instantly. The fire SFX plays at LMB press so the audio's pre-roll lines up with the wind-up wait and the launch transient hits when the projectile spawns.
+- **Energy Accelerator damage ramp** — replaced the stack-based +30% peak (reached in ~0.7s) with a time-based lerp to 2.5× over 2.5 seconds. Sustained channels now reward staying on target with a clear power curve.
+- **Specular shimmer on walls and floors fixed** — procedural normal maps were aliasing under camera motion. Cut metallic + bump strength and raised roughness on the four tech shaders; disabled FXAA (redundant with TAA).
+- **Tooltip type line cleaned up** — armor reads as "Armor — Legs" / "Armor — Chest" instead of "Leg Armor — Chaps". The model name lives in the item title already; the subtype line now shows category and slot.
+- **Character panel layout** — equipment grid rearranged (Backpack / Head / —, Weapon / Chest / Off-hand, Legs / Feet / Hands), avatar moved out of the grid centre into a tall portrait beside the stats column.
+- **Rarity-colored slot borders** — inventory and equipment slots tint their border by the contained item's rarity (blue magic, gold rare, orange unique), matching the existing text and glyph color signals.
+- **Save schema now persists** `icon_path`, `model_name`, `damage_type`, and bullet-weapon ammo state — previously these were silently stripped on every autosave, so loaded items reverted to glyph rendering, neutral element, and broken reloads.
+- **Per-archetype model variants for the Energy Accelerator** consolidated from 5 distinct icons down to 1 (other accelerator drops still roll varied model names).
+- **`prototype_enemy.gd` modularized** — the 3000+ line monolith split into `enemy_combat`, `enemy_afflictions`, and `enemy_visuals` modules behind a thin host facade.
+
+### Fixed
+
+- **Enemy hover/tooltip/health-bar regressions** introduced during the module extraction: tooltips were calling a non-existent method (silently no-op), the health bar's shader-driven fill got replaced with a broken scale.x + StandardMaterial override, and floor rings rendered as solid opaque-white discs instead of subtle emissive halos.
+- **Plasma rifle pierce-through** correctly continues through one enemy before stopping.
+- **IED screen shake** now triggers on traps the player lays.
+- **Ground pickup visual** now reads as the item icon (billboarded textured plane) instead of procedural primitive meshes for archetypes that have art.
+- **Pickup name labels** no longer overlap on tightly-grouped drops.
+- **Player run animation** no longer flickers between frames during sustained sprints.
+- **Leash extension on long-range damage** — enemies that take damage from beyond their leash radius extend their pursuit window rather than immediately giving up.
+
 ## [0.2.0] - 2026-05-10
 
 ### Added
