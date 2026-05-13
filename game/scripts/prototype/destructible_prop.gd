@@ -55,14 +55,17 @@ func _register_spatial() -> void:
 func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_strength: float = 0.0, multistrike: int = 1, is_crit: bool = false) -> void:
 	if not _alive:
 		return
+	# In MP only the host applies damage; clients route hits via the
+	# request_damage RPC and receive visuals via _client_show_hit /
+	# _client_break. Mirrors PrototypeEnemy._is_remote_enemy gating.
+	if NetState.is_in_lobby() and not multiplayer.is_server():
+		return
 	_health -= amount
-	push_warning("[DestructibleProp] %s took %d dmg → hp=%d  pos=%s" % [name, amount, _health, global_position])
-	# Damage number above the prop.
-	var head := global_position + Vector3(0.0, 0.8, 0.0)
-	DamageNumber.spawn(get_parent(), head, amount, multistrike, is_crit)
-	# Hit flash on mesh.
-	if _visual != null:
-		_hit_flash_tween = HitFlash.play(self, _visual, _hit_flash_tween)
+	_play_hit_local(amount, multistrike, is_crit)
+	# Broadcast hit visuals to remote peers so every player sees the
+	# damage number / flash, not just the attacker.
+	if NetState.is_in_lobby():
+		_client_show_hit.rpc(amount, multistrike, is_crit)
 	if _health <= 0:
 		_break()
 
@@ -76,7 +79,49 @@ func request_damage(amount: int, knockback_from: Vector3, knockback_strength: fl
 	take_damage(amount, knockback_from, knockback_strength, multistrike, is_crit)
 
 
+## Host → all clients: play hit feedback locally. Unreliable because a
+## dropped damage number is purely cosmetic.
+@rpc("authority", "call_remote", "unreliable")
+func _client_show_hit(amount: int, multistrike: int, is_crit: bool) -> void:
+	if not _alive or not is_inside_tree():
+		return
+	_play_hit_local(amount, multistrike, is_crit)
+
+
+## Host → all clients: mirror the break locally (particles, scale-to-zero
+## tween, queue_free). Loot/credit drops are NOT broadcast — those are
+## host-authoritative and the host's PickupsContainer replicates pickups
+## to clients separately.
+@rpc("authority", "call_remote", "reliable")
+func _client_break() -> void:
+	if not _alive or not is_inside_tree():
+		return
+	_play_break_local()
+
+
+func _play_hit_local(amount: int, multistrike: int, is_crit: bool) -> void:
+	var head := global_position + Vector3(0.0, 0.8, 0.0)
+	DamageNumber.spawn(get_parent(), head, amount, multistrike, is_crit)
+	if _visual != null:
+		_hit_flash_tween = HitFlash.play(self, _visual, _hit_flash_tween)
+
+
 func _break() -> void:
+	_play_break_local()
+	# Host-only side effects: loot + credits drop through the pickups
+	# container (which itself replicates to clients), and a broadcast
+	# tells remote peers to mirror the visual break.
+	if NetState.is_in_lobby() and not multiplayer.is_server():
+		return
+	_drop_credits_on_break()
+	_drop_loot_on_break()
+	if NetState.is_in_lobby():
+		_client_break.rpc()
+
+
+func _play_break_local() -> void:
+	if not _alive:
+		return
 	_alive = false
 	SpatialGrid.unregister(self)
 	remove_from_group(&"enemies")
@@ -92,8 +137,6 @@ func _break() -> void:
 			child.queue_free()
 
 	_spawn_break_particles()
-	_drop_credits_on_break()
-	_drop_loot_on_break()
 
 	# Scale-to-zero break tween.
 	var tween := create_tween()
