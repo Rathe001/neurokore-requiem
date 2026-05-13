@@ -216,6 +216,17 @@ func _on_slot_clicked(slot: ItemSlot) -> void:
 		if existing != null and _held_source != null:
 			if not _held_source.can_accept_item(existing):
 				return
+		# When placing a 2H weapon into the weapon slot, the displaced offhand
+		# would be auto-placed into inventory by set_equipped — but it may
+		# land in the source slot that's about to be overwritten with `existing`,
+		# silently clobbering the offhand. Pre-unequip it to a safe slot first.
+		if slot.role == ItemSlot.Role.EQUIPMENT and slot.slot_id == &"weapon" \
+				and _held_item != null and _held_item.two_handed:
+			var oh: Item = InventoryState.get_equipped(&"offhand")
+			if oh != null:
+				InventoryState.set_equipped(&"offhand", null)
+				if not InventoryState.add_to_inventory(oh):
+					get_tree().call_group(&"world_item_dropper", &"drop_item", oh)
 		slot._assign(_held_item) # This must happen before assigning existing back
 		if existing != null and _held_source != null:
 			_held_source._assign(existing)

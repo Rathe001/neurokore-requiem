@@ -304,6 +304,16 @@ func _drop_data(_pos: Vector2, data: Variant) -> void:
 	if source == null or incoming == null or source == self:
 		return
 	var my_prev := current_item()
+	# Pre-unequip offhand before equipping a 2H — set_equipped's internal
+	# add_to_inventory could place the offhand in source's slot, which
+	# source._assign then overwrites, silently losing the offhand.
+	if role == Role.EQUIPMENT and slot_id == &"weapon" \
+			and incoming != null and incoming.two_handed:
+		var oh: Item = InventoryState.get_equipped(&"offhand")
+		if oh != null:
+			InventoryState.set_equipped(&"offhand", null)
+			if not InventoryState.add_to_inventory(oh):
+				get_tree().call_group(&"world_item_dropper", &"drop_item", oh)
 	_assign(incoming)
 	source._assign(my_prev)
 

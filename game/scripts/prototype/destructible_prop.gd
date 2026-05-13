@@ -80,11 +80,12 @@ func _break() -> void:
 	_alive = false
 	SpatialGrid.unregister(self)
 	remove_from_group(&"enemies")
-	# Disable collision immediately so the corpse doesn't block anything.
+	# Remove collision shapes entirely so the scale-to-zero tween
+	# doesn't produce degenerate transforms (det == 0 physics errors).
 	collision_layer = 0
 	for child in get_children():
 		if child is CollisionShape3D:
-			child.set_deferred(&"disabled", true)
+			child.queue_free()
 
 	_spawn_break_particles()
 	_drop_credits_on_break()
