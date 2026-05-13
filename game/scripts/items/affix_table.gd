@@ -101,7 +101,7 @@ const PREFIXES: Array[Dictionary] = [
 	{
 		"id": &"hardened",
 		"label": "Hardened",
-		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Leg Armor", "Boots"],
+		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Leg Armor"],
 		"stat_modifiers": { "damage_reduction": 6 },
 		"min_item_level": 1,
 		"weight": 100,
@@ -125,7 +125,7 @@ const PREFIXES: Array[Dictionary] = [
 	{
 		"id": &"insulated",
 		"label": "Insulated",
-		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Leg Armor", "Boots"],
+		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Leg Armor"],
 		"stat_modifiers": { "electric_resistance": 8 },
 		"min_item_level": 5,
 		"weight": 70,
@@ -133,7 +133,7 @@ const PREFIXES: Array[Dictionary] = [
 	{
 		"id": &"cryo_lined",
 		"label": "Cryo-Lined",
-		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Leg Armor", "Boots"],
+		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Leg Armor"],
 		"stat_modifiers": { "cryo_resistance": 8 },
 		"min_item_level": 5,
 		"weight": 70,
@@ -141,10 +141,38 @@ const PREFIXES: Array[Dictionary] = [
 	{
 		"id": &"hazmat",
 		"label": "Hazmat",
-		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Leg Armor", "Boots"],
+		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Leg Armor"],
 		"stat_modifiers": { "toxic_resistance": 8 },
 		"min_item_level": 5,
 		"weight": 70,
+	},
+	# ── Gloves-only unarmed prefixes ─────────────────────────────────────────
+	# These make unarmed viable when combined with the bare-fist fallback.
+	# Spiked is the bread-and-butter damage boost; Concussive adds CC;
+	# Shockwave gives AoE so unarmed can clear small packs.
+	{
+		"id": &"spiked",
+		"label": "Spiked",
+		"item_types": ["Gloves"],
+		"stat_modifiers": { "unarmed_damage_bonus": 8 },
+		"min_item_level": 1,
+		"weight": 80,
+	},
+	{
+		"id": &"concussive",
+		"label": "Concussive",
+		"item_types": ["Gloves"],
+		"stat_modifiers": { "unarmed_stun_chance": 20 },
+		"min_item_level": 5,
+		"weight": 60,
+	},
+	{
+		"id": &"shockwave",
+		"label": "Shockwave",
+		"item_types": ["Gloves"],
+		"stat_modifiers": { "unarmed_aoe_radius": 3 },
+		"min_item_level": 8,
+		"weight": 50,
 	},
 	# ── Boots-only traction prefixes ─────────────────────────────────────────
 	# Traction is the boots stat domain (see docs/design/itemization.md).
@@ -205,7 +233,7 @@ const PREFIXES: Array[Dictionary] = [
 		"id": &"reinforced_pack",
 		"label": "Reinforced",
 		"item_types": ["Backpack"],
-		"stat_modifiers": { "inventory_bonus": 1, "damage_reduction": 3 },
+		"stat_modifiers": { "inventory_bonus": 1, "max_health_bonus": 10 },
 		"min_item_level": 5,
 		"weight": 70,
 	},
@@ -286,7 +314,7 @@ const SUFFIXES: Array[Dictionary] = [
 	{
 		"id": &"of_resilience",
 		"label": "of Resilience",
-		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Leg Armor", "Boots"],
+		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Leg Armor"],
 		"stat_modifiers": { "elemental_resistance": 6 },
 		"min_item_level": 5,
 		"weight": 80,

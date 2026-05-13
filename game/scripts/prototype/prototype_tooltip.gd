@@ -726,6 +726,25 @@ func _build_stats_text(item: Item, equipped: Item = null) -> String:
 		lines.append("Accuracy: %.1f%%" % (item.effective_accuracy() * 100.0))
 	if item.weapon_range > 0.0 and item.damage_max > 0:
 		lines.append("Range: %.1f m" % item.weapon_range)
+	# Weapon signature stats — archetype-specific rolled values (blast radius,
+	# penetration, bleed, etc). Displayed with effectiveness decay applied.
+	# Only for weapons (weapon_base_id set); grenades with blast_radius_bonus
+	# show it in the generic modifiers section instead.
+	if item.weapon_base_id != &"":
+		for sig_key: StringName in _WEAPON_SIG_DISPLAY:
+			var raw: int = int(item.stat_modifiers.get(sig_key, 0))
+			if raw == 0:
+				continue
+			var d: Dictionary = _WEAPON_SIG_DISPLAY[sig_key]
+			if d.get("no_decay", false):
+				# Geometric / feel stats (spread_angle) — raw value, no decay.
+				lines.append("%s: %s" % [d["label"], d["fmt"] % raw])
+			elif d.get("pct", false):
+				var val := item.get_effective_modifier_float(sig_key)
+				lines.append("%s: %s" % [d["label"], d["fmt"] % val])
+			else:
+				var val := item.get_effective_modifier(sig_key)
+				lines.append("%s: %s" % [d["label"], d["fmt"] % val])
 	# Element — for weapons whose archetype has an elemental identity
 	# (Energy Accelerator's flame/cryo/electric, Taser's electric, etc).
 	# Tints the weapon's effects in combat AND drives Overcharge-style
@@ -755,6 +774,8 @@ func _build_stats_text(item: Item, equipped: Item = null) -> String:
 	# Generic stat modifiers — bare values, no comparison.
 	for stat_id: StringName in item.stat_modifiers:
 		if stat_id == &"inventory_bonus" and item.kind == &"backpack":
+			continue
+		if stat_id in _WEAPON_SIG_DISPLAY and item.weapon_base_id != &"":
 			continue
 		var raw: int = int(item.stat_modifiers.get(stat_id, 0))
 		if raw == 0:
@@ -804,6 +825,25 @@ const _PCT_STATS: Dictionary = {
 	&"hp_regen_bonus": true,
 }
 
+# Weapon archetype signature stats — displayed in the weapon stats block
+# (above generic modifiers) with custom formatting per stat. Keys here are
+# also excluded from the generic stat_modifiers loop to avoid double-listing.
+# "pct" = true means the value is a percentage and should use float display.
+const _WEAPON_SIG_DISPLAY: Dictionary = {
+	&"blast_radius_bonus": { "label": "Blast Radius",    "fmt": "+%d m" },
+	&"pellet_count":       { "label": "Pellets",         "fmt": "%d" },
+	&"spread_angle":       { "label": "Spread",          "fmt": "%d°", "no_decay": true },
+	&"penetration":        { "label": "Penetration",     "fmt": "%d" },
+	&"headshot_bonus":     { "label": "Headshot Bonus",  "fmt": "+%.1f%%", "pct": true },
+	&"chain_retention":    { "label": "Chain Retention",  "fmt": "%.1f%%", "pct": true },
+	&"ramp_speed":         { "label": "Ramp Speed",      "fmt": "+%.1f%%", "pct": true },
+	&"bleed_damage":       { "label": "Bleed",           "fmt": "%d/tick" },
+	&"impact_radius":      { "label": "Impact Radius",   "fmt": "%d m" },
+	&"sustained_bonus":    { "label": "Sustained Fire",  "fmt": "+%.1f%%", "pct": true },
+	&"ricochet_chance":    { "label": "Ricochet",        "fmt": "%.1f%%", "pct": true },
+	&"overcharge_chance":  { "label": "Overcharge",      "fmt": "%.1f%%", "pct": true },
+}
+
 const _STAT_LABELS: Dictionary = {
 	&"max_health_bonus": "Max Health",
 	&"max_resource_bonus": "Max Resource",
@@ -836,6 +876,9 @@ const _STAT_LABELS: Dictionary = {
 	&"blast_radius_bonus": "Blast Radius",
 	&"damage_bonus_pct": "Damage",
 	&"resource_on_hit": "Resource On Hit",
+	&"unarmed_damage_bonus": "Unarmed Damage",
+	&"unarmed_stun_chance": "Unarmed Stun Chance",
+	&"unarmed_aoe_radius": "Unarmed AoE Radius",
 }
 
 func _stat_display_name(stat_id: StringName) -> String:

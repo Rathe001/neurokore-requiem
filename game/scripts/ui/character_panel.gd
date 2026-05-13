@@ -734,7 +734,7 @@ func _on_stats_changed() -> void:
 	# Damage reduction (armor) and gear-driven percentages are always
 	# valid — they don't depend on a weapon being equipped.
 	if _dmg_red_label != null:
-		_dmg_red_label.text = str(p_node.get_effective_armor())
+		_dmg_red_label.text = "%.1f%%" % p_node.get_effective_armor()
 	if _move_spd_label != null:
 		_move_spd_label.text = "+%d%%" % p_node.get_effective_move_speed_pct()
 	if _cdr_label != null:

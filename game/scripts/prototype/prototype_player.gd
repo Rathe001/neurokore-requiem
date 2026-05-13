@@ -30,6 +30,7 @@ signal slow_pool_changed(in_pool: bool)
 signal weapon_ammo_changed
 
 const ITEM_PICKUP_SCENE: PackedScene = preload("res://scenes/prototype/prototype_item_pickup.tscn")
+const UNARMED_SKILL: Skill = preload("res://resources/skills/unarmed_attack.tres")
 
 const KNOCKBACK_DURATION := CombatConstants.KNOCKBACK_DURATION
 const DEATH_HOLD := 0.9
@@ -310,7 +311,13 @@ func consume_lmg_heat() -> float:
 		_lmg_heat_stacks = 0
 	_lmg_heat_stacks = mini(LMG_HEAT_MAX_STACKS, _lmg_heat_stacks + 1)
 	_lmg_heat_last_fire_t = now
-	return 1.0 + LMG_HEAT_PCT_PER_STACK * float(_lmg_heat_stacks)
+	var pct_per_stack := LMG_HEAT_PCT_PER_STACK
+	var weapon: Item = InventoryState.get_equipped(&"weapon")
+	if weapon != null:
+		var bonus: int = weapon.get_effective_modifier(&"sustained_bonus")
+		if bonus > 0:
+			pct_per_stack += float(bonus) * 0.01 / float(LMG_HEAT_MAX_STACKS)
+	return 1.0 + pct_per_stack * float(_lmg_heat_stacks)
 
 
 # Advance the channel ramp timer by `delta`. Called every frame from
@@ -321,13 +328,37 @@ func tick_accel_resonance(delta: float) -> void:
 	_accel_channel_elapsed += delta
 
 
+# Effective ramp duration accounting for the weapon's ramp_speed stat.
+# ramp_speed of 50 means 50% faster ramp → duration ÷ 1.5.
+func _effective_accel_ramp_duration() -> float:
+	var weapon: Item = InventoryState.get_equipped(&"weapon")
+	if weapon != null:
+		var ramp_pct: int = weapon.get_effective_modifier(&"ramp_speed")
+		if ramp_pct > 0:
+			return ACCEL_RAMP_DURATION / (1.0 + float(ramp_pct) * 0.01)
+	return ACCEL_RAMP_DURATION
+
+
 # Current damage multiplier for the channel ramp. Lerp from 1.0 to
-# ACCEL_RAMP_MAX_MULT across ACCEL_RAMP_DURATION seconds of sustained
-# channel, clamped so post-peak ticks stay at the ceiling. Side-effect
-# free — called from PlayerCombat._roll_skill_damage for every tick.
+# ACCEL_RAMP_MAX_MULT across the effective ramp duration seconds of
+# sustained channel, clamped so post-peak ticks stay at the ceiling.
+# Side-effect free — called from PlayerCombat._roll_skill_damage for
+# every tick.
 func accel_resonance_mult() -> float:
-	var ratio: float = clampf(_accel_channel_elapsed / ACCEL_RAMP_DURATION, 0.0, 1.0)
+	var ratio: float = clampf(_accel_channel_elapsed / _effective_accel_ramp_duration(), 0.0, 1.0)
 	return lerp(1.0, ACCEL_RAMP_MAX_MULT, ratio)
+
+
+## 0–1 progress toward full ramp damage. Read by the HUD ramp indicator.
+func accel_ramp_ratio() -> float:
+	if _accel_channel_elapsed <= 0.0:
+		return 0.0
+	return clampf(_accel_channel_elapsed / _effective_accel_ramp_duration(), 0.0, 1.0)
+
+
+## True when the accelerator channel is actively ramping.
+func is_accel_ramping() -> bool:
+	return _accel_channel_elapsed > 0.0
 
 
 func reset_accel_resonance() -> void:
@@ -526,7 +557,7 @@ var _footstep_last_pos: Vector3 = Vector3.ZERO
 # between casts so the shader's noise time uniform stays warm.
 var _flame_visual: Node3D = null
 var _flame_material: ShaderMaterial = null
-var _gear_damage_reduction: int = 0
+var _gear_damage_reduction: float = 0.0
 var _gear_move_speed_bonus: int = 0
 var _gear_base_damage_bonus: int = 0
 var _gear_crit_chance_bonus: float = 0.0
@@ -813,9 +844,9 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 		return
 	if DebugState.config != null and DebugState.config.god_mode:
 		return
-	# Flat damage reduction from armor gear bonuses.
-	if _gear_damage_reduction > 0:
-		amount = maxi(1, amount - _gear_damage_reduction)
+	# Percentage damage reduction from armor gear bonuses (0–40%).
+	if _gear_damage_reduction > 0.0:
+		amount = maxi(1, int(round(float(amount) * (1.0 - _gear_damage_reduction * 0.01))))
 	# Knockback reduction from the active shield. Computed BEFORE the
 	var shield_result := _shield.absorb_damage(amount, knockback_strength)
 	amount = shield_result.amount
@@ -895,7 +926,7 @@ func _recompute_stat_bonuses() -> void:
 	# Aggregate all gear-driven bonuses from every equipped slot.
 	var hp_bonus := 0
 	var res_bonus := 0
-	var dmg_red := 0
+	var dmg_red := 0.0
 	var move_spd := 0
 	var base_dmg := 0
 	var crit := 0.0
@@ -914,7 +945,10 @@ func _recompute_stat_bonuses() -> void:
 		# the raw get_modifier so backpack capacity doesn't shrink with level.
 		hp_bonus += item.get_effective_modifier(&"max_health_bonus")
 		res_bonus += item.get_effective_modifier(&"max_resource_bonus")
-		dmg_red += item.get_effective_modifier(&"damage_reduction")
+		# DR: per-piece cap of 10%, total cap of 40%. Effective modifier
+		# already applies ilvl decay so outleveled armor loses DR naturally.
+		var piece_dr := minf(item.get_effective_modifier_float(&"damage_reduction"), 10.0)
+		dmg_red += piece_dr
 		move_spd += item.get_effective_modifier(&"move_speed_bonus")
 		base_dmg += item.get_effective_modifier(&"base_damage_bonus")
 		crit += float(item.get_effective_modifier(&"crit_chance_bonus")) * 0.01
@@ -923,7 +957,7 @@ func _recompute_stat_bonuses() -> void:
 		cdr += float(item.get_effective_modifier(&"cooldown_reduction")) * 0.01
 		hp_regen_bonus += float(item.get_effective_modifier(&"hp_regen_bonus"))
 		regen_delay_red += float(item.get_effective_modifier(&"regen_delay_reduction"))
-	_gear_damage_reduction = dmg_red
+	_gear_damage_reduction = minf(dmg_red, 40.0)
 	_gear_move_speed_bonus = move_spd
 	_gear_base_damage_bonus = base_dmg
 	_gear_crit_chance_bonus = crit
@@ -1321,7 +1355,9 @@ func resolve_skill(index: int) -> Skill:
 		# LMB binds to the MAIN weapon's fire skill for HUD display. Extra
 		# weapons (Amalgamation) fire alongside it via _cast_lmb_combat,
 		# but the slot icon shows the main weapon's cooldown.
-		return weapon.fire_skill if weapon != null else null
+		if weapon != null:
+			return weapon.fire_skill
+		return UNARMED_SKILL
 	elif index == 1:
 		# Two-handed weapons own RMB via their alt_fire_skill. One-handed
 		# weapons leave RMB to the offhand — the design rule is that
@@ -1496,6 +1532,11 @@ func _cast_lmb_combat() -> void:
 		ready_fires.append({"slot": slot, "item": item, "skill": skill, "is_main": is_main})
 
 	if ready_fires.is_empty():
+		# No weapon equipped — fall back to unarmed strike. Fires the
+		# unarmed skill with null weapon; damage comes from skill.damage
+		# plus any unarmed_damage_bonus on gloves.
+		if main_weapon == null:
+			_fire_unarmed(aim)
 		_lmb_busy = false
 		return
 
@@ -1597,6 +1638,23 @@ func _cast_lmb_combat() -> void:
 		# _cast_lmb_combat call on the very next tick can't slip through.
 		await get_tree().process_frame
 	_lmb_busy = false
+
+
+# Unarmed strike — fires the unarmed skill with null weapon. Glove
+# modifiers (unarmed_damage_bonus, unarmed_stun_chance, unarmed_aoe_radius)
+# are applied inside PlayerCombat's damage path via _host helpers.
+func _fire_unarmed(aim: Vector3) -> void:
+	if _combat.is_on_cooldown(UNARMED_SKILL):
+		return
+	_face_direction(aim)
+	_play_anim(ANIM_ATTACK, 1.4)
+	_combat.start_cooldown(UNARMED_SKILL, 1.0)
+	var wind_up := UNARMED_SKILL.wind_up
+	if wind_up > 0.0:
+		await get_tree().create_timer(wind_up).timeout
+		if not _alive:
+			return
+	_combat.resolve_skill_hit(UNARMED_SKILL, aim, null)
 
 
 # Per-arm world-space offset for the projectile / hitscan source position.
@@ -2454,9 +2512,31 @@ func get_effective_move_speed_pct() -> int:
 	return _gear_move_speed_bonus
 
 
-## Damage reduction (armor) flat value from gear.
-func get_effective_armor() -> int:
+## Damage reduction (armor) percentage from gear (0–40).
+func get_effective_armor() -> float:
 	return _gear_damage_reduction
+
+# ── Unarmed glove modifiers ──────────────────────────────────────────────────
+# Reads stat_modifiers from equipped gloves so unarmed strikes benefit
+# from "Spiked Gloves" etc. Returns 0 when no gloves equipped.
+
+func get_unarmed_damage_bonus() -> int:
+	var gloves: Item = InventoryState.get_equipped(&"hands")
+	if gloves == null:
+		return 0
+	return gloves.get_effective_modifier(&"unarmed_damage_bonus")
+
+func get_unarmed_stun_chance() -> float:
+	var gloves: Item = InventoryState.get_equipped(&"hands")
+	if gloves == null:
+		return 0.0
+	return float(gloves.get_effective_modifier(&"unarmed_stun_chance")) * 0.01
+
+func get_unarmed_aoe_radius() -> float:
+	var gloves: Item = InventoryState.get_equipped(&"hands")
+	if gloves == null:
+		return 0.0
+	return float(gloves.get_effective_modifier(&"unarmed_aoe_radius"))
 
 func get_cooldown_ratio(skill: Skill) -> float:
 	if skill != null and _shield != null and _shield.is_shield_skill(skill):
@@ -3162,6 +3242,10 @@ func _would_hit_ceiling_if_standing() -> bool:
 	# prevent standing.
 	query.collision_mask = 1
 	return space.intersect_shape(query, 1).size() > 0
+
+func is_crouching() -> bool:
+	return _crouching
+
 
 func _set_crouch(value: bool) -> void:
 	if not value and _would_hit_ceiling_if_standing():

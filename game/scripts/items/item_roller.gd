@@ -151,6 +151,7 @@ func roll(main_type: String, item_level: int, rarity: StringName, rng: RandomNum
 		item.stat_modifiers[&"inventory_bonus"] = 4
 
 	_apply_weapon_base(item, main_type, rng)
+	_roll_weapon_signature(item, rarity, rng)
 	_apply_offhand_base(item, main_type, rng)
 	_apply_grenade_base(item, main_type, rng)
 	_apply_armor_model_name(item, main_type, rng)
@@ -168,6 +169,9 @@ func roll(main_type: String, item_level: int, rarity: StringName, rng: RandomNum
 		var affix := AffixTable.roll_suffix(main_type, item_level, rng)
 		if affix != null and _apply_affix(item, affix):
 			affix_labels.append(affix.label)
+
+	# Base damage reduction on defensive armor pieces (Head/Chest/Gloves/Legs).
+	_roll_armor_defense(item, item_level, rarity, rng)
 
 	# Universal secondary bonuses — every equippable item can roll +HP and +resource.
 	_roll_universal_bonuses(item, item_level, rarity, rng)
@@ -189,6 +193,7 @@ func roll_from_base(base: WeaponBase, item_level: int, rarity: StringName, rng: 
 	if base.two_handed:
 		item.two_handed = true
 	_apply_weapon_base_direct(item, base, rng)
+	_roll_weapon_signature(item, rarity, rng)
 	var affix_labels: Array[String] = []
 	var prefix_count: int = RARITY_PREFIX_COUNT.get(rarity, 0)
 	for _i in prefix_count:
@@ -303,6 +308,105 @@ func _make_debug_offhand(skill: Skill, label: String) -> Item:
 	item.name_key = skill.display_name
 	item.fire_skill = skill
 	return item
+
+
+## Per-archetype signature stat — the one number that defines the weapon's
+## mechanical identity beyond the universal damage/speed/accuracy envelope.
+## Stored in stat_modifiers so SaveManager, network serialization, and the
+## effectiveness decay system all handle them automatically.
+##   "key"  — stat_modifiers key
+##   "base" — (min, max) before rarity scaling
+##   "cap"  — optional hard ceiling (e.g. chain_retention can't exceed 95%)
+## Per-archetype signature stats — each weapon base maps to one or more
+## stats that define its mechanical identity. Each entry is an Array of
+## stat definitions so archetypes like the Shotgun can roll both pellet
+## count AND spread angle.
+##   "key"     — stat_modifiers key
+##   "base"    — (min, max) before rarity scaling
+##   "cap"     — optional hard ceiling
+##   "inverse" — true = lower is better; divides by rarity_mult instead
+const WEAPON_SIGNATURE_STATS: Dictionary = {
+	&"rpg_2h": [
+		{ "key": &"blast_radius_bonus", "base": Vector2i(0, 3) },
+	],
+	&"shotgun_2h": [
+		{ "key": &"pellet_count",  "base": Vector2i(7, 9) },
+		{ "key": &"spread_angle",  "base": Vector2i(30, 45), "inverse": true },
+	],
+	&"ranged_2h": [
+		{ "key": &"penetration", "base": Vector2i(1, 2) },
+	],
+	&"sniper_2h": [
+		{ "key": &"headshot_bonus", "base": Vector2i(25, 50) },
+	],
+	&"taser_2h": [
+		{ "key": &"chain_retention", "base": Vector2i(75, 85), "cap": 95 },
+	],
+	&"accelerator_2h": [
+		{ "key": &"ramp_speed", "base": Vector2i(25, 60) },
+	],
+	&"melee_1h": [
+		{ "key": &"bleed_damage", "base": Vector2i(2, 5) },
+	],
+	&"melee_2h": [
+		{ "key": &"impact_radius", "base": Vector2i(2, 4) },
+	],
+	&"lmg_2h": [
+		{ "key": &"sustained_bonus", "base": Vector2i(8, 18) },
+	],
+	&"smg_1h": [
+		{ "key": &"ricochet_chance", "base": Vector2i(5, 12), "cap": 20 },
+	],
+	&"ranged_1h": [
+		{ "key": &"overcharge_chance", "base": Vector2i(8, 15), "cap": 25 },
+	],
+}
+
+
+## Roll the weapon's archetype-specific signature stats. Values scale with
+## rarity via the same budget multiplier used for affix rolls. Stats marked
+## "inverse" (lower = better, like spread_angle) divide by the multiplier
+## instead. The effectiveness decay system handles level-based scaling
+## automatically when combat code reads via get_effective_modifier.
+func _roll_weapon_signature(item: Item, rarity: StringName, rng: RandomNumberGenerator) -> void:
+	var sigs: Array = WEAPON_SIGNATURE_STATS.get(item.weapon_base_id, [])
+	if sigs.is_empty():
+		return
+	var mult: float = float(RARITY_BUDGET_MULT.get(rarity, 1.0))
+	for sig: Dictionary in sigs:
+		var base_range: Vector2i = sig["base"]
+		var base_val := rng.randi_range(base_range.x, base_range.y)
+		var final_val: int
+		if sig.get("inverse", false):
+			final_val = int(round(float(base_val) / mult))
+		else:
+			final_val = int(round(float(base_val) * mult))
+		var cap: int = int(sig.get("cap", 9999))
+		item.stat_modifiers[sig["key"]] = mini(final_val, cap)
+
+
+## Armor types that roll base damage_reduction. Only these 4 slots participate
+## in the DR/resistance system — Boots get traction instead, Backpack gets
+## inventory/HP.
+const DR_ARMOR_TYPES: Array[String] = ["Head Armor", "Chest Armor", "Gloves", "Leg Armor"]
+
+## Per-piece DR cap. Total cap is 4× this (one per DR armor slot).
+const DR_PER_PIECE_CAP: int = 10
+
+## Base DR scales with ilvl (0.3 per level) and rarity. A common ilvl 10 piece
+## gets ~3% DR; a unique ilvl 30 piece gets ~14% (clamped to 10). With 4 slots
+## of unique ilvl 30 gear you'd hit 40% total before effectiveness decay kicks
+## in, which is the intended ceiling at that tier.
+func _roll_armor_defense(item: Item, item_level: int, rarity: StringName, rng: RandomNumberGenerator) -> void:
+	if item.main_type not in DR_ARMOR_TYPES:
+		return
+	var budget_mult: float = float(RARITY_BUDGET_MULT.get(rarity, 1.0))
+	var base_dr := int(round(float(item_level) * 0.3 * budget_mult))
+	# Small random variance ±1 so same-ilvl same-rarity pieces aren't identical.
+	base_dr += rng.randi_range(-1, 1)
+	base_dr = clampi(base_dr, 1, DR_PER_PIECE_CAP)
+	var prior: int = int(item.stat_modifiers.get(&"damage_reduction", 0))
+	item.stat_modifiers[&"damage_reduction"] = mini(prior + base_dr, DR_PER_PIECE_CAP)
 
 
 ## Roll universal +HP and +resource bonuses. Every equippable item can get these.

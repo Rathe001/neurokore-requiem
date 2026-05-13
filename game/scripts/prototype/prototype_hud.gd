@@ -426,6 +426,77 @@ func _process_ammo_fill() -> void:
 	_ammo_fill.offset_right = _ammo_fill.offset_left + RESOURCE_BAR_WIDTH * player.get_reload_progress()
 
 
+# ── Accelerator ramp indicator ─────────────────────────────────────────
+# Small bar above the skill bar that fills as the beam ramps to max
+# damage. Orange → bright yellow at full. Visible only while channeling.
+var _ramp_bar: ColorRect = null
+var _ramp_bar_bg: ColorRect = null
+var _ramp_label: Label = null
+var _ramp_built: bool = false
+
+const _RAMP_BAR_WIDTH: float = 120.0
+const _RAMP_BAR_HEIGHT: float = 6.0
+const _RAMP_COLOR_LOW := Color(0.9, 0.5, 0.15, 0.9)
+const _RAMP_COLOR_FULL := Color(1.0, 0.95, 0.4, 1.0)
+const _RAMP_BG_COLOR := Color(0.1, 0.1, 0.1, 0.6)
+
+func _build_ramp_bar() -> void:
+	if _ramp_built or skill_bar == null:
+		return
+	var bg := ColorRect.new()
+	bg.color = _RAMP_BG_COLOR
+	bg.custom_minimum_size = Vector2(_RAMP_BAR_WIDTH, _RAMP_BAR_HEIGHT)
+	bg.size = bg.custom_minimum_size
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bg.visible = false
+	root.add_child(bg)
+	_ramp_bar_bg = bg
+	var fill := ColorRect.new()
+	fill.color = _RAMP_COLOR_LOW
+	fill.custom_minimum_size = Vector2(0, _RAMP_BAR_HEIGHT)
+	fill.size = Vector2(0, _RAMP_BAR_HEIGHT)
+	fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fill.visible = false
+	root.add_child(fill)
+	_ramp_bar = fill
+	var lbl := Label.new()
+	lbl.text = "RESONANCE"
+	lbl.add_theme_font_size_override(&"font_size", 7)
+	lbl.add_theme_color_override(&"font_color", Color(1.0, 0.85, 0.5, 0.8))
+	lbl.add_theme_color_override(&"font_outline_color", Color(0, 0, 0, 1))
+	lbl.add_theme_constant_override(&"outline_size", 1)
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	lbl.visible = false
+	root.add_child(lbl)
+	_ramp_label = lbl
+	_ramp_built = true
+
+
+func _process_ramp_bar() -> void:
+	if not _ramp_built:
+		_build_ramp_bar()
+		if not _ramp_built:
+			return
+	var player := get_tree().get_first_node_in_group(&"player") as PrototypePlayer
+	var ramping := player != null and player.is_accel_ramping()
+	_ramp_bar_bg.visible = ramping
+	_ramp_bar.visible = ramping
+	_ramp_label.visible = ramping
+	if not ramping:
+		return
+	var ratio: float = player.accel_ramp_ratio()
+	var screen := get_viewport().get_visible_rect().size
+	var bar_x := (screen.x - _RAMP_BAR_WIDTH) * 0.5
+	var bar_y: float = skill_bar.global_position.y - 18.0
+	_ramp_bar_bg.position = Vector2(bar_x, bar_y)
+	_ramp_bar.position = Vector2(bar_x, bar_y)
+	_ramp_bar.size.x = _RAMP_BAR_WIDTH * ratio
+	_ramp_bar.color = _RAMP_COLOR_LOW.lerp(_RAMP_COLOR_FULL, ratio)
+	_ramp_label.position = Vector2(bar_x, bar_y - 12.0)
+	_ramp_label.size.x = _RAMP_BAR_WIDTH
+
+
 # Slowed debuff entry: red "S" glyph with a Traction-aware tooltip body
 # so the player can see how much speed they're losing right now (which
 # scales with their boots' traction stat).
@@ -611,6 +682,7 @@ func _process(delta: float) -> void:
 	_position_controls_panel()
 	_pulse_talent_button(delta)
 	_process_ammo_fill()
+	_process_ramp_bar()
 	var panel := debug_label.get_parent() as Control
 	var overlay_on := DebugState.config == null or DebugState.config.show_debug_overlay
 	if panel.visible != overlay_on:

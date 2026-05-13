@@ -33,6 +33,24 @@ const QUIRK_TIPS: Dictionary = {
 # a separate line keeps the per-archetype quirk uncluttered.
 const MELEE_COMBO_TIP: String = "3-hit combo: wider, stronger, finisher applies status"
 
+# Display formatters for weapon signature stats shown under each quirk tip.
+# Mirrors prototype_tooltip's _WEAPON_SIG_DISPLAY but uses compact labels
+# suited to the small Combat Effects panel.
+const SIG_STAT_DISPLAY: Dictionary = {
+	&"blast_radius_bonus": { "label": "Blast Radius",   "fmt": "+%d m" },
+	&"pellet_count":       { "label": "Pellets",        "fmt": "%d" },
+	&"spread_angle":       { "label": "Spread",         "fmt": "%d°", "raw": true },
+	&"penetration":        { "label": "Penetration",    "fmt": "%d" },
+	&"headshot_bonus":     { "label": "Headshot",       "fmt": "+%d%%" },
+	&"chain_retention":    { "label": "Chain Retain",   "fmt": "%d%%" },
+	&"ramp_speed":         { "label": "Ramp Speed",     "fmt": "+%d%%" },
+	&"bleed_damage":       { "label": "Bleed",          "fmt": "%d/tick" },
+	&"impact_radius":      { "label": "Impact",         "fmt": "%d m" },
+	&"sustained_bonus":    { "label": "Sustained",      "fmt": "+%d%%" },
+	&"ricochet_chance":    { "label": "Ricochet",       "fmt": "%d%%" },
+	&"overcharge_chance":  { "label": "Overcharge",     "fmt": "%d%%" },
+}
+
 const PANEL_WIDTH: float = 210.0
 const PANEL_TITLE: String = "Combat Effects"
 const TITLE_FONT_SIZE: int = 11
@@ -146,6 +164,16 @@ func refresh() -> void:
 		tip.custom_minimum_size = Vector2(PANEL_WIDTH - 10.0, 0.0)
 		tip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_vbox.add_child(tip)
+		var stats_text: String = entry.get("stats", "")
+		if stats_text != "":
+			var stats_label := Label.new()
+			stats_label.text = stats_text
+			stats_label.add_theme_font_size_override(&"font_size", TIP_FONT_SIZE)
+			stats_label.add_theme_color_override(&"font_color", HEADER_COLOR)
+			stats_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			stats_label.custom_minimum_size = Vector2(PANEL_WIDTH - 10.0, 0.0)
+			stats_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			_vbox.add_child(stats_label)
 	# Re-fit the BG to the new content height after children layout.
 	# Defer one frame so the VBoxContainer has reported its size.
 	call_deferred(&"_resize_to_content")
@@ -166,10 +194,12 @@ func _gather_active_quirks() -> Array:
 	var entries: Array = []
 	var seen_quirks: Dictionary = {}  # don't double-list if main and offhand share an archetype
 	var any_melee := false
+	var has_weapon := false
 	for slot in [&"weapon", &"offhand"]:
 		var item: Item = InventoryState.get_equipped(slot)
 		if item == null:
 			continue
+		has_weapon = true
 		if item.weapon_base_id in PrototypePlayer.MELEE_BASE_IDS:
 			any_melee = true
 		var tip: String = QUIRK_TIPS.get(item.weapon_base_id, "")
@@ -181,18 +211,61 @@ func _gather_active_quirks() -> Array:
 		entries.append({
 			"header": _build_header(item),
 			"tip": tip,
+			"stats": _build_sig_stats(item),
 		})
 	if any_melee:
 		entries.append({
 			"header": "Melee Combo",
 			"tip": MELEE_COMBO_TIP,
 		})
+	# Unarmed fallback — show when no weapon is equipped.
+	if not has_weapon:
+		entries.append({
+			"header": "Unarmed Strike",
+			"tip": "Short-range punch. Equip gloves with unarmed bonuses to power up.",
+			"stats": _build_unarmed_stats(),
+		})
 	return entries
+
+
+func _build_unarmed_stats() -> String:
+	var gloves: Item = InventoryState.get_equipped(&"hands")
+	if gloves == null:
+		return ""
+	var parts: Array[String] = []
+	var dmg: int = gloves.get_effective_modifier(&"unarmed_damage_bonus")
+	if dmg > 0:
+		parts.append("Damage: +%d" % dmg)
+	var stun: int = gloves.get_effective_modifier(&"unarmed_stun_chance")
+	if stun > 0:
+		parts.append("Stun: %d%%" % stun)
+	var aoe: int = gloves.get_effective_modifier(&"unarmed_aoe_radius")
+	if aoe > 0:
+		parts.append("AoE: %dm" % aoe)
+	return "  ".join(parts)
 
 
 # Header line — uses the rolled model_name when set (e.g. "VK-9
 # Stinger"), otherwise the archetype sub_type ("SMG"). Keeps the
 # label terse so the tip line is readable at a glance.
+## Build a compact stat summary for the weapon's signature stats.
+## Returns a single line like "Pellets: 9  Spread: 32°" or "" if none.
+func _build_sig_stats(item: Item) -> String:
+	var parts: Array[String] = []
+	for sig_key: StringName in SIG_STAT_DISPLAY:
+		var raw: int = int(item.stat_modifiers.get(sig_key, 0))
+		if raw == 0:
+			continue
+		var d: Dictionary = SIG_STAT_DISPLAY[sig_key]
+		var val: int
+		if d.get("raw", false):
+			val = raw
+		else:
+			val = item.get_effective_modifier(sig_key)
+		parts.append("%s: %s" % [d["label"], d["fmt"] % val])
+	return "  ".join(parts)
+
+
 func _build_header(item: Item) -> String:
 	if item.model_name != "":
 		return item.model_name

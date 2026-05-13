@@ -83,6 +83,15 @@ var point_blank_bonus_mult: float = 1.0
 # (cryo RPG → cyan blast, electric → violet, default → orange
 # fireball). Empty StringName for kinetic / neutral.
 var damage_type: StringName = &""
+## Sniper headshot bonus — percentage bonus applied on first-mark hits.
+## Stacks additively with the base first-mark multiplier.
+var headshot_bonus_pct: int = 0
+## SMG ricochet — percentage chance on hit to spawn a secondary projectile
+## at the nearest other enemy. Ricochets don't chain (is_ricochet flag).
+var ricochet_chance_pct: int = 0
+var is_ricochet: bool = false
+## Laser overcharge — percentage chance for any shot to deal 2× damage.
+var overcharge_chance_pct: int = 0
 
 var _traveled: float = 0.0
 var _hit: bool = false
@@ -539,6 +548,10 @@ func _pool_release() -> void:
 	point_blank_bonus_distance = 0.0
 	point_blank_bonus_mult = 1.0
 	weapon_base_id = &""
+	headshot_bonus_pct = 0
+	ricochet_chance_pct = 0
+	is_ricochet = false
+	overcharge_chance_pct = 0
 
 func _physics_process(delta: float) -> void:
 	var step := speed * delta
@@ -665,7 +678,11 @@ func _hit_single(body: Node3D, impact_pos: Vector3) -> void:
 		if enemy != null:
 			var first_mark_mult := enemy.consume_sniper_first_mark()
 			if first_mark_mult != 1.0:
+				first_mark_mult += float(headshot_bonus_pct) * 0.01
 				dmg = int(round(float(dmg) * first_mark_mult))
+	# Laser "Overcharge" — flat chance for any laser shot to deal 2× damage.
+	if overcharge_chance_pct > 0 and randf() * 100.0 < float(overcharge_chance_pct):
+		dmg *= 2
 	if target_group == &"player":
 		body.take_damage(dmg, source_position, knockback_strength)
 	else:
@@ -673,6 +690,50 @@ func _hit_single(body: Node3D, impact_pos: Vector3) -> void:
 		_apply_exile_curse_if_active(body)
 		_apply_mindlink(body, dmg, is_crit)
 		_try_spawn_isr_drone(body)
+		# SMG "Ricochet" — on hit, chance to spawn a secondary bullet at
+		# the nearest other enemy. Ricochets don't chain further.
+		if ricochet_chance_pct > 0 and not is_ricochet and randf() * 100.0 < float(ricochet_chance_pct):
+			_try_ricochet(body)
+
+
+const RICOCHET_SEARCH_RADIUS: float = 8.0
+const RICOCHET_DAMAGE_MULT: float = 0.5
+
+func _try_ricochet(hit_body: Node3D) -> void:
+	var origin := hit_body.global_position + Vector3(0.0, 0.9, 0.0)
+	var best: Node3D = null
+	var best_dist := RICOCHET_SEARCH_RADIUS + 1.0
+	for enode: Node3D in SpatialGrid.query_radius(origin, RICOCHET_SEARCH_RADIUS, &"enemies"):
+		if enode == hit_body or not enode.has_method(&"take_damage"):
+			continue
+		var d := origin.distance_to(enode.global_position)
+		if d < best_dist:
+			best_dist = d
+			best = enode
+	if best == null:
+		return
+	var proj: PrototypeProjectile = EntityPool.acquire(preload("res://game/scenes/prototype_projectile.tscn"))
+	if proj == null:
+		return
+	var aim := (best.global_position + Vector3(0.0, 0.9, 0.0) - origin).normalized()
+	proj.direction = aim
+	proj.speed = speed
+	proj.max_range = best_dist + 2.0
+	proj.damage_min = int(float(damage_min) * RICOCHET_DAMAGE_MULT)
+	proj.damage_max = int(float(damage_max) * RICOCHET_DAMAGE_MULT)
+	proj.damage_mult = damage_mult
+	proj.crit_chance = crit_chance
+	proj.knockback_strength = 0.0
+	proj.source_position = origin
+	proj.target_group = &"enemies"
+	proj.is_bullet = true
+	proj.weapon_base_id = weapon_base_id
+	proj.damage_type = damage_type
+	proj.is_ricochet = true
+	get_parent().add_child(proj)
+	proj.global_position = origin
+	proj.monitoring = true
+	proj.reset()
 
 
 func _explode(impact_pos: Vector3) -> void:

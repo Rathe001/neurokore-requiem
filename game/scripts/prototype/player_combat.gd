@@ -486,10 +486,14 @@ func _resolve_cone(skill: Skill, aim: Vector3, eff_range: float, weapon: Item) -
 		if apply_combo_status:
 			_apply_melee_combo_status(enode, weapon)
 		any_hit = true
+	# Unarmed glove modifiers — stun chance and AoE splash on hit.
+	if any_hit and weapon == null and skill == PrototypePlayer.UNARMED_SKILL:
+		_apply_unarmed_glove_effects(skill, eff_range)
 	# Hitstop on connect — only fires if at least one enemy actually
 	# took damage. Sells the "weight" of the swing without freezing the
 	# player on whiffs.
-	if any_hit and is_melee:
+	var is_unarmed := weapon == null and skill == PrototypePlayer.UNARMED_SKILL
+	if any_hit and (is_melee or is_unarmed):
 		_host.trigger_melee_hitstop()
 
 
@@ -504,17 +508,41 @@ const MELEE_COMBO_BLEED_DURATION: float = 6.0
 const MELEE_COMBO_STUN_DURATION: float = 0.6
 
 
+const UNARMED_STUN_DURATION: float = 0.4
+
+func _apply_unarmed_glove_effects(skill: Skill, eff_range: float) -> void:
+	# AoE splash — if gloves grant unarmed_aoe_radius, deal skill.damage
+	# in a radius around the player (supplemental to the cone hits).
+	var aoe_radius: float = _host.get_unarmed_aoe_radius()
+	if aoe_radius > 0.0:
+		_resolve_aoe(skill, aoe_radius, null)
+	# Stun chance — each enemy in the cone can be stunned independently.
+	var stun_chance: float = _host.get_unarmed_stun_chance()
+	if stun_chance > 0.0:
+		for enode: Node3D in SpatialGrid.query_radius(_host.global_position, eff_range, &"enemies"):
+			if not enode.has_method(&"apply_stun"):
+				continue
+			if is_player_friendly(enode):
+				continue
+			if randf() < stun_chance:
+				enode.apply_stun(UNARMED_STUN_DURATION)
+
+
 func _apply_melee_combo_status(enemy: Node, weapon: Item) -> void:
 	if weapon == null:
 		return
 	if weapon.weapon_base_id == &"melee_1h" and enemy.has_method(&"apply_bleed"):
-		enemy.apply_bleed(MELEE_COMBO_BLEED_DURATION, 1)
+		var bleed_dps: int = maxi(1, weapon.get_effective_modifier(&"bleed_damage"))
+		enemy.apply_bleed(MELEE_COMBO_BLEED_DURATION, bleed_dps)
 	elif weapon.weapon_base_id == &"melee_2h" and enemy.has_method(&"apply_stun"):
 		enemy.apply_stun(MELEE_COMBO_STUN_DURATION)
 
 func _resolve_aoe(skill: Skill, eff_range: float, weapon: Item) -> void:
+	var aoe_range := eff_range
+	if weapon != null:
+		aoe_range += float(weapon.get_effective_modifier(&"impact_radius"))
 	var kb := _knockback_for(skill, weapon)
-	for enode: Node3D in SpatialGrid.query_radius(_host.global_position, eff_range, &"enemies"):
+	for enode: Node3D in SpatialGrid.query_radius(_host.global_position, aoe_range, &"enemies"):
 		if not enode.has_method(&"take_damage"):
 			continue
 		if is_player_friendly(enode):
@@ -577,6 +605,8 @@ func _spawn_projectile(skill: Skill, aim: Vector3, eff_range: float, weapon: Ite
 	if _overclock_active:
 		proj.damage_mult *= OVERCLOCK_DAMAGE_MULT
 	proj.blast_radius = skill.blast_radius
+	if weapon != null:
+		proj.blast_radius += weapon.get_effective_modifier(&"blast_radius_bonus")
 	var vis := skill.damage_multiplier if skill.damage_multiplier > 1.0 else 1.0
 	if _overclock_active:
 		vis *= OVERCLOCK_VISUAL_SCALE
@@ -586,6 +616,10 @@ func _spawn_projectile(skill: Skill, aim: Vector3, eff_range: float, weapon: Ite
 	proj.is_bullet = weapon != null and weapon.is_bullet_weapon()
 	proj.weapon_base_id = weapon.weapon_base_id if weapon != null else &""
 	proj.damage_type = weapon.effective_damage_type() if weapon != null else &""
+	if weapon != null:
+		proj.headshot_bonus_pct = weapon.get_effective_modifier(&"headshot_bonus")
+		proj.ricochet_chance_pct = weapon.get_effective_modifier(&"ricochet_chance")
+		proj.overcharge_chance_pct = weapon.get_effective_modifier(&"overcharge_chance")
 	# Plasma "Pierce" — plasma rifle bolts pass through 1 enemy before
 	# stopping. Set on the projectile so the hit handler decrements
 	# pierce_count and continues flight instead of releasing.
@@ -608,7 +642,7 @@ func _archetype_pierce_count(weapon: Item) -> int:
 	if weapon == null:
 		return 0
 	if weapon.weapon_base_id == &"ranged_2h":
-		return 1
+		return maxi(1, weapon.get_effective_modifier(&"penetration"))
 	return 0
 
 
@@ -692,6 +726,8 @@ func _spawn_airstrike(skill: Skill, eff_range: float, weapon: Item) -> void:
 	if _overclock_active:
 		proj.damage_mult *= OVERCLOCK_DAMAGE_MULT
 	proj.blast_radius = skill.blast_radius
+	if weapon != null:
+		proj.blast_radius += weapon.get_effective_modifier(&"blast_radius_bonus")
 	var vis_scale := skill.damage_multiplier if skill.damage_multiplier > 1.0 else 1.0
 	if _overclock_active:
 		vis_scale *= OVERCLOCK_VISUAL_SCALE
@@ -829,7 +865,13 @@ func _resolve_shotgun(skill: Skill, aim: Vector3, eff_range: float, weapon: Item
 				acc_mult = MELEE_RANGE_ACCURACY_MULT
 				break
 	var pellets: int = maxi(1, skill.pellet_count)
+	if weapon != null:
+		pellets += weapon.get_effective_modifier(&"pellet_count")
 	var cone_half_rad := deg_to_rad(maxf(skill.cone_deg, 1.0) * 0.5)
+	if weapon != null:
+		var wep_spread: int = weapon.get_modifier(&"spread_angle")
+		if wep_spread > 0:
+			cone_half_rad = deg_to_rad(float(wep_spread) * 0.5)
 	var per_pellet_kb := _knockback_for(skill, weapon) / float(pellets)
 	# Collect pellet directions so we can broadcast a SINGLE RPC after the
 	# local spawn loop — broadcasting per pellet was sending 9-18 separate
@@ -941,7 +983,12 @@ func _resolve_chain_lightning(skill: Skill, aim: Vector3, eff_range: float, weap
 	var hit_set: Dictionary = {}
 	var current: Node3D = primary
 	var damage: int = _roll_skill_damage(skill, weapon)
-	var falloff: float = clampf(skill.chain_falloff_pct, 0.0, 100.0) / 100.0
+	var falloff_pct: float = skill.chain_falloff_pct
+	if weapon != null:
+		var retention: int = weapon.get_effective_modifier(&"chain_retention")
+		if retention > 0:
+			falloff_pct = clampf(100.0 - float(retention), 0.0, 100.0)
+	var falloff: float = clampf(falloff_pct, 0.0, 100.0) / 100.0
 	var max_jumps: int = skill.chain_jumps
 	var min_damage: int = maxi(1, skill.chain_min_damage)
 	var jumps_left: int = max_jumps if max_jumps > 0 else 32  # absolute cap when "until depleted"
@@ -1216,6 +1263,9 @@ func _roll_skill_damage(skill: Skill, weapon: Item) -> int:
 	else:
 		base = skill.damage
 	base += _host._gear_base_damage_bonus
+	# Unarmed — glove modifiers add flat damage to bare-fist strikes.
+	if weapon == null and skill == PrototypePlayer.UNARMED_SKILL:
+		base += _host.get_unarmed_damage_bonus()
 	var dmg_mult := skill.damage_multiplier
 	if _overclock_active:
 		dmg_mult *= OVERCLOCK_DAMAGE_MULT
