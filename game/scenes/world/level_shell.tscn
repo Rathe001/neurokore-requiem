@@ -16,7 +16,7 @@
 [ext_resource type="Script" path="res://scripts/level/level_builder.gd" id="script_builder"]
 [ext_resource type="PackedScene" path="res://scenes/prototype/prototype_hud.tscn" id="scene_hud"]
 [ext_resource type="PackedScene" path="res://scenes/prototype/prototype_enemy.tscn" id="scene_enemy"]
-[ext_resource type="Resource" path="res://resources/level/layouts/procgen_demo.tres" id="layout"]
+[ext_resource type="Resource" path="res://resources/level/layouts/dungeon_demo.tres" id="layout"]
 
 [sub_resource type="Environment" id="env_test"]
 background_mode = 1
