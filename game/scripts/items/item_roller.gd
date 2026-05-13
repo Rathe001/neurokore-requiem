@@ -536,9 +536,10 @@ func _stat_applies_to_item(item: Item, stat_id: StringName) -> bool:
 # typed inside — typing as WeaponBase specifically would reject
 # legitimate GrenadeBase calls from _roll_grenade_from_base.
 # mini/maxi reorder so a max-roll under a min-roll doesn't invert.
-func _roll_damage(item: Item, base: Resource, rng: RandomNumberGenerator, curve: float = 2.0) -> void:
-	var dmin: int = int(round(_curved_randf(base.damage_min_range.x, base.damage_min_range.y, rng, curve)))
-	var dmax: int = int(round(_curved_randf(base.damage_max_range.x, base.damage_max_range.y, rng, curve)))
+func _roll_damage(item: Item, base: Resource, rng: RandomNumberGenerator, curve: float = 2.0, rarity: StringName = &"common") -> void:
+	var budget_mult: float = float(RARITY_BUDGET_MULT.get(rarity, 1.0))
+	var dmin: int = int(round(_curved_randf(base.damage_min_range.x, base.damage_min_range.y, rng, curve) * budget_mult))
+	var dmax: int = int(round(_curved_randf(base.damage_max_range.x, base.damage_max_range.y, rng, curve) * budget_mult))
 	item.damage_min = mini(dmin, dmax)
 	item.damage_max = maxi(dmin, dmax)
 
@@ -585,7 +586,7 @@ func _apply_weapon_base_direct(item: Item, base: WeaponBase, rarity: StringName,
 	if item.glyph == SlotRegistry.glyph_for_type(main_type) and base.glyph != "":
 		item.glyph = base.glyph
 	var curve: float = float(RARITY_ROLL_CURVE.get(rarity, 2.0))
-	_roll_damage(item, base, rng, curve)
+	_roll_damage(item, base, rng, curve, rarity)
 	item.attack_speed = _curved_randf(base.attack_speed_range.x, base.attack_speed_range.y, rng, curve)
 	item.crit_chance = _curved_randf(base.crit_chance_range.x, base.crit_chance_range.y, rng, curve)
 	item.accuracy = _curved_randf(base.accuracy_range.x, base.accuracy_range.y, rng, curve)
@@ -715,7 +716,7 @@ func _apply_grenade_base(item: Item, main_type: String, rarity: StringName, rng:
 	if base.glyph != "":
 		item.glyph = base.glyph
 	var curve: float = float(RARITY_ROLL_CURVE.get(rarity, 2.0))
-	_roll_damage(item, base, rng, curve)
+	_roll_damage(item, base, rng, curve, rarity)
 	item.crit_chance = _curved_randf(base.crit_chance_range.x, base.crit_chance_range.y, rng, curve)
 	item.blast_radius = _curved_randf(base.blast_radius_range.x, base.blast_radius_range.y, rng, curve)
 
