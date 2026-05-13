@@ -593,7 +593,12 @@ var _channel_hold_player: AudioStreamPlayer3D = null
 # refuses to begin while > 0.
 const CHANNEL_DEPLETED_COOLDOWN := 0.5
 var _channel_depleted_cd: float = 0.0
-const GRUNT_COOLDOWN := 0.4
+const GRUNT_COOLDOWN := 1.5
+## Grunt only fires when the incoming hit clears this fraction of max HP.
+## At 5% of a 100-HP base, that's 5 dmg — SMG/taser chip-ticks stay silent
+## but a sniper round or a melee bruiser still reads as "ouch." Without
+## the threshold the cooldown alone still spams during burst-heavy fights.
+const GRUNT_DAMAGE_PCT_MIN := 0.05
 var _grunt_cd: float = 0.0
 # ── Footstep dust puffs ─────────────────────────────────────────────────────
 # Position-based footstep emission. Each frame we accumulate the
@@ -930,7 +935,8 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 	_hp_regen_accum = 0.0
 	_hit_flash_tween = HitFlash.play(self, visual, _hit_flash_tween)
 	WeaponSounds.play_generic(&"hit_player", global_position)
-	if _grunt_cd <= 0.0:
+	var grunt_threshold: int = maxi(2, int(round(float(max_health) * GRUNT_DAMAGE_PCT_MIN)))
+	if _grunt_cd <= 0.0 and amount >= grunt_threshold:
 		_grunt_cd = GRUNT_COOLDOWN
 		WeaponSounds.play_generic(&"hit_grunt", global_position, -4.0, true)
 	if knockback_strength > 0.0:
