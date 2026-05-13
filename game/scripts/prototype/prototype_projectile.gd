@@ -712,7 +712,7 @@ func _try_ricochet(hit_body: Node3D) -> void:
 			best = enode
 	if best == null:
 		return
-	var proj: PrototypeProjectile = EntityPool.acquire(preload("res://game/scenes/prototype_projectile.tscn"))
+	var proj: PrototypeProjectile = EntityPool.acquire(preload("res://scenes/prototype/prototype_projectile.tscn"))
 	if proj == null:
 		return
 	var aim := (best.global_position + Vector3(0.0, 0.9, 0.0) - origin).normalized()
