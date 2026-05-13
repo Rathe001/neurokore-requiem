@@ -129,6 +129,7 @@ static func solve(graph: LevelGraph) -> Array[LevelPiece]:
 		var piece := LevelPiece.new()
 		piece.position = corridor_center
 		piece.corridor = corridor_copy
+		piece.enemy_count_override = c.enemy_count_override
 		pieces.append(piece)
 
 	# Unreachable rooms — declared in graph.rooms but no path from anchor.

@@ -274,7 +274,8 @@ func _build_corridor(piece: LevelPiece) -> void:
 	var fog_z := cd.length if cd.axis == CorridorDef.Axis.Z else cd.width
 	LightingBuilder.create_fill_light(_ctx, center, fog_x, fog_z)
 	LightingBuilder.create_fog_volume(_ctx, center, fog_x, fog_z)
-	EnemySpawner.spawn_in_bounds(_ctx, piece, center, hx, hz, cd.enemy_count, cd.enemy_scene, Vector2i.ZERO, cd.enemy_classes, piece.pack_chance_override)
+	var corridor_enemies: int = piece.enemy_count_override if piece.enemy_count_override >= 0 else cd.enemy_count
+	EnemySpawner.spawn_in_bounds(_ctx, piece, center, hx, hz, corridor_enemies, cd.enemy_scene, Vector2i.ZERO, cd.enemy_classes, piece.pack_chance_override)
 
 	var ap: AcousticProfile = cd.acoustic_profile
 	if ap == null:

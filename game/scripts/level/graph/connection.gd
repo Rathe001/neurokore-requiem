@@ -21,3 +21,5 @@ class_name Connection
 ## hand-authored levels). Doors are unlocked by default; pair with a
 ## SwitchDoorPuzzle to lock.
 @export var has_door: bool = false
+## Per-instance corridor enemy count override. -1 = use CorridorDef.enemy_count.
+@export var enemy_count_override: int = -1

@@ -186,15 +186,21 @@ func generate() -> LevelGraph:
 		var east := Vector2i(cell.x + 1, cell.y)
 		if occupied.has(east):
 			conn_idx += 1
-			graph.connections.append(GridGenerator._make_connection(
+			var c_east := GridGenerator._make_connection(
 				conn_idx, cell_to_node[cell].id, cell_to_node[east].id,
-				RoomDef.Wall.EAST, RoomDef.Wall.WEST, east_corridor))
+				RoomDef.Wall.EAST, RoomDef.Wall.WEST, east_corridor)
+			if cell == start_cell or east == start_cell:
+				c_east.enemy_count_override = 0
+			graph.connections.append(c_east)
 		var south := Vector2i(cell.x, cell.y + 1)
 		if occupied.has(south):
 			conn_idx += 1
-			graph.connections.append(GridGenerator._make_connection(
+			var c_south := GridGenerator._make_connection(
 				conn_idx, cell_to_node[cell].id, cell_to_node[south].id,
-				RoomDef.Wall.SOUTH, RoomDef.Wall.NORTH, south_corridor))
+				RoomDef.Wall.SOUTH, RoomDef.Wall.NORTH, south_corridor)
+			if cell == start_cell or south == start_cell:
+				c_south.enemy_count_override = 0
+			graph.connections.append(c_south)
 
 	# ── Step 5: Optional switch puzzle on boss connections ─────────────────
 	if emit_switch_puzzle and boss_cell != Vector2i(-1, -1):
