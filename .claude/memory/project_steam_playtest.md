@@ -4,7 +4,7 @@ description: Steam Playtest is live and accepting builds; deploy infrastructure 
 type: project
 originSessionId: eba7e73f-d7f6-4e08-be8e-53f1c4f66d76
 ---
-**Status (2026-05-10):** Playtest is **live** with **v0.2.0** shipped (BuildID 23169929). Players can request access via the base game's Steam page; auto-grant is configurable in Steamworks playtest settings. Prior versions: v0.1.0 (2026-04-28 initial), v0.1.1 (2026-05-06 export-resource-loader fix), v0.1.2 (2026-05-06 AA + balance), v0.1.3 (2026-05-08 ragdolls + early-game tuning), v0.2.0 (2026-05-10 mid-range weapons + signature quirks + melee combo + coop visibility).
+**Status (2026-05-12):** Playtest is **live** with **v0.2.1** shipped (BuildID 23208097). Players can request access via the base game's Steam page; auto-grant is configurable in Steamworks playtest settings. Prior versions: v0.1.0 (2026-04-28 initial), v0.1.1 (2026-05-06 export-resource-loader fix), v0.1.2 (2026-05-06 AA + balance), v0.1.3 (2026-05-08 ragdolls + early-game tuning), v0.2.0 (2026-05-10 mid-range weapons + signature quirks + melee combo + coop visibility), v0.2.1 (2026-05-12 audio overhaul + item icons + camera shake/push + enemy module extraction).
 
 **Steam IDs:**
 - Parent store app: **NeuroKore: Requiem** — App ID `4689190`
