@@ -24,6 +24,7 @@ var _player: Node = null
 var _cooldown_dim: ColorRect = null
 var _cooldown_label: Label = null
 var _charge_label: Label = null
+var _icon_texture: TextureRect = null
 
 func _ready() -> void:
 	_apply_theme()
@@ -85,7 +86,22 @@ func _apply_theme() -> void:
 func bind(player: Node, skill: Skill, keybind_label: String) -> void:
 	_player = player
 	_skill = skill
+	_clear_icon_texture()
 	if skill != null:
+		# Potion skills show the equipped consumable's icon instead of
+		# the generic skill glyph.
+		if skill.active_kind == Skill.ActiveKind.POTION:
+			var consumable: Item = InventoryState.get_equipped(&"consumable")
+			if consumable != null and consumable.icon_path != "":
+				var tex := load(consumable.icon_path) as Texture2D
+				if tex != null:
+					_show_icon_texture(tex, consumable.glyph_color)
+					icon.color = Color(0.15, 0.15, 0.15)
+					glyph_label.visible = false
+					key_label.text = keybind_label
+					key_label.visible = false
+					cooldown_overlay.visible = false
+					return
 		icon.color = skill.icon_color
 		var has_glyph := skill.glyph != ""
 		glyph_label.text = skill.glyph
@@ -97,6 +113,30 @@ func bind(player: Node, skill: Skill, keybind_label: String) -> void:
 		key_label.visible = true
 	key_label.text = keybind_label
 	cooldown_overlay.visible = false
+
+
+func _show_icon_texture(tex: Texture2D, tint: Color) -> void:
+	_clear_icon_texture()
+	_icon_texture = TextureRect.new()
+	_icon_texture.texture = tex
+	_icon_texture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_icon_texture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_icon_texture.modulate = tint
+	_icon_texture.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_icon_texture.offset_left = 2.0
+	_icon_texture.offset_top = 2.0
+	_icon_texture.offset_right = -2.0
+	_icon_texture.offset_bottom = -2.0
+	_icon_texture.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_icon_texture)
+	# Place behind cooldown overlays.
+	move_child(_icon_texture, cooldown_overlay.get_index())
+
+
+func _clear_icon_texture() -> void:
+	if _icon_texture != null:
+		_icon_texture.queue_free()
+		_icon_texture = null
 
 func _process(_delta: float) -> void:
 	if _player == null or _skill == null or not _player.has_method(&"get_cooldown_ratio"):
@@ -128,6 +168,13 @@ func _process(_delta: float) -> void:
 func _on_mouse_entered() -> void:
 	if _skill == null:
 		return
+	# Potion slot → show the equipped consumable's item tooltip instead of
+	# the generic skill tooltip so the player sees heal stats + rarity.
+	if _skill.active_kind == Skill.ActiveKind.POTION:
+		var consumable: Item = InventoryState.get_equipped(&"consumable")
+		if consumable != null:
+			get_tree().call_group(&"interactable_tooltip", &"show_item", consumable)
+			return
 	var source: Item = _resolve_source_item()
 	get_tree().call_group(&"interactable_tooltip", &"show_skill", _skill, source)
 

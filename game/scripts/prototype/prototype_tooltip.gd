@@ -775,10 +775,10 @@ func _build_stats_text(item: Item, equipped: Item = null) -> String:
 		lines.append("+%d %s" % [inv_bonus, tr("ITEM_STATS_INVENTORY_BONUS")])
 	# Consumable heal stats — custom one-liner instead of bare numbers.
 	if item.main_type == "Consumable":
-		var ht: float = item.get_modifier(&"heal_total")
+		var hp: float = item.get_modifier(&"heal_pct")
 		var hd: float = item.get_modifier(&"heal_duration")
-		if ht > 0.0 and hd > 0.0:
-			lines.append("[color=#66cc66]Heals %d over %.1fs[/color]" % [int(ht), hd])
+		if hp > 0.0 and hd > 0.0:
+			lines.append("[color=#66cc66]Heals %d%% HP over %.1fs[/color]" % [int(hp), hd])
 		lines.append("Charges: 3 (30s recharge)")
 	# Generic stat modifiers — bare values, no comparison.
 	for stat_id: StringName in item.stat_modifiers:
@@ -786,7 +786,7 @@ func _build_stats_text(item: Item, equipped: Item = null) -> String:
 			continue
 		if stat_id in _WEAPON_SIG_DISPLAY and item.weapon_base_id != &"":
 			continue
-		if stat_id in [&"heal_total", &"heal_duration"] and item.main_type == "Consumable":
+		if stat_id in [&"heal_pct", &"heal_duration"] and item.main_type == "Consumable":
 			continue
 		var raw: int = int(item.stat_modifiers.get(stat_id, 0))
 		if raw == 0:
@@ -978,10 +978,10 @@ func _build_skill_stats_text(skill: Skill, source: Item) -> String:
 		Skill.ActiveKind.POTION:
 			var consumable: Item = InventoryState.get_equipped(&"consumable")
 			if consumable != null:
-				var ht: float = consumable.get_modifier(&"heal_total")
+				var hp: float = consumable.get_modifier(&"heal_pct")
 				var hd: float = consumable.get_modifier(&"heal_duration")
-				if ht > 0.0 and hd > 0.0:
-					lines.append("[color=#66cc66]Heals %d over %.1fs[/color]" % [int(ht), hd])
+				if hp > 0.0 and hd > 0.0:
+					lines.append("[color=#66cc66]Heals %d%% HP over %.1fs[/color]" % [int(hp), hd])
 			lines.append("Charges: 3 (30s recharge)")
 			lines.append("Per-use Cooldown: %.1fs" % skill.cooldown)
 		_:

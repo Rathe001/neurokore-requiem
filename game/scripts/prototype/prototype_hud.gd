@@ -729,6 +729,10 @@ func _bind_skill_slots(player: Node) -> void:
 
 
 func _on_equipment_changed(slot_name: StringName, player: Node) -> void:
+	if slot_name == &"consumable":
+		# Consumable equip/unequip changes Q slot (visual slot 4).
+		_rebind_slot(4, player)
+		return
 	if slot_name != &"weapon" and slot_name != &"offhand":
 		return
 	# Only rebind LMB (visual slot 6) and RMB (visual slot 7) — the

@@ -92,10 +92,12 @@ func activate(_skill: Skill) -> void:
 	var consumable: Item = InventoryState.get_equipped(&"consumable")
 	if consumable == null:
 		return
-	var heal_total: float = consumable.get_modifier(&"heal_total")
+	var heal_pct: float = consumable.get_modifier(&"heal_pct")
 	var heal_duration: float = consumable.get_modifier(&"heal_duration")
-	if heal_total <= 0.0 or heal_duration <= 0.0:
+	if heal_pct <= 0.0 or heal_duration <= 0.0:
 		return
+	# Compute actual heal from percentage of max health.
+	var heal_total: float = heal_pct * _host.max_health / 100.0
 	# Start (or refresh) the HoT.
 	var ticks := heal_duration / HOT_INTERVAL
 	_hot_per_tick = heal_total / ticks
