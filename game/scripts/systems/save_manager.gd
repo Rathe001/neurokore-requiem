@@ -447,7 +447,14 @@ func _serialize_stat_modifiers(mods: Dictionary) -> Dictionary:
 func _deserialize_stat_modifiers(data: Dictionary) -> Dictionary:
 	var out := {}
 	for key: String in data.keys():
-		out[StringName(key)] = data[key]
+		var sn := StringName(key)
+		# v1 → v2: heal_total (flat HP) renamed to heal_pct (% of max HP).
+		# Old values were 20-60 flat; clamp to new 10-30 range.
+		if sn == &"heal_total":
+			sn = &"heal_pct"
+			out[sn] = mini(int(data[key]), 30)
+			continue
+		out[sn] = data[key]
 	return out
 
 
