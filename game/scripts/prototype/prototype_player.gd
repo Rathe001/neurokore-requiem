@@ -453,6 +453,7 @@ var _spawn_position: Vector3 = Vector3.ZERO
 # player, no aiming). The aim/pitch helpers gate on `is SpotLight3D` so
 # omni mods don't pick up cursor tracking.
 var _equipped_light: Light3D
+var _tactical_overlay: TacticalOverlay
 var _anim_reverse: bool = false
 var _light_on: bool = false
 var _fps_mode: bool = false
@@ -2923,6 +2924,9 @@ func _apply_light_item() -> void:
 	if _equipped_light != null:
 		_equipped_light.queue_free()
 		_equipped_light = null
+	if _tactical_overlay != null:
+		_tactical_overlay.queue_free()
+		_tactical_overlay = null
 	var head: Item = InventoryState.get_equipped(&"head")
 	if head == null or head.light_mod == Item.LightMod.NONE:
 		_light_on = false
@@ -2972,6 +2976,11 @@ func _apply_light_item() -> void:
 	_equipped_light = light
 	visual.add_child(light)
 	_update_flashlight_pitch(0.0)
+	# SCANNER mod projects a tactical range overlay on the ground.
+	if head.light_mod == Item.LightMod.SCANNER:
+		_tactical_overlay = TacticalOverlay.new()
+		add_child(_tactical_overlay)
+		_tactical_overlay.set_active(true)
 	light_changed.emit(_light_on)
 
 
@@ -3023,6 +3032,8 @@ func _slow_pool_factor() -> float:
 func _update_light_visibility() -> void:
 	if _equipped_light != null:
 		_equipped_light.visible = _light_on
+	if _tactical_overlay != null:
+		_tactical_overlay.set_active(_light_on)
 
 func _update_flashlight_pitch(cursor_distance: float) -> void:
 	if not _equipped_light is SpotLight3D:

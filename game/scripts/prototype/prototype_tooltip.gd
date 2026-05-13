@@ -765,7 +765,7 @@ func _build_stats_text(item: Item, equipped: Item = null) -> String:
 		match item.light_mod:
 			Item.LightMod.FLASHLIGHT: mod_name = "Flashlight"
 			Item.LightMod.RADIANT: mod_name = "Radiant Lamp"
-			Item.LightMod.SCANNER: mod_name = "Scanner"
+			Item.LightMod.SCANNER: mod_name = "Tactical Scanner"
 			Item.LightMod.UV: mod_name = "UV Lamp"
 		lines.append("Mod: %s" % mod_name)
 	# Container — shown via raw modifier because inventory capacity is a
