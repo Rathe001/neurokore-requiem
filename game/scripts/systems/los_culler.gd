@@ -150,7 +150,7 @@ func _physics_process(_delta: float) -> void:
 	var index := 0
 	for e in enemy_members:
 		var enemy := e as Node3D
-		if enemy == null:
+		if enemy == null or not enemy.is_inside_tree():
 			continue
 		var first_seen := not _target_los.has(enemy)
 		if first_seen or (index + stagger) % STAGGER_GROUPS == 0:
@@ -201,7 +201,7 @@ func _physics_process(_delta: float) -> void:
 		# death-hold). is_instance_valid catches both null and freed —
 		# the bare null check missed freed-but-not-null and crashed
 		# downstream when the cast tried to read global_position.
-		if not is_instance_valid(c):
+		if not is_instance_valid(c) or not c.is_inside_tree():
 			continue
 		var corpse := c as Node3D
 		if corpse == null:
@@ -228,7 +228,7 @@ func _physics_process(_delta: float) -> void:
 		# loop above. The cache is refreshed on cell change, but a glow
 		# can be freed mid-cell when its parent room teardown runs;
 		# the cast below would crash on the freed instance.
-		if not is_instance_valid(s):
+		if not is_instance_valid(s) or not s.is_inside_tree():
 			continue
 		var glow := s as Node3D
 		if glow == null:
@@ -251,7 +251,7 @@ func _physics_process(_delta: float) -> void:
 	# cell-cached like corpses/glows. Destructible props are already culled
 	# via the enemies loop, so this only covers indestructibles.
 	for st in _clutter_cache:
-		if not is_instance_valid(st):
+		if not is_instance_valid(st) or not st.is_inside_tree():
 			continue
 		var structure := st as Node3D
 		if structure == null:
@@ -279,7 +279,7 @@ func _physics_process(_delta: float) -> void:
 	var interactable_members: Dictionary = SpatialGrid.get_members(&"interactables")
 	for i in interactable_members:
 		var body := i as CollisionObject3D
-		if body == null:
+		if body == null or not body.is_inside_tree():
 			continue
 		# UVRevealable owns the visible flag for items in the "uv_hidden" group;
 		# don't fight it.
