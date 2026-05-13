@@ -204,6 +204,7 @@ func _build_room(piece: LevelPiece) -> void:
 	LightingBuilder.create_fill_light(_ctx, center, rd.size.x, rd.size.y)
 	LightingBuilder.create_fog_volume(_ctx, center, rd.size.x, rd.size.y)
 	DecalBuilder.place_puddles(_ctx, center, hx, hz, rd)
+	ClutterBuilder.scatter_clutter(_ctx, center, hx, hz, rd)
 	InteractableBuilder.spawn_slots(_ctx, piece_id, center, rd, piece.additional_slots)
 	# Per-instance count beats template default; -1 sentinel falls back.
 	var enemy_count: int = piece.enemy_count_override if piece.enemy_count_override >= 0 else rd.enemy_count

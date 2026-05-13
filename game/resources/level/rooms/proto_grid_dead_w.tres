@@ -13,3 +13,4 @@ openings = [3]
 opening_width = 4.0
 light_color = ExtResource("light")
 enemy_count = 3
+clutter_density = 1

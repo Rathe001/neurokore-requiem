@@ -90,3 +90,8 @@ enum Wall { NORTH, SOUTH, EAST, WEST }
 @export var decorative_pillars: Array[Vector2] = []
 ## Uniform XZ extent of every decorative pillar (width, depth).
 @export var decorative_pillar_size: Vector2 = Vector2(1.0, 1.0)
+
+@export_group("Clutter")
+## Density of scattered props. 0 = none, 1 = sparse (2 destructible + 1
+## indestructible), 2 = moderate (4 + 2), 3 = dense (6 + 3).
+@export_range(0, 3) var clutter_density: int = 0
