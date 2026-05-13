@@ -29,3 +29,6 @@ class_name RoomNode
 ## Generators use this to scale density (boss minions, lair rooms) without
 ## authoring another template variant.
 @export var enemy_count_override: int = -1
+## Per-instance pack chance override. -1.0 = use EnemySpawner.PACK_CHANCE.
+## Dungeon generators raise this to increase champion-pack density.
+@export var pack_chance_override: float = -1.0

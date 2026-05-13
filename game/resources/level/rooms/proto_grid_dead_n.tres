@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="RoomDef" load_steps=3 format=3]
+
+; Dead-end room with a single NORTH opening. Encounter pocket — player
+; commits to a dead end and fights a cluster. Used by DungeonGenerator
+; sparse grids where frontier cells have only one occupied neighbor.
+
+[ext_resource type="Script" path="res://scripts/level/room_def.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/level/lights/fluorescent_white.tres" id="light"]
+
+[resource]
+script = ExtResource("1")
+id = &"proto_grid_dead_n"
+size = Vector2(8, 8)
+openings = [0]
+opening_width = 4.0
+light_color = ExtResource("light")
+enemy_count = 3

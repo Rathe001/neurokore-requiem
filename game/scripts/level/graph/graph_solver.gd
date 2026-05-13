@@ -104,6 +104,7 @@ static func solve(graph: LevelGraph) -> Array[LevelPiece]:
 		piece.enemy_level_range = node.enemy_level_range
 		piece.theme_override = node.theme_override
 		piece.enemy_count_override = node.enemy_count_override
+		piece.pack_chance_override = node.pack_chance_override
 		pieces.append(piece)
 
 	# Emit corridor pieces (one per valid connection between two placed rooms).

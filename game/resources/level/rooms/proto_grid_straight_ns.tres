@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="RoomDef" load_steps=3 format=3]
+
+; Straight passage with NORTH + SOUTH openings. Produced by sparse grids
+; where a cell has occupied neighbors only above and below.
+
+[ext_resource type="Script" path="res://scripts/level/room_def.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/level/lights/fluorescent_white.tres" id="light"]
+
+[resource]
+script = ExtResource("1")
+id = &"proto_grid_straight_ns"
+size = Vector2(8, 8)
+openings = [0, 1]
+opening_width = 4.0
+light_color = ExtResource("light")
+enemy_count = 2

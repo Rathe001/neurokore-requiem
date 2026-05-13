@@ -26,3 +26,5 @@ class_name LevelPiece
 ## template default). Lets a generator scale density without authoring
 ## another template variant — e.g. boss minions, "lair" chain rooms.
 @export var enemy_count_override: int = -1
+## Per-instance pack chance override. -1.0 = use EnemySpawner.PACK_CHANCE.
+@export var pack_chance_override: float = -1.0

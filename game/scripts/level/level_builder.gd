@@ -207,7 +207,7 @@ func _build_room(piece: LevelPiece) -> void:
 	InteractableBuilder.spawn_slots(_ctx, piece_id, center, rd, piece.additional_slots)
 	# Per-instance count beats template default; -1 sentinel falls back.
 	var enemy_count: int = piece.enemy_count_override if piece.enemy_count_override >= 0 else rd.enemy_count
-	EnemySpawner.spawn_in_bounds(_ctx, piece, center, hx, hz, enemy_count, rd.enemy_scene, piece.enemy_level_range, rd.enemy_classes)
+	EnemySpawner.spawn_in_bounds(_ctx, piece, center, hx, hz, enemy_count, rd.enemy_scene, piece.enemy_level_range, rd.enemy_classes, piece.pack_chance_override)
 
 	var ap: AcousticProfile = rd.acoustic_profile
 	if ap == null:
@@ -274,7 +274,7 @@ func _build_corridor(piece: LevelPiece) -> void:
 	var fog_z := cd.length if cd.axis == CorridorDef.Axis.Z else cd.width
 	LightingBuilder.create_fill_light(_ctx, center, fog_x, fog_z)
 	LightingBuilder.create_fog_volume(_ctx, center, fog_x, fog_z)
-	EnemySpawner.spawn_in_bounds(_ctx, piece, center, hx, hz, cd.enemy_count, cd.enemy_scene, Vector2i.ZERO, cd.enemy_classes)
+	EnemySpawner.spawn_in_bounds(_ctx, piece, center, hx, hz, cd.enemy_count, cd.enemy_scene, Vector2i.ZERO, cd.enemy_classes, piece.pack_chance_override)
 
 	var ap: AcousticProfile = cd.acoustic_profile
 	if ap == null:

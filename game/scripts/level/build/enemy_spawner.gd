@@ -64,7 +64,7 @@ const DEFAULT_AREA_PER_ENEMY := 48.0
 const NAMED_CHANCE := 0.005
 
 
-static func spawn_in_bounds(ctx: LevelBuildContext, piece: LevelPiece, center: Vector3, hx: float, hz: float, count: int, scene: PackedScene, level_range: Vector2i = Vector2i.ZERO, class_pool: Array[EnemyClass] = []) -> void:
+static func spawn_in_bounds(ctx: LevelBuildContext, piece: LevelPiece, center: Vector3, hx: float, hz: float, count: int, scene: PackedScene, level_range: Vector2i = Vector2i.ZERO, class_pool: Array[EnemyClass] = [], pack_chance_override: float = -1.0) -> void:
 	# MP clients receive enemies via EnemiesContainer's MultiplayerSpawner —
 	# spawning locally would create duplicates.
 	if NetState.is_in_lobby() and NetState.is_client():
@@ -82,7 +82,7 @@ static func spawn_in_bounds(ctx: LevelBuildContext, piece: LevelPiece, center: V
 		# coordinates are authored for specific events (encounters, ambush
 		# triggers) and adding random extras would muddle the intent.
 		for epos: Vector3 in piece.enemy_positions:
-			_spawn_with_pack_chance(ctx, center + epos, hx, hz, scene, _roll_level(level_range), center, class_pool, limits)
+			_spawn_with_pack_chance(ctx, center + epos, hx, hz, scene, _roll_level(level_range), center, class_pool, limits, pack_chance_override)
 		return
 
 	# Auto-density: any room that opted in with a positive enemy_count
@@ -99,7 +99,7 @@ static func spawn_in_bounds(ctx: LevelBuildContext, piece: LevelPiece, center: V
 	while spawned < count:
 		var ex := center.x + randf_range(-hx + margin, hx - margin)
 		var ez := center.z + randf_range(-hz + margin, hz - margin)
-		var pack_size := _spawn_with_pack_chance(ctx, Vector3(ex, 0, ez), hx, hz, scene, _roll_level(level_range), center, class_pool, limits)
+		var pack_size := _spawn_with_pack_chance(ctx, Vector3(ex, 0, ez), hx, hz, scene, _roll_level(level_range), center, class_pool, limits, pack_chance_override)
 		spawned += pack_size
 
 
@@ -116,7 +116,7 @@ static func _roll_level(level_range: Vector2i) -> int:
 # (solo or pack member) draws an EnemyClass from it independently, so
 # a pack reads as melee + ranged + support instead of N copies of the
 # leader's class.
-static func _spawn_with_pack_chance(ctx: LevelBuildContext, pos: Vector3, hx: float, hz: float, scene: PackedScene, level_override: int, room_center: Vector3 = Vector3.ZERO, class_pool: Array[EnemyClass] = [], limits: Dictionary = {}) -> int:
+static func _spawn_with_pack_chance(ctx: LevelBuildContext, pos: Vector3, hx: float, hz: float, scene: PackedScene, level_override: int, room_center: Vector3 = Vector3.ZERO, class_pool: Array[EnemyClass] = [], limits: Dictionary = {}, pack_chance_override: float = -1.0) -> int:
 	# Hoisted so both the named-monster branch and the pack branch share
 	# one definition — declaring `var lvl` in each arm fires the
 	# "declared below in the parent block" GDScript warning.
@@ -133,7 +133,8 @@ static func _spawn_with_pack_chance(ctx: LevelBuildContext, pos: Vector3, hx: fl
 			return 1
 		# Named pool empty for this level — fall through to the regular
 		# pack/solo path so we don't waste the slot.
-	if randf() >= PACK_CHANCE:
+	var effective_pack_chance := pack_chance_override if pack_chance_override >= 0.0 else PACK_CHANCE
+	if randf() >= effective_pack_chance:
 		_spawn(ctx, pos, scene, level_override, [], null, _pick_class(class_pool, limits))
 		return 1
 	# Pack — roll affix list and companion count, spawn leader + companions

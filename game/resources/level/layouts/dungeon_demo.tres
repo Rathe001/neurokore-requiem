@@ -1,0 +1,136 @@
+[gd_resource type="Resource" script_class="LevelLayout" load_steps=42 format=3]
+
+; ══════════════════════════════════════════════════════════════════════════════
+; DUNGEON DEMO — DungeonGenerator carves a sparse 7×7 grid using Growing Tree.
+; D2-style maze topology: dead ends, winding corridors, loops. High enemy
+; density (~120-170 per floor) with elevated pack chance (0.18).
+;
+; To preview: open level_shell.tscn, swap LevelBuilder.layout to this file, F6.
+; ══════════════════════════════════════════════════════════════════════════════
+
+[ext_resource type="Script" path="res://scripts/level/level_layout.gd" id="script_layout"]
+[ext_resource type="Script" path="res://scripts/level/procgen/dungeon_generator.gd" id="script_dungeon"]
+[ext_resource type="Script" path="res://scripts/level/procgen/room_template.gd" id="script_template"]
+[ext_resource type="Resource" path="res://resources/level/themes/tech_theme.tres" id="theme"]
+[ext_resource type="Resource" path="res://resources/level/themes/amber_theme.tres" id="theme_amber"]
+[ext_resource type="Resource" path="res://resources/level/themes/dim_theme.tres" id="theme_dim"]
+
+; Dead ends (1 opening)
+[ext_resource type="Resource" path="res://resources/level/rooms/proto_grid_dead_n.tres" id="room_dead_n"]
+[ext_resource type="Resource" path="res://resources/level/rooms/proto_grid_dead_s.tres" id="room_dead_s"]
+[ext_resource type="Resource" path="res://resources/level/rooms/proto_grid_dead_e.tres" id="room_dead_e"]
+[ext_resource type="Resource" path="res://resources/level/rooms/proto_grid_dead_w.tres" id="room_dead_w"]
+
+; Straights (2 openings, aligned)
+[ext_resource type="Resource" path="res://resources/level/rooms/proto_grid_straight_ns.tres" id="room_straight_ns"]
+[ext_resource type="Resource" path="res://resources/level/rooms/proto_grid_straight_ew.tres" id="room_straight_ew"]
+
+; Corners (2 openings, perpendicular)
+[ext_resource type="Resource" path="res://resources/level/rooms/proto_grid_corner_ne.tres" id="room_ne"]
+[ext_resource type="Resource" path="res://resources/level/rooms/proto_grid_corner_nw.tres" id="room_nw"]
+[ext_resource type="Resource" path="res://resources/level/rooms/proto_grid_corner_se.tres" id="room_se"]
+[ext_resource type="Resource" path="res://resources/level/rooms/proto_grid_corner_sw.tres" id="room_sw"]
+
+; T-junctions (3 openings)
+[ext_resource type="Resource" path="res://resources/level/rooms/proto_grid_t_n.tres" id="room_t_n"]
+[ext_resource type="Resource" path="res://resources/level/rooms/proto_grid_t_s.tres" id="room_t_s"]
+[ext_resource type="Resource" path="res://resources/level/rooms/proto_grid_t_e.tres" id="room_t_e"]
+[ext_resource type="Resource" path="res://resources/level/rooms/proto_grid_t_w.tres" id="room_t_w"]
+
+; Cross (4 openings)
+[ext_resource type="Resource" path="res://resources/level/rooms/proto_grid_cross.tres" id="room_cross"]
+
+; Corridors
+[ext_resource type="Resource" path="res://resources/level/corridors/proto_corridor_standard.tres" id="corr_std"]
+[ext_resource type="Resource" path="res://resources/level/corridors/proto_corridor_dim.tres" id="corr_dim"]
+[ext_resource type="Resource" path="res://resources/level/corridors/proto_corridor_long.tres" id="corr_long"]
+[ext_resource type="Resource" path="res://resources/level/corridors/proto_corridor_patrolled.tres" id="corr_patrol"]
+
+; Templates — one per room shape
+[sub_resource type="Resource" id="tpl_dead_n"]
+script = ExtResource("script_template")
+room = ExtResource("room_dead_n")
+
+[sub_resource type="Resource" id="tpl_dead_s"]
+script = ExtResource("script_template")
+room = ExtResource("room_dead_s")
+
+[sub_resource type="Resource" id="tpl_dead_e"]
+script = ExtResource("script_template")
+room = ExtResource("room_dead_e")
+
+[sub_resource type="Resource" id="tpl_dead_w"]
+script = ExtResource("script_template")
+room = ExtResource("room_dead_w")
+
+[sub_resource type="Resource" id="tpl_straight_ns"]
+script = ExtResource("script_template")
+room = ExtResource("room_straight_ns")
+
+[sub_resource type="Resource" id="tpl_straight_ew"]
+script = ExtResource("script_template")
+room = ExtResource("room_straight_ew")
+
+[sub_resource type="Resource" id="tpl_ne"]
+script = ExtResource("script_template")
+room = ExtResource("room_ne")
+
+[sub_resource type="Resource" id="tpl_nw"]
+script = ExtResource("script_template")
+room = ExtResource("room_nw")
+
+[sub_resource type="Resource" id="tpl_se"]
+script = ExtResource("script_template")
+room = ExtResource("room_se")
+
+[sub_resource type="Resource" id="tpl_sw"]
+script = ExtResource("script_template")
+room = ExtResource("room_sw")
+
+[sub_resource type="Resource" id="tpl_t_n"]
+script = ExtResource("script_template")
+room = ExtResource("room_t_n")
+
+[sub_resource type="Resource" id="tpl_t_s"]
+script = ExtResource("script_template")
+room = ExtResource("room_t_s")
+
+[sub_resource type="Resource" id="tpl_t_e"]
+script = ExtResource("script_template")
+room = ExtResource("room_t_e")
+
+[sub_resource type="Resource" id="tpl_t_w"]
+script = ExtResource("script_template")
+room = ExtResource("room_t_w")
+
+[sub_resource type="Resource" id="tpl_cross"]
+script = ExtResource("script_template")
+room = ExtResource("room_cross")
+
+[sub_resource type="Resource" id="generator"]
+script = ExtResource("script_dungeon")
+rng_seed = 0
+templates = [SubResource("tpl_dead_n"), SubResource("tpl_dead_s"), SubResource("tpl_dead_e"), SubResource("tpl_dead_w"), SubResource("tpl_straight_ns"), SubResource("tpl_straight_ew"), SubResource("tpl_ne"), SubResource("tpl_nw"), SubResource("tpl_se"), SubResource("tpl_sw"), SubResource("tpl_t_n"), SubResource("tpl_t_s"), SubResource("tpl_t_e"), SubResource("tpl_t_w"), SubResource("tpl_cross")]
+corridor_pool = [ExtResource("corr_std"), ExtResource("corr_std"), ExtResource("corr_dim"), ExtResource("corr_dim"), ExtResource("corr_patrol"), ExtResource("corr_patrol"), ExtResource("corr_long")]
+grid_width = 7
+grid_height = 7
+fill_min = 0.4
+fill_max = 0.55
+newest_bias = 0.6
+anchor_position = Vector3(0, 0, 0)
+boss_placement = &"farthest"
+emit_switch_puzzle = true
+switch_count = 3
+dead_end_enemies = 4
+passage_enemies = 4
+junction_enemies = 6
+hub_enemies = 8
+pack_chance = 0.18
+boss_theme = ExtResource("theme_amber")
+dead_end_theme = ExtResource("theme_dim")
+
+[resource]
+script = ExtResource("script_layout")
+theme = ExtResource("theme")
+ground_size = Vector2(160, 160)
+generator = SubResource("generator")
