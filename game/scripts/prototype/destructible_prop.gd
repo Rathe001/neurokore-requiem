@@ -97,7 +97,7 @@ func _break() -> void:
 
 	# Scale-to-zero break tween.
 	var tween := create_tween()
-	tween.tween_property(self, "scale", Vector3.ZERO, BREAK_DURATION).set_ease(Tween.EASE_IN)
+	tween.tween_property(self, "scale", Vector3.ONE * 0.001, BREAK_DURATION).set_ease(Tween.EASE_IN)
 	tween.finished.connect(queue_free)
 
 
