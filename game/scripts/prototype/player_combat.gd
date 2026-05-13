@@ -540,7 +540,7 @@ func _apply_melee_combo_status(enemy: Node, weapon: Item) -> void:
 func _resolve_aoe(skill: Skill, eff_range: float, weapon: Item) -> void:
 	var aoe_range := eff_range
 	if weapon != null:
-		aoe_range += float(weapon.get_effective_modifier(&"impact_radius"))
+		aoe_range += float(weapon.get_modifier(&"impact_radius"))
 	var kb := _knockback_for(skill, weapon)
 	for enode: Node3D in SpatialGrid.query_radius(_host.global_position, aoe_range, &"enemies"):
 		if not enode.has_method(&"take_damage"):
@@ -606,7 +606,7 @@ func _spawn_projectile(skill: Skill, aim: Vector3, eff_range: float, weapon: Ite
 		proj.damage_mult *= OVERCLOCK_DAMAGE_MULT
 	proj.blast_radius = skill.blast_radius
 	if weapon != null:
-		proj.blast_radius += weapon.get_effective_modifier(&"blast_radius_bonus")
+		proj.blast_radius += weapon.get_modifier(&"blast_radius_bonus")
 	var vis := skill.damage_multiplier if skill.damage_multiplier > 1.0 else 1.0
 	if _overclock_active:
 		vis *= OVERCLOCK_VISUAL_SCALE
@@ -642,7 +642,7 @@ func _archetype_pierce_count(weapon: Item) -> int:
 	if weapon == null:
 		return 0
 	if weapon.weapon_base_id == &"ranged_2h":
-		return maxi(1, weapon.get_effective_modifier(&"penetration"))
+		return maxi(1, weapon.get_modifier(&"penetration"))
 	return 0
 
 
@@ -727,7 +727,7 @@ func _spawn_airstrike(skill: Skill, eff_range: float, weapon: Item) -> void:
 		proj.damage_mult *= OVERCLOCK_DAMAGE_MULT
 	proj.blast_radius = skill.blast_radius
 	if weapon != null:
-		proj.blast_radius += weapon.get_effective_modifier(&"blast_radius_bonus")
+		proj.blast_radius += weapon.get_modifier(&"blast_radius_bonus")
 	var vis_scale := skill.damage_multiplier if skill.damage_multiplier > 1.0 else 1.0
 	if _overclock_active:
 		vis_scale *= OVERCLOCK_VISUAL_SCALE
@@ -866,7 +866,7 @@ func _resolve_shotgun(skill: Skill, aim: Vector3, eff_range: float, weapon: Item
 				break
 	var pellets: int = maxi(1, skill.pellet_count)
 	if weapon != null:
-		pellets += weapon.get_effective_modifier(&"pellet_count")
+		pellets += weapon.get_modifier(&"pellet_count")
 	var cone_half_rad := deg_to_rad(maxf(skill.cone_deg, 1.0) * 0.5)
 	if weapon != null:
 		var wep_spread: int = weapon.get_modifier(&"spread_angle")

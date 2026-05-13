@@ -726,6 +726,8 @@ func _build_stats_text(item: Item, equipped: Item = null) -> String:
 		lines.append("Accuracy: %.1f%%" % (item.effective_accuracy() * 100.0))
 	if item.weapon_range > 0.0 and item.damage_max > 0:
 		lines.append("Range: %.1f m" % item.weapon_range)
+	if item.ammo_max > 0:
+		lines.append("Capacity: %d" % item.ammo_max)
 	# Weapon signature stats — archetype-specific rolled values (blast radius,
 	# penetration, bleed, etc). Displayed with effectiveness decay applied.
 	# Only for weapons (weapon_base_id set); grenades with blast_radius_bonus
@@ -830,15 +832,15 @@ const _PCT_STATS: Dictionary = {
 # also excluded from the generic stat_modifiers loop to avoid double-listing.
 # "pct" = true means the value is a percentage and should use float display.
 const _WEAPON_SIG_DISPLAY: Dictionary = {
-	&"blast_radius_bonus": { "label": "Blast Radius",    "fmt": "+%d m" },
-	&"pellet_count":       { "label": "Pellets",         "fmt": "%d" },
+	&"blast_radius_bonus": { "label": "Blast Radius",    "fmt": "+%d m", "no_decay": true },
+	&"pellet_count":       { "label": "Pellets",         "fmt": "%d", "no_decay": true },
 	&"spread_angle":       { "label": "Spread",          "fmt": "%d°", "no_decay": true },
-	&"penetration":        { "label": "Penetration",     "fmt": "%d" },
+	&"penetration":        { "label": "Penetration",     "fmt": "%d", "no_decay": true },
 	&"headshot_bonus":     { "label": "Headshot Bonus",  "fmt": "+%.1f%%", "pct": true },
 	&"chain_retention":    { "label": "Chain Retention",  "fmt": "%.1f%%", "pct": true },
 	&"ramp_speed":         { "label": "Ramp Speed",      "fmt": "+%.1f%%", "pct": true },
 	&"bleed_damage":       { "label": "Bleed",           "fmt": "%d/tick" },
-	&"impact_radius":      { "label": "Impact Radius",   "fmt": "%d m" },
+	&"impact_radius":      { "label": "Impact Radius",   "fmt": "%d m", "no_decay": true },
 	&"sustained_bonus":    { "label": "Sustained Fire",  "fmt": "+%.1f%%", "pct": true },
 	&"ricochet_chance":    { "label": "Ricochet",        "fmt": "%.1f%%", "pct": true },
 	&"overcharge_chance":  { "label": "Overcharge",      "fmt": "%.1f%%", "pct": true },

@@ -37,15 +37,15 @@ const MELEE_COMBO_TIP: String = "3-hit combo: wider, stronger, finisher applies 
 # Mirrors prototype_tooltip's _WEAPON_SIG_DISPLAY but uses compact labels
 # suited to the small Combat Effects panel.
 const SIG_STAT_DISPLAY: Dictionary = {
-	&"blast_radius_bonus": { "label": "Blast Radius",   "fmt": "+%d m" },
-	&"pellet_count":       { "label": "Pellets",        "fmt": "%d" },
+	&"blast_radius_bonus": { "label": "Blast Radius",   "fmt": "+%d m", "raw": true },
+	&"pellet_count":       { "label": "Pellets",        "fmt": "%d", "raw": true },
 	&"spread_angle":       { "label": "Spread",         "fmt": "%d°", "raw": true },
-	&"penetration":        { "label": "Penetration",    "fmt": "%d" },
+	&"penetration":        { "label": "Penetration",    "fmt": "%d", "raw": true },
 	&"headshot_bonus":     { "label": "Headshot",       "fmt": "+%d%%" },
 	&"chain_retention":    { "label": "Chain Retain",   "fmt": "%d%%" },
 	&"ramp_speed":         { "label": "Ramp Speed",     "fmt": "+%d%%" },
 	&"bleed_damage":       { "label": "Bleed",          "fmt": "%d/tick" },
-	&"impact_radius":      { "label": "Impact",         "fmt": "%d m" },
+	&"impact_radius":      { "label": "Impact",         "fmt": "%d m", "raw": true },
 	&"sustained_bonus":    { "label": "Sustained",      "fmt": "+%d%%" },
 	&"ricochet_chance":    { "label": "Ricochet",       "fmt": "%d%%" },
 	&"overcharge_chance":  { "label": "Overcharge",     "fmt": "%d%%" },
@@ -124,6 +124,7 @@ func refresh() -> void:
 	# repacks the rest. Building the panel fresh on every equip change is
 	# cheap (max ~4 labels) and avoids state bookkeeping.
 	for child in _vbox.get_children():
+		_vbox.remove_child(child)
 		child.queue_free()
 
 	var entries: Array = _gather_active_quirks()

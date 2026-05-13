@@ -150,7 +150,7 @@ func roll(main_type: String, item_level: int, rarity: StringName, rng: RandomNum
 	if main_type == "Backpack":
 		item.stat_modifiers[&"inventory_bonus"] = 4
 
-	_apply_weapon_base(item, main_type, rng)
+	_apply_weapon_base(item, main_type, rarity, rng)
 	_roll_weapon_signature(item, rarity, rng)
 	_apply_offhand_base(item, main_type, rng)
 	_apply_grenade_base(item, main_type, rng)
@@ -192,7 +192,7 @@ func roll_from_base(base: WeaponBase, item_level: int, rarity: StringName, rng: 
 	item.stat_modifiers = {}
 	if base.two_handed:
 		item.two_handed = true
-	_apply_weapon_base_direct(item, base, rng)
+	_apply_weapon_base_direct(item, base, rarity, rng)
 	_roll_weapon_signature(item, rarity, rng)
 	var affix_labels: Array[String] = []
 	var prefix_count: int = RARITY_PREFIX_COUNT.get(rarity, 0)
@@ -491,7 +491,7 @@ func _roll_damage(item: Item, base: Resource, rng: RandomNumberGenerator) -> voi
 	item.damage_min = mini(dmin, dmax)
 	item.damage_max = maxi(dmin, dmax)
 
-func _apply_weapon_base(item: Item, main_type: String, rng: RandomNumberGenerator) -> void:
+func _apply_weapon_base(item: Item, main_type: String, rarity: StringName, rng: RandomNumberGenerator) -> void:
 	var drops: Array = WEAPON_BASE_DROPS.get(main_type, [])
 	var path := _pick_weighted_path(drops, rng)
 	if path == "":
@@ -500,7 +500,7 @@ func _apply_weapon_base(item: Item, main_type: String, rng: RandomNumberGenerato
 	if base == null:
 		push_warning("[ItemRoller] missing WeaponBase: %s" % path)
 		return
-	_apply_weapon_base_direct(item, base, rng)
+	_apply_weapon_base_direct(item, base, rarity, rng)
 
 
 # Pick a path from a [{path, weight}] list weighted by the `weight` field.
@@ -524,7 +524,7 @@ func _pick_weighted_path(drops: Array, rng: RandomNumberGenerator) -> String:
 	# Fallback for floating-point edge case at the boundary.
 	return String(drops[drops.size() - 1].get("path", ""))
 
-func _apply_weapon_base_direct(item: Item, base: WeaponBase, rng: RandomNumberGenerator) -> void:
+func _apply_weapon_base_direct(item: Item, base: WeaponBase, rarity: StringName, rng: RandomNumberGenerator) -> void:
 	item.weapon_base_id = base.id
 	item.sub_type = base.display_name
 	item.two_handed = base.two_handed
@@ -538,13 +538,15 @@ func _apply_weapon_base_direct(item: Item, base: WeaponBase, rng: RandomNumberGe
 	item.crit_chance = rng.randf_range(base.crit_chance_range.x, base.crit_chance_range.y)
 	item.accuracy = rng.randf_range(base.accuracy_range.x, base.accuracy_range.y)
 	item.weapon_range = rng.randf_range(base.weapon_range_range.x, base.weapon_range_range.y)
-	# Bullet weapons: roll an ammo capacity in the base's range and start
-	# the magazine full. Energy weapons leave ammo_max == 0 and skip the
-	# reload mechanic entirely.
+	# Bullet weapons: roll an ammo capacity in the base's range, scaled by
+	# rarity (higher rarity = more rounds in the mag). Energy weapons leave
+	# ammo_max == 0 and skip the reload mechanic entirely.
 	if base.ammo_capacity_range.y > 0:
 		var lo: int = mini(base.ammo_capacity_range.x, base.ammo_capacity_range.y)
 		var hi: int = maxi(base.ammo_capacity_range.x, base.ammo_capacity_range.y)
-		item.ammo_max = rng.randi_range(maxi(1, lo), maxi(1, hi))
+		var base_ammo := rng.randi_range(maxi(1, lo), maxi(1, hi))
+		var rarity_mult: float = float(RARITY_BUDGET_MULT.get(rarity, 1.0))
+		item.ammo_max = maxi(1, int(round(float(base_ammo) * rarity_mult)))
 		item.ammo_current = item.ammo_max
 		item.reload_time = base.reload_time
 	# Damage-type resolution — pool first (random roll, e.g. Accelerator),
