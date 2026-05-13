@@ -1,7 +1,7 @@
 "appbuild"
 {
 	"appid"			"4689320"
-	"desc"			"v0.2.1 · 2a5da64 · **Spatial audio system** — every weapon now has fire SFX..."
+	"desc"			"v0.3.0 · 1e4ec21 · **Procgen dungeon layouts** — sparse D2-style maze topolo..."
 
 	// Where SteamPipe writes its build logs and intermediate state.
 	// Created on first run. Safe to .gitignore.

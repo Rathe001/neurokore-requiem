@@ -13,6 +13,8 @@ are mandatory.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-05-13
+
 ### Added
 
 - **Procgen dungeon layouts** — sparse D2-style maze topology with dead ends, winding corridors, and loops, generated from a Growing Tree carve over a 7×7 grid. Spawn always lands in a safe leaf (zero enemies, zero adjacent-corridor enemies); boss + exit live at the far end behind a 3-switch puzzle. Difficulty scales with BFS distance from spawn, so deeper rooms hit harder.

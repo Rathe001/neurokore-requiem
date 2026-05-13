@@ -1,7 +1,7 @@
 @echo off
 setlocal
 
-:: ── Configuration ────────────────────────────────────────────────────────────
+:: -- Configuration ------------------------------------------------------------
 :: All three honor an existing env var if set; placeholder defaults match the
 :: pattern in deploy.sh (${VAR:-default}). Set STEAM_USER persistently with
 :: `setx STEAM_USER your_username` (fresh terminal required) so you don't have
@@ -9,7 +9,7 @@ setlocal
 if "%GODOT%"=="" set GODOT=godot
 if "%STEAMCMD%"=="" set STEAMCMD=steamcmd
 if "%STEAM_USER%"=="" set STEAM_USER=your_steam_username
-:: ─────────────────────────────────────────────────────────────────────────────
+:: -----------------------------------------------------------------------------
 
 set ROOT=%~dp0..\..
 set GAME_DIR=%ROOT%\game
@@ -24,32 +24,36 @@ if "%PYTHON%"=="" set PYTHON=python
 
 echo.
 echo ========================================
-echo  Neurokore: Requiem — Steam Deploy
+echo  Neurokore: Requiem - Steam Deploy
 echo ========================================
 echo.
 
-:: ── Step 1: Bump version + roll CHANGELOG ────────────────────────────────────
+:: -- Step 1: Bump version + roll CHANGELOG ------------------------------------
 echo [1/4] Preparing build (version bump + changelog rotation)...
 "%PYTHON%" "%PREPARE%" --bump %BUMP%
 
 if %ERRORLEVEL% neq 0 (
     echo.
     echo ERROR: prepare_build.py failed. The most common cause is an empty
-    echo CHANGELOG '## [Unreleased]' section — add your patch notes there
+    echo CHANGELOG '## [Unreleased]' section - add your patch notes there
     echo before re-running.
     exit /b 1
 )
 
-:: ── Step 2: Clean previous build ─────────────────────────────────────────────
+:: -- Step 2: Clean previous build ---------------------------------------------
 echo [2/4] Cleaning previous build...
 if exist "%BUILD_DIR%" (
     rmdir /s /q "%BUILD_DIR%"
 )
 mkdir "%BUILD_DIR%"
 
-:: ── Step 3: Export from Godot ────────────────────────────────────────────────
+:: -- Step 3: Export from Godot ------------------------------------------------
 echo [3/4] Exporting Windows build from Godot...
-"%GODOT%" --headless --path "%GAME_DIR%" --export-release "Windows Desktop" "%BUILD_DIR%\neurokore-requiem.exe"
+:: `call` is mandatory when %GODOT% resolves to a .cmd shim (godot.cmd). Without
+:: it, the shim's `%~dp0` evaluates against deploy.bat's directory instead of
+:: the shim's own folder, so the shim tries to invoke the Godot exe from
+:: tools\steam\ and bombs out with "not recognized."
+call "%GODOT%" --headless --path "%GAME_DIR%" --export-release "Windows Desktop" "%BUILD_DIR%\neurokore-requiem.exe"
 
 if %ERRORLEVEL% neq 0 (
     echo.
@@ -62,7 +66,7 @@ if %ERRORLEVEL% neq 0 (
 
 echo    Export complete: %BUILD_DIR%
 
-:: ── Step 4: Upload to Steam ──────────────────────────────────────────────────
+:: -- Step 4: Upload to Steam --------------------------------------------------
 echo [4/4] Uploading to Steam via SteamCMD...
 "%STEAMCMD%" +login %STEAM_USER% +run_app_build "%VDF%" +quit
 
