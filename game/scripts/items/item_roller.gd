@@ -313,9 +313,10 @@ func _roll_grenade_from_base(base: GrenadeBase, item_level: int, rng: RandomNumb
 	item.fire_skill = base.fire_skill
 	if base.glyph != "":
 		item.glyph = base.glyph
-	_roll_damage(item, base, rng)
-	item.crit_chance = rng.randf_range(base.crit_chance_range.x, base.crit_chance_range.y)
-	item.blast_radius = rng.randf_range(base.blast_radius_range.x, base.blast_radius_range.y)
+	var curve: float = float(RARITY_ROLL_CURVE.get(&"common", 2.5))
+	_roll_damage(item, base, rng, curve)
+	item.crit_chance = _curved_randf(base.crit_chance_range.x, base.crit_chance_range.y, rng, curve)
+	item.blast_radius = _curved_randf(base.blast_radius_range.x, base.blast_radius_range.y, rng, curve)
 	item.name_key = base.display_name
 	return item
 
@@ -428,7 +429,8 @@ func _roll_armor_defense(item: Item, item_level: int, rarity: StringName, rng: R
 	var budget_mult: float = float(RARITY_BUDGET_MULT.get(rarity, 1.0))
 	var base_dr := int(round(float(item_level) * 0.3 * budget_mult))
 	# Small random variance ±1 so same-ilvl same-rarity pieces aren't identical.
-	base_dr += rng.randi_range(-1, 1)
+	var curve: float = float(RARITY_ROLL_CURVE.get(rarity, 2.0))
+	base_dr += _curved_randi(-1, 1, rng, curve)
 	base_dr = clampi(base_dr, 1, DR_PER_PIECE_CAP)
 	var prior: int = int(item.stat_modifiers.get(&"damage_reduction", 0))
 	item.stat_modifiers[&"damage_reduction"] = mini(prior + base_dr, DR_PER_PIECE_CAP)
@@ -718,8 +720,9 @@ func _apply_head_light_mod(item: Item, main_type: String, item_level: int, rng: 
 			chosen = entry
 			break
 	item.light_mod = chosen["mod"] as Item.LightMod
-	item.light_energy = rng.randf_range(2.0, 3.5)
-	item.light_range = rng.randf_range(12.0, 18.0)
+	var light_curve: float = float(RARITY_ROLL_CURVE.get(item.rarity, 2.0))
+	item.light_energy = _curved_randf(2.0, 3.5, rng, light_curve)
+	item.light_range = _curved_randf(12.0, 18.0, rng, light_curve)
 	match item.light_mod:
 		Item.LightMod.UV:
 			item.light_color = Color(0.6, 0.2, 1.0)
