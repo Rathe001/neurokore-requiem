@@ -392,7 +392,7 @@ func _build_resonance_bar() -> void:
 	mat.set_shader_parameter(&"border_color", Color(0.02, 0.03, 0.05, 1.0))
 	mat.set_shader_parameter(&"border_thickness", 0.08)
 	var mesh := QuadMesh.new()
-	mesh.size = Vector2(1.0, 0.08)
+	mesh.size = Vector2(1.6, 0.12)
 	mesh.material = mat
 	_resonance_bar = MeshInstance3D.new()
 	_resonance_bar.mesh = mesh
@@ -407,7 +407,7 @@ func _build_resonance_bar() -> void:
 	_resonance_label.outline_size = 4
 	_resonance_label.modulate = Color(1.0, 0.85, 0.5, 0.8)
 	_resonance_label.outline_modulate = Color(0, 0, 0, 1)
-	_resonance_label.position = Vector3(0.0, _RESONANCE_BAR_Y + 0.08, 0.0)
+	_resonance_label.position = Vector3(0.0, _RESONANCE_BAR_Y + 0.12, 0.0)
 	_resonance_label.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_resonance_label.visible = false
 	add_child(_resonance_label)
@@ -946,6 +946,12 @@ func get_potion_charges() -> int:
 	if _potion == null:
 		return 0
 	return _potion.get_charges()
+
+
+func get_potion_heal_remaining() -> int:
+	if _potion == null:
+		return 0
+	return _potion.get_heal_remaining()
 
 
 func heal(amount: int) -> void:

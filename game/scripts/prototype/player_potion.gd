@@ -55,6 +55,13 @@ func get_charges() -> int:
 	return _charges
 
 
+func get_heal_remaining() -> int:
+	if _hot_remain <= 0.0 or _hot_per_tick <= 0.0:
+		return 0
+	var ticks_left := int(ceil(_hot_remain / HOT_INTERVAL))
+	return int(round(_hot_per_tick * float(ticks_left)))
+
+
 # ── Tick ──────────────────────────────────────────────────────────────────────
 
 func tick(delta: float) -> void:

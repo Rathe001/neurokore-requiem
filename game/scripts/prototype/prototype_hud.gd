@@ -4,6 +4,7 @@ class_name PrototypeHud
 const HP_BAR_WIDTH := 156.0
 const RESOURCE_BAR_WIDTH := 156.0
 const LOW_HP_RATIO := 0.35
+const HEAL_PREVIEW_COLOR := Color(0.3, 0.85, 0.4, 0.35)
 # Rolling window for the avatar loot tally — pickups within this many seconds
 # of each other accumulate; the running total clears once nothing's been
 # picked up for the full window.
@@ -60,6 +61,7 @@ var _banner_token: int = 0
 var _shield_state: Dictionary = {"active": false, "pool": 0, "pool_max": 0, "reduction": 0.0, "cooldown_remain": 0.0, "cooldown_total": 0.0, "duration_remain": 0.0}
 var _shield_outline: ReferenceRect = null
 var _shield_overlay: ColorRect = null
+var _heal_preview: ColorRect = null
 # White → red lerp colours for the HP-bar outline. Above
 # _SHIELD_OUTLINE_RED_THRESHOLD the outline stays full white;
 # below, it lerps toward red so the player can see the shield
@@ -88,6 +90,7 @@ var _loot_tally_token: int = 0
 func _ready() -> void:
 	add_to_group(&"hud")
 	_apply_theme()
+	_build_heal_preview()
 	_update_avatar_panel()
 	_repaint_xp(PlayerState.xp, PlayerState.xp_to_next)
 	UIThemeState.changed.connect(_apply_theme)
@@ -612,6 +615,7 @@ func _process(delta: float) -> void:
 	_position_controls_panel()
 	_pulse_talent_button(delta)
 	_process_ammo_fill()
+	_update_heal_preview()
 	var panel := debug_label.get_parent() as Control
 	var overlay_on := DebugState.config == null or DebugState.config.show_debug_overlay
 	if panel.visible != overlay_on:
@@ -864,6 +868,43 @@ func _repaint_hp() -> void:
 	hp_fill.offset_right = hp_fill.offset_left + HP_BAR_WIDTH * ratio
 	hp_fill.color = p.hp_full if ratio > LOW_HP_RATIO else p.hp_low
 	hp_label.text = "%d / %d" % [max(_last_hp_current, 0), _max_health]
+	_update_heal_preview()
+
+
+func _build_heal_preview() -> void:
+	if hp_fill == null:
+		return
+	_heal_preview = ColorRect.new()
+	_heal_preview.color = HEAL_PREVIEW_COLOR
+	_heal_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_heal_preview.visible = false
+	# Insert just behind hp_fill so the preview shows under the solid fill.
+	hp_fill.get_parent().add_child(_heal_preview)
+	hp_fill.get_parent().move_child(_heal_preview, hp_fill.get_index())
+
+
+func _update_heal_preview() -> void:
+	if _heal_preview == null:
+		return
+	var player := get_tree().get_first_node_in_group(&"player")
+	if player == null or not player.has_method(&"get_potion_heal_remaining"):
+		_heal_preview.visible = false
+		return
+	var heal_remain: int = player.get_potion_heal_remaining()
+	if heal_remain <= 0:
+		_heal_preview.visible = false
+		return
+	var current_ratio := clampf(float(_last_hp_current) / float(_max_health), 0.0, 1.0)
+	var projected := mini(_last_hp_current + heal_remain, _max_health)
+	var projected_ratio := clampf(float(projected) / float(_max_health), 0.0, 1.0)
+	if projected_ratio <= current_ratio:
+		_heal_preview.visible = false
+		return
+	_heal_preview.offset_left = hp_fill.offset_left
+	_heal_preview.offset_top = hp_fill.offset_top
+	_heal_preview.offset_right = hp_fill.offset_left + HP_BAR_WIDTH * projected_ratio
+	_heal_preview.offset_bottom = hp_fill.offset_bottom
+	_heal_preview.visible = true
 
 func _on_resource_changed(current: int, max_value: int) -> void:
 	var ratio := 0.0 if max_value <= 0 else clampf(float(current) / float(max_value), 0.0, 1.0)
