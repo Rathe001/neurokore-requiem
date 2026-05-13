@@ -552,6 +552,12 @@ func _pool_release() -> void:
 	ricochet_chance_pct = 0
 	is_ricochet = false
 	overcharge_chance_pct = 0
+	# Reset falloff visual fade so pooled projectiles start opaque.
+	var vis := get_node_or_null(^"Visual") as MeshInstance3D
+	if vis != null:
+		vis.transparency = 0.0
+	if _trail_node != null:
+		_trail_node.transparency = 0.0
 
 func _physics_process(delta: float) -> void:
 	var step := speed * delta
@@ -597,7 +603,16 @@ func _physics_process(delta: float) -> void:
 			return
 	global_position = to
 	_traveled += step
-	if _traveled >= max_range:
+	# Visual fade in falloff zone — projectile dims as damage drops.
+	if _traveled > max_range:
+		var t := clampf((_traveled - max_range) / max_range, 0.0, 1.0)
+		var alpha := 1.0 - 0.75 * t
+		var vis := get_node_or_null(^"Visual") as MeshInstance3D
+		if vis != null:
+			vis.transparency = 1.0 - alpha
+		if _trail_node != null and _trail_node.visible:
+			_trail_node.transparency = 1.0 - alpha
+	if _traveled >= max_range * PlayerCombat.FALLOFF_RANGE_MULT:
 		_release()
 
 # True when `body` is a charmed enemy (player-friendly mind-controlled pet).
@@ -842,4 +857,6 @@ func _roll_damage(is_crit: bool) -> int:
 	if is_crit:
 		var mult := PROTO_BASE_CRIT_MULT + Effects.get_aggregate(&"crit_damage_pct")
 		dmg = int(round(float(dmg) * mult))
+	# Distance falloff — full damage within max_range, drops beyond.
+	dmg = maxi(1, int(round(float(dmg) * PlayerCombat.range_falloff(_traveled, max_range))))
 	return dmg

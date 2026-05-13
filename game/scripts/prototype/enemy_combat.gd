@@ -213,7 +213,7 @@ func cast_melee_attack(player: Node3D, aim: Vector3) -> void:
 	var to_p: Vector3 = player.global_position - _host.global_position
 	to_p.y = 0.0
 	var dist := to_p.length()
-	if dist > range_now or dist < 0.001:
+	if dist > range_now * PlayerCombat.FALLOFF_RANGE_MULT or dist < 0.001:
 		return
 	var half_cos := cos(deg_to_rad(cone_now * 0.5))
 	if aim.dot(to_p / dist) < half_cos:
@@ -222,6 +222,7 @@ func cast_melee_attack(player: Node3D, aim: Vector3) -> void:
 		return
 	if player.has_method(&"take_damage"):
 		var dmg := int(round(float(_host._attack_damage) * outgoing_damage_mult()))
+		dmg = maxi(1, int(round(float(dmg) * PlayerCombat.range_falloff(dist, range_now))))
 		player.take_damage(dmg, _host.global_position, melee_knockback())
 
 
@@ -355,7 +356,7 @@ func _cast_skill_cone(target: Node3D, aim: Vector3, skill: EnemySkill) -> void:
 	var to_p: Vector3 = target.global_position - _host.global_position
 	to_p.y = 0.0
 	var dist := to_p.length()
-	if dist > skill.skill_range or dist < 0.001:
+	if dist > skill.skill_range * PlayerCombat.FALLOFF_RANGE_MULT or dist < 0.001:
 		return
 	var half_cos := cos(deg_to_rad(skill.cone_deg * 0.5))
 	if aim.dot(to_p / dist) < half_cos:
@@ -364,6 +365,7 @@ func _cast_skill_cone(target: Node3D, aim: Vector3, skill: EnemySkill) -> void:
 		return
 	if target.has_method(&"take_damage"):
 		var dmg := int(round(float(_host._attack_damage) * skill.damage_mult * outgoing_damage_mult()))
+		dmg = maxi(1, int(round(float(dmg) * PlayerCombat.range_falloff(dist, skill.skill_range))))
 		target.take_damage(dmg, _host.global_position, skill.knockback)
 
 
@@ -380,7 +382,8 @@ func _cast_skill_radial(target: Node3D, skill: EnemySkill) -> void:
 		return
 	_host._change_state(PrototypeEnemy.State.CHASING)
 	var target_group: StringName = &"enemies" if _host._afflictions._charmed else &"player"
-	for n: Node in SpatialGrid.query_radius(_host.global_position, skill.aoe_radius, target_group):
+	var aoe_r := skill.aoe_radius
+	for n: Node in SpatialGrid.query_radius(_host.global_position, aoe_r * PlayerCombat.FALLOFF_RANGE_MULT, target_group):
 		if not is_instance_valid(n) or not (n is Node3D):
 			continue
 		if not n.has_method(&"take_damage"):
@@ -390,6 +393,8 @@ func _cast_skill_radial(target: Node3D, skill: EnemySkill) -> void:
 		if _host._afflictions._charmed and n is PrototypeEnemy and (n as PrototypeEnemy).is_player_friendly():
 			continue
 		var dmg := int(round(float(_host._attack_damage) * skill.damage_mult * outgoing_damage_mult()))
+		var dist_to_n := _host.global_position.distance_to((n as Node3D).global_position)
+		dmg = maxi(1, int(round(float(dmg) * PlayerCombat.range_falloff(dist_to_n, aoe_r))))
 		n.take_damage(dmg, _host.global_position, skill.knockback)
 
 

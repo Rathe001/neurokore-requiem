@@ -40,6 +40,19 @@ const OVERCLOCK_DAMAGE_MULT: float = 1.25
 const OVERCLOCK_RANGE_MULT: float = 0.75
 const OVERCLOCK_VISUAL_SCALE: float = 1.25
 
+# Damage falloff beyond effective range. Attacks extend to
+# FALLOFF_RANGE_MULT × effective range but deal progressively less
+# damage past the effective range, bottoming out at 25% damage.
+const FALLOFF_RANGE_MULT: float = 2.0
+const FALLOFF_MAX_REDUCTION: float = 0.75
+
+# Quadratic falloff: 100% within eff_range, drops to 25% at 2× eff_range.
+static func range_falloff(distance: float, eff_range: float) -> float:
+	if distance <= eff_range or eff_range <= 0.0:
+		return 1.0
+	var t := clampf((distance - eff_range) / eff_range, 0.0, 1.0)
+	return 1.0 - FALLOFF_MAX_REDUCTION * t * t
+
 
 var _host: PrototypePlayer
 var _cooldowns: Dictionary = {}
@@ -450,7 +463,7 @@ func _resolve_cone(skill: Skill, aim: Vector3, eff_range: float, weapon: Item) -
 	# combo-driven, not authored-per-skill.
 	var apply_combo_status := is_melee and combo_step == 2
 	var any_hit := false
-	for enode: Node3D in SpatialGrid.query_cone(_host.global_position, aim, eff_range, half_cos, &"enemies"):
+	for enode: Node3D in SpatialGrid.query_cone(_host.global_position, aim, eff_range * FALLOFF_RANGE_MULT, half_cos, &"enemies"):
 		if not enode.has_method(&"take_damage"):
 			continue
 		if is_player_friendly(enode):
@@ -459,6 +472,8 @@ func _resolve_cone(skill: Skill, aim: Vector3, eff_range: float, weapon: Item) -
 		var raw_dmg := _roll_skill_damage(skill, weapon)
 		if dmg_mult != 1.0:
 			raw_dmg = int(round(float(raw_dmg) * dmg_mult))
+		var dist_to_target := _host.global_position.distance_to(enode.global_position)
+		raw_dmg = maxi(1, int(round(float(raw_dmg) * range_falloff(dist_to_target, eff_range))))
 		# Knife "Backstab" — 1H melee hits from behind the enemy deal
 		# +50%. Compares the player→enemy direction to the enemy's
 		# facing: a high positive dot means the enemy is facing AWAY
@@ -542,13 +557,15 @@ func _resolve_aoe(skill: Skill, eff_range: float, weapon: Item) -> void:
 	if weapon != null:
 		aoe_range += float(weapon.get_modifier(&"impact_radius"))
 	var kb := _knockback_for(skill, weapon)
-	for enode: Node3D in SpatialGrid.query_radius(_host.global_position, aoe_range, &"enemies"):
+	for enode: Node3D in SpatialGrid.query_radius(_host.global_position, aoe_range * FALLOFF_RANGE_MULT, &"enemies"):
 		if not enode.has_method(&"take_damage"):
 			continue
 		if is_player_friendly(enode):
 			continue
 		var is_crit := _roll_crit(weapon)
 		var dmg := _crit_damage(_roll_skill_damage(skill, weapon), is_crit)
+		var dist_to_target := _host.global_position.distance_to(enode.global_position)
+		dmg = maxi(1, int(round(float(dmg) * range_falloff(dist_to_target, aoe_range))))
 		_deal_damage(enode, dmg, _host.global_position, kb, 1, is_crit)
 		_apply_exile_curse_if_active(enode)
 		_apply_mindlink(enode, dmg, is_crit)
@@ -765,10 +782,11 @@ func _resolve_hitscan(skill: Skill, aim: Vector3, eff_range: float, weapon: Item
 				break
 	aim_norm = _apply_aim_spread(aim_norm, weapon, acc_mult)
 	_last_resolved_aim = aim_norm
-	var wall_dist := eff_range
+	var extended_range := eff_range * FALLOFF_RANGE_MULT
+	var wall_dist := extended_range
 	var hit_target: Node3D = null
 	var space := _host.get_world_3d().direct_space_state
-	var ray_end := origin + aim_norm * eff_range
+	var ray_end := origin + aim_norm * extended_range
 	var query := PhysicsRayQueryParameters3D.create(origin, ray_end, 1)
 	var result := space.intersect_ray(query)
 	if not result.is_empty():
@@ -793,6 +811,7 @@ func _resolve_hitscan(skill: Skill, aim: Vector3, eff_range: float, weapon: Item
 		CombatVisuals.spawn_impact_burst(_host, hit_target.global_position + Vector3(0.0, 0.9, 0.0), hitscan_tint)
 		var is_crit := _roll_crit(weapon)
 		var dmg := _crit_damage(_roll_skill_damage(skill, weapon), is_crit)
+		dmg = maxi(1, int(round(float(dmg) * range_falloff(beam_end, eff_range))))
 		_deal_damage(hit_target, dmg, _host.global_position, _knockback_for(skill, weapon), 1, is_crit)
 		_apply_exile_curse_if_active(hit_target)
 		_apply_mindlink(hit_target, dmg, is_crit)
@@ -1160,10 +1179,11 @@ func _apply_overcharge_status(target: Node, skill: Skill, weapon: Item) -> void:
 
 func _resolve_hitscan_exact(skill: Skill, aim_norm: Vector3, eff_range: float, weapon: Item, source_offset: Vector3) -> void:
 	var origin := _host.global_position + Vector3(0.0, 1.0, 0.0) + source_offset
-	var wall_dist := eff_range
+	var extended_range := eff_range * FALLOFF_RANGE_MULT
+	var wall_dist := extended_range
 	var hit_target: Node3D = null
 	var space := _host.get_world_3d().direct_space_state
-	var ray_end := origin + aim_norm * eff_range
+	var ray_end := origin + aim_norm * extended_range
 	var query := PhysicsRayQueryParameters3D.create(origin, ray_end, 1)
 	var result := space.intersect_ray(query)
 	if not result.is_empty():
@@ -1188,6 +1208,7 @@ func _resolve_hitscan_exact(skill: Skill, aim_norm: Vector3, eff_range: float, w
 		CombatVisuals.spawn_impact_burst(_host, hit_target.global_position + Vector3(0.0, 0.9, 0.0), hitscan_exact_tint)
 		var is_crit := _roll_crit(weapon)
 		var dmg := _crit_damage(_roll_skill_damage(skill, weapon), is_crit)
+		dmg = maxi(1, int(round(float(dmg) * range_falloff(beam_end, eff_range))))
 		_deal_damage(hit_target, dmg, _host.global_position, _knockback_for(skill, weapon), 1, is_crit)
 		_apply_exile_curse_if_active(hit_target)
 		_apply_mindlink(hit_target, dmg, is_crit)
