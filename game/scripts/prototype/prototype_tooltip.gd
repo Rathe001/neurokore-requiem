@@ -24,7 +24,7 @@ var _name_row: HBoxContainer
 var _name_label: Label
 var _dps_label: Label
 var _type_label: Label
-var _desc_label: Label
+var _desc_label: RichTextLabel
 var _stats_label: RichTextLabel
 var _bg_style: StyleBoxFlat
 
@@ -136,19 +136,13 @@ func _build_ui() -> void:
 	_type_label.mouse_filter = MOUSE_FILTER_IGNORE
 	_vbox.add_child(_type_label)
 
-	_desc_label = Label.new()
-	_desc_label.theme_type_variation = &"SmallLabel"
-	_desc_label.add_theme_font_size_override(&"font_size", 7)
-	# Tighten line spacing — default (3) leaves too much vertical air in
-	# multi-line tooltips, especially the buff-bar tooltips with bullet lists.
-	# Down to 0 reads compact without the bullets touching descenders.
-	_desc_label.add_theme_constant_override(&"line_spacing", 0)
+	_desc_label = RichTextLabel.new()
+	_desc_label.bbcode_enabled = true
+	_desc_label.fit_content = true
+	_desc_label.scroll_active = false
+	_desc_label.add_theme_font_size_override(&"normal_font_size", 7)
 	_desc_label.mouse_filter = MOUSE_FILTER_IGNORE
 	_desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	# Pin the wrap width up-front. Without this, autowrap labels report
-	# minimum_size as the unwrapped natural width on first layout, which the
-	# PanelContainer then allocates — and the second pass that would measure
-	# wrapped height never fires before the tooltip is shown.
 	_desc_label.custom_minimum_size = Vector2(CONTENT_MIN_WIDTH, 0.0)
 	_vbox.add_child(_desc_label)
 
