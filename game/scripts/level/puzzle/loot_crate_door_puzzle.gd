@@ -22,13 +22,6 @@ func apply(_ctx: LevelBuildContext, slots: Dictionary, doors: Dictionary) -> voi
 	# walks through unimpeded.
 	if PlayerState.new_game_plus > 0:
 		return
-	if door_connection_id == &"":
-		push_error("[LootCrateDoorPuzzle] door_connection_id not set.")
-		return
-	var door := doors.get(door_connection_id) as PrototypeDoor
-	if door == null:
-		push_error("[LootCrateDoorPuzzle] No door found for connection '%s'." % door_connection_id)
-		return
 	if crate_slot_id == &"":
 		push_error("[LootCrateDoorPuzzle] crate_slot_id not set.")
 		return
@@ -36,7 +29,16 @@ func apply(_ctx: LevelBuildContext, slots: Dictionary, doors: Dictionary) -> voi
 	if crate == null:
 		push_error("[LootCrateDoorPuzzle] Slot '%s' is not a PrototypeLootCrate (or missing)." % crate_slot_id)
 		return
-	door.setup_lock(1, true, false)
-	crate.target_door = crate.get_path_to(door)
 	if force_starter_kit:
 		crate.starter_weapon_kit = true
+	# Door gating is optional — when door_connection_id is empty the crate
+	# just drops loot without unlocking anything (dungeon spawn rooms have
+	# multiple exits so there's no single door to gate).
+	if door_connection_id == &"":
+		return
+	var door := doors.get(door_connection_id) as PrototypeDoor
+	if door == null:
+		push_error("[LootCrateDoorPuzzle] No door found for connection '%s'." % door_connection_id)
+		return
+	door.setup_lock(1, true, false)
+	crate.target_door = crate.get_path_to(door)

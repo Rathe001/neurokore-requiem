@@ -26,6 +26,7 @@ const _PLAYER_SPAWN_SCENE: PackedScene = preload("res://scenes/prototype/prototy
 const _BOSS_SPAWN_SCENE: PackedScene = preload("res://scenes/prototype/prototype_boss_spawn.tscn")
 const _EXIT_SCENE: PackedScene = preload("res://scenes/prototype/prototype_exit.tscn")
 const _SWITCH_SCENE: PackedScene = preload("res://scenes/prototype/prototype_switch.tscn")
+const _LOOT_CRATE_SCENE: PackedScene = preload("res://scenes/prototype/prototype_loot_crate.tscn")
 
 const _DIRS: Array[Vector2i] = [Vector2i(0, -1), Vector2i(0, 1), Vector2i(1, 0), Vector2i(-1, 0)]
 
@@ -155,6 +156,15 @@ func generate() -> LevelGraph:
 			spawn.id = &"player_spawn"
 			spawn.scene = _PLAYER_SPAWN_SCENE
 			node.additional_slots.append(spawn)
+			# Starter chest — gives the player a weapon before they leave.
+			# No door-gating (maze has multiple exits); NG+ skip is handled
+			# by the crate itself (starter_weapon_kit only rolls on first run).
+			if PlayerState.new_game_plus == 0:
+				var chest := InteractableSlot.new()
+				chest.id = &"starter_chest"
+				chest.scene = _LOOT_CRATE_SCENE
+				chest.offset = Vector3(-1.5, 0.3, 1.5)
+				node.additional_slots.append(chest)
 
 		# Boss cell.
 		if cell == boss_cell:
@@ -205,6 +215,13 @@ func generate() -> LevelGraph:
 	# ── Step 5: Optional switch puzzle on boss connections ─────────────────
 	if emit_switch_puzzle and boss_cell != Vector2i(-1, -1):
 		_emit_switch_puzzle(graph, occupied, cell_to_node, start_cell, boss_cell, exit_cell, rng)
+
+	# ── Step 6: Starter chest in spawn room ────────────────────────────────
+	if PlayerState.new_game_plus == 0:
+		var chest_puzzle := LootCrateDoorPuzzle.new()
+		chest_puzzle.crate_slot_id = StringName("%s.starter_chest" % graph.anchor_id)
+		chest_puzzle.force_starter_kit = true
+		graph.puzzles.append(chest_puzzle)
 
 	return graph
 
