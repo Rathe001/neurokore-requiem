@@ -878,9 +878,12 @@ func _build_heal_preview() -> void:
 	_heal_preview.color = HEAL_PREVIEW_COLOR
 	_heal_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_heal_preview.visible = false
-	# Insert just behind hp_fill so the preview shows under the solid fill.
-	hp_fill.get_parent().add_child(_heal_preview)
-	hp_fill.get_parent().move_child(_heal_preview, hp_fill.get_index())
+	_heal_preview.anchor_bottom = 1.0
+	# Insert right after hp_fill so preview draws on top of the fill
+	# (the green zone extends past the current fill into the empty area).
+	var container := hp_fill.get_parent()
+	container.add_child(_heal_preview)
+	container.move_child(_heal_preview, hp_fill.get_index() + 1)
 
 
 func _update_heal_preview() -> void:
@@ -900,7 +903,8 @@ func _update_heal_preview() -> void:
 	if projected_ratio <= current_ratio:
 		_heal_preview.visible = false
 		return
-	_heal_preview.offset_left = hp_fill.offset_left
+	# Start the preview at current HP fill edge, extend to projected HP.
+	_heal_preview.offset_left = hp_fill.offset_left + HP_BAR_WIDTH * current_ratio
 	_heal_preview.offset_top = hp_fill.offset_top
 	_heal_preview.offset_right = hp_fill.offset_left + HP_BAR_WIDTH * projected_ratio
 	_heal_preview.offset_bottom = hp_fill.offset_bottom
