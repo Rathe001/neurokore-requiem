@@ -17,6 +17,12 @@ var _use_cooldown: float = 0.0
 var _hot_remain: float = 0.0
 var _hot_per_tick: float = 0.0
 var _hot_tick_timer: float = 0.0
+# Accumulates the fractional HP that round() drops each tick. With a
+# small heal_total (e.g. 10% of 60 HP = 6) spread across 12 ticks the
+# per-tick amount is 0.5, which alternates 0/1 under naive rounding and
+# under-delivers. Carrying the remainder forward guarantees we heal the
+# full amount promised by the tooltip.
+var _hot_carry: float = 0.0
 
 
 func setup(host: PrototypePlayer) -> void:
@@ -82,13 +88,22 @@ func tick(delta: float) -> void:
 		_hot_tick_timer -= delta
 		if _hot_tick_timer <= 0.0:
 			_hot_tick_timer += HOT_INTERVAL
-			var heal_amt := int(round(_hot_per_tick))
+			# Carry the fractional remainder forward so 0.5/tick still
+			# heals the full 0.5 each tick instead of round()-ing to zero.
+			_hot_carry += _hot_per_tick
+			var heal_amt := int(floor(_hot_carry))
 			if heal_amt > 0:
 				_host.heal(heal_amt)
+				_hot_carry -= float(heal_amt)
 		_hot_remain -= delta
 		if _hot_remain <= 0.0:
+			# Flush any sub-1 HP carry on the final tick so the total
+			# heal lands at full pct value, not pct - <1.
+			if _hot_carry >= 0.5:
+				_host.heal(1)
 			_hot_remain = 0.0
 			_hot_per_tick = 0.0
+			_hot_carry = 0.0
 
 
 # ── Activation ────────────────────────────────────────────────────────────────
@@ -110,6 +125,7 @@ func activate(_skill: Skill) -> void:
 	_hot_per_tick = heal_total / ticks
 	_hot_remain = heal_duration
 	_hot_tick_timer = HOT_INTERVAL
+	_hot_carry = 0.0
 	# Consume charge + start timers.
 	_charges -= 1
 	_use_cooldown = USE_COOLDOWN
@@ -125,3 +141,4 @@ func cleanup() -> void:
 	_use_cooldown = 0.0
 	_hot_remain = 0.0
 	_hot_per_tick = 0.0
+	_hot_carry = 0.0
