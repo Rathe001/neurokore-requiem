@@ -669,6 +669,16 @@ func _resolve_fire_skill(item: Item) -> Skill:
 # shift-held side-by-side panel covers the rest of the comparison.
 func _build_stats_text(item: Item, equipped: Item = null) -> String:
 	var lines: Array[String] = []
+	# Origin gate — Stimpack / Battery only equip on the matching player
+	# origin. Red when blocked, dim when satisfied (so a Cyborg picking up
+	# a Battery still sees that the gate exists rather than wondering why
+	# the item has no requirement line at all).
+	if item.origin_restriction != &"":
+		var origin_label: String = (item.origin_restriction as String).capitalize()
+		if item.origin_matches_player():
+			lines.append("[color=#888888]Origin: %s[/color]" % origin_label)
+		else:
+			lines.append("[color=#cc5555]Requires %s origin[/color]" % origin_label)
 	# ilvl header — shown for every item so the player can tell at a glance
 	# how outdated/overleveled a drop is. Decimal formatting on the multiplier
 	# so 1.0 reads as "100%" cleanly.

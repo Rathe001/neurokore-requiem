@@ -359,6 +359,7 @@ func _serialize_item(item: Item) -> Dictionary:
 		"glyph_color": _color_to_array(item.glyph_color),
 		"icon_path": item.icon_path,
 		"item_level": item.item_level,
+		"origin_restriction": str(item.origin_restriction),
 		"two_handed": item.two_handed,
 		"fire_skill": item.fire_skill.resource_path if item.fire_skill != null else "",
 		"alt_fire_skill": item.alt_fire_skill.resource_path if item.alt_fire_skill != null else "",
@@ -399,6 +400,7 @@ func _deserialize_item(data: Dictionary) -> Item:
 	item.glyph_color = _array_to_color(data.get("glyph_color", [1, 1, 1, 1]))
 	item.icon_path = str(data.get("icon_path", ""))
 	item.item_level = int(data.get("item_level", 1))
+	item.origin_restriction = StringName(data.get("origin_restriction", ""))
 	item.two_handed = bool(data.get("two_handed", false))
 
 	var fire_path: String = data.get("fire_skill", "")
@@ -432,6 +434,11 @@ func _deserialize_item(data: Dictionary) -> Item:
 	# instead of waiting for every armor piece to be replaced.
 	if item.icon_path == "":
 		item.icon_path = ItemRoller.resolve_icon_path(item)
+	# v0.2.1 → current: consumables rolled before origin_restriction
+	# existed had the field absent. Derive it from sub_type so existing
+	# Batteries / Stimpacks gate correctly after upgrade.
+	if item.main_type == "Consumable" and item.origin_restriction == &"":
+		item.origin_restriction = &"cyborg" if item.sub_type == "Battery" else &"analog"
 	return item
 
 
@@ -446,15 +453,26 @@ func _serialize_stat_modifiers(mods: Dictionary) -> Dictionary:
 
 func _deserialize_stat_modifiers(data: Dictionary) -> Dictionary:
 	var out := {}
+	var saw_heal_total := false
 	for key: String in data.keys():
 		var sn := StringName(key)
 		# v1 → v2: heal_total (flat HP) renamed to heal_pct (% of max HP).
-		# Old values were 20-60 flat; clamp to new 10-30 range.
+		# Old flat values had no relationship to max_health, so any
+		# translation is approximate. Floor migrated potions at the new
+		# minimum roll (10%) rather than clamping the raw flat number to
+		# the new range — letting a saved value of 50 through as "50% of
+		# max HP" silently turns a mid-tier playtest potion into a
+		# best-in-slot one.
 		if sn == &"heal_total":
-			sn = &"heal_pct"
-			out[sn] = mini(int(data[key]), 30)
+			out[&"heal_pct"] = 10
+			saw_heal_total = true
 			continue
 		out[sn] = data[key]
+	# v1 potions didn't carry a duration; PlayerPotion.activate bails when
+	# heal_duration <= 0, which would make migrated potions inert. Backfill
+	# at the new floor so migrated charges actually heal.
+	if saw_heal_total and not out.has(&"heal_duration"):
+		out[&"heal_duration"] = 3.0
 	return out
 
 

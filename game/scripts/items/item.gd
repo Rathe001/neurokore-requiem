@@ -23,6 +23,12 @@ enum LightMod { NONE, FLASHLIGHT, RADIANT, SCANNER, UV }
 ## items below the player's level decay smoothly, items above the player's
 ## level scale upward. 0 marks starter gear (intentionally below every drop).
 @export var item_level: int = 1
+## Origin gate — when set to &"analog" or &"cyborg", only a player whose
+## resolved origin matches can equip this item. Used by origin-flavored
+## consumables (Stimpack = analog, Battery = cyborg) which still roll in
+## any game so cross-origin trading works; the gate is enforced at equip
+## time, not at roll time. Empty StringName = no restriction.
+@export var origin_restriction: StringName = &""
 
 @export_group("Combat")
 @export var two_handed: bool = false
@@ -87,6 +93,23 @@ static func damage_type_color(element: StringName) -> Color:
 const BULLET_BASE_IDS: Array[StringName] = [
 	&"lmg_2h", &"smg_1h", &"sniper_2h", &"rpg_2h", &"shotgun_2h",
 ]
+
+
+## The player's resolved origin — spec_id's origin once a spec is picked,
+## class_id (&"analog" / &"cyborg") before then.
+static func player_origin() -> StringName:
+	if PlayerState.spec_id != &"":
+		return AttributeState.get_spec_origin(PlayerState.spec_id)
+	return PlayerState.class_id
+
+
+## True when this item has no origin gate, or the player's origin matches it.
+## Equipment paths consult this before allowing equip; tooltips render a
+## requirement line when this is false.
+func origin_matches_player() -> bool:
+	if origin_restriction == &"":
+		return true
+	return origin_restriction == Item.player_origin()
 
 
 ## True for bullet weapons (LMG/SMG/sniper/RPG). UI and combat code use
@@ -287,6 +310,7 @@ func to_dict() -> Dictionary:
 	d[&"glyph_color"] = [glyph_color.r, glyph_color.g, glyph_color.b, glyph_color.a]
 	d[&"icon_path"] = icon_path
 	d[&"item_level"] = item_level
+	d[&"origin_restriction"] = String(origin_restriction)
 	d[&"two_handed"] = two_handed
 	d[&"weapon_base_id"] = String(weapon_base_id)
 	d[&"damage_min"] = damage_min
@@ -329,6 +353,7 @@ static func from_dict(d: Dictionary) -> Item:
 	item.glyph_color = Color(gc[0], gc[1], gc[2], gc[3])
 	item.icon_path = String(d.get(&"icon_path", ""))
 	item.item_level = int(d.get(&"item_level", 1))
+	item.origin_restriction = StringName(d.get(&"origin_restriction", ""))
 	item.two_handed = d.get(&"two_handed", false)
 	item.weapon_base_id = StringName(d.get(&"weapon_base_id", ""))
 	item.damage_min = int(d.get(&"damage_min", 0))

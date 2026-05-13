@@ -159,6 +159,11 @@ func can_accept_item(item: Item) -> bool:
 		return false
 	if role == Role.EQUIPMENT and slot_id == &"offhand" and InventoryState.is_two_handed_equipped():
 		return false
+	# Origin gate — Stimpack / Battery only accept the matching player
+	# origin. Inventory slots ignore this (you can still carry/sell the
+	# wrong-origin potion); only equipment slots enforce it.
+	if role == Role.EQUIPMENT and not item.origin_matches_player():
+		return false
 	# Forged Amalgamation extra weapon slots: 1H only, and only when the
 	# perk has unlocked the slot. Mirroring the rules in
 	# InventoryState.set_equipped — rejecting here too means a failed

@@ -736,15 +736,22 @@ const CONSUMABLE_NAMES_CYBORG: Array[String] = [
 func _apply_consumable_base(item: Item, main_type: String, rarity: StringName, rng: RandomNumberGenerator) -> void:
 	if main_type != "Consumable":
 		return
-	var origin := AttributeState.get_spec_origin(PlayerState.spec_id)
-	if origin == &"cyborg":
+	# Both consumable types roll independently in any game — the player's
+	# origin is irrelevant at roll time. The mismatch is handled at equip
+	# time via item.origin_restriction (tooltip shows the requirement; the
+	# equip path refuses), so a Cyborg can pick up and trade a Stimpack
+	# without being forced to keep it.
+	var is_cyborg: bool = rng.randf() < 0.5
+	if is_cyborg:
 		item.sub_type = "Battery"
 		item.icon_path = CONSUMABLE_ICON_CYBORG
+		item.origin_restriction = &"cyborg"
 		var names := CONSUMABLE_NAMES_CYBORG
 		item.model_name = names[rng.randi_range(0, names.size() - 1)]
 	else:
 		item.sub_type = "Stimpack"
 		item.icon_path = CONSUMABLE_ICON_ANALOG
+		item.origin_restriction = &"analog"
 		var names := CONSUMABLE_NAMES_ANALOG
 		item.model_name = names[rng.randi_range(0, names.size() - 1)]
 	var curve: float = float(RARITY_ROLL_CURVE.get(rarity, 2.0))

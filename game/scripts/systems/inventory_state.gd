@@ -70,6 +70,10 @@ func set_equipped(slot: StringName, item: Item) -> void:
 	# callers so the rule holds everywhere.
 	if slot == &"offhand" and item != null and is_two_handed_equipped():
 		return
+	# Origin-gated items (Stimpack / Battery) refuse to equip when the
+	# player's origin doesn't match. Mirrors ItemSlot.can_accept_item.
+	if item != null and not item.origin_matches_player():
+		return
 
 	if item == null:
 		equipment.erase(slot)
