@@ -175,10 +175,10 @@ const LEVEL_HP_RANGE: Array[Vector2i] = [
 ]
 const LEVEL_DAMAGE_RANGE: Array[Vector2i] = [
 	Vector2i(0, 0),     # 0 — unused
-	Vector2i(3, 5),     # 1
-	Vector2i(4, 7),     # 2
-	Vector2i(5, 9),     # 3
-	Vector2i(6, 10),    # 4
+	Vector2i(2, 3),     # 1 — first encounter, no DR yet, potions not guaranteed
+	Vector2i(3, 5),     # 2
+	Vector2i(3, 6),     # 3
+	Vector2i(4, 7),     # 4
 	Vector2i(4, 6),     # 5
 	Vector2i(5, 8),     # 6
 	Vector2i(5, 9),     # 7
