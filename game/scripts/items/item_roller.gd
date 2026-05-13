@@ -632,6 +632,11 @@ func _apply_icon_path(item: Item) -> void:
 func resolve_icon_path(item: Item) -> String:
 	if item == null:
 		return ""
+	# Consumables use origin-gated icons.
+	if item.main_type == "Consumable":
+		match item.sub_type:
+			"Battery": return CONSUMABLE_ICON_CYBORG
+			_: return CONSUMABLE_ICON_ANALOG
 	# Armor pieces have one icon per slot, not per model name.
 	var armor_path: String = ARMOR_ICON_BY_TYPE.get(item.main_type, "")
 	if armor_path != "":
@@ -695,6 +700,9 @@ func _apply_grenade_base(item: Item, main_type: String, rarity: StringName, rng:
 
 # Origin-gated model names for consumables. Analog gets medical/chem
 # terminology; Cyborg gets battery/power-cell terminology.
+const CONSUMABLE_ICON_ANALOG: String = "res://assets/ui/items/consumable/stimpack.png"
+const CONSUMABLE_ICON_CYBORG: String = "res://assets/ui/items/consumable/battery.png"
+
 const CONSUMABLE_NAMES_ANALOG: Array[String] = [
 	"MedPak-7", "StimShot", "NerveJuice", "BioSurge", "HemoFix", "AdrenaPatch",
 ]
@@ -708,10 +716,12 @@ func _apply_consumable_base(item: Item, main_type: String, rarity: StringName, r
 	var origin := AttributeState.get_spec_origin(PlayerState.spec_id)
 	if origin == &"cyborg":
 		item.sub_type = "Battery"
+		item.icon_path = CONSUMABLE_ICON_CYBORG
 		var names := CONSUMABLE_NAMES_CYBORG
 		item.model_name = names[rng.randi_range(0, names.size() - 1)]
 	else:
 		item.sub_type = "Stimpack"
+		item.icon_path = CONSUMABLE_ICON_ANALOG
 		var names := CONSUMABLE_NAMES_ANALOG
 		item.model_name = names[rng.randi_range(0, names.size() - 1)]
 	var curve: float = float(RARITY_ROLL_CURVE.get(rarity, 2.0))
