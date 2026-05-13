@@ -13,6 +13,55 @@ are mandatory.
 
 ## [Unreleased]
 
+### Added
+
+- **Procgen dungeon layouts** — sparse D2-style maze topology with dead ends, winding corridors, and loops, generated from a Growing Tree carve over a 7×7 grid. Spawn always lands in a safe leaf (zero enemies, zero adjacent-corridor enemies); boss + exit live at the far end behind a 3-switch puzzle. Difficulty scales with BFS distance from spawn, so deeper rooms hit harder.
+- **Enemy density scales with zone level** — fresh L1 characters fight roughly half the per-room mob count of a deep-zone playthrough, ramping linearly to full density around player level 10. Pack chance scales together so the crowdedness curve moves coherently rather than fewer enemies but the same pack rate.
+- **Cover system** — destructibles and indestructible cover props sit on a new PILLAR collision layer. Crouching behind a barrel lowers your combat-LOS test below cover height, letting it block enemy fire and line-of-sight while you still see them. Destructibles also extend their collision to chest height so they're both bullet-catchable and standing-cover.
+- **Destructible and indestructible clutter** — rooms now scatter barrels, crates, monitors, chairs, and terminals (loot + credit drops on break) alongside non-destructible barriers, server racks, pipes, and floor grates. All built from procedural meshes + procedural textures, no external art needed.
+- **Damage falloff beyond effective range** — player and enemy cone/AoE/hitscan attacks deal full damage at their effective range and decay quadratically to 25% at 2× range. Sniper from across the map still grazes; standing in melee against a pistol still hurts.
+- **Health potion system** — new Consumable slot (Q key) holds either Stimpack (Analog) or Battery (Cyborg). Both types roll independently in any game; the equip-time origin gate refuses wrong-origin potions and the tooltip explains why so cross-origin trading still works. Three charges, 30s recharge per charge, heals a % of max HP over time. HP bar shows a green preview overlay projecting where the heal will land.
+- **Armor damage reduction** — Head/Chest/Gloves/Legs each roll a base DR stat that aggregates across all four slots, capped per-piece. Boots and Backpack stay out of the DR system (traction and inventory respectively).
+- **Per-weapon signature stats** — each archetype rolls one or two iconic stats that define its mechanical identity beyond the universal damage envelope: RPG blast radius, Shotgun pellet count + spread angle, Sniper headshot bonus, Taser chain retention + chain target count, Accelerator ramp speed, Knife bleed damage, Hammer impact radius, LMG sustained fire bonus, SMG ricochet chance, Plasma overcharge chance.
+- **Unarmed strikes + glove affixes** — bare-fist combat fallback when no weapon is equipped, with glove affixes Spiked (+ flat unarmed damage), Concussive (stun chance per swing), and Shockwave (AoE radius around the player) to make unarmed builds viable.
+- **Power-curve stat rolling** — rolls bias toward the low end of each range, with the bias weakening as rarity climbs. Common items cluster near their floor; uniques get a much flatter distribution where high rolls are attainable but still not guaranteed.
+- **Boots always roll move speed + traction** — both stats are guaranteed on every boots drop, scaled by ilvl and rarity. Traction breakpoints at 25/50/75/100 unlock CC immunities and DoT damage reduction in lockstep.
+- **Tactical range overlay** — SCANNER head mod projects two ground rings showing your weapon's effective range (inner) and falloff boundary (outer), with distance labels at the cardinals. Refreshes on equipment change.
+- **World-space resonance bar** — Energy Accelerator's channel ramp now reads as a cast bar under your character (billboarded, depth-test-disabled) instead of a HUD widget, matching the spatial feel of the channel itself.
+- **Aimed Shot** — replaces Sniper Focus with the same hold-to-buff behaviour plus a thin red laser sight that paints from rifle to cursor while RMB is held.
+- **Ammo capacity as a rollable stat** — bullet weapons (LMG/SMG/sniper/RPG/shotgun) roll magazine size in a per-base range, scaled by rarity, so a rare drop can carry visibly more rounds than a common one of the same archetype.
+- **Item level effectiveness curve** — combat power stats scale by an asymptotic multiplier driven by `item_level` vs `player_level`. Drops below player level decay to a 30% floor; drops above scale up to 150%. Storage (inventory_bonus) and feel stats (light radius) keep their raw value so a low-ilvl backpack doesn't shrink under a high-level character.
+- **Starter chest in the spawn room** — always rolls either a 2H weapon, or a 1H + offhand, so first-floor combat starts armed.
+
+### Changed
+
+- **Weapon DPS normalized to a 3-tier model**: single-target weapons (Sniper, Laser Pistol, LMG) hit ~26 DPS, limited-multi (Assault Rifle penetration, SMG ricochet) ~23, multi-target (Melee, RPG, Shotgun, Taser, Accelerator) ~20. Damage scales meaningfully with rarity via a budget multiplier so high-rarity drops are noticeably stronger, with overlap at the edges.
+- **Enemy attack cadence slowed across rapid-fire archetypes** — SMG 1.2→2.0s, LMG 2.0→2.8s, Laser 0.8→1.4s, Taser 0.8→1.4s, Accelerator 1.0→1.6s, Shotgun 2.2→2.8s, Plasma 2.0→2.5s, Sniper 3.5→4.5s, RPG 4.0→4.5s; windups raised to a 0.3s floor so attacks are readable enough to dodge. Closing distance against a pack is now possible without precision play.
+- **Enemy heavy-hitter damage cut** — Sniper damage_mult 2.0→1.5, RPG 1.5→1.2, Shotgun 1.3→1.1, Plasma 1.1→0.95, Sledgehammer 1.6→1.3. Sniper projectile slowed 35→28 m/s — was effectively undodgeable.
+- **L1-3 base enemy damage further reduced** — the first encounter, where the player has no DR and no potion drop yet, is the gentlest curve point. L1 enemies hit for 2-3 instead of 3-5; L2-3 ramp up gently from there.
+- **Class identity preserved for variant enemies** — classes that share a basic_attack skill (Laser Trooper vs Laser Gunner, Blade Runner vs melee Healer) now actually cadence per their per-class fields. Previously the shared skill's cooldown/windup won, so sister classes played identically.
+- **Default level is now the procgen dungeon layout** — level_shell.tscn ships pointing at dungeon_demo.tres, so opening F6 / running from main menu drops you straight into a generated maze.
+- **Consumable rolling decoupled from origin** — both Stimpack and Battery roll in any game. Origin gating is enforced at equip time via `Item.origin_restriction`; the tooltip shows red "Requires X origin" when blocked and dim "Origin: X" when satisfied.
+- **Destructible props are bullet-catchable** — visual mesh stays small (barrels, crates), but the underlying collision now extends up to standing fire height so aimed shots actually break them. Cover-providing props block enemy fire at standing height as well as crouching.
+- **Player damage grunts gated** — only fire on hits clearing 5% of max HP, with a 1.5s cooldown. SMG/taser/bleed chip ticks stay silent; sniper rounds, RPG splash, and melee bruisers still announce themselves.
+- **RPG primary windup removed** — the 0.25s delay existed to sync with a slow-attack sample. New samples hit instantly, so the rocket spawns on the click. Tactical Strike still telegraphs its 0.6s windup since that's the "step out of the painted X" tell, not a sound sync.
+- **Combat Effects panel** — equipped-weapon signature stats are merged inline into each quirk tip with highlighted numeric values, instead of duplicated as a separate stat block.
+
+### Fixed
+
+- **MP destructibles** — damage numbers, hit flashes, and break visuals are now broadcast to all peers (mirrors `PrototypeEnemy`'s authority pattern). Previously the host saw the prop break and clients saw it persist until something else resynced.
+- **Projectile sweep raycast routes PILLAR damage hits correctly** — extending destructibles to chest height meant the per-frame sweep ray (WORLD|PILLAR mask, used to prevent thin-wall tunneling) treated them as walls. Now PILLAR-layer hits that match the target group forward to the damage path so the prop actually takes damage.
+- **LOS culler crashes** when corpses, static glows, or clutter entries became freed mid-loop. Each path now guards with is_instance_valid before reading global_position. Adds a periodic stale-entry sweep for entries that became invalid while settled.
+- **det == 0 physics errors** in two places: knockback knockdown could shrink an enemy to zero scale (now scales to near-zero), and destructible props were tearing down collision shapes during the break tween (now disable shapes before queue_free).
+- **SaveManager schema persistence** — `origin_restriction` is now serialized/deserialized, and v0.2.1-era consumables in saved inventories back-fill their origin from sub_type on load.
+- **Heal_total → heal_pct migration** — old flat-HP saved potions now floor at 10% + 3s instead of silently buffing by clamping the raw flat value into the percentage namespace.
+- **HoT fractional carry** — low-roll potions accumulate fractional HP across ticks instead of round()-ing to 0 every tick, so the full healed amount actually lands.
+- **Offhand item lost** when equipping a 2H weapon — the offhand now correctly reflows to inventory or the world drop path.
+- **Raw BBCode tags** showing in enemy tooltips.
+- **Ricochet preload path** corrected (SMG ricochets now actually spawn).
+- **Tooltip ghost persistence** when interactables get freed by NG+ transitions.
+- **Missions panel drift** in some viewport sizes.
+
 ## [0.2.1] - 2026-05-12
 
 ### Added
