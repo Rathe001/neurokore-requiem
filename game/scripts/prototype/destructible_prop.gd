@@ -80,11 +80,15 @@ func _break() -> void:
 	_alive = false
 	SpatialGrid.unregister(self)
 	remove_from_group(&"enemies")
-	# Remove collision shapes entirely so the scale-to-zero tween
-	# doesn't produce degenerate transforms (det == 0 physics errors).
+	# Remove collision shapes so the scale-to-zero tween doesn't produce
+	# degenerate transforms (det == 0 physics errors). Disable immediately
+	# (queue_free doesn't take effect until end of frame, so the tween can
+	# shrink the shape before it's actually gone).
 	collision_layer = 0
+	collision_mask = 0
 	for child in get_children():
 		if child is CollisionShape3D:
+			child.disabled = true
 			child.queue_free()
 
 	_spawn_break_particles()
