@@ -44,19 +44,25 @@ func reset(skills: Array[EnemySkill]) -> void:
 
 
 # ── Attack config getters ──────────────────────────────────────────────────
+#
+# Precedence: class fields win, basic_attack skill is the fallback. Several
+# variant classes (e.g. ranged_laser vs ranged_laser_pistol) intentionally
+# share a basic_attack .tres and override cadence per-class — when the skill
+# wins, those variants play identically. Each class file already declares
+# its full attack profile, so taking the class as authoritative respects
+# the design while keeping the skill as a sane default for any class that
+# omits a field.
 
 func attack_range() -> float:
 	var ec := _host.enemy_class
-	if ec != null and ec.basic_attack != null:
-		return ec.basic_attack.skill_range
-	return ec.attack_range if ec != null else PrototypeEnemy.DEFAULT_ATTACK_RANGE
+	if ec != null:
+		return ec.attack_range
+	return PrototypeEnemy.DEFAULT_ATTACK_RANGE
 
 func attack_cooldown() -> float:
 	var ec := _host.enemy_class
 	var base: float
-	if ec != null and ec.basic_attack != null:
-		base = ec.basic_attack.cooldown
-	elif ec != null:
+	if ec != null:
 		base = ec.attack_cooldown
 	else:
 		base = PrototypeEnemy.DEFAULT_ATTACK_COOLDOWN
@@ -64,21 +70,21 @@ func attack_cooldown() -> float:
 
 func attack_windup() -> float:
 	var ec := _host.enemy_class
-	if ec != null and ec.basic_attack != null:
-		return ec.basic_attack.wind_up
-	return ec.attack_windup if ec != null else PrototypeEnemy.DEFAULT_ATTACK_WINDUP
+	if ec != null:
+		return ec.attack_windup
+	return PrototypeEnemy.DEFAULT_ATTACK_WINDUP
 
 func melee_cone_deg() -> float:
 	var ec := _host.enemy_class
-	if ec != null and ec.basic_attack != null:
-		return ec.basic_attack.cone_deg
-	return ec.melee_cone_deg if ec != null else PrototypeEnemy.DEFAULT_ATTACK_CONE_DEG
+	if ec != null:
+		return ec.melee_cone_deg
+	return PrototypeEnemy.DEFAULT_ATTACK_CONE_DEG
 
 func melee_knockback() -> float:
 	var ec := _host.enemy_class
-	if ec != null and ec.basic_attack != null:
-		return ec.basic_attack.knockback
-	return ec.melee_knockback if ec != null else PrototypeEnemy.DEFAULT_ATTACK_KNOCKBACK
+	if ec != null:
+		return ec.melee_knockback
+	return PrototypeEnemy.DEFAULT_ATTACK_KNOCKBACK
 
 func is_ranged() -> bool:
 	return _host.enemy_class != null and _host.enemy_class.attack_mode == EnemyClass.AttackMode.RANGED
