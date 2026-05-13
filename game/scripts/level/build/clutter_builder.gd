@@ -104,11 +104,11 @@ static func _create_destructible(ctx: LevelBuildContext, pos: Vector3, def: Dict
 	body.input_ray_pickable = false
 	# Cover props sit on ENEMY + PILLAR — blocks enemy projectiles and LoS
 	# rays when the player crouches behind them. Non-cover props (chairs) are
-	# ENEMY-only and short enough for StepUp to clear.
-	var is_cover: bool = def.get("cover", false)
-	body.provides_cover = is_cover
-	body.collision_layer = (2 | 128) if is_cover else 2
-	body.collision_mask = 0
+	# ENEMY-only and short enough for StepUp to clear. DestructibleProp._ready
+	# derives collision_layer / collision_mask from provides_cover, so we only
+	# set the flag here — writing the layers again would just shadow the
+	# (identical) _ready computation and invite drift.
+	body.provides_cover = def.get("cover", false)
 
 	var y_offset: float = def.get("y_offset", 0.0)
 	var mesh_inst := MeshInstance3D.new()
