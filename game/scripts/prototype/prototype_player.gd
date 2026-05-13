@@ -295,6 +295,13 @@ var _lmg_heat_last_fire_t: float = -1000.0
 const ACCEL_RAMP_DURATION: float = 2.5
 const ACCEL_RAMP_MAX_MULT: float = 2.5
 var _accel_channel_elapsed: float = 0.0
+# World-space resonance bar — sits under the player like a cast bar.
+var _resonance_bar: MeshInstance3D = null
+var _resonance_label: Label3D = null
+const _RESONANCE_BAR_Y: float = -0.1
+const _RESONANCE_BAR_SCALE := Vector3(1.0, 0.08, 1.0)
+const _RESONANCE_COLOR_LOW := Color(0.9, 0.5, 0.15, 0.9)
+const _RESONANCE_COLOR_FULL := Color(1.0, 0.95, 0.4, 1.0)
 
 # SMG "Penetration" — every Nth SMG shot deals 2× damage. Counter
 # advances on each SMG bullet spawn; the Nth shot's damage roll is
@@ -371,6 +378,54 @@ func is_accel_ramping() -> bool:
 
 func reset_accel_resonance() -> void:
 	_accel_channel_elapsed = 0.0
+	_update_resonance_bar()
+
+
+func _build_resonance_bar() -> void:
+	var shader := load("res://scripts/prototype/health_bar.gdshader") as Shader
+	if shader == null:
+		return
+	var mat := ShaderMaterial.new()
+	mat.shader = shader
+	mat.set_shader_parameter(&"back_color", Color(0.1, 0.1, 0.1, 0.6))
+	mat.set_shader_parameter(&"fill_color", _RESONANCE_COLOR_LOW)
+	mat.set_shader_parameter(&"border_color", Color(0.02, 0.03, 0.05, 1.0))
+	mat.set_shader_parameter(&"border_thickness", 0.08)
+	var mesh := QuadMesh.new()
+	mesh.size = Vector2(1.0, 0.08)
+	mesh.material = mat
+	_resonance_bar = MeshInstance3D.new()
+	_resonance_bar.mesh = mesh
+	_resonance_bar.position = Vector3(0.0, _RESONANCE_BAR_Y, 0.0)
+	_resonance_bar.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_resonance_bar.visible = false
+	add_child(_resonance_bar)
+	_resonance_label = Label3D.new()
+	_resonance_label.text = "RESONANCE"
+	_resonance_label.font_size = 32
+	_resonance_label.pixel_size = 0.004
+	_resonance_label.outline_size = 4
+	_resonance_label.modulate = Color(1.0, 0.85, 0.5, 0.8)
+	_resonance_label.outline_modulate = Color(0, 0, 0, 1)
+	_resonance_label.position = Vector3(0.0, _RESONANCE_BAR_Y + 0.08, 0.0)
+	_resonance_label.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_resonance_label.visible = false
+	add_child(_resonance_label)
+
+
+func _update_resonance_bar() -> void:
+	if _resonance_bar == null:
+		return
+	var ramping := is_accel_ramping()
+	_resonance_bar.visible = ramping
+	if _resonance_label != null:
+		_resonance_label.visible = ramping
+	if not ramping:
+		return
+	var ratio: float = accel_ramp_ratio()
+	_resonance_bar.set_instance_shader_parameter(&"fill_ratio", ratio)
+	var color: Color = _RESONANCE_COLOR_LOW.lerp(_RESONANCE_COLOR_FULL, ratio)
+	_resonance_bar.set_instance_shader_parameter(&"fill_color", color)
 
 
 # Returns the SMG penetration multiplier for THIS shot and advances
@@ -666,6 +721,7 @@ func _ready() -> void:
 	_potion = PlayerPotion.new()
 	_potion.setup(self)
 	add_child(_potion)
+	_build_resonance_bar()
 	PerkState.perks_changed.connect(_doomsayer.reconcile)
 	# Put player meshes on an extra render layer so equipped lights can
 	# exclude it from shadow casting (no self-shadow under own flashlight,
@@ -2254,6 +2310,7 @@ func _tick_channel(delta: float) -> void:
 	# tase uses CHAIN_LIGHTNING and doesn't have its own ramp.
 	if _channel_skill.targeting_mode == Skill.TargetingMode.SINGLE_CONE:
 		tick_accel_resonance(delta)
+		_update_resonance_bar()
 	# Damage tick — when accum exceeds the configured interval, resolve
 	# a hit via the skill's targeting_mode through the standard combat
 	# pipeline (so multistrike, talents, crits all apply).
