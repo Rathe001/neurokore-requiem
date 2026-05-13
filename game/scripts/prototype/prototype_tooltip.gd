@@ -834,6 +834,7 @@ const _PCT_STATS: Dictionary = {
 	&"armor_penetration": true,
 	&"damage_bonus_pct": true,
 	&"hp_regen_bonus": true,
+	&"move_speed_bonus": true,
 }
 
 # Weapon archetype signature stats — displayed in the weapon stats block

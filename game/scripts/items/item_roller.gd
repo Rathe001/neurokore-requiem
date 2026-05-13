@@ -198,6 +198,8 @@ func roll(main_type: String, item_level: int, rarity: StringName, rng: RandomNum
 
 	# Base damage reduction on defensive armor pieces (Head/Chest/Gloves/Legs).
 	_roll_armor_defense(item, item_level, rarity, rng)
+	# Boots always roll move speed and traction.
+	_roll_boots_stats(item, item_level, rarity, rng)
 
 	# Universal secondary bonuses — every equippable item can roll +HP and +resource.
 	_roll_universal_bonuses(item, item_level, rarity, rng)
@@ -436,6 +438,25 @@ func _roll_armor_defense(item: Item, item_level: int, rarity: StringName, rng: R
 	base_dr = clampi(base_dr, 1, DR_PER_PIECE_CAP)
 	var prior: int = int(item.stat_modifiers.get(&"damage_reduction", 0))
 	item.stat_modifiers[&"damage_reduction"] = mini(prior + base_dr, DR_PER_PIECE_CAP)
+
+
+## Boots always roll move speed and traction. Traction is a 0–100 stat with
+## breakpoints at 25/50/75/100; move_speed_bonus is a percentage added to
+## base movement. Both scale with ilvl, rarity curve, and budget mult.
+func _roll_boots_stats(item: Item, item_level: int, rarity: StringName, rng: RandomNumberGenerator) -> void:
+	if item.main_type != "Boots":
+		return
+	var curve: float = float(RARITY_ROLL_CURVE.get(rarity, 2.0))
+	var budget_mult: float = float(RARITY_BUDGET_MULT.get(rarity, 1.0))
+	# Move speed: 1–8% base, scaled by rarity budget.
+	var spd := int(round(_curved_randf(1.0, 8.0, rng, curve) * budget_mult))
+	spd = clampi(spd, 1, 12)
+	item.stat_modifiers[&"move_speed_bonus"] = int(item.stat_modifiers.get(&"move_speed_bonus", 0)) + spd
+	# Traction: 5–40 base, scaled by rarity budget. Affixes push toward
+	# breakpoints (25/50/75/100); base roll gives a head start.
+	var traction := int(round(_curved_randf(5.0, 40.0, rng, curve) * budget_mult))
+	traction = clampi(traction, 5, 60)
+	item.stat_modifiers[&"traction_bonus"] = int(item.stat_modifiers.get(&"traction_bonus", 0)) + traction
 
 
 ## Roll universal +HP and +resource bonuses. Every equippable item can get these.
