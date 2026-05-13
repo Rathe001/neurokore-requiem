@@ -51,15 +51,25 @@ const _DIRS: Array[Vector2i] = [Vector2i(0, -1), Vector2i(0, 1), Vector2i(1, 0),
 @export_range(1, 16) var switch_count: int = 3
 
 @export_group("Density")
-## Per-opening-count enemy overrides. Set on each RoomNode.enemy_count_override
-## so they supersede the template's baked enemy_count.
+## Per-opening-count enemy counts at full density. Actual counts are scaled
+## down at low zone levels — see density_scale_min / density_full_at_zone_level.
 @export_range(0, 16) var dead_end_enemies: int = 4
 @export_range(0, 16) var passage_enemies: int = 4
 @export_range(0, 16) var junction_enemies: int = 6
 @export_range(0, 16) var hub_enemies: int = 8
-## Per-piece pack chance override. -1.0 = use EnemySpawner.PACK_CHANCE.
+## Per-piece pack chance at full density. -1.0 = use EnemySpawner.PACK_CHANCE.
 ## 0.18 = 3× default, giving ~40% chance per room of at least one pack.
 @export var pack_chance: float = 0.18
+## Density floor at zone_level_offset 0 (fresh L1 character, no NG+). Enemy
+## counts and pack chance scale by this fraction at the start of the curve.
+## 0.5 means a freshly-rolled character fights roughly half as many enemies
+## per room as a deep-zone playthrough — first few floors should breathe.
+@export_range(0.0, 1.0) var density_scale_min: float = 0.5
+## Zone level offset at which density reaches full (1.0). Linear ramp from
+## density_scale_min at offset 0 to 1.0 at this offset, then clamps. Default
+## 9 = player level 10 (offset = player_level - 1) — by then the player has
+## potions, gear, and DR to handle the mobs the layout was tuned around.
+@export_range(1, 30) var density_full_at_zone_level: int = 9
 
 @export_group("Theming")
 @export var boss_theme: LevelTheme
@@ -130,6 +140,10 @@ func generate() -> LevelGraph:
 
 	# ── Step 3: Pick templates + build RoomNodes ───────────────────────────
 	var zoff := PlayerState.zone_level_offset()
+	# Density is gated by zone level — fresh L1 characters fight a fraction
+	# of the full mob count so early floors are approachable, scaling up to
+	# 1.0 around player level 10. See exports for the curve parameters.
+	var density_scale := _compute_density_scale(zoff)
 	var cell_to_node: Dictionary = {}
 
 	for cell: Vector2i in occupied.keys():
@@ -143,13 +157,13 @@ func generate() -> LevelGraph:
 		node.id = GridGenerator._cell_id(cell.x, cell.y)
 		node.room = t.room
 
-		# Density override by opening count.
+		# Density override by opening count, scaled to zone level.
 		var opening_count := ops.size()
-		node.enemy_count_override = _enemies_for_openings(opening_count)
+		node.enemy_count_override = maxi(0, int(round(float(_enemies_for_openings(opening_count)) * density_scale)))
 
-		# Pack chance override.
+		# Pack chance override, scaled to zone level.
 		if pack_chance >= 0.0:
-			node.pack_chance_override = pack_chance
+			node.pack_chance_override = pack_chance * density_scale
 
 		# Difficulty scales with BFS distance from spawn.
 		var dist: int = distances.get(cell, 0)
@@ -292,6 +306,15 @@ func _enemies_for_openings(count: int) -> int:
 		3: return junction_enemies
 		4: return hub_enemies
 		_: return 2
+
+
+# Linear ramp from density_scale_min (at zone_level_offset 0) to 1.0
+# (at density_full_at_zone_level). Used to dial mob counts and pack chance
+# down on the player's first few floors — see exports for the rationale.
+func _compute_density_scale(zone_level_offset: int) -> float:
+	var target: float = maxf(1.0, float(density_full_at_zone_level))
+	var t: float = clampf(float(zone_level_offset) / target, 0.0, 1.0)
+	return density_scale_min + (1.0 - density_scale_min) * t
 
 
 func _emit_switch_puzzle(graph: LevelGraph, occupied: Dictionary,
