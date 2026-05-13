@@ -1009,6 +1009,11 @@ func _resolve_chain_lightning(skill: Skill, aim: Vector3, eff_range: float, weap
 			falloff_pct = clampf(100.0 - float(retention), 0.0, 100.0)
 	var falloff: float = clampf(falloff_pct, 0.0, 100.0) / 100.0
 	var max_jumps: int = skill.chain_jumps
+	# Weapon-rolled chain_targets overrides the skill's built-in cap.
+	if weapon != null:
+		var wt: int = weapon.get_effective_modifier(&"chain_targets")
+		if wt > 0:
+			max_jumps = wt
 	var min_damage: int = maxi(1, skill.chain_min_damage)
 	var jumps_left: int = max_jumps if max_jumps > 0 else 32  # absolute cap when "until depleted"
 	while current != null and damage >= min_damage:

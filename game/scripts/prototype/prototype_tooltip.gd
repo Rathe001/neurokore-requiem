@@ -842,6 +842,7 @@ const _WEAPON_SIG_DISPLAY: Dictionary = {
 	&"penetration":        { "label": "Penetration",     "fmt": "%d", "no_decay": true },
 	&"headshot_bonus":     { "label": "Headshot Bonus",  "fmt": "+%.1f%%", "pct": true },
 	&"chain_retention":    { "label": "Chain Retention",  "fmt": "%.1f%%", "pct": true },
+	&"chain_targets":      { "label": "Chain Targets",   "fmt": "%d", "no_decay": true },
 	&"ramp_speed":         { "label": "Ramp Speed",      "fmt": "+%.1f%%", "pct": true },
 	&"bleed_damage":       { "label": "Bleed",           "fmt": "%d/tick" },
 	&"impact_radius":      { "label": "Impact Radius",   "fmt": "%d m", "no_decay": true },
@@ -965,10 +966,15 @@ func _build_skill_stats_text(skill: Skill, source: Item) -> String:
 				Skill.TargetingMode.SINGLE_CONE:
 					lines.append("Targeting: Cone %d°" % int(skill.cone_deg))
 				Skill.TargetingMode.CHAIN_LIGHTNING:
+					var ct: int = source.get_effective_modifier(&"chain_targets") if source != null else 0
+					var jumps: int = ct if ct > 0 else skill.chain_jumps
 					if skill.chain_falloff_pct > 0.0:
-						lines.append("Chain: bounces with %.0f%% falloff" % skill.chain_falloff_pct)
+						if jumps > 0:
+							lines.append("Chain: %d targets, %.0f%% falloff" % [jumps, skill.chain_falloff_pct])
+						else:
+							lines.append("Chain: bounces with %.0f%% falloff" % skill.chain_falloff_pct)
 					else:
-						lines.append("Chain: %d targets" % skill.chain_jumps)
+						lines.append("Chain: %d targets" % jumps)
 		Skill.ActiveKind.POTION:
 			var consumable: Item = InventoryState.get_equipped(&"consumable")
 			if consumable != null:

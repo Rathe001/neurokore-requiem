@@ -223,9 +223,14 @@ func _build_quirk_tip(item: Item) -> String:
 			return ", ".join(parts)
 		&"taser_2h":
 			var ret: int = item.get_effective_modifier(&"chain_retention")
+			var ct: int = item.get_effective_modifier(&"chain_targets")
+			var parts: Array[String] = []
+			parts.append("Every 10th hit releases %s damage" % _v("3×"))
+			if ct > 0:
+				parts.append("%s chain targets" % _v("%d" % ct))
 			if ret > 0:
-				return "Every 10th hit releases %s damage, %s chain retention" % [_v("3×"), _v("%d%%" % ret)]
-			return "Every 10th hit on an enemy releases %s damage" % _v("3×")
+				parts.append("%s chain retention" % _v("%d%%" % ret))
+			return ", ".join(parts)
 		&"accelerator_2h":
 			var ramp_pct: int = item.get_effective_modifier(&"ramp_speed")
 			if ramp_pct > 0:

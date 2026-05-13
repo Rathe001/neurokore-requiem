@@ -370,6 +370,7 @@ const WEAPON_SIGNATURE_STATS: Dictionary = {
 	],
 	&"taser_2h": [
 		{ "key": &"chain_retention", "base": Vector2i(75, 85), "cap": 95 },
+		{ "key": &"chain_targets", "base": Vector2i(5, 10) },
 	],
 	&"accelerator_2h": [
 		{ "key": &"ramp_speed", "base": Vector2i(25, 60) },
