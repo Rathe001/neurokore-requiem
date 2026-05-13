@@ -578,6 +578,19 @@ func _physics_process(delta: float) -> void:
 		var hit := space.intersect_ray(_ray_query)
 		if not hit.is_empty():
 			var impact_pos: Vector3 = hit.position
+			# Sweep mask includes PILLAR — which destructible props also sit
+			# on (so their tall bullet-catch collision blocks cover-targeted
+			# rays). Without this check the sweep would release the
+			# projectile as a "wall hit" and Area3D.body_entered would never
+			# fire, so damage never lands on the prop. Route PILLAR-layer
+			# damage targets through _on_body_entered so they take damage
+			# the same way a layer-2 hit would.
+			var collider: Variant = hit.get("collider")
+			if collider is Node3D and (collider as Node3D).is_in_group(target_group):
+				global_position = impact_pos
+				_traveled += from.distance_to(impact_pos)
+				_on_body_entered(collider as Node3D)
+				return
 			global_position = impact_pos
 			_traveled += from.distance_to(impact_pos)
 			_hit = true
