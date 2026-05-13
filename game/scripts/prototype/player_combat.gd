@@ -1222,7 +1222,7 @@ func _resolve_hitscan_exact(skill: Skill, aim_norm: Vector3, eff_range: float, w
 func _roll_crit(weapon: Item = null) -> bool:
 	var base_crit := weapon.effective_crit_chance() if weapon != null and weapon.crit_chance > 0.0 else PROTO_BASE_CRIT_CHANCE
 	var chance := base_crit + Effects.get_aggregate(&"crit_chance_pct") + _host._gear_crit_chance_bonus
-	# AIM_HOLD (Sniper Focus) flat-adds to crit chance while RMB is held.
+	# AIM_HOLD (Aimed Shot) flat-adds to crit chance while RMB is held.
 	chance += _host.aim_hold_crit_bonus()
 	return randf() < chance
 
@@ -1248,7 +1248,7 @@ const NATURAL_JITTER_RAD: float = 0.0087
 func _apply_aim_spread(aim: Vector3, weapon: Item, accuracy_mult: float = 1.0) -> Vector3:
 	var acc := weapon.effective_accuracy() if weapon != null else 1.0
 	acc += _host._gear_hit_chance_bonus
-	# AIM_HOLD (Tripod / Focus) layers a flat accuracy bonus while RMB is
+	# AIM_HOLD (Tripod / Aimed Shot) layers a flat accuracy bonus while RMB is
 	# held — the buff is intentional flat-add (not a multiplier) so the
 	# Tripod's +0.3 reads as "30 more points of accuracy" regardless of
 	# the rolled accuracy on the weapon.

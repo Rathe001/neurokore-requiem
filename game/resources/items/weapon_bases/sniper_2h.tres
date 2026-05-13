@@ -6,8 +6,9 @@
 ; magazine with a long reload (4s). Per-shot damage is heavy by design
 ; (~70 avg) but DPS sits at ~22, in line with every other archetype —
 ; the sniper sells precision and reach, not throughput. RMB alt-fire is
-; the Focus aim-hold buff (sniper_focus.tres) — pin in place, drain
+; the Aimed Shot aim-hold buff (sniper_focus.tres) — pin in place, drain
 ; resource, +50% crit on every shot until released or the pool empties.
+; Paints a thin red laser sight on the target while held.
 
 [ext_resource type="Script" path="res://scripts/items/weapon_base.gd" id="1_weapon_base"]
 [ext_resource type="Resource" path="res://resources/skills/sniper_shot.tres" id="2_fire_skill"]

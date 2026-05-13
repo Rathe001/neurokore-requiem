@@ -113,6 +113,7 @@ const MAIN_TYPE_WEIGHTS: Dictionary = {
 	"Boots": 1.0,
 	"Backpack": 1.0,
 	"Grenade": 1.0,
+	"Consumable": 1.0,
 }
 
 const OFFHAND_BASE_PATHS: Array[String] = [
@@ -178,6 +179,7 @@ func roll(main_type: String, item_level: int, rarity: StringName, rng: RandomNum
 	_roll_weapon_signature(item, rarity, rng)
 	_apply_offhand_base(item, main_type, rng)
 	_apply_grenade_base(item, main_type, rarity, rng)
+	_apply_consumable_base(item, main_type, rarity, rng)
 	_apply_armor_model_name(item, main_type, rng)
 	_apply_head_light_mod(item, main_type, item_level, rng)
 	_apply_icon_path(item)
@@ -689,6 +691,36 @@ func _apply_grenade_base(item: Item, main_type: String, rarity: StringName, rng:
 	_roll_damage(item, base, rng, curve)
 	item.crit_chance = _curved_randf(base.crit_chance_range.x, base.crit_chance_range.y, rng, curve)
 	item.blast_radius = _curved_randf(base.blast_radius_range.x, base.blast_radius_range.y, rng, curve)
+
+
+# Origin-gated model names for consumables. Analog gets medical/chem
+# terminology; Cyborg gets battery/power-cell terminology.
+const CONSUMABLE_NAMES_ANALOG: Array[String] = [
+	"MedPak-7", "StimShot", "NerveJuice", "BioSurge", "HemoFix", "AdrenaPatch",
+]
+const CONSUMABLE_NAMES_CYBORG: Array[String] = [
+	"NeuroBat-X", "VoltCell", "SynapCell", "CoreCharge", "IonoFuel", "PulseCell",
+]
+
+func _apply_consumable_base(item: Item, main_type: String, rarity: StringName, rng: RandomNumberGenerator) -> void:
+	if main_type != "Consumable":
+		return
+	var origin := AttributeState.get_spec_origin(PlayerState.spec_id)
+	if origin == &"cyborg":
+		item.sub_type = "Battery"
+		var names := CONSUMABLE_NAMES_CYBORG
+		item.model_name = names[rng.randi_range(0, names.size() - 1)]
+	else:
+		item.sub_type = "Stimpack"
+		var names := CONSUMABLE_NAMES_ANALOG
+		item.model_name = names[rng.randi_range(0, names.size() - 1)]
+	var curve: float = float(RARITY_ROLL_CURVE.get(rarity, 2.0))
+	var budget_mult: float = float(RARITY_BUDGET_MULT.get(rarity, 1.0))
+	var heal_total := int(round(_curved_randf(20.0, 60.0, rng, curve) * budget_mult))
+	var heal_duration := _curved_randf(3.0, 6.0, rng, curve)
+	item.stat_modifiers[&"heal_total"] = heal_total
+	item.stat_modifiers[&"heal_duration"] = heal_duration
+
 
 ## Head armor rolls a light mod. Most helmets get a flashlight; rarer mods
 ## (scanner, UV) appear at higher item levels. Light stats scale with level.

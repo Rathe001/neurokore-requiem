@@ -773,11 +773,20 @@ func _build_stats_text(item: Item, equipped: Item = null) -> String:
 	var inv_bonus := item.get_modifier(&"inventory_bonus")
 	if item.kind == &"backpack" and inv_bonus > 0:
 		lines.append("+%d %s" % [inv_bonus, tr("ITEM_STATS_INVENTORY_BONUS")])
+	# Consumable heal stats — custom one-liner instead of bare numbers.
+	if item.main_type == "Consumable":
+		var ht: float = item.get_modifier(&"heal_total")
+		var hd: float = item.get_modifier(&"heal_duration")
+		if ht > 0.0 and hd > 0.0:
+			lines.append("[color=#66cc66]Heals %d over %.1fs[/color]" % [int(ht), hd])
+		lines.append("Charges: 3 (30s recharge)")
 	# Generic stat modifiers — bare values, no comparison.
 	for stat_id: StringName in item.stat_modifiers:
 		if stat_id == &"inventory_bonus" and item.kind == &"backpack":
 			continue
 		if stat_id in _WEAPON_SIG_DISPLAY and item.weapon_base_id != &"":
+			continue
+		if stat_id in [&"heal_total", &"heal_duration"] and item.main_type == "Consumable":
 			continue
 		var raw: int = int(item.stat_modifiers.get(stat_id, 0))
 		if raw == 0:
@@ -925,7 +934,7 @@ func _build_skill_stats_text(skill: Skill, source: Item) -> String:
 				Skill.GrenadeType.STUN:
 					lines.append("[color=#88aaff]Stun: staggers enemies[/color]")
 		Skill.ActiveKind.AIM_HOLD:
-			# Held-buff skills (Sniper Focus, LMG Tripod). They don't
+			# Held-buff skills (Aimed Shot, LMG Tripod). They don't
 			# deal their own damage and aren't fired; showing weapon
 			# damage / speed / accuracy here was misleading. Show the
 			# buff effects + drain rate + movement-lock instead.
@@ -965,6 +974,15 @@ func _build_skill_stats_text(skill: Skill, source: Item) -> String:
 						lines.append("Chain: bounces with %.0f%% falloff" % skill.chain_falloff_pct)
 					else:
 						lines.append("Chain: %d targets" % skill.chain_jumps)
+		Skill.ActiveKind.POTION:
+			var consumable: Item = InventoryState.get_equipped(&"consumable")
+			if consumable != null:
+				var ht: float = consumable.get_modifier(&"heal_total")
+				var hd: float = consumable.get_modifier(&"heal_duration")
+				if ht > 0.0 and hd > 0.0:
+					lines.append("[color=#66cc66]Heals %d over %.1fs[/color]" % [int(ht), hd])
+			lines.append("Charges: 3 (30s recharge)")
+			lines.append("Per-use Cooldown: %.1fs" % skill.cooldown)
 		_:
 			# Standard weapon skill (cone, aoe, projectile, hitscan).
 			var dmg_mult := skill.damage_multiplier

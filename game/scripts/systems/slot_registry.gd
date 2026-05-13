@@ -20,7 +20,7 @@ extends Node
 const SLOTS: Array[StringName] = [
 	&"head", &"chest", &"hands",
 	&"weapon", &"backpack", &"offhand",
-	&"legs", &"feet",
+	&"legs", &"feet", &"consumable",
 	&"weapon_2", &"weapon_3", &"weapon_4",
 ]
 
@@ -44,7 +44,7 @@ func is_extra_weapon_slot(slot: StringName) -> bool:
 const MAIN_TYPES: Array[String] = [
 	"1H Weapon", "2H Weapon",
 	"Head Armor", "Chest Armor", "Gloves", "Leg Armor", "Boots",
-	"Backpack", "Grenade",
+	"Backpack", "Grenade", "Consumable",
 ]
 
 # main_type → slot lookup. Both weapon variants resolve to the same slot
@@ -60,6 +60,7 @@ const MAIN_TYPE_TO_SLOT: Dictionary = {
 	"Boots":       &"feet",
 	"Backpack":    &"backpack",
 	"Grenade":     &"offhand",
+	"Consumable":  &"consumable",
 }
 
 const MAIN_TYPE_GLYPH: Dictionary = {
@@ -73,6 +74,7 @@ const MAIN_TYPE_GLYPH: Dictionary = {
 	"Boots":       "⌐",
 	"Backpack":    "▤",
 	"Grenade":     "◉",
+	"Consumable":  "+",
 }
 
 

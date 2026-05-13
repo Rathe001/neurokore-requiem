@@ -22,8 +22,9 @@ enum ActiveKind {
 	GRENADE,        # click RMB → throw grenade at cursor with AoE on impact
 	SHIELD_BUFF,    # click RMB → buff player with N% damage reduction; cooldown after pool drains
 	SECOND_WIND,    # instant self-cast → refill resource bar, then cooldown
-	AIM_HOLD,       # hold RMB → buff accuracy/crit while drains resource (LMG Tripod, Sniper Focus)
+	AIM_HOLD,       # hold RMB → buff accuracy/crit while drains resource (LMG Tripod, Aimed Shot)
 	CHANNEL_BEAM,   # hold LMB/RMB → tick damage via skill.targeting_mode; drains resource per second (Taser hold, Accelerator stream)
+	POTION,         # consume a charge from the equipped consumable; starts a HoT on the player
 }
 
 enum GrenadeType {

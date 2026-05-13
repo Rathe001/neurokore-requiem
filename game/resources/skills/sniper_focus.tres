@@ -1,16 +1,17 @@
 [gd_resource type="Resource" script_class="Skill" load_steps=2 format=3]
 
-; Sniper Focus — RMB-hold buff. Pins the player in place and drains
+; Aimed Shot — RMB-hold buff. Pins the player in place and drains
 ; resource per second; while held every shot rolls with +0.50 crit
 ; chance (flat, on top of any helm/talent crit bonuses). Turns the
 ; sniper's already-heavy single-shot into a near-guaranteed crit at
 ; the cost of mobility — the canonical "wait for the shot" stance.
+; Paints a thin red laser sight on the target while held.
 
 [ext_resource type="Script" path="res://scripts/skills/skill.gd" id="1_skill_script"]
 
 [resource]
 script = ExtResource("1_skill_script")
-display_name = "Focus"
+display_name = "Aimed Shot"
 glyph = "F"
 damage = 0
 skill_range = 0.0

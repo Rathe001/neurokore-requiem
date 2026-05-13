@@ -33,7 +33,7 @@ const BACKDROP_COLOR := Color(0.0, 0.0, 0.0, 0.55)
 const EQUIP_SLOTS: Array[Dictionary] = [
 	{"row": 0, "col": 0, "label_key": "EQUIP_BACKPACK", "id": &"backpack", "accepts": &"backpack"},
 	{"row": 0, "col": 1, "label_key": "EQUIP_HEAD",     "id": &"head",     "accepts": &"head"},
-	{"row": 0, "col": 2, "label_key": "",               "id": &"",         "accepts": &""},
+	{"row": 0, "col": 2, "label_key": "EQUIP_CONSUMABLE", "id": &"consumable", "accepts": &"consumable"},
 	{"row": 1, "col": 0, "label_key": "EQUIP_WEAPON",   "id": &"weapon",   "accepts": &"weapon"},
 	{"row": 1, "col": 1, "label_key": "EQUIP_CHEST",    "id": &"chest",    "accepts": &"chest"},
 	{"row": 1, "col": 2, "label_key": "EQUIP_OFFHAND",  "id": &"offhand",  "accepts": &"offhand"},

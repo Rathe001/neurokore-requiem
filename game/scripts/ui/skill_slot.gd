@@ -23,6 +23,7 @@ var _player: Node = null
 #                     cooldowns ≥1s, one decimal below.
 var _cooldown_dim: ColorRect = null
 var _cooldown_label: Label = null
+var _charge_label: Label = null
 
 func _ready() -> void:
 	_apply_theme()
@@ -51,6 +52,17 @@ func _ready() -> void:
 	_cooldown_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_cooldown_label.visible = false
 	add_child(_cooldown_label)
+	_charge_label = Label.new()
+	_charge_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_charge_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_charge_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	_charge_label.add_theme_font_size_override(&"font_size", 8)
+	_charge_label.add_theme_color_override(&"font_color", Color(0.3, 0.9, 0.4))
+	_charge_label.add_theme_color_override(&"font_outline_color", Color(0, 0, 0, 1))
+	_charge_label.add_theme_constant_override(&"outline_size", 2)
+	_charge_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_charge_label.visible = false
+	add_child(_charge_label)
 
 func _apply_theme() -> void:
 	var p := UIThemeState.palette
@@ -88,7 +100,10 @@ func bind(player: Node, skill: Skill, keybind_label: String) -> void:
 
 func _process(_delta: float) -> void:
 	if _player == null or _skill == null or not _player.has_method(&"get_cooldown_ratio"):
+		if _charge_label != null:
+			_charge_label.visible = false
 		return
+	_update_charge_badge()
 	var ratio: float = _player.get_cooldown_ratio(_skill)
 	if ratio <= 0.0:
 		cooldown_overlay.visible = false
@@ -125,6 +140,20 @@ func _on_mouse_exited() -> void:
 func _on_tree_exiting() -> void:
 	_on_mouse_exited()
 	UIThemeState.changed.disconnect(_apply_theme)
+
+
+func _update_charge_badge() -> void:
+	if _charge_label == null:
+		return
+	if _skill == null or _skill.active_kind != Skill.ActiveKind.POTION:
+		_charge_label.visible = false
+		return
+	if _player == null or not _player.has_method(&"get_potion_charges"):
+		_charge_label.visible = false
+		return
+	var charges: int = _player.get_potion_charges()
+	_charge_label.text = str(charges)
+	_charge_label.visible = true
 
 
 func _resolve_source_item() -> Item:

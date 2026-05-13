@@ -91,6 +91,13 @@ const HP_REGEN_MIN_DELAY := 0.5
 # block + still being able to attack. SHIELD_BUFF doesn't apply.
 const STAND_HEIGHT := 1.6
 const CROUCH_HEIGHT := 0.9
+# Aim laser — thin red line painted during AIM_HOLD (Sniper Aimed Shot,
+# LMG Tripod). Same technique as the Exile curse laser in enemy_afflictions.
+const AIM_LASER_RADIUS: float = 0.003
+const AIM_LASER_COLOR: Color = Color(1.0, 0.15, 0.15, 0.2)
+const AIM_LASER_EMISSION: Color = Color(1.0, 0.25, 0.25, 1.0)
+const AIM_LASER_EMISSION_ENERGY: float = 0.5
+const AIM_LASER_PLAYER_OFFSET: Vector3 = Vector3(0.0, 1.0, 0.0)
 const GRAVITY := CombatConstants.GRAVITY
 const JUMP_VELOCITY := 6.5
 
@@ -185,6 +192,7 @@ var _walk_to_interact_target: Node3D = null
 
 var _shield: PlayerShield
 var _grenade: PlayerGrenade
+var _potion: PlayerPotion
 
 ## Called by pickups/interactables to suppress the fire input this frame.
 func consume_click() -> void:
@@ -412,7 +420,7 @@ var _hammer_wind_up_ready: bool = false
 # Movement detected via _want_dir; any non-zero direction resets the idle
 # accumulator. Once accumulator passes the threshold, ready flag flips on.
 #
-# Aim-hold skills that immobilize the player (LMG Tripod, Sniper Focus)
+# Aim-hold skills that immobilize the player (LMG Tripod, Aimed Shot)
 # zero _want_dir incidentally, so without this gate a Tripod-equipped
 # LMG user would build hammer wind-up while holding RMB. Treat "idle by
 # immobilization" as ineligible — wind-up is only meant to reward
@@ -500,7 +508,7 @@ var _reload_remain: float = 0.0
 var _reload_total: float = 0.0
 var _reload_target: StringName = &""
 
-# AIM_HOLD state — Tripod (LMG) and Focus (sniper) RMB-hold buffs.
+# AIM_HOLD state — Tripod (LMG) and Aimed Shot (sniper) RMB-hold buffs.
 # While active, the configured Skill drains resource per tick and applies
 # its accuracy/crit bonuses to every shot fired. Releasing RMB or running
 # the resource dry exits the hold.
@@ -511,6 +519,7 @@ var _aim_hold_skill: Skill = null
 # a manually-crouching player who triggers Tripod stays down after
 # the hold ends until they release Ctrl themselves.
 var _aim_hold_forced_crouch: bool = false
+var _aim_laser: MeshInstance3D = null
 
 # CHANNEL_BEAM state — Taser hold-tase, Accelerator stream. While the
 # bound input is held, the skill's targeting_mode resolves on a fixed
@@ -654,6 +663,9 @@ func _ready() -> void:
 	_grenade = PlayerGrenade.new()
 	_grenade.setup(self)
 	add_child(_grenade)
+	_potion = PlayerPotion.new()
+	_potion.setup(self)
+	add_child(_potion)
 	PerkState.perks_changed.connect(_doomsayer.reconcile)
 	# Put player meshes on an extra render layer so equipped lights can
 	# exclude it from shadow casting (no self-shadow under own flashlight,
@@ -874,6 +886,21 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 	if _health <= 0:
 		_die()
 
+func get_potion_charges() -> int:
+	if _potion == null:
+		return 0
+	return _potion.get_charges()
+
+
+func heal(amount: int) -> void:
+	if not _alive:
+		return
+	var old := _health
+	_health = mini(_health + amount, max_health)
+	if _health != old:
+		health_changed.emit(_health, max_health)
+
+
 func _on_player_leveled_up(new_level: int, hp_gain: int) -> void:
 	_level_hp_bonus += hp_gain
 	_recompute_stat_bonuses()
@@ -1044,6 +1071,7 @@ func _physics_process(delta: float) -> void:
 	_shield.tick(delta)
 	_doomsayer.tick(delta)
 	_grenade.tick(delta)
+	_potion.tick(delta)
 	_ied.tick(delta)
 	_tick_reload(delta)
 	_tick_aim_hold(delta)
@@ -1150,7 +1178,7 @@ func _physics_process(delta: float) -> void:
 			# still reposition, large enough that mid-fight reloads feel
 			# costly and reward the "back off, then reload" rhythm.
 			var reload_factor: float = RELOAD_SPEED_FACTOR if is_reloading() else 1.0
-			# AIM_HOLD (Tripod / Focus) pins the player in place — that's
+			# AIM_HOLD (Tripod / Aimed Shot) pins the player in place — that's
 			# the trade for the accuracy / crit buff.
 			var aim_hold_factor: float = 0.0 if aim_hold_locks_movement() else 1.0
 			var speed := move_speed * (CROUCH_SPEED_FACTOR if _crouching else 1.0) * (0.5 if _backing else 1.0) * sprint_factor * shield_factor * gear_speed_factor * pool_factor * reload_factor * aim_hold_factor
@@ -1367,6 +1395,11 @@ func resolve_skill(index: int) -> Skill:
 			return weapon.alt_fire_skill
 		var offhand: Item = InventoryState.get_equipped(&"offhand")
 		return offhand.fire_skill if offhand != null else null
+	# Q key (index 6) — consumable potion overrides talents + skills array.
+	if index == 6:
+		var consumable: Item = InventoryState.get_equipped(&"consumable")
+		if consumable != null:
+			return preload("res://resources/skills/health_potion.tres")
 	# Hotkey slots (1, 2, 3, 4, Q, E). A talent that has granted a
 	# skill to this slot wins over the player's @export skills array,
 	# so a Sanctify node can replace the default skill_q with its own
@@ -1728,6 +1761,8 @@ func _cast_skill(skill: Skill) -> void:
 				_grenade.activate(skill, throw_dir)
 			Skill.ActiveKind.SECOND_WIND:
 				_activate_second_wind(skill)
+			Skill.ActiveKind.POTION:
+				_potion.activate(skill)
 		return
 	_interacting = false
 	if _combat.is_on_cooldown(skill):
@@ -1939,9 +1974,9 @@ func start_reload() -> void:
 	WeaponSounds.play_reload(w.weapon_base_id, global_position)
 	weapon_ammo_changed.emit()
 
-# ── AIM_HOLD (Tripod / Focus) ───────────────────────────────────────────────
+# ── AIM_HOLD (Tripod / Aimed Shot) ───────────────────────────────────────────────
 
-## True while the player is holding the LMG Tripod / Sniper Focus RMB
+## True while the player is holding the LMG Tripod / Aimed Shot RMB
 ## buff. Read by player_combat for accuracy + crit modifiers and by the
 ## movement loop to lock the player in place if the skill demands it.
 func is_aim_holding() -> bool:
@@ -1982,6 +2017,7 @@ func _start_aim_hold(skill: Skill) -> void:
 	if not infinite_res and _resource_current <= 0.0:
 		return
 	_aim_hold_skill = skill
+	_show_aim_laser()
 	# Movement-locking aim-holds (Tripod) drop the player into a crouch
 	# stance for the duration. Only forces it if the player isn't already
 	# crouched — if they are, leave their state alone so we don't yank
@@ -1994,6 +2030,7 @@ func _start_aim_hold(skill: Skill) -> void:
 func _stop_aim_hold() -> void:
 	if _aim_hold_skill == null:
 		return
+	_clear_aim_laser()
 	_aim_hold_skill = null
 	if _aim_hold_forced_crouch:
 		_aim_hold_forced_crouch = false
@@ -2027,6 +2064,72 @@ func _tick_aim_hold(delta: float) -> void:
 			_emit_resource_if_changed()
 		if _resource_current <= 0.0:
 			_stop_aim_hold()
+			return
+	_update_aim_laser()
+
+
+# ── Aim laser (Aimed Shot / Tripod visual) ─────────────────────────────────
+
+func _show_aim_laser() -> void:
+	if _aim_laser != null and is_instance_valid(_aim_laser):
+		return
+	var mesh_inst := MeshInstance3D.new()
+	var cyl := CylinderMesh.new()
+	cyl.top_radius = AIM_LASER_RADIUS
+	cyl.bottom_radius = AIM_LASER_RADIUS
+	cyl.height = 1.0
+	cyl.radial_segments = 6
+	cyl.cap_top = false
+	cyl.cap_bottom = false
+	mesh_inst.mesh = cyl
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = AIM_LASER_COLOR
+	mat.emission_enabled = true
+	mat.emission = AIM_LASER_EMISSION
+	mat.emission_energy_multiplier = AIM_LASER_EMISSION_ENERGY
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.shadow_to_opacity = false
+	mesh_inst.material_override = mat
+	mesh_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mesh_inst.top_level = true
+	add_child(mesh_inst)
+	_aim_laser = mesh_inst
+	_update_aim_laser()
+
+
+func _clear_aim_laser() -> void:
+	if _aim_laser != null and is_instance_valid(_aim_laser):
+		_aim_laser.queue_free()
+	_aim_laser = null
+
+
+func _update_aim_laser() -> void:
+	if _aim_laser == null or not is_instance_valid(_aim_laser):
+		return
+	var aim := _aim_direction()
+	if aim == Vector3.ZERO:
+		_aim_laser.visible = false
+		return
+	var weapon: Item = InventoryState.get_equipped(&"weapon")
+	var eff_range: float = _combat.effective_range(_aim_hold_skill, weapon) if _aim_hold_skill != null else 10.0
+	if eff_range <= 0.0:
+		eff_range = 10.0
+	var p_pos: Vector3 = global_position + AIM_LASER_PLAYER_OFFSET
+	var target: Vector3 = p_pos + aim * eff_range
+	var diff := target - p_pos
+	var dist := diff.length()
+	if dist < 0.05:
+		_aim_laser.visible = false
+		return
+	_aim_laser.visible = true
+	_aim_laser.global_position = (p_pos + target) * 0.5
+	var dir := diff / dist
+	if dir.dot(Vector3.UP) < -0.9999:
+		_aim_laser.basis = Basis(Vector3(1.0, 0.0, 0.0), PI)
+	else:
+		_aim_laser.basis = Basis(Quaternion(Vector3.UP, dir))
+	_aim_laser.scale = Vector3(1.0, dist, 1.0)
 
 
 # ── CHANNEL_BEAM (Taser hold, Accelerator stream) ───────────────────────────
@@ -2544,6 +2647,8 @@ func get_cooldown_ratio(skill: Skill) -> float:
 		return _shield.get_cooldown_ratio(skill)
 	if skill != null and _grenade != null and _grenade.is_grenade_skill(skill):
 		return _grenade.get_cooldown_ratio(skill)
+	if skill != null and _potion != null and _potion.is_potion_skill(skill):
+		return _potion.get_cooldown_ratio(skill)
 	if _combat == null:
 		return 0.0
 	return _combat.get_cooldown_ratio(skill)
@@ -2556,6 +2661,8 @@ func get_cooldown_remain(skill: Skill) -> float:
 		return _shield.get_cooldown_remain(skill)
 	if _grenade != null and _grenade.is_grenade_skill(skill):
 		return _grenade.get_cooldown_remain(skill)
+	if _potion != null and _potion.is_potion_skill(skill):
+		return _potion.get_cooldown_remain(skill)
 	if _combat == null:
 		return 0.0
 	return _combat.get_cooldown_remain(skill)
