@@ -40,17 +40,26 @@ const OVERCLOCK_DAMAGE_MULT: float = 1.25
 const OVERCLOCK_RANGE_MULT: float = 0.75
 const OVERCLOCK_VISUAL_SCALE: float = 1.25
 
-# Damage falloff beyond effective range. Attacks extend to
-# FALLOFF_RANGE_MULT × effective range but deal progressively less
-# damage past the effective range, bottoming out at 25% damage.
-const FALLOFF_RANGE_MULT: float = 2.0
+# Damage falloff beyond effective range. Applies only to hitscan and
+# projectile resolution — the bullet/beam keeps travelling past the
+# weapon's stated range but does progressively less damage. Cone and
+# AoE attacks ignore this multiplier entirely: their hit region matches
+# the visual cone / shockwave, so a melee swing or ground-slam never
+# reaches past what the player sees.
+const FALLOFF_RANGE_MULT: float = 1.25
 const FALLOFF_MAX_REDUCTION: float = 0.75
 
-# Quadratic falloff: 100% within eff_range, drops to 25% at 2× eff_range.
+# Quadratic falloff: 100% within eff_range, drops to 25% at the
+# extended-range edge (eff_range × FALLOFF_RANGE_MULT). The denominator
+# is the *extension* distance — using eff_range alone made the curve's
+# floor unreachable whenever FALLOFF_RANGE_MULT was anything other than 2.
 static func range_falloff(distance: float, eff_range: float) -> float:
 	if distance <= eff_range or eff_range <= 0.0:
 		return 1.0
-	var t := clampf((distance - eff_range) / eff_range, 0.0, 1.0)
+	var extension := eff_range * (FALLOFF_RANGE_MULT - 1.0)
+	if extension <= 0.0:
+		return 1.0
+	var t := clampf((distance - eff_range) / extension, 0.0, 1.0)
 	return 1.0 - FALLOFF_MAX_REDUCTION * t * t
 
 
@@ -463,7 +472,7 @@ func _resolve_cone(skill: Skill, aim: Vector3, eff_range: float, weapon: Item) -
 	# combo-driven, not authored-per-skill.
 	var apply_combo_status := is_melee and combo_step == 2
 	var any_hit := false
-	for enode: Node3D in SpatialGrid.query_cone(_host.global_position, aim, eff_range * FALLOFF_RANGE_MULT, half_cos, &"enemies"):
+	for enode: Node3D in SpatialGrid.query_cone(_host.global_position, aim, eff_range, half_cos, &"enemies"):
 		if not enode.has_method(&"take_damage"):
 			continue
 		if is_player_friendly(enode):
@@ -557,7 +566,7 @@ func _resolve_aoe(skill: Skill, eff_range: float, weapon: Item) -> void:
 	if weapon != null:
 		aoe_range += float(weapon.get_modifier(&"impact_radius"))
 	var kb := _knockback_for(skill, weapon)
-	for enode: Node3D in SpatialGrid.query_radius(_host.global_position, aoe_range * FALLOFF_RANGE_MULT, &"enemies"):
+	for enode: Node3D in SpatialGrid.query_radius(_host.global_position, aoe_range, &"enemies"):
 		if not enode.has_method(&"take_damage"):
 			continue
 		if is_player_friendly(enode):

@@ -219,7 +219,7 @@ func cast_melee_attack(player: Node3D, aim: Vector3) -> void:
 	var to_p: Vector3 = player.global_position - _host.global_position
 	to_p.y = 0.0
 	var dist := to_p.length()
-	if dist > range_now * PlayerCombat.FALLOFF_RANGE_MULT or dist < 0.001:
+	if dist > range_now or dist < 0.001:
 		return
 	var half_cos := cos(deg_to_rad(cone_now * 0.5))
 	if aim.dot(to_p / dist) < half_cos:
@@ -362,7 +362,7 @@ func _cast_skill_cone(target: Node3D, aim: Vector3, skill: EnemySkill) -> void:
 	var to_p: Vector3 = target.global_position - _host.global_position
 	to_p.y = 0.0
 	var dist := to_p.length()
-	if dist > skill.skill_range * PlayerCombat.FALLOFF_RANGE_MULT or dist < 0.001:
+	if dist > skill.skill_range or dist < 0.001:
 		return
 	var half_cos := cos(deg_to_rad(skill.cone_deg * 0.5))
 	if aim.dot(to_p / dist) < half_cos:
@@ -389,7 +389,7 @@ func _cast_skill_radial(target: Node3D, skill: EnemySkill) -> void:
 	_host._change_state(PrototypeEnemy.State.CHASING)
 	var target_group: StringName = &"enemies" if _host._afflictions._charmed else &"player"
 	var aoe_r := skill.aoe_radius
-	for n: Node in SpatialGrid.query_radius(_host.global_position, aoe_r * PlayerCombat.FALLOFF_RANGE_MULT, target_group):
+	for n: Node in SpatialGrid.query_radius(_host.global_position, aoe_r, target_group):
 		if not is_instance_valid(n) or not (n is Node3D):
 			continue
 		if not n.has_method(&"take_damage"):
