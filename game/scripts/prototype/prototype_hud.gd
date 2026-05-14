@@ -951,16 +951,17 @@ func _drain_ghost_fills(delta: float) -> void:
 		if _hp_ghost_hold > 0.0:
 			_hp_ghost_hold -= delta
 		else:
-			_hp_ghost.offset_left = move_toward(_hp_ghost.offset_left, _hp_ghost.offset_right, GHOST_DRAIN_SPEED * delta)
-			if _hp_ghost.offset_left >= _hp_ghost.offset_right:
+			# Shrink from the right toward the fill edge (left).
+			_hp_ghost.offset_right = move_toward(_hp_ghost.offset_right, _hp_ghost.offset_left, GHOST_DRAIN_SPEED * delta)
+			if _hp_ghost.offset_right <= _hp_ghost.offset_left:
 				_hp_ghost.visible = false
 				_hp_ghost_right = hp_fill.offset_right
 	if _resource_ghost != null and _resource_ghost.visible:
 		if _resource_ghost_hold > 0.0:
 			_resource_ghost_hold -= delta
 		else:
-			_resource_ghost.offset_left = move_toward(_resource_ghost.offset_left, _resource_ghost.offset_right, GHOST_DRAIN_SPEED * delta)
-			if _resource_ghost.offset_left >= _resource_ghost.offset_right:
+			_resource_ghost.offset_right = move_toward(_resource_ghost.offset_right, _resource_ghost.offset_left, GHOST_DRAIN_SPEED * delta)
+			if _resource_ghost.offset_right <= _resource_ghost.offset_left:
 				_resource_ghost.visible = false
 				_resource_ghost_right = resource_fill.offset_right
 

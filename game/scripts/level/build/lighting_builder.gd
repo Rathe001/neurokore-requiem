@@ -72,8 +72,8 @@ static func configure_fps_fog(ctx: LevelBuildContext) -> void:
 # Per-room FogVolume — low-lying "dry ice" fog that hugs the floor.
 # A thin slab (FOG_HEIGHT) sitting at floor level gives the dungeon a
 # ground-mist look without filling the room with smoke.
-const FOG_HEIGHT := 0.8
-const FOG_DENSITY := 0.06
+const FOG_HEIGHT := 0.6
+const FOG_DENSITY := 0.5
 
 static func create_fog_volume(ctx: LevelBuildContext, center: Vector3, size_x: float, size_z: float) -> void:
 	var vol := FogVolume.new()
