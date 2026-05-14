@@ -208,8 +208,9 @@ func _backfill_damage_type_from_base() -> void:
 ## Keys are StringName — direct combat bonuses (&"damage_reduction",
 ## &"max_health_bonus", &"max_resource_bonus", &"move_speed_bonus",
 ## &"hit_chance_bonus", &"attack_speed_bonus", &"crit_chance_bonus",
-## &"cooldown_reduction", &"inventory_bonus", &"range_bonus") live in this
-## single dict. Affix table entries MUST use StringName keys (the &"" prefix);
+## &"cooldown_reduction", &"inventory_bonus", &"range_bonus",
+## &"life_on_kill", &"barrier_on_kill") live in this single dict.
+## Affix table entries MUST use StringName keys (the &"" prefix);
 ## plain string keys hash differently and silently fail to match reads.
 @export var stat_modifiers: Dictionary = {}
 

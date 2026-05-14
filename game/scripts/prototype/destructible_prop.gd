@@ -115,6 +115,9 @@ func _break() -> void:
 		return
 	_drop_credits_on_break()
 	_drop_loot_on_break()
+	for p in get_tree().get_nodes_in_group(&"player"):
+		if p is PrototypePlayer and p.is_alive():
+			p.on_enemy_killed()
 	if NetState.is_in_lobby():
 		_client_break.rpc()
 

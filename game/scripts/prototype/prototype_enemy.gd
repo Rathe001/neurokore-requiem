@@ -1580,6 +1580,13 @@ func _die(kill_from: Vector3 = Vector3.ZERO, kill_force: float = 0.0) -> void:
 	# stale markers. Full reset so pool re-acquire starts clean.
 	_afflictions.reset()
 	PlayerState.gain_xp(PlayerState.xp_award_for_enemy(level))
+	# On-kill sustain: notify all nearby players so each one heals from
+	# their own gear stats. In SP there's only one; in MP every player
+	# within range benefits (XP should follow the same pattern — tracked
+	# as a follow-up).
+	for p in get_tree().get_nodes_in_group(&"player"):
+		if p is PrototypePlayer and p.is_alive():
+			p.on_enemy_killed()
 	_drop_credits()
 	_drop_item()
 	# Ragdoll path: spawn a physics-driven corpse with a clone of our visual

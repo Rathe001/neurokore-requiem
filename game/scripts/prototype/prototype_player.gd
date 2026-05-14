@@ -637,6 +637,13 @@ var _gear_hit_chance_bonus: float = 0.0
 var _gear_cooldown_reduction: float = 0.0
 var _gear_hp_regen_bonus: float = 0.0
 var _gear_regen_delay_reduction: float = 0.0
+var _gear_life_on_kill: int = 0
+var _gear_barrier_on_kill: int = 0
+var _barrier: int = 0
+var _barrier_max: int = 0
+var _barrier_decay_timer: float = 0.0
+const BARRIER_DECAY_DELAY := 4.0
+const BARRIER_DECAY_RATE := 15
 # Time since the player was last hit. Counts up each frame; HP regen kicks
 # in once it crosses (HP_REGEN_DELAY - regen_delay_reduction). Reset by
 # take_damage().
@@ -928,6 +935,12 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 	var shield_result := _shield.absorb_damage(amount, knockback_strength)
 	amount = shield_result.amount
 	knockback_strength = shield_result.knockback
+	# Barrier absorbs remaining damage after shield (temporary HP buffer
+	# from barrier_on_kill gear stat).
+	if _barrier > 0 and amount > 0:
+		var absorbed := mini(amount, _barrier)
+		_barrier -= absorbed
+		amount -= absorbed
 	_health = max(_health - amount, 0)
 	health_changed.emit(_health, max_health)
 	# Reset out-of-combat regen — any take_damage() call delays HP recovery
@@ -972,6 +985,38 @@ func heal(amount: int) -> void:
 	_health = mini(_health + amount, max_health)
 	if _health != old:
 		health_changed.emit(_health, max_health)
+
+
+func on_enemy_killed() -> void:
+	if not _alive:
+		return
+	if _gear_life_on_kill > 0:
+		heal(_gear_life_on_kill)
+	if _gear_barrier_on_kill > 0:
+		_add_barrier(_gear_barrier_on_kill)
+
+
+func _add_barrier(amount: int) -> void:
+	if _barrier_max <= 0:
+		return
+	_barrier = mini(_barrier + amount, _barrier_max)
+	_barrier_decay_timer = BARRIER_DECAY_DELAY
+	health_changed.emit(_health, max_health)
+
+
+func _tick_barrier(delta: float) -> void:
+	if _barrier <= 0:
+		return
+	_barrier_decay_timer -= delta
+	if _barrier_decay_timer > 0.0:
+		return
+	var decay := maxi(1, int(BARRIER_DECAY_RATE * delta))
+	_barrier = maxi(0, _barrier - decay)
+	health_changed.emit(_health, max_health)
+
+
+func get_barrier() -> int:
+	return _barrier
 
 
 func _on_player_leveled_up(new_level: int, hp_gain: int) -> void:
@@ -1055,6 +1100,8 @@ func _recompute_stat_bonuses() -> void:
 	var cdr := 0.0
 	var hp_regen_bonus := 0.0
 	var regen_delay_red := 0.0
+	var life_on_kill := 0
+	var barrier_on_kill := 0
 	for slot in SlotRegistry.SLOTS:
 		var item: Item = InventoryState.get_equipped(slot)
 		if item == null:
@@ -1077,6 +1124,8 @@ func _recompute_stat_bonuses() -> void:
 		cdr += float(item.get_effective_modifier(&"cooldown_reduction")) * 0.01
 		hp_regen_bonus += float(item.get_effective_modifier(&"hp_regen_bonus"))
 		regen_delay_red += float(item.get_effective_modifier(&"regen_delay_reduction"))
+		life_on_kill += item.get_effective_modifier(&"life_on_kill")
+		barrier_on_kill += item.get_effective_modifier(&"barrier_on_kill")
 	_gear_damage_reduction = minf(dmg_red, 40.0)
 	_gear_move_speed_bonus = move_spd
 	_gear_base_damage_bonus = base_dmg
@@ -1086,6 +1135,9 @@ func _recompute_stat_bonuses() -> void:
 	_gear_cooldown_reduction = cdr
 	_gear_hp_regen_bonus = hp_regen_bonus
 	_gear_regen_delay_reduction = regen_delay_red
+	_gear_life_on_kill = life_on_kill
+	_gear_barrier_on_kill = barrier_on_kill
+	_barrier_max = 50 + barrier_on_kill * 3
 	var new_max := _base_max_health + _level_hp_bonus + hp_bonus
 	if new_max != max_health:
 		var old_max := max_health
@@ -1159,6 +1211,7 @@ func _physics_process(delta: float) -> void:
 	_combat.tick_cooldowns(delta)
 	_tick_resource_regen(delta)
 	_tick_health_regen(delta)
+	_tick_barrier(delta)
 	_telekinesis.tick(delta)
 	_shield.tick(delta)
 	_doomsayer.tick(delta)

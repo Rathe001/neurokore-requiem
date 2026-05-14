@@ -899,6 +899,8 @@ const _STAT_LABELS: Dictionary = {
 	&"blast_radius_bonus": "Blast Radius",
 	&"damage_bonus_pct": "Damage",
 	&"resource_on_hit": "Resource On Hit",
+	&"life_on_kill": "Life on Kill",
+	&"barrier_on_kill": "Barrier on Kill",
 	&"unarmed_damage_bonus": "Unarmed Damage",
 	&"unarmed_stun_chance": "Unarmed Stun Chance",
 	&"unarmed_aoe_radius": "Unarmed AoE Radius",

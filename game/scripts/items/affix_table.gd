@@ -237,6 +237,15 @@ const PREFIXES: Array[Dictionary] = [
 		"min_item_level": 5,
 		"weight": 70,
 	},
+	# ── Sustain prefixes ─────────────────────────────────────────────────────
+	{
+		"id": &"hardened",
+		"label": "Hardened",
+		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Leg Armor", "Boots"],
+		"stat_modifiers": { "barrier_on_kill": 5 },
+		"min_item_level": 3,
+		"weight": 70,
+	},
 ]
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -334,6 +343,23 @@ const SUFFIXES: Array[Dictionary] = [
 		"stat_modifiers": { "resource_on_hit": 2 },
 		"min_item_level": 5,
 		"weight": 75,
+	},
+	# ── Sustain suffixes ─────────────────────────────────────────────────────
+	{
+		"id": &"of_vitality",
+		"label": "of Vitality",
+		"item_types": ["1H Weapon", "2H Weapon", "Head Armor", "Chest Armor", "Gloves", "Leg Armor", "Boots"],
+		"stat_modifiers": { "life_on_kill": 5 },
+		"min_item_level": 1,
+		"weight": 85,
+	},
+	{
+		"id": &"of_the_parasite",
+		"label": "of the Parasite",
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "life_on_kill": 8 },
+		"min_item_level": 8,
+		"weight": 60,
 	},
 ]
 

@@ -54,6 +54,8 @@ const DEBUG_OVERLAY_INTERVAL := 0.1
 
 var _max_health: int = 1
 var _last_hp_current: int = 0
+var _barrier_fill: ColorRect = null
+const BARRIER_FILL_COLOR := Color(0.5, 0.85, 1.0, 0.45)
 var _banner_token: int = 0
 # Shield buff state cache, populated by player's shield_buff_changed
 # signal. Drives the white outline around the HP bar (visible when
@@ -103,6 +105,7 @@ func _ready() -> void:
 	_apply_theme()
 	_build_heal_preview()
 	_build_ghost_fills()
+	_build_barrier_fill()
 	_update_avatar_panel()
 	_repaint_xp(PlayerState.xp, PlayerState.xp_to_next)
 	UIThemeState.changed.connect(_apply_theme)
@@ -895,6 +898,7 @@ func _repaint_hp() -> void:
 	hp_fill.offset_right = new_right
 	hp_fill.color = p.hp_full if ratio > LOW_HP_RATIO else p.hp_low
 	hp_label.text = "%d / %d" % [max(_last_hp_current, 0), _max_health]
+	_update_barrier_fill()
 	_update_heal_preview()
 
 
@@ -944,6 +948,44 @@ func _build_ghost_fills() -> void:
 		container.add_child(_resource_ghost)
 		container.move_child(_resource_ghost, resource_fill.get_index() + 1)
 		_resource_ghost_right = resource_fill.offset_right
+
+
+func _update_barrier_fill() -> void:
+	if _barrier_fill == null:
+		return
+	var player := get_tree().get_first_node_in_group(&"player")
+	if player == null or not player.has_method(&"get_barrier"):
+		_barrier_fill.visible = false
+		return
+	var barrier: int = player.get_barrier()
+	if barrier <= 0:
+		_barrier_fill.visible = false
+		return
+	# Barrier sits at the right edge of the HP fill as a cyan extension.
+	var barrier_ratio := clampf(float(barrier) / float(_max_health), 0.0, 1.0)
+	var hp_right := hp_fill.offset_right
+	var barrier_width := HP_BAR_WIDTH * barrier_ratio
+	# Clamp so barrier + HP doesn't exceed the bar.
+	var max_right := hp_fill.offset_left + HP_BAR_WIDTH
+	_barrier_fill.offset_left = hp_right
+	_barrier_fill.offset_right = minf(hp_right + barrier_width, max_right)
+	_barrier_fill.visible = true
+
+
+func _build_barrier_fill() -> void:
+	if hp_fill == null:
+		return
+	_barrier_fill = ColorRect.new()
+	_barrier_fill.color = BARRIER_FILL_COLOR
+	_barrier_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_barrier_fill.visible = false
+	_barrier_fill.anchor_bottom = hp_fill.anchor_bottom
+	_barrier_fill.offset_top = hp_fill.offset_top
+	_barrier_fill.offset_bottom = hp_fill.offset_bottom
+	var container := hp_fill.get_parent()
+	container.add_child(_barrier_fill)
+	# Draw on top of hp_fill so the cyan segment is visible.
+	container.move_child(_barrier_fill, hp_fill.get_index() + 1)
 
 
 func _drain_ghost_fills(delta: float) -> void:
