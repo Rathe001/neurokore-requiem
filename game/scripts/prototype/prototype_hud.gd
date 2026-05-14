@@ -72,21 +72,15 @@ const GHOST_HP_COLOR := Color(1.0, 0.3, 0.2, 0.25)
 const GHOST_RESOURCE_COLOR := Color(0.4, 0.6, 0.9, 0.25)
 
 var _shield_state: Dictionary = {"active": false, "pool": 0, "pool_max": 0, "reduction": 0.0, "cooldown_remain": 0.0, "cooldown_total": 0.0, "duration_remain": 0.0}
-var _shield_outline: ReferenceRect = null
-var _shield_overlay: ColorRect = null
+# Shield ghost bars — same visual pattern as barrier-on-kill. _shield_fill
+# extends right from HP fill into the empty region; _shield_wrap is an
+# overlay that fills left-to-right on TOP of the HP fill when the shield
+# pool exceeds the missing-HP gap (i.e. player is at or near full health).
+var _shield_fill: ColorRect = null
+var _shield_wrap: ColorRect = null
 var _heal_preview: ColorRect = null
-# White → red lerp colours for the HP-bar outline. Above
-# _SHIELD_OUTLINE_RED_THRESHOLD the outline stays full white;
-# below, it lerps toward red so the player can see the shield
-# nearing collapse without staring at the buff bar.
-const _SHIELD_OUTLINE_FULL := Color.WHITE
-const _SHIELD_OUTLINE_BREAK := Color(1.0, 0.18, 0.18, 1.0)
-const _SHIELD_OUTLINE_COOLDOWN := Color(1.0, 1.0, 1.0, 0.35)
-# A dim cyan tint for SHIELD_HOLD released-with-pool: communicates
-# "ready to redeploy" without competing visually with the bright
-# active-block colour or the dim white cooldown state.
-const _SHIELD_OUTLINE_HOLD_READY := Color(0.6, 0.85, 1.0, 0.45)
-const _SHIELD_OUTLINE_RED_THRESHOLD := 0.5
+const SHIELD_FILL_COLOR := Color(1.0, 1.0, 1.0, 0.35)
+const SHIELD_WRAP_COLOR := Color(1.0, 1.0, 1.0, 0.2)
 var _debug_overlay_accum: float = 0.0
 var _state_flashlight: bool = false
 var _state_crouch: bool = false
@@ -159,7 +153,7 @@ func _ready() -> void:
 		player.credits_changed.connect(_on_credits_changed)
 	PerkState.perk_gained.connect(_on_perk_gained)
 	_on_health_changed(_max_health, _max_health)
-	_build_shield_outline()
+	_build_shield_fill()
 	_bind_skill_slots(player)
 	_bind_resource_pool(player)
 	_build_minimap(player)
@@ -899,6 +893,7 @@ func _repaint_hp() -> void:
 	hp_fill.color = p.hp_full if ratio > LOW_HP_RATIO else p.hp_low
 	hp_label.text = "%d / %d" % [max(_last_hp_current, 0), _max_health]
 	_update_barrier_fill()
+	_update_shield_fill()
 	_update_heal_preview()
 
 
@@ -1051,45 +1046,35 @@ func _on_player_died() -> void:
 	pass
 
 
-# Build a 1px white outline that tracks the HP bar's frame. Visible
-# whenever the shield buff is active OR on cooldown — the colour
-# difference between active (full white) and cooldown (dim) reads
-# without a label.
-func _build_shield_outline() -> void:
-	if hp_bg == null:
+# Build ghost bars for the active shield. Two rects:
+# _shield_fill — extends rightward from the HP fill edge into the empty
+#   region, same pattern as barrier-on-kill.
+# _shield_wrap — an overlay on TOP of the HP fill, filling left-to-right,
+#   for when the shield pool exceeds the missing-HP gap (i.e. at or near
+#   full health the shield "wraps around" and layers over the fill).
+func _build_shield_fill() -> void:
+	if hp_fill == null:
 		return
-	_shield_outline = ReferenceRect.new()
-	_shield_outline.editor_only = false
-	_shield_outline.border_color = Color.WHITE
-	_shield_outline.border_width = 2.0
-	_shield_outline.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# Inset 2px on every side so the white shield ring sits INSIDE the
-	# HP container's own 2px blue border. The HP fill is also inset by
-	# 2px (set in the .tscn), so the shield ring layers between them —
-	# the player sees the existing HUD border, then the shield ring,
-	# then the fill, all stacked outward-to-inward.
-	_shield_outline.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_shield_outline.offset_left = 2.0
-	_shield_outline.offset_top = 2.0
-	_shield_outline.offset_right = -2.0
-	_shield_outline.offset_bottom = -2.0
-	_shield_outline.visible = false
-	hp_bg.get_parent().add_child(_shield_outline)
-
-	# White overlay bar — covers the HP fill when SHIELD_HOLD (full block)
-	# is active, signaling "your HP is fully protected." Width tracks the
-	# shield pool ratio so the player sees the absorb pool drain. Sits above
-	# the HP fill in z-order via add_child ordering.
-	_shield_overlay = ColorRect.new()
-	_shield_overlay.color = Color(1.0, 1.0, 1.0, 0.35)
-	_shield_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_shield_overlay.visible = false
-	# Same inset as hp_fill so it layers directly on top.
-	_shield_overlay.offset_left = hp_fill.offset_left
-	_shield_overlay.offset_top = hp_fill.offset_top
-	_shield_overlay.offset_right = hp_fill.offset_right
-	_shield_overlay.offset_bottom = hp_fill.offset_bottom
-	hp_bg.get_parent().add_child(_shield_overlay)
+	var container := hp_fill.get_parent()
+	# Extension bar (right of HP fill, like barrier).
+	_shield_fill = ColorRect.new()
+	_shield_fill.color = SHIELD_FILL_COLOR
+	_shield_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_shield_fill.visible = false
+	_shield_fill.anchor_bottom = hp_fill.anchor_bottom
+	_shield_fill.offset_top = hp_fill.offset_top
+	_shield_fill.offset_bottom = hp_fill.offset_bottom
+	container.add_child(_shield_fill)
+	container.move_child(_shield_fill, hp_fill.get_index() + 1)
+	# Wrap overlay (on top of HP fill, left-to-right).
+	_shield_wrap = ColorRect.new()
+	_shield_wrap.color = SHIELD_WRAP_COLOR
+	_shield_wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_shield_wrap.visible = false
+	_shield_wrap.anchor_bottom = hp_fill.anchor_bottom
+	_shield_wrap.offset_top = hp_fill.offset_top
+	_shield_wrap.offset_bottom = hp_fill.offset_bottom
+	container.add_child(_shield_wrap)
 
 
 func _on_shield_buff_changed(active: bool, pool: int, pool_max: int, reduction: float, cooldown_remain: float, cooldown_total: float, duration_remain: float) -> void:
@@ -1102,46 +1087,52 @@ func _on_shield_buff_changed(active: bool, pool: int, pool_max: int, reduction: 
 		"cooldown_total": cooldown_total,
 		"duration_remain": duration_remain,
 	}
-	if _shield_outline != null:
-		var player := get_tree().get_first_node_in_group(&"player") as PrototypePlayer
-		var kind := player.get_shield_buff_kind() if player != null else Skill.ActiveKind.NONE
-		var has_pool: bool = pool > 0 and pool_max > 0
-		var hold_ready: bool = kind == Skill.ActiveKind.SHIELD_HOLD and not active and has_pool and cooldown_remain <= 0.0
-		# Visible when active (white→red as pool depletes), recovering
-		# (dim white), or HOLD-ready-with-partial-pool (dim cyan).
-		# Hidden when no offhand, or just cleared.
-		var show: bool = active or cooldown_remain > 0.0 or hold_ready
-		_shield_outline.visible = show
-		# Thicker border for Amp Shield (partial DR) so it reads at a glance.
-		_shield_outline.border_width = 3.0 if kind == Skill.ActiveKind.SHIELD_BUFF else 2.0
-		if show:
-			if active and pool_max > 0:
-				# Lerp from white to red below the threshold; full white
-				# above. Pool ratio of 0 = full red (about to break);
-				# ratio at threshold = full white. Linear in between.
-				var ratio: float = clampf(float(pool) / float(pool_max), 0.0, 1.0)
-				if ratio >= _SHIELD_OUTLINE_RED_THRESHOLD:
-					_shield_outline.border_color = _SHIELD_OUTLINE_FULL
-				else:
-					var t: float = 1.0 - (ratio / _SHIELD_OUTLINE_RED_THRESHOLD)
-					_shield_outline.border_color = _SHIELD_OUTLINE_FULL.lerp(_SHIELD_OUTLINE_BREAK, t)
-			elif hold_ready:
-				_shield_outline.border_color = _SHIELD_OUTLINE_HOLD_READY
-			else:
-				_shield_outline.border_color = _SHIELD_OUTLINE_COOLDOWN
-
-	# White overlay for SHIELD_HOLD — covers the HP bar to signal full
-	# protection. Width tracks pool ratio so the bar visually drains.
-	if _shield_overlay != null:
-		var shield_reduction: float = _shield_state.get("reduction", 0.0)
-		var is_hold_active: bool = active and pool_max > 0 and shield_reduction >= 1.0
-		_shield_overlay.visible = is_hold_active
-		if is_hold_active:
-			var pool_ratio := clampf(float(pool) / float(pool_max), 0.0, 1.0)
-			_shield_overlay.offset_right = _shield_overlay.offset_left + HP_BAR_WIDTH * pool_ratio
+	_update_shield_fill()
 	# Buff bar shows the live shield as an entry; rebuild so the tooltip
 	# is current. The bar is at most ~7 entries — cheap.
 	_update_buffs_bar()
+
+
+func _update_shield_fill() -> void:
+	if _shield_fill == null:
+		return
+	var pool: int = _shield_state.get("pool", 0)
+	var pool_max: int = _shield_state.get("pool_max", 0)
+	var is_active: bool = _shield_state.get("active", false)
+	if not is_active or pool <= 0 or pool_max <= 0:
+		_shield_fill.visible = false
+		_shield_wrap.visible = false
+		return
+	# Shield amount expressed as a ratio of the player's max health so
+	# the ghost bar is visually comparable to the HP fill.
+	var shield_ratio := clampf(float(pool) / float(_max_health), 0.0, 1.0)
+	var hp_ratio := clampf(float(_last_hp_current) / float(_max_health), 0.0, 1.0)
+	var bar_left := hp_fill.offset_left
+	var bar_max_right := bar_left + HP_BAR_WIDTH
+	var hp_right := bar_left + HP_BAR_WIDTH * hp_ratio
+	var empty_ratio := 1.0 - hp_ratio  # fraction of bar that is empty
+
+	if shield_ratio <= empty_ratio:
+		# Shield fits entirely in the empty region — extend rightward from
+		# the HP fill edge, same pattern as barrier-on-kill.
+		_shield_fill.offset_left = hp_right
+		_shield_fill.offset_right = hp_right + HP_BAR_WIDTH * shield_ratio
+		_shield_fill.visible = true
+		_shield_wrap.visible = false
+	else:
+		# Shield overflows the empty region. Fill the remaining empty space
+		# AND wrap the overflow as a left-to-right overlay on top of the
+		# HP fill. This reads as "shield extends past full health."
+		if empty_ratio > 0.001:
+			_shield_fill.offset_left = hp_right
+			_shield_fill.offset_right = bar_max_right
+			_shield_fill.visible = true
+		else:
+			_shield_fill.visible = false
+		var overflow_ratio := shield_ratio - empty_ratio
+		_shield_wrap.offset_left = bar_left
+		_shield_wrap.offset_right = bar_left + HP_BAR_WIDTH * overflow_ratio
+		_shield_wrap.visible = true
 
 func _on_notification_requested(text: String) -> void:
 	# Hold duration is fully-opaque time; the slow alpha fade-out adds
