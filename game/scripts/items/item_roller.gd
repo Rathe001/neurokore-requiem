@@ -385,7 +385,7 @@ const WEAPON_SIGNATURE_STATS: Dictionary = {
 		{ "key": &"sustained_bonus", "base": Vector2i(8, 18) },
 	],
 	&"smg_1h": [
-		{ "key": &"ricochet_chance", "base": Vector2i(5, 12), "cap": 20 },
+		{ "key": &"ricochet_chance", "base": Vector2i(15, 25), "cap": 40 },
 	],
 	&"ranged_1h": [
 		{ "key": &"overcharge_chance", "base": Vector2i(8, 15), "cap": 25 },

@@ -86,10 +86,9 @@ var damage_type: StringName = &""
 ## Sniper headshot bonus — percentage bonus applied on first-mark hits.
 ## Stacks additively with the base first-mark multiplier.
 var headshot_bonus_pct: int = 0
-## SMG ricochet — percentage chance on hit to spawn a secondary projectile
-## at the nearest other enemy. Ricochets don't chain (is_ricochet flag).
+## SMG ricochet — percentage chance on hit to deal instant damage to the
+## nearest other enemy with a visible arc. Single-bounce only.
 var ricochet_chance_pct: int = 0
-var is_ricochet: bool = false
 ## Laser overcharge — percentage chance for any shot to deal 2× damage.
 var overcharge_chance_pct: int = 0
 
@@ -551,7 +550,6 @@ func _pool_release() -> void:
 	weapon_base_id = &""
 	headshot_bonus_pct = 0
 	ricochet_chance_pct = 0
-	is_ricochet = false
 	overcharge_chance_pct = 0
 	# Reset falloff visual fade so pooled projectiles start opaque.
 	var vis := get_node_or_null(^"Visual") as MeshInstance3D
@@ -727,12 +725,14 @@ func _hit_single(body: Node3D, impact_pos: Vector3) -> void:
 		_try_spawn_isr_drone(body)
 		# SMG "Ricochet" — on hit, chance to spawn a secondary bullet at
 		# the nearest other enemy. Ricochets don't chain further.
-		if ricochet_chance_pct > 0 and not is_ricochet and randf() * 100.0 < float(ricochet_chance_pct):
+		if ricochet_chance_pct > 0 and randf() * 100.0 < float(ricochet_chance_pct):
 			_try_ricochet(body)
 
 
 const RICOCHET_SEARCH_RADIUS: float = 8.0
 const RICOCHET_DAMAGE_MULT: float = 0.5
+const RICOCHET_ARC_COLOR := Color(1.0, 0.75, 0.3, 1.0)  # warm yellow-orange
+const RICOCHET_ARC_DURATION := 0.12  # short flash so it reads as a ricochet
 
 func _try_ricochet(hit_body: Node3D) -> void:
 	var origin := hit_body.global_position + Vector3(0.0, 0.9, 0.0)
@@ -747,28 +747,18 @@ func _try_ricochet(hit_body: Node3D) -> void:
 			best = enode
 	if best == null:
 		return
-	var proj: PrototypeProjectile = EntityPool.acquire(preload("res://scenes/prototype/prototype_projectile.tscn"))
-	if proj == null:
-		return
-	var aim := (best.global_position + Vector3(0.0, 0.9, 0.0) - origin).normalized()
-	proj.direction = aim
-	proj.speed = speed
-	proj.max_range = best_dist + 2.0
-	proj.damage_min = int(float(damage_min) * RICOCHET_DAMAGE_MULT)
-	proj.damage_max = int(float(damage_max) * RICOCHET_DAMAGE_MULT)
-	proj.damage_mult = damage_mult
-	proj.crit_chance = crit_chance
-	proj.knockback_strength = 0.0
-	proj.source_position = origin
-	proj.target_group = &"enemies"
-	proj.is_bullet = true
-	proj.weapon_base_id = weapon_base_id
-	proj.damage_type = damage_type
-	proj.is_ricochet = true
-	get_parent().add_child(proj)
-	proj.global_position = origin
-	proj.monitoring = true
-	proj.reset()
+	var target_pos := best.global_position + Vector3(0.0, 0.9, 0.0)
+	# Visual: short arc from hit enemy to ricochet target + impact burst.
+	CombatVisuals.spawn_lightning_arc(self, origin, target_pos, RICOCHET_ARC_DURATION, RICOCHET_ARC_COLOR)
+	CombatVisuals.spawn_impact_burst(self, target_pos, RICOCHET_ARC_COLOR)
+	# Deal damage directly — no secondary projectile needed for an instant
+	# ricochet. This avoids pool churn and guarantees the hit lands.
+	var is_crit := randf() < crit_chance
+	var base_dmg := randi_range(damage_min, damage_max)
+	var dmg := int(round(float(base_dmg) * RICOCHET_DAMAGE_MULT * damage_mult * (1.5 if is_crit else 1.0)))
+	if dmg < 1:
+		dmg = 1
+	PrototypeEnemy.deal_damage(best, dmg, origin, 0.0, 1, is_crit, weapon_base_id)
 
 
 func _explode(impact_pos: Vector3) -> void:
