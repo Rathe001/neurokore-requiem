@@ -7,6 +7,8 @@ const SETTLED_HEIGHT := 0.35
 const BOB_HEIGHT := 0.10
 const BOB_SPEED := 2.2
 const SPIN_SPEED := 0.8
+const MAGNET_DURATION := 0.15
+const MAGNET_SHRINK := 0.3
 
 var item: Item = null
 ## Peer id (as StringName) of the player who owns this drop. Empty means
@@ -20,6 +22,7 @@ var owner_id: StringName = &""
 
 var _velocity: Vector3 = Vector3.ZERO
 var _popping: bool = true
+var _collecting: bool = false
 var _bob_phase: float = 0.0
 var _object_y: float = 0.0
 var _name_label: Label3D = null
@@ -98,6 +101,8 @@ func _apply_ownership_visual() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if _collecting:
+		return
 	if _popping:
 		_velocity.y -= GRAVITY * delta
 		var next_pos := global_position + _velocity * delta
@@ -147,7 +152,7 @@ func _on_hover_exit() -> void:
 ## full, surfacing a banner so the player knows why the pickup didn't
 ## happen instead of failing silently.
 func interact(_user: Node) -> void:
-	if _popping:
+	if _popping or _collecting:
 		return
 	# Non-owned items can't be picked up.
 	if not _is_owned_by_local_player():
@@ -188,10 +193,26 @@ func _notify_inventory_full() -> void:
 
 
 func _do_local_pickup() -> void:
-	if InventoryState.add_to_inventory(item):
-		get_tree().call_group(&"interactable_tooltip", &"hide_tooltip")
-		SpatialGrid.unregister(self)
+	if not InventoryState.add_to_inventory(item):
+		return
+	_collecting = true
+	get_tree().call_group(&"interactable_tooltip", &"hide_tooltip")
+	SpatialGrid.unregister(self)
+	# Pickup audio — reuse ui_confirm which is already registered.
+	WeaponSounds.play_generic(&"ui_confirm", global_position, -4.0)
+	# Magnet-to-player tween: fly toward the player and shrink.
+	var player := get_tree().get_first_node_in_group(&"player")
+	if player == null or not is_instance_valid(player):
 		queue_free()
+		return
+	var target_pos: Vector3 = player.global_position + Vector3(0.0, 1.0, 0.0)
+	# Hide the name label immediately so the text doesn't stretch during tween.
+	if _name_label != null:
+		_name_label.visible = false
+	var tween := create_tween().set_parallel(true)
+	tween.tween_property(self, "global_position", target_pos, MAGNET_DURATION).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	tween.tween_property(self, "scale", Vector3.ONE * MAGNET_SHRINK, MAGNET_DURATION).set_ease(Tween.EASE_IN)
+	tween.chain().tween_callback(queue_free)
 
 
 ## True when the local player is allowed to pick this up: either we own it,

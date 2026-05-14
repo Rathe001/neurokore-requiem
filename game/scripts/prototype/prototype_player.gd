@@ -530,6 +530,7 @@ var _fade_rect: ColorRect = null
 var _chromatic: ChromaticAberrationOverlay = null
 var _retro_filter: RetroFilterOverlay = null
 var _low_hp_warning: LowHpWarningOverlay = null
+var _damage_flash: DamageFlashOverlay = null
 var _death_glitch: DeathGlitchOverlay = null
 # Replicated by the MultiplayerSynchronizer attached to player.tscn — the
 # authority sets it from velocity each physics tick; remote peers read it
@@ -696,6 +697,8 @@ func _ready() -> void:
 	_low_hp_warning = LowHpWarningOverlay.new()
 	_low_hp_warning.setup(self)
 	add_child(_low_hp_warning)
+	_damage_flash = DamageFlashOverlay.new()
+	add_child(_damage_flash)
 	_death_glitch = DeathGlitchOverlay.new()
 	_death_glitch.setup(self)
 	add_child(_death_glitch)
@@ -934,6 +937,8 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 	_out_of_combat_t = 0.0
 	_hp_regen_accum = 0.0
 	_hit_flash_tween = HitFlash.play(self, visual, _hit_flash_tween)
+	if _damage_flash != null:
+		_damage_flash.flash(amount, max_health)
 	WeaponSounds.play_generic(&"hit_player", global_position)
 	var grunt_threshold: int = maxi(2, int(round(float(max_health) * GRUNT_DAMAGE_PCT_MIN)))
 	if _grunt_cd <= 0.0 and amount >= grunt_threshold:
