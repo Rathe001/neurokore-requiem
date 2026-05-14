@@ -730,7 +730,11 @@ func _hit_single(body: Node3D, impact_pos: Vector3) -> void:
 
 
 const RICOCHET_SEARCH_RADIUS: float = 8.0
-const RICOCHET_DAMAGE_MULT: float = 0.5
+# Ricochet used to be 50% of the original hit — fine in theory, but on
+# SMG base damage of 2-6 it rounded down to ~1 per ricochet, which read
+# as a hit with no impact. Bumped to 80% so the bounce feels like a real
+# secondary hit rather than a courtesy graze.
+const RICOCHET_DAMAGE_MULT: float = 0.8
 const RICOCHET_ARC_COLOR := Color(1.0, 0.75, 0.3, 1.0)  # warm yellow-orange
 const RICOCHET_ARC_DURATION := 0.12  # short flash so it reads as a ricochet
 

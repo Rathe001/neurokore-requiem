@@ -1345,6 +1345,24 @@ func _physics_process(delta: float) -> void:
 			flat = flat.move_toward(target, step)
 			velocity.x = flat.x
 			velocity.z = flat.y
+		else:
+			# Air control — without this, jumping straight up against an
+			# obstacle leaves the player no way to nudge themselves over
+			# it. Reduced cap (60% of ground speed) and reduced accel so
+			# the rise still feels weighty; just enough lateral influence
+			# to clear knee-high clutter when starting from rest.
+			const AIR_CONTROL_SPEED_FACTOR: float = 0.6
+			const AIR_CONTROL_ACCEL_FACTOR: float = 0.5
+			var flat := Vector2(velocity.x, velocity.z)
+			var air_target := Vector2(wish_dir.x, wish_dir.z) * move_speed * AIR_CONTROL_SPEED_FACTOR
+			# If existing horizontal speed exceeds the air cap (running jump),
+			# don't drag it back — only let air input ADD lateral velocity.
+			if wish_dir.length_squared() > 0.01:
+				var max_speed: float = maxf(flat.length(), air_target.length())
+				var air_step := accel * AIR_CONTROL_ACCEL_FACTOR * delta
+				flat = flat.move_toward(air_target.limit_length(max_speed), air_step)
+				velocity.x = flat.x
+				velocity.z = flat.y
 	# Capture the wished horizontal motion before move_and_slide so step-up can
 	# probe in that direction even if the slide zeroed velocity against a wall.
 	var wish_horiz := Vector3(velocity.x, 0.0, velocity.z)
