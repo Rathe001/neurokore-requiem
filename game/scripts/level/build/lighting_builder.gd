@@ -77,10 +77,10 @@ static func configure_fps_fog(ctx: LevelBuildContext) -> void:
 # density gradient: a dense thin slab on the floor for the FPS view, and
 # a taller, softer layer above it that gives the iso camera enough depth
 # to accumulate visible fog while staying visually floor-weighted.
-const FOG_FLOOR_HEIGHT := 0.5
-const FOG_FLOOR_DENSITY := 0.6
-const FOG_HAZE_HEIGHT := 3.0
-const FOG_HAZE_DENSITY := 0.08
+const FOG_FLOOR_HEIGHT := 0.3
+const FOG_FLOOR_DENSITY := 0.9
+const FOG_HAZE_HEIGHT := 1.5
+const FOG_HAZE_DENSITY := 0.12
 
 static func create_fog_volume(ctx: LevelBuildContext, center: Vector3, size_x: float, size_z: float) -> void:
 	# Dense floor slab — visible in FPS, provides the "dry ice" floor line.

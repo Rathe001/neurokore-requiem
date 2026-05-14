@@ -785,8 +785,8 @@ func _apply_consumable_base(item: Item, main_type: String, rarity: StringName, r
 const LIGHT_MOD_POOL: Array[Dictionary] = [
 	{"mod": Item.LightMod.FLASHLIGHT, "weight": 50, "min_ilvl": 1},
 	{"mod": Item.LightMod.RADIANT,    "weight": 30, "min_ilvl": 1},
-	{"mod": Item.LightMod.SCANNER,    "weight": 15, "min_ilvl": 15},
-	{"mod": Item.LightMod.UV,         "weight": 10, "min_ilvl": 25},
+	{"mod": Item.LightMod.SCANNER,    "weight": 15, "min_ilvl": 3},
+	{"mod": Item.LightMod.UV,         "weight": 10, "min_ilvl": 5},
 ]
 
 func _apply_head_light_mod(item: Item, main_type: String, item_level: int, rng: RandomNumberGenerator) -> void:
