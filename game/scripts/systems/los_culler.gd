@@ -152,6 +152,19 @@ func _physics_process(_delta: float) -> void:
 		var enemy := e as Node3D
 		if enemy == null or not enemy.is_inside_tree():
 			continue
+		# Clutter destructibles (barrels, exam tables, etc.) register as
+		# &"enemies" for damage routing but they're static level geometry —
+		# the ray-from-player-center test misreports them as "behind a
+		# wall" when their footprint extends past a corner, and the
+		# player ends up bumping a prop they can't see. Skip the LOS
+		# test entirely for them; they should always render. Their cover
+		# function is handled by the PILLAR-layer combat-LOS test in
+		# the enemy AI's own pick_skill / cast path, not by visibility.
+		if enemy.is_in_group(&"clutter"):
+			_set_target(enemy, true)
+			_combat_los[enemy] = true
+			index += 1
+			continue
 		var first_seen := not _target_los.has(enemy)
 		if first_seen or (index + stagger) % STAGGER_GROUPS == 0:
 			var visual_los: bool
