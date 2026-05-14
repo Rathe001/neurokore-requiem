@@ -1249,6 +1249,12 @@ func _physics_process(delta: float) -> void:
 	if on_floor and not _crouching and not GameplayChatState.typing and Input.is_action_just_pressed(&"jump"):
 		_interacting = false
 		velocity.y = JUMP_VELOCITY
+		# move_and_slide zeroes horizontal velocity against walls, so a jump
+		# while pressed into an obstacle would go straight up. Inject the
+		# last input direction as forward momentum so the player vaults over.
+		if _want_dir.length_squared() > 0.01 and Vector2(velocity.x, velocity.z).length_squared() < 1.0:
+			velocity.x = _want_dir.x * move_speed
+			velocity.z = _want_dir.z * move_speed
 		_is_airborne = true
 		_play_anim(ANIM_JUMP_START, 1.2)
 
