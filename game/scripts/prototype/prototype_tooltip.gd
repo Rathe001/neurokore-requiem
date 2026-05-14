@@ -986,11 +986,16 @@ func _build_skill_stats_text(skill: Skill, source: Item) -> String:
 				Skill.TargetingMode.CHAIN_LIGHTNING:
 					var ct: int = source.get_effective_modifier(&"chain_targets") if source != null else 0
 					var jumps: int = ct if ct > 0 else skill.chain_jumps
-					if skill.chain_falloff_pct > 0.0:
+					var falloff: float = skill.chain_falloff_pct
+					if source != null:
+						var ret: int = source.get_effective_modifier(&"chain_retention")
+						if ret > 0:
+							falloff = clampf(100.0 - float(ret), 0.0, 100.0)
+					if falloff > 0.0:
 						if jumps > 0:
-							lines.append("Chain: %d targets, %.0f%% falloff" % [jumps, skill.chain_falloff_pct])
+							lines.append("Chain: %d targets, %.0f%% falloff" % [jumps, falloff])
 						else:
-							lines.append("Chain: bounces with %.0f%% falloff" % skill.chain_falloff_pct)
+							lines.append("Chain: bounces with %.0f%% falloff" % falloff)
 					else:
 						lines.append("Chain: %d targets" % jumps)
 		Skill.ActiveKind.POTION:
