@@ -257,10 +257,21 @@ func _quick_equip(slot: ItemSlot) -> void:
 	# trap.
 	if equip_slot_id == &"offhand" and InventoryState.is_two_handed_equipped():
 		return
+	# Origin-gated items (Stimpack vs Battery on the wrong-origin character)
+	# would silently reject inside set_equipped. Pre-check so we don't clear
+	# the inventory slot first.
+	if not item.origin_matches_player():
+		return
 	var displaced := InventoryState.get_equipped(equip_slot_id)
 	# Free inventory slot first so set_equipped has room for 2H offhand displacement
 	InventoryState.set_inventory_item(slot.inventory_index, null)
 	InventoryState.set_equipped(equip_slot_id, item)
+	# Belt-and-suspenders: if set_equipped silently rejected for any reason
+	# the pre-checks didn't cover (future gates, edge cases), restore the
+	# item to its inventory slot rather than losing it.
+	if InventoryState.get_equipped(equip_slot_id) != item:
+		InventoryState.set_inventory_item(slot.inventory_index, item)
+		return
 	if displaced != null:
 		if not InventoryState.add_to_inventory(displaced):
 			get_tree().call_group(&"world_item_dropper", &"drop_item", displaced)
