@@ -528,16 +528,21 @@ static func spawn_impact_burst(host: Node3D, world_pos: Vector3, color_override:
 #     to be procedural so it doesn't need the source's seven sprite
 #     sheets.
 const EXPLOSION_DURATION := 0.8
-# Smoke particles linger past the main fireball — keep them alive for
-# this long total so the volume reads as a real plume rather than a flash.
-const EXPLOSION_SMOKE_LIFETIME := 1.6
+# Spark + flash layers run alongside the flipbook for the "impact
+# moment" punch — the flipbook itself handles fireball + smoke phases
+# internally over its own ~2s sprite-sheet lifetime, so we don't need
+# a separate procedural smoke layer.
 const EXPLOSION_SPARK_LIFETIME := 0.45
-# Instant white-hot flash that pops on detonation for one short beat
-# before the fireball mesh catches up. Lives on its own quick tween;
-# unmistakable visual cue at iso distance even if the camera isn't
-# pointed straight at the impact.
 const EXPLOSION_FLASH_DURATION: float = 0.18
-const FIREBALL_SHADER: Shader = preload("res://scripts/prototype/explosion_fireball.gdshader")
+# Lifetime of the flipbook GPUParticles3D scene before we queue_free
+# its instance. Matches the BigExplosionScene's particle lifetime
+# (2.13s) plus a small tail so trailing frames have time to finish.
+const EXPLOSION_FLIPBOOK_LIFETIME: float = 2.6
+# The BigExplosionScene was authored at roughly this blast radius —
+# we scale the instantiated scene by (blast_radius / this) so smaller
+# grenades produce smaller flipbooks instead of full-screen kabooms.
+const FLIPBOOK_BASE_RADIUS: float = 3.0
+const FLIPBOOK_EXPLOSION_SCENE: PackedScene = preload("res://assets/vfx/explosion/BigExplosionScene.tscn")
 
 # Elemental palettes for the procedural fireball. Each entry gives the
 # four shader color uniforms (core / mid / outer / smoke) plus the
@@ -595,56 +600,36 @@ static func spawn_explosion(host: Node3D, world_pos: Vector3, blast_radius: floa
 		_spawn_energy_explosion(parent, world_pos, blast_radius, color_override)
 
 
-# Procedural fireball — sphere mesh running explosion_fireball.gdshader.
-# Tweens scale up from 0.15× to 0.7× of blast_radius, intensity down,
-# and age 0→1 to drive the color shift to smoke and the alpha fade.
-# Damage type picks the color palette: empty / flame → orange fireball,
-# cryo → cyan ice burst, electric → violet arc burst.
-static var _fireball_mesh_cache: Dictionary = {}
-
-static func _get_fireball_mesh(start_radius: float) -> SphereMesh:
-	var cached: SphereMesh = _fireball_mesh_cache.get(start_radius)
-	if cached != null:
-		return cached
-	var m := SphereMesh.new()
-	m.radius = start_radius
-	m.height = start_radius * 2.0
-	m.radial_segments = 24
-	m.rings = 12
-	_fireball_mesh_cache[start_radius] = m
-	return m
-
+## Flipbook-driven explosion using the BigExplosionScene's pre-baked
+## 8×8 sprite-sheet (smokesprite.png) + normal maps for lighting. The
+## scene itself owns the GPUParticles3D and the material's UV
+## animation; we just instantiate it, scale to blast radius, and
+## stack the supporting layers (omni light, sparks, instant flash) on
+## top. The flipbook includes its own smoke-dispersal phase as the
+## sprite ages, so we don't spawn a separate procedural smoke layer.
 static func _spawn_fireball_explosion(parent: Node, world_pos: Vector3, blast_radius: float, damage_type: StringName = &"") -> void:
-	var start_radius := blast_radius * 0.15
-	var end_radius := blast_radius * 0.7
 	var palette: Dictionary = FIREBALL_PALETTES.get(damage_type, FIREBALL_PALETTES[&""])
 
-	var mat := ShaderMaterial.new()
-	mat.shader = FIREBALL_SHADER
-	# Intensity multiplies EMISSION in the shader. 1.0 just paints the
-	# surface its color — not HDR-bright. To get a real flash that
-	# blooms and reads as "explosion", push intensity into the HDR
-	# range (>1) so post-process glow / tonemap actually engages.
-	mat.set_shader_parameter(&"intensity", 5.0)
-	mat.set_shader_parameter(&"age", 0.0)
-	mat.set_shader_parameter(&"core_color", palette["core"])
-	mat.set_shader_parameter(&"mid_color", palette["mid"])
-	mat.set_shader_parameter(&"outer_color", palette["outer"])
-	mat.set_shader_parameter(&"smoke_color", palette["smoke"])
+	var fx: Node3D = FLIPBOOK_EXPLOSION_SCENE.instantiate() as Node3D
+	parent.add_child(fx)
+	fx.global_position = world_pos
+	# The scene was authored for ~FLIPBOOK_BASE_RADIUS m blasts. Scale
+	# the whole node so smaller grenades produce smaller flipbooks
+	# instead of dominating the screen. Clamped so chip-scale AoEs
+	# don't shrink the effect to invisibility and so a giant Tactical
+	# Strike doesn't fill the entire viewport.
+	fx.scale = Vector3.ONE * clampf(blast_radius / FLIPBOOK_BASE_RADIUS, 0.4, 2.0)
+	# Auto-cleanup once the flipbook lifetime + tail expires. Particle
+	# system stops emitting at ~2.13s; tail gives trailing frames time
+	# to finish their UV animation before we yank the node.
+	fx.get_tree().create_timer(EXPLOSION_FLIPBOOK_LIFETIME).timeout.connect(fx.queue_free)
 
-	var mesh := _get_fireball_mesh(start_radius)
-
-	var inst := MeshInstance3D.new()
-	inst.mesh = mesh
-	inst.material_override = mat
-	inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	parent.add_child(inst)
-	inst.global_position = world_pos
-
-	# Element-tinted omni-light pulses with the blast. Bright peak, fast
-	# drop to a sustained glow over 0.15s, then long tail to zero. Light
-	# scatters through volumetric fog at quarter intensity so dense
-	# rooms get a colored haze.
+	# Omni light pulse — surrounding floor / walls / enemies light up
+	# in the explosion's color. Two-stage fade: peak holds briefly at
+	# 40, drops to a sustained glow at 14 over 0.15s, then trails to
+	# zero. light_volumetric_fog_energy carries a quarter of the
+	# brightness into any in-room fog so dense rooms get a colored
+	# haze without overpowering them.
 	var light := _acquire_light()
 	light.light_color = palette["light"]
 	light.light_energy = 40.0
@@ -652,38 +637,22 @@ static func _spawn_fireball_explosion(parent: Node, world_pos: Vector3, blast_ra
 	light.omni_attenuation = 0.9
 	light.shadow_enabled = false
 	light.light_volumetric_fog_energy = 0.25
-	inst.add_child(light)
+	fx.add_child(light)
 
-	# Instant flash sphere — bright unshaded white-hot pop on top of
-	# the fireball mesh. Reads as the detonation flash that should
-	# precede the orange ball; the shader's age-based fade can take a
-	# few frames to read clearly, this one is immediately visible.
+	var light_tween := fx.create_tween()
+	light_tween.tween_property(light, "light_energy", 14.0, 0.15).set_ease(Tween.EASE_OUT)
+	light_tween.chain()
+	light_tween.tween_property(light, "light_energy", 0.0, EXPLOSION_DURATION).set_ease(Tween.EASE_IN)
+	light_tween.chain().tween_callback(_release_light.bind(light))
+
+	# Instant flash sphere — bright unshaded white-hot pop that
+	# precedes the flipbook's first visible frame. Reads as the
+	# detonation flash at iso distance even when the flipbook quads
+	# haven't fully oriented to camera yet.
 	_spawn_explosion_flash(parent, world_pos, blast_radius, palette["core"])
 	# Sparks — bright radial dots flying outward, short lifetime, low
 	# gravity. Reads as flying debris / hot fragments.
 	_spawn_explosion_sparks(parent, world_pos, blast_radius, palette["mid"])
-	# Smoke plume — sparse, very transparent puffs that linger around
-	# the explosion. Onset is slightly delayed so the fireball flash
-	# isn't immediately occluded; rise is gentle so the iso camera
-	# stays focused on the impact site, not a column climbing off-screen.
-	_spawn_explosion_smoke(parent, world_pos, blast_radius, palette["smoke"])
-
-	var scale_target := end_radius / start_radius
-	var tween := inst.create_tween().set_parallel(true)
-	# Scale punches out fast (TRANS_EXPO) — feels like a real shockwave.
-	tween.tween_property(inst, "scale", Vector3.ONE * scale_target, EXPLOSION_DURATION).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_EXPO)
-	# age tweens linearly 0→1 over the duration; the shader's alpha and
-	# color-to-smoke transitions drive off it.
-	tween.tween_property(mat, "shader_parameter/age", 1.0, EXPLOSION_DURATION)
-	# Light: peak holds briefly at 40, drops to a strong sustained glow
-	# at 14 over 0.15s, then long tail to zero over the rest of the
-	# duration. Two-stage chain so the bright phase is readable before
-	# the long fade.
-	tween.tween_property(light, "light_energy", 14.0, 0.15).set_ease(Tween.EASE_OUT)
-	tween.chain()
-	tween.tween_property(light, "light_energy", 0.0, EXPLOSION_DURATION - 0.15).set_ease(Tween.EASE_IN)
-	tween.chain().tween_callback(_release_light.bind(light))
-	tween.chain().tween_callback(inst.queue_free)
 
 
 # Instant white-hot pop at the impact point — separate from the
@@ -777,70 +746,6 @@ static func _spawn_explosion_sparks(parent: Node, world_pos: Vector3, blast_radi
 	# Cleanup after the burst — lifetime is short, but pad so the tail
 	# fully fades.
 	particles.get_tree().create_timer(EXPLOSION_SPARK_LIFETIME + 0.2).timeout.connect(particles.queue_free)
-
-
-# Slow upward-drifting smoke puffs. Outlive the fireball so the area
-# stays visually marked after the bright flash settles. Tuned for the
-# iso camera — gentle drift, very low opacity per puff, smooth spheres
-# so the silhouette doesn't read as cartoony low-poly polygons.
-static func _spawn_explosion_smoke(parent: Node, world_pos: Vector3, blast_radius: float, tint: Color) -> void:
-	var particles := GPUParticles3D.new()
-	particles.emitting = true
-	particles.one_shot = true
-	particles.amount = clampi(int(round(blast_radius * 1.8)), 4, 10)
-	particles.lifetime = EXPLOSION_SMOKE_LIFETIME
-	particles.explosiveness = 0.65
-	particles.local_coords = false
-
-	var pm := ParticleProcessMaterial.new()
-	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
-	pm.emission_sphere_radius = blast_radius * 0.25
-	pm.direction = Vector3(0.0, 1.0, 0.0)
-	pm.spread = 30.0
-	# Gentle upward drift only — the previous values had smoke climbing
-	# 6-10m off-screen on a 3m blast radius, which read as fog rising
-	# rather than residue at the impact site.
-	pm.initial_velocity_min = blast_radius * 0.4
-	pm.initial_velocity_max = blast_radius * 0.9
-	pm.gravity = Vector3(0.0, -0.3, 0.0)
-	pm.damping_min = 2.5
-	pm.damping_max = 4.5
-	pm.scale_min = blast_radius * 0.22
-	pm.scale_max = blast_radius * 0.4
-	# Grow-and-fade curve. Starts small so the fireball flash isn't
-	# instantly occluded, peaks around 30%, fades to nothing by the end.
-	var curve := Curve.new()
-	curve.add_point(Vector2(0.0, 0.35))
-	curve.add_point(Vector2(0.35, 1.0))
-	curve.add_point(Vector2(1.0, 0.0))
-	var curve_tex := CurveTexture.new()
-	curve_tex.curve = curve
-	pm.scale_curve = curve_tex
-	# Particle color alpha 0.45 × mesh material alpha 0.18 ≈ 0.08 per
-	# puff. Previous 0.75 × 0.55 ≈ 0.41 stacked into an opaque tan wall
-	# that hid the fireball + light entirely.
-	pm.color = Color(tint.r, tint.g, tint.b, 0.45)
-	particles.process_material = pm
-
-	# Smoother sphere mesh — was 8 × 4, which silhouetted as octagons in
-	# the screenshot. 16 × 8 reads round at iso distance.
-	var mesh := SphereMesh.new()
-	mesh.radius = 0.5
-	mesh.height = 1.0
-	mesh.radial_segments = 16
-	mesh.rings = 8
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(tint.r, tint.g, tint.b, 0.18)
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	mesh.material = mat
-	particles.draw_pass_1 = mesh
-
-	# Add to tree first — see _spawn_explosion_sparks for the rationale.
-	parent.add_child(particles)
-	particles.global_position = world_pos
-	particles.get_tree().create_timer(EXPLOSION_SMOKE_LIFETIME + 0.4).timeout.connect(particles.queue_free)
 
 
 # Energy-weapon AoE — keeps the existing translucent-bubble look that
