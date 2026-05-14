@@ -21,6 +21,15 @@ const PARTICLE_LIFETIME := 0.4
 ## When true, this prop also sits on the PILLAR layer (128) so it blocks
 ## enemy projectiles and LOS rays — acting as cover when the player crouches.
 @export var provides_cover: bool = false
+## When true the prop also joins the WORLD layer so enemies can't path
+## through it (hard cover — cell bars, exam tables, security barriers).
+## When false, enemies phase through the prop (knee-high clutter — chairs,
+## barrels). Player still bumps either way via their PILLAR mask bit, so
+## a hard-cover prop still serves as movement cover for the player.
+## Hard-cover props are intentionally breakable so they can't softlock
+## a level — the player can shoot through a high-HP wall if the procgen
+## places one in the only path.
+@export var blocks_enemies: bool = false
 
 var _health: int
 var _alive: bool = true
@@ -29,16 +38,12 @@ var _visual: MeshInstance3D
 
 
 func _ready() -> void:
-	# PILLAR (128) only — not ENEMY (2). Player projectile mask already
-	# includes PILLAR (PROJECTILE_WORLD_MASK), so damage routing via the
-	# sweep raycast + body_entered group-check path still lands. Off the
-	# ENEMY layer means enemies don't physically bump destructibles — the
-	# cover-blocking-LOS purpose of the prop is preserved by PILLAR alone.
-	# `provides_cover` no longer affects the layer because every
-	# destructible is bullet-catchable at chest height now (see
-	# ClutterBuilder.DESTRUCTIBLE_COLLISION_HEIGHT) — the flag is kept on
-	# the resource for potential future use but doesn't gate the layer.
-	collision_layer = 128
+	# PILLAR (128) — bullets / combat-LOS rays see this as cover.
+	# Soft-cover props stop there. Hard-cover props (blocks_enemies)
+	# also join WORLD (1) so enemies physically bump them. Either way
+	# the prop is off the ENEMY layer (2), so enemy-vs-enemy navigation
+	# isn't poisoned by clutter sitting on the same layer.
+	collision_layer = (1 | 128) if blocks_enemies else 128
 	collision_mask = 0
 	add_to_group(&"enemies")
 	add_to_group(&"structures")

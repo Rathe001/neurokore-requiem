@@ -167,17 +167,23 @@ static func _create_indestructible(ctx: LevelBuildContext, pos: Vector3, def: Di
 		mesh_inst.add_to_group(&"clutter")
 		return
 
-	# Blocking: StaticBody3D on WORLD + PILLAR. WORLD is what makes enemies
-	# stop here — their mask drops PILLAR specifically so they walk through
-	# destructible clutter, so a PILLAR-only indestructible (cell bars,
-	# exam tables) would also become walkable. WORLD restores the hard-cover
-	# behaviour. PILLAR is retained so bullets + combat-LOS rays still see
-	# these as cover (same as destructibles).
-	var body := StaticBody3D.new()
+	# Blocking props are now DestructibleProps with high HP and
+	# blocks_enemies=true — they look and behave like hard cover
+	# (WORLD+PILLAR layer, blocks enemy movement + bullets + LOS) but
+	# the player can shoot through them if the procgen drops one in the
+	# only path. Without this, an exam table in a narrow corridor
+	# softlocked the floor.
+	const HARD_COVER_HP: int = 80
+	var body := DestructibleProp.new()
 	body.name = StringName("Prop_%s" % def["name"])
-	body.collision_layer = 1 | 128  # WORLD + PILLAR
-	body.collision_mask = 0
+	body.max_health = HARD_COVER_HP
+	body.drops_loot = false
+	body.drops_credits = false
+	body.credit_range = Vector2i(0, 0)
+	body.prop_color = def["color"] as Color
 	body.input_ray_pickable = false
+	body.provides_cover = true
+	body.blocks_enemies = true
 
 	var mesh_height := _get_height(def)
 	var mesh_inst := MeshInstance3D.new()
@@ -192,15 +198,21 @@ static func _create_indestructible(ctx: LevelBuildContext, pos: Vector3, def: Di
 		mesh_inst.rotation_degrees.z = 90.0
 		mesh_inst.position = Vector3(0, radius, 0)
 	else:
-		mesh_inst.position = Vector3(0, mesh_height * 0.5, 0)
+		mesh_inst.position = Vector3(0, mesh_height * 0.5 + def.get("y_offset", 0.0), 0)
 	body.add_child(mesh_inst)
 
 	var col := CollisionShape3D.new()
 	col.name = &"Collision"
-	col.shape = _make_shape(def)
-	col.position = mesh_inst.position
+	col.shape = _make_destructible_shape(def)
+	# Bullet-catch column same as soft-cover destructibles. For horizontal
+	# pipes we still anchor at radius height so the long axis sits along
+	# the floor.
 	if horizontal:
+		var radius: float = def.get("radius", 0.2)
 		col.rotation_degrees.z = 90.0
+		col.position = Vector3(0, radius, 0)
+	else:
+		col.position = Vector3(0, DESTRUCTIBLE_COLLISION_HEIGHT * 0.5, 0)
 	body.add_child(col)
 
 	body.position = pos
