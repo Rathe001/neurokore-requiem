@@ -499,6 +499,7 @@ func reset() -> void:
 			glow.visible = true
 			glow.omni_range = 5.0 * visual_scale
 			glow.light_energy = 3.0 * visual_scale
+			glow.light_specular = 0.0
 			# Drives _projectile_color() too — impact bursts and explosion
 			# VFX pick up the side color automatically.
 			glow.light_color = tint
