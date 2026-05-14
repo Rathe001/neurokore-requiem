@@ -217,10 +217,11 @@ func _do_reset_level(override_seed: int = 0) -> void:
 	_clear_corpses()
 	_clear_pickups()
 	var builder := get_node_or_null("LevelBuilder") as LevelBuilder
-	# Layout rotation: on NG+ cycle through the layout pool so each run
-	# feels different. First playthrough keeps the scene-assigned layout.
-	if builder != null and PlayerState.new_game_plus > 0 and not LAYOUT_POOL.is_empty():
-		var idx := (PlayerState.new_game_plus - 1) % LAYOUT_POOL.size()
+	# Layout rotation: cycle through the layout pool on every reset so each
+	# run feels different. new_game_plus is still at its pre-increment value
+	# here (_reset_player bumps it after we return), so index 0 = first NG+.
+	if builder != null and not LAYOUT_POOL.is_empty():
+		var idx := PlayerState.new_game_plus % LAYOUT_POOL.size()
 		var new_layout := load(LAYOUT_POOL[idx]) as LevelLayout
 		if new_layout != null:
 			builder.layout = new_layout
@@ -291,8 +292,8 @@ func _client_reset_level(seed_val: int, is_procgen: bool) -> void:
 	_clear_pickups()
 	var builder := get_node_or_null("LevelBuilder") as LevelBuilder
 	# Layout rotation — clients must swap to the same layout as the host.
-	if builder != null and PlayerState.new_game_plus > 0 and not LAYOUT_POOL.is_empty():
-		var idx := (PlayerState.new_game_plus - 1) % LAYOUT_POOL.size()
+	if builder != null and not LAYOUT_POOL.is_empty():
+		var idx := PlayerState.new_game_plus % LAYOUT_POOL.size()
 		var new_layout := load(LAYOUT_POOL[idx]) as LevelLayout
 		if new_layout != null:
 			builder.layout = new_layout
