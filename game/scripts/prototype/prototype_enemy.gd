@@ -1258,12 +1258,12 @@ func _chase_tick() -> void:
 	# Charmed enemies always melee (see _cast_attack), so they bypass kite
 	# too — otherwise they'd backpedal from the very target they're charmed
 	# to attack.
-	# Special skill check — runs before the basic attack for both melee and
-	# ranged. _pick_skill filters by range, cooldown, and LoS internally.
-	var special := _combat.pick_skill(dist, has_los)
-	if special != null:
-		_combat.cast_skill(target, to_target / dist, special)
-		return
+	# Special skill check disabled — enemy skills need a balance/design pass
+	# before they're ready for playtest. Basic attacks still function.
+	#var special := _combat.pick_skill(dist, has_los)
+	#if special != null:
+	#	_combat.cast_skill(target, to_target / dist, special)
+	#	return
 
 	if _combat.is_ranged() and not charmed:
 		var kite := _combat.ranged_kite_distance()
