@@ -721,8 +721,11 @@ static func _spawn_explosion_sparks(parent: Node, world_pos: Vector3, blast_radi
 	mesh.material = mat
 	particles.draw_pass_1 = mesh
 
-	particles.global_position = world_pos
+	# Add to tree BEFORE setting global_position — the setter walks the
+	# scene tree to convert into local coords, so doing it pre-parent
+	# trips "!is_inside_tree()" and silently leaves the node at origin.
 	parent.add_child(particles)
+	particles.global_position = world_pos
 	# Cleanup after the burst — lifetime is short, but pad so the tail
 	# fully fades.
 	particles.get_tree().create_timer(EXPLOSION_SPARK_LIFETIME + 0.2).timeout.connect(particles.queue_free)
@@ -777,8 +780,9 @@ static func _spawn_explosion_smoke(parent: Node, world_pos: Vector3, blast_radiu
 	mesh.material = mat
 	particles.draw_pass_1 = mesh
 
-	particles.global_position = world_pos
+	# Add to tree first — see _spawn_explosion_sparks for the rationale.
 	parent.add_child(particles)
+	particles.global_position = world_pos
 	particles.get_tree().create_timer(EXPLOSION_SMOKE_LIFETIME + 0.4).timeout.connect(particles.queue_free)
 
 
