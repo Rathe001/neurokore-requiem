@@ -1172,19 +1172,19 @@ func aggro(depth: int = 0) -> void:
 # how many ranged allies are FURTHER from the target than this enemy. When
 # multiple ranged enemies converge on the same target, the closest ones get
 # the biggest push-in so they form a front row and leave LoS for the back.
-func _front_row_kite_reduction(my_dist_sq: float) -> float:
+func _front_row_kite_reduction(my_dist_sq: float, target_pos: Vector3) -> float:
 	var allies := SpatialGrid.query_radius(global_position, RANGED_GROUP_SCAN_RADIUS, &"enemies")
 	var total_ranged := 0
 	var behind_me := 0  # allies further from target than me
 	for ally: Node3D in allies:
 		if ally == self:
 			continue
-		if ally is PrototypeEnemy and ally._combat != null and ally._combat.is_ranged() and ally._state == State.CHASING:
+		var e := ally as PrototypeEnemy
+		if e != null and e._combat != null and e._combat.is_ranged() and e._state == State.CHASING:
 			total_ranged += 1
-			if ally._target != null:
-				var ally_dist_sq := ally.global_position.distance_squared_to(ally._target.global_position)
-				if ally_dist_sq > my_dist_sq:
-					behind_me += 1
+			var ally_dist_sq := ally.global_position.distance_squared_to(target_pos)
+			if ally_dist_sq > my_dist_sq:
+				behind_me += 1
 	if total_ranged == 0:
 		return 0.0
 	# Fraction of the group behind me: 1.0 = I'm the closest, 0.0 = I'm the furthest
@@ -1298,7 +1298,7 @@ func _chase_tick() -> void:
 		var base_kite := _combat.ranged_kite_distance()
 		# Front-row stagger: when grouped with other ranged, the closest
 		# enemies push in tighter so rear allies can get line of sight.
-		var kite := maxf(base_kite - _front_row_kite_reduction(dist * dist), 1.5)
+		var kite := maxf(base_kite - _front_row_kite_reduction(dist * dist, target.global_position), 1.5)
 		if dist <= _combat.attack_range() and _attack_cd <= 0.0 and has_los:
 			_holding_position = false
 			_combat.cast_attack(target, to_target / dist)
