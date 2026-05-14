@@ -990,10 +990,25 @@ func heal(amount: int) -> void:
 func on_enemy_killed() -> void:
 	if not _alive:
 		return
-	if _gear_life_on_kill > 0:
-		heal(_gear_life_on_kill)
-	if _gear_barrier_on_kill > 0:
-		_add_barrier(_gear_barrier_on_kill)
+	var lok := _gear_life_on_kill
+	# Survivalist talent: +25% life on kill while a melee weapon is equipped.
+	if lok > 0:
+		var melee_mult := Effects.get_aggregate(&"life_on_kill_melee_mult")
+		if melee_mult > 0.0 and _has_melee_equipped():
+			lok = int(round(float(lok) * (1.0 + melee_mult)))
+		heal(lok)
+	var bok := _gear_barrier_on_kill
+	# Forged talent: +25% barrier on kill.
+	if bok > 0:
+		var barrier_mult := Effects.get_aggregate(&"barrier_on_kill_mult")
+		if barrier_mult > 0.0:
+			bok = int(round(float(bok) * (1.0 + barrier_mult)))
+		_add_barrier(bok)
+
+
+func _has_melee_equipped() -> bool:
+	var weapon: Item = InventoryState.get_equipped(&"weapon")
+	return weapon != null and weapon.weapon_base_id in MELEE_BASE_IDS
 
 
 func _add_barrier(amount: int) -> void:

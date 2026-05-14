@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="TalentTree" load_steps=4 format=3]
+[gd_resource type="Resource" script_class="TalentTree" load_steps=6 format=3]
 
 ; Survivalist (ing) talent tree — Ingenuity-aligned survival nodes.
 ;
@@ -8,6 +8,7 @@
 [ext_resource type="Script" path="res://scripts/talents/talent_node.gd" id="node_script"]
 [ext_resource type="Script" path="res://scripts/talents/talent_tree.gd" id="tree_script"]
 [ext_resource type="Resource" path="res://resources/skills/second_wind.tres" id="skill_second_wind"]
+[ext_resource type="Script" path="res://scripts/perks/perk_effect.gd" id="effect_script"]
 
 [sub_resource type="Resource" id="node_ing_t0_n0"]
 script = ExtResource("node_script")
@@ -19,6 +20,20 @@ node_idx = 0
 granted_skill = ExtResource("skill_second_wind")
 granted_slot = &"skill_1"
 
+[sub_resource type="Resource" id="effect_ing_t0_n1_lok"]
+script = ExtResource("effect_script")
+kind = &"life_on_kill_melee_mult"
+magnitude = 0.25
+
+[sub_resource type="Resource" id="node_ing_t0_n1"]
+script = ExtResource("node_script")
+id = &"ing_t0_n1_melee_leech"
+label = "Melee Leech"
+description = "Life on Kill from gear is 25% more effective while a melee weapon is equipped. Stay close, stay alive."
+tier = 0
+node_idx = 1
+effects = [SubResource("effect_ing_t0_n1_lok")]
+
 [resource]
 script = ExtResource("tree_script")
-nodes = [SubResource("node_ing_t0_n0")]
+nodes = [SubResource("node_ing_t0_n0"), SubResource("node_ing_t0_n1")]

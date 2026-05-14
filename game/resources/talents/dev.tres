@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="TalentTree" load_steps=5 format=3]
+[gd_resource type="Resource" script_class="TalentTree" load_steps=6 format=3]
 
 ; Forged (dev) talent tree — combat nodes.
 ;
@@ -28,6 +28,20 @@ tier = 0
 node_idx = 0
 effects = [SubResource("effect_dev_t0_n0_multistrike")]
 
+[sub_resource type="Resource" id="effect_dev_t0_n1_bok"]
+script = ExtResource("effect_script")
+kind = &"barrier_on_kill_mult"
+magnitude = 0.25
+
+[sub_resource type="Resource" id="node_dev_t0_n1"]
+script = ExtResource("node_script")
+id = &"dev_t0_n1_barrier_surge"
+label = "Barrier Surge"
+description = "Barrier on Kill from gear is 25% more effective. The Forged builds shields from carnage."
+tier = 0
+node_idx = 1
+effects = [SubResource("effect_dev_t0_n1_bok")]
+
 [resource]
 script = ExtResource("tree_script")
-nodes = [SubResource("node_dev_t0_n0")]
+nodes = [SubResource("node_dev_t0_n0"), SubResource("node_dev_t0_n1")]
