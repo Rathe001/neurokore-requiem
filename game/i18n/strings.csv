@@ -189,8 +189,8 @@ DEBUG_FILTER_GLITCH,Glitch
 DEBUG_FILTER_NOIR,Noir
 DEBUG_FILTER_INVERTED,Inverted
 HUD_HOTKEY_HINTS,WASD Move · LMB Fire · RMB Skill · Space Jump · Ctrl Crouch · I Inventory · N Talents · Tab Map · Esc Menu
-EXIT_TOOLTIP_LOCKED,Exit (Locked — defeat the boss)
-EXIT_TOOLTIP_UNLOCKED,Exit (Reset Level)
+EXIT_TOOLTIP_LOCKED,Elevator (Locked — defeat the boss)
+EXIT_TOOLTIP_UNLOCKED,Elevator (Descend to next level)
 HUD_BANNER_LEVEL_RESET,New Game +%d
 DOOR_LOCKED,It's locked
 HUD_BANNER_DIED,You died
