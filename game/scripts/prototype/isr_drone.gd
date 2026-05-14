@@ -61,11 +61,15 @@ var _offset_dir: Vector3 = Vector3.ZERO
 static func spawn_on(target: Node3D) -> void:
 	if target == null or not is_instance_valid(target):
 		return
-	# Already an active drone? Migrate it to the new target (or just
-	# refresh the timer if it's already on this one). Strictly one drone
-	# in the world at any time.
+	# One drone in flight at a time. While a proc is running, additional
+	# spawn calls are ignored — the existing drone keeps its target and
+	# its timer, and the next proc only lands once the current one
+	# releases. Acts as a natural cooldown gated by the active state
+	# rather than a separate timer. Previous behavior re-targeted the
+	# drone mid-flight, which made the green cone hop around the screen
+	# at horde scale and burned the proc on whatever was hit most
+	# recently rather than the original mark.
 	if _active_drone != null and is_instance_valid(_active_drone) and not _active_drone._released:
-		_active_drone._migrate_to(target)
 		return
 	var drone: ISRDrone = EntityPool.acquire(SCENE)
 	if drone == null:
@@ -90,27 +94,6 @@ static func spawn_on(target: Node3D) -> void:
 		target.apply_isr_mark()
 	drone._ensure_scan_cone()
 
-
-# Move the active drone to a new target without spawning a fresh one.
-# Lifts the ISR mark off the previous target (so it stops taking +25%
-# damage from random sources), applies it to the new one, and resets
-# the duration.
-func _migrate_to(new_target: Node3D) -> void:
-	if new_target == null or not is_instance_valid(new_target):
-		return
-	if _target == new_target:
-		_elapsed = 0.0
-		return
-	if _target != null and is_instance_valid(_target) and _target.has_method(&"remove_isr_mark"):
-		_target.remove_isr_mark()
-	_target = new_target
-	_elapsed = 0.0
-	# Re-randomize the lateral offset so the drone doesn't appear to teleport
-	# in a perfectly straight line above-and-behind the previous target.
-	var angle := randf() * TAU
-	_offset_dir = Vector3(cos(angle), 0.0, sin(angle))
-	if new_target.has_method(&"apply_isr_mark"):
-		new_target.apply_isr_mark()
 
 # ---------------------------------------------------------------------------
 # Lifecycle
