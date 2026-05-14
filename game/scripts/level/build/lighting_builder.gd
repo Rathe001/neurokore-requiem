@@ -69,11 +69,63 @@ static func configure_fps_fog(ctx: LevelBuildContext) -> void:
 	env.fog_density = t.fps_fog_density
 
 
-# Volumetric fog is disabled at the environment level; per-piece FogVolume
-# nodes would just be wasted resources. Kept as a no-op so the orchestrator
-# can call it unconditionally — re-enable here if volumetric fog returns.
-static func create_fog_volume(_ctx: LevelBuildContext, _center: Vector3, _size_x: float, _size_z: float) -> void:
-	pass
+# Per-room FogVolume — adds localized density variation so corridors feel
+# murkier than open rooms. Uses a FogMaterial with low density; the global
+# volumetric fog base provides the floor, and these volumes add on top.
+static func create_fog_volume(ctx: LevelBuildContext, center: Vector3, size_x: float, size_z: float) -> void:
+	var vol := FogVolume.new()
+	vol.size = Vector3(size_x, ctx.theme.wall_height, size_z)
+	vol.shape = RenderingServer.FOG_VOLUME_SHAPE_BOX
+	var mat := FogMaterial.new()
+	mat.density = 0.03
+	mat.albedo = Color(0.6, 0.65, 0.75)
+	vol.material = mat
+	vol.transform.origin = center + Vector3(0, ctx.theme.wall_height * 0.5, 0)
+	ctx.root.add_child(vol)
+
+
+# Per-room ambient dust particles — subtle floating motes that catch the
+# light and sell "atmosphere". Low count, slow drift, long lifetime so
+# they're always present without burning fill rate.
+static func create_room_particles(ctx: LevelBuildContext, center: Vector3, size_x: float, size_z: float) -> void:
+	var p := GPUParticles3D.new()
+	# Scale count with room area but cap to avoid GPU pressure in large rooms.
+	var area := size_x * size_z
+	p.amount = clampi(int(area * 0.4), 8, 48)
+	p.lifetime = 8.0
+	p.visibility_aabb = AABB(
+		Vector3(-size_x * 0.5, 0.0, -size_z * 0.5),
+		Vector3(size_x, ctx.theme.wall_height, size_z))
+	var mat := ParticleProcessMaterial.new()
+	mat.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	mat.emission_box_extents = Vector3(size_x * 0.45, ctx.theme.wall_height * 0.4, size_z * 0.45)
+	mat.direction = Vector3(0, 1, 0)
+	mat.spread = 180.0
+	mat.initial_velocity_min = 0.02
+	mat.initial_velocity_max = 0.06
+	mat.gravity = Vector3(0, -0.01, 0)
+	mat.scale_min = 0.015
+	mat.scale_max = 0.035
+	# Subtle turbulence so motes drift lazily, not straight-line.
+	mat.turbulence_enabled = true
+	mat.turbulence_noise_strength = 0.3
+	mat.turbulence_noise_speed_random = 0.2
+	mat.turbulence_noise_speed = Vector3(0.1, 0.05, 0.1)
+	p.process_material = mat
+	# Tiny unshaded sphere mesh — reads as floating dust from iso distance.
+	var mesh := SphereMesh.new()
+	mesh.radius = 0.02
+	mesh.height = 0.04
+	mesh.radial_segments = 4
+	mesh.rings = 2
+	var draw_mat := StandardMaterial3D.new()
+	draw_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	draw_mat.albedo_color = Color(0.85, 0.85, 0.75, 0.5)
+	draw_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mesh.material = draw_mat
+	p.draw_pass_1 = mesh
+	p.transform.origin = center + Vector3(0, ctx.theme.wall_height * 0.5, 0)
+	ctx.root.add_child(p)
 
 
 # ── internals ────────────────────────────────────────────────────────────
@@ -88,7 +140,7 @@ static func _create_ceiling_light(ctx: LevelBuildContext, pos: Vector3, lc: Ligh
 	light.omni_range = randf_range(CEILING_LIGHT_RANGE_MIN, CEILING_LIGHT_RANGE_MAX)
 	light.omni_attenuation = CEILING_LIGHT_ATTENUATION
 	light.shadow_enabled = lc.shadows
-	light.light_volumetric_fog_energy = 0.0
+	light.light_volumetric_fog_energy = 0.4
 	fixture.add_child(light)
 
 	_randomize_flicker_profile(fixture)

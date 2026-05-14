@@ -203,6 +203,7 @@ func _build_room(piece: LevelPiece) -> void:
 	LightingBuilder.place_room_fluorescents(_ctx, center, rd)
 	LightingBuilder.create_fill_light(_ctx, center, rd.size.x, rd.size.y)
 	LightingBuilder.create_fog_volume(_ctx, center, rd.size.x, rd.size.y)
+	LightingBuilder.create_room_particles(_ctx, center, rd.size.x, rd.size.y)
 	DecalBuilder.place_puddles(_ctx, center, hx, hz, rd)
 	ClutterBuilder.scatter_clutter(_ctx, center, hx, hz, rd, piece_id)
 	InteractableBuilder.spawn_slots(_ctx, piece_id, center, rd, piece.additional_slots)
@@ -275,6 +276,7 @@ func _build_corridor(piece: LevelPiece) -> void:
 	var fog_z := cd.length if cd.axis == CorridorDef.Axis.Z else cd.width
 	LightingBuilder.create_fill_light(_ctx, center, fog_x, fog_z)
 	LightingBuilder.create_fog_volume(_ctx, center, fog_x, fog_z)
+	LightingBuilder.create_room_particles(_ctx, center, fog_x, fog_z)
 	var corridor_enemies: int = piece.enemy_count_override if piece.enemy_count_override >= 0 else cd.enemy_count
 	EnemySpawner.spawn_in_bounds(_ctx, piece, center, hx, hz, corridor_enemies, cd.enemy_scene, Vector2i.ZERO, cd.enemy_classes, piece.pack_chance_override)
 

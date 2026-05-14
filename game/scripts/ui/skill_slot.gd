@@ -25,6 +25,8 @@ var _cooldown_dim: ColorRect = null
 var _cooldown_label: Label = null
 var _charge_label: Label = null
 var _icon_texture: TextureRect = null
+var _was_on_cooldown: bool = false
+var _ready_flash_tween: Tween = null
 
 func _ready() -> void:
 	_apply_theme()
@@ -151,7 +153,11 @@ func _process(_delta: float) -> void:
 			_cooldown_dim.visible = false
 		if _cooldown_label != null:
 			_cooldown_label.visible = false
+		if _was_on_cooldown:
+			_was_on_cooldown = false
+			_flash_ready()
 		return
+	_was_on_cooldown = true
 	cooldown_overlay.visible = true
 	cooldown_overlay.offset_top = size.y * (1.0 - ratio)
 	if _cooldown_dim != null:
@@ -163,6 +169,18 @@ func _process(_delta: float) -> void:
 		var remain: float = _player.get_cooldown_remain(_skill)
 		_cooldown_label.text = "%d" % int(ceil(remain)) if remain >= 1.0 else "%.1f" % remain
 		_cooldown_label.visible = true
+
+
+func _flash_ready() -> void:
+	if border == null:
+		return
+	if _ready_flash_tween != null and _ready_flash_tween.is_valid():
+		_ready_flash_tween.kill()
+	var original_color: Color = UIThemeState.palette.slot_border
+	border.visible = true
+	border.color = Color.WHITE
+	_ready_flash_tween = create_tween()
+	_ready_flash_tween.tween_property(border, "color", original_color, 0.35).set_ease(Tween.EASE_OUT)
 
 
 func _on_mouse_entered() -> void:

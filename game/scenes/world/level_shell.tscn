@@ -32,7 +32,12 @@ glow_bloom = 0.05
 glow_blend_mode = 1
 glow_hdr_threshold = 0.9
 glow_hdr_scale = 2.0
-volumetric_fog_enabled = false
+volumetric_fog_enabled = true
+volumetric_fog_density = 0.02
+volumetric_fog_albedo = Color(0.7, 0.75, 0.85, 1)
+volumetric_fog_emission = Color(0.0, 0.0, 0.0, 1)
+volumetric_fog_anisotropy = 0.3
+volumetric_fog_length = 40.0
 
 ; agent_height matches the enemy CROUCH_HEIGHT (1.0) so the navmesh routes
 ; through low-ceiling crawlspaces. Enemies detect overhead clearance at run
