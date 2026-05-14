@@ -31,12 +31,16 @@ func acquire(scene: PackedScene) -> Node3D:
 	if _pools.has(key):
 		var pool: Array = _pools[key]
 		while pool.size() > 0:
-			var node: Node3D = pool.pop_back()
-			if is_instance_valid(node):
-				node.set_physics_process(true)
-				node.set_process(true)
-				node.visible = true
-				return node
+			var raw = pool.pop_back()
+			if not is_instance_valid(raw):
+				continue
+			var node: Node3D = raw as Node3D
+			if node == null:
+				continue
+			node.set_physics_process(true)
+			node.set_process(true)
+			node.visible = true
+			return node
 	var inst := scene.instantiate()
 	if inst == null:
 		push_error("[EntityPool] acquire() instantiate() returned null for '%s' — %s" % [key, _get_caller_hint()])
