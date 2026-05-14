@@ -69,18 +69,22 @@ static func configure_fps_fog(ctx: LevelBuildContext) -> void:
 	env.fog_density = t.fps_fog_density
 
 
-# Per-room FogVolume — adds localized density variation so corridors feel
-# murkier than open rooms. Uses a FogMaterial with low density; the global
-# volumetric fog base provides the floor, and these volumes add on top.
+# Per-room FogVolume — low-lying "dry ice" fog that hugs the floor.
+# A thin slab (FOG_HEIGHT) sitting at floor level gives the dungeon a
+# ground-mist look without filling the room with smoke.
+const FOG_HEIGHT := 0.8
+const FOG_DENSITY := 0.06
+
 static func create_fog_volume(ctx: LevelBuildContext, center: Vector3, size_x: float, size_z: float) -> void:
 	var vol := FogVolume.new()
-	vol.size = Vector3(size_x, ctx.theme.wall_height, size_z)
+	vol.size = Vector3(size_x, FOG_HEIGHT, size_z)
 	vol.shape = RenderingServer.FOG_VOLUME_SHAPE_BOX
 	var mat := FogMaterial.new()
-	mat.density = 0.03
+	mat.density = FOG_DENSITY
 	mat.albedo = Color(0.6, 0.65, 0.75)
 	vol.material = mat
-	vol.transform.origin = center + Vector3(0, ctx.theme.wall_height * 0.5, 0)
+	# Center the slab at half its height so the bottom sits on the floor.
+	vol.transform.origin = center + Vector3(0, FOG_HEIGHT * 0.5, 0)
 	ctx.root.add_child(vol)
 
 
@@ -91,40 +95,40 @@ static func create_room_particles(ctx: LevelBuildContext, center: Vector3, size_
 	var p := GPUParticles3D.new()
 	# Scale count with room area but cap to avoid GPU pressure in large rooms.
 	var area := size_x * size_z
-	p.amount = clampi(int(area * 0.4), 8, 48)
-	p.lifetime = 8.0
+	p.amount = clampi(int(area * 0.5), 12, 64)
+	p.lifetime = 10.0
+	# Generous AABB so the iso camera (y=14, looking down) doesn't cull.
+	var wh := ctx.theme.wall_height
 	p.visibility_aabb = AABB(
-		Vector3(-size_x * 0.5, 0.0, -size_z * 0.5),
-		Vector3(size_x, ctx.theme.wall_height, size_z))
+		Vector3(-size_x, -wh, -size_z),
+		Vector3(size_x * 2.0, wh * 3.0, size_z * 2.0))
 	var mat := ParticleProcessMaterial.new()
 	mat.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-	mat.emission_box_extents = Vector3(size_x * 0.45, ctx.theme.wall_height * 0.4, size_z * 0.45)
+	mat.emission_box_extents = Vector3(size_x * 0.45, wh * 0.4, size_z * 0.45)
 	mat.direction = Vector3(0, 1, 0)
 	mat.spread = 180.0
 	mat.initial_velocity_min = 0.02
-	mat.initial_velocity_max = 0.06
+	mat.initial_velocity_max = 0.08
 	mat.gravity = Vector3(0, -0.01, 0)
-	mat.scale_min = 0.015
-	mat.scale_max = 0.035
+	mat.scale_min = 0.5
+	mat.scale_max = 1.5
 	# Subtle turbulence so motes drift lazily, not straight-line.
 	mat.turbulence_enabled = true
-	mat.turbulence_noise_strength = 0.3
-	mat.turbulence_noise_speed_random = 0.2
+	mat.turbulence_noise_strength = 0.4
+	mat.turbulence_noise_speed_random = 0.3
 	mat.turbulence_noise_speed = Vector3(0.1, 0.05, 0.1)
 	p.process_material = mat
-	# Tiny unshaded sphere mesh — reads as floating dust from iso distance.
-	var mesh := SphereMesh.new()
-	mesh.radius = 0.02
-	mesh.height = 0.04
-	mesh.radial_segments = 4
-	mesh.rings = 2
+	# QuadMesh billboard — always faces camera, reads clearly from iso view.
+	var mesh := QuadMesh.new()
+	mesh.size = Vector2(0.04, 0.04)
 	var draw_mat := StandardMaterial3D.new()
 	draw_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	draw_mat.albedo_color = Color(0.85, 0.85, 0.75, 0.5)
+	draw_mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	draw_mat.albedo_color = Color(0.9, 0.9, 0.8, 0.6)
 	draw_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mesh.material = draw_mat
 	p.draw_pass_1 = mesh
-	p.transform.origin = center + Vector3(0, ctx.theme.wall_height * 0.5, 0)
+	p.transform.origin = center + Vector3(0, wh * 0.5, 0)
 	ctx.root.add_child(p)
 
 

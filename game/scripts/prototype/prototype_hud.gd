@@ -921,7 +921,12 @@ func _build_ghost_fills() -> void:
 		_hp_ghost.color = GHOST_HP_COLOR
 		_hp_ghost.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_hp_ghost.visible = false
-		_hp_ghost.anchor_bottom = 1.0
+		# Mirror hp_fill's anchor + offset layout exactly.
+		_hp_ghost.anchor_bottom = hp_fill.anchor_bottom
+		_hp_ghost.offset_left = hp_fill.offset_left
+		_hp_ghost.offset_top = hp_fill.offset_top
+		_hp_ghost.offset_right = hp_fill.offset_right
+		_hp_ghost.offset_bottom = hp_fill.offset_bottom
 		var container := hp_fill.get_parent()
 		container.add_child(_hp_ghost)
 		# Place behind hp_fill so the ghost shows through the gap.
@@ -934,7 +939,11 @@ func _build_ghost_fills() -> void:
 		_resource_ghost.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_resource_ghost.visible = false
 		_resource_ghost.anchor_top = resource_fill.anchor_top
-		_resource_ghost.anchor_bottom = 1.0
+		_resource_ghost.anchor_bottom = resource_fill.anchor_bottom
+		_resource_ghost.offset_left = resource_fill.offset_left
+		_resource_ghost.offset_top = resource_fill.offset_top
+		_resource_ghost.offset_right = resource_fill.offset_right
+		_resource_ghost.offset_bottom = resource_fill.offset_bottom
 		var container := resource_fill.get_parent()
 		container.add_child(_resource_ghost)
 		container.move_child(_resource_ghost, resource_fill.get_index())
