@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="LevelLayout" load_steps=4 format=3]
+
+; Arena Hub — wide-open central arena with four cardinal combat rooms.
+; Drop-in replacement for prototype_layout.tres or procgen_demo.tres.
+
+[ext_resource type="Script" path="res://scripts/level/level_layout.gd" id="script_layout"]
+[ext_resource type="Resource" path="res://resources/level/themes/tech_theme.tres" id="theme"]
+[ext_resource type="Resource" path="res://resources/level/layouts/arena_hub_graph.tres" id="graph"]
+
+[resource]
+script = ExtResource("script_layout")
+theme = ExtResource("theme")
+ground_size = Vector2(80, 80)
+graph = ExtResource("graph")

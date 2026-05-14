@@ -1,0 +1,226 @@
+[gd_resource type="Resource" script_class="LevelGraph" load_steps=27 format=3]
+
+; ══════════════════════════════════════════════════════════════════════════════
+; ARENA HUB — wide-open central arena with combat rooms branching off each
+; cardinal direction. Spawn is south of the arena; boss lives in the arena
+; itself. Four side rooms reward exploration with loot + enemies. The arena's
+; decorative pillars provide cover but the centre stays clear for kiting.
+;
+;               [North Wing 10x8]
+;                     |
+;   [West Wing 10x8]—[Arena 32x24]—[East Wing 10x8]
+;                     |
+;              [South Hall 8x8]
+;                     |
+;              [Spawn Room 8x8]
+;
+; Wall enum: NORTH=0, SOUTH=1, EAST=2, WEST=3
+; ══════════════════════════════════════════════════════════════════════════════
+
+[ext_resource type="Script" path="res://scripts/level/graph/level_graph.gd" id="script_graph"]
+[ext_resource type="Script" path="res://scripts/level/graph/room_node.gd" id="script_node"]
+[ext_resource type="Script" path="res://scripts/level/graph/connection.gd" id="script_conn"]
+[ext_resource type="Script" path="res://scripts/level/room_def.gd" id="script_room"]
+[ext_resource type="Script" path="res://scripts/level/corridor_def.gd" id="script_corridor"]
+[ext_resource type="Script" path="res://scripts/level/interactable_slot.gd" id="script_slot"]
+[ext_resource type="Resource" path="res://resources/level/lights/fluorescent_white.tres" id="light_fluoro"]
+[ext_resource type="Resource" path="res://resources/level/lights/amber.tres" id="light_amber"]
+[ext_resource type="PackedScene" path="res://scenes/prototype/prototype_player_spawn.tscn" id="player_spawn"]
+[ext_resource type="PackedScene" path="res://scenes/prototype/prototype_boss_spawn.tscn" id="boss_spawn"]
+[ext_resource type="PackedScene" path="res://scenes/prototype/prototype_exit.tscn" id="exit"]
+
+; ── Spawn Room ──────────────────────────────────────────────────────────────
+
+[sub_resource type="Resource" id="slot_spawn"]
+script = ExtResource("script_slot")
+id = &"player_spawn"
+scene = ExtResource("player_spawn")
+offset = Vector3(0, 0.5, 0)
+
+[sub_resource type="Resource" id="room_spawn"]
+script = ExtResource("script_room")
+id = &"arena_spawn"
+size = Vector2(8, 8)
+openings = [0]
+opening_width = 4.0
+light_color = ExtResource("light_fluoro")
+slots = [SubResource("slot_spawn")]
+
+; ── South Hall — transition room with a few enemies ─────────────────────────
+
+[sub_resource type="Resource" id="room_south_hall"]
+script = ExtResource("script_room")
+id = &"arena_south_hall"
+size = Vector2(8, 8)
+openings = [0, 1]
+opening_width = 4.0
+light_color = ExtResource("light_fluoro")
+enemy_count = 2
+
+; ── Central Arena — wide open with pillar cover, boss + exit ────────────────
+
+[sub_resource type="Resource" id="slot_boss"]
+script = ExtResource("script_slot")
+id = &"boss"
+scene = ExtResource("boss_spawn")
+offset = Vector3(0, 0, 0)
+
+[sub_resource type="Resource" id="slot_exit"]
+script = ExtResource("script_slot")
+id = &"exit"
+scene = ExtResource("exit")
+offset = Vector3(0, 0, -10)
+
+[sub_resource type="Resource" id="room_arena"]
+script = ExtResource("script_room")
+id = &"arena_centre"
+size = Vector2(32, 24)
+openings = [0, 1, 2, 3]
+opening_width = 6.0
+light_color = ExtResource("light_fluoro")
+enemy_count = 6
+slots = [SubResource("slot_boss"), SubResource("slot_exit")]
+decorative_pillars = [
+	Vector2(-10, -7), Vector2(10, -7),
+	Vector2(-10, 7), Vector2(10, 7),
+	Vector2(0, -7), Vector2(0, 7),
+	Vector2(-13, 0), Vector2(13, 0),
+]
+decorative_pillar_size = Vector2(1.4, 1.4)
+puddle_count = 5
+puddle_size = Vector2(1.2, 2.0)
+
+; ── North Wing — combat room ────────────────────────────────────────────────
+
+[sub_resource type="Resource" id="room_north"]
+script = ExtResource("script_room")
+id = &"arena_north_wing"
+size = Vector2(10, 8)
+openings = [1]
+opening_width = 4.0
+light_color = ExtResource("light_amber")
+enemy_count = 3
+
+; ── East Wing — combat room ─────────────────────────────────────────────────
+
+[sub_resource type="Resource" id="room_east"]
+script = ExtResource("script_room")
+id = &"arena_east_wing"
+size = Vector2(10, 8)
+openings = [3]
+opening_width = 4.0
+light_color = ExtResource("light_fluoro")
+enemy_count = 3
+
+; ── West Wing — combat room ─────────────────────────────────────────────────
+
+[sub_resource type="Resource" id="room_west"]
+script = ExtResource("script_room")
+id = &"arena_west_wing"
+size = Vector2(10, 8)
+openings = [2]
+opening_width = 4.0
+light_color = ExtResource("light_amber")
+enemy_count = 3
+
+; ── Corridors ───────────────────────────────────────────────────────────────
+
+[sub_resource type="Resource" id="corr_short"]
+script = ExtResource("script_corridor")
+width = 4.0
+length = 4.0
+light_color = ExtResource("light_fluoro")
+light_interval = 4.0
+
+[sub_resource type="Resource" id="corr_wide"]
+script = ExtResource("script_corridor")
+width = 6.0
+length = 4.0
+light_color = ExtResource("light_fluoro")
+light_interval = 4.0
+
+; ── Room Nodes ──────────────────────────────────────────────────────────────
+
+[sub_resource type="Resource" id="node_spawn"]
+script = ExtResource("script_node")
+id = &"spawn"
+room = SubResource("room_spawn")
+position = Vector3(0, 0, 22)
+
+[sub_resource type="Resource" id="node_south"]
+script = ExtResource("script_node")
+id = &"south_hall"
+room = SubResource("room_south_hall")
+
+[sub_resource type="Resource" id="node_arena"]
+script = ExtResource("script_node")
+id = &"arena"
+room = SubResource("room_arena")
+
+[sub_resource type="Resource" id="node_north"]
+script = ExtResource("script_node")
+id = &"north"
+room = SubResource("room_north")
+
+[sub_resource type="Resource" id="node_east"]
+script = ExtResource("script_node")
+id = &"east"
+room = SubResource("room_east")
+
+[sub_resource type="Resource" id="node_west"]
+script = ExtResource("script_node")
+id = &"west"
+room = SubResource("room_west")
+
+; ── Connections ─────────────────────────────────────────────────────────────
+
+[sub_resource type="Resource" id="conn_spawn_south"]
+script = ExtResource("script_conn")
+from_room = &"spawn"
+from_wall = 0
+to_room = &"south_hall"
+to_wall = 1
+corridor = SubResource("corr_short")
+
+[sub_resource type="Resource" id="conn_south_arena"]
+script = ExtResource("script_conn")
+from_room = &"south_hall"
+from_wall = 0
+to_room = &"arena"
+to_wall = 1
+corridor = SubResource("corr_wide")
+
+[sub_resource type="Resource" id="conn_arena_north"]
+script = ExtResource("script_conn")
+from_room = &"arena"
+from_wall = 0
+to_room = &"north"
+to_wall = 1
+corridor = SubResource("corr_short")
+has_door = true
+
+[sub_resource type="Resource" id="conn_arena_east"]
+script = ExtResource("script_conn")
+from_room = &"arena"
+from_wall = 2
+to_room = &"east"
+to_wall = 3
+corridor = SubResource("corr_short")
+has_door = true
+
+[sub_resource type="Resource" id="conn_arena_west"]
+script = ExtResource("script_conn")
+from_room = &"arena"
+from_wall = 3
+to_room = &"west"
+to_wall = 2
+corridor = SubResource("corr_short")
+has_door = true
+
+; ── Graph Root ──────────────────────────────────────────────────────────────
+
+[resource]
+script = ExtResource("script_graph")
+anchor_id = &"spawn"
+rooms = [SubResource("node_spawn"), SubResource("node_south"), SubResource("node_arena"), SubResource("node_north"), SubResource("node_east"), SubResource("node_west")]
+connections = [SubResource("conn_spawn_south"), SubResource("conn_south_arena"), SubResource("conn_arena_north"), SubResource("conn_arena_east"), SubResource("conn_arena_west")]

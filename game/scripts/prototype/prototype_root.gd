@@ -7,6 +7,13 @@ const SPAWN_BATCH := 25
 const MAX_CORPSES := 100
 const PLAYER_SPAWN := Vector3(0.0, 0.0, -4.0)
 const BOSS_SCENE: PackedScene = preload("res://scenes/prototype/prototype_enemy.tscn")
+# NG+ layout rotation — first playthrough uses the scene's assigned layout
+# (prototype_layout.tres), then cycles through this pool each NG+.
+const LAYOUT_POOL: Array[String] = [
+	"res://resources/level/layouts/procgen_demo.tres",
+	"res://resources/level/layouts/arena_hub.tres",
+	"res://resources/level/layouts/procgen_pit_gauntlet.tres",
+]
 
 @export var spawn_min_radius: float = 8.0
 @export var spawn_max_radius: float = 14.0
@@ -210,8 +217,15 @@ func _do_reset_level(override_seed: int = 0) -> void:
 	_clear_corpses()
 	_clear_pickups()
 	var builder := get_node_or_null("LevelBuilder") as LevelBuilder
-	if builder != null and builder.layout != null and builder.layout.generator != null:
-		# Procgen path: fresh layout per NG+.
+	# Layout rotation: on NG+ cycle through the layout pool so each run
+	# feels different. First playthrough keeps the scene-assigned layout.
+	if builder != null and PlayerState.new_game_plus > 0 and not LAYOUT_POOL.is_empty():
+		var idx := (PlayerState.new_game_plus - 1) % LAYOUT_POOL.size()
+		var new_layout := load(LAYOUT_POOL[idx]) as LevelLayout
+		if new_layout != null:
+			builder.layout = new_layout
+	if builder != null and builder.layout != null and (builder.layout.generator != null or builder.layout.graph != null):
+		# Procgen / graph path: fresh layout per NG+.
 		var seed_val := override_seed if override_seed != 0 else randi()
 		# Broadcast seed so clients rebuild the same geometry.
 		# Also store in lobby data so late joiners get the current seed.
@@ -276,6 +290,12 @@ func _client_reset_level(seed_val: int, is_procgen: bool) -> void:
 	_clear_corpses()
 	_clear_pickups()
 	var builder := get_node_or_null("LevelBuilder") as LevelBuilder
+	# Layout rotation — clients must swap to the same layout as the host.
+	if builder != null and PlayerState.new_game_plus > 0 and not LAYOUT_POOL.is_empty():
+		var idx := (PlayerState.new_game_plus - 1) % LAYOUT_POOL.size()
+		var new_layout := load(LAYOUT_POOL[idx]) as LevelLayout
+		if new_layout != null:
+			builder.layout = new_layout
 	if is_procgen and builder != null:
 		await builder.rebuild(seed_val)
 		_move_player_to_spawn()

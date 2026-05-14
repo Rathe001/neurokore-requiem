@@ -85,6 +85,11 @@ const KEEP_CHASE_PLAYER_RANGE_SQ := 144.0  # 12.0 * 12.0
 # change) within RETURN_STUCK_TIMEOUT, teleport it home.
 const RETURN_STUCK_TIMEOUT := 3.0
 const RETURN_STUCK_PROGRESS_SQ := 2.0  # must close 1.4m in 3s or stuck
+# Chase stuck: if chasing but unable to close distance for this long, warp
+# to the next nav waypoint. Fires more aggressively than return-stuck because
+# the player is watching and a frozen enemy reads as broken.
+const CHASE_STUCK_TIMEOUT := 2.0
+const CHASE_STUCK_PROGRESS_SQ := 1.0  # must close ~1m in 2s or stuck
 # Returning enemies take this fraction of damage (5% — effectively immune)
 # and skip knockback entirely. Stops the player from kiting an enemy past
 # its leash and then sniping it on the walk back.
@@ -206,8 +211,8 @@ const LEVEL_RING_EMISSION: Array[Color] = [
 # Boss tuning: levels above the trash cap, multipliers stacked on the rolled
 # stats, and a deep-red glow distinct from any trash tier.
 const BOSS_LEVEL := 5
-const BOSS_HP_MULT := 3.0
-const BOSS_DAMAGE_MULT := 2.25
+const BOSS_HP_MULT := 12.0
+const BOSS_DAMAGE_MULT := 3.0
 # Bosses move at this multiple of CHASE_SPEED so the encounter has more
 # pressure than a kited trash mob. Applied in _movement_speed_base().
 const BOSS_SPEED_MULT := 1.35
@@ -368,6 +373,8 @@ var _visuals: EnemyVisuals
 var _spawn_position: Vector3 = Vector3.ZERO
 var _return_stuck_timer: float = 0.0
 var _return_last_dist_sq: float = 0.0
+var _chase_stuck_timer: float = 0.0
+var _chase_last_dist_sq: float = 0.0
 var _hit_leash_extend_sq: float = 0.0
 
 # Networking: synced by the MultiplayerSynchronizer to clients. Authority
@@ -953,6 +960,9 @@ func _change_state(new_state: State) -> void:
 	_state = new_state
 	if new_state == State.IDLE:
 		_hit_leash_extend_sq = 0.0
+	if new_state == State.CHASING:
+		_chase_stuck_timer = 0.0
+		_chase_last_dist_sq = 0.0
 
 
 func _physics_process(delta: float) -> void:
@@ -1303,6 +1313,25 @@ func _chase_tick() -> void:
 	# attack/kite range — explicitly drop the hold flag so the next
 	# in-range entry uses the strict threshold, not the buffered one.
 	_holding_position = false
+
+	# Chase stuck detection: if the enemy hasn't closed distance for
+	# CHASE_STUCK_TIMEOUT seconds, warp it to the next nav waypoint.
+	# Catches enemies wedged on destructibles, props, or stale navmesh.
+	var dist_sq := dist * dist
+	var chase_progress := _chase_last_dist_sq - dist_sq
+	_chase_last_dist_sq = dist_sq
+	if chase_progress < CHASE_STUCK_PROGRESS_SQ * get_physics_process_delta_time():
+		_chase_stuck_timer += get_physics_process_delta_time()
+		if _chase_stuck_timer >= CHASE_STUCK_TIMEOUT:
+			_chase_stuck_timer = 0.0
+			if _nav_agent != null and _nav_agent.get_navigation_map().is_valid():
+				_nav_agent.target_position = target.global_position
+				if not _nav_agent.is_navigation_finished():
+					var warp_pos := _nav_agent.get_next_path_position()
+					warp_pos.y = global_position.y
+					global_position = warp_pos
+	else:
+		_chase_stuck_timer = 0.0
 
 	# Pathfind via NavigationAgent — routes around walls and pit edges
 	# instead of charging straight at the target. Falls back to direct
