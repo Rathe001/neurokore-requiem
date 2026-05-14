@@ -95,6 +95,7 @@ func unlock() -> void:
 		return
 	_locked = false
 	_refresh_tint()
+	MissionState.notify_exit_unlocked()
 
 
 func lock() -> void:

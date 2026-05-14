@@ -571,6 +571,12 @@ func _apply_boss_stats() -> void:
 	_visuals.apply_floor_ring_tint_color(BOSS_RING_EMISSION)
 	_visuals.apply_model_tint(BOSS_RING_EMISSION)
 	add_to_group(&"bosses")
+	# Register from here (not from the spawn slot) so MP clients — who get
+	# bosses replicated via MultiplayerSpawner rather than running the
+	# spawn slot's _spawn() locally — also flip into the boss phase.
+	# register_boss is idempotent, so duplicate calls from the spawn slot
+	# on the host are harmless.
+	MissionState.register_boss()
 
 ## Class-tint constants — used by EnemyVisuals.class_ring_color.
 const _CLASS_TINT_MELEE := Color(1.0, 0.25, 0.15)

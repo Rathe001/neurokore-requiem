@@ -70,6 +70,11 @@ func _mark_used() -> void:
 	_used = true
 	_refresh_lamp()
 	_set_interactive(false)
+	# Mission tracker — only UNLOCK switches feed the switches phase. Other
+	# actions (OPEN/CLOSE doors directly) aren't part of the boss-gating
+	# puzzle chain.
+	if action == Action.UNLOCK:
+		MissionState.notify_switch_used()
 
 # Used switches drop out of mouse picking, the SpatialGrid interactable index,
 # and any active hover/tooltip state so they read as inert. reset_state() flips

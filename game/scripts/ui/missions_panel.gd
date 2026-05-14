@@ -2,14 +2,10 @@ extends Control
 class_name MissionsPanel
 
 ## Mission tracker panel — stacked under the Combat Effects panel in
-## the top-right corner. Always visible (even when no missions are
-## active, showing a placeholder); positions itself dynamically beneath
-## WeaponQuirkPanel so the two panels stay glued together as the
-## quirks panel grows / shrinks with equipped weapons.
-##
-## Content is placeholder for now — the mission system isn't built
-## yet. Once it lands, replace `_gather_active_missions` with a read
-## from MissionState (or whatever the eventual API is).
+## the top-right corner. Reads from the MissionState autoload and
+## re-renders on its `changed` signal. Phase transitions (switches done
+## → boss alive → boss dead) animate the previously-active line into a
+## green checkmark before the new phase replaces it.
 
 const PANEL_WIDTH: float = 210.0
 const PANEL_TITLE: String = "Missions"
@@ -20,13 +16,23 @@ const TIP_FONT_SIZE: int = 8
 const TITLE_COLOR := Color(0.95, 0.92, 0.85, 1.0)
 const HEADER_COLOR := Color(0.95, 0.85, 0.5, 1.0)
 const TIP_COLOR := Color(0.78, 0.78, 0.78, 0.85)
+const CHECK_COLOR := Color(0.45, 1.0, 0.55, 1.0)
 const PANEL_BG := Color(0.0, 0.0, 0.0, 0.55)
 const TITLE_DIVIDER_COLOR := Color(0.95, 0.85, 0.5, 0.35)
 const EMPTY_PLACEHOLDER := "No active missions"
 
+# Checkmark animation timing.
+const CHECK_POP_IN: float = 0.22   # scale 0 → 1.25 → 1.0
+const CHECK_HOLD: float = 1.1      # stay legible after the pop
+const CHECK_FADE_OUT: float = 0.35 # fade alpha 1 → 0 before swap
+
 var _bg: ColorRect
 var _vbox: VBoxContainer
 var _quirk_panel: WeaponQuirkPanel = null
+var _last_phase: StringName = MissionState.PHASE_NONE
+var _last_label: String = ""
+var _check_label: Label = null
+var _check_tween: Tween = null
 
 
 func _ready() -> void:
@@ -69,11 +75,32 @@ func _ready() -> void:
 	if _quirk_panel != null:
 		_quirk_panel.layout_changed.connect(_reposition_under_quirks)
 
+	MissionState.changed.connect(_on_mission_state_changed)
+	_last_phase = MissionState.current_phase()
+	_last_label = MissionState.current_label()
 	refresh()
 	_reposition_under_quirks()
 
 
+func _on_mission_state_changed() -> void:
+	var new_phase: StringName = MissionState.current_phase()
+	# Phase transition (not just a switch-count tick): the previously
+	# active phase just completed. Play the checkmark animation over the
+	# old label before swapping to the new one. Resetting to PHASE_NONE
+	# (level reset) is a wipe, not a completion — skip the animation.
+	if new_phase != _last_phase and _last_phase != MissionState.PHASE_NONE and new_phase != MissionState.PHASE_NONE:
+		_play_checkmark(_last_label)
+	_last_phase = new_phase
+	_last_label = MissionState.current_label()
+	refresh()
+
+
 func refresh() -> void:
+	# Don't clobber an in-flight checkmark — the animation owns the panel
+	# until it expires, then the next refresh() (kicked by _show_current
+	# at the end of the tween) repaints from current state.
+	if _check_label != null and is_instance_valid(_check_label):
+		return
 	for child in _vbox.get_children():
 		child.queue_free()
 	var title := Label.new()
@@ -87,8 +114,8 @@ func refresh() -> void:
 	divider.custom_minimum_size = Vector2(0.0, 1.0)
 	divider.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_vbox.add_child(divider)
-	var entries: Array = _gather_active_missions()
-	if entries.is_empty():
+	var label_text: String = MissionState.current_label()
+	if label_text == "":
 		var empty := Label.new()
 		empty.text = EMPTY_PLACEHOLDER
 		empty.add_theme_font_size_override(&"font_size", TIP_FONT_SIZE)
@@ -96,22 +123,77 @@ func refresh() -> void:
 		empty.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_vbox.add_child(empty)
 	else:
-		for entry in entries:
-			var header := Label.new()
-			header.text = entry["header"]
-			header.add_theme_font_size_override(&"font_size", HEADER_FONT_SIZE)
-			header.add_theme_color_override(&"font_color", HEADER_COLOR)
-			header.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			_vbox.add_child(header)
-			var tip := Label.new()
-			tip.text = entry["tip"]
-			tip.add_theme_font_size_override(&"font_size", TIP_FONT_SIZE)
-			tip.add_theme_color_override(&"font_color", TIP_COLOR)
-			tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			tip.custom_minimum_size = Vector2(PANEL_WIDTH - 10.0, 0.0)
-			tip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			_vbox.add_child(tip)
+		var tip := Label.new()
+		tip.text = label_text
+		tip.add_theme_font_size_override(&"font_size", TIP_FONT_SIZE)
+		tip.add_theme_color_override(&"font_color", TIP_COLOR)
+		tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		tip.custom_minimum_size = Vector2(PANEL_WIDTH - 10.0, 0.0)
+		tip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_vbox.add_child(tip)
 	call_deferred(&"_resize_to_content")
+
+
+# Replaces the active mission line with a green "✓ <previous label>"
+# that pops in, holds, fades out, then triggers a normal refresh so the
+# next phase's label takes over. Kill any in-flight checkmark first so
+# back-to-back phase transitions don't pile up.
+func _play_checkmark(prev_label: String) -> void:
+	if _check_tween != null and _check_tween.is_valid():
+		_check_tween.kill()
+	if _check_label != null and is_instance_valid(_check_label):
+		_check_label.queue_free()
+		_check_label = null
+	# Clear current children except the title + divider so the checkmark
+	# sits where the active objective was.
+	for child in _vbox.get_children():
+		child.queue_free()
+	var title := Label.new()
+	title.text = PANEL_TITLE
+	title.add_theme_font_size_override(&"font_size", TITLE_FONT_SIZE)
+	title.add_theme_color_override(&"font_color", TITLE_COLOR)
+	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_vbox.add_child(title)
+	var divider := ColorRect.new()
+	divider.color = TITLE_DIVIDER_COLOR
+	divider.custom_minimum_size = Vector2(0.0, 1.0)
+	divider.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_vbox.add_child(divider)
+	_check_label = Label.new()
+	_check_label.text = "✓ %s" % prev_label
+	_check_label.add_theme_font_size_override(&"font_size", TIP_FONT_SIZE)
+	_check_label.add_theme_color_override(&"font_color", CHECK_COLOR)
+	_check_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_check_label.custom_minimum_size = Vector2(PANEL_WIDTH - 10.0, 0.0)
+	_check_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_check_label.pivot_offset = Vector2(0.0, 0.0)
+	_check_label.scale = Vector2(0.6, 0.6)
+	_check_label.modulate = Color(1.0, 1.0, 1.0, 0.0)
+	_vbox.add_child(_check_label)
+	call_deferred(&"_resize_to_content")
+	# Pop-in scale + alpha together, then hold, then fade out. On
+	# completion the checkmark is removed and refresh() renders the new
+	# phase label.
+	_check_tween = create_tween()
+	_check_tween.set_parallel(true)
+	_check_tween.tween_property(_check_label, "scale", Vector2(1.25, 1.25), CHECK_POP_IN * 0.6).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_check_tween.tween_property(_check_label, "modulate:a", 1.0, CHECK_POP_IN * 0.6)
+	_check_tween.chain()
+	_check_tween.tween_property(_check_label, "scale", Vector2(1.0, 1.0), CHECK_POP_IN * 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_check_tween.chain()
+	_check_tween.tween_interval(CHECK_HOLD)
+	_check_tween.chain()
+	_check_tween.tween_property(_check_label, "modulate:a", 0.0, CHECK_FADE_OUT)
+	_check_tween.chain()
+	_check_tween.tween_callback(_on_check_finished)
+
+
+func _on_check_finished() -> void:
+	if _check_label != null and is_instance_valid(_check_label):
+		_check_label.queue_free()
+	_check_label = null
+	_check_tween = null
+	refresh()
 
 
 func _resize_to_content() -> void:
@@ -133,8 +215,3 @@ func _reposition_under_quirks() -> void:
 		offset_top = minimap_bottom
 
 
-# Placeholder — returns an empty list until the mission system lands.
-# Once MissionState (or whatever the API is) exists, read active
-# missions here and return entries shaped as {header, tip} dicts.
-func _gather_active_missions() -> Array:
-	return []
