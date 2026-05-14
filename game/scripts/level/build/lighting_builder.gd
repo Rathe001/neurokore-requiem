@@ -95,8 +95,8 @@ static func create_room_particles(ctx: LevelBuildContext, center: Vector3, size_
 	var p := GPUParticles3D.new()
 	# Scale count with room area but cap to avoid GPU pressure in large rooms.
 	var area := size_x * size_z
-	p.amount = clampi(int(area * 0.5), 12, 64)
-	p.lifetime = 10.0
+	p.amount = clampi(int(area * 0.3), 6, 32)
+	p.lifetime = 12.0
 	# Generous AABB so the iso camera (y=14, looking down) doesn't cull.
 	var wh := ctx.theme.wall_height
 	p.visibility_aabb = AABB(
@@ -107,24 +107,24 @@ static func create_room_particles(ctx: LevelBuildContext, center: Vector3, size_
 	mat.emission_box_extents = Vector3(size_x * 0.45, wh * 0.4, size_z * 0.45)
 	mat.direction = Vector3(0, 1, 0)
 	mat.spread = 180.0
-	mat.initial_velocity_min = 0.02
-	mat.initial_velocity_max = 0.08
-	mat.gravity = Vector3(0, -0.01, 0)
-	mat.scale_min = 0.5
-	mat.scale_max = 1.5
+	mat.initial_velocity_min = 0.01
+	mat.initial_velocity_max = 0.04
+	mat.gravity = Vector3(0, -0.005, 0)
+	mat.scale_min = 0.3
+	mat.scale_max = 0.8
 	# Subtle turbulence so motes drift lazily, not straight-line.
 	mat.turbulence_enabled = true
-	mat.turbulence_noise_strength = 0.4
-	mat.turbulence_noise_speed_random = 0.3
-	mat.turbulence_noise_speed = Vector3(0.1, 0.05, 0.1)
+	mat.turbulence_noise_strength = 0.2
+	mat.turbulence_noise_speed_random = 0.15
+	mat.turbulence_noise_speed = Vector3(0.05, 0.03, 0.05)
 	p.process_material = mat
 	# QuadMesh billboard — always faces camera, reads clearly from iso view.
 	var mesh := QuadMesh.new()
-	mesh.size = Vector2(0.04, 0.04)
+	mesh.size = Vector2(0.02, 0.02)
 	var draw_mat := StandardMaterial3D.new()
 	draw_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	draw_mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
-	draw_mat.albedo_color = Color(0.9, 0.9, 0.8, 0.6)
+	draw_mat.albedo_color = Color(0.85, 0.85, 0.75, 0.2)
 	draw_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mesh.material = draw_mat
 	p.draw_pass_1 = mesh

@@ -59,12 +59,15 @@ var _banner_token: int = 0
 # signal. Drives the white outline around the HP bar (visible when
 # active OR on cooldown) and the buff-bar "Shield" entry's tooltip.
 var _hp_ghost: ColorRect = null
-var _hp_ghost_target: float = 0.0
+var _hp_ghost_right: float = 0.0
+var _hp_ghost_hold: float = 0.0
 var _resource_ghost: ColorRect = null
-var _resource_ghost_target: float = 0.0
-const GHOST_DRAIN_SPEED := 120.0  # pixels per second
-const GHOST_HP_COLOR := Color(0.9, 0.25, 0.2, 0.45)
-const GHOST_RESOURCE_COLOR := Color(0.3, 0.5, 0.8, 0.4)
+var _resource_ghost_right: float = 0.0
+var _resource_ghost_hold: float = 0.0
+const GHOST_HOLD_TIME := 0.4        # seconds to hold before draining
+const GHOST_DRAIN_SPEED := 200.0    # pixels per second
+const GHOST_HP_COLOR := Color(1.0, 0.3, 0.2, 0.85)
+const GHOST_RESOURCE_COLOR := Color(0.4, 0.6, 0.9, 0.7)
 
 var _shield_state: Dictionary = {"active": false, "pool": 0, "pool_max": 0, "reduction": 0.0, "cooldown_remain": 0.0, "cooldown_total": 0.0, "duration_remain": 0.0}
 var _shield_outline: ReferenceRect = null
@@ -876,23 +879,19 @@ func _repaint_hp() -> void:
 	var ratio := clampf(float(_last_hp_current) / float(_max_health), 0.0, 1.0)
 	var p := UIThemeState.palette
 	var new_right := hp_fill.offset_left + HP_BAR_WIDTH * ratio
-	# Ghost: when HP drops, keep ghost at old position and let it drain.
-	# When HP rises (heal), snap ghost to match immediately.
+	# Ghost: on damage, show the lost region (from new fill edge to old edge)
+	# as a bright bar that holds briefly then shrinks from the right.
 	if _hp_ghost != null:
 		if new_right < hp_fill.offset_right:
-			# Damage — ghost stays where it was, starts draining.
-			if not _hp_ghost.visible:
-				_hp_ghost.offset_left = hp_fill.offset_left
-				_hp_ghost.offset_right = hp_fill.offset_right
-				_hp_ghost.offset_top = hp_fill.offset_top
-				_hp_ghost.offset_bottom = hp_fill.offset_bottom
+			# Damage — ghost covers the gap between new and old fill.
+			_hp_ghost.offset_left = new_right
+			_hp_ghost.offset_right = maxf(_hp_ghost_right, hp_fill.offset_right)
+			_hp_ghost_right = _hp_ghost.offset_right
+			_hp_ghost_hold = GHOST_HOLD_TIME
 			_hp_ghost.visible = true
-		else:
-			# Heal — snap ghost to new fill.
-			_hp_ghost.offset_right = new_right
-			if _hp_ghost.offset_right <= hp_fill.offset_left:
-				_hp_ghost.visible = false
-		_hp_ghost_target = new_right
+		elif not _hp_ghost.visible:
+			# No active ghost and health rose — just track position.
+			_hp_ghost_right = new_right
 	hp_fill.offset_right = new_right
 	hp_fill.color = p.hp_full if ratio > LOW_HP_RATIO else p.hp_low
 	hp_label.text = "%d / %d" % [max(_last_hp_current, 0), _max_health]
@@ -915,24 +914,23 @@ func _build_heal_preview() -> void:
 
 
 func _build_ghost_fills() -> void:
-	# HP ghost — trails behind the HP fill on damage, drains smoothly.
+	# HP ghost — on damage, shows the "lost HP" region as a bright bar that
+	# holds briefly then drains. Sits ON TOP of hp_fill (right after it in
+	# child order) so it draws over the background in the gap.
 	if hp_fill != null:
 		_hp_ghost = ColorRect.new()
 		_hp_ghost.color = GHOST_HP_COLOR
 		_hp_ghost.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_hp_ghost.visible = false
-		# Mirror hp_fill's anchor + offset layout exactly.
 		_hp_ghost.anchor_bottom = hp_fill.anchor_bottom
-		_hp_ghost.offset_left = hp_fill.offset_left
 		_hp_ghost.offset_top = hp_fill.offset_top
-		_hp_ghost.offset_right = hp_fill.offset_right
 		_hp_ghost.offset_bottom = hp_fill.offset_bottom
 		var container := hp_fill.get_parent()
 		container.add_child(_hp_ghost)
-		# Place behind hp_fill so the ghost shows through the gap.
-		container.move_child(_hp_ghost, hp_fill.get_index())
-		_hp_ghost_target = hp_fill.offset_right
-	# Resource ghost — same pattern for the resource bar.
+		# Right after hp_fill in draw order so it layers on top of bg.
+		container.move_child(_hp_ghost, hp_fill.get_index() + 1)
+		_hp_ghost_right = hp_fill.offset_right
+	# Resource ghost — same pattern.
 	if resource_fill != null:
 		_resource_ghost = ColorRect.new()
 		_resource_ghost.color = GHOST_RESOURCE_COLOR
@@ -940,26 +938,31 @@ func _build_ghost_fills() -> void:
 		_resource_ghost.visible = false
 		_resource_ghost.anchor_top = resource_fill.anchor_top
 		_resource_ghost.anchor_bottom = resource_fill.anchor_bottom
-		_resource_ghost.offset_left = resource_fill.offset_left
 		_resource_ghost.offset_top = resource_fill.offset_top
-		_resource_ghost.offset_right = resource_fill.offset_right
 		_resource_ghost.offset_bottom = resource_fill.offset_bottom
 		var container := resource_fill.get_parent()
 		container.add_child(_resource_ghost)
-		container.move_child(_resource_ghost, resource_fill.get_index())
-		_resource_ghost_target = resource_fill.offset_right
+		container.move_child(_resource_ghost, resource_fill.get_index() + 1)
+		_resource_ghost_right = resource_fill.offset_right
 
 
 func _drain_ghost_fills(delta: float) -> void:
-	var drain := GHOST_DRAIN_SPEED * delta
 	if _hp_ghost != null and _hp_ghost.visible:
-		_hp_ghost.offset_right = move_toward(_hp_ghost.offset_right, _hp_ghost_target, drain)
-		if _hp_ghost.offset_right <= _hp_ghost_target:
-			_hp_ghost.visible = false
+		if _hp_ghost_hold > 0.0:
+			_hp_ghost_hold -= delta
+		else:
+			_hp_ghost.offset_left = move_toward(_hp_ghost.offset_left, _hp_ghost.offset_right, GHOST_DRAIN_SPEED * delta)
+			if _hp_ghost.offset_left >= _hp_ghost.offset_right:
+				_hp_ghost.visible = false
+				_hp_ghost_right = hp_fill.offset_right
 	if _resource_ghost != null and _resource_ghost.visible:
-		_resource_ghost.offset_right = move_toward(_resource_ghost.offset_right, _resource_ghost_target, drain)
-		if _resource_ghost.offset_right <= _resource_ghost_target:
-			_resource_ghost.visible = false
+		if _resource_ghost_hold > 0.0:
+			_resource_ghost_hold -= delta
+		else:
+			_resource_ghost.offset_left = move_toward(_resource_ghost.offset_left, _resource_ghost.offset_right, GHOST_DRAIN_SPEED * delta)
+			if _resource_ghost.offset_left >= _resource_ghost.offset_right:
+				_resource_ghost.visible = false
+				_resource_ghost_right = resource_fill.offset_right
 
 
 func _update_heal_preview() -> void:
@@ -991,17 +994,13 @@ func _on_resource_changed(current: int, max_value: int) -> void:
 	var new_right := resource_fill.offset_left + RESOURCE_BAR_WIDTH * ratio
 	if _resource_ghost != null:
 		if new_right < resource_fill.offset_right:
-			if not _resource_ghost.visible:
-				_resource_ghost.offset_left = resource_fill.offset_left
-				_resource_ghost.offset_right = resource_fill.offset_right
-				_resource_ghost.offset_top = resource_fill.offset_top
-				_resource_ghost.offset_bottom = resource_fill.offset_bottom
+			_resource_ghost.offset_left = new_right
+			_resource_ghost.offset_right = maxf(_resource_ghost_right, resource_fill.offset_right)
+			_resource_ghost_right = _resource_ghost.offset_right
+			_resource_ghost_hold = GHOST_HOLD_TIME
 			_resource_ghost.visible = true
-		else:
-			_resource_ghost.offset_right = new_right
-			if _resource_ghost.offset_right <= resource_fill.offset_left:
-				_resource_ghost.visible = false
-		_resource_ghost_target = new_right
+		elif not _resource_ghost.visible:
+			_resource_ghost_right = new_right
 	resource_fill.offset_right = new_right
 	resource_label.text = "%d / %d" % [max(current, 0), max_value]
 
