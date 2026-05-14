@@ -538,10 +538,14 @@ const EXPLOSION_FLASH_DURATION: float = 0.18
 # its instance. Matches the BigExplosionScene's particle lifetime
 # (2.13s) plus a small tail so trailing frames have time to finish.
 const EXPLOSION_FLIPBOOK_LIFETIME: float = 2.6
-# The BigExplosionScene was authored at roughly this blast radius —
-# we scale the instantiated scene by (blast_radius / this) so smaller
-# grenades produce smaller flipbooks instead of full-screen kabooms.
-const FLIPBOOK_BASE_RADIUS: float = 3.0
+# BigExplosionScene's natural visual size at scale=1 is roughly 2-3 m
+# across (1 m QuadMesh × ~20 particles with small drift). RPG blasts
+# at blast_radius=3-4 m should fill noticeably more than that to feel
+# impactful, so the scale formula maps blast_radius directly to scale
+# with a generous max — a Tactical Strike at 9 m hits the clamp and
+# still reads as a huge kaboom.
+const FLIPBOOK_SCALE_FLOOR: float = 1.5
+const FLIPBOOK_SCALE_CEILING: float = 5.0
 const FLIPBOOK_EXPLOSION_SCENE: PackedScene = preload("res://assets/vfx/explosion/BigExplosionScene.tscn")
 
 # Elemental palettes for the procedural fireball. Each entry gives the
@@ -613,12 +617,11 @@ static func _spawn_fireball_explosion(parent: Node, world_pos: Vector3, blast_ra
 	var fx: Node3D = FLIPBOOK_EXPLOSION_SCENE.instantiate() as Node3D
 	parent.add_child(fx)
 	fx.global_position = world_pos
-	# The scene was authored for ~FLIPBOOK_BASE_RADIUS m blasts. Scale
-	# the whole node so smaller grenades produce smaller flipbooks
-	# instead of dominating the screen. Clamped so chip-scale AoEs
-	# don't shrink the effect to invisibility and so a giant Tactical
-	# Strike doesn't fill the entire viewport.
-	fx.scale = Vector3.ONE * clampf(blast_radius / FLIPBOOK_BASE_RADIUS, 0.4, 2.0)
+	# Scale roughly 1:1 with blast_radius so the visual matches the
+	# gameplay radius. Floor keeps tiny AoEs from being imperceptible;
+	# ceiling keeps Tactical-Strike-class blasts from overrunning the
+	# entire viewport.
+	fx.scale = Vector3.ONE * clampf(blast_radius, FLIPBOOK_SCALE_FLOOR, FLIPBOOK_SCALE_CEILING)
 	# Auto-cleanup once the flipbook lifetime + tail expires. Particle
 	# system stops emitting at ~2.13s; tail gives trailing frames time
 	# to finish their UV animation before we yank the node.
