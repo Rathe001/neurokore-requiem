@@ -51,6 +51,18 @@ func _ready() -> void:
 	# the modulo wrap, plays with a 30s silent gap before re-looping.
 	Music.play_level_track(PlayerState.new_game_plus)
 	EntityPool.warmup(ENEMY_SCENE, SPAWN_BATCH)
+	# NG+ layout on load: LevelBuilder already built with the scene's default
+	# layout in its own _ready (fires before ours — bottom-up). If the save
+	# has NG+ > 0, swap to the correct pool layout and rebuild so the player
+	# loads into the right level variant instead of always getting the default.
+	if PlayerState.new_game_plus > 0 and not LAYOUT_POOL.is_empty():
+		var builder := get_node_or_null("LevelBuilder") as LevelBuilder
+		if builder != null:
+			var idx := PlayerState.new_game_plus % LAYOUT_POOL.size()
+			var new_layout := load(LAYOUT_POOL[idx]) as LevelLayout
+			if new_layout != null:
+				builder.layout = new_layout
+				await builder.rebuild(randi())
 	_wire_switches()
 	_move_player_to_spawn()
 	if DebugState.config != null and DebugState.config.disable_enemies:

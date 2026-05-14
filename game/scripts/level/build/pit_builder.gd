@@ -55,7 +55,7 @@ static func build_pit_shaft(ctx: LevelBuildContext, center: Vector3, inner_x: fl
 		Kind.SPIKES:
 			_build_pit_floor_spikes(ctx, center, inner_x, inner_z, depth)
 		Kind.BOTTOMLESS:
-			pass  # no floor — fall into darkness
+			_build_bottomless_fog(ctx, center, inner_x, inner_z, depth)
 		_:
 			_build_pit_floor_ooze(ctx, center, inner_x, inner_z, depth)
 
@@ -86,6 +86,40 @@ static func _create_pit_kill_area(ctx: LevelBuildContext, center: Vector3, inner
 			body.take_damage(9999, Vector3.ZERO, 0.0)
 	)
 	ctx.root.add_child(kill)
+
+
+# Thick fog bank filling the top of a bottomless pit — from the iso camera
+# it reads as an opaque cloud you'd fall into, selling the "infinite depth"
+# illusion. Two layers: a dense cap at floor level and a softer column
+# extending a few metres down so the pit walls fade into murk.
+const PIT_FOG_CAP_HEIGHT := 0.6
+const PIT_FOG_CAP_DENSITY := 8.0
+const PIT_FOG_COLUMN_HEIGHT := 4.0
+const PIT_FOG_COLUMN_DENSITY := 2.0
+
+static func _build_bottomless_fog(ctx: LevelBuildContext, center: Vector3, inner_x: float, inner_z: float, depth: float) -> void:
+	# Dense cap at floor level — the visible "cloud" the player sees.
+	var cap := FogVolume.new()
+	cap.size = Vector3(inner_x, PIT_FOG_CAP_HEIGHT, inner_z)
+	cap.shape = RenderingServer.FOG_VOLUME_SHAPE_BOX
+	var cap_mat := FogMaterial.new()
+	cap_mat.density = PIT_FOG_CAP_DENSITY
+	cap_mat.albedo = Color(0.3, 0.32, 0.4)
+	cap.material = cap_mat
+	cap.transform.origin = center + Vector3(0, -PIT_FOG_CAP_HEIGHT * 0.5, 0)
+	ctx.root.add_child(cap)
+	# Softer column below — gives the iso camera enough depth to accumulate
+	# fog and makes the shaft walls fade into darkness rather than ending
+	# at a hard edge.
+	var col := FogVolume.new()
+	col.size = Vector3(inner_x, PIT_FOG_COLUMN_HEIGHT, inner_z)
+	col.shape = RenderingServer.FOG_VOLUME_SHAPE_BOX
+	var col_mat := FogMaterial.new()
+	col_mat.density = PIT_FOG_COLUMN_DENSITY
+	col_mat.albedo = Color(0.2, 0.22, 0.28)
+	col.material = col_mat
+	col.transform.origin = center + Vector3(0, -PIT_FOG_CAP_HEIGHT - PIT_FOG_COLUMN_HEIGHT * 0.5, 0)
+	ctx.root.add_child(col)
 
 
 static func build_room_pit(ctx: LevelBuildContext, center: Vector3, rd: RoomDef) -> void:
