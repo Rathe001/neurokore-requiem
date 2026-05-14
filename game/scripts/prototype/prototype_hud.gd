@@ -66,8 +66,8 @@ var _resource_ghost_right: float = 0.0
 var _resource_ghost_hold: float = 0.0
 const GHOST_HOLD_TIME := 0.4        # seconds to hold before draining
 const GHOST_DRAIN_SPEED := 200.0    # pixels per second
-const GHOST_HP_COLOR := Color(1.0, 0.3, 0.2, 0.85)
-const GHOST_RESOURCE_COLOR := Color(0.4, 0.6, 0.9, 0.7)
+const GHOST_HP_COLOR := Color(1.0, 0.3, 0.2, 0.25)
+const GHOST_RESOURCE_COLOR := Color(0.4, 0.6, 0.9, 0.25)
 
 var _shield_state: Dictionary = {"active": false, "pool": 0, "pool_max": 0, "reduction": 0.0, "cooldown_remain": 0.0, "cooldown_total": 0.0, "duration_remain": 0.0}
 var _shield_outline: ReferenceRect = null
