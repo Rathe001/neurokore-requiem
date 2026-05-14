@@ -996,6 +996,25 @@ func _on_player_leveled_up(new_level: int, hp_gain: int) -> void:
 func _play_levelup_vfx() -> void:
 	if visual == null:
 		return
+	# Audio — ui_confirm as a stand-in until a dedicated level_up sting exists.
+	WeaponSounds.play_generic(&"ui_confirm", global_position, 2.0, true)
+	# Screen flash — brief gold overlay.
+	if _damage_flash != null:
+		# Reuse the damage flash overlay with a gold tint for level-up.
+		# Manually set the color + visible since flash() expects damage args.
+		_damage_flash._rect.color = Color(1.0, 0.85, 0.4, 0.3)
+		_damage_flash._rect.visible = true
+		if _damage_flash._tween != null and _damage_flash._tween.is_valid():
+			_damage_flash._tween.kill()
+		_damage_flash._tween = _damage_flash.create_tween()
+		_damage_flash._tween.tween_property(_damage_flash._rect, "color:a", 0.0, 0.2) \
+			.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+		_damage_flash._tween.tween_callback(func() -> void: _damage_flash._rect.visible = false)
+	# Camera shake — small celebratory jolt.
+	var cam := get_viewport().get_camera_3d() as PrototypeCamera
+	if cam != null:
+		cam.shake(0.25, 0.3)
+	# Expanding golden ring.
 	var ring := MeshInstance3D.new()
 	var torus := TorusMesh.new()
 	torus.inner_radius = 0.55
