@@ -661,6 +661,9 @@ func _on_mouse_exited() -> void:
 func set_tooltip_locked(on: bool) -> void:
 	_visuals.set_tooltip_locked(on)
 
+func refresh_locked_tooltip() -> void:
+	_visuals.push_tooltip()
+
 ## Static helper: route damage to an enemy, handling SP / MP host / MP client
 ## transparently. Every damage source (player_combat, projectile, grenade,
 ## trap, telekinesis, doomsayer) calls this instead of target.take_damage().

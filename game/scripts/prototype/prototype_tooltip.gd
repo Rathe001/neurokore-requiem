@@ -78,7 +78,25 @@ func _process(_dt: float) -> void:
 		_anchor_target = null
 		hide_tooltip()
 		return
-	if not visible or _lmb_held:
+	if not visible:
+		return
+	# While locked, keep repositioning (enemy may move) and periodically
+	# ask the locked target to push fresh content so status-effect timers
+	# and HP update in real time.
+	if _lmb_held:
+		# Enemy died while locked — auto-dismiss.
+		if _locked_target != null and is_instance_valid(_locked_target) \
+				and _locked_target.has_method(&"_is_alive") and not _locked_target._is_alive():
+			_lmb_held = false
+			_set_lock_border(false)
+			_dismiss()
+			_release_target()
+			return
+		if _anchor_target != null:
+			_position_at_top()
+		if _locked_target != null and is_instance_valid(_locked_target) \
+				and _locked_target.has_method(&"refresh_locked_tooltip"):
+			_locked_target.refresh_locked_tooltip()
 		return
 	# Only re-pin 3D-anchored tooltips; UI tooltips track mouse via _input.
 	if _anchor_target != null:
@@ -447,6 +465,10 @@ func show_skill(skill: Skill, source: Item) -> void:
 
 func show_talent_node(title: String, body: String) -> void:
 	if _lmb_held:
+		# Locked — update text in-place without resize/reposition so the
+		# tooltip stays pinned but reflects live HP and status effects.
+		_name_label.text = title
+		_desc_label.text = body
 		return
 	_current_item = null
 	_equipped_bg.visible = false
