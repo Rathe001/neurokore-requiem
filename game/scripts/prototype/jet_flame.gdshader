@@ -12,6 +12,10 @@ uniform vec3 inner_color : source_color = vec3(1.0, 0.95, 0.7);
 uniform float scroll_speed = 4.0;
 uniform float noise_scale = 4.0;
 uniform float intensity : hint_range(0.0, 5.0) = 1.5;
+// Wall clip: fraction of the fan to hide from the tip inward.
+// 0.0 = no clip (full range), 1.0 = fully clipped. Driven by raycast
+// in _apply_flame_transform so the fan stops at walls without scaling.
+uniform float clip_ratio : hint_range(0.0, 1.0) = 0.0;
 
 
 float hash(vec2 p) {
@@ -79,6 +83,11 @@ void fragment() {
 	vec3 col = mix(flame_color, inner_color, core_blend);
 	// Crackle arcs tint toward white for contrast.
 	col = mix(col, vec3(1.0), crackle * arc_mask * 0.4);
+
+	// Wall clip — discard pixels beyond the wall distance. Soft edge
+	// over a narrow band so the cutoff doesn't look razor-sharp.
+	float clip_fade = smoothstep(clip_ratio, clip_ratio + 0.04, UV.y);
+	brightness *= clip_fade;
 
 	ALBEDO = col * brightness * 1.6;
 	ALPHA = clamp(brightness * 1.1, 0.0, 1.0);

@@ -2508,7 +2508,8 @@ func _show_flame_visual() -> void:
 	_flame_material.set_shader_parameter(&"flame_color", Vector3(elem_color.r, elem_color.g, elem_color.b))
 	var core := elem_color.lerp(Color(1.0, 0.95, 0.7, 1.0), 0.65)
 	_flame_material.set_shader_parameter(&"inner_color", Vector3(core.r, core.g, core.b))
-	_flame_material.set_shader_parameter(&"intensity", 1.5)
+	_flame_material.set_shader_parameter(&"intensity", 0.0)
+	_flame_material.set_shader_parameter(&"clip_ratio", 0.0)
 	_flame_visual.visible = true
 	_update_flame_visual()
 
@@ -2545,10 +2546,10 @@ func _update_remote_flame_visual() -> void:
 
 
 # Shared transform/scale logic for the flame pivot. Aim is flattened to
-# horizontal, wall-clipped via a raycast against world geometry, then
-# turned into an orthonormal basis with +Y = aim. The flat fan mesh
-# extends from the pivot origin (muzzle) outward along +Y, scaled to
-# weapon range.
+# horizontal, wall-clipped via shader uniform (not mesh scale), then
+# turned into an orthonormal basis with +Y = aim. The flat fan mesh is
+# always scaled to the weapon's full range — the shader discards pixels
+# beyond the wall distance so the fan shape stays consistent.
 func _apply_flame_transform(aim: Vector3, range_m: float) -> void:
 	var aim_flat := aim
 	aim_flat.y = 0.0
@@ -2556,9 +2557,10 @@ func _apply_flame_transform(aim: Vector3, range_m: float) -> void:
 		return
 	var aim_norm := aim_flat.normalized()
 	var muzzle := global_position + Vector3(0.0, FLAME_MUZZLE_HEIGHT, 0.0)
-	# Wall clip: raycast from muzzle along aim and cap the flame's
-	# length at the first wall hit so the fan doesn't punch through
-	# into the next room.
+	# Wall clip: raycast to find the wall distance, then pass a clip
+	# ratio to the shader instead of shrinking the mesh. This keeps the
+	# fan's angular spread constant — only the length gets capped.
+	var clip_ratio: float = 0.0
 	var space := get_world_3d().direct_space_state
 	if space != null:
 		if _flame_ray_query == null:
@@ -2570,10 +2572,18 @@ func _apply_flame_transform(aim: Vector3, range_m: float) -> void:
 		_flame_ray_query.to = muzzle + aim_norm * range_m
 		var hit := space.intersect_ray(_flame_ray_query)
 		if not hit.is_empty():
-			var wall_dist: float = muzzle.distance_to(hit["position"])
-			range_m = maxf(0.5, wall_dist - 0.2)
-	# Basis: +Y = aim, +Z = world up (flat fan lies in XY plane,
-	# viewed from above by the iso camera).
+			var wall_dist: float = maxf(0.5, muzzle.distance_to(hit["position"]) - 0.2)
+			# clip_ratio: fraction of the fan to hide (0 = no clip, 1 = all hidden).
+			clip_ratio = clampf(1.0 - wall_dist / range_m, 0.0, 1.0)
+	if _flame_material != null:
+		_flame_material.set_shader_parameter(&"clip_ratio", clip_ratio)
+		# Intensity ramps with the resonance so the effect fades in over
+		# the weapon's ramp-up time instead of popping to full brightness.
+		var ramp := clampf(accel_ramp_ratio(), 0.0, 1.0)
+		# Floor at 0.15 so there's always a hint of the stream on first frame,
+		# then lerp up to full intensity (1.5) as the ramp completes.
+		_flame_material.set_shader_parameter(&"intensity", lerpf(0.15, 1.5, ramp))
+	# Basis: +Y = aim, +Z = world up.
 	var ref_up := Vector3.UP
 	var x_axis := aim_norm.cross(ref_up).normalized()
 	var z_axis := x_axis.cross(aim_norm).normalized()
