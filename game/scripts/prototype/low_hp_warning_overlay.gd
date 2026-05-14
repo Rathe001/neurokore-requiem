@@ -32,7 +32,10 @@ func _ready() -> void:
 	_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_rect.material = _mat
-	_rect.color = Color(1, 1, 1, 1)
+	# Transparent base — the shader writes red with per-pixel alpha for
+	# the vignette. No screen_texture read, so this composes cleanly with
+	# other post-process overlays on the same CanvasLayer.
+	_rect.color = Color(0, 0, 0, 0)
 	_rect.visible = false
 	add_child(_rect)
 
