@@ -774,7 +774,14 @@ func _apply_consumable_base(item: Item, main_type: String, rarity: StringName, r
 		item.model_name = names[rng.randi_range(0, names.size() - 1)]
 	var curve: float = float(RARITY_ROLL_CURVE.get(rarity, 2.0))
 	var budget_mult: float = float(RARITY_BUDGET_MULT.get(rarity, 1.0))
-	var heal_pct := int(round(_curved_randf(50.0, 150.0, rng, curve) * budget_mult))
+	# Steeper curve for heal % than the generic rarity exponent so
+	# perfect-roll commons stay near the floor and 100%+ heals
+	# concentrate at higher rarities (where budget_mult also stretches
+	# the ceiling). At +1.5 over RARITY_ROLL_CURVE:
+	#   common (4.0) — median ~58%, ~90th percentile ~110%
+	#   unique (2.7) — median ~78%, mult 1.5 → median heal ~117%
+	var heal_curve: float = curve + 1.5
+	var heal_pct := int(round(_curved_randf(50.0, 150.0, rng, heal_curve) * budget_mult))
 	var heal_duration := _curved_randf(0.0, 5.0, rng, curve)
 	item.stat_modifiers[&"heal_pct"] = heal_pct
 	item.stat_modifiers[&"heal_duration"] = heal_duration

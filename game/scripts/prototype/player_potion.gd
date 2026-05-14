@@ -114,8 +114,11 @@ func activate(_skill: Skill) -> void:
 	var consumable: Item = InventoryState.get_equipped(&"consumable")
 	if consumable == null:
 		return
-	var heal_pct: float = consumable.get_modifier(&"heal_pct")
-	var heal_duration: float = consumable.get_modifier(&"heal_duration")
+	# heal_duration is rolled as float (0.0-5.0); get_modifier returns int
+	# and would truncate a 2.5s duration to 2 (or 0.4s to 0). Read raw via
+	# the dict so the HoT lasts exactly as long as the tooltip advertises.
+	var heal_pct: float = float(consumable.stat_modifiers.get(&"heal_pct", 0))
+	var heal_duration: float = float(consumable.stat_modifiers.get(&"heal_duration", 0.0))
 	if heal_pct <= 0.0:
 		return
 	# Compute actual heal from percentage of max health.

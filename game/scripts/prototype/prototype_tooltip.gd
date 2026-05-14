@@ -806,11 +806,19 @@ func _build_stats_text(item: Item, equipped: Item = null) -> String:
 	if item.kind == &"backpack" and inv_bonus > 0:
 		lines.append("+%d %s" % [inv_bonus, tr("ITEM_STATS_INVENTORY_BONUS")])
 	# Consumable heal stats — custom one-liner instead of bare numbers.
+	# heal_duration is rolled as a float (0.0-5.0) and item.get_modifier
+	# returns int, so reading via the dict avoids truncating sub-1s
+	# durations to 0 (which would silently skip this entire heal line and
+	# make the potion read as "no health restoration"). Sub-HOT_INTERVAL
+	# durations route through PlayerPotion's instant-heal branch.
 	if item.main_type == "Consumable":
-		var hp: float = item.get_modifier(&"heal_pct")
-		var hd: float = item.get_modifier(&"heal_duration")
-		if hp > 0.0 and hd > 0.0:
-			lines.append("[color=#66cc66]Heals %d%% HP over %.1fs[/color]" % [int(hp), hd])
+		var hp: float = float(item.stat_modifiers.get(&"heal_pct", 0))
+		var hd: float = float(item.stat_modifiers.get(&"heal_duration", 0.0))
+		if hp > 0.0:
+			if hd < 0.5:
+				lines.append("[color=#66cc66]Heals %d%% HP instantly[/color]" % int(hp))
+			else:
+				lines.append("[color=#66cc66]Heals %d%% HP over %.1fs[/color]" % [int(hp), hd])
 		lines.append("Charges: 3 (30s recharge)")
 	# Generic stat modifiers — bare values, no comparison.
 	for stat_id: StringName in item.stat_modifiers:
@@ -1023,8 +1031,10 @@ func _build_skill_stats_text(skill: Skill, source: Item) -> String:
 		Skill.ActiveKind.POTION:
 			var consumable: Item = InventoryState.get_equipped(&"consumable")
 			if consumable != null:
-				var hp: float = consumable.get_modifier(&"heal_pct")
-				var hd: float = consumable.get_modifier(&"heal_duration")
+				# Read via stat_modifiers — heal_duration is float and
+				# get_modifier truncates to int (see _build_stats_text).
+				var hp: float = float(consumable.stat_modifiers.get(&"heal_pct", 0))
+				var hd: float = float(consumable.stat_modifiers.get(&"heal_duration", 0.0))
 				if hp > 0.0:
 					if hd < 0.5:
 						lines.append("[color=#66cc66]Instantly heals %d%% HP[/color]" % int(hp))
