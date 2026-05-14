@@ -1249,22 +1249,28 @@ func _physics_process(delta: float) -> void:
 	if on_floor and not _crouching and not GameplayChatState.typing and Input.is_action_just_pressed(&"jump"):
 		_interacting = false
 		velocity.y = JUMP_VELOCITY
-		# move_and_slide zeroes horizontal velocity against walls, so a jump
-		# while pressed into an obstacle would go straight up. Inject the
-		# live input direction as forward momentum so the player vaults over.
-		# Use _input_wish_dir() (read NOW) instead of _want_dir — the latter
-		# is only assigned later in this same _physics_process, so a player
-		# who presses [move + jump] on the same frame from a standstill
-		# would see _want_dir = ZERO (stale from idle) and skip the inject.
+		# Inject the live input direction as horizontal momentum, otherwise
+		# a standing-still + move+jump on the same frame would skip it
+		# because _want_dir is set later in _physics_process.
 		var jump_wish := _input_wish_dir()
 		if jump_wish.length_squared() > 0.01 and Vector2(velocity.x, velocity.z).length_squared() < 1.0:
 			velocity.x = jump_wish.x * move_speed
 			velocity.z = jump_wish.z * move_speed
 		_is_airborne = true
+		# Drop PILLAR from the collision mask for the duration of the jump
+		# so destructible clutter (barrels, crates — PILLAR-only) becomes
+		# phase-through and the injected horizontal velocity isn't zeroed
+		# by move_and_slide's wall projection every frame. Indestructible
+		# cover sits on WORLD+PILLAR, so it still blocks via WORLD —
+		# server racks and cell bars stay solid mid-jump as intended.
+		_apply_airborne_collision_mask()
 		_play_anim(ANIM_JUMP_START, 1.2)
 
 	if _is_airborne and on_floor and velocity.y <= 0.0:
 		_is_airborne = false
+		# Restore ground-state mask so destructibles are solid again once
+		# the player lands — otherwise they'd remain phase-through forever.
+		_restore_ground_collision_mask()
 
 	if _knockback_remain > 0.0:
 		# Quadratic ease-out: matches PrototypeEnemy so the player coasts to a
@@ -3536,6 +3542,18 @@ func _set_crouch(value: bool) -> void:
 func _flatten(v: Vector3) -> Vector3:
 	v.y = 0.0
 	return v.normalized()
+
+
+# Layer bit for cover / destructible clutter. Matches
+# enemy_afflictions.gd's _LAYER_PILLAR constant. Inlined as a local
+# const so the player file doesn't have to import the enemy module.
+const _LAYER_PILLAR_BIT: int = 128
+
+func _apply_airborne_collision_mask() -> void:
+	collision_mask &= ~_LAYER_PILLAR_BIT
+
+func _restore_ground_collision_mask() -> void:
+	collision_mask |= _LAYER_PILLAR_BIT
 
 
 # Camera-relative world-space input direction for the current frame.
