@@ -72,20 +72,39 @@ static func configure_fps_fog(ctx: LevelBuildContext) -> void:
 # Per-room FogVolume — low-lying "dry ice" fog that hugs the floor.
 # A thin slab (FOG_HEIGHT) sitting at floor level gives the dungeon a
 # ground-mist look without filling the room with smoke.
-const FOG_HEIGHT := 0.6
-const FOG_DENSITY := 0.5
+# The iso camera sits at y≈14 looking nearly straight down. A thin slab
+# has almost no optical depth from that angle. Two stacked layers fake a
+# density gradient: a dense thin slab on the floor for the FPS view, and
+# a taller, softer layer above it that gives the iso camera enough depth
+# to accumulate visible fog while staying visually floor-weighted.
+const FOG_FLOOR_HEIGHT := 0.5
+const FOG_FLOOR_DENSITY := 0.6
+const FOG_HAZE_HEIGHT := 3.0
+const FOG_HAZE_DENSITY := 0.08
 
 static func create_fog_volume(ctx: LevelBuildContext, center: Vector3, size_x: float, size_z: float) -> void:
-	var vol := FogVolume.new()
-	vol.size = Vector3(size_x, FOG_HEIGHT, size_z)
-	vol.shape = RenderingServer.FOG_VOLUME_SHAPE_BOX
-	var mat := FogMaterial.new()
-	mat.density = FOG_DENSITY
-	mat.albedo = Color(0.6, 0.65, 0.75)
-	vol.material = mat
-	# Center the slab at half its height so the bottom sits on the floor.
-	vol.transform.origin = center + Vector3(0, FOG_HEIGHT * 0.5, 0)
-	ctx.root.add_child(vol)
+	# Dense floor slab — visible in FPS, provides the "dry ice" floor line.
+	var floor_vol := FogVolume.new()
+	floor_vol.size = Vector3(size_x, FOG_FLOOR_HEIGHT, size_z)
+	floor_vol.shape = RenderingServer.FOG_VOLUME_SHAPE_BOX
+	var floor_mat := FogMaterial.new()
+	floor_mat.density = FOG_FLOOR_DENSITY
+	floor_mat.albedo = Color(0.6, 0.65, 0.75)
+	floor_vol.material = floor_mat
+	floor_vol.transform.origin = center + Vector3(0, FOG_FLOOR_HEIGHT * 0.5, 0)
+	ctx.root.add_child(floor_vol)
+	# Taller haze layer — low density, gives the iso camera enough ray depth
+	# to see the fog. Still floor-anchored (bottom at y=0) so it reads as
+	# ground mist rather than room-filling smoke.
+	var haze_vol := FogVolume.new()
+	haze_vol.size = Vector3(size_x, FOG_HAZE_HEIGHT, size_z)
+	haze_vol.shape = RenderingServer.FOG_VOLUME_SHAPE_BOX
+	var haze_mat := FogMaterial.new()
+	haze_mat.density = FOG_HAZE_DENSITY
+	haze_mat.albedo = Color(0.55, 0.6, 0.7)
+	haze_vol.material = haze_mat
+	haze_vol.transform.origin = center + Vector3(0, FOG_HAZE_HEIGHT * 0.5, 0)
+	ctx.root.add_child(haze_vol)
 
 
 # Per-room ambient dust particles — subtle floating motes that catch the
