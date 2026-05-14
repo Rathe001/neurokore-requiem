@@ -527,11 +527,16 @@ static func spawn_impact_burst(host: Node3D, world_pos: Vector3, color_override:
 #     https://godotshaders.com/shader/3d-explosion-vfx/ but reworked
 #     to be procedural so it doesn't need the source's seven sprite
 #     sheets.
-const EXPLOSION_DURATION := 0.55
+const EXPLOSION_DURATION := 0.8
 # Smoke particles linger past the main fireball — keep them alive for
 # this long total so the volume reads as a real plume rather than a flash.
 const EXPLOSION_SMOKE_LIFETIME := 1.6
 const EXPLOSION_SPARK_LIFETIME := 0.45
+# Instant white-hot flash that pops on detonation for one short beat
+# before the fireball mesh catches up. Lives on its own quick tween;
+# unmistakable visual cue at iso distance even if the camera isn't
+# pointed straight at the impact.
+const EXPLOSION_FLASH_DURATION: float = 0.18
 const FIREBALL_SHADER: Shader = preload("res://scripts/prototype/explosion_fireball.gdshader")
 
 # Elemental palettes for the procedural fireball. Each entry gives the
@@ -616,7 +621,11 @@ static func _spawn_fireball_explosion(parent: Node, world_pos: Vector3, blast_ra
 
 	var mat := ShaderMaterial.new()
 	mat.shader = FIREBALL_SHADER
-	mat.set_shader_parameter(&"intensity", 1.0)
+	# Intensity multiplies EMISSION in the shader. 1.0 just paints the
+	# surface its color — not HDR-bright. To get a real flash that
+	# blooms and reads as "explosion", push intensity into the HDR
+	# range (>1) so post-process glow / tonemap actually engages.
+	mat.set_shader_parameter(&"intensity", 5.0)
 	mat.set_shader_parameter(&"age", 0.0)
 	mat.set_shader_parameter(&"core_color", palette["core"])
 	mat.set_shader_parameter(&"mid_color", palette["mid"])
@@ -633,19 +642,23 @@ static func _spawn_fireball_explosion(parent: Node, world_pos: Vector3, blast_ra
 	inst.global_position = world_pos
 
 	# Element-tinted omni-light pulses with the blast. Bright peak, fast
-	# drop to a sustained glow at ~33% over 0.12s, then long tail to
-	# zero over the remaining duration. Players should be able to read
-	# the explosion light at a glance — surrounding floor / walls /
-	# enemies light up in the explosion's color.
+	# drop to a sustained glow over 0.15s, then long tail to zero. Light
+	# scatters through volumetric fog at quarter intensity so dense
+	# rooms get a colored haze.
 	var light := _acquire_light()
 	light.light_color = palette["light"]
-	light.light_energy = 24.0
-	light.omni_range = blast_radius * 2.8
-	light.omni_attenuation = 1.0
+	light.light_energy = 40.0
+	light.omni_range = blast_radius * 3.5
+	light.omni_attenuation = 0.9
 	light.shadow_enabled = false
-	light.light_volumetric_fog_energy = 0.0
+	light.light_volumetric_fog_energy = 0.25
 	inst.add_child(light)
 
+	# Instant flash sphere — bright unshaded white-hot pop on top of
+	# the fireball mesh. Reads as the detonation flash that should
+	# precede the orange ball; the shader's age-based fade can take a
+	# few frames to read clearly, this one is immediately visible.
+	_spawn_explosion_flash(parent, world_pos, blast_radius, palette["core"])
 	# Sparks — bright radial dots flying outward, short lifetime, low
 	# gravity. Reads as flying debris / hot fragments.
 	_spawn_explosion_sparks(parent, world_pos, blast_radius, palette["mid"])
@@ -662,12 +675,48 @@ static func _spawn_fireball_explosion(parent: Node, world_pos: Vector3, blast_ra
 	# age tweens linearly 0→1 over the duration; the shader's alpha and
 	# color-to-smoke transitions drive off it.
 	tween.tween_property(mat, "shader_parameter/age", 1.0, EXPLOSION_DURATION)
-	# Light: peak holds briefly, drops to a strong glow, tails off to
-	# zero. Tween chain handles the two segments.
-	tween.tween_property(light, "light_energy", 8.0, 0.12).set_ease(Tween.EASE_OUT)
+	# Light: peak holds briefly at 40, drops to a strong sustained glow
+	# at 14 over 0.15s, then long tail to zero over the rest of the
+	# duration. Two-stage chain so the bright phase is readable before
+	# the long fade.
+	tween.tween_property(light, "light_energy", 14.0, 0.15).set_ease(Tween.EASE_OUT)
 	tween.chain()
-	tween.tween_property(light, "light_energy", 0.0, EXPLOSION_DURATION - 0.12).set_ease(Tween.EASE_IN)
+	tween.tween_property(light, "light_energy", 0.0, EXPLOSION_DURATION - 0.15).set_ease(Tween.EASE_IN)
 	tween.chain().tween_callback(_release_light.bind(light))
+	tween.chain().tween_callback(inst.queue_free)
+
+
+# Instant white-hot pop at the impact point — separate from the
+# fireball shader so it's guaranteed to register even if the shader's
+# fresnel + age fade hides the orange ball at certain angles. Sphere
+# uses an unshaded high-emission StandardMaterial so it bloom-glows
+# regardless of palette or volumetric fog density.
+static func _spawn_explosion_flash(parent: Node, world_pos: Vector3, blast_radius: float, core_tint: Color) -> void:
+	var mesh := SphereMesh.new()
+	mesh.radius = blast_radius * 0.35
+	mesh.height = blast_radius * 0.7
+	mesh.radial_segments = 16
+	mesh.rings = 8
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(core_tint.r, core_tint.g, core_tint.b, 0.9)
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.emission_enabled = true
+	mat.emission = core_tint
+	mat.emission_energy_multiplier = 6.0
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var inst := MeshInstance3D.new()
+	inst.mesh = mesh
+	inst.material_override = mat
+	inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# Start small so it pops into existence, scale up + fade fast.
+	inst.scale = Vector3.ONE * 0.3
+	parent.add_child(inst)
+	inst.global_position = world_pos
+	var tween := inst.create_tween().set_parallel(true)
+	tween.tween_property(inst, "scale", Vector3.ONE * 1.4, EXPLOSION_FLASH_DURATION).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_EXPO)
+	tween.tween_property(mat, "albedo_color:a", 0.0, EXPLOSION_FLASH_DURATION).set_ease(Tween.EASE_IN)
+	tween.tween_property(mat, "emission_energy_multiplier", 0.0, EXPLOSION_FLASH_DURATION).set_ease(Tween.EASE_IN)
 	tween.chain().tween_callback(inst.queue_free)
 
 
