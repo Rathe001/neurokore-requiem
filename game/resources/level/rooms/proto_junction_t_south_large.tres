@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="RoomDef" load_steps=3 format=3]
+
+; Larger T-junction (south branch). 10x10 so the junction doesn't feel
+; cramped when a branch corridor attaches to the south wall.
+
+[ext_resource type="Script" path="res://scripts/level/room_def.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/level/lights/fluorescent_white.tres" id="light"]
+
+[resource]
+script = ExtResource("1")
+id = &"proto_junction_t_south_large"
+size = Vector2(10, 10)
+openings = [1, 2, 3]
+opening_width = 4.0
+light_color = ExtResource("light")
+enemy_count = 2
+clutter_density = 1

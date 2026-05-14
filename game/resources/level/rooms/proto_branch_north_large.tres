@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="RoomDef" load_steps=3 format=3]
+
+; Larger branch terminator (opens north). 8x8 up from 6x6 — gives dead-end
+; rooms enough space for clutter and a proper fight before the loot/switch.
+
+[ext_resource type="Script" path="res://scripts/level/room_def.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/level/lights/fluorescent_white.tres" id="light"]
+
+[resource]
+script = ExtResource("1")
+id = &"proto_branch_north_large"
+size = Vector2(8, 8)
+openings = [0]
+opening_width = 4.0
+light_color = ExtResource("light")
+enemy_count = 2
+clutter_density = 2

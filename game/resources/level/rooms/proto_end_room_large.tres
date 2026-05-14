@@ -1,0 +1,34 @@
+[gd_resource type="Resource" script_class="RoomDef" load_steps=6 format=3]
+
+; Larger boss arena — 16x16 with 4 decorative pillars for cover during
+; the fight. Boss spawns at centre, exit pad to the east. Generous space
+; so ranged builds can kite and melee builds can weave between columns.
+
+[ext_resource type="Script" path="res://scripts/level/room_def.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/level/interactable_slot.gd" id="2"]
+[ext_resource type="Resource" path="res://resources/level/lights/fluorescent_white.tres" id="light"]
+[ext_resource type="PackedScene" path="res://scenes/prototype/prototype_boss_spawn.tscn" id="boss_spawn"]
+[ext_resource type="PackedScene" path="res://scenes/prototype/prototype_exit.tscn" id="exit"]
+
+[sub_resource type="Resource" id="slot_boss"]
+script = ExtResource("2")
+id = &"boss"
+scene = ExtResource("boss_spawn")
+offset = Vector3(0, 0, 0)
+
+[sub_resource type="Resource" id="slot_exit"]
+script = ExtResource("2")
+id = &"exit"
+scene = ExtResource("exit")
+offset = Vector3(6, 0, 0)
+
+[resource]
+script = ExtResource("1")
+id = &"proto_end_room_large"
+size = Vector2(16, 16)
+openings = [3]
+opening_width = 4.0
+light_color = ExtResource("light")
+decorative_pillars = [Vector2(-4, -4), Vector2(4, -4), Vector2(-4, 4), Vector2(4, 4)]
+decorative_pillar_size = Vector2(1.2, 1.2)
+slots = [SubResource("slot_boss"), SubResource("slot_exit")]

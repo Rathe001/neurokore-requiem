@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="RoomDef" load_steps=3 format=3]
+
+; Huge pit room with a narrow bridge spanning the chasm east-to-west.
+; One massive pillar (16x2.5) forms a continuous walkway — not a jumping
+; puzzle, a design element. Bottomless void beneath for drama. Enemies
+; fight the player on the bridge with nowhere to retreat sideways.
+
+[ext_resource type="Script" path="res://scripts/level/room_def.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/level/lights/fluorescent_white.tres" id="light"]
+
+[resource]
+script = ExtResource("1")
+id = &"proto_pit_bridge"
+size = Vector2(20, 10)
+openings = [3, 2]
+opening_width = 4.0
+light_color = ExtResource("light")
+enemy_count = 3
+pit_floor = true
+pit_margin = 1.5
+bottomless_pit = true
+pillars = [Vector2(0, 0)]
+pillar_size = Vector2(16, 2.5)

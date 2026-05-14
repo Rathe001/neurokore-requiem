@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="RoomDef" load_steps=3 format=3]
+
+; Medical Ward — clinical room with curtain partition columns. Wet floor
+; (high puddle count) from leaking pipes or worse. Lower enemy count
+; — eerie rather than swarming.
+
+[ext_resource type="Script" path="res://scripts/level/room_def.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/level/lights/fluorescent_white.tres" id="light"]
+
+[resource]
+script = ExtResource("1")
+id = &"proto_medical_ward"
+size = Vector2(14, 10)
+openings = [3, 2]
+opening_width = 4.0
+light_color = ExtResource("light")
+enemy_count = 2
+decorative_pillars = [Vector2(-3, 0), Vector2(3, 0)]
+decorative_pillar_size = Vector2(0.5, 0.5)
+clutter_density = 2
+puddle_count = 3
+puddle_size = Vector2(0.8, 1.4)

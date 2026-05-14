@@ -64,6 +64,10 @@ const _LOOT_CRATE_SCENE: PackedScene = preload("res://scenes/prototype/prototype
 ## extra enemies. 0 = never (current behaviour); 0.2-0.3 sprinkles
 ## occasional encounter spikes.
 @export_range(0.0, 1.0) var packed_room_chance: float = 0.0
+## Per-connection probability of placing a door. Rolled after the connection
+## is created; skipped when has_door is already true (puzzle-locked doors).
+## 0 = no random doors; 0.85 = most rooms get doors.
+@export_range(0.0, 1.0) var door_chance: float = 0.0
 ## Number of additional enemies added to a packed lair room on top of
 ## the template's default enemy_count.
 @export_range(1, 8) var packed_room_extra_enemies: int = 2
@@ -181,6 +185,8 @@ func generate() -> LevelGraph:
 		# we just need a door here + a puzzle wiring the two.
 		if i == 1:
 			c.has_door = true
+		if not c.has_door and rng.randf() < door_chance:
+			c.has_door = true
 		graph.connections.append(c)
 		if i == 1:
 			_emit_starter_chest_puzzle(graph, c)
@@ -223,6 +229,8 @@ func generate() -> LevelGraph:
 	final_c.to_room = end_id
 	final_c.to_wall = RoomDef.Wall.WEST
 	final_c.corridor = _pick_corridor(rng, false)
+	if not final_c.has_door and rng.randf() < door_chance:
+		final_c.has_door = true
 	graph.connections.append(final_c)
 
 	if emit_switch_puzzle and not _branch_terminator_ids.is_empty():
@@ -270,6 +278,8 @@ func _add_branch(graph: LevelGraph, junction_id: StringName, junction_wall: Room
 		bc.to_room = b_id
 		bc.to_wall = _opposite_wall(current_outgoing_wall)
 		bc.corridor = _pick_corridor(rng, true)
+		if not bc.has_door and rng.randf() < door_chance:
+			bc.has_door = true
 		graph.connections.append(bc)
 		if entrance_conn == null:
 			entrance_conn = bc
@@ -306,6 +316,8 @@ func _add_branch(graph: LevelGraph, junction_id: StringName, junction_wall: Room
 	tc.to_room = term_id
 	tc.to_wall = terminator_wall
 	tc.corridor = _pick_corridor(rng, true)
+	if not tc.has_door and rng.randf() < door_chance:
+		tc.has_door = true
 	graph.connections.append(tc)
 	if entrance_conn == null:
 		entrance_conn = tc

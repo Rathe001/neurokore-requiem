@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="RoomDef" load_steps=3 format=3]
+
+; Isolation Wing — abandoned solitary confinement area. No pillars,
+; sparse clutter, lots of puddles. One enemy lurking in the dark.
+; Unsettling atmosphere.
+
+[ext_resource type="Script" path="res://scripts/level/room_def.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/level/lights/fluorescent_white.tres" id="light"]
+
+[resource]
+script = ExtResource("1")
+id = &"proto_isolation_wing"
+size = Vector2(10, 10)
+openings = [3, 2]
+opening_width = 4.0
+light_color = ExtResource("light")
+enemy_count = 1
+clutter_density = 1
+puddle_count = 4
+puddle_size = Vector2(0.7, 1.3)

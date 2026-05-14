@@ -10,43 +10,53 @@ class_name ClutterBuilder
 # ENEMY collision layer so player attacks hit them.
 
 const DESTRUCTIBLE_POOL: Array[Dictionary] = [
-	{ "name": "Barrel",   "mesh": "cylinder", "radius": 0.4, "height": 0.9,
-	  "hp": 10, "loot": true,  "credits": true,  "credit_min": 1, "credit_max": 3,
-	  "color": Color(0.55, 0.35, 0.15), "weight": 3, "cover": true,
-	  "texture": &"barrel" },
-	{ "name": "Crate",    "mesh": "box", "size": Vector3(0.7, 0.7, 0.7),
-	  "hp": 15, "loot": true,  "credits": true,  "credit_min": 1, "credit_max": 4,
-	  "color": Color(0.50, 0.40, 0.20), "weight": 3, "cover": true,
-	  "texture": &"crate" },
-	{ "name": "Monitor",  "mesh": "box", "size": Vector3(0.5, 0.4, 0.1),
+	{ "name": "MedicalCart",  "mesh": "box", "size": Vector3(0.7, 0.6, 0.5),
+	  "hp": 12, "loot": true,  "credits": true,  "credit_min": 1, "credit_max": 3,
+	  "color": Color(0.90, 0.90, 0.88), "weight": 3, "cover": true,
+	  "texture": &"medical_cart" },
+	{ "name": "FoldingChair", "mesh": "box", "size": Vector3(0.4, 0.5, 0.4),
 	  "hp": 5,  "loot": false, "credits": false, "credit_min": 0, "credit_max": 0,
-	  "color": Color(0.20, 0.20, 0.25), "weight": 2, "y_offset": 0.5, "cover": true,
-	  "texture": &"screen" },
-	{ "name": "Chair",    "mesh": "box", "size": Vector3(0.4, 0.4, 0.4),
-	  "hp": 5,  "loot": false, "credits": false, "credit_min": 0, "credit_max": 0,
-	  "color": Color(0.30, 0.30, 0.30), "weight": 2, "cover": false,
+	  "color": Color(0.45, 0.45, 0.45), "weight": 3, "cover": false,
 	  "texture": &"metal" },
-	{ "name": "Terminal",  "mesh": "box", "size": Vector3(0.4, 0.6, 0.3),
-	  "hp": 8,  "loot": false, "credits": true,  "credit_min": 1, "credit_max": 2,
-	  "color": Color(0.15, 0.22, 0.15), "weight": 1, "cover": true,
+	{ "name": "FilingCabinet", "mesh": "box", "size": Vector3(0.5, 1.0, 0.4),
+	  "hp": 18, "loot": true,  "credits": true,  "credit_min": 2, "credit_max": 5,
+	  "color": Color(0.55, 0.55, 0.52), "weight": 2, "cover": true,
+	  "texture": &"filing_cabinet" },
+	{ "name": "IVStand",      "mesh": "cylinder", "radius": 0.08, "height": 1.6,
+	  "hp": 3,  "loot": false, "credits": false, "credit_min": 0, "credit_max": 0,
+	  "color": Color(0.70, 0.70, 0.70), "weight": 2, "cover": false,
+	  "texture": &"metal" },
+	{ "name": "PatientTray",  "mesh": "box", "size": Vector3(0.5, 0.3, 0.4),
+	  "hp": 5,  "loot": false, "credits": true,  "credit_min": 1, "credit_max": 2,
+	  "color": Color(0.60, 0.60, 0.58), "weight": 2, "y_offset": 0.4, "cover": true,
+	  "texture": &"metal" },
+	{ "name": "SurveillanceMonitor", "mesh": "box", "size": Vector3(0.5, 0.4, 0.1),
+	  "hp": 5,  "loot": false, "credits": false, "credit_min": 0, "credit_max": 0,
+	  "color": Color(0.20, 0.20, 0.25), "weight": 2, "y_offset": 0.6, "cover": true,
 	  "texture": &"screen" },
 ]
 
 # ── Indestructible prop pool ──────────────────────────────────────────────
 
 const INDESTRUCTIBLE_POOL: Array[Dictionary] = [
-	{ "name": "Barrier",    "mesh": "box", "size": Vector3(1.2, 0.6, 0.5),
+	{ "name": "CellBars",         "mesh": "box", "size": Vector3(0.15, 2.5, 1.2),
+	  "blocking": true,  "color": Color(0.30, 0.30, 0.30), "weight": 2,
+	  "texture": &"cell_bars" },
+	{ "name": "ExamTable",        "mesh": "box", "size": Vector3(1.8, 0.7, 0.8),
+	  "blocking": true,  "color": Color(0.85, 0.85, 0.82), "weight": 2,
+	  "texture": &"medical_cart" },
+	{ "name": "SecurityBarrier",  "mesh": "box", "size": Vector3(1.2, 0.6, 0.5),
 	  "blocking": true,  "color": Color(0.40, 0.40, 0.40), "weight": 2,
 	  "texture": &"hazard" },
-	{ "name": "ServerRack", "mesh": "box", "size": Vector3(0.6, 1.8, 0.5),
-	  "blocking": true,  "color": Color(0.15, 0.15, 0.22), "weight": 2,
-	  "texture": &"server" },
-	{ "name": "HeavyPipe",  "mesh": "cylinder", "radius": 0.2, "height": 2.0,
-	  "blocking": false,  "color": Color(0.35, 0.30, 0.25), "weight": 1,
+	{ "name": "VentDuct",         "mesh": "cylinder", "radius": 0.25, "height": 2.0,
+	  "blocking": false,  "color": Color(0.45, 0.45, 0.42), "weight": 1,
 	  "horizontal": true, "texture": &"metal" },
-	{ "name": "FloorGrate", "mesh": "plane", "size": Vector2(1.0, 1.0),
+	{ "name": "FloorDrain",       "mesh": "plane", "size": Vector2(0.8, 0.8),
 	  "blocking": false, "color": Color(0.25, 0.25, 0.25), "weight": 2,
 	  "texture": &"grate" },
+	{ "name": "RestraintChair",   "mesh": "box", "size": Vector3(0.6, 0.8, 0.6),
+	  "blocking": true,  "color": Color(0.35, 0.30, 0.28), "weight": 1,
+	  "texture": &"restraint" },
 ]
 
 const MARGIN := 1.5           ## min distance from wall edge
@@ -366,13 +376,17 @@ static func _get_texture(id: StringName) -> ImageTexture:
 		return _texture_cache[id]
 	var img: Image = null
 	match id:
-		&"barrel":  img = _gen_barrel_tex()
-		&"crate":   img = _gen_crate_tex()
-		&"screen":  img = _gen_screen_tex()
-		&"metal":   img = _gen_metal_tex()
-		&"hazard":  img = _gen_hazard_tex()
-		&"server":  img = _gen_server_tex()
-		&"grate":   img = _gen_grate_tex()
+		&"barrel":         img = _gen_barrel_tex()
+		&"crate":          img = _gen_crate_tex()
+		&"screen":         img = _gen_screen_tex()
+		&"metal":          img = _gen_metal_tex()
+		&"hazard":         img = _gen_hazard_tex()
+		&"server":         img = _gen_server_tex()
+		&"grate":          img = _gen_grate_tex()
+		&"medical_cart":   img = _gen_medical_cart_tex()
+		&"filing_cabinet": img = _gen_filing_cabinet_tex()
+		&"cell_bars":      img = _gen_cell_bars_tex()
+		&"restraint":      img = _gen_restraint_tex()
 	if img == null:
 		return null
 	var tex := ImageTexture.create_from_image(img)
@@ -506,4 +520,81 @@ static func _gen_grate_tex() -> Image:
 			else:
 				# Frame bars — lighter metal.
 				img.set_pixel(x, y, Color(0.95, 0.95, 0.90))
+	return img
+
+
+# Medical cart: clinical white-gray with horizontal shelf seams and rivet dots.
+static func _gen_medical_cart_tex() -> Image:
+	var img := Image.create(TEX_SIZE, TEX_SIZE, false, Image.FORMAT_RGBA8)
+	for y in TEX_SIZE:
+		for x in TEX_SIZE:
+			var v := 0.90
+			# Horizontal shelf seams every 16px.
+			if y % 16 < 2:
+				v = 0.60
+			# Rivet dots at seam intersections.
+			if y % 16 < 2 and x % 12 < 3:
+				v = 1.0
+			# Subtle vertical panel lines.
+			if x % 32 < 1:
+				v *= 0.85
+			img.set_pixel(x, y, Color(v, v, v * 0.97))
+	return img
+
+
+# Filing cabinet: mid-gray metal with horizontal drawer seams and handle dots.
+static func _gen_filing_cabinet_tex() -> Image:
+	var img := Image.create(TEX_SIZE, TEX_SIZE, false, Image.FORMAT_RGBA8)
+	for y in TEX_SIZE:
+		for x in TEX_SIZE:
+			var v := 0.75
+			# Drawer seams every 16px.
+			if y % 16 < 2:
+				v = 0.48
+			# Handle dot — centered below each seam.
+			if y % 16 == 6 and x >= 28 and x <= 35:
+				v = 1.0
+			# Subtle vertical stiffener lines.
+			if x % 32 < 1:
+				v *= 0.88
+			img.set_pixel(x, y, Color(v, v, v))
+	return img
+
+
+# Cell bars: alternating vertical stripes with horizontal crossbars.
+static func _gen_cell_bars_tex() -> Image:
+	var img := Image.create(TEX_SIZE, TEX_SIZE, false, Image.FORMAT_RGBA8)
+	for y in TEX_SIZE:
+		for x in TEX_SIZE:
+			# Vertical bars: 4px dark bar / 4px near-black gap.
+			var bar_phase: int = x % 8
+			var is_bar: bool = bar_phase < 4
+			# Horizontal crossbars at 25% and 75% height.
+			var is_crossbar: bool = (y >= 14 and y <= 17) or (y >= 46 and y <= 49)
+			if is_crossbar:
+				img.set_pixel(x, y, Color(0.50, 0.50, 0.48))
+			elif is_bar:
+				img.set_pixel(x, y, Color(0.40, 0.40, 0.38))
+			else:
+				# Gap between bars — very dark.
+				img.set_pixel(x, y, Color(0.08, 0.08, 0.10))
+	return img
+
+
+# Restraint chair: dark leather-gray with horizontal strap lines and buckles.
+static func _gen_restraint_tex() -> Image:
+	var img := Image.create(TEX_SIZE, TEX_SIZE, false, Image.FORMAT_RGBA8)
+	for y in TEX_SIZE:
+		for x in TEX_SIZE:
+			var v := 0.55
+			# Horizontal strap lines every 12px.
+			if y % 12 < 2:
+				v = 0.35
+			# Bright buckle squares at strap centres.
+			if y % 12 < 2 and x >= 29 and x <= 34:
+				v = 0.95
+			# Leather grain noise.
+			if (x * 11 + y * 3) % 13 == 0:
+				v *= 0.90
+			img.set_pixel(x, y, Color(v, v * 0.95, v * 0.90))
 	return img

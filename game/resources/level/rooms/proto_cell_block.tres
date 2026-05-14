@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="RoomDef" load_steps=3 format=3]
+
+; Cell Block — long narrow corridor of cells. Thin partitions represent
+; cell dividers; clutter fills the space between. Feels like walking
+; through a housing unit in a decommissioned prison wing.
+
+[ext_resource type="Script" path="res://scripts/level/room_def.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/level/lights/fluorescent_white.tres" id="light"]
+
+[resource]
+script = ExtResource("1")
+id = &"proto_cell_block"
+size = Vector2(20, 8)
+openings = [3, 2]
+opening_width = 4.0
+light_color = ExtResource("light")
+enemy_count = 3
+decorative_pillars = [Vector2(-6, -2), Vector2(-2, -2), Vector2(2, -2), Vector2(6, -2), Vector2(-6, 2), Vector2(6, 2)]
+decorative_pillar_size = Vector2(0.6, 3.0)
+clutter_density = 2
+puddle_count = 2
+puddle_size = Vector2(0.8, 1.2)

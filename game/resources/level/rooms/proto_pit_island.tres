@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="RoomDef" load_steps=3 format=3]
+
+; Arena island suspended over a bottomless pit. A large 8x8 central
+; platform gives enough space for a proper fight, while the surrounding
+; abyss makes positioning matter — get knocked toward the edge and you're
+; dead. Narrow landing strips at walls connect to corridors.
+
+[ext_resource type="Script" path="res://scripts/level/room_def.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/level/lights/fluorescent_white.tres" id="light"]
+
+[resource]
+script = ExtResource("1")
+id = &"proto_pit_island"
+size = Vector2(16, 16)
+openings = [3, 2]
+opening_width = 4.0
+light_color = ExtResource("light")
+enemy_count = 4
+pit_floor = true
+pit_margin = 2.0
+bottomless_pit = true
+pillars = [Vector2(0, 0)]
+pillar_size = Vector2(8, 8)

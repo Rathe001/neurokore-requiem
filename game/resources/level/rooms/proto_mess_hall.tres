@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="RoomDef" load_steps=3 format=3]
+
+; Mess Hall — wide cafeteria space with structural columns. Dense clutter
+; represents overturned tables and trays. High enemy count for a pitched
+; brawl in the dining area.
+
+[ext_resource type="Script" path="res://scripts/level/room_def.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/level/lights/fluorescent_white.tres" id="light"]
+
+[resource]
+script = ExtResource("1")
+id = &"proto_mess_hall"
+size = Vector2(16, 12)
+openings = [3, 2]
+opening_width = 4.0
+light_color = ExtResource("light")
+enemy_count = 4
+decorative_pillars = [Vector2(-4, -3), Vector2(4, -3), Vector2(-4, 3), Vector2(4, 3)]
+decorative_pillar_size = Vector2(1.0, 1.0)
+clutter_density = 3
+puddle_count = 1
+puddle_size = Vector2(0.9, 1.4)

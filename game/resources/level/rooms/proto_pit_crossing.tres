@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="RoomDef" load_steps=3 format=3]
+
+; Cross-shaped walkway over a spike pit. A central 2.5x2.5 hub with
+; arms extending in four directions — east-west for the main path,
+; north-south for flanking. Pillars are placed edge-to-edge so the
+; cross forms a continuous walkway, not a jumping puzzle. Enemies on
+; opposite arms create crossfire; the narrow walkway forces the player
+; to choose which arm to push first.
+
+[ext_resource type="Script" path="res://scripts/level/room_def.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/level/lights/fluorescent_white.tres" id="light"]
+
+[resource]
+script = ExtResource("1")
+id = &"proto_pit_crossing"
+size = Vector2(18, 12)
+openings = [3, 2]
+opening_width = 4.0
+light_color = ExtResource("light")
+enemy_count = 3
+pit_floor = true
+pit_margin = 1.5
+spike_pit = true
+pillars = [Vector2(-5, 0), Vector2(-2.5, 0), Vector2(0, 0), Vector2(2.5, 0), Vector2(5, 0), Vector2(0, -2.5), Vector2(0, 2.5)]
+pillar_size = Vector2(2.5, 2.5)

@@ -1,0 +1,33 @@
+[gd_resource type="Resource" script_class="RoomDef" load_steps=7 format=3]
+
+; Larger start room — 10x10 gives the player more breathing room to
+; orient before the first fight. Same slots as the original: player
+; spawn at centre, starter chest in the SW quadrant.
+
+[ext_resource type="Script" path="res://scripts/level/room_def.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/level/interactable_slot.gd" id="2"]
+[ext_resource type="Resource" path="res://resources/level/lights/fluorescent_white.tres" id="light"]
+[ext_resource type="PackedScene" path="res://scenes/prototype/prototype_player_spawn.tscn" id="player_spawn"]
+[ext_resource type="PackedScene" path="res://scenes/prototype/prototype_loot_crate.tscn" id="loot_crate"]
+
+[sub_resource type="Resource" id="slot_player_spawn"]
+script = ExtResource("2")
+id = &"player_spawn"
+scene = ExtResource("player_spawn")
+offset = Vector3(0, 0.5, 0)
+
+[sub_resource type="Resource" id="slot_starter_chest"]
+script = ExtResource("2")
+id = &"starter_chest"
+scene = ExtResource("loot_crate")
+offset = Vector3(-2, 0.3, 2)
+
+[resource]
+script = ExtResource("1")
+id = &"proto_start_room_large"
+size = Vector2(10, 10)
+openings = [2]
+opening_width = 4.0
+light_color = ExtResource("light")
+clutter_density = 1
+slots = [SubResource("slot_player_spawn"), SubResource("slot_starter_chest")]

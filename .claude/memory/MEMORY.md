@@ -45,4 +45,6 @@
 - [Weapon DPS balance](project_dps_balance_model.md) — 3-tier DPS by multi-target capability (26/23/20); damage scales by RARITY_BUDGET_MULT
 - [Resonance bar world-space](project_resonance_bar.md) — accelerator ramp bar moved from HUD to 3D cast bar under player; reuses health_bar.gdshader
 - [Destructibles + cover invariants](project_destructibles_cover.md) — collision is 1.6m tall regardless of mesh size; cover blocks standing fire too; projectile sweep routes PILLAR hits to damage path
+- [Procgen level realism pass](project_procgen_realism.md) — 25-40 room procgen with asylum clutter, facility rooms, pit design elements, doors
+- [move_and_slide velocity gotcha](project_move_and_slide_gotcha.md) — wall collisions zero velocity; jumping/dashing must inject momentum from input direction
 - [Project: Neurokore Requiem](project_neurokore_requiem.md) — Game design project: "Neurokore: Requiem"
