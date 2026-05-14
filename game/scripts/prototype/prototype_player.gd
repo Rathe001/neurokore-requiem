@@ -2432,60 +2432,63 @@ func _tick_channel(delta: float) -> void:
 # ── Channel flame visual (Energy Accelerator stream) ────────────────────────
 
 const FLAME_SHADER: Shader = preload("res://scripts/prototype/jet_flame.gdshader")
-# Cone shape matching the Accelerator's hit telegraph: narrow at the
-# muzzle, wide at the far end. Accelerator stream is cone_deg=32° at
-# range 7m → tan(16°) × 7 ≈ 2.0m half-width at the far end. Sizing
-# the mesh's far-end radius to that means the flame visual covers
-# exactly what the per-tick damage cone actually catches.
-const FLAME_BASE_RADIUS: float = 0.08  # at the muzzle (mesh -Y)
-const FLAME_TIP_RADIUS: float = 2.0    # at the far end (mesh +Y)
 const FLAME_DEFAULT_RANGE: float = 7.0
-# Chest-height offset for the muzzle. Player origin is at the floor,
-# so we lift the pivot to where the weapon would actually emit from.
-const FLAME_MUZZLE_HEIGHT: float = 1.0
+# Cone half-angle in radians — matches the 32° hit cone (16° each side).
+const FLAME_HALF_ANGLE: float = deg_to_rad(16.0)
+const FLAME_FAN_SEGMENTS: int = 16
+# Height above floor for the flat fan. Slightly above the fog layer
+# so it reads as a ground-level energy wash, not floating.
+const FLAME_MUZZLE_HEIGHT: float = 0.2
+
+
+static func _build_flame_fan_mesh() -> ArrayMesh:
+	# Flat pizza-slice triangle fan in the XY plane. Apex at origin,
+	# arc at Y=1.0 spanning ±FLAME_HALF_ANGLE. Scaled to range each tick.
+	var verts := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var indices := PackedInt32Array()
+	# Vertex 0: apex (muzzle)
+	verts.append(Vector3.ZERO)
+	uvs.append(Vector2(0.5, 1.0))  # center, muzzle end
+	# Arc vertices
+	for i in range(FLAME_FAN_SEGMENTS + 1):
+		var t := float(i) / float(FLAME_FAN_SEGMENTS)
+		var angle := lerpf(-FLAME_HALF_ANGLE, FLAME_HALF_ANGLE, t)
+		verts.append(Vector3(sin(angle), cos(angle), 0.0))
+		uvs.append(Vector2(t, 0.0))  # tip end
+	# Triangle fan: apex + consecutive arc pairs.
+	for i in range(FLAME_FAN_SEGMENTS):
+		indices.append(0)
+		indices.append(i + 1)
+		indices.append(i + 2)
+	var arr := []
+	arr.resize(Mesh.ARRAY_MAX)
+	arr[Mesh.ARRAY_VERTEX] = verts
+	arr[Mesh.ARRAY_TEX_UV] = uvs
+	arr[Mesh.ARRAY_INDEX] = indices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+	return mesh
 
 
 func _ensure_flame_visual() -> void:
 	if _flame_visual != null:
 		return
-	# Pivot Node3D placed in world space (top_level=true so player
-	# rotation/movement doesn't double-apply). Each tick we set the
-	# pivot's full transform: position at the player's chest, basis
-	# with local +Y aligned to aim direction. Cylinder mounted under
-	# pivot with its natural Y-up orientation — wide bottom at
-	# pivot.origin (the muzzle), narrow tip at +Y (aim direction).
+	# Pivot in world space (top_level=true). +Y = aim direction.
+	# The flat fan mesh lies in the XY plane — visible from the iso
+	# camera, can't clip into the floor.
 	var pivot := Node3D.new()
 	pivot.name = "ChannelFlamePivot"
 	pivot.top_level = true
 	add_child(pivot)
-	var mesh := CylinderMesh.new()
-	# Bottom (narrow muzzle) is at mesh -Y; top (wide far end) is at
-	# +Y. With the pivot's +Y axis aligned to aim each tick, the mesh
-	# extends FROM the pivot origin (player chest, narrow) AWAY along
-	# aim direction (wide end where the cone hits).
-	mesh.bottom_radius = FLAME_BASE_RADIUS
-	mesh.top_radius = FLAME_TIP_RADIUS
-	mesh.height = 1.0
-	mesh.radial_segments = 14
-	mesh.rings = 4
-	# Disable both caps — the muzzle cap is what was reading as a flat
-	# triangle at the player's feet, and the far-end cap is invisible
-	# anyway because the flame fades to transparent there. Side surface
-	# only keeps the visual a true open jet, not a closed solid.
-	mesh.cap_top = false
-	mesh.cap_bottom = false
 	var mat := ShaderMaterial.new()
 	mat.shader = FLAME_SHADER
 	var inst := MeshInstance3D.new()
 	inst.name = "ChannelFlameMesh"
-	inst.mesh = mesh
+	inst.mesh = _build_flame_fan_mesh()
 	inst.material_override = mat
 	inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	# Lift mesh by half its (unscaled) height so its bottom face sits
-	# at the pivot origin instead of straddling it. Scaled along Y
-	# each tick to match weapon range; we re-position the mesh in
-	# _update_flame_visual proportionally.
-	inst.position = Vector3(0.0, 0.5, 0.0)
+	inst.position = Vector3(0.0, 0.0, 0.0)
 	pivot.add_child(inst)
 	pivot.visible = false
 	_flame_visual = pivot
@@ -2543,15 +2546,10 @@ func _update_remote_flame_visual() -> void:
 
 # Shared transform/scale logic for the flame pivot. Aim is flattened to
 # horizontal, wall-clipped via a raycast against world geometry, then
-# turned into an orthonormal basis with +Y = aim. The cylinder mesh
-# under the pivot is scaled along Y to range_m and re-offset so its
-# narrow base stays anchored at the pivot origin (the muzzle).
+# turned into an orthonormal basis with +Y = aim. The flat fan mesh
+# extends from the pivot origin (muzzle) outward along +Y, scaled to
+# weapon range.
 func _apply_flame_transform(aim: Vector3, range_m: float) -> void:
-	# Force the flame to lie flat in the horizontal plane. _aim_direction
-	# can carry a vertical component (lock-target chest aim, FPS look
-	# pitch) which would tip the flame into the floor or ceiling. The
-	# cone hit detection itself uses the same horizontal projection so
-	# flattening here keeps the visual aligned with what deals damage.
 	var aim_flat := aim
 	aim_flat.y = 0.0
 	if aim_flat.length_squared() < 0.0001:
@@ -2559,9 +2557,8 @@ func _apply_flame_transform(aim: Vector3, range_m: float) -> void:
 	var aim_norm := aim_flat.normalized()
 	var muzzle := global_position + Vector3(0.0, FLAME_MUZZLE_HEIGHT, 0.0)
 	# Wall clip: raycast from muzzle along aim and cap the flame's
-	# length at the first wall hit so the cone doesn't punch through
-	# into the next room. Layer 1 is walls/structures (same mask the
-	# cone damage path uses for LoS).
+	# length at the first wall hit so the fan doesn't punch through
+	# into the next room.
 	var space := get_world_3d().direct_space_state
 	if space != null:
 		if _flame_ray_query == null:
@@ -2574,11 +2571,9 @@ func _apply_flame_transform(aim: Vector3, range_m: float) -> void:
 		var hit := space.intersect_ray(_flame_ray_query)
 		if not hit.is_empty():
 			var wall_dist: float = muzzle.distance_to(hit["position"])
-			# Pull back slightly from the wall surface so the wide tip
-			# doesn't intersect/clip into wall geometry.
 			range_m = maxf(0.5, wall_dist - 0.2)
-	# Build an orthonormal basis with +Y = aim. Mesh's narrow base
-	# sits at pivot origin (muzzle); mesh's wide top extends along +Y.
+	# Basis: +Y = aim, +Z = world up (flat fan lies in XY plane,
+	# viewed from above by the iso camera).
 	var ref_up := Vector3.UP
 	var x_axis := aim_norm.cross(ref_up).normalized()
 	var z_axis := x_axis.cross(aim_norm).normalized()
@@ -2586,8 +2581,7 @@ func _apply_flame_transform(aim: Vector3, range_m: float) -> void:
 	_flame_visual.global_transform = Transform3D(basis, muzzle)
 	var mesh_inst := _flame_visual.get_node_or_null(^"ChannelFlameMesh") as MeshInstance3D
 	if mesh_inst != null:
-		mesh_inst.scale = Vector3(1.0, range_m, 1.0)
-		mesh_inst.position = Vector3(0.0, range_m * 0.5, 0.0)
+		mesh_inst.scale = Vector3(range_m, range_m, 1.0)
 
 
 # ── Remote channel-flame replication ────────────────────────────────────────

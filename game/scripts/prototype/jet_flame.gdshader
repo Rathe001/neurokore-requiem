@@ -1,21 +1,16 @@
 shader_type spatial;
 
-// Continuous-channel flame visual for the Energy Accelerator's stream
-// LMB. Adapted from https://godotshaders.com/shader/futuristic-jet-thruster/
-// — replaces the FastNoiseLite texture sampler with built-in FBM so the
-// material has zero external dependencies.
-//
-// Mesh expectation: a stretched cylinder/cone with its long axis on
-// local Y. UV.x is the radial coordinate (0..1 across circumference);
-// UV.y is along the length (0 = base, 1 = tip). Time-scrolling UV.y
-// produces the outward-flow look of a continuous jet.
+// Flat energy fan for the Energy Accelerator's channeled stream.
+// Mesh: pizza-slice triangle fan in the XY plane. UV.x = 0..1 across
+// the arc (0.5 = centerline), UV.y = 1 at muzzle apex, 0 at far tip.
+// Renders as a ground-hugging energy wash visible from the iso camera.
 
 render_mode unshaded, depth_draw_opaque, cull_disabled, blend_mix;
 
 uniform vec3 flame_color : source_color = vec3(1.0, 0.5, 0.1);
 uniform vec3 inner_color : source_color = vec3(1.0, 0.95, 0.7);
-uniform float scroll_speed = 3.0;
-uniform float noise_scale = 3.5;
+uniform float scroll_speed = 4.0;
+uniform float noise_scale = 4.0;
 uniform float intensity : hint_range(0.0, 5.0) = 1.5;
 
 
@@ -44,40 +39,47 @@ float fbm(vec2 p) {
 
 
 void fragment() {
-	// Mesh orientation note: CylinderMesh UVs map UV.y=0 at the top
-	// (mesh +Y) and UV.y=1 at the bottom (mesh -Y). This shader's
-	// host mounts the cylinder so mesh -Y is at the muzzle (narrow,
-	// player chest) and mesh +Y is at the far end (wide, where the
-	// hit cone lands). So in shader space:
-	//   UV.y = 1.0  →  muzzle (narrow, hot)
-	//   UV.y = 0.0  →  far tip (wide, cooling)
-	// The whole shader is written against this convention; flipping
-	// it on the host side breaks animation flow + brightness.
+	// Flowing energy noise — scrolls outward from muzzle to tip.
 	vec2 uv = UV * noise_scale;
-	// `+= TIME * scroll_speed` makes the noise pattern flow toward
-	// LOWER UV.y, which on this mesh = toward the far tip. The flame
-	// reads as ejected outward from the muzzle.
 	uv.y += TIME * scroll_speed;
 	float n = (fbm(uv) + fbm(uv * 1.7 + vec2(5.2, 1.3))) * 0.5;
 
-	// Radial: bright on the centerline, fades to edges. UV.x runs 0..1
-	// around the circumference; 0.5 is the visible centerline.
+	// Secondary crackle layer — higher frequency, faster scroll for
+	// the look of energy arcs dancing across the fan surface.
+	vec2 uv2 = UV * noise_scale * 2.5;
+	uv2.y += TIME * scroll_speed * 1.8;
+	uv2.x += TIME * 0.7;
+	float crackle = fbm(uv2);
+	// Sharp threshold turns smooth noise into bright arc lines.
+	crackle = smoothstep(0.55, 0.7, crackle);
+
+	// Radial: bright centerline, fading to edges.
 	float radial = 1.0 - smoothstep(0.0, 1.0, abs(UV.x - 0.5) * 2.0);
-	// Length fade: brightest at the muzzle (UV.y near 1), cooling
-	// toward the tip (UV.y near 0). Power curve front-loads the
-	// brightness so the muzzle reads as the heat source instead of
-	// a uniform ramp.
-	float length_fade = pow(UV.y, 1.4);
 
-	float brightness = radial * length_fade * (n * 1.4 + 0.2);
-	brightness = clamp(brightness * intensity, 0.0, 1.5);
+	// Length fade: brightest at muzzle (UV.y=1), cooling toward tip (UV.y=0).
+	float length_fade = pow(UV.y, 1.2);
 
-	// Hot core uses inner_color where brightness is high; body uses
-	// the elemental flame_color where brightness is low. Smoothstep
-	// gives a soft falloff between the two.
-	float core_blend = smoothstep(0.4, 1.0, brightness);
+	// Leading edge glow — bright band at the far tip so the reach
+	// boundary is clearly visible to the player.
+	float edge_glow = smoothstep(0.12, 0.0, UV.y) * 0.6;
+
+	// Subtle pulsing tied to TIME so the stream feels alive.
+	float pulse = 0.85 + 0.15 * sin(TIME * 5.0);
+
+	float brightness = radial * length_fade * (n * 1.4 + 0.3) * pulse;
+	// Add crackle arcs — strongest at mid-range, fading at muzzle/tip.
+	float arc_mask = smoothstep(0.0, 0.3, 1.0 - UV.y) * smoothstep(0.0, 0.15, UV.y);
+	brightness += crackle * arc_mask * 0.5;
+	// Leading edge contribution.
+	brightness += edge_glow * radial;
+	brightness = clamp(brightness * intensity, 0.0, 2.0);
+
+	// Core/body color blend.
+	float core_blend = smoothstep(0.35, 0.9, brightness);
 	vec3 col = mix(flame_color, inner_color, core_blend);
+	// Crackle arcs tint toward white for contrast.
+	col = mix(col, vec3(1.0), crackle * arc_mask * 0.4);
 
-	ALBEDO = col * brightness * 1.8;
-	ALPHA = clamp(brightness, 0.0, 1.0);
+	ALBEDO = col * brightness * 1.6;
+	ALPHA = clamp(brightness * 1.1, 0.0, 1.0);
 }
