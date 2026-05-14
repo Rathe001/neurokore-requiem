@@ -1003,8 +1003,11 @@ func _build_skill_stats_text(skill: Skill, source: Item) -> String:
 			if consumable != null:
 				var hp: float = consumable.get_modifier(&"heal_pct")
 				var hd: float = consumable.get_modifier(&"heal_duration")
-				if hp > 0.0 and hd > 0.0:
-					lines.append("[color=#66cc66]Heals %d%% HP over %.1fs[/color]" % [int(hp), hd])
+				if hp > 0.0:
+					if hd < 0.5:
+						lines.append("[color=#66cc66]Instantly heals %d%% HP[/color]" % int(hp))
+					else:
+						lines.append("[color=#66cc66]Heals %d%% HP over %.1fs[/color]" % [int(hp), hd])
 			lines.append("Charges: 3 (30s recharge)")
 			lines.append("Per-use Cooldown: %.1fs" % skill.cooldown)
 		_:

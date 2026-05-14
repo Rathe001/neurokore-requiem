@@ -774,8 +774,8 @@ func _apply_consumable_base(item: Item, main_type: String, rarity: StringName, r
 		item.model_name = names[rng.randi_range(0, names.size() - 1)]
 	var curve: float = float(RARITY_ROLL_CURVE.get(rarity, 2.0))
 	var budget_mult: float = float(RARITY_BUDGET_MULT.get(rarity, 1.0))
-	var heal_pct := int(round(_curved_randf(10.0, 30.0, rng, curve) * budget_mult))
-	var heal_duration := _curved_randf(3.0, 6.0, rng, curve)
+	var heal_pct := int(round(_curved_randf(50.0, 150.0, rng, curve) * budget_mult))
+	var heal_duration := _curved_randf(0.0, 5.0, rng, curve)
 	item.stat_modifiers[&"heal_pct"] = heal_pct
 	item.stat_modifiers[&"heal_duration"] = heal_duration
 

@@ -116,16 +116,23 @@ func activate(_skill: Skill) -> void:
 		return
 	var heal_pct: float = consumable.get_modifier(&"heal_pct")
 	var heal_duration: float = consumable.get_modifier(&"heal_duration")
-	if heal_pct <= 0.0 or heal_duration <= 0.0:
+	if heal_pct <= 0.0:
 		return
 	# Compute actual heal from percentage of max health.
 	var heal_total: float = heal_pct * _host.max_health / 100.0
-	# Start (or refresh) the HoT.
-	var ticks := heal_duration / HOT_INTERVAL
-	_hot_per_tick = heal_total / ticks
-	_hot_remain = heal_duration
-	_hot_tick_timer = HOT_INTERVAL
-	_hot_carry = 0.0
+	if heal_duration < HOT_INTERVAL:
+		# Instant heal — duration too short for even one tick.
+		_host.heal(int(round(heal_total)))
+		_hot_remain = 0.0
+		_hot_per_tick = 0.0
+		_hot_carry = 0.0
+	else:
+		# Start (or refresh) the HoT.
+		var ticks := heal_duration / HOT_INTERVAL
+		_hot_per_tick = heal_total / ticks
+		_hot_remain = heal_duration
+		_hot_tick_timer = HOT_INTERVAL
+		_hot_carry = 0.0
 	# Consume charge + start timers.
 	_charges -= 1
 	_use_cooldown = USE_COOLDOWN
