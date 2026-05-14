@@ -714,7 +714,7 @@ func _hit_single(body: Node3D, impact_pos: Vector3) -> void:
 	if target_group == &"player":
 		body.take_damage(dmg, source_position, knockback_strength)
 	else:
-		PrototypeEnemy.deal_damage(body, dmg, source_position, knockback_strength, 1, is_crit)
+		PrototypeEnemy.deal_damage(body, dmg, source_position, knockback_strength, 1, is_crit, weapon_base_id)
 		_apply_exile_curse_if_active(body)
 		_apply_mindlink(body, dmg, is_crit)
 		_try_spawn_isr_drone(body)
@@ -798,7 +798,7 @@ func _explode(impact_pos: Vector3) -> void:
 		if target_group == &"player":
 			target.take_damage(dmg, source_position, knockback_strength)
 		else:
-			PrototypeEnemy.deal_damage(target, dmg, source_position, knockback_strength, 1, is_crit)
+			PrototypeEnemy.deal_damage(target, dmg, source_position, knockback_strength, 1, is_crit, weapon_base_id)
 			_apply_exile_curse_if_active(target)
 			_apply_mindlink(target, dmg, is_crit)
 			_try_spawn_isr_drone(target)

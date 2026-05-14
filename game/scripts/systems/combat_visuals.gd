@@ -123,6 +123,21 @@ func _rpc_impact_burst(origin: Vector3, world_pos: Vector3, color_override: Colo
 	_release_anchor(anchor)
 
 
+# ── Muzzle flash ───────────────────────────────────────────────
+
+static func spawn_muzzle_flash(host: Node3D, barrel_pos: Vector3, is_bullet: bool = true, tint: Color = Color(0, 0, 0, 0)) -> void:
+	PrototypeAttackIndicator.spawn_muzzle_flash(host, barrel_pos, is_bullet, tint)
+	if NetState.is_in_lobby():
+		var cv: Node = host.get_node(_AUTOLOAD_PATH)
+		cv._rpc_muzzle_flash.rpc(barrel_pos, is_bullet, tint, host.is_in_group(&"player"))
+
+@rpc("any_peer", "call_remote", "unreliable")
+func _rpc_muzzle_flash(barrel_pos: Vector3, is_bullet: bool, tint: Color, is_player: bool) -> void:
+	var anchor := _acquire_anchor(barrel_pos, is_player)
+	PrototypeAttackIndicator.spawn_muzzle_flash(anchor, barrel_pos, is_bullet, tint)
+	_release_anchor(anchor)
+
+
 # ── Explosion ───────────────────────────────────────────────────
 
 static func spawn_explosion(host: Node3D, world_pos: Vector3, blast_radius: float, color_override: Color = Color(0, 0, 0, 0), damage_type: StringName = &"") -> void:

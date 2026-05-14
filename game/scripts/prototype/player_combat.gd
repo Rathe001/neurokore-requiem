@@ -398,8 +398,8 @@ func _knockback_for(skill: Skill, weapon: Item) -> float:
 ## Convenience wrapper — delegates to the static PrototypeEnemy.deal_damage
 ## so PlayerCombat call sites stay short. See PrototypeEnemy.deal_damage for
 ## the SP / MP routing logic.
-func _deal_damage(target: Node3D, amount: int, knockback_from: Vector3, knockback_strength: float, multistrike: int, is_crit: bool) -> void:
-	PrototypeEnemy.deal_damage(target, amount, knockback_from, knockback_strength, multistrike, is_crit)
+func _deal_damage(target: Node3D, amount: int, knockback_from: Vector3, knockback_strength: float, multistrike: int, is_crit: bool, weapon_base_id: StringName = &"") -> void:
+	PrototypeEnemy.deal_damage(target, amount, knockback_from, knockback_strength, multistrike, is_crit, weapon_base_id)
 
 
 ## Combo step → cone-width override. Step 0 uses the authored cone_deg,
@@ -497,7 +497,8 @@ func _resolve_cone(skill: Skill, aim: Vector3, eff_range: float, weapon: Item) -
 				if alignment > 0.5:  # ~60° cone behind the enemy
 					raw_dmg = int(round(float(raw_dmg) * 1.5))
 		var dmg := _crit_damage(raw_dmg, is_crit)
-		_deal_damage(enode, dmg, _host.global_position, kb, 1, is_crit)
+		var wbid: StringName = weapon.weapon_base_id if weapon != null else &""
+		_deal_damage(enode, dmg, _host.global_position, kb, 1, is_crit, wbid)
 		_apply_exile_curse_if_active(enode)
 		_apply_mindlink(enode, dmg, is_crit)
 		_try_spawn_isr_drone(enode)
@@ -575,7 +576,8 @@ func _resolve_aoe(skill: Skill, eff_range: float, weapon: Item) -> void:
 		var dmg := _crit_damage(_roll_skill_damage(skill, weapon), is_crit)
 		var dist_to_target := _host.global_position.distance_to(enode.global_position)
 		dmg = maxi(1, int(round(float(dmg) * range_falloff(dist_to_target, aoe_range))))
-		_deal_damage(enode, dmg, _host.global_position, kb, 1, is_crit)
+		var wbid: StringName = weapon.weapon_base_id if weapon != null else &""
+		_deal_damage(enode, dmg, _host.global_position, kb, 1, is_crit, wbid)
 		_apply_exile_curse_if_active(enode)
 		_apply_mindlink(enode, dmg, is_crit)
 		_try_spawn_isr_drone(enode)
@@ -654,6 +656,10 @@ func _spawn_projectile(skill: Skill, aim: Vector3, eff_range: float, weapon: Ite
 	proj.global_position = spawn_pos
 	proj.monitoring = true
 	proj.reset()
+	# Muzzle flash — brief point light at the barrel.
+	var _is_bullet := weapon != null and weapon.is_bullet_weapon()
+	var _tint := _weapon_tint(weapon)
+	CombatVisuals.spawn_muzzle_flash(_host, spawn_pos, _is_bullet, _tint)
 	# MP: replicate the projectile spawn so other peers see it travel.
 	# Damage stays host-authoritative; remote echoes are ghost projectiles.
 	CombatVisuals.broadcast_projectile(spawn_pos, aim_norm, proj.speed, proj.max_range,
@@ -815,13 +821,16 @@ func _resolve_hitscan(skill: Skill, aim: Vector3, eff_range: float, weapon: Item
 	if hit_target != null:
 		beam_end = minf(beam_end, origin.distance_to(hit_target.global_position))
 	var hitscan_tint := _weapon_tint(weapon)
+	var _is_bullet := weapon != null and weapon.is_bullet_weapon()
+	CombatVisuals.spawn_muzzle_flash(_host, origin, _is_bullet, hitscan_tint)
 	CombatVisuals.spawn_beam(_host, aim_norm, beam_end, source_offset, hitscan_tint)
 	if hit_target != null:
 		CombatVisuals.spawn_impact_burst(_host, hit_target.global_position + Vector3(0.0, 0.9, 0.0), hitscan_tint)
 		var is_crit := _roll_crit(weapon)
 		var dmg := _crit_damage(_roll_skill_damage(skill, weapon), is_crit)
 		dmg = maxi(1, int(round(float(dmg) * range_falloff(beam_end, eff_range))))
-		_deal_damage(hit_target, dmg, _host.global_position, _knockback_for(skill, weapon), 1, is_crit)
+		var wbid: StringName = weapon.weapon_base_id if weapon != null else &""
+		_deal_damage(hit_target, dmg, _host.global_position, _knockback_for(skill, weapon), 1, is_crit, wbid)
 		_apply_exile_curse_if_active(hit_target)
 		_apply_mindlink(hit_target, dmg, is_crit)
 		_try_spawn_isr_drone(hit_target)
@@ -858,6 +867,7 @@ func _spawn_projectile_exact(skill: Skill, aim_norm: Vector3, eff_range: float, 
 	proj.global_position = spawn_pos
 	proj.monitoring = true
 	proj.reset()
+	CombatVisuals.spawn_muzzle_flash(_host, spawn_pos, proj.is_bullet, _weapon_tint(weapon))
 	# MP: replicate the Double Tap follow-up shot.
 	CombatVisuals.broadcast_projectile(spawn_pos, aim_norm, proj.speed, proj.max_range,
 		proj.blast_radius, proj.visual_scale, proj.is_bullet, proj.damage_type, proj.target_group)
@@ -892,6 +902,8 @@ func _resolve_shotgun(skill: Skill, aim: Vector3, eff_range: float, weapon: Item
 			if enode.has_method(&"take_damage") and not is_player_friendly(enode):
 				acc_mult = MELEE_RANGE_ACCURACY_MULT
 				break
+	# One muzzle flash for the whole burst — all pellets leave the barrel together.
+	CombatVisuals.spawn_muzzle_flash(_host, origin, true, _weapon_tint(weapon))
 	var pellets: int = maxi(1, skill.pellet_count)
 	if weapon != null:
 		pellets += weapon.get_modifier(&"pellet_count")
@@ -1044,7 +1056,8 @@ func _resolve_chain_lightning(skill: Skill, aim: Vector3, eff_range: float, weap
 		# visual contract; an additional energy-burst on top read as
 		# noisy double-feedback. The arc itself terminating on each
 		# enemy is the hit telegraph.
-		_deal_damage(current, dmg, _host.global_position, _knockback_for(skill, weapon) * 0.25, 1, is_crit)
+		var wbid: StringName = weapon.weapon_base_id if weapon != null else &""
+		_deal_damage(current, dmg, _host.global_position, _knockback_for(skill, weapon) * 0.25, 1, is_crit, wbid)
 		_apply_exile_curse_if_active(current)
 		_apply_mindlink(current, dmg, is_crit)
 		if max_jumps > 0:
@@ -1217,13 +1230,16 @@ func _resolve_hitscan_exact(skill: Skill, aim_norm: Vector3, eff_range: float, w
 	if hit_target != null:
 		beam_end = minf(beam_end, origin.distance_to(hit_target.global_position))
 	var hitscan_exact_tint := _weapon_tint(weapon)
+	var _is_bullet_exact := weapon != null and weapon.is_bullet_weapon()
+	CombatVisuals.spawn_muzzle_flash(_host, origin, _is_bullet_exact, hitscan_exact_tint)
 	CombatVisuals.spawn_beam(_host, aim_norm, beam_end, source_offset, hitscan_exact_tint)
 	if hit_target != null:
 		CombatVisuals.spawn_impact_burst(_host, hit_target.global_position + Vector3(0.0, 0.9, 0.0), hitscan_exact_tint)
 		var is_crit := _roll_crit(weapon)
 		var dmg := _crit_damage(_roll_skill_damage(skill, weapon), is_crit)
 		dmg = maxi(1, int(round(float(dmg) * range_falloff(beam_end, eff_range))))
-		_deal_damage(hit_target, dmg, _host.global_position, _knockback_for(skill, weapon), 1, is_crit)
+		var wbid: StringName = weapon.weapon_base_id if weapon != null else &""
+		_deal_damage(hit_target, dmg, _host.global_position, _knockback_for(skill, weapon), 1, is_crit, wbid)
 		_apply_exile_curse_if_active(hit_target)
 		_apply_mindlink(hit_target, dmg, is_crit)
 		_try_spawn_isr_drone(hit_target)

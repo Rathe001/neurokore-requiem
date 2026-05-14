@@ -1244,6 +1244,45 @@ static func _beam_glow_material(color: Color) -> StandardMaterial3D:
 		_beam_glow_mat_cache[color] = template
 	return template.duplicate() as StandardMaterial3D
 
+# ── Muzzle flash ─────────────────────────────────────────────────────────────
+# Quick OmniLight3D pulse at the barrel position on weapon fire. No mesh —
+# just a point light pop that illuminates nearby surfaces for 1-2 frames.
+# Reuses the existing light pool so no allocations at horde scale.
+
+const MUZZLE_FLASH_DURATION: float = 0.06
+const MUZZLE_FLASH_ENERGY: float = 5.0
+const MUZZLE_FLASH_RANGE: float = 4.0
+# Per-archetype flash color. Bullet weapons flash warm orange-white (muzzle
+# fire); energy weapons flash their damage-type tint.
+const MUZZLE_FLASH_BULLET_COLOR := Color(1.0, 0.8, 0.45)
+const MUZZLE_FLASH_ENERGY_COLOR := Color(0.6, 0.85, 1.0)
+
+
+static func spawn_muzzle_flash(host: Node3D, barrel_pos: Vector3, is_bullet: bool = true, tint: Color = Color(0, 0, 0, 0)) -> void:
+	if host == null:
+		return
+	var parent: Node = host.get_parent()
+	if parent == null:
+		parent = host
+	var light := _acquire_light()
+	if tint.a > 0.0:
+		light.light_color = tint
+	elif is_bullet:
+		light.light_color = MUZZLE_FLASH_BULLET_COLOR
+	else:
+		light.light_color = MUZZLE_FLASH_ENERGY_COLOR
+	light.light_energy = MUZZLE_FLASH_ENERGY
+	light.omni_range = MUZZLE_FLASH_RANGE
+	light.omni_attenuation = 2.0
+	light.shadow_enabled = false
+	light.light_volumetric_fog_energy = 0.0
+	parent.add_child(light)
+	light.global_position = barrel_pos
+	var tween := light.create_tween()
+	tween.tween_property(light, "light_energy", 0.0, MUZZLE_FLASH_DURATION).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	tween.tween_callback(_release_light.bind(light))
+
+
 # ── Telegraph material ───────────────────────────────────────────────────────
 
 static func _build_material(color: Color) -> StandardMaterial3D:

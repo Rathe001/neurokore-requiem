@@ -307,6 +307,8 @@ enum State {
 # (_knockback_remain, _jump_t) which support but don't replace the State.
 var _state: State = State.IDLE
 var _health: int
+var _last_hit_weapon_base_id: StringName = &""
+var _last_hit_was_crit: bool = false
 var _knockback_vel: Vector3 = Vector3.ZERO
 var _knockback_remain: float = 0.0
 var _attack_cd: float = 0.0
@@ -653,22 +655,22 @@ func set_tooltip_locked(on: bool) -> void:
 ## the hit to the host via RPC. Hit visuals (damage number, flash, squash)
 ## are broadcast to ALL clients by the host's take_damage via _client_show_hit,
 ## so the client path no longer spawns local feedback.
-static func deal_damage(target: Node3D, amount: int, knockback_from: Vector3, knockback_strength: float = 0.0, multistrike: int = 1, is_crit: bool = false) -> void:
+static func deal_damage(target: Node3D, amount: int, knockback_from: Vector3, knockback_strength: float = 0.0, multistrike: int = 1, is_crit: bool = false, weapon_base_id: StringName = &"") -> void:
 	if NetState.is_in_lobby() and not NetState.is_host():
-		target.request_damage.rpc_id(1, amount, knockback_from, knockback_strength, multistrike, is_crit)
+		target.request_damage.rpc_id(1, amount, knockback_from, knockback_strength, multistrike, is_crit, weapon_base_id)
 		return
-	target.take_damage(amount, knockback_from, knockback_strength, multistrike, is_crit)
+	target.take_damage(amount, knockback_from, knockback_strength, multistrike, is_crit, weapon_base_id)
 
 ## RPC endpoint: any peer can request damage on an enemy. Only the host
 ## (authority) actually applies it — clients' local take_damage is gated.
 ## Clients call `request_damage.rpc_id(1, ...)` to route hits to the host.
 @rpc("any_peer", "call_remote", "reliable")
-func request_damage(amount: int, knockback_from: Vector3, knockback_strength: float, multistrike: int, is_crit: bool) -> void:
+func request_damage(amount: int, knockback_from: Vector3, knockback_strength: float, multistrike: int, is_crit: bool, weapon_base_id: StringName = &"") -> void:
 	if not multiplayer.is_server():
 		return
 	if not is_inside_tree():
 		return
-	take_damage(amount, knockback_from, knockback_strength, multistrike, is_crit)
+	take_damage(amount, knockback_from, knockback_strength, multistrike, is_crit, weapon_base_id)
 
 ## Host → all clients: play hit visuals (damage number, squash, flash).
 ## Sent from take_damage after the host applies damage so every client
@@ -681,7 +683,7 @@ func _client_show_hit(amount: int, multistrike: int, is_crit: bool) -> void:
 	_visuals.play_hit_squash()
 	_hit_flash_tween = HitFlash.play(self, visual, _hit_flash_tween)
 
-func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_strength: float = 0.0, multistrike: int = 1, is_crit: bool = false) -> void:
+func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_strength: float = 0.0, multistrike: int = 1, is_crit: bool = false, weapon_base_id: StringName = &"") -> void:
 	if not _is_alive():
 		return
 	# Clients don't apply damage locally — they route hits through
@@ -707,6 +709,8 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 	if _afflictions._isr_vuln_count > 0:
 		amount = int(round(float(amount) * (1.0 + float(_afflictions._isr_vuln_count) * (ISRDrone.VULN_MULT - 1.0))))
 	_health -= amount
+	_last_hit_weapon_base_id = weapon_base_id
+	_last_hit_was_crit = is_crit
 	_visuals.update_health_bar()
 	var head := global_position + Vector3(0.0, 1.8, 0.0)
 	DamageNumber.spawn(get_parent(), head, amount, multistrike, is_crit)
@@ -714,6 +718,10 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 	# weapon fire mix; -3 dB sits just under the weapon fire volume so the
 	# pop reads as a confirmation rather than competing for attention.
 	WeaponSounds.play_generic(&"hit_flesh", global_position, -3.0)
+	# Crit hitstop — brief time-scale dip on non-fatal crits from single-hit
+	# weapons. Fatal crits route through _die for the longer crit-kill freeze.
+	if is_crit and _health > 0:
+		HitStop.on_crit(weapon_base_id)
 	# Snapshot the pre-hit state BEFORE the knockback transition so the
 	# aggro check below sees the original disposition. Without this, any
 	# IDLE enemy that gets knocked back loses the IDLE→aggro transition
@@ -1545,6 +1553,12 @@ func _tick_jump(delta: float) -> void:
 
 func _die(kill_from: Vector3 = Vector3.ZERO, kill_force: float = 0.0) -> void:
 	_change_state(State.DEAD)
+	# Kill hitstop — brief time-scale dip so the killing blow lands with
+	# weight. Crit kills get the longest freeze.
+	if _last_hit_was_crit:
+		HitStop.on_crit_kill(_last_hit_weapon_base_id)
+	else:
+		HitStop.on_kill(_last_hit_weapon_base_id)
 	# Drop out of the spatial grid immediately so AoE/cone queries during the
 	# DEATH_HOLD window stop "hitting" the corpse-in-progress. The actual
 	# group/collision teardown still waits for _become_corpse so the death
