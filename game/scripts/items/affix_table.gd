@@ -243,7 +243,7 @@ const PREFIXES: Array[Dictionary] = [
 		"label": "Hardened",
 		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Leg Armor", "Boots"],
 		"stat_modifiers": { "barrier_on_kill": 5 },
-		"min_item_level": 3,
+		"min_item_level": 1,
 		"weight": 70,
 	},
 ]

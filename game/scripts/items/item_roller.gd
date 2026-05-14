@@ -486,6 +486,24 @@ func _roll_universal_bonuses(item: Item, item_level: int, rarity: StringName, rn
 		var res := int(round(res_base + rng.randf_range(-1.0, 1.0)))
 		if res > 0:
 			item.stat_modifiers[&"max_resource_bonus"] = int(item.stat_modifiers.get(&"max_resource_bonus", 0)) + res
+	# Sustain: life_on_kill / barrier_on_kill as low-chance universal rolls.
+	# These are the primary sustain loop — even common gear should occasionally
+	# carry a small amount so the player can start building sustain early.
+	var sustain_chance: float = 0.15
+	match rarity:
+		&"magic": sustain_chance = 0.25
+		&"rare": sustain_chance = 0.4
+		&"unique": sustain_chance = 0.6
+	var lok_base := 2.0 + float(item_level) * 0.3
+	if rng.randf() < sustain_chance:
+		var lok := int(round(lok_base + rng.randf_range(-1.0, 1.0)))
+		if lok > 0:
+			item.stat_modifiers[&"life_on_kill"] = int(item.stat_modifiers.get(&"life_on_kill", 0)) + lok
+	var bok_base := 1.0 + float(item_level) * 0.2
+	if rng.randf() < sustain_chance * 0.6:
+		var bok := int(round(bok_base + rng.randf_range(-0.5, 0.5)))
+		if bok > 0:
+			item.stat_modifiers[&"barrier_on_kill"] = int(item.stat_modifiers.get(&"barrier_on_kill", 0)) + bok
 
 
 func _roll_rarity(rng: RandomNumberGenerator) -> StringName:
