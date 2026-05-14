@@ -627,6 +627,12 @@ func _physics_process(delta: float) -> void:
 		if _trail_node != null and _trail_node.visible:
 			_trail_node.transparency = 1.0 - alpha
 	if _traveled >= max_range * PlayerCombat.FALLOFF_RANGE_MULT:
+		# AoE projectiles (RPG rockets, charged plasma) detonate at max
+		# range instead of silently disappearing — the range limit should
+		# feel like the shell ran out of fuel, not like it vanished.
+		if blast_radius > 0.0 and not _hit:
+			_hit = true
+			_explode(global_position)
 		_release()
 
 # True when `body` is a charmed enemy (player-friendly mind-controlled pet).
