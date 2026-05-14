@@ -632,17 +632,16 @@ static func _spawn_fireball_explosion(parent: Node, world_pos: Vector3, blast_ra
 	parent.add_child(inst)
 	inst.global_position = world_pos
 
-	# Element-tinted omni-light pulses with the blast — surrounding
-	# floor / walls / enemies light up in the explosion's color
-	# regardless of player class accent. Two-stage fade: initial flash
-	# pops bright for one frame, drops to a strong glow, then trails off
-	# more gradually so the explosion lingers in light past the
-	# fireball's own mesh fade.
+	# Element-tinted omni-light pulses with the blast. Bright peak, fast
+	# drop to a sustained glow at ~33% over 0.12s, then long tail to
+	# zero over the remaining duration. Players should be able to read
+	# the explosion light at a glance — surrounding floor / walls /
+	# enemies light up in the explosion's color.
 	var light := _acquire_light()
 	light.light_color = palette["light"]
-	light.light_energy = 18.0
-	light.omni_range = blast_radius * 2.0
-	light.omni_attenuation = 1.5
+	light.light_energy = 24.0
+	light.omni_range = blast_radius * 2.8
+	light.omni_attenuation = 1.0
 	light.shadow_enabled = false
 	light.light_volumetric_fog_energy = 0.0
 	inst.add_child(light)
@@ -650,9 +649,10 @@ static func _spawn_fireball_explosion(parent: Node, world_pos: Vector3, blast_ra
 	# Sparks — bright radial dots flying outward, short lifetime, low
 	# gravity. Reads as flying debris / hot fragments.
 	_spawn_explosion_sparks(parent, world_pos, blast_radius, palette["mid"])
-	# Smoke plume — dark puffs drifting up, slow fade. Lingers past the
-	# main fireball so the area reads as "something just blew up here"
-	# even after the bright flash is gone.
+	# Smoke plume — sparse, very transparent puffs that linger around
+	# the explosion. Onset is slightly delayed so the fireball flash
+	# isn't immediately occluded; rise is gentle so the iso camera
+	# stays focused on the impact site, not a column climbing off-screen.
 	_spawn_explosion_smoke(parent, world_pos, blast_radius, palette["smoke"])
 
 	var scale_target := end_radius / start_radius
@@ -662,12 +662,11 @@ static func _spawn_fireball_explosion(parent: Node, world_pos: Vector3, blast_ra
 	# age tweens linearly 0→1 over the duration; the shader's alpha and
 	# color-to-smoke transitions drive off it.
 	tween.tween_property(mat, "shader_parameter/age", 1.0, EXPLOSION_DURATION)
-	# Light: bright single-frame peak → quick drop to a strong glow at
-	# ~25% over 0.08s, then a long tail to zero over the rest of the
-	# duration. Single tween chain handles the two segments.
-	tween.tween_property(light, "light_energy", 4.5, 0.08).set_ease(Tween.EASE_IN)
+	# Light: peak holds briefly, drops to a strong glow, tails off to
+	# zero. Tween chain handles the two segments.
+	tween.tween_property(light, "light_energy", 8.0, 0.12).set_ease(Tween.EASE_OUT)
 	tween.chain()
-	tween.tween_property(light, "light_energy", 0.0, EXPLOSION_DURATION - 0.08).set_ease(Tween.EASE_IN)
+	tween.tween_property(light, "light_energy", 0.0, EXPLOSION_DURATION - 0.12).set_ease(Tween.EASE_IN)
 	tween.chain().tween_callback(_release_light.bind(light))
 	tween.chain().tween_callback(inst.queue_free)
 
@@ -732,48 +731,57 @@ static func _spawn_explosion_sparks(parent: Node, world_pos: Vector3, blast_radi
 
 
 # Slow upward-drifting smoke puffs. Outlive the fireball so the area
-# stays visually marked after the bright flash settles.
+# stays visually marked after the bright flash settles. Tuned for the
+# iso camera — gentle drift, very low opacity per puff, smooth spheres
+# so the silhouette doesn't read as cartoony low-poly polygons.
 static func _spawn_explosion_smoke(parent: Node, world_pos: Vector3, blast_radius: float, tint: Color) -> void:
 	var particles := GPUParticles3D.new()
 	particles.emitting = true
 	particles.one_shot = true
-	particles.amount = clampi(int(round(blast_radius * 3.0)), 6, 18)
+	particles.amount = clampi(int(round(blast_radius * 1.8)), 4, 10)
 	particles.lifetime = EXPLOSION_SMOKE_LIFETIME
-	particles.explosiveness = 0.7
+	particles.explosiveness = 0.65
 	particles.local_coords = false
 
 	var pm := ParticleProcessMaterial.new()
 	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
-	pm.emission_sphere_radius = blast_radius * 0.3
+	pm.emission_sphere_radius = blast_radius * 0.25
 	pm.direction = Vector3(0.0, 1.0, 0.0)
-	pm.spread = 35.0
-	pm.initial_velocity_min = blast_radius * 1.2
-	pm.initial_velocity_max = blast_radius * 2.2
-	# Light upward float — gravity slightly negative so smoke keeps rising
-	# instead of falling back into the explosion crater.
-	pm.gravity = Vector3(0.0, -0.6, 0.0)
-	pm.damping_min = 1.5
-	pm.damping_max = 3.0
-	pm.scale_min = blast_radius * 0.35
-	pm.scale_max = blast_radius * 0.55
-	# Smoke grows as it rises and disperses, then fades to nothing.
+	pm.spread = 30.0
+	# Gentle upward drift only — the previous values had smoke climbing
+	# 6-10m off-screen on a 3m blast radius, which read as fog rising
+	# rather than residue at the impact site.
+	pm.initial_velocity_min = blast_radius * 0.4
+	pm.initial_velocity_max = blast_radius * 0.9
+	pm.gravity = Vector3(0.0, -0.3, 0.0)
+	pm.damping_min = 2.5
+	pm.damping_max = 4.5
+	pm.scale_min = blast_radius * 0.22
+	pm.scale_max = blast_radius * 0.4
+	# Grow-and-fade curve. Starts small so the fireball flash isn't
+	# instantly occluded, peaks around 30%, fades to nothing by the end.
 	var curve := Curve.new()
-	curve.add_point(Vector2(0.0, 0.6))
-	curve.add_point(Vector2(0.3, 1.0))
+	curve.add_point(Vector2(0.0, 0.35))
+	curve.add_point(Vector2(0.35, 1.0))
 	curve.add_point(Vector2(1.0, 0.0))
 	var curve_tex := CurveTexture.new()
 	curve_tex.curve = curve
 	pm.scale_curve = curve_tex
-	pm.color = Color(tint.r, tint.g, tint.b, 0.75)
+	# Particle color alpha 0.45 × mesh material alpha 0.18 ≈ 0.08 per
+	# puff. Previous 0.75 × 0.55 ≈ 0.41 stacked into an opaque tan wall
+	# that hid the fireball + light entirely.
+	pm.color = Color(tint.r, tint.g, tint.b, 0.45)
 	particles.process_material = pm
 
+	# Smoother sphere mesh — was 8 × 4, which silhouetted as octagons in
+	# the screenshot. 16 × 8 reads round at iso distance.
 	var mesh := SphereMesh.new()
 	mesh.radius = 0.5
 	mesh.height = 1.0
-	mesh.radial_segments = 8
-	mesh.rings = 4
+	mesh.radial_segments = 16
+	mesh.rings = 8
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(tint.r, tint.g, tint.b, 0.55)
+	mat.albedo_color = Color(tint.r, tint.g, tint.b, 0.18)
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
