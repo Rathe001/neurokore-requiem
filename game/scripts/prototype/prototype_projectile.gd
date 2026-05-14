@@ -103,7 +103,7 @@ var _released: bool = false
 # (charged plasma, anything with blast_radius > 0) keep the original
 # SphereMesh from the .tscn so the heavier hit reads as a glowing orb.
 # The discriminator is `blast_radius > 0` set by the spawner before reset().
-const LASER_BOX_SIZE: Vector3 = Vector3(0.07, 0.07, 0.55)
+const LASER_BOX_SIZE: Vector3 = Vector3(0.03, 0.03, 0.55)
 # Bullet visual is split into two pieces:
 #   • Visual (existing MeshInstance3D, used as the "head"): a small flat
 #     rectangle leading the projectile so the player sees a discrete
