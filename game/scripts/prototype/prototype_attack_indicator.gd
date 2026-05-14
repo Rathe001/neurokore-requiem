@@ -1208,8 +1208,8 @@ static func _beam_glow_mesh(length: float) -> CylinderMesh:
 	if cached != null:
 		return cached
 	var m := CylinderMesh.new()
-	m.top_radius = BEAM_RADIUS * 8.0
-	m.bottom_radius = BEAM_RADIUS * 8.0
+	m.top_radius = BEAM_RADIUS * 3.0
+	m.bottom_radius = BEAM_RADIUS * 3.0
 	m.height = length
 	m.radial_segments = 6
 	m.rings = 1
@@ -1234,10 +1234,10 @@ static func _beam_glow_material(color: Color) -> StandardMaterial3D:
 	var template: StandardMaterial3D = _beam_glow_mat_cache.get(color)
 	if template == null:
 		template = StandardMaterial3D.new()
-		template.albedo_color = Color(color.r, color.g, color.b, 0.35)
+		template.albedo_color = Color(color.r, color.g, color.b, 0.2)
 		template.emission_enabled = true
 		template.emission = color
-		template.emission_energy_multiplier = 10.0
+		template.emission_energy_multiplier = 6.0
 		template.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		template.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		template.cull_mode = BaseMaterial3D.CULL_DISABLED
