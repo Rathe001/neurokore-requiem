@@ -1251,10 +1251,15 @@ func _physics_process(delta: float) -> void:
 		velocity.y = JUMP_VELOCITY
 		# move_and_slide zeroes horizontal velocity against walls, so a jump
 		# while pressed into an obstacle would go straight up. Inject the
-		# last input direction as forward momentum so the player vaults over.
-		if _want_dir.length_squared() > 0.01 and Vector2(velocity.x, velocity.z).length_squared() < 1.0:
-			velocity.x = _want_dir.x * move_speed
-			velocity.z = _want_dir.z * move_speed
+		# live input direction as forward momentum so the player vaults over.
+		# Use _input_wish_dir() (read NOW) instead of _want_dir — the latter
+		# is only assigned later in this same _physics_process, so a player
+		# who presses [move + jump] on the same frame from a standstill
+		# would see _want_dir = ZERO (stale from idle) and skip the inject.
+		var jump_wish := _input_wish_dir()
+		if jump_wish.length_squared() > 0.01 and Vector2(velocity.x, velocity.z).length_squared() < 1.0:
+			velocity.x = jump_wish.x * move_speed
+			velocity.z = jump_wish.z * move_speed
 		_is_airborne = true
 		_play_anim(ANIM_JUMP_START, 1.2)
 
@@ -1274,35 +1279,14 @@ func _physics_process(delta: float) -> void:
 		velocity.x = 0.0
 		velocity.z = 0.0
 	else:
-		# Suppress movement entirely while the chat input is open — Input.
-		# get_action_strength polls the action map regardless of UI focus,
-		# so without this gate typing "WASD" into chat would walk the
-		# character around behind the panel.
-		var input_vec := Vector2.ZERO
-		if not GameplayChatState.typing:
-			input_vec = Vector2(
-				Input.get_action_strength(&"move_right") - Input.get_action_strength(&"move_left"),
-				Input.get_action_strength(&"move_down") - Input.get_action_strength(&"move_up"),
-			)
-		var wish_dir := Vector3.ZERO
-		if input_vec.length_squared() > 0.0:
+		# Camera-relative wish direction. Chat-typing + top-down + FPS
+		# corner cases all live in _input_wish_dir() so the jump-check
+		# above and this block stay in lockstep.
+		var wish_dir := _input_wish_dir()
+		if wish_dir.length_squared() > 0.01:
 			# Manual WASD cancels auto-walk-to-interact — the player took
 			# direct control.
 			_walk_to_interact_target = null
-			var ref_cam: Camera3D = _fps_camera if _fps_mode else _camera
-			var cam_forward := _flatten(-ref_cam.global_transform.basis.z)
-			if cam_forward.is_zero_approx():
-				# Top-down camera path: -basis.z is straight down at pitch=0,
-				# which flatten zeroes out — making W/S no-op or jitter on
-				# float precision at the boundary (perceived as "W and S
-				# reversed at exactly top-down"). basis.y still has the
-				# camera's "screen up" direction in the horizontal plane,
-				# which IS what W should map to. Iso clamps pitch ≥ 0 and
-				# FPS never reaches straight-down, so this fallback only
-				# fires for the top-down corner case.
-				cam_forward = _flatten(ref_cam.global_transform.basis.y)
-			var cam_right := _flatten(ref_cam.global_transform.basis.x)
-			wish_dir = (cam_right * input_vec.x - cam_forward * input_vec.y).normalized()
 		elif _walk_to_interact_target != null:
 			wish_dir = _tick_walk_to_interact()
 		_want_dir = wish_dir
@@ -3552,3 +3536,25 @@ func _set_crouch(value: bool) -> void:
 func _flatten(v: Vector3) -> Vector3:
 	v.y = 0.0
 	return v.normalized()
+
+
+# Camera-relative world-space input direction for the current frame.
+# Returns Vector3.ZERO when no movement is held or chat is typing. Used
+# in two places: the jump-check (line ~1249) needs the live direction
+# because _want_dir is only assigned later in the same frame, and the
+# main movement block reuses it as the canonical wish_dir.
+func _input_wish_dir() -> Vector3:
+	if GameplayChatState.typing:
+		return Vector3.ZERO
+	var input_vec := Vector2(
+		Input.get_action_strength(&"move_right") - Input.get_action_strength(&"move_left"),
+		Input.get_action_strength(&"move_down") - Input.get_action_strength(&"move_up"),
+	)
+	if input_vec.length_squared() <= 0.0:
+		return Vector3.ZERO
+	var ref_cam: Camera3D = _fps_camera if _fps_mode else _camera
+	var cam_forward := _flatten(-ref_cam.global_transform.basis.z)
+	if cam_forward.is_zero_approx():
+		cam_forward = _flatten(ref_cam.global_transform.basis.y)
+	var cam_right := _flatten(ref_cam.global_transform.basis.x)
+	return (cam_right * input_vec.x - cam_forward * input_vec.y).normalized()
