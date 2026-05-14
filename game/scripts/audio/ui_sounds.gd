@@ -23,7 +23,7 @@ func _wire_existing(node: Node) -> void:
 
 func _on_node_added(node: Node) -> void:
 	# Deferred so the node is fully in the tree and ready.
-	_try_wire.call_deferred(node)
+	call_deferred(&"_try_wire", node)
 
 
 func _try_wire(node: Node) -> void:
