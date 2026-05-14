@@ -114,8 +114,8 @@ func refresh() -> void:
 	divider.custom_minimum_size = Vector2(0.0, 1.0)
 	divider.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_vbox.add_child(divider)
-	var label_text: String = MissionState.current_label()
-	if label_text == "":
+	var lines: Array[String] = MissionState.current_lines()
+	if lines.is_empty():
 		var empty := Label.new()
 		empty.text = EMPTY_PLACEHOLDER
 		empty.add_theme_font_size_override(&"font_size", TIP_FONT_SIZE)
@@ -123,14 +123,15 @@ func refresh() -> void:
 		empty.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_vbox.add_child(empty)
 	else:
-		var tip := Label.new()
-		tip.text = label_text
-		tip.add_theme_font_size_override(&"font_size", TIP_FONT_SIZE)
-		tip.add_theme_color_override(&"font_color", TIP_COLOR)
-		tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		tip.custom_minimum_size = Vector2(PANEL_WIDTH - 10.0, 0.0)
-		tip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_vbox.add_child(tip)
+		for line in lines:
+			var tip := Label.new()
+			tip.text = line
+			tip.add_theme_font_size_override(&"font_size", TIP_FONT_SIZE)
+			tip.add_theme_color_override(&"font_color", TIP_COLOR)
+			tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			tip.custom_minimum_size = Vector2(PANEL_WIDTH - 10.0, 0.0)
+			tip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			_vbox.add_child(tip)
 	call_deferred(&"_resize_to_content")
 
 
@@ -213,5 +214,3 @@ func _reposition_under_quirks() -> void:
 		offset_top = _quirk_panel.bottom_edge_y + STACK_GAP
 	else:
 		offset_top = minimap_bottom
-
-

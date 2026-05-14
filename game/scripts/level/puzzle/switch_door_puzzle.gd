@@ -38,7 +38,8 @@ func apply(_ctx: LevelBuildContext, slots: Dictionary, doors: Dictionary) -> voi
 	for sw in switches:
 		sw.target_door = sw.get_path_to(door)
 		sw.action = PrototypeSwitch.Action.UNLOCK
-	# Tell the mission tracker how many switches feed this puzzle so the
-	# Missions panel can show "Activate switches (done/total)". Multiple
-	# puzzles on the same floor accumulate.
-	MissionState.register_switches(n)
+	# Register this puzzle by door with the mission tracker. Each puzzle
+	# becomes its own line in the missions panel — boss rooms with
+	# multiple entrances get one per door instead of a misleading
+	# aggregate count.
+	MissionState.register_puzzle(door, n)
