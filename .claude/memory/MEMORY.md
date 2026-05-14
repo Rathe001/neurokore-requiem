@@ -44,4 +44,5 @@
 - [Health potion system](project_health_potion_system.md) — consumable slot, origin-gated potions, 3 charges, %-based HoT, heal preview on HP bar
 - [Weapon DPS balance](project_dps_balance_model.md) — 3-tier DPS by multi-target capability (26/23/20); damage scales by RARITY_BUDGET_MULT
 - [Resonance bar world-space](project_resonance_bar.md) — accelerator ramp bar moved from HUD to 3D cast bar under player; reuses health_bar.gdshader
+- [Destructibles + cover invariants](project_destructibles_cover.md) — collision is 1.6m tall regardless of mesh size; cover blocks standing fire too; projectile sweep routes PILLAR hits to damage path
 - [Project: Neurokore Requiem](project_neurokore_requiem.md) — Game design project: "Neurokore: Requiem"
