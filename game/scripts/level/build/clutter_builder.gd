@@ -167,10 +167,15 @@ static func _create_indestructible(ctx: LevelBuildContext, pos: Vector3, def: Di
 		mesh_inst.add_to_group(&"clutter")
 		return
 
-	# Blocking: StaticBody3D on PILLAR layer (128).
+	# Blocking: StaticBody3D on WORLD + PILLAR. WORLD is what makes enemies
+	# stop here — their mask drops PILLAR specifically so they walk through
+	# destructible clutter, so a PILLAR-only indestructible (cell bars,
+	# exam tables) would also become walkable. WORLD restores the hard-cover
+	# behaviour. PILLAR is retained so bullets + combat-LOS rays still see
+	# these as cover (same as destructibles).
 	var body := StaticBody3D.new()
 	body.name = StringName("Prop_%s" % def["name"])
-	body.collision_layer = 128  # PILLAR — blocks movement and bullets
+	body.collision_layer = 1 | 128  # WORLD + PILLAR
 	body.collision_mask = 0
 	body.input_ray_pickable = false
 

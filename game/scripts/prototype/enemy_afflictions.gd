@@ -68,8 +68,13 @@ const _LAYER_PLAYER := 4
 const _LAYER_CHARMED_ALLY := 16
 const _LAYER_INTERACTABLE := 64
 const _LAYER_PILLAR := 128
-const _DEFAULT_ENEMY_MASK := _LAYER_WORLD | _LAYER_ENEMY | _LAYER_PLAYER | _LAYER_CHARMED_ALLY | _LAYER_INTERACTABLE | _LAYER_PILLAR
-const _CHARMED_PET_MASK := _LAYER_WORLD | _LAYER_ENEMY | _LAYER_CHARMED_ALLY | _LAYER_INTERACTABLE | _LAYER_PILLAR
+# PILLAR intentionally absent: enemies physically phase through destructible
+# clutter (barrels, crates, chairs) so they don't get stuck on knee-high props
+# whose bullet-catch collision extends to chest height. Indestructible cover
+# (cell bars, exam tables) keeps blocking enemy movement via its WORLD-layer
+# membership — see clutter_builder._create_indestructible.
+const _DEFAULT_ENEMY_MASK := _LAYER_WORLD | _LAYER_ENEMY | _LAYER_PLAYER | _LAYER_CHARMED_ALLY | _LAYER_INTERACTABLE
+const _CHARMED_PET_MASK := _LAYER_WORLD | _LAYER_ENEMY | _LAYER_CHARMED_ALLY | _LAYER_INTERACTABLE
 
 
 func setup(host: PrototypeEnemy) -> void:

@@ -29,7 +29,16 @@ var _visual: MeshInstance3D
 
 
 func _ready() -> void:
-	collision_layer = (2 | 128) if provides_cover else 2  # ENEMY + PILLAR for cover props
+	# PILLAR (128) only — not ENEMY (2). Player projectile mask already
+	# includes PILLAR (PROJECTILE_WORLD_MASK), so damage routing via the
+	# sweep raycast + body_entered group-check path still lands. Off the
+	# ENEMY layer means enemies don't physically bump destructibles — the
+	# cover-blocking-LOS purpose of the prop is preserved by PILLAR alone.
+	# `provides_cover` no longer affects the layer because every
+	# destructible is bullet-catchable at chest height now (see
+	# ClutterBuilder.DESTRUCTIBLE_COLLISION_HEIGHT) — the flag is kept on
+	# the resource for potential future use but doesn't gate the layer.
+	collision_layer = 128
 	collision_mask = 0
 	add_to_group(&"enemies")
 	add_to_group(&"structures")
