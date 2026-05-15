@@ -41,6 +41,7 @@ var _equipped_type: Label
 var _equipped_stats: RichTextLabel
 var _equipped_style: StyleBoxFlat
 var _equipped_meters: WeaponMeterStrip = null
+var _equipped_quality_label: Label = null
 var _shift_held: bool = false
 
 # LMB lock: while held on an enemy, the tooltip freezes — no content updates,
@@ -221,13 +222,28 @@ func _build_ui() -> void:
 	_equipped_header.mouse_filter = MOUSE_FILTER_IGNORE
 	_equipped_vbox.add_child(_equipped_header)
 
+	var eq_name_row := HBoxContainer.new()
+	eq_name_row.mouse_filter = MOUSE_FILTER_IGNORE
+	eq_name_row.add_theme_constant_override(&"separation", 4)
+	_equipped_vbox.add_child(eq_name_row)
+
 	_equipped_name = Label.new()
 	_equipped_name.theme_type_variation = &"BodyLabel"
 	_equipped_name.add_theme_font_size_override(&"font_size", 10)
 	_equipped_name.mouse_filter = MOUSE_FILTER_IGNORE
 	_equipped_name.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_equipped_name.custom_minimum_size = Vector2(CONTENT_MIN_WIDTH, 0.0)
-	_equipped_vbox.add_child(_equipped_name)
+	_equipped_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_equipped_name.custom_minimum_size = Vector2(80.0, 0.0)
+	eq_name_row.add_child(_equipped_name)
+
+	_equipped_quality_label = Label.new()
+	_equipped_quality_label.theme_type_variation = &"BodyLabel"
+	_equipped_quality_label.add_theme_font_size_override(&"font_size", 8)
+	_equipped_quality_label.mouse_filter = MOUSE_FILTER_IGNORE
+	_equipped_quality_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_equipped_quality_label.size_flags_horizontal = Control.SIZE_SHRINK_END
+	_equipped_quality_label.visible = false
+	eq_name_row.add_child(_equipped_quality_label)
 
 	_equipped_type = Label.new()
 	_equipped_type.theme_type_variation = &"SmallLabel"
@@ -446,15 +462,7 @@ func show_item(item: Item) -> void:
 
 	# Visual meter bars — replaces numeric stat lines with at-a-glance bars
 	# showing where this item's roll sits in its archetype+rarity range.
-	var meter_data := ItemMeterData.compute(item)
-	# Hide unrolled (empty) bars unless Shift is held for comparison.
-	if not _shift_held:
-		meter_data = meter_data.filter(func(b: WeaponMeterData.MeterBar) -> bool: return not b.number_text.is_empty())
-	if not meter_data.is_empty():
-		_weapon_meters.populate(meter_data)
-		_weapon_meters.visible = true
-	else:
-		_weapon_meters.visible = false
+	_update_meter_bars(item)
 
 	# DPS keeps an inline arrow vs equipped (the headline at-a-glance signal);
 	# every other stat shows bare. Shift+hover provides the full comparison.
@@ -489,14 +497,35 @@ func _sync_equipped_panel_visibility() -> void:
 func _refresh_meters() -> void:
 	if _current_item == null:
 		return
-	var meter_data := ItemMeterData.compute(_current_item)
-	if not _shift_held:
-		meter_data = meter_data.filter(func(b: WeaponMeterData.MeterBar) -> bool: return not b.number_text.is_empty())
-	if not meter_data.is_empty():
-		_weapon_meters.populate(meter_data)
+	_update_meter_bars(_current_item)
+
+# Compute + merge meter bars for both hovered and equipped items.
+# When Shift is held, both panels show the union of all bar IDs so missing
+# stats are visible as empty bars.
+func _update_meter_bars(item: Item) -> void:
+	var hovered_bars := ItemMeterData.compute(item)
+	var equipped: Item = _resolve_equipped(item)
+	if _shift_held and equipped != null:
+		var eq_bars := ItemMeterData.compute(equipped)
+		var merged: Array = ItemMeterData.merge_for_comparison(hovered_bars, eq_bars)
+		hovered_bars = merged[0]
+		var merged_eq: Array[WeaponMeterData.MeterBar] = []
+		for b in merged[1]:
+			merged_eq.append(b as WeaponMeterData.MeterBar)
+		if not merged_eq.is_empty():
+			_equipped_meters.populate(merged_eq)
+			_equipped_meters.visible = true
+		else:
+			_equipped_meters.visible = false
+	else:
+		# No comparison — hide unrolled (empty) bars
+		hovered_bars = hovered_bars.filter(func(b: WeaponMeterData.MeterBar) -> bool: return not b.number_text.is_empty())
+	if not hovered_bars.is_empty():
+		_weapon_meters.populate(hovered_bars)
 		_weapon_meters.visible = true
 	else:
 		_weapon_meters.visible = false
+
 
 # Mid-show shift toggle: visibility flip changes compound width, so re-run
 # the size/position pipeline.
@@ -516,13 +545,10 @@ func _populate_equipped_panel(item: Item) -> void:
 	var t := _build_type_text(item)
 	_equipped_type.text = t
 	_equipped_type.visible = not t.is_empty()
-	# Meter bars for the equipped item — same visual as hovered item's meters.
-	var eq_meters := ItemMeterData.compute(item)
-	if not eq_meters.is_empty():
-		_equipped_meters.populate(eq_meters)
-		_equipped_meters.visible = true
-	else:
-		_equipped_meters.visible = false
+	# Quality % for equipped item
+	if _equipped_quality_label != null:
+		_update_quality_label(item, _equipped_quality_label)
+	# Meter bars populated by _update_meter_bars (merged with hovered)
 	_equipped_stats.text = _build_stats_text(item)
 
 func show_skill(skill: Skill, source: Item) -> void:
@@ -674,14 +700,15 @@ func _build_type_text(item: Item) -> String:
 
 # Color-coded quality % in the top-right of the tooltip name row.
 # Below 100%: red→yellow→green. Above 100%: green→blue.
-func _update_quality_label(item: Item) -> void:
+func _update_quality_label(item: Item, label: Label = null) -> void:
+	var lbl: Label = label if label != null else _quality_label
 	if not ItemMeterData.has_meters(item):
-		_quality_label.visible = false
+		lbl.visible = false
 		return
 	var pct := int(round(item.effective_multiplier() * 100.0))
-	_quality_label.text = "%d%%" % pct
-	_quality_label.add_theme_color_override(&"font_color", _quality_pct_color(pct))
-	_quality_label.visible = true
+	lbl.text = "%d%%" % pct
+	lbl.add_theme_color_override(&"font_color", _quality_pct_color(pct))
+	lbl.visible = true
 
 
 # Quality % color: 30% (floor) = red, 65% = yellow, 100% = green, 150% (ceil) = blue.

@@ -541,3 +541,52 @@ static func _make_bar(
 		bar.value = _normalize(raw_val, arch_lo, arch_hi)
 		bar.number_text = fmt % raw_val
 	return bar
+
+
+# ── Comparison merge — union of both items' bar IDs ──────────────────────
+# When Shift is held, both hovered and equipped items should show the same
+# set of bars so the user can see at a glance what's missing from each.
+# Missing bars show as empty (value=0, no number_text).
+
+static func merge_for_comparison(
+	hovered_bars: Array[WeaponMeterData.MeterBar],
+	equipped_bars: Array[WeaponMeterData.MeterBar]
+) -> Array:  # Returns [merged_hovered, merged_equipped]
+	# Collect union of all bar IDs in order (hovered first, then any equipped-only)
+	var ordered_ids: Array[StringName] = []
+	var hovered_by_id: Dictionary = {}
+	for bar: WeaponMeterData.MeterBar in hovered_bars:
+		if not ordered_ids.has(bar.id):
+			ordered_ids.append(bar.id)
+		hovered_by_id[bar.id] = bar
+	var equipped_by_id: Dictionary = {}
+	for bar: WeaponMeterData.MeterBar in equipped_bars:
+		if not ordered_ids.has(bar.id):
+			ordered_ids.append(bar.id)
+		equipped_by_id[bar.id] = bar
+	# Build merged arrays — placeholder for missing bars
+	var merged_hovered: Array[WeaponMeterData.MeterBar] = []
+	var merged_equipped: Array[WeaponMeterData.MeterBar] = []
+	for id: StringName in ordered_ids:
+		if hovered_by_id.has(id):
+			merged_hovered.append(hovered_by_id[id])
+		else:
+			# Find the label from the equipped bar
+			var ref: WeaponMeterData.MeterBar = equipped_by_id[id]
+			var placeholder := WeaponMeterData.MeterBar.new()
+			placeholder.id = id
+			placeholder.label = ref.label
+			placeholder.value = 0.0
+			placeholder.number_text = ""
+			merged_hovered.append(placeholder)
+		if equipped_by_id.has(id):
+			merged_equipped.append(equipped_by_id[id])
+		else:
+			var ref: WeaponMeterData.MeterBar = hovered_by_id[id]
+			var placeholder := WeaponMeterData.MeterBar.new()
+			placeholder.id = id
+			placeholder.label = ref.label
+			placeholder.value = 0.0
+			placeholder.number_text = ""
+			merged_equipped.append(placeholder)
+	return [merged_hovered, merged_equipped]
