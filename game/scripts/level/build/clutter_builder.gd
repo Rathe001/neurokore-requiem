@@ -6,8 +6,10 @@ class_name ClutterBuilder
 
 # ── Destructible prop pool ─────────────────────────────────────────────────
 # Each entry defines a prop type. "weight" controls how often it's picked
-# relative to other entries. All destructibles are StaticBody3D on the
-# ENEMY collision layer so player attacks hit them.
+# relative to other entries. Destructibles sit on the PILLAR layer (not
+# ENEMY) so enemies physically phase through them; player projectiles
+# still hit because PROJECTILE_WORLD_MASK includes PILLAR. See
+# DestructibleProp._ready for the exact layer derivation.
 
 const DESTRUCTIBLE_POOL: Array[Dictionary] = [
 	{ "name": "MedicalCart",  "mesh": "box", "size": Vector3(0.7, 0.6, 0.5),
@@ -121,12 +123,14 @@ static func _create_destructible(ctx: LevelBuildContext, pos: Vector3, def: Dict
 	body.credit_range = Vector2i(int(def["credit_min"]), int(def["credit_max"]))
 	body.prop_color = def["color"] as Color
 	body.input_ray_pickable = false
-	# Cover props sit on ENEMY + PILLAR — blocks enemy projectiles and LoS
-	# rays when the player crouches behind them. Non-cover props (chairs) are
-	# ENEMY-only and short enough for StepUp to clear. DestructibleProp._ready
-	# derives collision_layer / collision_mask from provides_cover, so we only
-	# set the flag here — writing the layers again would just shadow the
-	# (identical) _ready computation and invite drift.
+	# All destructibles sit on PILLAR only — they block enemy projectiles
+	# and combat-LOS rays (cover), but enemies physically phase through
+	# them because the enemy mask drops PILLAR. The player's mask
+	# includes PILLAR so they still bump these as solid obstacles.
+	# DestructibleProp._ready derives the exact layer from
+	# provides_cover + blocks_enemies, so we only set the flag here —
+	# writing the layers again would shadow the _ready computation and
+	# invite drift.
 	body.provides_cover = def.get("cover", false)
 
 	var y_offset: float = def.get("y_offset", 0.0)
