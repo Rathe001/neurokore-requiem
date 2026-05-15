@@ -74,6 +74,15 @@ func _ready() -> void:
 	_build_ui()
 	_apply_theme()
 	UIThemeState.changed.connect(_apply_theme)
+	# _process tracks anchor validity + repositions while shown. Gated
+	# on show/hide so the tooltip costs nothing while hidden (which is
+	# 99% of the time).
+	set_process(false)
+
+
+func _exit_tree() -> void:
+	if UIThemeState.changed.is_connected(_apply_theme):
+		UIThemeState.changed.disconnect(_apply_theme)
 
 func _process(_dt: float) -> void:
 	# Anchor freed (level reset, pool release, queue_free) — drop the stale
@@ -390,9 +399,11 @@ func _release_target() -> void:
 
 func _dismiss() -> void:
 	visible = false
+	set_process(false)
 
 func _show_now() -> void:
 	visible = true
+	set_process(true)
 
 func _reposition(mouse: Vector2) -> void:
 	var vp_size := get_viewport().get_visible_rect().size
