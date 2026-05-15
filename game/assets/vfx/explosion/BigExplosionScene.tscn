@@ -14,7 +14,7 @@ linear_accel_min = -0.2
 linear_accel_max = -0.2
 
 [sub_resource type="QuadMesh" id="QuadMesh_16uck"]
-size = Vector2(5, 5)
+size = Vector2(8, 8)
 
 [node name="Node3D" type="Node3D"]
 
