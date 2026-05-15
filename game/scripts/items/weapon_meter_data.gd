@@ -14,10 +14,17 @@ extends RefCounted
 class MeterBar:
 	var id: StringName
 	var label: String
-	var value: float          # Normalized [0,1] in archetype range
+	var value: float          # Normalized [0,1] in this bar's reference range
 	var decayed_value: float = -1.0  # Normalized [0,1] effective value after decay; -1 = no decay
 	var boosted_value: float = -1.0  # Normalized [0,1] effective value when boosted; -1 = no boost
 	var number_text: String   # Formatted raw value for shift-overlay
+	## True when the bar's range is a GLOBAL comparison (every weapon in
+	## the game, all archetypes / rarities) rather than scoped to this
+	## item's archetype + rarity. The renderer draws a divider below
+	## global rows so the player can tell at a glance which bars compare
+	## across weapons (Power) vs. within the same archetype (Fire Rate,
+	## sig stats, etc.).
+	var is_global: bool = false
 
 # ── Bar IDs ─────────────────────────────────────────────────────────────────
 
@@ -81,6 +88,12 @@ static var _arch_ranges: Dictionary = {}
 static var _base_cache: Dictionary = {}
 static var _ranges_built: bool = false
 
+# Global Power range — min/max DPS across every weapon archetype × rarity.
+# Used to normalize the Power bar on a single shared scale so an SMG at
+# 60% Power and a Sniper at 90% Power can be compared directly. Built
+# alongside _arch_ranges in _ensure_ranges_built().
+static var _global_power_range: Vector2 = Vector2(0.0, 1.0)
+
 
 static func _get_base(path: String) -> WeaponBase:
 	if _base_cache.has(path):
@@ -96,13 +109,24 @@ static func _ensure_ranges_built() -> void:
 		return
 	_ranges_built = true
 
+	var global_lo: float = INF
+	var global_hi: float = -INF
 	for path: String in _BASE_PATHS:
 		var base := _get_base(path)
 		if base == null:
 			continue
 		_arch_ranges[base.id] = {}
 		for rarity: StringName in _RARITIES:
-			_arch_ranges[base.id][rarity] = _compute_archetype_range(base, rarity)
+			var rng_dict := _compute_archetype_range(base, rarity)
+			_arch_ranges[base.id][rarity] = rng_dict
+			# Track the global Power floor/ceil across all archetype × rarity
+			# combos. Floor = the worst common roll on the lowest-DPS weapon;
+			# ceil = the best unique roll on the highest-DPS weapon.
+			var pwr: Vector2 = rng_dict.get(BAR_POWER_ST, Vector2(0, 0))
+			global_lo = minf(global_lo, pwr.x)
+			global_hi = maxf(global_hi, pwr.y)
+	if global_hi > global_lo:
+		_global_power_range = Vector2(global_lo, global_hi)
 
 
 # Compute the theoretical floor and ceil of each bar for a given base+rarity.
@@ -223,21 +247,36 @@ static func compute(item: Item) -> Array[MeterBar]:
 		# Skip bars with sentinel values
 		if a.x < 0.0:
 			continue
-		# Skip bars with no rollable variance (fixed values)
-		if absf(a.y - a.x) < 0.01:
+		# Power is the only cross-weapon comparison — normalize against
+		# the global DPS range instead of this archetype's slice. Other
+		# bars (Fire Rate, Capacity, Reload, sig stats) compare within
+		# the archetype because they don't translate across weapon
+		# classes (a sniper's 0.5/s fire rate isn't worse than an SMG's
+		# 10/s; they're different roles).
+		var is_global := bar_id == BAR_POWER_ST
+		var range_lo: float = a.x
+		var range_hi: float = a.y
+		if is_global:
+			range_lo = _global_power_range.x
+			range_hi = _global_power_range.y
+		# Skip bars with no rollable variance (fixed values). Global bars
+		# always have non-trivial range, so this guard only short-circuits
+		# archetype-scoped fixed stats.
+		if not is_global and absf(range_hi - range_lo) < 0.01:
 			continue
 
 		var bar := MeterBar.new()
 		bar.id = bar_id
 		bar.label = BAR_LABELS.get(bar_id, "")
-		bar.value = _normalize(raw_val, a.x, a.y)
+		bar.value = _normalize(raw_val, range_lo, range_hi)
 		bar.number_text = _format_value(bar_id, raw_val)
+		bar.is_global = is_global
 		# Decay/boost overlay for damage-based bars only
 		if bar_id == BAR_POWER_ST:
 			if mult < 1.0:
-				bar.decayed_value = _normalize(raw_val * mult, a.x, a.y)
+				bar.decayed_value = _normalize(raw_val * mult, range_lo, range_hi)
 			elif mult > 1.0:
-				bar.boosted_value = _normalize(raw_val * mult, a.x, a.y)
+				bar.boosted_value = _normalize(raw_val * mult, range_lo, range_hi)
 		bars.append(bar)
 
 	# ── Signature stat bars (archetype-specific: ricochet, bleed, etc.) ──

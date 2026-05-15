@@ -10,7 +10,7 @@ ALL item tooltips use visual meter bars instead of raw numeric stats. Bars show 
 
 **Decay overlay:** Pulsing red overlay on each bar showing how much effective_multiplier has reduced the stat. Only appears on combat power stats (damage-based bars, defense, HP, resource, speed, combat sig stats). Feel stats (traction, blast radius, capacity, fire rate) don't decay.
 
-**Bar range:** Each bar represents the archetype+rarity range only — no global cross-type comparison. 0% = worst possible roll for this type, 100% = best possible. Minimum 2px fill for rolled stats so floor-rolls are visually distinct from unrolled empty bars.
+**Bar range:** Most bars are archetype+rarity scoped (0% = worst possible roll for this type, 100% = best possible). Weapon **Power** is the exception — normalized against the global DPS range across every archetype × rarity so an SMG and a Sniper compare on the same scale. MeterBar.is_global flags the global bars; StatMeterBar.has_separator renders a thin divider beneath the last global bar to telegraph "everything below is type-scoped." Minimum 2px fill for rolled stats so floor-rolls are visually distinct from unrolled empty bars.
 
 **Weapon bars:** Power (Single), Power (AoE), Fire Rate, Capacity, [Reload if ammo], then signature stat bars (Ricochet, Bleed, Headshot, etc. per archetype). Zero-variance bars hidden.
 

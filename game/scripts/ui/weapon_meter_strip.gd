@@ -23,6 +23,16 @@ func _ready() -> void:
 
 func populate(meter_data: Array[WeaponMeterData.MeterBar]) -> void:
 	var count := mini(meter_data.size(), MAX_BARS)
+	# Find the LAST global-flagged bar so the separator only renders once
+	# at the transition between the global group and the archetype group,
+	# even if multiple global bars exist in the future.
+	var last_global := -1
+	for i in count:
+		if meter_data[i].is_global:
+			last_global = i
+	# Cumulative y so rows with extra-padding (separator-bearing) push
+	# subsequent rows down by the right amount.
+	var y := 0.0
 	for i in MAX_BARS:
 		if i < count:
 			var data: WeaponMeterData.MeterBar = meter_data[i]
@@ -32,17 +42,16 @@ func populate(meter_data: Array[WeaponMeterData.MeterBar]) -> void:
 			bar.decayed_value = data.decayed_value
 			bar.boosted_value = data.boosted_value
 			bar.number_text = data.number_text
-			bar.position = Vector2(0, float(i) * StatMeterBar.ROW_HEIGHT)
+			bar.has_separator = (i == last_global)
+			bar.position = Vector2(0, y)
 			bar.visible = true
 			bar.update_pulse()
 			bar.queue_redraw()
+			y += bar.row_height()
 		else:
 			_bars[i].visible = false
 			_bars[i].set_process(false)
-	custom_minimum_size = Vector2(
-		StatMeterBar.TOTAL_WIDTH,
-		float(count) * StatMeterBar.ROW_HEIGHT
-	)
+	custom_minimum_size = Vector2(StatMeterBar.TOTAL_WIDTH, y)
 
 
 func update_theme() -> void:

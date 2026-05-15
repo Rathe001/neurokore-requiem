@@ -577,6 +577,7 @@ static func merge_for_comparison(
 			placeholder.label = ref.label
 			placeholder.value = 0.0
 			placeholder.number_text = ""
+			placeholder.is_global = ref.is_global
 			merged_hovered.append(placeholder)
 		if equipped_by_id.has(id):
 			merged_equipped.append(equipped_by_id[id])
@@ -587,5 +588,6 @@ static func merge_for_comparison(
 			placeholder.label = ref.label
 			placeholder.value = 0.0
 			placeholder.number_text = ""
+			placeholder.is_global = ref.is_global
 			merged_equipped.append(placeholder)
 	return [merged_hovered, merged_equipped]

@@ -28,17 +28,27 @@ const LABEL_WIDTH := 42.0
 const VALUE_WIDTH := 36.0
 const GAP := 3.0
 const ROW_HEIGHT := 8.0         # Total height per bar row (bar + vertical padding)
+# Extra vertical space added beneath a row when has_separator is true —
+# leaves room for the divider line + a little breathing space so the
+# "global comparison" group reads as visually distinct from the
+# archetype-scoped rows below it.
+const SEPARATOR_EXTRA_HEIGHT := 4.0
 const FONT_SIZE_LABEL := 5
 const FONT_SIZE_NUMBER := 5
 const TOTAL_WIDTH := LABEL_WIDTH + VALUE_WIDTH + GAP + BAR_WIDTH
 
 # ── Properties (set by parent before queue_redraw) ──────────────────────────
 
-var value: float = 0.0              # Normalized [0,1] position in archetype range
+var value: float = 0.0              # Normalized [0,1] position in this bar's range
 var decayed_value: float = -1.0     # Normalized [0,1] effective value after decay; -1 = no decay
 var boosted_value: float = -1.0     # Normalized [0,1] effective value when boosted; -1 = no boost
 var number_text: String = ""        # Formatted raw value
 var label_text: String = ""         # Left-side label
+## When true, the bar draws a thin horizontal divider in its bottom
+## padding and reserves SEPARATOR_EXTRA_HEIGHT pixels for it. Used to
+## visually separate the global-comparison Power bar from the
+## archetype-scoped bars below it.
+var has_separator: bool = false
 var _pulsing: bool = false          # True when decay/boost overlay needs animation
 
 # ── Cached theme colors (track + text only; fill uses fixed gradient) ──────
@@ -80,6 +90,12 @@ static func _gradient_color(t: float) -> Color:
 		return Color(0.9, 0.2, 0.2).lerp(Color(0.95, 0.85, 0.2), t / 0.5)
 	else:
 		return Color(0.95, 0.85, 0.2).lerp(Color(0.2, 0.85, 0.3), (t - 0.5) / 0.5)
+
+
+## Total height this row occupies, including separator padding when set.
+## WeaponMeterStrip uses this to position subsequent rows.
+func row_height() -> float:
+	return ROW_HEIGHT + (SEPARATOR_EXTRA_HEIGHT if has_separator else 0.0)
 
 
 ## Call after setting properties to enable/disable the pulse animation.
@@ -142,3 +158,12 @@ func _draw() -> void:
 			var pulse := 0.45 + 0.35 * sin(float(Time.get_ticks_msec()) * 0.008)
 			var overlay_color := Color(0.3, 0.5, 1.0, pulse)
 			draw_rect(Rect2(bar_x + fill_w, bar_y, boost_w - fill_w, BAR_HEIGHT), overlay_color)
+
+	# 7. Separator — thin horizontal divider in the padding under the bar
+	# when this row is the bottom of the global-comparison group. Uses a
+	# softened version of the label color so it reads as a structural
+	# cue rather than another data layer.
+	if has_separator:
+		var sep_y := ROW_HEIGHT + SEPARATOR_EXTRA_HEIGHT * 0.5
+		var sep_color := Color(_label_color.r, _label_color.g, _label_color.b, 0.35)
+		draw_rect(Rect2(0, sep_y, TOTAL_WIDTH, 1.0), sep_color)
