@@ -1,21 +1,30 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/prototype/prototype_switch.gd" id="1_script"]
 
-[sub_resource type="StandardMaterial3D" id="mat_switch_housing"]
-albedo_color = Color(0.1, 0.1, 0.12, 1)
+[sub_resource type="StandardMaterial3D" id="mat_console_body"]
+albedo_color = Color(0.12, 0.12, 0.14, 1)
 metallic = 0.7
 roughness = 0.35
 
-[sub_resource type="BoxMesh" id="mesh_switch_housing"]
-material = SubResource("mat_switch_housing")
-size = Vector3(0.4, 1.4, 0.6)
+[sub_resource type="BoxMesh" id="mesh_console_body"]
+material = SubResource("mat_console_body")
+size = Vector3(0.8, 0.7, 0.6)
 
-[sub_resource type="BoxShape3D" id="shape_switch_housing"]
-size = Vector3(0.4, 1.4, 0.6)
+[sub_resource type="BoxShape3D" id="shape_console"]
+size = Vector3(0.8, 0.7, 0.6)
 
-[sub_resource type="BoxMesh" id="mesh_switch_lamp"]
-size = Vector3(0.05, 0.3, 0.4)
+[sub_resource type="StandardMaterial3D" id="mat_console_top"]
+albedo_color = Color(0.08, 0.08, 0.10, 1)
+metallic = 0.5
+roughness = 0.45
+
+[sub_resource type="BoxMesh" id="mesh_console_top"]
+material = SubResource("mat_console_top")
+size = Vector3(0.82, 0.04, 0.62)
+
+[sub_resource type="BoxMesh" id="mesh_button"]
+size = Vector3(0.18, 0.07, 0.18)
 
 [node name="Switch" type="StaticBody3D"]
 collision_layer = 64
@@ -24,11 +33,15 @@ script = ExtResource("1_script")
 display_name = "Switch"
 
 [node name="Mesh" type="MeshInstance3D" parent="."]
-mesh = SubResource("mesh_switch_housing")
+mesh = SubResource("mesh_console_body")
 
-[node name="Collision" type="CollisionShape3D" parent="."]
-shape = SubResource("shape_switch_housing")
+[node name="Top" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.37, 0)
+mesh = SubResource("mesh_console_top")
 
 [node name="Lamp" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.225, 0, 0)
-mesh = SubResource("mesh_switch_lamp")
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.425, 0)
+mesh = SubResource("mesh_button")
+
+[node name="Collision" type="CollisionShape3D" parent="."]
+shape = SubResource("shape_console")

@@ -3,24 +3,21 @@ extends HoverableInteractable
 
 enum Action { TOGGLE, OPEN, CLOSE, UNLOCK }
 
-const COLOR_ACTIVE := Color(0.35, 0.95, 1.0, 1.0)
-const COLOR_USED := Color(0.4, 0.5, 0.55, 1.0)
-# Idle / hover emission. Bumped from 4 / 12 (which barely lit the small
-# lamp face against dark walls) so the switch reads as a clear waypoint
-# even at iso distance.
-const LAMP_EMISSION_IDLE := 10.0
+const COLOR_ACTIVE := Color(1.0, 0.15, 0.1, 1.0)
+const COLOR_USED := Color(0.35, 0.2, 0.2, 1.0)
+const LAMP_EMISSION_ON := 12.0
+const LAMP_EMISSION_OFF := 0.5
 const LAMP_EMISSION_HOVER := 24.0
-# Idle pulse — sin-wave drives the emission between BASE and BASE × PULSE_AMP
-# at PULSE_HZ Hz. Gives unused switches a slow heartbeat that's noticeable
-# without being obnoxious. Disabled once the switch is used.
-const LAMP_PULSE_HZ := 1.0
-const LAMP_PULSE_AMP := 0.55
+# Blink pattern: on for BLINK_ON seconds, off for BLINK_OFF. Short off-
+# phase keeps the switch readable while the strobe grabs attention from
+# across the room. Disabled once the switch is used.
+const BLINK_ON := 0.6
+const BLINK_OFF := 0.25
 # OmniLight3D attached to the lamp so the switch actually casts colored
-# light onto nearby walls / floor. The mesh-emission alone doesn't
-# illuminate anything in PBR mode; adding a real light makes the switch
-# read as a beacon from across the room.
-const LAMP_LIGHT_ENERGY := 1.4
-const LAMP_LIGHT_RANGE := 5.0
+# light onto nearby walls / floor.
+const LAMP_LIGHT_ENERGY_ON := 2.5
+const LAMP_LIGHT_ENERGY_OFF := 0.15
+const LAMP_LIGHT_RANGE := 6.0
 
 @export var target_door: NodePath
 @export var action: Action = Action.TOGGLE
@@ -31,20 +28,18 @@ const LAMP_LIGHT_RANGE := 5.0
 var _used: bool = false
 var _mat: StandardMaterial3D
 var _omni: OmniLight3D
-var _pulse_t: float = 0.0
+var _blink_t: float = 0.0
+var _blink_on: bool = true
 
 func _ready() -> void:
 	_mat = StandardMaterial3D.new()
 	_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	_mat.emission_enabled = true
-	_mat.emission_energy_multiplier = LAMP_EMISSION_IDLE
+	_mat.emission_energy_multiplier = LAMP_EMISSION_ON
 	lamp.material_override = _mat
-	# Attach a colored OmniLight3D to the lamp so it actually illuminates
-	# the surrounding geometry — the mesh emission on its own doesn't
-	# cast onto walls under PBR shading.
 	_omni = OmniLight3D.new()
 	_omni.light_color = COLOR_ACTIVE
-	_omni.light_energy = LAMP_LIGHT_ENERGY
+	_omni.light_energy = LAMP_LIGHT_ENERGY_ON
 	_omni.omni_range = LAMP_LIGHT_RANGE
 	_omni.omni_attenuation = 1.5
 	_omni.shadow_enabled = false
@@ -57,13 +52,14 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if _used or _mat == null:
 		return
-	_pulse_t += delta
-	# Sin wave 0..1 mapped to [1.0, 1+PULSE_AMP] so the emission throbs
-	# above the base level without ever dipping below it.
-	var pulse: float = 1.0 + LAMP_PULSE_AMP * (0.5 + 0.5 * sin(_pulse_t * TAU * LAMP_PULSE_HZ))
-	_mat.emission_energy_multiplier = LAMP_EMISSION_IDLE * pulse
-	if _omni != null:
-		_omni.light_energy = LAMP_LIGHT_ENERGY * pulse
+	_blink_t -= delta
+	if _blink_t <= 0.0:
+		_blink_on = not _blink_on
+		_blink_t = BLINK_ON if _blink_on else BLINK_OFF
+		var em := LAMP_EMISSION_ON if _blink_on else LAMP_EMISSION_OFF
+		_mat.emission_energy_multiplier = em
+		if _omni != null:
+			_omni.light_energy = LAMP_LIGHT_ENERGY_ON if _blink_on else LAMP_LIGHT_ENERGY_OFF
 
 func _on_mouse_entered() -> void:
 	super._on_mouse_entered()
@@ -72,8 +68,9 @@ func _on_mouse_entered() -> void:
 
 func _on_mouse_exited() -> void:
 	super._on_mouse_exited()
-	if _mat != null:
-		_mat.emission_energy_multiplier = LAMP_EMISSION_IDLE
+	# Blink resumes on next _process tick — just reset the timer so the
+	# transition from hover → blink isn't jarring.
+	_blink_t = 0.0
 
 func _get_outline_source() -> MeshInstance3D:
 	return mesh
@@ -139,12 +136,13 @@ func _refresh_lamp() -> void:
 	var c := COLOR_USED if _used else COLOR_ACTIVE
 	_mat.albedo_color = c
 	_mat.emission = c
-	# Energy 0 when used reads as a hard "off" state instead of a dim glow
-	# that's easy to miss against bright room lighting.
-	_mat.emission_energy_multiplier = 0.0 if _used else LAMP_EMISSION_IDLE
+	_mat.emission_energy_multiplier = 0.0 if _used else LAMP_EMISSION_ON
 	if _omni != null:
 		_omni.light_color = c
-		_omni.light_energy = 0.0 if _used else LAMP_LIGHT_ENERGY
+		_omni.light_energy = 0.0 if _used else LAMP_LIGHT_ENERGY_ON
+	# Reset blink state so it starts in the "on" phase after a refresh.
+	_blink_on = true
+	_blink_t = BLINK_ON
 
 
 func _do_action(door: PrototypeDoor) -> void:
