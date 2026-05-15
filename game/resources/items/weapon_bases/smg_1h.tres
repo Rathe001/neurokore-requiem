@@ -1,11 +1,10 @@
 [gd_resource type="Resource" script_class="WeaponBase" load_steps=3 format=3]
 
-; SMG (1H) — fast spray bullet weapon. Tiny per-shot damage, very high
-; attack-speed (1.6–2.2× cycle on a 0.15s base), low accuracy. Smaller
-; magazine (10–50 rounds) but a fast reload (1.5s) keeps it spammable.
-; Tuned to ~22 raw DPS to match the other archetypes; the spray cadence
-; lets it reliably stack hit-on-crit and hit-aggro effects despite the
-; small numbers per individual round.
+; SMG (1H) — fast spray bullet weapon. Modest per-shot damage, high
+; attack-speed (1.6–2.2× cycle on a 0.25s base), low accuracy. 25–50
+; round magazine with fast reload (1.5s). Tuned to ~24 raw DPS (limited
+; multi-target tier via ricochet). The spray cadence + 50–100% ricochet
+; gives reliable multi-target damage and hit-on-crit stacking.
 
 [ext_resource type="Script" path="res://scripts/items/weapon_base.gd" id="1_weapon_base"]
 [ext_resource type="Resource" path="res://resources/skills/smg_burst.tres" id="2_fire_skill"]
@@ -17,12 +16,12 @@ display_name = "SMG"
 glyph = "i"
 two_handed = false
 damage_min_range = Vector2(2, 3)
-damage_max_range = Vector2(4, 6)
+damage_max_range = Vector2(3, 4)
 attack_speed_range = Vector2(1.6, 2.2)
 crit_chance_range = Vector2(0.0, 0.0)
 accuracy_range = Vector2(0.55, 0.75)
 weapon_range_range = Vector2(8.0, 10.0)
 fire_skill = ExtResource("2_fire_skill")
-ammo_capacity_range = Vector2i(10, 50)
+ammo_capacity_range = Vector2i(25, 50)
 reload_time = 1.5
 model_names = Array[String](["VK-9 Stinger", "VKR-22 Wasp", "VKX-4 Sliver", "VKZ-7 Murmur", "VKM-3 Compact"])

@@ -766,22 +766,17 @@ func _try_ricochet(hit_body: Node3D) -> void:
 
 
 func _explode(impact_pos: Vector3) -> void:
-	# Bullet projectiles (RPG, future kinetic AoE) route to the
-	# procedural fireball path by passing zero-alpha color_override.
-	# Energy projectiles (charged plasma) keep their class-tinted
-	# bubble look. damage_type then picks the fireball palette
-	# (orange / cyan / violet) — passed through both branches so a
-	# future cryo RPG would still color-tint correctly.
-	var color_override := Color(0.0, 0.0, 0.0, 0.0) if is_bullet else _projectile_color()
-	CombatVisuals.spawn_explosion(self, impact_pos, blast_radius, color_override, damage_type)
-	# RPG impact shake — big, distance-scaled jolt for the local camera.
-	# Fires here (not at launch) so the boom hits when the shell lands,
-	# matching the visual fireball and the player's expectation that
-	# "explosions shake the screen, not muzzle blasts." Other AoE
-	# projectiles (charged plasma) intentionally skip — they're energy
-	# bubbles, not kinetic detonations.
+	# All AoE explosions use the flipbook fireball path — damage_type
+	# picks the elemental palette (orange / cyan / violet) so both
+	# kinetic (RPG) and energy (charged plasma) get the same VFX stack.
+	CombatVisuals.spawn_explosion(self, impact_pos, blast_radius, Color(0.0, 0.0, 0.0, 0.0), damage_type)
+	# Impact shake — distance-scaled jolt for the local camera. Fires
+	# here (not at launch) so the boom hits when the shell lands. RPG
+	# gets a heavy slam; plasma gets a lighter punch.
 	if weapon_base_id == &"rpg_2h":
 		PrototypeCamera.shake_at(self, impact_pos, 1.40, 0.65)
+	elif blast_radius > 0.0:
+		PrototypeCamera.shake_at(self, impact_pos, 0.70, 0.35)
 	# Impact SFX — fires for any projectile that has an impact sound
 	# registered. WeaponSounds.play_impact no-ops gracefully if nothing
 	# is wired for this archetype, so the call is safe to make always.

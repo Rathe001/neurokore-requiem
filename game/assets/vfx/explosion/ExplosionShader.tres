@@ -18,6 +18,7 @@ uniform sampler2D tex_frg_25 : source_color;
 uniform sampler2D tex_frg_26 : source_color;
 uniform sampler2D tex_frg_16;
 uniform sampler2D tex_frg_17;
+uniform float alpha_multiplier = 1.0;
 uniform sampler2D depth_texture : source_color, hint_depth_texture;
 
 
@@ -190,7 +191,7 @@ void fragment() {
 
 // Output:0
 	ALBEDO = vec3(n_out27p0.xyz);
-	ALPHA = n_out20p0;
+	ALPHA = n_out20p0 * alpha_multiplier;
 	EMISSION = n_out12p0;
 	NORMAL = n_out18p0;
 
