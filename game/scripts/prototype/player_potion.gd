@@ -2,16 +2,18 @@ class_name PlayerPotion
 extends Node
 
 ## Health potion system — origin-specific consumable (Stimpack / Battery).
-## 3 charges, 30s recharge per charge, heals over time. Modeled after
-## PlayerGrenade: setup/tick/activate pattern, player owns the live state.
+## Charges and recharge time are read from the equipped consumable item;
+## defaults apply when no item is equipped or fields are unset.
 
-const MAX_CHARGES := 3
-const RECHARGE_TIME := 30.0
+const DEFAULT_MAX_CHARGES := 3
+const DEFAULT_RECHARGE_TIME := 30.0
 const USE_COOLDOWN := 1.0
 const HOT_INTERVAL := 0.5
 
 var _host: PrototypePlayer
-var _charges: int = MAX_CHARGES
+var _max_charges: int = DEFAULT_MAX_CHARGES
+var _recharge_time: float = DEFAULT_RECHARGE_TIME
+var _charges: int = DEFAULT_MAX_CHARGES
 var _recharge_timer: float = 0.0
 var _use_cooldown: float = 0.0
 var _hot_remain: float = 0.0
@@ -29,6 +31,23 @@ func setup(host: PrototypePlayer) -> void:
 	_host = host
 
 
+## Re-read charges/recharge from the currently equipped consumable.
+## Called on equip change and at session start.
+func sync_consumable() -> void:
+	var consumable: Item = InventoryState.get_equipped(&"consumable")
+	if consumable != null and consumable.max_charges > 0:
+		var old_max := _max_charges
+		_max_charges = consumable.max_charges
+		_recharge_time = consumable.recharge_time if consumable.recharge_time > 0.0 else DEFAULT_RECHARGE_TIME
+		# If new item has more charges, grant the difference immediately.
+		if _max_charges > old_max:
+			_charges = mini(_charges + (_max_charges - old_max), _max_charges)
+	else:
+		_max_charges = DEFAULT_MAX_CHARGES
+		_recharge_time = DEFAULT_RECHARGE_TIME
+	_charges = mini(_charges, _max_charges)
+
+
 # ── Queries ───────────────────────────────────────────────────────────────────
 
 func is_potion_skill(skill: Skill) -> bool:
@@ -44,8 +63,8 @@ func get_cooldown_ratio(_skill: Skill) -> float:
 	if _use_cooldown > 0.0:
 		return clampf(_use_cooldown / USE_COOLDOWN, 0.0, 1.0)
 	# No charges — show recharge progress.
-	if _charges <= 0 and RECHARGE_TIME > 0.0:
-		return clampf(_recharge_timer / RECHARGE_TIME, 0.0, 1.0)
+	if _charges <= 0 and _recharge_time > 0.0:
+		return clampf(_recharge_timer / _recharge_time, 0.0, 1.0)
 	return 0.0
 
 
@@ -76,12 +95,12 @@ func tick(delta: float) -> void:
 		_use_cooldown = maxf(0.0, _use_cooldown - delta)
 
 	# Charge recharge — one at a time.
-	if _charges < MAX_CHARGES:
+	if _charges < _max_charges:
 		_recharge_timer -= delta
 		if _recharge_timer <= 0.0:
 			_charges += 1
-			if _charges < MAX_CHARGES:
-				_recharge_timer = RECHARGE_TIME
+			if _charges < _max_charges:
+				_recharge_timer = _recharge_time
 
 	# HoT ticking.
 	if _hot_remain > 0.0:
@@ -139,14 +158,14 @@ func activate(_skill: Skill) -> void:
 	# Consume charge + start timers.
 	_charges -= 1
 	_use_cooldown = USE_COOLDOWN
-	if _charges < MAX_CHARGES and _recharge_timer <= 0.0:
-		_recharge_timer = RECHARGE_TIME
+	if _charges < _max_charges and _recharge_timer <= 0.0:
+		_recharge_timer = _recharge_time
 
 
 # ── Cleanup ───────────────────────────────────────────────────────────────────
 
 func cleanup() -> void:
-	_charges = MAX_CHARGES
+	_charges = _max_charges
 	_recharge_timer = 0.0
 	_use_cooldown = 0.0
 	_hot_remain = 0.0

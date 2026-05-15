@@ -70,6 +70,36 @@ static func _curved_randf(lo: float, hi: float, rng: RandomNumberGenerator, expo
 	return lo + t * (hi - lo)
 
 
+# ── Universal rarity-aware roll helpers ─────────────────────────────────────
+# Every rollable stat should use one of these. They apply:
+#   1. Power-curve exponent from RARITY_ROLL_CURVE (higher rarity = flatter)
+#   2. Budget multiplier from RARITY_BUDGET_MULT (higher rarity = wider range)
+
+## Curved float roll scaled by rarity budget.
+static func _rarity_rollf(lo: float, hi: float, rarity: StringName, rng: RandomNumberGenerator) -> float:
+	var curve: float = float(RARITY_ROLL_CURVE.get(rarity, 2.0))
+	var mult: float = float(RARITY_BUDGET_MULT.get(rarity, 1.0))
+	return _curved_randf(lo, hi, rng, curve) * mult
+
+## Curved int roll scaled by rarity budget.
+static func _rarity_rolli(lo: int, hi: int, rarity: StringName, rng: RandomNumberGenerator) -> int:
+	var curve: float = float(RARITY_ROLL_CURVE.get(rarity, 2.0))
+	var mult: float = float(RARITY_BUDGET_MULT.get(rarity, 1.0))
+	return int(round(float(_curved_randi(lo, hi, rng, curve)) * mult))
+
+## Inverse — lower is better (recharge_time, spread_angle). Divides by mult.
+static func _rarity_rollf_inv(lo: float, hi: float, rarity: StringName, rng: RandomNumberGenerator) -> float:
+	var curve: float = float(RARITY_ROLL_CURVE.get(rarity, 2.0))
+	var mult: float = float(RARITY_BUDGET_MULT.get(rarity, 1.0))
+	return _curved_randf(lo, hi, rng, curve) / mult
+
+## Inverse int version.
+static func _rarity_rolli_inv(lo: int, hi: int, rarity: StringName, rng: RandomNumberGenerator) -> int:
+	var curve: float = float(RARITY_ROLL_CURVE.get(rarity, 2.0))
+	var mult: float = float(RARITY_BUDGET_MULT.get(rarity, 1.0))
+	return int(round(float(_curved_randi(lo, hi, rng, curve)) / mult))
+
+
 # Registry of weapon bases keyed by main_type, with per-base drop weights.
 # Picker normalizes weights at roll time, so the numbers are relative — bump
 # a base's weight to make it appear more often without rebalancing the rest.
@@ -385,7 +415,7 @@ const WEAPON_SIGNATURE_STATS: Dictionary = {
 		{ "key": &"sustained_bonus", "base": Vector2i(8, 18) },
 	],
 	&"smg_1h": [
-		{ "key": &"ricochet_chance", "base": Vector2i(15, 25), "cap": 40 },
+		{ "key": &"ricochet_chance", "base": Vector2i(50, 75), "cap": 100 },
 	],
 	&"ranged_1h": [
 		{ "key": &"overcharge_chance", "base": Vector2i(8, 15), "cap": 25 },
@@ -431,12 +461,12 @@ const DR_PER_PIECE_CAP: int = 10
 func _roll_armor_defense(item: Item, item_level: int, rarity: StringName, rng: RandomNumberGenerator) -> void:
 	if item.main_type not in DR_ARMOR_TYPES:
 		return
-	var budget_mult: float = float(RARITY_BUDGET_MULT.get(rarity, 1.0))
-	var base_dr := int(round(float(item_level) * 0.3 * budget_mult))
-	# Small random variance ±1 so same-ilvl same-rarity pieces aren't identical.
-	var curve: float = float(RARITY_ROLL_CURVE.get(rarity, 2.0))
-	base_dr += _curved_randi(-1, 1, rng, curve)
-	base_dr = clampi(base_dr, 1, DR_PER_PIECE_CAP)
+	# DR range derived from ilvl: center = ilvl * 0.3, ±1 variance.
+	# _rarity_rolli applies curve + budget_mult.
+	var center := int(round(float(item_level) * 0.3))
+	var dr_lo := maxi(1, center - 1)
+	var dr_hi := maxi(2, center + 1)
+	var base_dr := clampi(_rarity_rolli(dr_lo, dr_hi, rarity, rng), 1, DR_PER_PIECE_CAP)
 	var prior: int = int(item.stat_modifiers.get(&"damage_reduction", 0))
 	item.stat_modifiers[&"damage_reduction"] = mini(prior + base_dr, DR_PER_PIECE_CAP)
 
@@ -476,14 +506,17 @@ func _roll_universal_bonuses(item: Item, item_level: int, rarity: StringName, rn
 		&"magic": bonus_chance = 0.5
 		&"rare": bonus_chance = 0.7
 		&"unique": bonus_chance = 0.9
-	var hp_base := 3.0 + float(item_level) * 0.5
-	var res_base := 2.0 + float(item_level) * 0.3
+	# ilvl-derived ranges for HP and resource bonuses.
+	var hp_lo := maxi(1, int(round(float(item_level) * 0.4)))
+	var hp_hi := maxi(2, int(round(3.0 + float(item_level) * 0.6)))
+	var res_lo := maxi(1, int(round(float(item_level) * 0.25)))
+	var res_hi := maxi(2, int(round(2.0 + float(item_level) * 0.4)))
 	if rng.randf() < bonus_chance:
-		var hp := int(round(hp_base + rng.randf_range(-2.0, 2.0)))
+		var hp := _rarity_rolli(hp_lo, hp_hi, rarity, rng)
 		if hp > 0:
 			item.stat_modifiers[&"max_health_bonus"] = int(item.stat_modifiers.get(&"max_health_bonus", 0)) + hp
 	if rng.randf() < bonus_chance:
-		var res := int(round(res_base + rng.randf_range(-1.0, 1.0)))
+		var res := _rarity_rolli(res_lo, res_hi, rarity, rng)
 		if res > 0:
 			item.stat_modifiers[&"max_resource_bonus"] = int(item.stat_modifiers.get(&"max_resource_bonus", 0)) + res
 	# Sustain: life_on_kill / barrier_on_kill as low-chance universal rolls.
@@ -494,14 +527,16 @@ func _roll_universal_bonuses(item: Item, item_level: int, rarity: StringName, rn
 		&"magic": sustain_chance = 0.25
 		&"rare": sustain_chance = 0.4
 		&"unique": sustain_chance = 0.6
-	var lok_base := 2.0 + float(item_level) * 0.3
+	var lok_lo := maxi(1, int(round(float(item_level) * 0.2)))
+	var lok_hi := maxi(2, int(round(2.0 + float(item_level) * 0.4)))
 	if rng.randf() < sustain_chance:
-		var lok := int(round(lok_base + rng.randf_range(-1.0, 1.0)))
+		var lok := _rarity_rolli(lok_lo, lok_hi, rarity, rng)
 		if lok > 0:
 			item.stat_modifiers[&"life_on_kill"] = int(item.stat_modifiers.get(&"life_on_kill", 0)) + lok
-	var bok_base := 1.0 + float(item_level) * 0.2
+	var bok_lo := maxi(1, int(round(float(item_level) * 0.15)))
+	var bok_hi := maxi(1, int(round(1.0 + float(item_level) * 0.25)))
 	if rng.randf() < sustain_chance * 0.6:
-		var bok := int(round(bok_base + rng.randf_range(-0.5, 0.5)))
+		var bok := _rarity_rolli(bok_lo, bok_hi, rarity, rng)
 		if bok > 0:
 			item.stat_modifiers[&"barrier_on_kill"] = int(item.stat_modifiers.get(&"barrier_on_kill", 0)) + bok
 
@@ -782,9 +817,12 @@ func _apply_consumable_base(item: Item, main_type: String, rarity: StringName, r
 	#   unique (2.7) — median ~78%, mult 1.5 → median heal ~117%
 	var heal_curve: float = curve + 1.5
 	var heal_pct := int(round(_curved_randf(50.0, 150.0, rng, heal_curve) * budget_mult))
-	var heal_duration := _curved_randf(0.0, 5.0, rng, curve)
+	var heal_duration := _rarity_rollf(0.0, 5.0, rarity, rng)
 	item.stat_modifiers[&"heal_pct"] = heal_pct
 	item.stat_modifiers[&"heal_duration"] = heal_duration
+	# Charges and recharge time — higher rarity = more charges, faster recharge.
+	item.max_charges = clampi(int(round(_curved_randf(2.0, 7.0, rng, curve) * budget_mult)), 2, 7)
+	item.recharge_time = snappedf(_rarity_rollf_inv(20.0, 45.0, rarity, rng), 0.5)
 
 
 ## Head armor rolls a light mod. Most helmets get a flashlight; rarer mods
@@ -817,9 +855,8 @@ func _apply_head_light_mod(item: Item, main_type: String, item_level: int, rng: 
 			chosen = entry
 			break
 	item.light_mod = chosen["mod"] as Item.LightMod
-	var light_curve: float = float(RARITY_ROLL_CURVE.get(item.rarity, 2.0))
-	item.light_energy = _curved_randf(2.0, 3.5, rng, light_curve)
-	item.light_range = _curved_randf(12.0, 18.0, rng, light_curve)
+	item.light_energy = _rarity_rollf(2.0, 3.5, item.rarity, rng)
+	item.light_range = _rarity_rollf(12.0, 18.0, item.rarity, rng)
 	match item.light_mod:
 		Item.LightMod.UV:
 			item.light_color = Color(0.6, 0.2, 1.0)

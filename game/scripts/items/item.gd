@@ -52,6 +52,10 @@ enum LightMod { NONE, FLASHLIGHT, RADIANT, SCANNER, UV }
 @export var ammo_max: int = 0
 @export var ammo_current: int = 0
 @export var reload_time: float = 0.0
+## Consumable charges — how many uses before the item must recharge.
+@export var max_charges: int = 0
+## Consumable recharge time — seconds per charge to regenerate.
+@export var recharge_time: float = 0.0
 ## Damage element — set on weapons whose archetype has an elemental
 ## identity (flame/cryo/electric/etc). Empty StringName = neutral
 ## (kinetic / energy default). Two consumers:
@@ -284,7 +288,11 @@ func effective_damage_max() -> int:
 	return int(round(float(damage_max) * effective_multiplier()))
 
 func effective_attack_speed() -> float:
-	return attack_speed * effective_multiplier()
+	# Attack speed is a weapon characteristic (how fast it cycles), not a
+	# power stat. A slow RPG stays slow; a fast SMG stays fast — regardless
+	# of item-level delta. Damage carries the level-scaling load via
+	# effective_damage_min/max.
+	return attack_speed
 
 func effective_crit_chance() -> float:
 	return clampf(crit_chance * effective_multiplier(), 0.0, 1.0)

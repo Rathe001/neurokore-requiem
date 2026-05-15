@@ -374,6 +374,8 @@ func _serialize_item(item: Item) -> Dictionary:
 		"ammo_max": item.ammo_max,
 		"ammo_current": item.ammo_current,
 		"reload_time": item.reload_time,
+		"max_charges": item.max_charges,
+		"recharge_time": item.recharge_time,
 		"damage_type": str(item.damage_type),
 		"model_name": item.model_name,
 		"light_mod": int(item.light_mod),
@@ -419,6 +421,8 @@ func _deserialize_item(data: Dictionary) -> Item:
 	item.ammo_max = int(data.get("ammo_max", 0))
 	item.ammo_current = int(data.get("ammo_current", 0))
 	item.reload_time = float(data.get("reload_time", 0.0))
+	item.max_charges = int(data.get("max_charges", 0))
+	item.recharge_time = float(data.get("recharge_time", 0.0))
 	item.damage_type = StringName(data.get("damage_type", ""))
 	item.model_name = str(data.get("model_name", ""))
 

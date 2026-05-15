@@ -23,7 +23,9 @@ var _text_label: Label
 var _name_row: HBoxContainer
 var _name_label: Label
 var _dps_label: Label
+var _quality_label: Label
 var _type_label: Label
+var _origin_label: Label
 var _desc_label: RichTextLabel
 var _stats_label: RichTextLabel
 var _bg_style: StyleBoxFlat
@@ -38,11 +40,13 @@ var _equipped_name: Label
 var _equipped_type: Label
 var _equipped_stats: RichTextLabel
 var _equipped_style: StyleBoxFlat
+var _equipped_meters: WeaponMeterStrip = null
 var _shift_held: bool = false
 
 # LMB lock: while held on an enemy, the tooltip freezes — no content updates,
 # no hide on hover-exit, gold border to telegraph the locked state. Released
 # → unlocked and dismissed.
+var _weapon_meters: WeaponMeterStrip = null
 var _current_item: Item = null
 var _lmb_held: bool = false
 # Increments on every show_* call and on hide_tooltip. The deferred resume
@@ -115,7 +119,7 @@ func _build_ui() -> void:
 
 	_vbox = VBoxContainer.new()
 	_vbox.custom_minimum_size = Vector2(CONTENT_MIN_WIDTH, 0.0)
-	_vbox.add_theme_constant_override(&"separation", 3)
+	_vbox.add_theme_constant_override(&"separation", 1)
 	_vbox.mouse_filter = MOUSE_FILTER_IGNORE
 	_bg.add_child(_vbox)
 
@@ -132,7 +136,7 @@ func _build_ui() -> void:
 
 	_name_label = Label.new()
 	_name_label.theme_type_variation = &"BodyLabel"
-	_name_label.add_theme_font_size_override(&"font_size", 10)
+	_name_label.add_theme_font_size_override(&"font_size", 8)
 	_name_label.mouse_filter = MOUSE_FILTER_IGNORE
 	_name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -148,11 +152,27 @@ func _build_ui() -> void:
 	_dps_label.size_flags_horizontal = Control.SIZE_SHRINK_END
 	_name_row.add_child(_dps_label)
 
+	_quality_label = Label.new()
+	_quality_label.theme_type_variation = &"BodyLabel"
+	_quality_label.add_theme_font_size_override(&"font_size", 8)
+	_quality_label.mouse_filter = MOUSE_FILTER_IGNORE
+	_quality_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_quality_label.size_flags_horizontal = Control.SIZE_SHRINK_END
+	_quality_label.visible = false
+	_name_row.add_child(_quality_label)
+
 	_type_label = Label.new()
 	_type_label.theme_type_variation = &"SmallLabel"
 	_type_label.add_theme_font_size_override(&"font_size", 7)
 	_type_label.mouse_filter = MOUSE_FILTER_IGNORE
 	_vbox.add_child(_type_label)
+
+	_origin_label = Label.new()
+	_origin_label.theme_type_variation = &"SmallLabel"
+	_origin_label.add_theme_font_size_override(&"font_size", 7)
+	_origin_label.mouse_filter = MOUSE_FILTER_IGNORE
+	_origin_label.visible = false
+	_vbox.add_child(_origin_label)
 
 	_desc_label = RichTextLabel.new()
 	_desc_label.bbcode_enabled = true
@@ -163,6 +183,11 @@ func _build_ui() -> void:
 	_desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_desc_label.custom_minimum_size = Vector2(CONTENT_MIN_WIDTH, 0.0)
 	_vbox.add_child(_desc_label)
+
+	_weapon_meters = WeaponMeterStrip.new()
+	_weapon_meters.mouse_filter = MOUSE_FILTER_IGNORE
+	_weapon_meters.visible = false
+	_vbox.add_child(_weapon_meters)
 
 	_stats_label = RichTextLabel.new()
 	_stats_label.bbcode_enabled = true
@@ -210,6 +235,11 @@ func _build_ui() -> void:
 	_equipped_type.mouse_filter = MOUSE_FILTER_IGNORE
 	_equipped_vbox.add_child(_equipped_type)
 
+	_equipped_meters = WeaponMeterStrip.new()
+	_equipped_meters.mouse_filter = MOUSE_FILTER_IGNORE
+	_equipped_meters.visible = false
+	_equipped_vbox.add_child(_equipped_meters)
+
 	_equipped_stats = RichTextLabel.new()
 	_equipped_stats.bbcode_enabled = true
 	_equipped_stats.fit_content = true
@@ -232,6 +262,10 @@ func _apply_theme() -> void:
 	_bg.add_theme_stylebox_override(&"panel", _bg_style)
 	_equipped_style = _make_style(p.panel_bg, p.panel_border, 1)
 	_equipped_bg.add_theme_stylebox_override(&"panel", _equipped_style)
+	if _weapon_meters:
+		_weapon_meters.update_theme()
+	if _equipped_meters:
+		_equipped_meters.update_theme()
 	_text_label.add_theme_color_override(&"font_color", p.text)
 	_type_label.add_theme_color_override(&"font_color", Color(p.text, 0.55))
 	_stats_label.add_theme_color_override(&"default_color", p.text)
@@ -278,6 +312,7 @@ func _input(event: InputEvent) -> void:
 			var was := _shift_held
 			_shift_held = key.pressed
 			if was != _shift_held and _current_item != null:
+				_refresh_meters()
 				_refresh_equipped_panel()
 		return
 
@@ -361,10 +396,12 @@ func show_text(text: String) -> void:
 		return
 	_current_item = null
 	_equipped_bg.visible = false
+	_weapon_meters.visible = false
 	_text_label.text = text
 	_text_label.visible = true
 	_name_row.visible = false
 	_type_label.visible = false
+	_origin_label.visible = false
 	_desc_label.visible = false
 	_stats_label.visible = false
 	_resize_then_show()
@@ -384,14 +421,40 @@ func show_item(item: Item) -> void:
 	_name_label.add_theme_color_override(&"font_color", _rarity_color(item.rarity))
 	_name_row.visible = true
 	_dps_label.visible = false
+	_update_quality_label(item)
 
 	var type_text := _build_type_text(item)
 	_type_label.text = type_text
 	_type_label.visible = not type_text.is_empty()
 
+	# Origin restriction — green when met, red when blocked.
+	if item.origin_restriction != &"":
+		var origin_label: String = (item.origin_restriction as String).capitalize()
+		if item.origin_matches_player():
+			_origin_label.text = "Origin: %s" % origin_label
+			_origin_label.add_theme_color_override(&"font_color", Color(0.4, 0.8, 0.4))
+		else:
+			_origin_label.text = "Requires %s origin" % origin_label
+			_origin_label.add_theme_color_override(&"font_color", Color(0.8, 0.33, 0.33))
+		_origin_label.visible = true
+	else:
+		_origin_label.visible = false
+
 	var has_desc := item.description_key != ""
 	_desc_label.text = item.description_key
 	_desc_label.visible = has_desc
+
+	# Visual meter bars — replaces numeric stat lines with at-a-glance bars
+	# showing where this item's roll sits in its archetype+rarity range.
+	var meter_data := ItemMeterData.compute(item)
+	# Hide unrolled (empty) bars unless Shift is held for comparison.
+	if not _shift_held:
+		meter_data = meter_data.filter(func(b: WeaponMeterData.MeterBar) -> bool: return not b.number_text.is_empty())
+	if not meter_data.is_empty():
+		_weapon_meters.populate(meter_data)
+		_weapon_meters.visible = true
+	else:
+		_weapon_meters.visible = false
 
 	# DPS keeps an inline arrow vs equipped (the headline at-a-glance signal);
 	# every other stat shows bare. Shift+hover provides the full comparison.
@@ -421,6 +484,20 @@ func _sync_equipped_panel_visibility() -> void:
 	if should_show:
 		_populate_equipped_panel(equipped)
 
+# Re-filter meter bars on shift toggle — unrolled bars appear only when
+# comparing (shift held).
+func _refresh_meters() -> void:
+	if _current_item == null:
+		return
+	var meter_data := ItemMeterData.compute(_current_item)
+	if not _shift_held:
+		meter_data = meter_data.filter(func(b: WeaponMeterData.MeterBar) -> bool: return not b.number_text.is_empty())
+	if not meter_data.is_empty():
+		_weapon_meters.populate(meter_data)
+		_weapon_meters.visible = true
+	else:
+		_weapon_meters.visible = false
+
 # Mid-show shift toggle: visibility flip changes compound width, so re-run
 # the size/position pipeline.
 func _refresh_equipped_panel() -> void:
@@ -428,9 +505,8 @@ func _refresh_equipped_panel() -> void:
 	var should_show := _shift_held and equipped != null
 	if should_show:
 		_populate_equipped_panel(equipped)
-	if _equipped_bg.visible == should_show:
-		return
 	_equipped_bg.visible = should_show
+	# Always resize — meter bar count or equipped panel may have changed.
 	if visible and not _lmb_held:
 		_resize_then_show()
 
@@ -440,7 +516,14 @@ func _populate_equipped_panel(item: Item) -> void:
 	var t := _build_type_text(item)
 	_equipped_type.text = t
 	_equipped_type.visible = not t.is_empty()
-	_equipped_stats.text = _build_stats_text(item, null)
+	# Meter bars for the equipped item — same visual as hovered item's meters.
+	var eq_meters := ItemMeterData.compute(item)
+	if not eq_meters.is_empty():
+		_equipped_meters.populate(eq_meters)
+		_equipped_meters.visible = true
+	else:
+		_equipped_meters.visible = false
+	_equipped_stats.text = _build_stats_text(item)
 
 func show_skill(skill: Skill, source: Item) -> void:
 	if _lmb_held:
@@ -450,12 +533,15 @@ func show_skill(skill: Skill, source: Item) -> void:
 		return
 	_current_item = null
 	_equipped_bg.visible = false
+	_weapon_meters.visible = false
 	_text_label.visible = false
 	_name_label.text = skill.display_name
 	_name_label.add_theme_color_override(&"font_color", skill.icon_color)
 	_dps_label.visible = false
+	_quality_label.visible = false
 	_name_row.visible = true
 	_type_label.visible = false
+	_origin_label.visible = false
 	_desc_label.visible = false
 	var stats := _build_skill_stats_text(skill, source)
 	_stats_label.text = stats
@@ -472,12 +558,15 @@ func show_talent_node(title: String, body: String) -> void:
 		return
 	_current_item = null
 	_equipped_bg.visible = false
+	_weapon_meters.visible = false
 	_text_label.visible = false
 	_name_label.text = title
 	_name_label.add_theme_color_override(&"font_color", Color(0.95, 0.95, 0.95, 1.0))
 	_dps_label.visible = false
+	_quality_label.visible = false
 	_name_row.visible = true
 	_type_label.visible = false
+	_origin_label.visible = false
 	_desc_label.text = body
 	_desc_label.visible = true
 	_stats_label.visible = false
@@ -583,6 +672,33 @@ func _build_type_text(item: Item) -> String:
 	return "%s - %s" % [category, subtype]
 
 
+# Color-coded quality % in the top-right of the tooltip name row.
+# Below 100%: red→yellow→green. Above 100%: green→blue.
+func _update_quality_label(item: Item) -> void:
+	if not ItemMeterData.has_meters(item):
+		_quality_label.visible = false
+		return
+	var pct := int(round(item.effective_multiplier() * 100.0))
+	_quality_label.text = "%d%%" % pct
+	_quality_label.add_theme_color_override(&"font_color", _quality_pct_color(pct))
+	_quality_label.visible = true
+
+
+# Quality % color: 30% (floor) = red, 65% = yellow, 100% = green, 150% (ceil) = blue.
+static func _quality_pct_color(pct: int) -> Color:
+	if pct <= 100:
+		# 30–100 range → red→yellow→green
+		var t := clampf(float(pct - 30) / 70.0, 0.0, 1.0)
+		if t < 0.5:
+			return Color(0.9, 0.2, 0.2).lerp(Color(0.95, 0.85, 0.2), t / 0.5)
+		else:
+			return Color(0.95, 0.85, 0.2).lerp(Color(0.2, 0.85, 0.3), (t - 0.5) / 0.5)
+	else:
+		# 100–150 range → green→blue
+		var t := clampf(float(pct - 100) / 50.0, 0.0, 1.0)
+		return Color(0.2, 0.85, 0.3).lerp(Color(0.3, 0.55, 1.0), t)
+
+
 # Choose what goes after the dash. Armor pieces show the slot; weapons
 # show the archetype (`sub_type` is the WeaponBase's display_name like
 # "SMG" or "Sniper Rifle"); grenades / offhands / backpacks fall back
@@ -603,60 +719,9 @@ func _resolve_type_subtype(item: Item) -> String:
 	return st
 
 func _compute_dps(item: Item) -> float:
-	# Returns the weapon's expected raw single-target DPS — what the
-	# weapon outputs when every shot lands and the damage roll is
-	# average. Accuracy is intentionally NOT in the formula: scattered
-	# shots still hit nearby enemies in the cone, and a shotgun pellet
-	# that "misses" the cursor target often hits a different one in
-	# the spread. The number is "weapon power" not "expected DPS to a
-	# specific cursor-target."
-	#
-	# Formula (single-shot weapons):
-	#   DPS = avg_dmg × pellet_count × damage_multiplier × fire_rate × crit_factor
-	# where:
-	#   fire_rate = atk_speed / skill.cooldown   (casts per second)
-	#   crit_factor = 1 + crit × (crit_mult - 1)
-	#
-	# Channel weapons (CHANNEL_BEAM, e.g. Energy Accelerator stream)
-	# bypass cooldown and tick by `channel_tick_interval` instead;
-	# their per-tick damage is the *skill*'s damage value, not the
-	# weapon roll. Weapon roll still drives the displayed Damage line.
-	var avg_dmg := float(item.effective_damage_min() + item.effective_damage_max()) * 0.5
-	var spd := item.effective_attack_speed()
-	var crit: float = item.effective_crit_chance() if item.crit_chance > 0.0 else 0.15
-	var crit_mult := 1.5
-	var crit_factor := 1.0 + crit * (crit_mult - 1.0)
-	# Multistrike rolls per cast, so DPS scales with E[hits]. Resolves
-	# to 1.0 with no multistrike sources equipped — unaffected weapons
-	# pass through cleanly.
-	var multistrike_factor: float = PerkState.expected_multistrike()
-
-	var fire_skill := _resolve_fire_skill(item)
-	var pellet_count := 1
-	var damage_mult := 1.0
-	var fire_rate := spd  # fallback when no fire_skill or cooldown=0 and not a channel
-	if fire_skill != null:
-		pellet_count = maxi(1, fire_skill.pellet_count)
-		damage_mult = maxf(0.01, fire_skill.damage_multiplier)
-		# Channel beams: per-tick damage × ticks per second. Per-tick
-		# damage on a channel is `skill.damage` (the resource of an
-		# Accelerator stream defines its tick). The weapon's avg_dmg
-		# is irrelevant to actual stream output. Multistrike still
-		# applies — each tick goes through resolve_skill_hit's
-		# multistrike loop, so per-tick output scales with E[hits].
-		if fire_skill.active_kind == Skill.ActiveKind.CHANNEL_BEAM:
-			var interval: float = maxf(fire_skill.channel_tick_interval, 0.05)
-			var per_tick := float(fire_skill.damage)
-			return per_tick * (1.0 / interval) * crit_factor * multistrike_factor
-		# Cooldown-driven fire rate. attack_speed scales the cooldown
-		# duration (start_cooldown divides by it), so casts/sec =
-		# atk_speed / cooldown. cooldown <= 0 falls back to atk_speed
-		# alone (e.g. zero-cooldown skills that effectively re-fire as
-		# fast as the weapon's animation allows).
-		if fire_skill.cooldown > 0.0:
-			fire_rate = spd / fire_skill.cooldown
-
-	return avg_dmg * float(pellet_count) * damage_mult * fire_rate * crit_factor * multistrike_factor
+	# Delegates to WeaponMeterData — single source of truth for the DPS
+	# formula. Includes multistrike from equipped perks.
+	return WeaponMeterData.compute_single_dps(item)
 
 
 # Cached WeaponBase loads, keyed by weapon_base_id, so opening tooltips
@@ -689,36 +754,13 @@ func _resolve_fire_skill(item: Item) -> Skill:
 # Builds the stats-block text for an item. Only DPS shows an inline
 # comparison arrow against `equipped` — everything else is bare. The
 # shift-held side-by-side panel covers the rest of the comparison.
-func _build_stats_text(item: Item, equipped: Item = null) -> String:
+func _build_stats_text(item: Item, equipped: Item = null, force_text: bool = false) -> String:
 	var lines: Array[String] = []
-	# Origin gate — Stimpack / Battery only equip on the matching player
-	# origin. Red when blocked, dim when satisfied (so a Cyborg picking up
-	# a Battery still sees that the gate exists rather than wondering why
-	# the item has no requirement line at all).
-	if item.origin_restriction != &"":
-		var origin_label: String = (item.origin_restriction as String).capitalize()
-		if item.origin_matches_player():
-			lines.append("[color=#888888]Origin: %s[/color]" % origin_label)
-		else:
-			lines.append("[color=#cc5555]Requires %s origin[/color]" % origin_label)
-	# ilvl header — shown for every item so the player can tell at a glance
-	# how outdated/overleveled a drop is. Decimal formatting on the multiplier
-	# so 1.0 reads as "100%" cleanly.
-	var mult: float = item.effective_multiplier()
-	var pct: int = int(round(mult * 100.0))
-	if pct == 100:
-		lines.append("Item Level: %d" % item.item_level)
-	else:
-		lines.append("Item Level: %d (%d%% effective)" % [item.item_level, pct])
-	# DPS summary — single most important number for weapon comparison.
-	# Factors in accuracy and crit so it reflects real expected output.
-	# Restricted to actual weapons: grenades have damage + attack_speed too,
-	# but they're thrown one-at-a-time, "DPS" doesn't read meaningfully, and
-	# the lookup _compute_dps does via _resolve_fire_skill would log a
-	# spurious "WeaponBase not found for cluster" warning since grenade
-	# bases live in their own folder.
+	# Weapons with meter bars skip DPS and combat stat lines — those are
+	# now conveyed visually by the meter strip above this text block.
 	var is_weapon: bool = item.main_type == "1H Weapon" or item.main_type == "2H Weapon"
-	if is_weapon and item.damage_max > 0 and item.attack_speed > 0.0:
+	var has_meters: bool = not force_text and ItemMeterData.has_meters(item)
+	if not has_meters and is_weapon and item.damage_max > 0 and item.attack_speed > 0.0:
 		var new_dps := _compute_dps(item)
 		var line := "[color=#ffe680]DPS: %.1f[/color]" % new_dps
 		if equipped != null and equipped.damage_max > 0 and equipped.attack_speed > 0.0:
@@ -742,29 +784,31 @@ func _build_stats_text(item: Item, equipped: Item = null) -> String:
 				lines.append("Shield Pool: %d" % pool_total)
 				lines.append("Cooldown on Break: %.1fs" % sk.cooldown)
 			Skill.ActiveKind.GRENADE:
-				var radius := item.blast_radius if item.blast_radius > 0.0 else sk.blast_radius
-				lines.append("Blast Radius: %.1f m" % radius)
-				lines.append("Cooldown: %.1fs" % sk.cooldown)
-				if sk.resource_cost > 0:
-					lines.append("Resource Cost: %d" % sk.resource_cost)
-	# Weapon / combat stats — bare values (shift-side-by-side covers compare).
-	if item.damage_max > 0:
-		lines.append("Damage: %d–%d" % [item.effective_damage_min(), item.effective_damage_max()])
-	if item.attack_speed != 1.0:
-		lines.append("Speed: %.2f" % item.effective_attack_speed())
-	if item.crit_chance > 0.0:
-		lines.append("Crit: %.1f%%" % (item.effective_crit_chance() * 100.0))
-	if item.accuracy != 1.0:
-		lines.append("Accuracy: %.1f%%" % (item.effective_accuracy() * 100.0))
-	if item.weapon_range > 0.0 and item.damage_max > 0:
-		lines.append("Range: %.1f m" % item.weapon_range)
-	if item.ammo_max > 0:
-		lines.append("Capacity: %d" % item.ammo_max)
+				if not has_meters:
+					var radius := item.blast_radius if item.blast_radius > 0.0 else sk.blast_radius
+					lines.append("Blast Radius: %.1f m" % radius)
+					lines.append("Cooldown: %.1fs" % sk.cooldown)
+					if sk.resource_cost > 0:
+						lines.append("Resource Cost: %d" % sk.resource_cost)
+	# Weapon / combat stats — bare values. Weapons with meter bars skip
+	# these entirely; the bars convey the same information visually.
+	if not has_meters:
+		if item.damage_max > 0:
+			lines.append("Damage: %d–%d" % [item.effective_damage_min(), item.effective_damage_max()])
+		if item.attack_speed != 1.0:
+			lines.append("Speed: %.2f" % item.effective_attack_speed())
+		if item.crit_chance > 0.0:
+			lines.append("Crit: %.1f%%" % (item.effective_crit_chance() * 100.0))
+		if item.accuracy != 1.0:
+			lines.append("Accuracy: %.1f%%" % (item.effective_accuracy() * 100.0))
+		if item.weapon_range > 0.0 and item.damage_max > 0:
+			lines.append("Range: %.1f m" % item.weapon_range)
+		if item.ammo_max > 0:
+			lines.append("Capacity: %d" % item.ammo_max)
 	# Weapon signature stats — archetype-specific rolled values (blast radius,
 	# penetration, bleed, etc). Displayed with effectiveness decay applied.
-	# Only for weapons (weapon_base_id set); grenades with blast_radius_bonus
-	# show it in the generic modifiers section instead.
-	if item.weapon_base_id != &"":
+	# Skipped when meter bars are active — sig stats are shown as bars instead.
+	if not has_meters and item.weapon_base_id != &"":
 		for sig_key: StringName in _WEAPON_SIG_DISPLAY:
 			var raw: int = int(item.stat_modifiers.get(sig_key, 0))
 			if raw == 0:
@@ -812,14 +856,16 @@ func _build_stats_text(item: Item, equipped: Item = null) -> String:
 	# make the potion read as "no health restoration"). Sub-HOT_INTERVAL
 	# durations route through PlayerPotion's instant-heal branch.
 	if item.main_type == "Consumable":
-		var hp: float = float(item.stat_modifiers.get(&"heal_pct", 0))
-		var hd: float = float(item.stat_modifiers.get(&"heal_duration", 0.0))
-		if hp > 0.0:
-			if hd < 0.5:
-				lines.append("[color=#66cc66]Heals %d%% HP instantly[/color]" % int(hp))
-			else:
-				lines.append("[color=#66cc66]Heals %d%% HP over %.1fs[/color]" % [int(hp), hd])
-		lines.append("Charges: 3 (30s recharge)")
+		if not has_meters:
+			var hp: float = float(item.stat_modifiers.get(&"heal_pct", 0))
+			var hd: float = float(item.stat_modifiers.get(&"heal_duration", 0.0))
+			if hp > 0.0:
+				if hd < 0.5:
+					lines.append("[color=#66cc66]Heals %d%% HP instantly[/color]" % int(hp))
+				else:
+					lines.append("[color=#66cc66]Heals %d%% HP over %.1fs[/color]" % [int(hp), hd])
+		if item.max_charges > 0:
+			lines.append("Charges: %d (%.0fs recharge)" % [item.max_charges, item.recharge_time])
 	# Generic stat modifiers — bare values, no comparison.
 	for stat_id: StringName in item.stat_modifiers:
 		if stat_id == &"inventory_bonus" and item.kind == &"backpack":
@@ -827,6 +873,8 @@ func _build_stats_text(item: Item, equipped: Item = null) -> String:
 		if stat_id in _WEAPON_SIG_DISPLAY and item.weapon_base_id != &"":
 			continue
 		if stat_id in [&"heal_pct", &"heal_duration"] and item.main_type == "Consumable":
+			continue
+		if has_meters and stat_id in ItemMeterData.METERED_MODIFIER_KEYS:
 			continue
 		var raw: int = int(item.stat_modifiers.get(stat_id, 0))
 		if raw == 0:
@@ -1040,7 +1088,8 @@ func _build_skill_stats_text(skill: Skill, source: Item) -> String:
 						lines.append("[color=#66cc66]Instantly heals %d%% HP[/color]" % int(hp))
 					else:
 						lines.append("[color=#66cc66]Heals %d%% HP over %.1fs[/color]" % [int(hp), hd])
-			lines.append("Charges: 3 (30s recharge)")
+			if consumable != null and consumable.max_charges > 0:
+				lines.append("Charges: %d (%.0fs recharge)" % [consumable.max_charges, consumable.recharge_time])
 			lines.append("Per-use Cooldown: %.1fs" % skill.cooldown)
 		_:
 			# Standard weapon skill (cone, aoe, projectile, hitscan).

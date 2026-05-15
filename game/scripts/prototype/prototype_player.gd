@@ -277,7 +277,7 @@ func _release_melee_hitstop() -> void:
 # LMG "Heat" — sustained fire stacks a damage bonus that decays after
 # 1s of no LMG fire. Each shot adds 1 stack, capped at LMG_HEAT_MAX.
 const LMG_HEAT_DECAY_TIME: float = 1.0
-const LMG_HEAT_MAX_STACKS: int = 5
+const LMG_HEAT_MAX_STACKS: int = 3
 const LMG_HEAT_PCT_PER_STACK: float = 0.10
 var _lmg_heat_stacks: int = 0
 var _lmg_heat_last_fire_t: float = -1000.0
@@ -293,7 +293,7 @@ var _lmg_heat_last_fire_t: float = -1000.0
 # is the fantasy of the weapon — "wind-up beam that melts whatever
 # stays in front of it."
 const ACCEL_RAMP_DURATION: float = 2.5
-const ACCEL_RAMP_MAX_MULT: float = 2.5
+const ACCEL_RAMP_MAX_MULT: float = 1.8
 var _accel_channel_elapsed: float = 0.0
 # World-space resonance bar — sits under the player like a cast bar.
 var _resonance_bar: MeshInstance3D = null
@@ -735,6 +735,7 @@ func _ready() -> void:
 	add_child(_grenade)
 	_potion = PlayerPotion.new()
 	_potion.setup(self)
+	_potion.sync_consumable()
 	add_child(_potion)
 	_build_resonance_bar()
 	PerkState.perks_changed.connect(_doomsayer.reconcile)
@@ -3106,6 +3107,8 @@ func _on_equipment_changed(slot: StringName) -> void:
 		# granted. Re-equipping a different shield offhand requires
 		# the player to re-press RMB to activate.
 		_shield.cleanup()
+	elif slot == &"consumable":
+		_potion.sync_consumable()
 
 func _on_items_overflowed(overflow: Array[Item]) -> void:
 	for displaced_item in overflow:
