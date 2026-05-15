@@ -768,21 +768,23 @@ func _build_stats_text(item: Item, equipped: Item = null, force_text: bool = fal
 			if not is_equal_approx(new_dps, old_dps):
 				line += " %s [color=#ffe680]%.1f[/color]" % [_compare_arrow(new_dps, old_dps), old_dps]
 		lines.append(line)
-	# Active offhand stats — shield pool, reduction, cooldown, duration.
+	# Active offhand stats — meters handle these when available.
 	if item.fire_skill != null and item.fire_skill.active_kind != Skill.ActiveKind.NONE:
 		var sk: Skill = item.fire_skill
 		var bonus: int = item.get_effective_modifier(&"shield_pool_bonus")
 		var pool_total: int = sk.shield_pool + bonus
 		match sk.active_kind:
 			Skill.ActiveKind.SHIELD_BUFF:
-				lines.append("Damage Reduction: %.1f%%" % (sk.damage_reduction * 100.0))
-				lines.append("Shield Pool: %d" % pool_total)
-				lines.append("Duration: %ds" % int(round(sk.duration)))
-				lines.append("Cooldown on Break: %.1fs" % sk.cooldown)
+				if not has_meters:
+					lines.append("Damage Reduction: %.1f%%" % (sk.damage_reduction * 100.0))
+					lines.append("Shield Pool: %d" % pool_total)
+					lines.append("Duration: %ds" % int(round(sk.duration)))
+					lines.append("Cooldown on Break: %.1fs" % sk.cooldown)
 			Skill.ActiveKind.SHIELD_HOLD:
-				lines.append("Damage Block: 100%")
-				lines.append("Shield Pool: %d" % pool_total)
-				lines.append("Cooldown on Break: %.1fs" % sk.cooldown)
+				if not has_meters:
+					lines.append("Damage Block: 100%")
+					lines.append("Shield Pool: %d" % pool_total)
+					lines.append("Cooldown on Break: %.1fs" % sk.cooldown)
 			Skill.ActiveKind.GRENADE:
 				if not has_meters:
 					var radius := item.blast_radius if item.blast_radius > 0.0 else sk.blast_radius

@@ -60,6 +60,8 @@ static func compute(item: Item) -> Array[WeaponMeterData.MeterBar]:
 				stat_bars = _compute_grenade(item)
 			"Consumable":
 				stat_bars = _compute_consumable(item)
+			"Offhand":
+				stat_bars = _compute_offhand(item)
 			_:
 				return []
 	return stat_bars
@@ -73,7 +75,7 @@ static func has_meters(item: Item) -> bool:
 		return true
 	return item.main_type in [
 		"Head Armor", "Chest Armor", "Gloves", "Leg Armor",
-		"Boots", "Grenade", "Consumable",
+		"Boots", "Grenade", "Consumable", "Offhand",
 	]
 
 
@@ -87,6 +89,10 @@ const METERED_MODIFIER_KEYS: Dictionary = {
 	&"max_resource_bonus": true,
 	&"life_on_kill": true,
 	&"barrier_on_kill": true,
+	&"shield_pool_bonus": true,
+	&"shield_dr_bonus": true,
+	&"shield_cd_reduction": true,
+	&"shield_duration_bonus": true,
 }
 
 
@@ -284,7 +290,65 @@ static func _compute_consumable(item: Item) -> Array[WeaponMeterData.MeterBar]:
 	return bars
 
 
-# ── Sustain bars (shared by armor + boots) ────────────────────────────────
+# ── Offhand / Shield ─────────────────────────────────────────────────────
+# Shield bonus stats are rolled onto stat_modifiers on top of the Skill's
+# base values. Bars show TOTAL values (base + bonus). SHIELD_BUFF shows
+# DR, pool, duration, cooldown. SHIELD_HOLD shows pool, cooldown only.
+
+static func _compute_offhand(item: Item) -> Array[WeaponMeterData.MeterBar]:
+	var bars: Array[WeaponMeterData.MeterBar] = []
+	var sk: Skill = item.fire_skill
+	if sk == null or sk.active_kind == Skill.ActiveKind.NONE:
+		return bars
+	var budget: float = float(ItemRoller.RARITY_BUDGET_MULT.get(item.rarity, 1.0))
+
+	# Shield Pool — base + bonus, rolled 15–50
+	var raw_pool_bonus: int = int(item.stat_modifiers.get(&"shield_pool_bonus", 0))
+	var total_pool := sk.shield_pool + raw_pool_bonus
+	var pool_lo := float(sk.shield_pool + 15)
+	var pool_hi := float(sk.shield_pool) + 50.0 * budget
+	bars.append(_make_bar(&"shield_pool", "Shield", float(total_pool), pool_lo, pool_hi, raw_pool_bonus > 0, "%d"))
+
+	# Damage Reduction — SHIELD_BUFF only; base + bonus (%), rolled 5–25
+	if sk.active_kind == Skill.ActiveKind.SHIELD_BUFF:
+		var raw_dr_bonus: int = int(item.stat_modifiers.get(&"shield_dr_bonus", 0))
+		var total_dr := sk.damage_reduction * 100.0 + float(raw_dr_bonus)
+		var dr_lo := sk.damage_reduction * 100.0 + 5.0
+		var dr_hi := sk.damage_reduction * 100.0 + 25.0 * budget
+		bars.append(_make_bar(&"shield_dr", "DR", total_dr, dr_lo, dr_hi, raw_dr_bonus > 0, "%.0f%%"))
+
+	# Duration — SHIELD_BUFF only; base + bonus (s), rolled 30–120
+	if sk.active_kind == Skill.ActiveKind.SHIELD_BUFF:
+		var raw_dur_bonus: int = int(item.stat_modifiers.get(&"shield_duration_bonus", 0))
+		var total_dur := sk.duration + float(raw_dur_bonus)
+		var dur_lo := sk.duration + 30.0
+		var dur_hi := sk.duration + 120.0 * budget
+		bars.append(_make_bar(&"shield_dur", "Duration", total_dur, dur_lo, dur_hi, raw_dur_bonus > 0, "%ds"))
+
+	# Cooldown Reduction — inverse: lower cooldown = better; rolled 5–20%
+	var raw_cdr: int = int(item.stat_modifiers.get(&"shield_cd_reduction", 0))
+	if raw_cdr > 0:
+		var effective_cd := sk.cooldown * (1.0 - float(raw_cdr) / 100.0)
+		var cd_best := sk.cooldown * (1.0 - 20.0 * budget / 100.0)
+		var cd_worst := sk.cooldown * (1.0 - 5.0 / 100.0)
+		var cd_bar := WeaponMeterData.MeterBar.new()
+		cd_bar.id = &"shield_cd"
+		cd_bar.label = "Cooldown"
+		# Invert: lower cooldown = higher bar fill
+		cd_bar.value = _normalize(cd_best + cd_worst - effective_cd, cd_best, cd_worst)
+		cd_bar.number_text = "%.1fs" % effective_cd
+		bars.append(cd_bar)
+	else:
+		bars.append(_make_bar(&"shield_cd", "Cooldown", 0.0, 0.0, 1.0, false, ""))
+
+	# Sustain (life_on_kill, barrier_on_kill) — offhands go through universal bonuses
+	var mult := item.effective_multiplier()
+	_append_sustain_bars(item, bars, mult)
+
+	return bars
+
+
+# ── Sustain bars (shared by armor + boots + offhands) ────────────────────
 # life_on_kill and barrier_on_kill are universal sustain rolls that can
 # appear on any equipment. Only shown when rolled (> 0).
 # Ranges derived from ilvl, scaled by rarity budget_mult via _rarity_rolli.

@@ -207,7 +207,7 @@ func roll(main_type: String, item_level: int, rarity: StringName, rng: RandomNum
 
 	_apply_weapon_base(item, main_type, rarity, rng)
 	_roll_weapon_signature(item, rarity, rng)
-	_apply_offhand_base(item, main_type, rng)
+	_apply_offhand_base(item, main_type, rarity, rng)
 	_apply_grenade_base(item, main_type, rarity, rng)
 	_apply_consumable_base(item, main_type, rarity, rng)
 	_apply_armor_model_name(item, main_type, rng)
@@ -738,7 +738,7 @@ func resolve_icon_path(item: Item) -> String:
 	return ""
 
 
-func _apply_offhand_base(item: Item, main_type: String, rng: RandomNumberGenerator) -> void:
+func _apply_offhand_base(item: Item, main_type: String, rarity: StringName, rng: RandomNumberGenerator) -> void:
 	if main_type != "Offhand":
 		return
 	if OFFHAND_BASE_PATHS.is_empty():
@@ -752,6 +752,15 @@ func _apply_offhand_base(item: Item, main_type: String, rng: RandomNumberGenerat
 	item.fire_skill = base.fire_skill
 	if base.glyph != "":
 		item.glyph = base.glyph
+	# Roll shield bonus stats on top of the Skill's base values.
+	var sk: Skill = base.fire_skill
+	if sk == null:
+		return
+	item.stat_modifiers[&"shield_pool_bonus"] = _rarity_rolli(15, 50, rarity, rng)
+	item.stat_modifiers[&"shield_cd_reduction"] = _rarity_rolli(5, 20, rarity, rng)
+	if sk.active_kind == Skill.ActiveKind.SHIELD_BUFF:
+		item.stat_modifiers[&"shield_dr_bonus"] = _rarity_rolli(5, 25, rarity, rng)
+		item.stat_modifiers[&"shield_duration_bonus"] = _rarity_rolli(30, 120, rarity, rng)
 
 func _apply_grenade_base(item: Item, main_type: String, rarity: StringName, rng: RandomNumberGenerator) -> void:
 	if main_type != "Grenade":
