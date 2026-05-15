@@ -819,18 +819,24 @@ func _apply_consumable_base(item: Item, main_type: String, rarity: StringName, r
 	var curve: float = float(RARITY_ROLL_CURVE.get(rarity, 2.0))
 	var budget_mult: float = float(RARITY_BUDGET_MULT.get(rarity, 1.0))
 	# Steeper curve for heal % than the generic rarity exponent so
-	# perfect-roll commons stay near the floor and 100%+ heals
+	# perfect-roll commons stay near the floor and high heals
 	# concentrate at higher rarities (where budget_mult also stretches
-	# the ceiling). At +1.5 over RARITY_ROLL_CURVE:
-	#   common (4.0) — median ~58%, ~90th percentile ~110%
-	#   unique (2.7) — median ~78%, mult 1.5 → median heal ~117%
+	# the ceiling). Raw range 50–83 × budget mult 1.0–1.5 puts:
+	#   common  → 50 floor, 83 ceiling (perfect roll)
+	#   unique  → 75 floor, 125 ceiling (perfect roll)
+	# matching the design intent of "50% on poor common, 125% on
+	# perfect unique."
 	var heal_curve: float = curve + 1.5
-	var heal_pct := int(round(_curved_randf(50.0, 150.0, rng, heal_curve) * budget_mult))
+	var heal_pct := int(round(_curved_randf(50.0, 83.0, rng, heal_curve) * budget_mult))
 	var heal_duration := _rarity_rollf(0.0, 5.0, rarity, rng)
 	item.stat_modifiers[&"heal_pct"] = heal_pct
 	item.stat_modifiers[&"heal_duration"] = heal_duration
-	# Charges and recharge time — higher rarity = more charges, faster recharge.
-	item.max_charges = clampi(int(round(_curved_randf(2.0, 7.0, rng, curve) * budget_mult)), 2, 7)
+	# Charges — raw range 1.0–3.33 × budget mult 1.0–1.5 lands:
+	#   common  poor → 1 / perfect → 3
+	#   unique  poor → 2 / perfect → 5
+	# clamped to [1, 5] so common-floor rolls always grant at least one
+	# charge and unique-ceiling rolls never exceed the design cap.
+	item.max_charges = clampi(int(round(_curved_randf(1.0, 3.33, rng, curve) * budget_mult)), 1, 5)
 	item.recharge_time = snappedf(_rarity_rollf_inv(20.0, 45.0, rarity, rng), 0.5)
 
 

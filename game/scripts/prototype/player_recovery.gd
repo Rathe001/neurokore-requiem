@@ -62,8 +62,11 @@ func get_cooldown_ratio(_skill: Skill) -> float:
 	# Per-use cooldown takes priority while active.
 	if _use_cooldown > 0.0:
 		return clampf(_use_cooldown / USE_COOLDOWN, 0.0, 1.0)
-	# No charges — show recharge progress.
-	if _charges <= 0 and _recharge_time > 0.0:
+	# Recharge in progress — surface progress whenever a charge is
+	# regenerating, not only when all charges are spent. The slot stays
+	# usable (Q-key still fires if _charges > 0); the visual just lets
+	# the player see how soon the next charge tops off.
+	if _charges < _max_charges and _recharge_time > 0.0:
 		return clampf(_recharge_timer / _recharge_time, 0.0, 1.0)
 	return 0.0
 
@@ -71,7 +74,7 @@ func get_cooldown_ratio(_skill: Skill) -> float:
 func get_cooldown_remain(_skill: Skill) -> float:
 	if _use_cooldown > 0.0:
 		return _use_cooldown
-	if _charges <= 0:
+	if _charges < _max_charges:
 		return maxf(_recharge_timer, 0.0)
 	return 0.0
 

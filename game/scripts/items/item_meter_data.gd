@@ -355,9 +355,11 @@ static func _compute_consumable(item: Item) -> Array[WeaponMeterData.MeterBar]:
 		return bars
 	var budget: float = float(ItemRoller.RARITY_BUDGET_MULT.get(item.rarity, 1.0))
 	var mult := item.effective_multiplier()
-	# Heal % — rolled 50–150 with curve + budget_mult
+	# Heal % — rolled 50–83 with curve + budget_mult → 50 floor (poor
+	# common) to 125 ceiling (perfect unique). See ItemRoller for the
+	# matching design tuning.
 	var heal_lo := 50.0
-	var heal_hi := 150.0 * budget
+	var heal_hi := 83.0 * budget
 	var heal_bar := _make_bar(&"heal", "Heal", raw_heal, heal_lo, heal_hi, raw_heal > 0.0, "%d%%")
 	_apply_scaling(heal_bar, raw_heal, mult, heal_lo, heal_hi)
 	bars.append(heal_bar)
@@ -366,10 +368,11 @@ static func _compute_consumable(item: Item) -> Array[WeaponMeterData.MeterBar]:
 	var dur_lo := 0.0
 	var dur_hi := 5.0 * budget
 	bars.append(_make_bar(&"heal_dur", "Duration", raw_dur, dur_lo, dur_hi, raw_dur > 0.0, "%.1fs"))
-	# Charges — rolled 2–7 with budget_mult
+	# Charges — rolled 1–3.33 with budget_mult, clamped to [1,5]. Common
+	# floors at 1 / perfects at 3; uniques reach the design cap of 5.
 	var raw_charges := float(item.max_charges)
-	var charges_lo := 2.0
-	var charges_hi := 7.0 * budget
+	var charges_lo := 1.0
+	var charges_hi := minf(3.33 * budget, 5.0)
 	bars.append(_make_bar(&"charges", "Charges", raw_charges, charges_lo, charges_hi, item.max_charges > 0, "%d"))
 	# Recharge Time — rolled 20–45s, inverse (lower = better), divided by budget_mult
 	var raw_recharge := item.recharge_time

@@ -158,10 +158,26 @@ func _process(_delta: float) -> void:
 			_flash_ready()
 		return
 	_was_on_cooldown = true
-	cooldown_overlay.visible = true
-	cooldown_overlay.offset_top = size.y * (1.0 - ratio)
-	if _cooldown_dim != null:
-		_cooldown_dim.visible = true
+	# Recovery slot quirk: when charges > 0, the slot is still USABLE
+	# (Q-key fires the next charge) even though one is mid-recharge.
+	# Show the countdown label so the player sees when the next charge
+	# tops off, but suppress the drain overlay + icon dim so the slot
+	# doesn't read as "locked out." When charges hit zero, the slot
+	# behaves like any other cooldown.
+	var recovery_with_charges: bool = (
+		_skill.active_kind == Skill.ActiveKind.RECOVERY
+		and _player.has_method(&"get_recovery_charges")
+		and int(_player.get_recovery_charges()) > 0
+	)
+	if recovery_with_charges:
+		cooldown_overlay.visible = false
+		if _cooldown_dim != null:
+			_cooldown_dim.visible = false
+	else:
+		cooldown_overlay.visible = true
+		cooldown_overlay.offset_top = size.y * (1.0 - ratio)
+		if _cooldown_dim != null:
+			_cooldown_dim.visible = true
 	# Numeric countdown — integer seconds at 1s+ (room for two digits
 	# without overflowing the slot), one decimal below 1s so the
 	# player sees the final tick rather than a flat "0".
