@@ -456,27 +456,16 @@ static func spawn_beam(host: Node3D, aim: Vector3, length: float, source_offset:
 	tween.chain().tween_callback(_release_light.bind(mid_light))
 	tween.chain().tween_callback(node.queue_free)
 
-# Brief impact flash spawned at a hit point — small emissive sphere that
-# scales up as it fades, plus a short-lived OmniLight so nearby surfaces
-# catch the burst. Used by projectile collisions and hitscan target hits.
-# `color_override` opts in to a specific tint; pass Color() (zero alpha) to
-# fall back to _color_for_host so player shots stay class-colored.
-const IMPACT_DURATION := 0.22
-const IMPACT_RADIUS_START := 0.18
-const IMPACT_RADIUS_END := 0.55
-
-static var _impact_mesh_cache: SphereMesh = null
-
-static func _get_impact_mesh() -> SphereMesh:
-	if _impact_mesh_cache != null:
-		return _impact_mesh_cache
-	var m := SphereMesh.new()
-	m.radius = IMPACT_RADIUS_START
-	m.height = IMPACT_RADIUS_START * 2.0
-	m.radial_segments = 12
-	m.rings = 6
-	_impact_mesh_cache = m
-	return m
+# Brief impact flash + spark burst spawned at a hit point — mini version of
+# the explosion VFX stack (flash sphere + radial sparks + omni light), no
+# flipbook or smoke. Reads as a sharp detonation pop colored to the
+# triggering projectile. Used by projectile collisions and hitscan target
+# hits. `color_override` opts in to a specific tint; pass Color() (zero
+# alpha) to fall back to _color_for_host so player shots stay class-colored.
+const IMPACT_FLASH_DURATION := 0.12
+const IMPACT_FLASH_RADIUS := 0.25
+const IMPACT_SPARK_LIFETIME := 0.25
+const IMPACT_SPARK_COUNT := 8
 
 static func spawn_impact_burst(host: Node3D, world_pos: Vector3, color_override: Color = Color(0, 0, 0, 0)) -> void:
 	if host == null:
@@ -488,45 +477,103 @@ static func spawn_impact_burst(host: Node3D, world_pos: Vector3, color_override:
 	if color.a == 0.0:
 		color = _color_for_host(host)
 
-	var mat := _build_material(color)
-	mat.albedo_color.a = 0.95
+	# ── Flash sphere ──────────────────────────────────────────────────
+	var flash_mesh := SphereMesh.new()
+	flash_mesh.radius = IMPACT_FLASH_RADIUS
+	flash_mesh.height = IMPACT_FLASH_RADIUS * 2.0
+	flash_mesh.radial_segments = 12
+	flash_mesh.rings = 6
+	var flash_mat := StandardMaterial3D.new()
+	# Core color is a brighter, desaturated version of the projectile color
+	# so the initial pop reads as white-hot center fading to the accent.
+	var core := Color(
+		lerpf(color.r, 1.0, 0.6),
+		lerpf(color.g, 1.0, 0.6),
+		lerpf(color.b, 1.0, 0.6),
+		0.9)
+	flash_mat.albedo_color = core
+	flash_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	flash_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	flash_mat.emission_enabled = true
+	flash_mat.emission = Color(core.r, core.g, core.b)
+	flash_mat.emission_energy_multiplier = 5.0
+	flash_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var flash_inst := MeshInstance3D.new()
+	flash_inst.mesh = flash_mesh
+	flash_inst.material_override = flash_mat
+	flash_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	flash_inst.scale = Vector3.ONE * 0.3
+	parent.add_child(flash_inst)
+	flash_inst.global_position = world_pos
 
-	var inst := MeshInstance3D.new()
-	inst.mesh = _get_impact_mesh()
-	inst.material_override = mat
-	parent.add_child(inst)
-	inst.global_position = world_pos
+	var flash_tween := flash_inst.create_tween().set_parallel(true)
+	flash_tween.tween_property(flash_inst, "scale", Vector3.ONE * 1.4, IMPACT_FLASH_DURATION).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_EXPO)
+	flash_tween.tween_property(flash_mat, "albedo_color:a", 0.0, IMPACT_FLASH_DURATION).set_ease(Tween.EASE_IN)
+	flash_tween.tween_property(flash_mat, "emission_energy_multiplier", 0.0, IMPACT_FLASH_DURATION).set_ease(Tween.EASE_IN)
+	flash_tween.chain().tween_callback(flash_inst.queue_free)
 
+	# ── Omni light ────────────────────────────────────────────────────
 	var light := _acquire_light()
 	light.light_color = color
-	light.light_energy = 3.0
+	light.light_energy = 5.0
 	light.omni_range = 3.5
 	light.omni_attenuation = 2.0
 	light.shadow_enabled = false
 	light.light_volumetric_fog_energy = 0.0
-	inst.add_child(light)
+	flash_inst.add_child(light)
 
-	var scale_target := IMPACT_RADIUS_END / IMPACT_RADIUS_START
-	var tween := inst.create_tween().set_parallel(true)
-	tween.tween_property(inst, "scale", Vector3.ONE * scale_target, IMPACT_DURATION).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
-	tween.tween_property(mat, "albedo_color:a", 0.0, IMPACT_DURATION).set_ease(Tween.EASE_IN)
-	tween.tween_property(mat, "emission_energy_multiplier", 0.0, IMPACT_DURATION).set_ease(Tween.EASE_IN)
-	tween.tween_property(light, "light_energy", 0.0, IMPACT_DURATION).set_ease(Tween.EASE_IN)
-	tween.chain().tween_callback(_release_light.bind(light))
-	tween.chain().tween_callback(inst.queue_free)
+	# ── Spark burst ───────────────────────────────────────────────────
+	var particles := GPUParticles3D.new()
+	particles.emitting = true
+	particles.one_shot = true
+	particles.amount = IMPACT_SPARK_COUNT
+	particles.lifetime = IMPACT_SPARK_LIFETIME
+	particles.explosiveness = 1.0
+	particles.local_coords = false
 
-# AoE explosion burst — like spawn_impact_burst but scaled to a blast_radius.
-# Two visual paths:
-#   • Color-tinted (energy weapon AoE) — keeps the legacy translucent-bubble
-#     shell that reads as "expanding force field". This is the path
-#     plasma-charged shots etc. take.
-#   • No tint (kinetic / RPG / grenade explosions) — runs the procedural
-#     fireball shader: yellow-white core, orange mid, red rim, FBM
-#     turbulence, fades to smoke. This is the new path the user asked
-#     for, inspired by the flipbook explosion VFX shader at
-#     https://godotshaders.com/shader/3d-explosion-vfx/ but reworked
-#     to be procedural so it doesn't need the source's seven sprite
-#     sheets.
+	var pm := ParticleProcessMaterial.new()
+	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_POINT
+	pm.direction = Vector3(0.0, 0.2, 0.0)
+	pm.spread = 180.0
+	pm.initial_velocity_min = 3.0
+	pm.initial_velocity_max = 6.0
+	pm.gravity = Vector3(0.0, -8.0, 0.0)
+	pm.damping_min = 4.0
+	pm.damping_max = 7.0
+	pm.scale_min = 0.02
+	pm.scale_max = 0.05
+	pm.color = Color(color.r, color.g, color.b, 1.0)
+	var curve := Curve.new()
+	curve.add_point(Vector2(0.0, 1.0))
+	curve.add_point(Vector2(0.6, 0.4))
+	curve.add_point(Vector2(1.0, 0.0))
+	var curve_tex := CurveTexture.new()
+	curve_tex.curve = curve
+	pm.scale_curve = curve_tex
+	particles.process_material = pm
+
+	var spark_mesh := SphereMesh.new()
+	spark_mesh.radius = 0.03
+	spark_mesh.height = 0.06
+	spark_mesh.radial_segments = 4
+	spark_mesh.rings = 2
+	var spark_mat := StandardMaterial3D.new()
+	spark_mat.albedo_color = color
+	spark_mat.emission_enabled = true
+	spark_mat.emission = color
+	spark_mat.emission_energy_multiplier = 4.0
+	spark_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	spark_mesh.material = spark_mat
+	particles.draw_pass_1 = spark_mesh
+
+	parent.add_child(particles)
+	particles.global_position = world_pos
+	particles.get_tree().create_timer(IMPACT_SPARK_LIFETIME + 0.15).timeout.connect(particles.queue_free)
+
+# AoE explosion burst — flipbook fireball + flash + sparks, palette-keyed
+# by damage_type. All AoE projectiles route here; the elemental palette
+# (kinetic / flame / cryo / electric / plasma) colors the flash, sparks,
+# and omni light to match the weapon's identity.
 const EXPLOSION_DURATION := 0.8
 # Spark + flash layers run alongside the flipbook for the "impact
 # moment" punch — the flipbook itself handles fireball + smoke phases
@@ -585,23 +632,30 @@ const FIREBALL_PALETTES: Dictionary = {
 		"smoke": Color(0.18, 0.15, 0.22),
 		"light": Color(0.85, 0.6, 1.0),
 	},
+	&"plasma": {  # plasma burst — white-cyan core, cyan mid, deep teal rim
+		"core": Color(0.9, 1.0, 1.0),
+		"mid": Color(0.3, 0.85, 1.0),
+		"outer": Color(0.05, 0.35, 0.55),
+		"smoke": Color(0.10, 0.16, 0.20),
+		"light": Color(0.4, 0.85, 1.0),
+	},
 }
 
-static func spawn_explosion(host: Node3D, world_pos: Vector3, blast_radius: float, color_override: Color = Color(0, 0, 0, 0), damage_type: StringName = &"") -> void:
+static func spawn_explosion(host: Node3D, world_pos: Vector3, blast_radius: float, _color_override: Color = Color(0, 0, 0, 0), damage_type: StringName = &"") -> void:
 	if host == null:
 		return
 	var parent: Node = host.get_parent()
 	if parent == null:
 		parent = host
-	# Branch on whether the caller provided an explicit color. Kinetic
-	# explosions (RPG, grenades) pass no color → procedural fireball.
-	# Energy explosions (plasma-charged, future energy AoE) pass their
-	# class accent → translucent bubble shell. damage_type only
-	# matters for the fireball path — picks an elemental palette.
-	if color_override.a == 0.0:
-		_spawn_fireball_explosion(parent, world_pos, blast_radius, damage_type)
-	else:
-		_spawn_energy_explosion(parent, world_pos, blast_radius, color_override)
+	# Detect enemy-sourced explosions: projectile target_group == &"player"
+	# means an enemy fired it. Player hosts or non-projectile hosts stay
+	# full-intensity.
+	var is_enemy := false
+	if host is PrototypeProjectile:
+		is_enemy = (host as PrototypeProjectile).target_group == &"player"
+	elif not host.is_in_group(&"player"):
+		is_enemy = true
+	_spawn_fireball_explosion(parent, world_pos, blast_radius, damage_type, is_enemy)
 
 
 ## Flipbook-driven explosion using the BigExplosionScene's pre-baked
@@ -611,51 +665,110 @@ static func spawn_explosion(host: Node3D, world_pos: Vector3, blast_radius: floa
 ## stack the supporting layers (omni light, sparks, instant flash) on
 ## top. The flipbook includes its own smoke-dispersal phase as the
 ## sprite ages, so we don't spawn a separate procedural smoke layer.
-static func _spawn_fireball_explosion(parent: Node, world_pos: Vector3, blast_radius: float, damage_type: StringName = &"") -> void:
+static func _spawn_fireball_explosion(parent: Node, world_pos: Vector3, blast_radius: float, damage_type: StringName = &"", is_enemy: bool = false) -> void:
 	var palette: Dictionary = FIREBALL_PALETTES.get(damage_type, FIREBALL_PALETTES[&""])
+	var is_kinetic: bool = damage_type == &"" or damage_type == &"flame"
 
 	var fx: Node3D = FLIPBOOK_EXPLOSION_SCENE.instantiate() as Node3D
+	fx.scale = Vector3.ONE * clampf(blast_radius, FLIPBOOK_SCALE_FLOOR, FLIPBOOK_SCALE_CEILING)
+
+	# Speed up the flipbook by shortening particle lifetime BEFORE the
+	# node enters the tree (so the particle emits at the new speed).
+	# The sprite sheet's last frames naturally fade to alpha 0, so faster
+	# playback = quicker smoke that ends gracefully — no hard cuts.
+	# Kinetic gets a modest speedup; energy types play ~2× faster so the
+	# smoke reads as dissipating energy rather than lingering particulate.
+	var particles: GPUParticles3D = fx.get_node(^"Explosion1") as GPUParticles3D
+	var anim_lifetime: float = 1.4 if is_kinetic else 0.9
+	if particles != null:
+		particles.lifetime = anim_lifetime
+		# Recolor the flipbook to match the palette. The shader has two
+		# gradient lookups keyed on sprite brightness:
+		#   tex_frg_26 → EMISSION (fire/smoke color)
+		#   tex_frg_27 → ALBEDO   (base tint, default white)
+		# We duplicate the material and replace both so the entire explosion
+		# — fire core, mid ring, and trailing smoke — reads in-palette.
+		var mat: ShaderMaterial = particles.material_override.duplicate() as ShaderMaterial
+		var smoke: Color = palette["smoke"]
+		var em_grad := Gradient.new()
+		em_grad.offsets = PackedFloat32Array([0.0, 0.017, 0.38, 0.461, 0.55, 0.602, 1.0])
+		em_grad.colors = PackedColorArray([
+			Color(smoke.r, smoke.g, smoke.b, 0.0),  # very dark → smoke (transparent edge)
+			Color(smoke.r, smoke.g, smoke.b, 1.0),  # dark → smoke
+			palette["core"],                          # bright centre
+			palette["mid"],                           # mid ring
+			palette["outer"],                         # rim
+			smoke,                                    # fade to smoke
+			smoke,                                    # hold smoke
+		])
+		var em_tex := GradientTexture1D.new()
+		em_tex.gradient = em_grad
+		mat.set_shader_parameter(&"tex_frg_26", em_tex)
+		var alb_grad := Gradient.new()
+		alb_grad.offsets = PackedFloat32Array([0.0, 0.4, 1.0])
+		alb_grad.colors = PackedColorArray([
+			smoke,                      # dark → smoke tint
+			Color(0.7, 0.7, 0.7, 1.0), # mid → neutral
+			Color(1.0, 1.0, 1.0, 1.0), # bright → white
+		])
+		var alb_tex := GradientTexture1D.new()
+		alb_tex.gradient = alb_grad
+		mat.set_shader_parameter(&"tex_frg_27", alb_tex)
+		# Enemy-sourced explosions are ~50% transparent so they don't
+		# overpower player VFX. The shader's alpha_multiplier uniform
+		# is authoritative here; we also halve the emission falloff so
+		# the glow is proportionally dimmer.
+		if is_enemy:
+			mat.set_shader_parameter(&"alpha_multiplier", 0.5)
+		particles.material_override = mat
+		# GPU particles ignore parent node scale (local_coords=false), so
+		# resize the draw pass QuadMesh directly. Energy explosions use a
+		# small quad — the flash/sparks carry the blast visual; the
+		# flipbook is just a brief residual puff.
+		if not is_kinetic:
+			var quad: QuadMesh = particles.draw_pass_1.duplicate() as QuadMesh
+			quad.size = Vector2(3, 3)  # down from 8×8
+			particles.draw_pass_1 = quad
+
+	# Add to tree after configuring — particle emits on first frame.
 	parent.add_child(fx)
 	fx.global_position = world_pos
-	# Scale roughly 1:1 with blast_radius so the visual matches the
-	# gameplay radius. Floor keeps tiny AoEs from being imperceptible;
-	# ceiling keeps Tactical-Strike-class blasts from overrunning the
-	# entire viewport.
-	fx.scale = Vector3.ONE * clampf(blast_radius, FLIPBOOK_SCALE_FLOOR, FLIPBOOK_SCALE_CEILING)
-	# Auto-cleanup once the flipbook lifetime + tail expires. Particle
-	# system stops emitting at ~2.13s; tail gives trailing frames time
-	# to finish their UV animation before we yank the node.
-	fx.get_tree().create_timer(EXPLOSION_FLIPBOOK_LIFETIME).timeout.connect(fx.queue_free)
+	fx.get_tree().create_timer(anim_lifetime + 0.3).timeout.connect(fx.queue_free)
 
 	# Omni light pulse — surrounding floor / walls / enemies light up
 	# in the explosion's color. Two-stage fade: peak holds briefly at
 	# 40, drops to a sustained glow at 14 over 0.15s, then trails to
-	# zero. light_volumetric_fog_energy carries a quarter of the
-	# brightness into any in-room fog so dense rooms get a colored
-	# haze without overpowering them.
+	# zero. The light is added to parent (NOT fx) because fx is scaled
+	# to blast_radius and Godot scales OmniLight range with node
+	# transform — parenting to the unscaled level node keeps the range
+	# predictable.
+	# Enemy-sourced explosions halve all visual intensity so they don't
+	# overpower player VFX at horde scale.
+	var intensity_mult := 0.5 if is_enemy else 1.0
+
 	var light := _acquire_light()
 	light.light_color = palette["light"]
-	light.light_energy = 40.0
+	light.light_energy = 40.0 * intensity_mult
 	light.omni_range = blast_radius * 3.5
 	light.omni_attenuation = 0.9
 	light.shadow_enabled = false
 	light.light_volumetric_fog_energy = 0.25
-	fx.add_child(light)
+	parent.add_child(light)
+	light.global_position = world_pos
 
-	var light_tween := fx.create_tween()
-	light_tween.tween_property(light, "light_energy", 14.0, 0.15).set_ease(Tween.EASE_OUT)
-	light_tween.chain()
+	var light_tween := light.create_tween()
+	light_tween.tween_property(light, "light_energy", 14.0 * intensity_mult, 0.15).set_ease(Tween.EASE_OUT)
 	light_tween.tween_property(light, "light_energy", 0.0, EXPLOSION_DURATION).set_ease(Tween.EASE_IN)
-	light_tween.chain().tween_callback(_release_light.bind(light))
+	light_tween.tween_callback(_release_light.bind(light))
 
 	# Instant flash sphere — bright unshaded white-hot pop that
 	# precedes the flipbook's first visible frame. Reads as the
 	# detonation flash at iso distance even when the flipbook quads
 	# haven't fully oriented to camera yet.
-	_spawn_explosion_flash(parent, world_pos, blast_radius, palette["core"])
+	_spawn_explosion_flash(parent, world_pos, blast_radius, palette["core"], intensity_mult)
 	# Sparks — bright radial dots flying outward, short lifetime, low
 	# gravity. Reads as flying debris / hot fragments.
-	_spawn_explosion_sparks(parent, world_pos, blast_radius, palette["mid"])
+	_spawn_explosion_sparks(parent, world_pos, blast_radius, palette["mid"], intensity_mult)
 
 
 # Instant white-hot pop at the impact point — separate from the
@@ -663,19 +776,19 @@ static func _spawn_fireball_explosion(parent: Node, world_pos: Vector3, blast_ra
 # fresnel + age fade hides the orange ball at certain angles. Sphere
 # uses an unshaded high-emission StandardMaterial so it bloom-glows
 # regardless of palette or volumetric fog density.
-static func _spawn_explosion_flash(parent: Node, world_pos: Vector3, blast_radius: float, core_tint: Color) -> void:
+static func _spawn_explosion_flash(parent: Node, world_pos: Vector3, blast_radius: float, core_tint: Color, intensity_mult: float = 1.0) -> void:
 	var mesh := SphereMesh.new()
 	mesh.radius = blast_radius * 0.35
 	mesh.height = blast_radius * 0.7
 	mesh.radial_segments = 16
 	mesh.rings = 8
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(core_tint.r, core_tint.g, core_tint.b, 0.9)
+	mat.albedo_color = Color(core_tint.r, core_tint.g, core_tint.b, 0.9 * intensity_mult)
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.emission_enabled = true
 	mat.emission = core_tint
-	mat.emission_energy_multiplier = 6.0
+	mat.emission_energy_multiplier = 6.0 * intensity_mult
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	var inst := MeshInstance3D.new()
 	inst.mesh = mesh
@@ -695,7 +808,7 @@ static func _spawn_explosion_flash(parent: Node, world_pos: Vector3, blast_radiu
 # Bright outward-spraying spark particles. One-shot burst sized to the
 # blast radius. Particles don't follow the parent so they survive the
 # fireball mesh's queue_free.
-static func _spawn_explosion_sparks(parent: Node, world_pos: Vector3, blast_radius: float, tint: Color) -> void:
+static func _spawn_explosion_sparks(parent: Node, world_pos: Vector3, blast_radius: float, tint: Color, intensity_mult: float = 1.0) -> void:
 	var particles := GPUParticles3D.new()
 	particles.emitting = true
 	particles.one_shot = true
@@ -733,11 +846,13 @@ static func _spawn_explosion_sparks(parent: Node, world_pos: Vector3, blast_radi
 	mesh.radial_segments = 6
 	mesh.rings = 3
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = tint
+	mat.albedo_color = Color(tint.r, tint.g, tint.b, intensity_mult)
 	mat.emission_enabled = true
 	mat.emission = tint
-	mat.emission_energy_multiplier = 4.0
+	mat.emission_energy_multiplier = 4.0 * intensity_mult
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	if intensity_mult < 1.0:
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mesh.material = mat
 	particles.draw_pass_1 = mesh
 
