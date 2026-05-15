@@ -138,6 +138,15 @@ func _any_puzzle_incomplete() -> bool:
 	return false
 
 
+## True when at least one puzzle's switches are all activated — that
+## door is open and the player can reach the boss through it.
+func _any_puzzle_complete() -> bool:
+	for puzzle in _puzzles:
+		if int(puzzle["done"]) >= int(puzzle["required"]):
+			return true
+	return false
+
+
 func _has_puzzles() -> bool:
 	return not _puzzles.is_empty()
 
@@ -145,11 +154,13 @@ func _has_puzzles() -> bool:
 ## Current phase ID. Boss-dead wins over incomplete switches because the
 ## player physically can't redo the puzzle once the boss is down, and
 ## leaving the panel stuck on "switches" after the kill confuses the
-## flow.
+## flow. When multiple puzzles exist (two doors into the boss room),
+## completing ANY one advances to BOSS — the player only needs one open
+## path.
 func current_phase() -> StringName:
 	if _has_boss and not boss_alive:
 		return PHASE_DESCEND
-	if _has_puzzles() and _any_puzzle_incomplete():
+	if _has_puzzles() and not _any_puzzle_complete():
 		return PHASE_SWITCHES
 	if _has_boss and boss_alive:
 		return PHASE_BOSS
