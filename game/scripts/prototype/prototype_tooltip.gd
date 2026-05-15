@@ -48,6 +48,7 @@ var _shift_held: bool = false
 # no hide on hover-exit, gold border to telegraph the locked state. Released
 # → unlocked and dismissed.
 var _weapon_meters: WeaponMeterStrip = null
+var _meter_divider: ColorRect = null
 var _current_item: Item = null
 var _lmb_held: bool = false
 # Increments on every show_* call and on hide_tooltip. The deferred resume
@@ -190,6 +191,18 @@ func _build_ui() -> void:
 	_weapon_meters.visible = false
 	_vbox.add_child(_weapon_meters)
 
+	# Divider between the meter strip and the non-meter mod lines below
+	# (Mod: Radiant Lamp, Element, Inventory bonus, etc). Matches the
+	# in-strip global/archetype divider visually so the player reads the
+	# meter block as one self-contained group, with mods clearly tagged
+	# as "extras" below. Visibility toggled by _update_meter_bars based
+	# on whether both the strip and the stats label have content.
+	_meter_divider = ColorRect.new()
+	_meter_divider.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_meter_divider.custom_minimum_size = Vector2(0.0, 1.0)
+	_meter_divider.visible = false
+	_vbox.add_child(_meter_divider)
+
 	_stats_label = RichTextLabel.new()
 	_stats_label.bbcode_enabled = true
 	_stats_label.fit_content = true
@@ -285,6 +298,10 @@ func _apply_theme() -> void:
 	_text_label.add_theme_color_override(&"font_color", p.text)
 	_type_label.add_theme_color_override(&"font_color", Color(p.text, 0.55))
 	_stats_label.add_theme_color_override(&"default_color", p.text)
+	if _meter_divider:
+		# Same subtle dim color the in-strip global/archetype divider uses
+		# so the two dividers read as a consistent visual language.
+		_meter_divider.color = Color(p.text_dim.r, p.text_dim.g, p.text_dim.b, 0.35)
 	_equipped_header.add_theme_color_override(&"font_color", Color(p.text, 0.55))
 	_equipped_type.add_theme_color_override(&"font_color", Color(p.text, 0.55))
 	_equipped_stats.add_theme_color_override(&"default_color", p.text)
@@ -420,6 +437,7 @@ func show_text(text: String) -> void:
 	_origin_label.visible = false
 	_desc_label.visible = false
 	_stats_label.visible = false
+	_sync_meter_divider()
 	_resize_then_show()
 
 func show_item(item: Item) -> void:
@@ -470,9 +488,20 @@ func show_item(item: Item) -> void:
 	var stats := _build_stats_text(item, equipped)
 	_stats_label.text = stats
 	_stats_label.visible = not stats.is_empty()
+	_sync_meter_divider()
 
 	_sync_equipped_panel_visibility()
 	_resize_then_show()
+
+# Show the divider between the meter strip and the stats label only when
+# both have content. If meters are hidden (non-weapon/non-armor item) OR
+# the stats label is empty (no mods/element/etc. below the bars), the
+# divider would be a dangling line and we hide it.
+func _sync_meter_divider() -> void:
+	if _meter_divider == null:
+		return
+	_meter_divider.visible = _weapon_meters != null and _weapon_meters.visible and _stats_label.visible
+
 
 func _resolve_equipped(item: Item) -> Item:
 	if item == null or item.kind == &"":
@@ -525,6 +554,7 @@ func _update_meter_bars(item: Item) -> void:
 		_weapon_meters.visible = true
 	else:
 		_weapon_meters.visible = false
+	_sync_meter_divider()
 
 
 # Mid-show shift toggle: visibility flip changes compound width, so re-run
@@ -572,6 +602,7 @@ func show_skill(skill: Skill, source: Item) -> void:
 	var stats := _build_skill_stats_text(skill, source)
 	_stats_label.text = stats
 	_stats_label.visible = not stats.is_empty()
+	_sync_meter_divider()
 	_resize_then_show()
 
 
@@ -596,6 +627,7 @@ func show_talent_node(title: String, body: String) -> void:
 	_desc_label.text = body
 	_desc_label.visible = true
 	_stats_label.visible = false
+	_sync_meter_divider()
 	_resize_then_show()
 
 
