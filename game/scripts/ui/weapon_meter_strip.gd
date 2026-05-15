@@ -7,7 +7,7 @@ extends Control
 # freed/recreated to avoid GC churn during rapid hover switches.
 
 var _bars: Array[StatMeterBar] = []
-const MAX_BARS := 9  # Up to 5 standard bars + up to 2 signature bars + margin
+const MAX_BARS := 20  # Base bars + signature + affix modifier bars + comparison union
 
 
 func _ready() -> void:

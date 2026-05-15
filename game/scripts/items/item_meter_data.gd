@@ -50,6 +50,12 @@ static func compute(item: Item) -> Array[WeaponMeterData.MeterBar]:
 	var stat_bars: Array[WeaponMeterData.MeterBar]
 	if is_weapon and item.weapon_base_id != &"":
 		stat_bars = WeaponMeterData.compute(item)
+		# Append affix modifier bars (fire dmg, resource on hit, etc.)
+		# Exclude weapon signature stats — already shown as dedicated bars.
+		var weapon_exclude: Dictionary = {}
+		for key: StringName in WeaponMeterData._SIG_DISPLAY:
+			weapon_exclude[key] = true
+		_append_modifier_bars(item, stat_bars, item.effective_multiplier(), weapon_exclude)
 	else:
 		match item.main_type:
 			"Head Armor", "Chest Armor", "Gloves", "Leg Armor":
@@ -79,9 +85,53 @@ static func has_meters(item: Item) -> bool:
 	]
 
 
-# ── Stat keys covered by meters (skipped in tooltip text stats) ────────────
+# ── Modifier bar definitions — every stat_modifier key gets a meter ───────
+# Keys already handled by dedicated bars (DR on armor, speed on boots, etc.)
+# are excluded per compute function via the `exclude` set.
+# "lo"/"hi" define the bar's normalization range. "fmt" is the number format.
+# "pct": true means the raw value is a percentage. "decays": true means it
+# scales with effective_multiplier. "inverse": true means lower = better.
 
+const MODIFIER_BAR_DEFS: Dictionary = {
+	# Elemental damage (weapon affixes)
+	&"fire_damage_bonus":      { "label": "Fire Dmg",   "fmt": "+%d",     "lo": 1,  "hi": 15 },
+	&"cryo_damage_bonus":      { "label": "Cryo Dmg",   "fmt": "+%d",     "lo": 1,  "hi": 15 },
+	&"electric_damage_bonus":  { "label": "Elec Dmg",   "fmt": "+%d",     "lo": 1,  "hi": 15 },
+	&"toxic_damage_bonus":     { "label": "Toxic Dmg",  "fmt": "+%d",     "lo": 1,  "hi": 15 },
+	# Core combat
+	&"base_damage_bonus":      { "label": "+Damage",    "fmt": "+%d",     "lo": 1,  "hi": 12 },
+	&"resource_on_hit":        { "label": "Res/Hit",    "fmt": "+%d",     "lo": 1,  "hi": 4 },
+	&"crit_chance_bonus":      { "label": "+Crit",      "fmt": "+%.1f%%", "lo": 1,  "hi": 10, "pct": true },
+	&"crit_damage_bonus":      { "label": "+Crit Dmg",  "fmt": "+%d%%",   "lo": 1,  "hi": 20 },
+	&"attack_speed_bonus":     { "label": "+Speed",     "fmt": "+%d%%",   "lo": 1,  "hi": 12 },
+	&"hit_chance_bonus":       { "label": "+Accuracy",  "fmt": "+%d",     "lo": 1,  "hi": 8 },
+	&"cooldown_reduction":     { "label": "CDR",        "fmt": "+%d%%",   "lo": 1,  "hi": 15 },
+	&"lifesteal_percent":      { "label": "Lifesteal",  "fmt": "%d%%",    "lo": 1,  "hi": 5 },
+	&"armor_penetration":      { "label": "Armor Pen",  "fmt": "+%d%%",   "lo": 1,  "hi": 12 },
+	&"damage_bonus_pct":       { "label": "+Dmg %",     "fmt": "+%d%%",   "lo": 1,  "hi": 20 },
+	# Sustain / utility
+	&"resource_cost_reduction":{ "label": "Cost Red",   "fmt": "+%d%%",   "lo": 1,  "hi": 15 },
+	&"knockback_bonus":        { "label": "Knockback",  "fmt": "+%d",     "lo": 1,  "hi": 15 },
+	&"range_bonus":            { "label": "+Range",     "fmt": "+%d",     "lo": 1,  "hi": 12 },
+	&"carry_capacity_bonus":   { "label": "Carry Cap",  "fmt": "+%d",     "lo": 1,  "hi": 15 },
+	&"inventory_bonus":        { "label": "Inv Slots",  "fmt": "+%d",     "lo": 1,  "hi": 4 },
+	# Resistances
+	&"electric_resistance":    { "label": "Elec Res",   "fmt": "+%d%%",   "lo": 1,  "hi": 12 },
+	&"cryo_resistance":        { "label": "Cryo Res",   "fmt": "+%d%%",   "lo": 1,  "hi": 12 },
+	&"toxic_resistance":       { "label": "Toxic Res",  "fmt": "+%d%%",   "lo": 1,  "hi": 12 },
+	&"elemental_resistance":   { "label": "All Res",    "fmt": "+%d%%",   "lo": 1,  "hi": 8 },
+	# Gloves-specific
+	&"unarmed_damage_bonus":   { "label": "Unarmed",    "fmt": "+%d",     "lo": 1,  "hi": 12 },
+	&"unarmed_stun_chance":    { "label": "Stun %",     "fmt": "+%d%%",   "lo": 5,  "hi": 30 },
+	&"unarmed_aoe_radius":     { "label": "Unarmd AoE", "fmt": "+%d m",  "lo": 1,  "hi": 5 },
+	# Grenade bonus
+	&"blast_radius_bonus":     { "label": "+Blast",     "fmt": "+%.1f m", "lo": 0.5, "hi": 3.0 },
+}
+
+# Stat keys covered by meters — union of dedicated bar keys + MODIFIER_BAR_DEFS.
+# Tooltip skips these in text stat display.
 const METERED_MODIFIER_KEYS: Dictionary = {
+	# Dedicated bars (armor/boots/offhand/consumable)
 	&"damage_reduction": true,
 	&"move_speed_bonus": true,
 	&"traction_bonus": true,
@@ -93,6 +143,36 @@ const METERED_MODIFIER_KEYS: Dictionary = {
 	&"shield_dr_bonus": true,
 	&"shield_cd_reduction": true,
 	&"shield_duration_bonus": true,
+	&"heal_pct": true,
+	&"heal_duration": true,
+	# MODIFIER_BAR_DEFS keys
+	&"fire_damage_bonus": true,
+	&"cryo_damage_bonus": true,
+	&"electric_damage_bonus": true,
+	&"toxic_damage_bonus": true,
+	&"base_damage_bonus": true,
+	&"resource_on_hit": true,
+	&"crit_chance_bonus": true,
+	&"crit_damage_bonus": true,
+	&"attack_speed_bonus": true,
+	&"hit_chance_bonus": true,
+	&"cooldown_reduction": true,
+	&"lifesteal_percent": true,
+	&"armor_penetration": true,
+	&"damage_bonus_pct": true,
+	&"resource_cost_reduction": true,
+	&"knockback_bonus": true,
+	&"range_bonus": true,
+	&"carry_capacity_bonus": true,
+	&"inventory_bonus": true,
+	&"electric_resistance": true,
+	&"cryo_resistance": true,
+	&"toxic_resistance": true,
+	&"elemental_resistance": true,
+	&"unarmed_damage_bonus": true,
+	&"unarmed_stun_chance": true,
+	&"unarmed_aoe_radius": true,
+	&"blast_radius_bonus": true,
 }
 
 
@@ -133,6 +213,12 @@ static func _compute_armor(item: Item) -> Array[WeaponMeterData.MeterBar]:
 
 	# Sustain (life_on_kill, barrier_on_kill) — optional, only shown when rolled
 	_append_sustain_bars(item, bars, mult)
+
+	# Affix stats as meters (resistances, etc.)
+	_append_modifier_bars(item, bars, mult, {
+		&"damage_reduction": true, &"max_health_bonus": true,
+		&"max_resource_bonus": true, &"life_on_kill": true, &"barrier_on_kill": true,
+	})
 
 	return bars
 
@@ -177,6 +263,13 @@ static func _compute_boots(item: Item) -> Array[WeaponMeterData.MeterBar]:
 
 	# Sustain (life_on_kill, barrier_on_kill) — optional, only shown when rolled
 	_append_sustain_bars(item, bars, mult)
+
+	# Affix stats as meters
+	_append_modifier_bars(item, bars, mult, {
+		&"move_speed_bonus": true, &"traction_bonus": true,
+		&"max_health_bonus": true, &"max_resource_bonus": true,
+		&"life_on_kill": true, &"barrier_on_kill": true,
+	})
 
 	return bars
 
@@ -246,6 +339,10 @@ static func _compute_grenade(item: Item) -> Array[WeaponMeterData.MeterBar]:
 		bar.value = _normalize(GRENADE_COST_HI + GRENADE_COST_LO - cost, GRENADE_COST_LO, GRENADE_COST_HI)
 		bar.number_text = "%d" % int(cost)
 		bars.append(bar)
+
+	# Affix stats as meters (damage_bonus_pct, blast_radius_bonus, knockback, etc.)
+	var mult := item.effective_multiplier()
+	_append_modifier_bars(item, bars, mult, {})
 
 	return bars
 
@@ -345,6 +442,13 @@ static func _compute_offhand(item: Item) -> Array[WeaponMeterData.MeterBar]:
 	var mult := item.effective_multiplier()
 	_append_sustain_bars(item, bars, mult)
 
+	# Affix stats as meters
+	_append_modifier_bars(item, bars, mult, {
+		&"shield_pool_bonus": true, &"shield_dr_bonus": true,
+		&"shield_cd_reduction": true, &"shield_duration_bonus": true,
+		&"life_on_kill": true, &"barrier_on_kill": true,
+	})
+
 	return bars
 
 
@@ -389,6 +493,36 @@ static func _normalize(val: float, lo: float, hi: float) -> float:
 	if hi <= lo:
 		return 0.5
 	return clampf((val - lo) / (hi - lo), 0.0, 1.0)
+
+
+# ── Generic modifier bars (affix stats → meters) ─────────────────────────
+# Iterates item.stat_modifiers and creates a bar for any key present in
+# MODIFIER_BAR_DEFS that isn't in the exclude set (already shown as a
+# dedicated bar). Called at the end of every _compute_* function.
+
+static func _append_modifier_bars(
+	item: Item, bars: Array[WeaponMeterData.MeterBar],
+	mult: float, exclude: Dictionary
+) -> void:
+	for key: StringName in item.stat_modifiers:
+		if exclude.has(key):
+			continue
+		var def: Dictionary = MODIFIER_BAR_DEFS.get(key, {})
+		if def.is_empty():
+			continue
+		var raw_val: float = float(item.stat_modifiers[key])
+		if raw_val == 0.0:
+			continue
+		var lo: float = float(def["lo"])
+		var hi: float = float(def["hi"])
+		var bar := _make_bar(key, def["label"], raw_val, lo, hi, true, def["fmt"])
+		# Combat power stats decay with effective_multiplier
+		if def.get("decays", false) and not is_equal_approx(mult, 1.0):
+			if mult < 1.0:
+				bar.decayed_value = _normalize(raw_val * mult, lo, hi)
+			else:
+				bar.boosted_value = _normalize(raw_val * mult, lo, hi)
+		bars.append(bar)
 
 
 ## Build a MeterBar with "not rolled" vs "rolled" distinction.
