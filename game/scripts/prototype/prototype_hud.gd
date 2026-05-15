@@ -1007,10 +1007,10 @@ func _update_heal_preview() -> void:
 	if _heal_preview == null:
 		return
 	var player := get_tree().get_first_node_in_group(&"player")
-	if player == null or not player.has_method(&"get_potion_heal_remaining"):
+	if player == null or not player.has_method(&"get_recovery_heal_remaining"):
 		_heal_preview.visible = false
 		return
-	var heal_remain: int = player.get_potion_heal_remaining()
+	var heal_remain: int = player.get_recovery_heal_remaining()
 	if heal_remain <= 0:
 		_heal_preview.visible = false
 		return

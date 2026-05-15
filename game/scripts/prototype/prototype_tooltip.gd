@@ -883,7 +883,7 @@ func _build_stats_text(item: Item, equipped: Item = null, force_text: bool = fal
 	# returns int, so reading via the dict avoids truncating sub-1s
 	# durations to 0 (which would silently skip this entire heal line and
 	# make the potion read as "no health restoration"). Sub-HOT_INTERVAL
-	# durations route through PlayerPotion's instant-heal branch.
+	# durations route through PlayerRecovery's instant-heal branch.
 	if item.main_type == "Consumable":
 		if not has_meters:
 			var hp: float = float(item.stat_modifiers.get(&"heal_pct", 0))
@@ -1105,7 +1105,7 @@ func _build_skill_stats_text(skill: Skill, source: Item) -> String:
 							lines.append("Chain: bounces with %.0f%% falloff" % falloff)
 					else:
 						lines.append("Chain: %d targets" % jumps)
-		Skill.ActiveKind.POTION:
+		Skill.ActiveKind.RECOVERY:
 			var consumable: Item = InventoryState.get_equipped(&"consumable")
 			if consumable != null:
 				# Read via stat_modifiers — heal_duration is float and

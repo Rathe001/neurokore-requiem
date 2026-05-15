@@ -24,7 +24,7 @@ enum ActiveKind {
 	SECOND_WIND,    # instant self-cast → refill resource bar, then cooldown
 	AIM_HOLD,       # hold RMB → buff accuracy/crit while drains resource (LMG Tripod, Aimed Shot)
 	CHANNEL_BEAM,   # hold LMB/RMB → tick damage via skill.targeting_mode; drains resource per second (Taser hold, Accelerator stream)
-	POTION,         # consume a charge from the equipped consumable; starts a HoT on the player
+	RECOVERY,       # consume a charge from the equipped consumable; starts a HoT on the player
 }
 
 enum GrenadeType {

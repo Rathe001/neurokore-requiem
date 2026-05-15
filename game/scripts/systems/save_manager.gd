@@ -472,7 +472,7 @@ func _deserialize_stat_modifiers(data: Dictionary) -> Dictionary:
 			saw_heal_total = true
 			continue
 		out[sn] = data[key]
-	# v1 potions didn't carry a duration; PlayerPotion.activate bails when
+	# v1 potions didn't carry a duration; PlayerRecovery.activate bails when
 	# heal_duration <= 0, which would make migrated potions inert. Backfill
 	# at the new floor so migrated charges actually heal.
 	if saw_heal_total and not out.has(&"heal_duration"):

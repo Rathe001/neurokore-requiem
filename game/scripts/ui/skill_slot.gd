@@ -90,9 +90,9 @@ func bind(player: Node, skill: Skill, keybind_label: String) -> void:
 	_skill = skill
 	_clear_icon_texture()
 	if skill != null:
-		# Potion skills show the equipped consumable's icon instead of
+		# Recovery skills show the equipped consumable's icon instead of
 		# the generic skill glyph.
-		if skill.active_kind == Skill.ActiveKind.POTION:
+		if skill.active_kind == Skill.ActiveKind.RECOVERY:
 			var consumable: Item = InventoryState.get_equipped(&"consumable")
 			if consumable != null and consumable.icon_path != "":
 				var tex := load(consumable.icon_path) as Texture2D
@@ -186,9 +186,9 @@ func _flash_ready() -> void:
 func _on_mouse_entered() -> void:
 	if _skill == null:
 		return
-	# Potion slot → show the equipped consumable's item tooltip instead of
+	# Recovery slot → show the equipped consumable's item tooltip instead of
 	# the generic skill tooltip so the player sees heal stats + rarity.
-	if _skill.active_kind == Skill.ActiveKind.POTION:
+	if _skill.active_kind == Skill.ActiveKind.RECOVERY:
 		var consumable: Item = InventoryState.get_equipped(&"consumable")
 		if consumable != null:
 			get_tree().call_group(&"interactable_tooltip", &"show_item", consumable)
@@ -210,13 +210,13 @@ func _on_tree_exiting() -> void:
 func _update_charge_badge() -> void:
 	if _charge_label == null:
 		return
-	if _skill == null or _skill.active_kind != Skill.ActiveKind.POTION:
+	if _skill == null or _skill.active_kind != Skill.ActiveKind.RECOVERY:
 		_charge_label.visible = false
 		return
-	if _player == null or not _player.has_method(&"get_potion_charges"):
+	if _player == null or not _player.has_method(&"get_recovery_charges"):
 		_charge_label.visible = false
 		return
-	var charges: int = _player.get_potion_charges()
+	var charges: int = _player.get_recovery_charges()
 	_charge_label.text = str(charges)
 	_charge_label.visible = true
 

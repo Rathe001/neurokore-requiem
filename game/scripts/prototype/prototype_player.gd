@@ -192,7 +192,7 @@ var _walk_to_interact_target: Node3D = null
 
 var _shield: PlayerShield
 var _grenade: PlayerGrenade
-var _potion: PlayerPotion
+var _recovery: PlayerRecovery
 
 ## Called by pickups/interactables to suppress the fire input this frame.
 func consume_click() -> void:
@@ -733,10 +733,10 @@ func _ready() -> void:
 	_grenade = PlayerGrenade.new()
 	_grenade.setup(self)
 	add_child(_grenade)
-	_potion = PlayerPotion.new()
-	_potion.setup(self)
-	_potion.sync_consumable()
-	add_child(_potion)
+	_recovery = PlayerRecovery.new()
+	_recovery.setup(self)
+	_recovery.sync_consumable()
+	add_child(_recovery)
 	_build_resonance_bar()
 	PerkState.perks_changed.connect(_doomsayer.reconcile)
 	# Put player meshes on an extra render layer so equipped lights can
@@ -967,16 +967,16 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 	if _health <= 0:
 		_die()
 
-func get_potion_charges() -> int:
-	if _potion == null:
+func get_recovery_charges() -> int:
+	if _recovery == null:
 		return 0
-	return _potion.get_charges()
+	return _recovery.get_charges()
 
 
-func get_potion_heal_remaining() -> int:
-	if _potion == null:
+func get_recovery_heal_remaining() -> int:
+	if _recovery == null:
 		return 0
-	return _potion.get_heal_remaining()
+	return _recovery.get_heal_remaining()
 
 
 func heal(amount: int) -> void:
@@ -1232,7 +1232,7 @@ func _physics_process(delta: float) -> void:
 	_shield.tick(delta)
 	_doomsayer.tick(delta)
 	_grenade.tick(delta)
-	_potion.tick(delta)
+	_recovery.tick(delta)
 	_ied.tick(delta)
 	_tick_reload(delta)
 	_tick_aim_hold(delta)
@@ -1570,11 +1570,11 @@ func resolve_skill(index: int) -> Skill:
 			return weapon.alt_fire_skill
 		var offhand: Item = InventoryState.get_equipped(&"offhand")
 		return offhand.fire_skill if offhand != null else null
-	# Q key (index 6) — consumable potion overrides talents + skills array.
+	# Q key (index 6) — consumable recovery overrides talents + skills array.
 	if index == 6:
 		var consumable: Item = InventoryState.get_equipped(&"consumable")
 		if consumable != null:
-			return preload("res://resources/skills/health_potion.tres")
+			return preload("res://resources/skills/health_recovery.tres")
 	# Hotkey slots (1, 2, 3, 4, Q, E). A talent that has granted a
 	# skill to this slot wins over the player's @export skills array,
 	# so a Sanctify node can replace the default skill_q with its own
@@ -1936,8 +1936,8 @@ func _cast_skill(skill: Skill) -> void:
 				_grenade.activate(skill, throw_dir)
 			Skill.ActiveKind.SECOND_WIND:
 				_activate_second_wind(skill)
-			Skill.ActiveKind.POTION:
-				_potion.activate(skill)
+			Skill.ActiveKind.RECOVERY:
+				_recovery.activate(skill)
 		return
 	_interacting = false
 	if _combat.is_on_cooldown(skill):
@@ -2827,8 +2827,8 @@ func get_cooldown_ratio(skill: Skill) -> float:
 		return _shield.get_cooldown_ratio(skill)
 	if skill != null and _grenade != null and _grenade.is_grenade_skill(skill):
 		return _grenade.get_cooldown_ratio(skill)
-	if skill != null and _potion != null and _potion.is_potion_skill(skill):
-		return _potion.get_cooldown_ratio(skill)
+	if skill != null and _recovery != null and _recovery.is_recovery_skill(skill):
+		return _recovery.get_cooldown_ratio(skill)
 	if _combat == null:
 		return 0.0
 	return _combat.get_cooldown_ratio(skill)
@@ -2841,8 +2841,8 @@ func get_cooldown_remain(skill: Skill) -> float:
 		return _shield.get_cooldown_remain(skill)
 	if _grenade != null and _grenade.is_grenade_skill(skill):
 		return _grenade.get_cooldown_remain(skill)
-	if _potion != null and _potion.is_potion_skill(skill):
-		return _potion.get_cooldown_remain(skill)
+	if _recovery != null and _recovery.is_recovery_skill(skill):
+		return _recovery.get_cooldown_remain(skill)
 	if _combat == null:
 		return 0.0
 	return _combat.get_cooldown_remain(skill)
@@ -3108,7 +3108,7 @@ func _on_equipment_changed(slot: StringName) -> void:
 		# the player to re-press RMB to activate.
 		_shield.cleanup()
 	elif slot == &"consumable":
-		_potion.sync_consumable()
+		_recovery.sync_consumable()
 
 func _on_items_overflowed(overflow: Array[Item]) -> void:
 	for displaced_item in overflow:

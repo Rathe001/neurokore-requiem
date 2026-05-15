@@ -1,7 +1,7 @@
-class_name PlayerPotion
+class_name PlayerRecovery
 extends Node
 
-## Health potion system — origin-specific consumable (Stimpack / Battery).
+## Recovery system — origin-specific consumable (Stimpack / Battery).
 ## Charges and recharge time are read from the equipped consumable item;
 ## defaults apply when no item is equipped or fields are unset.
 
@@ -50,8 +50,8 @@ func sync_consumable() -> void:
 
 # ── Queries ───────────────────────────────────────────────────────────────────
 
-func is_potion_skill(skill: Skill) -> bool:
-	return skill.active_kind == Skill.ActiveKind.POTION
+func is_recovery_skill(skill: Skill) -> bool:
+	return skill.active_kind == Skill.ActiveKind.RECOVERY
 
 
 func is_on_cooldown() -> bool:
