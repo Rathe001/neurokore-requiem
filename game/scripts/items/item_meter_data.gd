@@ -341,7 +341,6 @@ static func _compute_grenade(item: Item) -> Array[WeaponMeterData.MeterBar]:
 		bars.append(bar)
 
 	# Affix stats as meters (damage_bonus_pct, blast_radius_bonus, knockback, etc.)
-	var mult := item.effective_multiplier()
 	_append_modifier_bars(item, bars, mult, {})
 
 	return bars
