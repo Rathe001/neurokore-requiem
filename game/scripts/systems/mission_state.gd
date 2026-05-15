@@ -106,6 +106,12 @@ func notify_switch_used_for_door(door: Node) -> void:
 		return
 	for puzzle in _puzzles:
 		var d: Object = puzzle["door"].get_ref()
+		# WeakRef returns null once its target is freed. Skip the entry
+		# rather than comparing null == door (always false), which would
+		# silently drop the switch tick and leave a phantom incomplete
+		# puzzle in the list across level resets.
+		if d == null:
+			continue
 		if d == door:
 			puzzle["done"] = mini(int(puzzle["done"]) + 1, int(puzzle["required"]))
 			changed.emit()
