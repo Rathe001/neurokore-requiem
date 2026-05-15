@@ -9,8 +9,10 @@ class_name DestructibleProp
 const ITEM_PICKUP_SCENE: PackedScene = preload("res://scenes/prototype/prototype_item_pickup.tscn")
 const CREDIT_PICKUP_SCENE: PackedScene = preload("res://scenes/prototype/prototype_credit_pickup.tscn")
 
-const BREAK_DURATION := 0.15
-const PARTICLE_LIFETIME := 0.4
+const BREAK_DURATION := 0.08
+const SHARD_COUNT := 8
+const SHARD_LIFETIME := 1.2
+const SHARD_GRAVITY := 12.0
 
 @export var max_health: int = 10
 @export var drops_loot: bool = false
@@ -157,42 +159,71 @@ func _play_break_local() -> void:
 			child.set_deferred("disabled", true)
 			child.queue_free()
 
+	# Hide the intact mesh immediately — the shards ARE the visual now.
+	if _visual != null:
+		_visual.visible = false
 	_spawn_break_particles()
 
-	# Scale-to-zero break tween.
+	# Brief delay before freeing the node so shards (parented to our
+	# parent, not us) have time to read our global_position during spawn.
 	var tween := create_tween()
-	tween.tween_property(self, "scale", Vector3.ONE * 0.001, BREAK_DURATION).set_ease(Tween.EASE_IN)
-	tween.finished.connect(queue_free)
+	tween.tween_interval(BREAK_DURATION)
+	tween.tween_callback(queue_free)
 
 
+## Spawn tumbling debris shards that fly outward and fade. Each shard is
+## a MeshInstance3D with hand-rolled velocity + gravity + angular spin,
+## sized proportionally to the destroyed prop. No RigidBody3D overhead —
+## a DebrisShard helper node handles the arc + tumble in _process.
 func _spawn_break_particles() -> void:
-	var particles := GPUParticles3D.new()
-	particles.emitting = true
-	particles.one_shot = true
-	particles.amount = 8
-	particles.lifetime = PARTICLE_LIFETIME
-	particles.explosiveness = 1.0
-
-	var mat := ParticleProcessMaterial.new()
-	mat.direction = Vector3(0, 1, 0)
-	mat.spread = 60.0
-	mat.initial_velocity_min = 2.0
-	mat.initial_velocity_max = 4.0
-	mat.gravity = Vector3(0, -9.8, 0)
-	mat.scale_min = 0.06
-	mat.scale_max = 0.12
-	mat.color = prop_color.lightened(0.2)
-	particles.process_material = mat
-
-	var mesh := BoxMesh.new()
-	mesh.size = Vector3(0.08, 0.08, 0.08)
-	particles.draw_pass_1 = mesh
-
-	particles.position = global_position + Vector3(0, 0.4, 0)
-	# Parent to root so particles survive this node's queue_free.
-	get_parent().add_child(particles)
-	# Auto-cleanup after particles finish.
-	get_tree().create_timer(PARTICLE_LIFETIME + 0.5).timeout.connect(particles.queue_free)
+	var parent_node: Node = get_parent()
+	if parent_node == null:
+		return
+	# Derive prop dimensions from the visual mesh for proportional shards.
+	var prop_size := Vector3(0.5, 0.5, 0.5)
+	if _visual != null and _visual.mesh != null:
+		var aabb := _visual.mesh.get_aabb()
+		prop_size = aabb.size
+	var center := global_position + Vector3(0.0, prop_size.y * 0.5, 0.0)
+	var ground_y := global_position.y
+	var base_mat := StandardMaterial3D.new()
+	base_mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+	base_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	base_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	for i in SHARD_COUNT:
+		# Randomised shard shape — elongated, flat, or chunky.
+		var sx := randf_range(0.08, 0.22) * prop_size.x
+		var sy := randf_range(0.06, 0.18) * prop_size.y
+		var sz := randf_range(0.08, 0.22) * prop_size.z
+		var mesh := BoxMesh.new()
+		mesh.size = Vector3(sx, sy, sz)
+		var mat := base_mat.duplicate() as StandardMaterial3D
+		# Slight per-shard color variation for visual interest.
+		var tint := prop_color.lightened(randf_range(-0.1, 0.15))
+		mat.albedo_color = Color(tint.r, tint.g, tint.b, 1.0)
+		mesh.material = mat
+		var shard := DebrisShard.new()
+		shard.mesh_resource = mesh
+		shard.mat = mat
+		shard.lifetime = SHARD_LIFETIME
+		shard.gravity = SHARD_GRAVITY
+		shard.floor_y = ground_y
+		# Outward + upward velocity. Spread is full 360° around the Y axis
+		# with an upward bias so shards arc and land naturally.
+		var angle := randf() * TAU
+		var up_bias := randf_range(2.5, 5.0)
+		var out_speed := randf_range(1.5, 4.0)
+		shard.velocity = Vector3(cos(angle) * out_speed, up_bias, sin(angle) * out_speed)
+		# Random spin axis + speed for tumble.
+		shard.angular_velocity = Vector3(
+			randf_range(-8.0, 8.0),
+			randf_range(-6.0, 6.0),
+			randf_range(-8.0, 8.0))
+		parent_node.add_child(shard)
+		shard.global_position = center + Vector3(
+			randf_range(-prop_size.x * 0.2, prop_size.x * 0.2),
+			randf_range(-prop_size.y * 0.15, prop_size.y * 0.15),
+			randf_range(-prop_size.z * 0.2, prop_size.z * 0.2))
 
 
 func _drop_credits_on_break() -> void:
