@@ -1,7 +1,7 @@
 "appbuild"
 {
 	"appid"			"4689320"
-	"desc"			"v0.3.0 · 1e4ec21 · **Procgen dungeon layouts** — sparse D2-style maze topolo..."
+	"desc"			"v0.4.0 · 29bdac5 · **Visual meter-bar tooltips** — every item now renders it..."
 
 	// Where SteamPipe writes its build logs and intermediate state.
 	// Created on first run. Safe to .gitignore.
