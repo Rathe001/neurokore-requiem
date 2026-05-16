@@ -116,11 +116,18 @@ func _on_body_entered(body: Node) -> void:
 
 func _detonate() -> void:
 	_detonated = true
-	# Visual: radial pulse at the trap point so the AoE landing reads.
-	# Reuses the same indicator the player's hitscan paths use, anchored
-	# to self so the ring scales correctly even if the trap was nudged by
-	# physics (it isn't, but cheap insurance).
-	CombatVisuals.spawn_hit_radial(self, BLAST_RADIUS)
+	# Visual: flipbook explosion at the trap point so the blast reads as
+	# a real detonation rather than the old shockwave ring. Same VFX path
+	# RPG / grenade impacts use post-v0.4.0. The generic explosion sound
+	# fires inside spawn_explosion; the IED-specific layer below adds a
+	# digital-blast signature on top so traps don't sound identical to
+	# grenade/RPG impacts.
+	CombatVisuals.spawn_explosion(self, global_position, BLAST_RADIUS)
+	# IED layer plays under the generic explosion, not on top of it — full
+	# volume here stacks with the explosion sound and reads as a doubled
+	# boom. -12 dB drops the layer to roughly 1/4 perceived loudness so
+	# the digital-blast signature comes through without dominating.
+	WeaponSounds.play_generic(&"ied_detonate", global_position, -12.0)
 	PrototypeCamera.shake_at(self, global_position, 0.35, 0.4)
 	var dmg := int(round(float(BASE_DAMAGE) * _captured_damage_mult))
 	for n in SpatialGrid.query_radius(global_position, BLAST_RADIUS, &"enemies"):

@@ -62,6 +62,7 @@ func toss_trap(cursor_offset: Vector3) -> void:
 	_host.get_parent().add_child(trap)
 	trap.global_position = _host.global_position + cursor_offset
 	_ied_traps.append(trap)
+	WeaponSounds.play_generic(&"ied_place", trap.global_position)
 	_throw_cooldown_remain = arm_delay + IED_COOLDOWN_BUFFER
 
 

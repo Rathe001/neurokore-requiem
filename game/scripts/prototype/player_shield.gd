@@ -75,6 +75,11 @@ func absorb_damage(amount: int, knockback_strength: float) -> Dictionary:
 		var absorbed: int = mini(int(ceil(float(amount) * _reduction)), _pool)
 		amount = maxi(amount - absorbed, 0)
 		_pool -= absorbed
+		if absorbed > 0:
+			# Hit cue only fires when the shield actually ate damage; a
+			# 0-reduction buff that doesn't absorb anything (rare edge case)
+			# shouldn't make a hit sound. _break below plays its own SFX.
+			WeaponSounds.play_generic(&"shield_hit", _host.global_position)
 		if _pool <= 0:
 			_break()
 		else:
@@ -135,6 +140,7 @@ func _activate(skill: Skill) -> void:
 	_cooldown_total = maxf(skill.cooldown, 0.1)
 	_kind = skill.active_kind
 	_active = true
+	WeaponSounds.play_generic(&"shield_raise", _host.global_position)
 	_emit_changed()
 
 
@@ -152,6 +158,7 @@ func _break() -> void:
 	_pool = 0
 	_duration_remain = 0.0
 	_cooldown_remain = _cooldown_total
+	WeaponSounds.play_generic(&"shield_break", _host.global_position)
 	_emit_changed()
 
 

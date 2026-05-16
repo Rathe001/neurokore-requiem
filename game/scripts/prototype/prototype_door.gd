@@ -1,7 +1,12 @@
 class_name PrototypeDoor
 extends HoverableInteractable
 
-const SLIDE_DURATION := 0.4
+## Open/close take their full sound-effect duration to slide — feels weighty
+## and matches the audio so the visual settle and the SFX tail land together.
+## Tune these alongside the audio: if you swap in a different door_open.wav
+## with a different length, update SLIDE_OPEN_DURATION too.
+const SLIDE_OPEN_DURATION := 1.71
+const SLIDE_CLOSE_DURATION := 1.19
 const SLIDE_DISTANCE := 4.7
 const FRAME_LOCKED := Color(1.0, 0.25, 0.2, 1.0)
 const FRAME_UNLOCKED := Color(0.3, 1.0, 0.45, 1.0)
@@ -114,16 +119,18 @@ func open() -> void:
 		return
 	_open = true
 	collision.disabled = true
-	_animate(_rest_y + SLIDE_DISTANCE)
+	_animate(_rest_y + SLIDE_DISTANCE, SLIDE_OPEN_DURATION)
 	_refresh_tint()
+	WeaponSounds.play_generic(&"door_open", global_position)
 
 func close() -> void:
 	if not _open:
 		return
 	_open = false
 	collision.disabled = false
-	_animate(_rest_y)
+	_animate(_rest_y, SLIDE_CLOSE_DURATION)
 	_refresh_tint()
+	WeaponSounds.play_generic(&"door_close", global_position)
 
 func toggle() -> void:
 	if _open:
@@ -181,11 +188,11 @@ func on_boss_died(_boss: Node) -> void:
 		return
 	unlock()
 
-func _animate(target_y: float) -> void:
+func _animate(target_y: float, duration: float) -> void:
 	if _tween != null and _tween.is_valid():
 		_tween.kill()
 	_tween = create_tween()
-	_tween.tween_property(mesh, "position:y", target_y, SLIDE_DURATION).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+	_tween.tween_property(mesh, "position:y", target_y, duration).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
 
 func _on_mouse_entered() -> void:
 	_hovered = true
@@ -273,13 +280,13 @@ func _client_set_open(is_open: bool) -> void:
 		if not _open:
 			_open = true
 			collision.disabled = true
-			_animate(_rest_y + SLIDE_DISTANCE)
+			_animate(_rest_y + SLIDE_DISTANCE, SLIDE_OPEN_DURATION)
 			_refresh_tint()
 	else:
 		if _open:
 			_open = false
 			collision.disabled = false
-			_animate(_rest_y)
+			_animate(_rest_y, SLIDE_CLOSE_DURATION)
 			_refresh_tint()
 
 

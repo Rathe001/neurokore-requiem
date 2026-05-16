@@ -262,10 +262,6 @@ func _ensure_loaded() -> void:
 		"res://resources/audio/sfx/weapons/blade_swing_02.wav",
 		"res://resources/audio/sfx/weapons/blade_swing_03.wav",
 		"res://resources/audio/sfx/weapons/blade_swing_04.wav",
-		"res://resources/audio/sfx/weapons/blade_swing_05.wav",
-		"res://resources/audio/sfx/weapons/blade_swing_06.wav",
-		"res://resources/audio/sfx/weapons/blade_swing_07.wav",
-		"res://resources/audio/sfx/weapons/blade_swing_08.wav",
 	])
 	_register(&"melee_1h", { fire = _blade_swings })
 	_register(&"melee_2h", {
@@ -295,7 +291,13 @@ func _ensure_loaded() -> void:
 		reload = _reloads,
 	})
 	_register(&"ranged_2h", {
-		fire = _streams(["res://resources/audio/sfx/weapons/plasma-rifle.wav"]),
+		fire = _streams([
+			"res://resources/audio/sfx/weapons/plasma_rifle_01.wav",
+			"res://resources/audio/sfx/weapons/plasma_rifle_02.wav",
+			"res://resources/audio/sfx/weapons/plasma_rifle_03.wav",
+			"res://resources/audio/sfx/weapons/plasma_rifle_04.wav",
+			"res://resources/audio/sfx/weapons/plasma_rifle_05.wav",
+		]),
 		reload = _reloads,
 	})
 	_register(&"smg_1h", {
@@ -416,6 +418,98 @@ func _ensure_loaded() -> void:
 		"res://resources/audio/sfx/player/step_grate_02.wav",
 		"res://resources/audio/sfx/player/step_grate_03.wav",
 		"res://resources/audio/sfx/player/step_grate_04.wav",
+	]))
+
+	# ── Player took damage (impact on flesh/armor) ─────────────────────────
+	# Generic body-impact sound for "you got hit." Pairs with hit_grunt:
+	# this is the impact thump on the player, hit_grunt is the vocal
+	# response. play_generic at_listener=true in prototype_player.gd
+	# so distance attenuation doesn't kill the feedback.
+	register_generic(&"hit_player", _streams([
+		"res://resources/audio/sfx/player/hit_player_01.wav",
+		"res://resources/audio/sfx/player/hit_player_02.wav",
+		"res://resources/audio/sfx/player/hit_player_03.wav",
+		"res://resources/audio/sfx/player/hit_player_04.wav",
+		"res://resources/audio/sfx/player/hit_player_05.wav",
+	]))
+
+	# ── Unarmed swing ─────────────────────────────────────────────────────
+	# Bare-fist attack whoosh. prototype_player.gd _fire_unarmed fires this
+	# at swing time; the per-archetype hit_flesh sample lands the impact.
+	register_generic(&"unarmed_swing", _streams([
+		"res://resources/audio/sfx/weapons/unarmed_swing_01.wav",
+		"res://resources/audio/sfx/weapons/unarmed_swing_02.wav",
+		"res://resources/audio/sfx/weapons/unarmed_swing_03.wav",
+		"res://resources/audio/sfx/weapons/unarmed_swing_04.wav",
+		"res://resources/audio/sfx/weapons/unarmed_swing_05.wav",
+	]))
+
+	# ── Enemy death ────────────────────────────────────────────────────────
+	# Killing-blow sting fired from prototype_enemy._die at the corpse
+	# position. Distinct from hit_flesh (every hit) so kills feel weightier
+	# than chip-damage swings.
+	register_generic(&"enemy_death", _streams([
+		"res://resources/audio/sfx/enemies/enemy_death_01.wav",
+		"res://resources/audio/sfx/enemies/enemy_death_02.wav",
+		"res://resources/audio/sfx/enemies/enemy_death_03.wav",
+		"res://resources/audio/sfx/enemies/enemy_death_04.wav",
+		"res://resources/audio/sfx/enemies/enemy_death_05.wav",
+		"res://resources/audio/sfx/enemies/enemy_death_06.wav",
+		"res://resources/audio/sfx/enemies/enemy_death_07.wav",
+		"res://resources/audio/sfx/enemies/enemy_death_08.wav",
+		"res://resources/audio/sfx/enemies/enemy_death_09.wav",
+	]))
+
+	# ── Doors and switches ────────────────────────────────────────────────
+	# Single-sample environmental clicks. PrototypeDoor open/close and
+	# PrototypeSwitch.interact fire these at the node's position so the
+	# 3D attenuation telegraphs which door/switch the player just used.
+	register_generic(&"door_open", _streams([
+		"res://resources/audio/sfx/world/door_open.wav",
+	]))
+	register_generic(&"door_close", _streams([
+		"res://resources/audio/sfx/world/door_close.wav",
+	]))
+	register_generic(&"switch_click", _streams([
+		"res://resources/audio/sfx/world/switch_click.wav",
+	]))
+	# Loot crate / chest open — single sample fired from _open_visual so it
+	# plays on both the local opener AND every peer that receives the
+	# _client_open_visual RPC (since the visual path runs on both sides).
+	register_generic(&"chest_open", _streams([
+		"res://resources/audio/sfx/world/chest_open.wav",
+	]))
+
+	# ── IED placement and detonation ──────────────────────────────────────
+	# Placement: short electronic beep/click when the trap arms at the
+	# thrown position. Detonation: layered on top of the generic explosion
+	# sound by prototype_trap._detonate to give the IED a distinct
+	# digital-blast signature versus a grenade or RPG impact.
+	register_generic(&"ied_place", _streams([
+		"res://resources/audio/sfx/world/ied_place_01.wav",
+		"res://resources/audio/sfx/world/ied_place_02.wav",
+		"res://resources/audio/sfx/world/ied_place_03.wav",
+	]))
+	register_generic(&"ied_detonate", _streams([
+		"res://resources/audio/sfx/weapons/ied_detonate_01.wav",
+		"res://resources/audio/sfx/weapons/ied_detonate_02.wav",
+		"res://resources/audio/sfx/weapons/ied_detonate_03.wav",
+		"res://resources/audio/sfx/weapons/ied_detonate_04.wav",
+	]))
+
+	# ── Shield (offhand) ──────────────────────────────────────────────────
+	# Raise plays on activation, hit plays each time damage is absorbed
+	# (multi-sample pool prevents repetitive sustained-fire blocks from
+	# sounding identical), break plays when the pool depletes.
+	register_generic(&"shield_raise", _streams([
+		"res://resources/audio/sfx/weapons/shield_raise.wav",
+	]))
+	register_generic(&"shield_hit", _streams([
+		"res://resources/audio/sfx/weapons/shield_hit_01.wav",
+		"res://resources/audio/sfx/weapons/shield_hit_02.wav",
+	]))
+	register_generic(&"shield_break", _streams([
+		"res://resources/audio/sfx/weapons/shield_break.wav",
 	]))
 
 	# ── Player hit grunts ─────────────────────────────────────────────────

@@ -457,7 +457,7 @@ func consume_laser_charged_shot() -> float:
 # too — no replication needed.
 func _tick_footsteps() -> void:
 	var result := Footsteps.tick(self, _footstep_distance_accum, _footstep_last_pos,
-		FOOTSTEP_DISTANCE, -20.0, true, true)
+		FOOTSTEP_DISTANCE, -30.0, true, true)
 	_footstep_distance_accum = result[0]
 	_footstep_last_pos = result[1]
 
@@ -1857,6 +1857,7 @@ func _fire_unarmed(aim: Vector3) -> void:
 		return
 	_face_direction(aim)
 	_play_anim(ANIM_ATTACK, 1.4)
+	WeaponSounds.play_generic(&"unarmed_swing", global_position)
 	_combat.start_cooldown(UNARMED_SKILL, 1.0)
 	var wind_up := UNARMED_SKILL.wind_up
 	if wind_up > 0.0:

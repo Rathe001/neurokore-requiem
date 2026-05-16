@@ -50,6 +50,11 @@ func _ready() -> void:
 	# so successive NG+ runs hear different music. Music autoload handles
 	# the modulo wrap, plays with a 30s silent gap before re-looping.
 	Music.play_level_track(PlayerState.new_game_plus)
+	# Ambient zone bed runs on the Ambient bus alongside the music, looping
+	# natively (no silent gap). Same NG+ counter so the room-tone changes
+	# in lockstep with the music swap. Silent until ambient assets land
+	# in res://resources/audio/ambient/.
+	Ambient.play_floor_track(PlayerState.new_game_plus)
 	EntityPool.warmup(ENEMY_SCENE, SPAWN_BATCH)
 	# NG+ layout on load: LevelBuilder already built with the scene's default
 	# layout in its own _ready (fires before ours — bottom-up). If the save
