@@ -140,6 +140,9 @@ func _open_visual() -> void:
 	if lid != null:
 		var tween := create_tween()
 		tween.tween_property(lid, "rotation_degrees:x", -110.0, 0.3).set_ease(Tween.EASE_OUT)
+	# Plays on both the local opener AND every peer that receives the
+	# _client_open_visual RPC (the visual path runs on both sides).
+	WeaponSounds.play_generic(&"chest_open", global_position)
 
 
 func _become_inert() -> void:

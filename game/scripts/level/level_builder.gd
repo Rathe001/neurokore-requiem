@@ -115,6 +115,11 @@ func _build_level() -> void:
 		if override != null:
 			_ctx.apply_theme(layout.theme)
 
+	# Stamp every piece's footprint into ExplorationState now that final
+	# positions are known. Done before PuzzleBuilder so any door / switch
+	# placements that query room_at_world resolve correctly.
+	_register_exploration()
+
 	# Puzzles run last — they reference doors and interactable slots, which
 	# only exist after the geometry pass.
 	PuzzleBuilder.apply_all(_ctx, layout)
@@ -130,6 +135,32 @@ func _index_room_pieces() -> void:
 			continue
 		var pid: StringName = piece.room_id if piece.room_id != &"" else piece.room.id
 		_ctx.pieces_by_id[pid] = piece
+
+
+# Stamps every piece's XZ footprint into ExplorationState's cell map so
+# LosCuller can room-gate entity visibility and the minimap fog can track
+# which rooms have been seen. Reset of prior state happens via the
+# &"level_reset_handler" group dispatch on descend — by the time this runs
+# the cell map is empty. Corridors get synthetic ids derived from their
+# world position since CorridorDef carries no id of its own; per-piece
+# uniqueness is enough for the cell-map's last-write-wins behaviour.
+func _register_exploration() -> void:
+	for piece: LevelPiece in _pieces:
+		if piece.room != null:
+			var rd := piece.room
+			var pid: StringName = piece.room_id if piece.room_id != &"" else rd.id
+			ExplorationState.register_room(pid, piece.position, rd.size.x * 0.5, rd.size.y * 0.5)
+		elif piece.corridor != null:
+			var cd := piece.corridor
+			var hx: float = cd.width * 0.5 if cd.axis == CorridorDef.Axis.Z else cd.length * 0.5
+			var hz: float = cd.length * 0.5 if cd.axis == CorridorDef.Axis.Z else cd.width * 0.5
+			var cid: StringName = piece.room_id if piece.room_id != &"" else StringName("corridor_%d_%d" % [int(round(piece.position.x)), int(round(piece.position.z))])
+			ExplorationState.register_room(cid, piece.position, hx, hz)
+	# Adjacency between pieces is what stops the "clutter / enemies vanish
+	# around the corner" leak when an open architectural space spans two
+	# graph pieces (room + corridor, two rooms with a wide opening). Built
+	# from the registered footprints, so it must come after the loop.
+	ExplorationState.finalize_layout()
 
 
 # Returns the graph that drives this build (generator output or

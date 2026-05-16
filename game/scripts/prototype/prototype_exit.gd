@@ -24,6 +24,7 @@ var _pulse_t: float = 0.0
 
 func _ready() -> void:
 	add_to_group(&"boss_listeners")
+	add_to_group(&"minimap_marker")
 
 	# Platform — dark industrial metal grate.
 	_platform_mat = StandardMaterial3D.new()

@@ -37,6 +37,11 @@ const VOID_COLOR := Color(0.0, 0.0, 0.0, 0.0)
 ## Runtime view sizes control how much of the baked texture is visible.
 const CORNER_VIEW_SIZE := 30.0   # world-unit radius visible in corner mode
 const FULL_VIEW_SIZE := 80.0     # world-unit radius visible in fullscreen
+## Arrow-key pan speed (world units per second) while in fullscreen mode.
+## Tuned to traverse a full FULL_VIEW_SIZE in about 1.5s of held input —
+## fast enough to scan a large level without being twitchy. Reset to zero
+## whenever the player toggles back to corner mode.
+const FULLSCREEN_PAN_SPEED := 55.0
 
 ## Rotates the displayed map so it aligns with the iso game camera.
 ## -PI/4 (-45°) makes "screen up" point in the world's (-X, -Z)
@@ -63,6 +68,7 @@ var _texture_rect: TextureRect
 var _mask_material: ShaderMaterial
 var _player_dot: MinimapPlayerDot
 var _radar: ScannerRadar
+var _markers: MinimapMarkerOverlay
 var _player: Node3D
 
 ## Bake metadata — maps world position to UV coordinates.
@@ -74,6 +80,21 @@ var _bake_ortho: float = BAKE_ORTHO_SIZE_MIN  # ortho size used during bake (com
 ## still works without conditionals.
 var _bake_right: Vector3 = Vector3.RIGHT
 var _bake_up: Vector3 = Vector3.FORWARD
+## Per-floor-rect tag list captured at bake time so reveal events can paint
+## just the newly-explored room's pixels instead of re-walking the scene
+## tree. Each entry: {"rect": Rect2 (world-space XZ), "room_id": StringName}.
+var _walkable_rects: Array = []
+## Mutable bake image — _on_room_revealed paints new floor rects into it
+## and pushes the update to _bake_texture. Kept around between reveals so
+## the previously-painted state persists.
+var _bake_image: Image
+var _bake_texture: ImageTexture
+## Fullscreen-mode arrow-key pan offset (world XZ). Added to the player's
+## position to compute the visible map center, and used in reverse to
+## reposition the player dot away from the widget center so it stays at
+## the player's true world position as the map scrolls. Zeroed on mode
+## toggle so closing fullscreen always recenters on the player.
+var _manual_pan_offset: Vector3 = Vector3.ZERO
 
 func _ready() -> void:
 	add_to_group(&"minimap")
@@ -92,6 +113,11 @@ func _ready() -> void:
 	_texture_rect.material = _mask_material
 	add_child(_texture_rect)
 
+	# Marker overlay sits BELOW the player dot in the z-order so the player
+	# dot always wins when a marker overlaps it (you on top of an exit pad).
+	_markers = MinimapMarkerOverlay.new()
+	add_child(_markers)
+
 	_player_dot = MinimapPlayerDot.new()
 	add_child(_player_dot)
 
@@ -101,10 +127,15 @@ func _ready() -> void:
 
 	# Wait one frame so level geometry and entities are in the tree.
 	await get_tree().process_frame
-	var players := get_tree().get_nodes_in_group(&"player")
-	if not players.is_empty():
-		_player = players[0] as Node3D
+	_player = _find_local_player()
+	if _player != null:
 		_radar.set_player(_player)
+
+	# Fog-of-war hook: paint newly-revealed rooms onto the bake image.
+	# Connected once — ExplorationState is an autoload so it persists
+	# across rebakes; we don't need to reconnect on rebuild.
+	if not ExplorationState.room_revealed.is_connected(_on_room_revealed):
+		ExplorationState.room_revealed.connect(_on_room_revealed)
 
 	_bake_map()
 	_apply_layout()
@@ -115,24 +146,37 @@ func _ready() -> void:
 ## minimap re-rasterizes the new floor geometry and resets panning.
 func rebake() -> void:
 	# Re-acquire the player ref in case it was recycled.
-	var players := get_tree().get_nodes_in_group(&"player")
-	if not players.is_empty():
-		_player = players[0] as Node3D
+	_player = _find_local_player()
+	if _player != null:
 		_radar.set_player(_player)
 	_bake_map()
 	_apply_layout()
+
+
+# Local-player lookup. In MP the &"player" group holds every peer's avatar
+# — picking [0] would land on a remote avatar on the client side and the
+# whole minimap would pan around the wrong player. is_multiplayer_authority
+# returns true only on the avatar owned by this peer.
+func _find_local_player() -> Node3D:
+	var players := get_tree().get_nodes_in_group(&"player")
+	for n in players:
+		var node := n as Node3D
+		if node != null and is_instance_valid(node) and node.is_multiplayer_authority():
+			return node
+	if players.is_empty():
+		return null
+	return players[0] as Node3D
 
 
 func _bake_map() -> void:
 	# D2-style abstract bake. Walk the &"minimap_walkable" group (every
 	# floor StaticBody3D registers itself there in floor_builder.gd),
 	# pull each floor's XZ rect from its BoxShape3D collision, and
-	# rasterize the rects onto a flat Image. No SubViewport, no 3D
-	# render pass — just filled rectangles in world coords projected to
-	# pixel coords. Result is a clean walkable shape: floor where you
-	# can stand, transparent void everywhere else. The parent shader's
-	# bg_color paints the void.
-	var rects: Array[Rect2] = []
+	# tag each rect with the ExplorationState piece-id it sits inside.
+	# Rasterization is selective — only rects whose room is in
+	# ExplorationState's explored set get painted; the rest stay void
+	# until the player walks into them and reveal_room fires.
+	_walkable_rects.clear()
 	var min_x := INF
 	var max_x := -INF
 	var min_z := INF
@@ -150,13 +194,15 @@ func _bake_map() -> void:
 		var center_xz := Vector2(sb.global_position.x, sb.global_position.z)
 		var size_xz := Vector2(shape.size.x, shape.size.z)
 		var rect := Rect2(center_xz - size_xz * 0.5, size_xz)
-		rects.append(rect)
+		var center_world := Vector3(center_xz.x, sb.global_position.y, center_xz.y)
+		var room_id: StringName = ExplorationState.room_at_world(center_world)
+		_walkable_rects.append({"rect": rect, "room_id": room_id})
 		min_x = minf(min_x, rect.position.x)
 		max_x = maxf(max_x, rect.position.x + rect.size.x)
 		min_z = minf(min_z, rect.position.y)
 		max_z = maxf(max_z, rect.position.y + rect.size.y)
 
-	if rects.is_empty():
+	if _walkable_rects.is_empty():
 		_bake_center = Vector3.ZERO
 		_bake_ortho = BAKE_ORTHO_SIZE_MIN
 	else:
@@ -170,32 +216,105 @@ func _bake_map() -> void:
 	_bake_right = Vector3.RIGHT
 	_bake_up = Vector3.FORWARD  # (0, 0, -1); _world_to_map negates so positive Z → screen Y down
 
-	var img := Image.create(BAKE_VIEWPORT_SIZE.x, BAKE_VIEWPORT_SIZE.y, false, Image.FORMAT_RGBA8)
-	img.fill(VOID_COLOR)
-	if not rects.is_empty():
-		var px_per_world := float(BAKE_VIEWPORT_SIZE.x) / _bake_ortho
-		var center_px := Vector2(BAKE_VIEWPORT_SIZE) * 0.5
-		var image_bounds := Rect2i(Vector2i.ZERO, BAKE_VIEWPORT_SIZE)
-		for rect in rects:
-			var px_min: Vector2 = center_px + (rect.position - Vector2(_bake_center.x, _bake_center.z)) * px_per_world
-			var px_size: Vector2 = rect.size * px_per_world
-			var px_rect := Rect2i(int(round(px_min.x)), int(round(px_min.y)), int(round(px_size.x)), int(round(px_size.y)))
-			px_rect = px_rect.intersection(image_bounds)
-			if px_rect.size.x > 0 and px_rect.size.y > 0:
-				img.fill_rect(px_rect, FLOOR_COLOR)
+	_bake_image = Image.create(BAKE_VIEWPORT_SIZE.x, BAKE_VIEWPORT_SIZE.y, false, Image.FORMAT_RGBA8)
+	_bake_image.fill(VOID_COLOR)
+	# Paint only the rects that belong to rooms already in the explored set.
+	# On initial load this is usually empty (player hasn't moved yet) so the
+	# image starts blank; LosCuller's first reveal_room fires within a
+	# physics tick of spawn and lights the starting room.
+	# Rects with no room_id (legacy levels with no ExplorationState
+	# population) get painted unconditionally so we don't break those.
+	for entry in _walkable_rects:
+		var rid: StringName = entry["room_id"]
+		if rid == &"" or ExplorationState.is_explored(rid):
+			_paint_rect_into_bake(entry["rect"])
 
-	_texture_rect.texture = ImageTexture.create_from_image(img)
+	_bake_texture = ImageTexture.create_from_image(_bake_image)
+	_texture_rect.texture = _bake_texture
+
+
+# Paints one walkable rect (world XZ coordinates) onto _bake_image using
+# the bake's center+ortho mapping. Used both for initial bake and for
+# incremental reveals; caller is responsible for pushing the texture
+# update after a batch of paints (so a multi-rect room only triggers one
+# GPU upload).
+func _paint_rect_into_bake(rect: Rect2) -> void:
+	if _bake_image == null:
+		return
+	var px_per_world := float(BAKE_VIEWPORT_SIZE.x) / _bake_ortho
+	var center_px := Vector2(BAKE_VIEWPORT_SIZE) * 0.5
+	var image_bounds := Rect2i(Vector2i.ZERO, BAKE_VIEWPORT_SIZE)
+	var px_min: Vector2 = center_px + (rect.position - Vector2(_bake_center.x, _bake_center.z)) * px_per_world
+	var px_size: Vector2 = rect.size * px_per_world
+	var px_rect := Rect2i(int(round(px_min.x)), int(round(px_min.y)), int(round(px_size.x)), int(round(px_size.y)))
+	px_rect = px_rect.intersection(image_bounds)
+	if px_rect.size.x > 0 and px_rect.size.y > 0:
+		_bake_image.fill_rect(px_rect, FLOOR_COLOR)
+
+
+# ExplorationState.room_revealed handler. Paints every walkable rect
+# tagged with the revealed room onto the existing bake image — one room
+# typically has one rect (its floor) plus corridors-coming-in rects from
+# adjacent pieces, but we only paint exact-match here so corridors light
+# up when their own id is revealed, not when an adjacent room reveals.
+func _on_room_revealed(room_id: StringName) -> void:
+	if _bake_image == null or _bake_texture == null:
+		return
+	var painted := false
+	for entry in _walkable_rects:
+		if entry["room_id"] != room_id:
+			continue
+		_paint_rect_into_bake(entry["rect"])
+		painted = true
+	if painted:
+		_bake_texture.update(_bake_image)
 
 # ── Per-frame pan ─────────────────────────────────────────────────────────────
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if _player == null or not is_instance_valid(_player):
 		return
+	if mode == Mode.FULLSCREEN:
+		_handle_manual_pan(delta)
 	_update_pan()
 
+
+# Accumulates arrow-key input into _manual_pan_offset while in fullscreen.
+# Direction vectors use the iso projection basis so "screen up" / "screen
+# right" line up with the rotated map display — pressing up arrow pans
+# the visible area upward on screen regardless of which world axis that
+# corresponds to. Released keys mean no input; the offset stays where it
+# was so the user can let go of arrows and the panned view persists.
+func _handle_manual_pan(delta: float) -> void:
+	var dx := 0.0
+	var dy := 0.0
+	if Input.is_action_pressed(&"ui_left"):
+		dx -= 1.0
+	if Input.is_action_pressed(&"ui_right"):
+		dx += 1.0
+	if Input.is_action_pressed(&"ui_up"):
+		dy -= 1.0
+	if Input.is_action_pressed(&"ui_down"):
+		dy += 1.0
+	if dx == 0.0 and dy == 0.0:
+		return
+	var input := Vector2(dx, dy)
+	if input.length_squared() > 1.0:
+		input = input.normalized()
+	# Screen-axis input → world XZ delta via the iso basis. dy is in
+	# "screen down is positive" convention, so we negate it before applying
+	# to the up-basis so up arrow moves the visible area up on screen.
+	var step: Vector3 = ISO_PROJECT_RIGHT * input.x + ISO_PROJECT_UP * (-input.y)
+	_manual_pan_offset += step * FULLSCREEN_PAN_SPEED * delta
+
+
 func _update_pan() -> void:
-	# Project the player's world offset onto the baked image's 2D axes.
-	var offset := _player.global_position - _bake_center
+	# Visible center = player position + arrow-key offset. The offset is
+	# always zero outside fullscreen mode so corner-mode behaviour stays
+	# unchanged.
+	var view_center := _player.global_position + _manual_pan_offset
+	# Project the visible-centre world offset onto the baked image's 2D axes.
+	var offset := view_center - _bake_center
 	var sx := offset.dot(_bake_right)
 	var sy := -offset.dot(_bake_up)  # screen Y is inverted
 	# Convert world offset to UV offset (bake covers _bake_ortho world units).
@@ -208,16 +327,47 @@ func _update_pan() -> void:
 	var uv_scale := view_size / _bake_ortho
 	_mask_material.set_shader_parameter(&"uv_scale", uv_scale)
 
+	# Player dot follows the panned view. With no manual pan, the dot sits
+	# at the widget centre (matching old behaviour). With pan, the dot
+	# shifts the opposite way in iso pixel space so it visually stays at
+	# the player's actual world position as the map scrolls past.
+	var map_r := Rect2(_texture_rect.position, _texture_rect.size)
+	var dot_world: Vector3 = -_manual_pan_offset
+	var dot_iso_x := dot_world.dot(ISO_PROJECT_RIGHT)
+	var dot_iso_y := -dot_world.dot(ISO_PROJECT_UP)
+	var px_per_world := map_r.size.x / view_size
+	_player_dot.map_center = map_r.get_center() + Vector2(dot_iso_x, dot_iso_y) * px_per_world
+
+	# Marker overlay shares the same projection. view_center is the panned
+	# centre so markers scroll with the map; project_* match the iso basis
+	# the bake shader rotates into.
+	if _markers != null:
+		_markers.map_rect = map_r
+		_markers.view_center = view_center
+		_markers.view_size = view_size
+		_markers.project_right = ISO_PROJECT_RIGHT
+		_markers.project_up = ISO_PROJECT_UP
+		# Always full opacity. The radar dims in fullscreen so its sweep
+		# doesn't dominate the map, but markers ARE the map's point of
+		# interest — keep them readable in both modes.
+		_markers.opacity = 1.0
+		_markers.queue_redraw()
+
 # ── Input ─────────────────────────────────────────────────────────────────────
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed(&"toggle_minimap"):
 		mode = Mode.FULLSCREEN if mode == Mode.CORNER else Mode.CORNER
+		# Any mode change snaps the view back to player-centred. Matches
+		# D2's behaviour: pan around in fullscreen, hit Tab, and the map
+		# recentres on the player as it closes.
+		_manual_pan_offset = Vector3.ZERO
 		_apply_layout()
 		mode_changed.emit(mode == Mode.FULLSCREEN)
 		get_viewport().set_input_as_handled()
 	elif mode == Mode.FULLSCREEN and event.is_action_pressed(&"ui_cancel"):
 		mode = Mode.CORNER
+		_manual_pan_offset = Vector3.ZERO
 		_apply_layout()
 		mode_changed.emit(false)
 		get_viewport().set_input_as_handled()

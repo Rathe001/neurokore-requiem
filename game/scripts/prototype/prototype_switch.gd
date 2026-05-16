@@ -47,6 +47,13 @@ func _ready() -> void:
 	super._ready()
 	_refresh_lamp()
 	set_process(true)
+	add_to_group(&"minimap_marker")
+
+
+# Public getter so the minimap marker overlay can determine whether to
+# draw the switch as still-active (bright) or already-used (dim).
+func is_used() -> bool:
+	return _used
 
 
 func _process(delta: float) -> void:
@@ -95,6 +102,7 @@ func interact(_user: Node) -> void:
 	# excluded — it's the only repeatable action.
 	if _used and action != Action.TOGGLE:
 		return
+	WeaponSounds.play_generic(&"switch_click", global_position)
 	_do_action(door)
 
 func _mark_used() -> void:

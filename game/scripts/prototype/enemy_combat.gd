@@ -183,7 +183,13 @@ func cast_skill(target: Node3D, aim: Vector3, skill: EnemySkill) -> void:
 # ── Attack execution ───────────────────────────────────────────────────────
 
 func cast_attack(player: Node3D, aim: Vector3) -> void:
-	if is_ranged() and not _host._afflictions._charmed:
+	# Charmed enemies use whatever attack profile their class was built
+	# with — forcing them to melee turned a ranged class's huge attack_range
+	# into a melee cone that swept the whole room, which read as a giant
+	# AoE spam instead of "this ranged ally fires at my target." The
+	# projectile spawn below switches target_group on charm so allied
+	# rounds hit enemies, not the player.
+	if is_ranged():
 		cast_ranged_attack(player, aim)
 	else:
 		cast_melee_attack(player, aim)
@@ -292,7 +298,10 @@ func _spawn_enemy_projectile(aim: Vector3, skill_damage_mult: float = 1.0, blast
 	var proj: PrototypeProjectile = EntityPool.acquire(_host.enemy_class.projectile_scene)
 	if proj == null:
 		return
-	proj.target_group = &"player"
+	# Charmed allies shoot at the enemy faction; projectile.gd already
+	# filters charmed pets out of the &"enemies" hit list so allied fire
+	# can't friendly-fire other charms.
+	proj.target_group = &"enemies" if _host._afflictions._charmed else &"player"
 	proj.direction = apply_enemy_aim_spread(aim)
 	proj.speed = _host.enemy_class.projectile_speed
 	proj.max_range = _host.enemy_class.projectile_max_range

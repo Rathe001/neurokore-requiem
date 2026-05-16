@@ -1623,6 +1623,10 @@ func _tick_jump(delta: float) -> void:
 
 func _die(kill_from: Vector3 = Vector3.ZERO, kill_force: float = 0.0) -> void:
 	_change_state(State.DEAD)
+	# Death sting at the corpse position — distinct from hit_flesh so kills
+	# feel weightier than chip damage. Run quiet so a horde clear doesn't
+	# dominate the mix.
+	WeaponSounds.play_generic(&"enemy_death", global_position, -12.0)
 	# Kill hitstop — brief time-scale dip so the killing blow lands with
 	# weight. Crit kills get the longest freeze.
 	if _last_hit_was_crit:
