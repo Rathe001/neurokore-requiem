@@ -61,7 +61,12 @@ func _build_name_label(p_item: Item) -> void:
 	_name_label = Label3D.new()
 	_name_label.text = tr(p_item.name_key) if p_item.name_key != "" else "Item"
 	_name_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	_name_label.no_depth_test = true
+	# Walls must occlude the label — without depth testing it leaked
+	# through the room walls and the player saw "Standard VKM-3 Compact"
+	# floating in the void of adjacent unlit rooms. The label sits at
+	# Y=1.3 above a ground-level pickup, so it's clear of its own mesh
+	# and clutter when the player is in the same room.
+	_name_label.no_depth_test = false
 	_name_label.fixed_size = true
 	# fixed_size scales by pixel_size; small footprint so the label hovers
 	# unobtrusively above the loot. Previous values were sized for a
@@ -78,8 +83,9 @@ func _build_name_label(p_item: Item) -> void:
 	add_child(_name_label)
 
 
-## Dim non-owned item labels so the player can tell at a glance which drops
-## are theirs. Only applies in MP; in SP every drop is owned by default.
+## Dim non-owned item labels AND shrink the world object so the player
+## can tell at a glance which drops are theirs. Only applies in MP; in SP
+## every drop is owned by default.
 ##
 ## owner_id is a Steam id stringified at drop time (see prototype_enemy
 ## ._drop_item iterating NetState.lobby_members.keys() — those are Steam
@@ -93,11 +99,15 @@ func _apply_ownership_visual() -> void:
 	var local_id := StringName(str(SteamState.steam_id))
 	if owner_id == local_id:
 		return
-	# Not ours — dim the label to 35% alpha.
+	# Not ours — dim the name label hard and shrink the world object so it
+	# reads as background clutter. Hover still pops the label brightness
+	# (see _on_hover_enter) so the player can read what it is.
 	if _name_label != null:
 		var dim: Color = item.glyph_color if item != null else Color.WHITE
-		dim.a = 0.35
+		dim.a = 0.12
 		_name_label.modulate = dim
+	if _object != null:
+		_object.scale = Vector3.ONE * 0.7
 
 
 func _physics_process(delta: float) -> void:
@@ -131,11 +141,37 @@ func _on_hover_enter() -> void:
 	add_to_group(&"hovered_clickable")
 	add_to_group(&"tooltip_target")
 	if item != null:
-		get_tree().call_group(&"interactable_tooltip", &"show_item", item)
+		get_tree().call_group(&"interactable_tooltip", &"show_item", item, _resolve_owner_display_name())
 	if _name_label != null:
-		# Brighter on hover so the player sees what they're targeting.
-		if _is_owned_by_local_player():
-			_name_label.modulate = Color(1.0, 1.0, 1.0, 1.0)
+		# Brighter on hover so the player sees what they're targeting,
+		# even when it's not theirs — they may want to read the name
+		# before walking away from someone else's drop.
+		var bright: Color = item.glyph_color if item != null else Color.WHITE
+		bright.a = 1.0
+		_name_label.modulate = bright
+
+
+# Returns the persona name of the player who owns this drop — but only
+# when it isn't the local player, since "Owned by you" is implicit and
+# would just be noise. Empty string in SP and for unowned (manual) drops.
+func _resolve_owner_display_name() -> String:
+	if not NetState.is_in_lobby():
+		return ""
+	if owner_id == &"":
+		return ""
+	if _is_owned_by_local_player():
+		return ""
+	# owner_id is a Steam id as a string; NetState.lobby_members is keyed
+	# by int Steam id → persona name. Fall back to "Someone" if the lookup
+	# fails (member left the lobby, malformed id, etc.).
+	var owner_str := String(owner_id)
+	if not owner_str.is_valid_int():
+		return "Someone"
+	var steam_id := int(owner_str)
+	var name: Variant = NetState.lobby_members.get(steam_id, "")
+	if name == null or String(name).is_empty():
+		return "Someone"
+	return String(name)
 
 func _on_hover_exit() -> void:
 	remove_from_group(&"hovered_clickable")
@@ -144,7 +180,12 @@ func _on_hover_exit() -> void:
 	if _name_label != null and item != null:
 		if _is_owned_by_local_player():
 			_name_label.modulate = item.glyph_color
-		# Non-owned items stay dimmed.
+		else:
+			# Re-apply the dimmed ownership visual — hover_enter
+			# brightened the label so the player could read it.
+			var dim: Color = item.glyph_color
+			dim.a = 0.12
+			_name_label.modulate = dim
 
 ## Called by PrototypePlayer._interact_with_hovered after distance gating
 ## (and after the walk-to-interact path catches up if the click was made

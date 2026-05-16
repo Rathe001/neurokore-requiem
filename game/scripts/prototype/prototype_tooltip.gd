@@ -26,6 +26,7 @@ var _dps_label: Label
 var _quality_label: Label
 var _type_label: Label
 var _origin_label: Label
+var _owner_label: Label
 var _desc_label: RichTextLabel
 var _stats_label: RichTextLabel
 var _bg_style: StyleBoxFlat
@@ -184,6 +185,16 @@ func _build_ui() -> void:
 	_origin_label.mouse_filter = MOUSE_FILTER_IGNORE
 	_origin_label.visible = false
 	_vbox.add_child(_origin_label)
+
+	# Loot ownership line — only populated for MP item pickups dropped to
+	# another player. Same size/colour conventions as the origin gate label
+	# so "you can't take this" reads consistently across both gates.
+	_owner_label = Label.new()
+	_owner_label.theme_type_variation = &"SmallLabel"
+	_owner_label.add_theme_font_size_override(&"font_size", 7)
+	_owner_label.mouse_filter = MOUSE_FILTER_IGNORE
+	_owner_label.visible = false
+	_vbox.add_child(_owner_label)
 
 	_desc_label = RichTextLabel.new()
 	_desc_label.bbcode_enabled = true
@@ -451,7 +462,7 @@ func show_text(text: String) -> void:
 	_sync_meter_divider()
 	_resize_then_show()
 
-func show_item(item: Item) -> void:
+func show_item(item: Item, owner_name: String = "") -> void:
 	if _lmb_held:
 		return
 	if item == null:
@@ -484,6 +495,17 @@ func show_item(item: Item) -> void:
 		_origin_label.visible = true
 	else:
 		_origin_label.visible = false
+
+	# Loot ownership — populated only when the caller (PrototypeItemPickup)
+	# passes a non-empty owner name, which it does for MP drops belonging
+	# to other players. Red to match the origin "blocked" colour so both
+	# pickup-gating reasons read the same way.
+	if owner_name != "":
+		_owner_label.text = "Owned by %s" % owner_name
+		_owner_label.add_theme_color_override(&"font_color", Color(0.8, 0.33, 0.33))
+		_owner_label.visible = true
+	else:
+		_owner_label.visible = false
 
 	var has_desc := item.description_key != ""
 	_desc_label.text = item.description_key

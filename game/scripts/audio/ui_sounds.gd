@@ -22,8 +22,11 @@ func _wire_existing(node: Node) -> void:
 
 
 func _on_node_added(node: Node) -> void:
-	# Deferred so the node is fully in the tree and ready.
-	call_deferred(&"_try_wire", node)
+	# Deferred so the node is fully in the tree and ready. Callable form
+	# preserves the typed Node parameter — the string-name form
+	# call_deferred(&"_try_wire", node) fails Godot 4's deferred type
+	# check with "Cannot convert argument 1 from Object to Object".
+	_try_wire.call_deferred(node)
 
 
 func _try_wire(node: Node) -> void:

@@ -42,6 +42,9 @@
 - [Itemization revamp](project_itemization_revamp.md) — Removing attributes, gear gets direct bonuses + behavior mods, 5 perk tiers via talents
 - [Audio architecture](project_audio_architecture.md) — bus layout, room-aware reverb, SFX pool, WeaponSounds registry; silent until assets added
 - [SFX gaps](project_sfx_gaps.md) — what audio still needs wiring as of 2026-05-12 (hit_player, per-weapon impacts, plasma variants, etc.)
+- [Asset manifest](project_asset_manifest.md) — docs/assets.md tracks every third-party asset + license status; append a row when the user shares any new asset link
+- [Blenderkit normals — DO NOT auto-recalc](project_blenderkit_normals_fix.md) — bulk `Recalculate Outside` destroys intentionally-inverted detail (recessed panels, inner flaps); fix individual models by hand in Blender. Models are untracked in git — no rollback. Don't run `tools/fix_normals.py` without a filter
+- [call_deferred typed-arg gotcha](project_call_deferred_typed_args.md) — Godot 4 quirk: `call_deferred(&"m", typed_obj)` fails type-check; use `m.call_deferred(typed_obj)` (Callable form)
 - [Health potion system](project_health_potion_system.md) — consumable slot, origin-gated potions, 3 charges, %-based HoT, heal preview on HP bar
 - [Weapon DPS balance](project_dps_balance_model.md) — 3-tier DPS by multi-target capability (26/23/20); damage scales by RARITY_BUDGET_MULT
 - [Resonance bar world-space](project_resonance_bar.md) — accelerator ramp bar moved from HUD to 3D cast bar under player; reuses health_bar.gdshader
