@@ -148,6 +148,7 @@ func _physics_process(delta: float) -> void:
 	# drone targeting an offset behind a wall slides along the wall toward
 	# the nearest reachable point instead of pushing into it.
 	move_and_slide()
+	_update_facing(delta)
 	_fire_cd -= delta
 	if _fire_cd <= 0.0:
 		if _try_fire():
@@ -157,6 +158,33 @@ func _physics_process(delta: float) -> void:
 			# full FIRE_COOLDOWN so the drone reacts quickly when an enemy
 			# walks into range.
 			_fire_cd = 0.25
+
+
+# Yaw-only facing toward whatever the drone is "about." Priority order:
+#   1. Locked chase target → face the enemy so the muzzle aligns with the
+#      shot trajectory the next time _try_fire runs.
+#   2. Non-trivial velocity → face the direction of travel so the drone
+#      banks like a forward-flying gunship rather than drifting sideways.
+#   3. Idle (no target, near-zero velocity) → leave the heading alone.
+# Y-component is flattened so the bob doesn't pitch the drone up and down.
+# slerp speed tuned so a chase pivot lands inside ~0.2s — fast enough to
+# look intentional, slow enough that the swarm doesn't visibly twitch on
+# every retarget tick.
+const FACING_SLERP_RATE := 12.0
+func _update_facing(delta: float) -> void:
+	var aim_dir: Vector3 = Vector3.ZERO
+	if _chase_target != null and is_instance_valid(_chase_target):
+		aim_dir = _chase_target.global_position - global_position
+	elif velocity.length_squared() > 0.25:
+		aim_dir = velocity
+	if aim_dir.length_squared() < 0.01:
+		return
+	aim_dir.y = 0.0
+	if aim_dir.length_squared() < 0.01:
+		return
+	var target_basis := Basis.looking_at(aim_dir.normalized(), Vector3.UP)
+	var weight: float = clampf(FACING_SLERP_RATE * delta, 0.0, 1.0)
+	transform.basis = transform.basis.slerp(target_basis, weight).orthonormalized()
 
 
 # Compute the swarm hover position around a target enemy. The drone keeps
