@@ -82,6 +82,11 @@ var _player_cache: Node3D = null
 var _corpses_cache: Array = []
 var _static_glows_cache: Array = []
 var _clutter_cache: Array = []
+# Per-room MultiMeshInstance3D / floor StaticBody3D nodes for kit-bash
+# levels. Hidden when their room isn't adjacent to the player's, which
+# spares the GPU a per-frame vertex+shadow pass on offscreen rooms. Same
+# cell-change refresh cadence as the other static caches.
+var _room_geometry_cache: Array = []
 
 func _ready() -> void:
 	_query.collision_mask = WORLD_LAYER_MASK
@@ -143,6 +148,7 @@ func _physics_process(_delta: float) -> void:
 		_corpses_cache = get_tree().get_nodes_in_group(&"corpses")
 		_static_glows_cache = get_tree().get_nodes_in_group(&"static_glows")
 		_clutter_cache = get_tree().get_nodes_in_group(&"clutter")
+		_room_geometry_cache = get_tree().get_nodes_in_group(&"room_geometry")
 
 	var stagger := _stagger_frame
 	_stagger_frame = (_stagger_frame + 1) % STAGGER_GROUPS
@@ -299,6 +305,23 @@ func _physics_process(_delta: float) -> void:
 		if structure == null or structure.is_in_group(&"enemies"):
 			continue
 		_set_target(structure, not _room_blocks(structure, player_room))
+	# Room-gated kit-bash level geometry. The room_geometry group is the
+	# wall + floor MultiMeshInstance3Ds (or their wrapping StaticBody3D for
+	# floors with collision). Each MMI is positioned at the room's center
+	# so room_at_world resolves correctly. Hide/show via .visible — no
+	# fade because rooms are far enough apart that the pop isn't visible,
+	# and the room-gate adjacency already keeps "one room over" visible.
+	# Skipping vertex + shadow work on offscreen rooms is the biggest perf
+	# win for kit-bash levels.
+	for rg in _room_geometry_cache:
+		if not is_instance_valid(rg) or not rg.is_inside_tree():
+			continue
+		var geom := rg as Node3D
+		if geom == null:
+			continue
+		var should_hide := _room_blocks(geom, player_room)
+		if geom.visible == should_hide:
+			geom.visible = not should_hide
 	# Interactibles — static (doors, switches, crates). Re-raycast only when the
 	# player crosses a cell boundary, since neither side is moving otherwise.
 	# Iterate SpatialGrid's flat membership set (no per-frame allocation).

@@ -33,6 +33,75 @@ static func build_piece_floor(ctx: LevelBuildContext, center: Vector3, size_x: f
 	build_exact_floor(ctx, center, size_x + FLOOR_OVERLAP * 2.0, size_z + FLOOR_OVERLAP * 2.0, mat, mesh_y_bias)
 
 
+# Tile the floor area with theme.floor_model instances on a grid. Each tile
+# is floor_grid_size meters square. Collision + minimap registration come
+# from a single hidden body covering the whole area (same approach as the
+# procedural floor) so layout-cell registration and footstep audio still
+# work. Visual is the model instances only.
+static func build_piece_floor_kit(ctx: LevelBuildContext, center: Vector3, size_x: float, size_z: float, mesh_y_bias: float = 0.0) -> void:
+	var t := ctx.theme
+	if t.floor_model == null:
+		return
+	var mesh := WallBuilder._get_kit_mesh(ctx, t.floor_model, false)
+	if mesh == null:
+		return
+	var grid: float = t.floor_grid_size
+	# Adaptive tiling — fit any size with no edge gaps. n = round(size/grid)
+	# (min 1), then actual_grid = size/n. Each tile is scaled to fill its
+	# actual cell exactly, regardless of the model's native footprint.
+	var nx: int = max(1, int(round(size_x / grid)))
+	var nz: int = max(1, int(round(size_z / grid)))
+	var actual_grid_x: float = size_x / float(nx)
+	var actual_grid_z: float = size_z / float(nz)
+	# Container body — hosts collision + group memberships. The MMI rides
+	# along as a child so the visuals follow the body's transform.
+	var body := StaticBody3D.new()
+	body.name = &"Floor"
+	body.input_ray_pickable = false
+	body.transform.origin = center
+	var col := CollisionShape3D.new()
+	col.name = &"Collision"
+	col.shape = BoxShape3D.new()
+	(col.shape as BoxShape3D).size = Vector3(size_x, 0.1, size_z)
+	col.position.y = -0.05
+	body.add_child(col)
+	# Build transforms for every tile, then a single MultiMesh covers them
+	# all with one draw call per material surface.
+	var origin_x := -size_x * 0.5 + actual_grid_x * 0.5
+	var origin_z := -size_z * 0.5 + actual_grid_z * 0.5
+	var n := nx * nz
+	# Scale each tile to fill actual_grid × actual_grid exactly. Combines
+	# the room-fit scaling with the native_size correction (model is 1.92m
+	# × 2m, scaling per-axis avoids gaps).
+	var native: Vector2 = t.floor_model_native_size
+	var sx: float = actual_grid_x / maxf(0.01, native.x)
+	var sz: float = actual_grid_z / maxf(0.01, native.y)
+	var tile_basis := Basis(Vector3.RIGHT, Vector3.UP, Vector3.BACK).scaled(Vector3(sx, 1.0, sz))
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = mesh
+	mm.instance_count = n
+	var i := 0
+	for ix in range(nx):
+		for iz in range(nz):
+			var pos := Vector3(origin_x + ix * actual_grid_x, mesh_y_bias, origin_z + iz * actual_grid_z)
+			mm.set_instance_transform(i, Transform3D(tile_basis, pos))
+			i += 1
+	var mmi := MultiMeshInstance3D.new()
+	mmi.multimesh = mm
+	body.add_child(mmi)
+	ctx.root.add_child(body)
+	body.add_to_group(&"structures")
+	body.add_to_group(&"minimap_walkable")
+	# Floor-type tag for material-specific footstep audio.
+	body.add_to_group(&"floor_metal")
+	# Room-gated visibility hook — LoS culler hides this body (and the
+	# MMI children that render the tiles) when the player is far from
+	# this room. Major perf win at horde density since hidden floors
+	# skip both their vertex pass and shadow-map contribution.
+	body.add_to_group(&"room_geometry")
+
+
 static func build_exact_floor(ctx: LevelBuildContext, center: Vector3, size_x: float, size_z: float, mat: Material = null, mesh_y_bias: float = 0.0) -> void:
 	var mesh := PlaneMesh.new()
 	mesh.size = Vector2(size_x, size_z)
@@ -71,6 +140,21 @@ static func build_exact_floor(ctx: LevelBuildContext, center: Vector3, size_x: f
 	# (corridors) = grate; primary (rooms) = metal plating.
 	var is_alt := mat != null and mat == ctx.floor_material_alt
 	body.add_to_group(&"floor_grate" if is_alt else &"floor_metal")
+
+
+# Kit-bash version of corridor floor. Quantizes corridor length to the
+# grid, then delegates to build_piece_floor_kit which tiles the area
+# with floor model instances via MultiMesh.
+static func build_corridor_floor_kit(ctx: LevelBuildContext, center: Vector3, cd: CorridorDef) -> void:
+	var t := ctx.theme
+	if t.floor_model == null:
+		return
+	var along_z := cd.axis == CorridorDef.Axis.Z
+	var sw := cd.width
+	var sl := cd.length
+	var sx := sw if along_z else sl
+	var sz := sl if along_z else sw
+	build_piece_floor_kit(ctx, center, sx, sz, CORRIDOR_FLOOR_MESH_Y_BIAS)
 
 
 static func build_corridor_floor(ctx: LevelBuildContext, center: Vector3, cd: CorridorDef) -> void:

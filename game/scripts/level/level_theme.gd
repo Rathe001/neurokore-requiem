@@ -4,10 +4,32 @@ class_name LevelTheme
 @export var wall_height: float = 4.5
 @export var wall_thickness: float = 0.4
 
-# PBR materials applied to walls and floors. Imported from Blenderkit via
-# tools/import_blenderkit_material.py. The _alt slots are used for corridor
-# pieces so corridors can read as a different space from rooms; null falls
-# back to the primary material (corridors look like rooms).
+# Kit-bash models. When wall_model / floor_model are set the level builder
+# instances these 3D models in a grid instead of using procedural geometry
+# + PBR materials. Each model is assumed to be sized exactly wall_grid_size
+# (or floor_grid_size) so they tile seam-to-seam. Rooms get their size
+# quantized to multiples of the grid at build time.
+#
+# When wall_model is null, falls back to the procedural SurfaceTool wall
+# mesh + StandardMaterial3D (wall_material). Same for floor_model.
+@export var wall_model: PackedScene
+@export var floor_model: PackedScene
+@export var wall_grid_size: float = 4.0
+@export var floor_grid_size: float = 4.0
+# Native dimensions of the source models (before any kit-bash scaling).
+# - wall_model_native_width / _native_height: X width and Y height of the
+#   model in its source orientation (we rotate +90° X to stand it up).
+# - floor_model_native_size: XZ footprint of the floor tile.
+# The builders scale each instance so it fills wall_grid_size × wall_height
+# (walls) or floor_grid_size × floor_grid_size (floors).
+@export var wall_model_native_width: float = 2.0
+@export var wall_model_native_height: float = 2.0
+@export var floor_model_native_size: Vector2 = Vector2(2.0, 2.0)
+
+# PBR materials applied to walls and floors when no kit model is set.
+# Imported from Blenderkit via tools/import_blenderkit_material.py. The
+# _alt slots are used for corridor pieces so corridors can read as a
+# different space from rooms; null falls back to the primary material.
 @export var wall_material: Material
 @export var floor_material: Material
 @export var wall_material_alt: Material

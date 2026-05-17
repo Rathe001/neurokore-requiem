@@ -1,23 +1,27 @@
 [gd_resource type="Resource" script_class="LevelTheme" load_steps=4 format=3]
 
-; Warm/orange boss-arena theme. Currently uses the same PBR materials as
-; tech_theme — when a rust/amber Blenderkit material is imported, swap
-; floor_material / wall_material here to it. The fps_fog tint and
-; pit_ooze_color already give the arena a warm read; texture-level
-; differentiation comes later.
+; Warm/orange boss-arena theme. Shares the same kit-bash models as
+; tech_theme — fps_fog_color + pit_ooze_color give the arena its warm
+; read. Swap wall_model / floor_model here once a zone-specific kit is
+; imported.
 
 [ext_resource type="Script" path="res://scripts/level/level_theme.gd" id="1"]
-[ext_resource type="Material" path="res://resources/materials/floor_metal_panels_displaced.tres" id="floor_mat"]
-[ext_resource type="Material" path="res://resources/materials/wall_metal_panels.tres" id="wall_mat"]
+[ext_resource type="PackedScene" path="res://assets/models/objects/wall_industrial_panel/wall_industrial_panel.glb" id="wall_model"]
+[ext_resource type="PackedScene" path="res://assets/models/objects/floor_panel/floor_panel.glb" id="floor_model"]
 
 [resource]
 script = ExtResource("1")
 fps_fog_density = 0.35
 fps_fog_color = Color(0.012, 0.005, 0.002, 1)
-wall_height = 4.5
+wall_height = 4.0
 wall_thickness = 0.4
-wall_material = ExtResource("wall_mat")
-floor_material = ExtResource("floor_mat")
+wall_model = ExtResource("wall_model")
+floor_model = ExtResource("floor_model")
+wall_grid_size = 4.0
+floor_grid_size = 4.0
+wall_model_native_width = 2.0
+wall_model_native_height = 2.0
+floor_model_native_size = Vector2(1.92, 2.0)
 pit_depth = 5.0
 pit_ooze_color = Color(1.0, 0.45, 0.1, 1)
 pit_ooze_energy = 2.5

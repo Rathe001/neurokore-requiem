@@ -2,17 +2,20 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://5dvcwgxhacq8"
-path.s3tc="res://.godot/imported/Sci-Fi_Metal_Panels_Roughness.png-e5c5d61b0feaa0d659d818056fa03684.s3tc.ctex"
+uid="uid://dwujaijk5nj0k"
+path.s3tc="res://.godot/imported/wall_industrial_panel_03_Sci-Fi_Industrial_Panel_Roughness.png-1617bbe4bd3ef674d20c6f5c9bc3b76c.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
 }
+generator_parameters={
+"md5": "f45e129d41adde211072fbd03e2d18d5"
+}
 
 [deps]
 
-source_file="res://assets/textures/floor_metal_panels/Sci-Fi_Metal_Panels_Roughness.png"
-dest_files=["res://.godot/imported/Sci-Fi_Metal_Panels_Roughness.png-e5c5d61b0feaa0d659d818056fa03684.s3tc.ctex"]
+source_file="res://assets/models/objects/wall_industrial_panel/wall_industrial_panel_03_Sci-Fi_Industrial_Panel_Roughness.png"
+dest_files=["res://.godot/imported/wall_industrial_panel_03_Sci-Fi_Industrial_Panel_Roughness.png-1617bbe4bd3ef674d20c6f5c9bc3b76c.s3tc.ctex"]
 
 [params]
 

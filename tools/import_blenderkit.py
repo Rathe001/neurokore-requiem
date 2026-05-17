@@ -115,7 +115,7 @@ def locate_cached_blend(meta: dict) -> Path:
     return max(blends, key=lambda p: p.stat().st_size)
 
 
-def export_glb(blend_path: Path, out_path: Path, decimate_ratio: float = 1.0, tint_emission: str = "") -> None:
+def export_glb(blend_path: Path, out_path: Path, decimate_ratio: float = 0.05, tint_emission: str = "", texture_size: int = 1024) -> None:
     """Drive Blender headless to open the .blend and export it as .glb
     with default settings. Does NOT modify geometry, normals, or materials."""
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -220,6 +220,22 @@ def export_glb(blend_path: Path, out_path: Path, decimate_ratio: float = 1.0, ti
             "    m.decimate_type = 'COLLAPSE'\n"
             "    m.ratio = _DECIMATE\n"
         )
+    texture_step = ""
+    if texture_size > 0:
+        texture_step = (
+            f"_MAX_TEX = {texture_size}\n"
+            "for img in bpy.data.images:\n"
+            "    if img.size[0] == 0 or img.size[1] == 0:\n"
+            "        continue\n"
+            "    long_edge = max(img.size[0], img.size[1])\n"
+            "    if long_edge <= _MAX_TEX:\n"
+            "        continue\n"
+            "    factor = _MAX_TEX / float(long_edge)\n"
+            "    new_w = max(1, int(img.size[0] * factor))\n"
+            "    new_h = max(1, int(img.size[1] * factor))\n"
+            "    img.scale(new_w, new_h)\n"
+            "    img.update()\n"
+        )
     script = (
         "import bpy\n"
         f"bpy.ops.wm.open_mainfile(filepath=r'{blend_path}')\n"
@@ -318,7 +334,7 @@ def export_glb(blend_path: Path, out_path: Path, decimate_ratio: float = 1.0, ti
         "                    node.inputs[socket_name].default_value = (0.0, 0.0, 0.0, 1.0)\n"
         "            if 'Emission Strength' in node.inputs:\n"
         "                node.inputs['Emission Strength'].default_value = 0.0\n"
-        + decimate_step + tint_step +
+        + decimate_step + tint_step + texture_step +
         "for mat in bpy.data.materials:\n"
         "    mat.use_backface_culling = False\n"
         "    if hasattr(mat, 'blend_method'):\n"
@@ -386,11 +402,21 @@ def main() -> None:
     p.add_argument("target_name")
     p.add_argument("--category", default="objects")
     p.add_argument("--license", default="Blenderkit — listed Free")
-    p.add_argument("--decimate", type=float, default=1.0,
+    p.add_argument("--decimate", type=float, default=0.05,
                    help="Mesh decimation ratio passed to Blender's Decimate "
-                        "modifier (COLLAPSE). 1.0 keeps every polygon (default); "
-                        "0.5 halves geometry; 0.3 ~ a third. For iso camera use "
-                        "0.4–0.6 — most fine detail is sub-pixel anyway.")
+                        "modifier (COLLAPSE). Default 0.05 (5%% of original) — "
+                        "aggressive baseline for iso-camera kit pieces, where "
+                        "Blenderkit's pre-subdivided source geometry is wildly "
+                        "over-detailed (we've seen 350k+ tris on a single 2m "
+                        "floor tile). Pass 1.0 to keep every polygon for "
+                        "character or hero-prop imports where silhouette "
+                        "matters more than instance count.")
+    p.add_argument("--texture-size", type=int, default=1024,
+                   help="Max texture dimension after import. Default 1024 — "
+                        "kit-bash surfaces don't benefit from 2K/4K at iso "
+                        "distance and the VRAM saved (75%% for 2K -> 1K) is "
+                        "meaningful at horde density. Pass 2048 for hero "
+                        "props or 0 to keep original resolution.")
     p.add_argument("--tint-emission", default="",
                    help="Recolor emissive textures to luminance × this color. "
                         "Format: 'r,g,b' with each in 0-255. Use when a model's "
@@ -411,7 +437,7 @@ def main() -> None:
     out = MODELS_OUT / args.category / args.target_name / f"{args.target_name}.glb"
     if out.exists():
         fail(f"target {out} already exists — delete it first if you want to replace")
-    export_glb(blend, out, decimate_ratio=args.decimate, tint_emission=args.tint_emission)
+    export_glb(blend, out, decimate_ratio=args.decimate, tint_emission=args.tint_emission, texture_size=args.texture_size)
     print(f"[import_blenderkit] exported: {out.relative_to(ROOT)} "
           f"(decimate={args.decimate})")
 

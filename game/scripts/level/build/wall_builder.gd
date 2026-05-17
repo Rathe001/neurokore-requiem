@@ -196,6 +196,180 @@ static func build_low_ceiling(ctx: LevelBuildContext, center: Vector3, cd: Corri
 	ctx.root.add_child(body)
 
 
+# ── Kit-Bash Room Walls ─────────────────────────────────────────────────
+# Instances theme.wall_model along each wall in grid steps. Each panel is
+# wall_grid_size meters wide (X), scaled vertically to wall_height. Doors
+# get skipped by leaving a gap of `opening_width` centered on the wall.
+# Collision is still handled by _build_room_wall_collisions in level_builder
+# (panels are visual-only).
+
+# Kit-bash version of corridor walls. Two parallel rows along the corridor's
+# travel axis. No openings (doors live at the corridor's endpoints where it
+# joins the rooms). Builds a single MMI per corridor.
+static func build_corridor_walls_kit(ctx: LevelBuildContext, center: Vector3, cd: CorridorDef) -> void:
+	var t := ctx.theme
+	if t.wall_model == null:
+		return
+	var mesh := _get_kit_mesh(ctx, t.wall_model, true)
+	if mesh == null:
+		return
+	var grid: float = t.wall_grid_size
+	var native_w: float = maxf(0.01, t.wall_model_native_width)
+	var native_h: float = maxf(0.01, t.wall_model_native_height)
+	var wall_h: float = t.wall_height
+	var y_scale: float = wall_h / native_h
+	var thick_half: float = t.wall_thickness * 0.5
+	var along_z := cd.axis == CorridorDef.Axis.Z
+	var half_w := cd.width * 0.5
+	# Adaptive panel step — fits any corridor length without gaps at the
+	# ends. n_panels = round(length/grid), each panel scaled to length/n_panels.
+	var n_panels: int = max(1, int(round(cd.length / grid)))
+	var actual_step: float = cd.length / float(n_panels)
+	var x_scale: float = actual_step / native_w
+
+	var sides: Array[Dictionary]
+	if along_z:
+		sides = [
+			{"axis": Vector3.FORWARD, "base_pos": Vector3(half_w - thick_half, 0, 0), "y_rot": PI * 0.5},
+			{"axis": Vector3.FORWARD, "base_pos": Vector3(-half_w + thick_half, 0, 0), "y_rot": -PI * 0.5},
+		]
+	else:
+		sides = [
+			{"axis": Vector3.RIGHT, "base_pos": Vector3(0, 0, half_w - thick_half), "y_rot": PI},
+			{"axis": Vector3.RIGHT, "base_pos": Vector3(0, 0, -half_w + thick_half), "y_rot": 0.0},
+		]
+
+	var transforms: Array[Transform3D] = []
+	for s: Dictionary in sides:
+		var axis: Vector3 = s["axis"]
+		var base_pos: Vector3 = s["base_pos"]
+		var y_rot: float = s["y_rot"]
+		var basis_x_up := Basis(Vector3.RIGHT, PI * 0.5)
+		var basis := Basis(Vector3.UP, y_rot) * basis_x_up
+		basis = basis.scaled(Vector3(x_scale, y_scale, 1.0))
+		for i in range(n_panels):
+			var slot_center: float = (i + 0.5) * actual_step - cd.length * 0.5
+			var pos := base_pos + axis * slot_center + Vector3(0, wall_h * 0.5, 0)
+			transforms.append(Transform3D(basis, pos))
+
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = mesh
+	mm.instance_count = transforms.size()
+	for i in range(transforms.size()):
+		mm.set_instance_transform(i, transforms[i])
+
+	var mmi := MultiMeshInstance3D.new()
+	mmi.multimesh = mm
+	mmi.position = center
+	ctx.root.add_child(mmi)
+	mmi.add_to_group(&"structures")
+	mmi.add_to_group(&"room_geometry")
+
+
+static func build_room_walls_kit(ctx: LevelBuildContext, center: Vector3, rd: RoomDef) -> void:
+	var t := ctx.theme
+	if t.wall_model == null:
+		return
+	var mesh := _get_kit_mesh(ctx, t.wall_model, true)
+	if mesh == null:
+		return
+	var hx := rd.size.x * 0.5
+	var hz := rd.size.y * 0.5
+	var grid: float = t.wall_grid_size
+	var wall_h: float = t.wall_height
+	var native_h: float = maxf(0.01, t.wall_model_native_height)
+	var native_w: float = maxf(0.01, t.wall_model_native_width)
+	var y_scale: float = wall_h / native_h
+	var thick_half: float = t.wall_thickness * 0.5
+	var gap: float = rd.opening_width
+
+	var sides: Array[Dictionary] = [
+		{"side": RoomDef.Wall.NORTH, "axis": Vector3.RIGHT, "base_pos": Vector3(0, 0, -hz + thick_half), "length": rd.size.x, "y_rot": 0.0},
+		{"side": RoomDef.Wall.SOUTH, "axis": Vector3.RIGHT, "base_pos": Vector3(0, 0, hz - thick_half), "length": rd.size.x, "y_rot": PI},
+		{"side": RoomDef.Wall.EAST, "axis": Vector3.FORWARD, "base_pos": Vector3(hx - thick_half, 0, 0), "length": rd.size.y, "y_rot": PI * 0.5},
+		{"side": RoomDef.Wall.WEST, "axis": Vector3.FORWARD, "base_pos": Vector3(-hx + thick_half, 0, 0), "length": rd.size.y, "y_rot": -PI * 0.5},
+	]
+
+	# Collect all panel transforms first; then build a single MultiMesh
+	# with one draw call covering every wall panel in the room. Each side
+	# computes its own count + actual_step so it fits the wall length
+	# exactly — no gaps at the ends regardless of room size.
+	var transforms: Array[Transform3D] = []
+	for s: Dictionary in sides:
+		var side: RoomDef.Wall = s["side"] as RoomDef.Wall
+		var axis: Vector3 = s["axis"]
+		var base_pos: Vector3 = s["base_pos"]
+		var length: float = s["length"]
+		var y_rot: float = s["y_rot"]
+		var n_panels: int = max(1, int(round(length / grid)))
+		var actual_step: float = length / float(n_panels)
+		var x_scale: float = actual_step / native_w
+		var has_opening: bool = side in rd.openings
+		var open_min: float = -gap * 0.5
+		var open_max: float = gap * 0.5
+		# Composed orientation: rot_x = 90° stands the flat panel up, then
+		# y_rot spins it to face this wall's outward direction.
+		var basis_x_up := Basis(Vector3.RIGHT, PI * 0.5)
+		var basis := Basis(Vector3.UP, y_rot) * basis_x_up
+		basis = basis.scaled(Vector3(x_scale, y_scale, 1.0))
+		for i in range(n_panels):
+			var slot_center: float = (i + 0.5) * actual_step - length * 0.5
+			if has_opening and slot_center > open_min and slot_center < open_max:
+				continue
+			var pos := base_pos + axis * slot_center + Vector3(0, wall_h * 0.5, 0)
+			transforms.append(Transform3D(basis, pos))
+	if transforms.is_empty():
+		return
+
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = mesh
+	mm.instance_count = transforms.size()
+	for i in range(transforms.size()):
+		mm.set_instance_transform(i, transforms[i])
+
+	var mmi := MultiMeshInstance3D.new()
+	mmi.multimesh = mm
+	mmi.position = center
+	# Group tag — LoS culler reads &"room_geometry" each physics tick and
+	# hides MMIs whose room isn't adjacent to the player's. Big perf win
+	# at horde density since each hidden MMI skips its vertex pass + any
+	# shadow-map contribution.
+	ctx.root.add_child(mmi)
+	mmi.add_to_group(&"structures")
+	mmi.add_to_group(&"room_geometry")
+
+
+# Walks a PackedScene to extract its first MeshInstance3D's Mesh. Caches
+# on ctx so we don't repeatedly instantiate the .glb across rooms.
+static func _get_kit_mesh(ctx: LevelBuildContext, scene: PackedScene, is_wall: bool) -> Mesh:
+	if is_wall and ctx.wall_kit_mesh != null:
+		return ctx.wall_kit_mesh
+	if not is_wall and ctx.floor_kit_mesh != null:
+		return ctx.floor_kit_mesh
+	var inst := scene.instantiate()
+	var mesh := _find_first_mesh_in_kit(inst)
+	inst.queue_free()
+	if is_wall:
+		ctx.wall_kit_mesh = mesh
+	else:
+		ctx.floor_kit_mesh = mesh
+	return mesh
+
+
+static func _find_first_mesh_in_kit(node: Node) -> Mesh:
+	if node is MeshInstance3D:
+		var mi := node as MeshInstance3D
+		if mi.mesh != null:
+			return mi.mesh
+	for child in node.get_children():
+		var m := _find_first_mesh_in_kit(child)
+		if m != null:
+			return m
+	return null
+
+
 # ── Procedural Room Mesh ────────────────────────────────────────────────
 # A single mesh for all four walls of a room (with openings cut), produced
 # via SurfaceTool. Front faces, jamb reveals, and wall tops included.

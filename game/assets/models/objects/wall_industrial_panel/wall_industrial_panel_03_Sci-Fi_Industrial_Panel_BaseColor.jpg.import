@@ -2,17 +2,20 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://c3efqrka3k0ke"
-path.s3tc="res://.godot/imported/Sci-Fi_Metal_Panels_Displacement.png-df99f31d05f020860b865418438304dd.s3tc.ctex"
+uid="uid://c0ep35wgdakr1"
+path.s3tc="res://.godot/imported/wall_industrial_panel_03_Sci-Fi_Industrial_Panel_BaseColor.jpg-deee34a90120c8c611e389445e0250fa.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
 }
+generator_parameters={
+"md5": "94feccf4540f8bca901790a84602ccb2"
+}
 
 [deps]
 
-source_file="res://assets/textures/floor_metal_panels/Sci-Fi_Metal_Panels_Displacement.png"
-dest_files=["res://.godot/imported/Sci-Fi_Metal_Panels_Displacement.png-df99f31d05f020860b865418438304dd.s3tc.ctex"]
+source_file="res://assets/models/objects/wall_industrial_panel/wall_industrial_panel_03_Sci-Fi_Industrial_Panel_BaseColor.jpg"
+dest_files=["res://.godot/imported/wall_industrial_panel_03_Sci-Fi_Industrial_Panel_BaseColor.jpg-deee34a90120c8c611e389445e0250fa.s3tc.ctex"]
 
 [params]
 
@@ -26,8 +29,8 @@ compress/normal_map=0
 compress/channel_pack=0
 mipmaps/generate=true
 mipmaps/limit=-1
-roughness/mode=7
-roughness/src_normal="res://assets/textures/floor_metal_panels/Sci-Fi_Metal_Panels_Normal.png"
+roughness/mode=0
+roughness/src_normal=""
 process/channel_remap/red=0
 process/channel_remap/green=1
 process/channel_remap/blue=2

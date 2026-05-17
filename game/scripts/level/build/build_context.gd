@@ -26,6 +26,12 @@ var wall_material_alt: Material
 var floor_material_alt: Material
 var wall_meshes: Dictionary = {}
 var wall_shapes: Dictionary = {}
+## Cached extracted Meshes from kit PackedScenes (wall_model, floor_model).
+## Avoids instantiating the .glb scene per room just to grab its mesh; the
+## first room's build extracts and caches, subsequent rooms reuse. Both
+## start null and stay null when the theme has no kit model assigned.
+var wall_kit_mesh: Mesh
+var floor_kit_mesh: Mesh
 ## Cache: LevelTheme → {wall, floor, wall_alt, floor_alt} so apply_theme()
 ## doesn't rebuild StandardMaterial3D / ShaderMaterial instances every time
 ## a piece swaps to an already-seen theme.

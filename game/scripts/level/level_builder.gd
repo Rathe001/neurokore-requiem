@@ -219,13 +219,25 @@ func _build_room(piece: LevelPiece) -> void:
 	# Per-instance identity (preferred) → RoomDef.id (legacy fallback).
 	var piece_id: StringName = piece.room_id if piece.room_id != &"" else rd.id
 
+	# No room-size quantization — kit builders adapt per-segment by
+	# computing actual_step = length / count, scaling each instance to
+	# fit exactly. Quantizing broke connections to corridors authored at
+	# the original size (a 6m room rounded to 8m left the corridor short
+	# of the new wall plane).
+
 	if rd.pit_floor:
 		PitBuilder.build_room_pit(_ctx, center, rd)
+	elif _ctx.theme.floor_model != null:
+		FloorBuilder.build_piece_floor_kit(_ctx, center, rd.size.x, rd.size.y)
 	else:
 		FloorBuilder.build_piece_floor(_ctx, center, rd.size.x, rd.size.y)
 
-	# Single procedural wall mesh for the entire room (one draw call).
-	WallBuilder.build_room_mesh(_ctx, center, rd)
+	# Walls: kit-bash 3D models when the theme provides them, fall back to
+	# the procedural single-mesh path otherwise.
+	if _ctx.theme.wall_model != null:
+		WallBuilder.build_room_walls_kit(_ctx, center, rd)
+	else:
+		WallBuilder.build_room_mesh(_ctx, center, rd)
 	_build_room_wall_collisions(piece_id, rd, center, hx, hz, thick)
 
 	# Decorative columns — architectural blockers, distinct from pit pillars.
@@ -293,8 +305,18 @@ func _build_corridor(piece: LevelPiece) -> void:
 	var cd := piece.corridor
 	var center := piece.position
 
-	WallBuilder.build_corridor_walls(_ctx, center, cd)
-	FloorBuilder.build_corridor_floor(_ctx, center, cd)
+	# Kit builders adapt per-corridor (actual_step = length / count, each
+	# instance scaled to fit), so no quantization needed — keeps the
+	# corridor endpoints aligned with the connecting rooms.
+
+	if _ctx.theme.wall_model != null:
+		WallBuilder.build_corridor_walls_kit(_ctx, center, cd)
+	else:
+		WallBuilder.build_corridor_walls(_ctx, center, cd)
+	if _ctx.theme.floor_model != null:
+		FloorBuilder.build_corridor_floor_kit(_ctx, center, cd)
+	else:
+		FloorBuilder.build_corridor_floor(_ctx, center, cd)
 	if cd.ceiling_height > 0.0:
 		WallBuilder.build_low_ceiling(_ctx, center, cd)
 
