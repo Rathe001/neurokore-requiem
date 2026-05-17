@@ -25,3 +25,7 @@ site/
 # GodotSteam GDExtension is the usual culprit. They're not real artifacts.
 ~*.dll
 ~*.dll~*.TMP
+
+# Python bytecode
+__pycache__/
+*.pyc
