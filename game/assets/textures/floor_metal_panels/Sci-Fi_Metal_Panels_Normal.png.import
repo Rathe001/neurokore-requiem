@@ -2,8 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://desuq46vs7shi"
-path.s3tc="res://.godot/imported/Normals_01.png-2c5d35db36ccb586a45383fcc281d9b8.s3tc.ctex"
+uid="uid://bo6g4gir1h152"
+path.s3tc="res://.godot/imported/Sci-Fi_Metal_Panels_Normal.png-51015ef2f145a5e6af98c02de1405ad8.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
@@ -11,8 +11,8 @@ metadata={
 
 [deps]
 
-source_file="res://assets/textures/wall_scifi_panelizer/Normals_01.png"
-dest_files=["res://.godot/imported/Normals_01.png-2c5d35db36ccb586a45383fcc281d9b8.s3tc.ctex"]
+source_file="res://assets/textures/floor_metal_panels/Sci-Fi_Metal_Panels_Normal.png"
+dest_files=["res://.godot/imported/Sci-Fi_Metal_Panels_Normal.png-51015ef2f145a5e6af98c02de1405ad8.s3tc.ctex"]
 
 [params]
 
@@ -27,7 +27,7 @@ compress/channel_pack=0
 mipmaps/generate=true
 mipmaps/limit=-1
 roughness/mode=1
-roughness/src_normal="res://assets/textures/wall_scifi_panelizer/Normals_01.png"
+roughness/src_normal="res://assets/textures/floor_metal_panels/Sci-Fi_Metal_Panels_Normal.png"
 process/channel_remap/red=0
 process/channel_remap/green=1
 process/channel_remap/blue=2

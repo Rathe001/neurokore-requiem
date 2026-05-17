@@ -2,8 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://olmqa3ydteur"
-path.s3tc="res://.godot/imported/Sci-Fi_Vent_03_Height.png-1d0054679aeae0d86ac489ae241317d9.s3tc.ctex"
+uid="uid://c3efqrka3k0ke"
+path.s3tc="res://.godot/imported/Sci-Fi_Metal_Panels_Displacement.png-df99f31d05f020860b865418438304dd.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
@@ -11,8 +11,8 @@ metadata={
 
 [deps]
 
-source_file="res://assets/textures/floor_scifi_vent/Sci-Fi_Vent_03_Height.png"
-dest_files=["res://.godot/imported/Sci-Fi_Vent_03_Height.png-1d0054679aeae0d86ac489ae241317d9.s3tc.ctex"]
+source_file="res://assets/textures/floor_metal_panels/Sci-Fi_Metal_Panels_Displacement.png"
+dest_files=["res://.godot/imported/Sci-Fi_Metal_Panels_Displacement.png-df99f31d05f020860b865418438304dd.s3tc.ctex"]
 
 [params]
 
@@ -27,7 +27,7 @@ compress/channel_pack=0
 mipmaps/generate=true
 mipmaps/limit=-1
 roughness/mode=7
-roughness/src_normal="res://assets/textures/floor_scifi_vent/Sci-Fi_Vent_03_Normal.png"
+roughness/src_normal="res://assets/textures/floor_metal_panels/Sci-Fi_Metal_Panels_Normal.png"
 process/channel_remap/red=0
 process/channel_remap/green=1
 process/channel_remap/blue=2

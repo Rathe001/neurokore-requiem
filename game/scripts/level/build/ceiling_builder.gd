@@ -47,10 +47,13 @@ static func build(ctx: LevelBuildContext) -> void:
 	if ctx.wall_material != null:
 		mesh.material = ctx.wall_material
 
+	# Ceiling is invisible in iso (SHADOWS_ONLY below) and only renders in
+	# FPS mode. Hard-coded dark grey since the value barely shows; if we
+	# ever want a per-theme ceiling tint we can add a theme field for it.
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = t.wall_color if t.wall_shader == null else Color(0.12, 0.12, 0.14)
-	mat.metallic = t.wall_metallic if t.wall_shader == null else 0.1
-	mat.roughness = t.wall_roughness if t.wall_shader == null else 0.8
+	mat.albedo_color = Color(0.12, 0.12, 0.14)
+	mat.metallic = 0.1
+	mat.roughness = 0.8
 	mat.cull_mode = BaseMaterial3D.CULL_BACK
 
 	# Wrap the visual mesh in a StaticBody3D so projectiles and raycasts

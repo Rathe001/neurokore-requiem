@@ -1,15 +1,14 @@
 [gd_resource type="Resource" script_class="LevelTheme" load_steps=4 format=3]
 
-; Warm/orange boss-arena theme. Uses the riveted/grate shader pair (the
-; same surface detail as the dim/corridor cladding) so the room reads as
-; visibly textured — colours come from the shaders' base_color uniforms,
-; which default to industrial grey, so the wall_color values below are
-; only the StandardMaterial3D fallback if shaders are dropped. Geometry
-; constants match tech_theme so per-piece swaps share the wall mesh cache.
+; Warm/orange boss-arena theme. Currently uses the same PBR materials as
+; tech_theme — when a rust/amber Blenderkit material is imported, swap
+; floor_material / wall_material here to it. The fps_fog tint and
+; pit_ooze_color already give the arena a warm read; texture-level
+; differentiation comes later.
 
 [ext_resource type="Script" path="res://scripts/level/level_theme.gd" id="1"]
-[ext_resource type="Shader" path="res://scripts/prototype/tech_wall_riveted.gdshader" id="wall_shader"]
-[ext_resource type="Shader" path="res://scripts/prototype/tech_floor_grate.gdshader" id="floor_shader"]
+[ext_resource type="Material" path="res://resources/materials/floor_metal_panels_displaced.tres" id="floor_mat"]
+[ext_resource type="Material" path="res://resources/materials/wall_metal_panels.tres" id="wall_mat"]
 
 [resource]
 script = ExtResource("1")
@@ -17,19 +16,8 @@ fps_fog_density = 0.35
 fps_fog_color = Color(0.012, 0.005, 0.002, 1)
 wall_height = 4.5
 wall_thickness = 0.4
-wall_shader = ExtResource("wall_shader")
-floor_shader = ExtResource("floor_shader")
-; Rust / amber shader-parameter overrides so the boss arena reads as a
-; warm zone using the same riveted/grate detail as the corridors and
-; dim chain rooms (different colours, same surface language).
-wall_shader_params = {"base_color": Color(0.30, 0.16, 0.08, 1.0), "seam_color": Color(0.16, 0.07, 0.02, 1.0), "rivet_color": Color(0.20, 0.10, 0.04, 1.0), "accent_color": Color(0.45, 0.25, 0.10, 1.0)}
-floor_shader_params = {"base_color": Color(0.22, 0.12, 0.06, 1.0), "seam_color": Color(0.12, 0.06, 0.02, 1.0), "tread_color": Color(0.32, 0.18, 0.08, 1.0)}
-wall_color = Color(0.32, 0.18, 0.08, 1)
-wall_metallic = 0.4
-wall_roughness = 0.55
-floor_color = Color(0.28, 0.18, 0.10, 1)
-floor_metallic = 0.3
-floor_roughness = 0.7
+wall_material = ExtResource("wall_mat")
+floor_material = ExtResource("floor_mat")
 pit_depth = 5.0
 pit_ooze_color = Color(1.0, 0.45, 0.1, 1)
 pit_ooze_energy = 2.5

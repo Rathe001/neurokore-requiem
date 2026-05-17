@@ -2,8 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://3gohxkq32aw5"
-path.s3tc="res://.godot/imported/Sci-Fi_Vent_03_Metallic.png-f2c82d4fbdfee0a3e84e7449f1cd7178.s3tc.ctex"
+uid="uid://gtbguqfvt1ec"
+path.s3tc="res://.godot/imported/Scifi_panel_Normal.png-250198663ddcdd1f0fd22db3d740ff15.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
@@ -11,8 +11,8 @@ metadata={
 
 [deps]
 
-source_file="res://assets/textures/floor_scifi_vent/Sci-Fi_Vent_03_Metallic.png"
-dest_files=["res://.godot/imported/Sci-Fi_Vent_03_Metallic.png-f2c82d4fbdfee0a3e84e7449f1cd7178.s3tc.ctex"]
+source_file="res://assets/textures/wall_metal_panels/Scifi_panel_Normal.png"
+dest_files=["res://.godot/imported/Scifi_panel_Normal.png-250198663ddcdd1f0fd22db3d740ff15.s3tc.ctex"]
 
 [params]
 
@@ -22,12 +22,12 @@ compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
-compress/normal_map=0
+compress/normal_map=1
 compress/channel_pack=0
 mipmaps/generate=true
 mipmaps/limit=-1
-roughness/mode=0
-roughness/src_normal=""
+roughness/mode=1
+roughness/src_normal="res://assets/textures/wall_metal_panels/Scifi_panel_Normal.png"
 process/channel_remap/red=0
 process/channel_remap/green=1
 process/channel_remap/blue=2

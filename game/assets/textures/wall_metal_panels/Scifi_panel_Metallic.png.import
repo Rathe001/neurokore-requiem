@@ -2,8 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://b6nr33w2l1wrw"
-path.s3tc="res://.godot/imported/Sci-Fi_Vent_03_BaseColor.png-d3c5f5f9b15614869cb3ce4edc1d7c12.s3tc.ctex"
+uid="uid://dgb7docvig0v7"
+path.s3tc="res://.godot/imported/Scifi_panel_Metallic.png-98a2be79be8d483c325c90e214a2f774.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
@@ -11,8 +11,8 @@ metadata={
 
 [deps]
 
-source_file="res://assets/textures/floor_scifi_vent/Sci-Fi_Vent_03_BaseColor.png"
-dest_files=["res://.godot/imported/Sci-Fi_Vent_03_BaseColor.png-d3c5f5f9b15614869cb3ce4edc1d7c12.s3tc.ctex"]
+source_file="res://assets/textures/wall_metal_panels/Scifi_panel_Metallic.png"
+dest_files=["res://.godot/imported/Scifi_panel_Metallic.png-98a2be79be8d483c325c90e214a2f774.s3tc.ctex"]
 
 [params]
 

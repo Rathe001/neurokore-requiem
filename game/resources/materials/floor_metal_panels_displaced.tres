@@ -1,0 +1,22 @@
+[gd_resource type="ShaderMaterial" load_steps=7 format=3]
+
+[ext_resource type="Shader" path="res://scripts/prototype/displacement_floor.gdshader" id="shader"]
+[ext_resource type="Texture2D" path="res://assets/textures/floor_metal_panels/Sci-Fi_Metal_Panels_BaseColor.png" id="tex_albedo"]
+[ext_resource type="Texture2D" path="res://assets/textures/floor_metal_panels/Sci-Fi_Metal_Panels_Normal.png" id="tex_normal"]
+[ext_resource type="Texture2D" path="res://assets/textures/floor_metal_panels/Sci-Fi_Metal_Panels_Roughness.png" id="tex_roughness"]
+[ext_resource type="Texture2D" path="res://assets/textures/floor_metal_panels/Sci-Fi_Metal_Panels_Metallic.png" id="tex_metallic"]
+[ext_resource type="Texture2D" path="res://assets/textures/floor_metal_panels/Sci-Fi_Metal_Panels_Displacement.png" id="tex_height"]
+
+[resource]
+shader = ExtResource("shader")
+shader_parameter/uv_scale = 0.2
+shader_parameter/normal_strength = 3.0
+shader_parameter/displacement_strength = 0.3
+shader_parameter/displacement_bias = 0.5
+shader_parameter/metallic_factor = 0.35
+shader_parameter/roughness_floor = 0.4
+shader_parameter/albedo_texture = ExtResource("tex_albedo")
+shader_parameter/normal_texture = ExtResource("tex_normal")
+shader_parameter/roughness_texture = ExtResource("tex_roughness")
+shader_parameter/metallic_texture = ExtResource("tex_metallic")
+shader_parameter/height_texture = ExtResource("tex_height")

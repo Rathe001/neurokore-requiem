@@ -1,12 +1,8 @@
-[gd_resource type="Resource" script_class="LevelTheme" load_steps=8 format=3]
+[gd_resource type="Resource" script_class="LevelTheme" load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/level/level_theme.gd" id="1"]
-[ext_resource type="Shader" path="res://scripts/prototype/tech_wall.gdshader" id="wall_shader"]
-[ext_resource type="Shader" path="res://scripts/prototype/tech_floor.gdshader" id="floor_shader"]
-[ext_resource type="Shader" path="res://scripts/prototype/tech_wall_riveted.gdshader" id="wall_shader_alt"]
-[ext_resource type="Shader" path="res://scripts/prototype/tech_floor_grate.gdshader" id="floor_shader_alt"]
-[ext_resource type="Material" path="res://resources/materials/floor_scifi_vent.tres" id="floor_mat_override"]
-[ext_resource type="Material" path="res://resources/materials/wall_scifi_panelizer.tres" id="wall_mat_override"]
+[ext_resource type="Material" path="res://resources/materials/floor_metal_panels_displaced.tres" id="floor_mat"]
+[ext_resource type="Material" path="res://resources/materials/wall_metal_panels.tres" id="wall_mat"]
 
 [resource]
 script = ExtResource("1")
@@ -14,18 +10,8 @@ fps_fog_density = 0.35
 fps_fog_color = Color(0.002, 0.003, 0.006, 1)
 wall_height = 4.5
 wall_thickness = 0.4
-wall_shader = ExtResource("wall_shader")
-floor_shader = ExtResource("floor_shader")
-wall_shader_alt = ExtResource("wall_shader_alt")
-floor_shader_alt = ExtResource("floor_shader_alt")
-wall_material_override = ExtResource("wall_mat_override")
-floor_material_override = ExtResource("floor_mat_override")
-wall_color = Color(0.2, 0.21, 0.24, 1)
-wall_metallic = 0.3
-wall_roughness = 0.6
-floor_color = Color(0.25, 0.26, 0.28, 1)
-floor_metallic = 0.2
-floor_roughness = 0.7
+wall_material = ExtResource("wall_mat")
+floor_material = ExtResource("floor_mat")
 fluorescent_housing_size = Vector3(1.2, 0.25, 0.1)
 fluorescent_tube_size = Vector3(1.05, 0.12, 0.03)
 fluorescent_housing_color = Color(0.12, 0.12, 0.13, 1)

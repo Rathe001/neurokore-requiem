@@ -3,44 +3,15 @@ class_name LevelTheme
 
 @export var wall_height: float = 4.5
 @export var wall_thickness: float = 0.4
-@export var wall_shader: Shader
-@export var floor_shader: Shader
-# Optional variant shaders used for corridors so they read as a different
-# space from rooms (e.g., utility cladding + walkway plate). If left null the
-# corridor falls back to the primary wall/floor shader.
-@export var wall_shader_alt: Shader
-@export var floor_shader_alt: Shader
-# Shader parameter overrides applied when materialising the ShaderMaterial
-# for each shader slot. Keyed by uniform name → value (Color, Vector3, etc.
-# matching the shader's uniform type). Lets multiple themes share one
-# shader with different colour palettes — e.g. amber_theme overrides
-# tech_wall_riveted's base_color to rust/orange while dim_theme keeps
-# the cool grey defaults.
-@export var wall_shader_params: Dictionary = {}
-@export var floor_shader_params: Dictionary = {}
-@export var wall_shader_alt_params: Dictionary = {}
-@export var floor_shader_alt_params: Dictionary = {}
 
-# Optional pre-baked materials (e.g. StandardMaterial3D wired to a PBR
-# texture set imported via tools/import_blenderkit_material.py). When set,
-# these take priority over the shader / color paths above — the build
-# context uses them directly instead of constructing a procedural material.
-# Lets us drop a Blenderkit-sourced texture set onto a theme without
-# touching shader code.
-@export var wall_material_override: Material
-@export var floor_material_override: Material
-@export var wall_material_alt_override: Material
-@export var floor_material_alt_override: Material
-
-@export_group("Wall Material")
-@export var wall_color: Color = Color(0.2, 0.21, 0.24, 1)
-@export var wall_metallic: float = 0.3
-@export var wall_roughness: float = 0.6
-
-@export_group("Floor Material")
-@export var floor_color: Color = Color(0.25, 0.26, 0.28, 1)
-@export var floor_metallic: float = 0.2
-@export var floor_roughness: float = 0.7
+# PBR materials applied to walls and floors. Imported from Blenderkit via
+# tools/import_blenderkit_material.py. The _alt slots are used for corridor
+# pieces so corridors can read as a different space from rooms; null falls
+# back to the primary material (corridors look like rooms).
+@export var wall_material: Material
+@export var floor_material: Material
+@export var wall_material_alt: Material
+@export var floor_material_alt: Material
 
 @export_group("FPS Fog")
 @export var fps_fog_density: float = 0.35

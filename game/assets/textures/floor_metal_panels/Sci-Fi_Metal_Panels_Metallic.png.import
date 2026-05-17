@@ -2,8 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://ckfv8yjgd7tq4"
-path.s3tc="res://.godot/imported/Roughness_01.png-acb58dd51349508a307f898ad189512f.s3tc.ctex"
+uid="uid://tmvjuppddf2d"
+path.s3tc="res://.godot/imported/Sci-Fi_Metal_Panels_Metallic.png-41d133c5144391fa23752f2dfca7a42c.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
@@ -11,8 +11,8 @@ metadata={
 
 [deps]
 
-source_file="res://assets/textures/wall_scifi_panelizer/Roughness_01.png"
-dest_files=["res://.godot/imported/Roughness_01.png-acb58dd51349508a307f898ad189512f.s3tc.ctex"]
+source_file="res://assets/textures/floor_metal_panels/Sci-Fi_Metal_Panels_Metallic.png"
+dest_files=["res://.godot/imported/Sci-Fi_Metal_Panels_Metallic.png-41d133c5144391fa23752f2dfca7a42c.s3tc.ctex"]
 
 [params]
 

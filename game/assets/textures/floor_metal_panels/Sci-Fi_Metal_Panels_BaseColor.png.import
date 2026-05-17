@@ -2,8 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://og1w7sn8ge6h"
-path.s3tc="res://.godot/imported/Sci-Fi_Vent_03_Roughness.png-a457d821bd676665326c02fc3b501dc7.s3tc.ctex"
+uid="uid://dvfn8y1odqs8u"
+path.s3tc="res://.godot/imported/Sci-Fi_Metal_Panels_BaseColor.png-a762e6b2f02f5c886de4490abee33a39.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
@@ -11,8 +11,8 @@ metadata={
 
 [deps]
 
-source_file="res://assets/textures/floor_scifi_vent/Sci-Fi_Vent_03_Roughness.png"
-dest_files=["res://.godot/imported/Sci-Fi_Vent_03_Roughness.png-a457d821bd676665326c02fc3b501dc7.s3tc.ctex"]
+source_file="res://assets/textures/floor_metal_panels/Sci-Fi_Metal_Panels_BaseColor.png"
+dest_files=["res://.godot/imported/Sci-Fi_Metal_Panels_BaseColor.png-a762e6b2f02f5c886de4490abee33a39.s3tc.ctex"]
 
 [params]
 
