@@ -35,6 +35,12 @@ const COLOR_OPENED := Color(0.35, 0.35, 0.35, 1.0)
 var _mesh: MeshInstance3D = null
 var _lid: Node3D = null
 var _lid_rest_position: Vector3 = Vector3.ZERO
+# AnimationPlayer is preferred over the manual lid tween whenever the .glb
+# ships with its own open animation. Set by _ready when the imported scene
+# contains an AnimationPlayer node — Godot adds one automatically when the
+# source glTF has animation tracks (Sci Fi Storage Box ships three of them).
+var _anim_player: AnimationPlayer = null
+var _open_anim_name: StringName = &""
 
 var _opened: bool = false
 
@@ -43,7 +49,26 @@ func _ready() -> void:
 	_lid = _find_named_descendant(visual, "zCrateLarge_Top")
 	if _lid != null:
 		_lid_rest_position = _lid.position
+	_anim_player = _find_anim_player(visual)
+	if _anim_player != null:
+		# Pick the first available animation as "open." For the current
+		# Sci Fi Storage Box .glb, all three baked animations are variants
+		# of "Inner BoxAction" doing roughly the same lid-lift motion, so
+		# any of them reads as "the crate opens."
+		var names: PackedStringArray = _anim_player.get_animation_list()
+		if names.size() > 0:
+			_open_anim_name = StringName(names[0])
 	super._ready()
+
+
+static func _find_anim_player(node: Node) -> AnimationPlayer:
+	for child in node.get_children():
+		if child is AnimationPlayer:
+			return child
+		var nested := _find_anim_player(child)
+		if nested != null:
+			return nested
+	return null
 
 
 static func _find_first_mesh(node: Node) -> MeshInstance3D:
@@ -76,6 +101,9 @@ func reset_state() -> void:
 	if _lid != null:
 		_lid.position = _lid_rest_position
 		_lid.rotation_degrees = Vector3.ZERO
+	if _anim_player != null and _open_anim_name != &"":
+		_anim_player.stop()
+		_anim_player.seek(0.0, true)
 	input_ray_pickable = true
 	SpatialGrid.register(self, &"interactables")
 
@@ -164,6 +192,14 @@ func _roll_items() -> Array[Item]:
 
 
 func _open_visual() -> void:
+	# Prefer the .glb's baked-in animation when present (Sci Fi Storage Box
+	# ships an "Inner BoxAction" lid-lift). Falls through to the manual lid
+	# tween if the model has a named lid node but no AnimationPlayer (older
+	# Container Large authoring pattern).
+	if _anim_player != null and _open_anim_name != &"":
+		_anim_player.play(_open_anim_name)
+		WeaponSounds.play_generic(&"chest_open", global_position)
+		return
 	# Lift the lid off the crate and tilt it backward — the model is
 	# authored with the top as a removable lid (no hinge geometry), so
 	# the natural animation is "set it aside" rather than "hinge open."

@@ -15,7 +15,12 @@ collision_mask = 0
 script = ExtResource("1_script")
 display_name = "Loot Crate"
 
+; Sci-Fi-Crate .glb bbox is 2.76 × 1.13 × 1.55m at scale 1.0. Collision
+; below is 1.5 × 0.8 × 1.2m. Uniform 0.55 scale shrinks the model so its
+; widest axis fits the collision footprint; smaller axes have a bit of
+; clearance which is fine.
 [node name="Visual" parent="." instance=ExtResource("crate_visual")]
+transform = Transform3D(0.55, 0, 0, 0, 0.55, 0, 0, 0, 0.55, 0, 0, 0)
 
 [node name="Collision" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)
