@@ -1,22 +1,10 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/prototype/prototype_drone.gd" id="script_drone"]
-
-[sub_resource type="SphereMesh" id="mesh_drone"]
-radius = 0.11
-height = 0.22
-radial_segments = 12
-rings = 6
+[ext_resource type="PackedScene" path="res://assets/models/objects/automaton_drone/automaton_drone.glb" id="drone_visual"]
 
 [sub_resource type="SphereShape3D" id="shape_drone"]
 radius = 0.13
-
-[sub_resource type="StandardMaterial3D" id="mat_drone"]
-shading_mode = 0
-albedo_color = Color(0.55, 0.78, 0.85, 1)
-emission_enabled = true
-emission = Color(0.55, 0.78, 0.85, 1)
-emission_energy_multiplier = 4.0
 
 ; Untargetable hover drone for the Automaton Drone Swarm perk.
 ;
@@ -30,17 +18,20 @@ collision_layer = 0
 collision_mask = 1
 script = ExtResource("script_drone")
 
-[node name="Mesh" type="MeshInstance3D" parent="."]
-mesh = SubResource("mesh_drone")
-material_override = SubResource("mat_drone")
-cast_shadow = 0
+; Visual is the Blenderkit Sci-fi Droid Robot .glb at scale 0.3. Source
+; bbox is 2.29 × 1.8 × 2.7m with the pivot offset above the visual
+; centre (Y min ≈ -1.22). At scale 0.3 the drone lands at ~70 × 54 × 80cm
+; and the visual centre sits ~37cm below the hover point — looks natural
+; for a hovering sci-fi orb (the body hangs slightly below its tracker).
+[node name="Mesh" parent="." instance=ExtResource("drone_visual")]
+transform = Transform3D(0.3, 0, 0, 0, 0.3, 0, 0, 0, 0.3, 0, 0, 0)
 
 [node name="Collision" type="CollisionShape3D" parent="."]
 shape = SubResource("shape_drone")
 
-; Small ProximityLighting-aware glow so the drone visibly lights nearby
-; surfaces as it hovers. Shadow off because the drone meshes are tiny and
-; constantly moving — shadow updates would be expensive at 5 drones.
+; ProximityLighting-aware glow tinted to the drone's accent colour so it
+; lights nearby surfaces as it hovers. Shadow off — at 5+ drones at horde
+; density the shadow updates would dominate the frame budget.
 [node name="Glow" type="OmniLight3D" parent="."]
 light_color = Color(0.55, 0.78, 0.85, 1)
 light_energy = 1.0

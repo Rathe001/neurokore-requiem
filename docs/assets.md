@@ -23,6 +23,8 @@ _None added from third-party sources yet. Player + enemy + drone use Quaternius
 | Asset | Source | License | Files | Status | Notes |
 |---|---|---|---|---|---|
 | UAL1 Standard | Quaternius | CC0 (verify) | `game/art/3d/characters/quaternius/UAL1_Standard.glb` | ⚠️ | Default character rig used for player + every enemy class |
+| Sci-fi Droid Robot | [Blenderkit](https://www.blenderkit.com/get-blenderkit/45ee98c2-d943-4cd8-bbc7-48e12c134040/) | Blenderkit — listed Free | `game/assets/models/objects/automaton_drone/automaton_drone.glb` | ⚠️ | Imported via tools/import_blenderkit.py — license TBD until verified |
+
 
 ## Audio — SFX (YouTube extracts)
 
