@@ -1,60 +1,34 @@
 ---
 name: blenderkit-model-import-workflow
-description: "Use tools/import_blenderkit.py to bring a Blenderkit model into the project as a clean .glb. The user downloads in Blender's Blenderkit panel first (handles auth/payment), then the script converts the cached .blend to .glb without modifying geometry. NEVER bulk-process or recalculate normals — that was destructive."
+description: "tools/import_blenderkit.py converts a Blenderkit-cached .blend → .glb with several Godot-iso-camera-friendly fixes baked in. Workflow: user downloads in Blender first (handles auth), then script imports."
 metadata: 
   node_type: memory
   type: project
   originSessionId: 8cb2236a-ff5a-4a76-8cc4-a33a9a8014b8
 ---
 
-**Tool:** `tools/import_blenderkit.py`
+`tools/import_blenderkit.py` is the canonical import path for any Blenderkit asset. User downloads via Blender's Blenderkit panel first (handles auth + caches under `~/blenderkit_data/models/<slug>_<id>/`), then run the script with the asset_base_id from the asset's URL or search-string.
 
-**Workflow when the user shares a Blenderkit asset_base_id or search query:**
+```
+python tools/import_blenderkit.py <asset_base_id> <target_name> [--category objects] [--decimate 0.5] [--tint-emission "50,200,230"]
+```
 
-1. The user has to download the asset in Blender's Blenderkit panel first
-   (Blenderkit's addon handles auth, credits, and rate-limiting for paid
-   assets). Blenderkit caches the source .blend under
-   `~/blenderkit_data/models/<slug>_<id>/`.
+The script's Blender headless preprocessing applies, in order:
 
-2. Run the import script:
-   ```
-   python tools/import_blenderkit.py <asset_base_id> <target_name> [--category objects]
-   ```
-   - `asset_base_id` is the UUID from the Blenderkit URL (e.g. the one in
-     `https://www.blenderkit.com/get-blenderkit/<UUID>/`). The script
-     accepts either the bare UUID or a full Blenderkit search-query
-     fragment like `asset_base_id:UUID asset_type:model`.
-   - `target_name` is the project slug (e.g. `barrel3`, `console2`).
-   - `--category` defaults to `objects`; use `characters` for rigged figures.
+1. `unpack_all` packed images so paths resolve.
+2. **UDIM handling** — glTF can't export `image.source == 'TILED'`. The script walks the .blend's cache directory looking for tile-1001 files (Blenderkit ships them under `textures/` even when the blend references `textures_2k/` — folder-name mismatch is common). Found tiles are loaded as regular non-tiled images and references swapped. Tiles that can't be found get disconnected from materials, AND the material's `Emission`/`Emission Strength` inputs are zeroed (else the missing texture-mask leaves the whole surface glowing white).
+3. **Colorspace preservation** — swapped images inherit the original TILED image's `colorspace_settings.name` so normal/metallic/roughness/emissive maps don't get misinterpreted as sRGB.
+4. **`--decimate` ratio** (optional) — Decimate modifier (COLLAPSE) before export. Use 0.4–0.6 for iso-camera clutter where fine triangles are sub-pixel anyway.
+5. **`--tint-emission "r,g,b"`** (optional) — recolors every emissive texture to `luminance × tint` via numpy. Preserves the brightness pattern but remaps the hue (e.g. the Sci Fi Crate ships red emission, retinted cyan to match its preview).
+6. **Per-material**: `use_backface_culling = False` (glTF `doubleSided=true`), `blend_method = 'OPAQUE'` (kills alpha-blend depth sort issues).
+7. **Export**: `export_apply=True` bakes Solidify/Mirror/Subsurf modifiers into the geometry.
 
-3. The script:
-   - Queries Blenderkit's anonymous search API to bridge asset_base_id
-     (URL form) → `id` (cache-folder form). They are NOT the same UUID.
-   - Locates the cached .blend file.
-   - Opens it in headless Blender and exports as `.glb` with default
-     glTF settings (normals + tangents + skinning + animations preserved,
-     no geometry modification).
-   - Appends a row to `docs/assets.md` so the asset is tracked for
-     license verification.
+Appends a row to `docs/assets.md` automatically for credit/license tracking.
 
-**Critical: do NOT modify geometry on import.** The previous
-`tools/fix_normals.py` ran "Recalculate Outside" globally and destroyed
-intentionally-inverted detail (recessed panels, inner cardboard flaps,
-hollow sci-fi monitor cavities) on ~half the Blenderkit assets. That
-tool no longer exists. The right approach for normal issues is
-per-model in Blender's UI: enable Face Orientation overlay, select
-only the red faces, `Mesh → Normals → Flip`. Surgical, not bulk.
+**Why:** Blenderkit ships film/VFX-quality models that fight Godot's iso rendering — UDIM textures, clearcoat extensions, alpha-blend decals, inverted normals, full-detail PBR. We learned the hard way; this script encodes every fix we've found.
 
-**If a model has visible "transparent / inside-out" faces after import:**
-- Don't auto-fix. Tell the user to open the .glb in Blender, use Face
-  Orientation overlay to find red faces, flip those specifically, re-
-  export over the imported .glb.
-- Or — if the user is fine living with it — `ClutterBuilder.disable_backface_culling`
-  still exists as an opt-in per-model workaround (call it from the
-  specific consumer's `_ready`, not globally).
+**How to apply:** for any new third-party model that imports glitchy, run `python tools/inspect_glb.py <path>` first to see what extensions/animations/material setup it has, then decide if we need to extend the import script further.
 
-**Hard-won lesson (don't repeat):** Untracked .glbs under
-`game/assets/models/` mean no rollback if a destructive transform runs.
-Either commit before running anything destructive, or copy to a backup
-location first. The import script is non-destructive by design — it
-exports default glTF settings without any geometry passes.
+**NEVER** bulk-recalculate normals — destroys intentionally-inverted detail (recessed panels, inner cardboard flaps, hollow sci-fi monitor cavities). The previous `tools/fix_normals.py` did this and broke half of our assets; that tool no longer exists. Per-model in Blender's UI is the right approach for normal issues.
+
+See [[project_los_culler_transparency_pass]] for the related "model looks glitchy in-game" red herring — that was almost always our LoS culler routing meshes through the transparent pipeline, not the .glb's fault.

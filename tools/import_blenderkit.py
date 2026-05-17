@@ -115,19 +115,218 @@ def locate_cached_blend(meta: dict) -> Path:
     return max(blends, key=lambda p: p.stat().st_size)
 
 
-def export_glb(blend_path: Path, out_path: Path) -> None:
+def export_glb(blend_path: Path, out_path: Path, decimate_ratio: float = 1.0, tint_emission: str = "") -> None:
     """Drive Blender headless to open the .blend and export it as .glb
     with default settings. Does NOT modify geometry, normals, or materials."""
     out_path.parent.mkdir(parents=True, exist_ok=True)
     blender = os.environ.get("BLENDER", DEFAULT_BLENDER)
     if not Path(blender).exists():
         fail(f"Blender not found at {blender} — set $BLENDER to override")
+    # export_apply=True bakes modifiers (Solidify, Mirror, Subdivision Surface,
+    # etc.) into the exported mesh. Blenderkit assets commonly ship with a
+    # Solidify modifier on container/box bodies to create dual-sided geometry —
+    # without applying it the export ships only the inner OR outer shell
+    # and the model lights wrong in Godot even though Blender's preview
+    # (which respects modifiers) looked fine. Armature modifiers are
+    # preserved separately for rigged characters, so this is safe to keep on.
+    #
+    # use_backface_culling = False on every material is the glTF spec way to
+    # say "render this material on both sides" — Blender's exporter maps it
+    # to glTF's `doubleSided: true` flag, which Godot honors. Blenderkit
+    # models often have intentionally inverted faces (recessed panels,
+    # interior surfaces) authored to look right under Blender's default
+    # Eevee preview (which doesn't cull backfaces unless you toggle it on
+    # per-material). When those same faces ship to Godot — which defaults
+    # to back-face cull — chunks of the model drop out depending on camera
+    # angle. Forcing double-sided at export time is the surgical fix and
+    # doesn't touch geometry.
+    # blend_method = 'OPAQUE' fixes the camera-angle-dependent face dropouts
+    # we kept seeing on Blenderkit containers. Many of those models use
+    # alpha-blend materials in Blender for subtle decals/edges; glTF
+    # preserves that as `alphaMode: BLEND`, and transparent surfaces in
+    # Godot don't write to the depth buffer — so two transparent panels
+    # at different distances sort wrong as the camera rotates, with one
+    # appearing to vanish behind the other. Forcing opaque kills the
+    # transparency sort entirely (cost: any genuinely-transparent details
+    # like glass become opaque, but for solid containers that's correct).
+    # UDIM textures (image.source == 'TILED') aren't supported by the glTF
+    # spec at all. Blenderkit ships some "PBR Pro" models with UDIM-tiled
+    # detail maps; the exporter aborts hard rather than degrade. Our
+    # workaround: walk every image-texture node, and for tiled images,
+    # disconnect the node's outputs so the material falls back to its
+    # Principled BSDF defaults (baseColorFactor, etc.). Cost: surface
+    # detail authored into UDIM tiles is lost, but the model still ships
+    # and renders cleanly. Future: bake UDIM down to a single texture
+    # via Blender's bake op if a model really needs the detail preserved.
+    #
+    # Decimation: optional poly reduction via the Decimate modifier
+    # (COLLAPSE method). At iso camera distance many fine triangles are
+    # sub-pixel — a ratio of 0.5 typically halves geometry with no
+    # visible difference. Applied before export_apply so the decimation
+    # is baked into the .glb.
+    tint_step = ""
+    if tint_emission:
+        parts = [float(x) for x in tint_emission.split(",")]
+        if len(parts) == 3:
+            tr, tg, tb = (p / 255.0 for p in parts)
+            # Remap every emissive-input texture from its native color to
+            # luminance × (tr, tg, tb). Preserves which pixels emit and how
+            # bright they get; replaces the hue. Catches both pre-swap UDIM
+            # images and post-swap on-disk loads — we walk every material
+            # that has an active Emission link and recolor the image it
+            # ultimately samples from.
+            tint_step = (
+                "import numpy as _np\n"
+                f"_TINT = ({tr}, {tg}, {tb})\n"
+                "_emis_imgs = set()\n"
+                "for mat in bpy.data.materials:\n"
+                "    if not mat.use_nodes or mat.node_tree is None:\n"
+                "        continue\n"
+                "    for node in mat.node_tree.nodes:\n"
+                "        if node.type != 'BSDF_PRINCIPLED':\n"
+                "            continue\n"
+                "        for socket_name in ('Emission', 'Emission Color'):\n"
+                "            if socket_name not in node.inputs:\n"
+                "                continue\n"
+                "            sock = node.inputs[socket_name]\n"
+                "            if not sock.is_linked:\n"
+                "                continue\n"
+                "            src = sock.links[0].from_node\n"
+                "            if src.type == 'TEX_IMAGE' and src.image is not None:\n"
+                "                _emis_imgs.add(src.image.name)\n"
+                "for name in _emis_imgs:\n"
+                "    img = bpy.data.images.get(name)\n"
+                "    if img is None or img.size[0] == 0:\n"
+                "        continue\n"
+                "    n_floats = img.size[0] * img.size[1] * img.channels\n"
+                "    arr = _np.empty(n_floats, dtype=_np.float32)\n"
+                "    img.pixels.foreach_get(arr)\n"
+                "    arr = arr.reshape(-1, img.channels)\n"
+                "    lum = arr[:, :3].max(axis=1)\n"
+                "    arr[:, 0] = lum * _TINT[0]\n"
+                "    arr[:, 1] = lum * _TINT[1]\n"
+                "    arr[:, 2] = lum * _TINT[2]\n"
+                "    img.pixels.foreach_set(arr.reshape(-1))\n"
+                "    img.update()\n"
+            )
+    decimate_step = ""
+    if decimate_ratio < 1.0:
+        decimate_step = (
+            f"_DECIMATE = {decimate_ratio}\n"
+            "for obj in bpy.data.objects:\n"
+            "    if obj.type != 'MESH':\n"
+            "        continue\n"
+            "    m = obj.modifiers.new('AutoDecimate', 'DECIMATE')\n"
+            "    m.decimate_type = 'COLLAPSE'\n"
+            "    m.ratio = _DECIMATE\n"
+        )
     script = (
         "import bpy\n"
         f"bpy.ops.wm.open_mainfile(filepath=r'{blend_path}')\n"
+        # Unpack any packed textures so the exporter resolves their paths.
+        # try/except because unpack errors on .blends with no packed data.
+        "try:\n"
+        "    bpy.ops.file.unpack_all(method='WRITE_LOCAL')\n"
+        "except Exception:\n"
+        "    pass\n"
+        # UDIM handling — three-strategy ladder.
+        #
+        # 1) Try to find the actual tile file on disk (Blenderkit ships tile
+        #    1001 separately under a textures/ folder; blend's filepath_raw
+        #    references a different folder name like textures_2k/ which
+        #    doesn't exist). Walk the .blend's directory recursively looking
+        #    for files matching the tile-1001 filename. If found, load as a
+        #    regular non-tiled image and swap all references — textures are
+        #    preserved.
+        # 2) If no on-disk tile is found, fall back to disconnecting the
+        #    texture node (material renders with its baseColorFactor only).
+        # 3) For step-2 strips, also zero the Principled BSDF emission — many
+        #    emissive materials use the texture as a mask (only painted
+        #    accents emit), and without the mask the whole surface glows
+        #    at emissiveFactor's full strength.
+        "import os\n"
+        "_blend_dir = os.path.dirname(bpy.data.filepath)\n"
+        "_disk_files = {}\n"
+        "for root, dirs, files in os.walk(_blend_dir):\n"
+        "    for f in files:\n"
+        "        _disk_files[f.lower()] = os.path.join(root, f)\n"
+        "_swapped = {}\n"
+        "_stripped_imgs = set()\n"
+        "for img in list(bpy.data.images):\n"
+        "    if img.source != 'TILED' or not img.tiles:\n"
+        "        continue\n"
+        "    _target_idx = 0\n"
+        "    for _i, _t in enumerate(img.tiles):\n"
+        "        if _t.number == 1001:\n"
+        "            _target_idx = _i\n"
+        "            break\n"
+        "    _target_tile = img.tiles[_target_idx]\n"
+        "    _candidates = []\n"
+        "    if img.filepath_raw:\n"
+        "        _candidates.append(img.filepath_raw.replace('<UDIM>', str(_target_tile.number)))\n"
+        "    if _target_tile.label:\n"
+        "        _candidates.append(_target_tile.label)\n"
+        "    _found_path = None\n"
+        "    for _c in _candidates:\n"
+        "        _abs = bpy.path.abspath(_c) if _c.startswith('//') else _c\n"
+        "        if os.path.exists(_abs):\n"
+        "            _found_path = _abs\n"
+        "            break\n"
+        "    if _found_path is None:\n"
+        "        for _c in _candidates:\n"
+        "            _basename = os.path.basename(_c).lower()\n"
+        "            if _basename in _disk_files:\n"
+        "                _found_path = _disk_files[_basename]\n"
+        "                break\n"
+        "    if _found_path is not None:\n"
+        "        _new_img = bpy.data.images.load(_found_path, check_existing=True)\n"
+        # Preserve the original UDIM image's colorspace. A freshly-loaded
+        # image gets Blender's auto-detected colorspace (usually 'sRGB'),
+        # which is wrong for data textures: a normal map loaded as sRGB
+        # produces blue-tinted garbage in Godot; an emissive map authored
+        # in linear space loaded as sRGB shifts hues (cyan → red on the
+        # Sci Fi Crate's accent strips). Copying the original's setting
+        # ensures Roughness/Metallic/Normal/Emissive each end up in the
+        # space the source artist intended.
+        "        try:\n"
+        "            _new_img.colorspace_settings.name = img.colorspace_settings.name\n"
+        "        except Exception:\n"
+        "            pass\n"
+        "        _swapped[img.name] = _new_img\n"
+        "    else:\n"
+        "        _stripped_imgs.add(img.name)\n"
+        "for mat in bpy.data.materials:\n"
+        "    if not mat.use_nodes or mat.node_tree is None:\n"
+        "        continue\n"
+        "    _stripped_this_mat = False\n"
+        "    for node in list(mat.node_tree.nodes):\n"
+        "        if node.type != 'TEX_IMAGE' or node.image is None:\n"
+        "            continue\n"
+        "        if node.image.name in _swapped:\n"
+        "            node.image = _swapped[node.image.name]\n"
+        "        elif node.image.name in _stripped_imgs:\n"
+        "            _stripped_this_mat = True\n"
+        "            for out in node.outputs:\n"
+        "                for link in list(out.links):\n"
+        "                    mat.node_tree.links.remove(link)\n"
+        "    if _stripped_this_mat:\n"
+        "        for node in mat.node_tree.nodes:\n"
+        "            if node.type != 'BSDF_PRINCIPLED':\n"
+        "                continue\n"
+        "            for socket_name in ('Emission', 'Emission Color'):\n"
+        "                if socket_name in node.inputs:\n"
+        "                    node.inputs[socket_name].default_value = (0.0, 0.0, 0.0, 1.0)\n"
+        "            if 'Emission Strength' in node.inputs:\n"
+        "                node.inputs['Emission Strength'].default_value = 0.0\n"
+        + decimate_step + tint_step +
+        "for mat in bpy.data.materials:\n"
+        "    mat.use_backface_culling = False\n"
+        "    if hasattr(mat, 'blend_method'):\n"
+        "        mat.blend_method = 'OPAQUE'\n"
         "bpy.ops.export_scene.gltf("
         f"filepath=r'{out_path}',"
         "export_format='GLB',"
+        "export_apply=True,"
         "export_normals=True,"
         "export_tangents=True,"
         "export_animations=True,"
@@ -187,6 +386,17 @@ def main() -> None:
     p.add_argument("target_name")
     p.add_argument("--category", default="objects")
     p.add_argument("--license", default="Blenderkit — listed Free")
+    p.add_argument("--decimate", type=float, default=1.0,
+                   help="Mesh decimation ratio passed to Blender's Decimate "
+                        "modifier (COLLAPSE). 1.0 keeps every polygon (default); "
+                        "0.5 halves geometry; 0.3 ~ a third. For iso camera use "
+                        "0.4–0.6 — most fine detail is sub-pixel anyway.")
+    p.add_argument("--tint-emission", default="",
+                   help="Recolor emissive textures to luminance × this color. "
+                        "Format: 'r,g,b' with each in 0-255. Use when a model's "
+                        "warning-red glow doesn't fit and you want cyan/etc — the "
+                        "brightness pattern is preserved, only the hue changes. "
+                        "Empty (default) skips tinting.")
     args = p.parse_args()
 
     asset_base_id = normalize_id(args.asset_id)
@@ -201,8 +411,9 @@ def main() -> None:
     out = MODELS_OUT / args.category / args.target_name / f"{args.target_name}.glb"
     if out.exists():
         fail(f"target {out} already exists — delete it first if you want to replace")
-    export_glb(blend, out)
-    print(f"[import_blenderkit] exported: {out.relative_to(ROOT)}")
+    export_glb(blend, out, decimate_ratio=args.decimate, tint_emission=args.tint_emission)
+    print(f"[import_blenderkit] exported: {out.relative_to(ROOT)} "
+          f"(decimate={args.decimate})")
 
     append_manifest_row(asset_base_id, meta, out, args.license)
     print(f"[import_blenderkit] done.")
