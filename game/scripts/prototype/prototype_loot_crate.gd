@@ -22,32 +22,60 @@ const COLOR_OPENED := Color(0.35, 0.35, 0.35, 1.0)
 ## hand-authored. Empty path = no door wiring (regular loot drop).
 @export var target_door: NodePath
 
-@onready var mesh: MeshInstance3D = $Mesh
-@onready var lid: MeshInstance3D = $Lid
+# Visual is a .glb instance; the lid (`zCrateLarge_Top`) is one of its
+# children. We resolve both at _ready so the open animation can hinge
+# the lid without disturbing the rest of the model.
+@onready var visual: Node3D = $Visual
+
+# Cached at _ready by walking the .glb hierarchy. Lid is the named top
+# node from the source asset; _mesh is the first MeshInstance3D anywhere
+# under Visual (used by the outline shader, falls back to a Node3D if
+# the model is unusual). Both can be null if the .glb structure changes
+# — code that uses them guards on null.
+var _mesh: MeshInstance3D = null
+var _lid: Node3D = null
+var _lid_rest_position: Vector3 = Vector3.ZERO
 
 var _opened: bool = false
-var _mat: StandardMaterial3D
 
 func _ready() -> void:
-	_mat = StandardMaterial3D.new()
-	_mat.emission_enabled = true
-	_mat.emission_energy_multiplier = 2.0
-	_apply_color(COLOR_CLOSED)
-	mesh.material_override = _mat
+	_mesh = _find_first_mesh(visual)
+	_lid = _find_named_descendant(visual, "zCrateLarge_Top")
+	if _lid != null:
+		_lid_rest_position = _lid.position
 	super._ready()
 
+
+static func _find_first_mesh(node: Node) -> MeshInstance3D:
+	for child in node.get_children():
+		if child is MeshInstance3D:
+			return child
+		var nested := _find_first_mesh(child)
+		if nested != null:
+			return nested
+	return null
+
+
+static func _find_named_descendant(node: Node, target_name: String) -> Node3D:
+	for child in node.get_children():
+		if child.name == target_name and child is Node3D:
+			return child
+		var nested := _find_named_descendant(child, target_name)
+		if nested != null:
+			return nested
+	return null
+
 func _get_outline_source() -> MeshInstance3D:
-	return mesh
+	return _mesh
 
 func _get_tooltip_text() -> String:
 	return "Loot Crate" if not _opened else "Empty Crate"
 
 func reset_state() -> void:
 	_opened = false
-	_apply_color(COLOR_CLOSED)
-	if lid != null:
-		lid.visible = true
-		lid.rotation_degrees.x = 0.0
+	if _lid != null:
+		_lid.position = _lid_rest_position
+		_lid.rotation_degrees = Vector3.ZERO
 	input_ray_pickable = true
 	SpatialGrid.register(self, &"interactables")
 
@@ -136,10 +164,21 @@ func _roll_items() -> Array[Item]:
 
 
 func _open_visual() -> void:
-	_apply_color(COLOR_OPENED)
-	if lid != null:
-		var tween := create_tween()
-		tween.tween_property(lid, "rotation_degrees:x", -110.0, 0.3).set_ease(Tween.EASE_OUT)
+	# Lift the lid off the crate and tilt it backward — the model is
+	# authored with the top as a removable lid (no hinge geometry), so
+	# the natural animation is "set it aside" rather than "hinge open."
+	# Total ~0.5s — chase it with the chest_open SFX so the sound's
+	# decay lines up with the tween settle.
+	if _lid != null:
+		var tween := create_tween().set_parallel(true)
+		tween.tween_property(
+			_lid, "position",
+			_lid_rest_position + Vector3(0.0, 0.45, -0.35), 0.45,
+		).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+		tween.tween_property(
+			_lid, "rotation_degrees",
+			Vector3(-22.0, 0.0, 6.0), 0.45,
+		).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
 	# Plays on both the local opener AND every peer that receives the
 	# _client_open_visual RPC (the visual path runs on both sides).
 	WeaponSounds.play_generic(&"chest_open", global_position)
@@ -180,6 +219,9 @@ func _find_pickups_container() -> PickupsContainer:
 	return null
 
 
-func _apply_color(c: Color) -> void:
-	_mat.albedo_color = c
-	_mat.emission = c
+func _apply_color(_c: Color) -> void:
+	# No-op: the .glb ships with its own PBR materials we don't override.
+	# Open-state read comes from the lid-lift tween + _become_inert
+	# (outline hide, pickability off). Kept as a stub so any caller
+	# that still invokes _apply_color doesn't error.
+	pass
