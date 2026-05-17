@@ -8,7 +8,7 @@ class_name FloorBuilder
 ## Pit interiors (the shaft and ooze/spike floor) are owned by PitBuilder;
 ## this file only handles the surface plane(s) and the perimeter trim.
 
-const FLOOR_OVERLAP := 0.3  ## extends piece floors past wall outer face (slightly > wall_thickness * 0.5)
+const FLOOR_OVERLAP := 0.1  ## extends piece floors slightly past wall plane so the wall-floor seam stays hidden under the wall geometry. With strict-grid kit pieces aligned at wall planes, only a small overlap is needed (was 0.3m when we had non-grid sizes + adaptive scaling).
 ## Subdivision density for floor PlaneMesh, in vertices per meter. The
 ## displacement ShaderMaterial needs subdivided geometry to actually deform —
 ## without subdivision a 20m floor is 4 corner verts and no displacement is
@@ -166,7 +166,7 @@ static func build_corridor_floor_kit(ctx: LevelBuildContext, center: Vector3, cd
 
 static func build_corridor_floor(ctx: LevelBuildContext, center: Vector3, cd: CorridorDef) -> void:
 	var along_z := cd.axis == CorridorDef.Axis.Z
-	var sw := cd.width   # perpendicular to travel
+	var sw := cd.width   # perpendicular to travel (walkable width, inner-face to inner-face)
 	var sl := cd.length  # along travel axis
 	# Pass the un-biased center; the mesh_y_bias arg shifts only the visual,
 	# leaving the collision flush with the adjacent room floor.

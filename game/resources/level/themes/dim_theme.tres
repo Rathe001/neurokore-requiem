@@ -1,13 +1,16 @@
-[gd_resource type="Resource" script_class="LevelTheme" load_steps=4 format=3]
+[gd_resource type="Resource" script_class="LevelTheme" load_steps=8 format=3]
 
-; Industrial-cladding theme for the chain's middle section. Currently
-; shares the same kit-bash models as tech_theme — when zone-specific
-; models are imported, swap wall_model / floor_model here. Per-zone
-; differentiation in the meantime comes from fps_fog_color + lights.
+; Industrial-cladding theme for the chain's middle section. Dual-state — see
+; tech_theme.tres for the kit/debug toggle pattern. Currently shares the
+; same kit models as tech_theme; differentiation via fps_fog_color + lights.
 
 [ext_resource type="Script" path="res://scripts/level/level_theme.gd" id="1"]
 [ext_resource type="PackedScene" path="res://assets/models/objects/wall_industrial_panel/wall_industrial_panel.glb" id="wall_model"]
 [ext_resource type="PackedScene" path="res://assets/models/objects/floor_panel/floor_panel.glb" id="floor_model"]
+[ext_resource type="ShaderMaterial" path="res://resources/level/debug/wall_debug.tres" id="wall_mat"]
+[ext_resource type="ShaderMaterial" path="res://resources/level/debug/floor_debug.tres" id="floor_mat"]
+[ext_resource type="ShaderMaterial" path="res://resources/level/debug/wall_alt_debug.tres" id="wall_alt_mat"]
+[ext_resource type="ShaderMaterial" path="res://resources/level/debug/floor_alt_debug.tres" id="floor_alt_mat"]
 
 [resource]
 script = ExtResource("1")
@@ -22,6 +25,10 @@ floor_grid_size = 4.0
 wall_model_native_width = 2.0
 wall_model_native_height = 2.0
 floor_model_native_size = Vector2(1.92, 2.0)
+wall_material = ExtResource("wall_mat")
+floor_material = ExtResource("floor_mat")
+wall_material_alt = ExtResource("wall_alt_mat")
+floor_material_alt = ExtResource("floor_alt_mat")
 pit_depth = 5.0
 fluorescent_housing_size = Vector3(1.2, 0.25, 0.1)
 fluorescent_tube_size = Vector3(1.05, 0.12, 0.03)

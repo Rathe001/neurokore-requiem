@@ -1,0 +1,10 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+
+[ext_resource type="Shader" path="res://scripts/level/debug_block.gdshader" id="1"]
+
+[resource]
+shader = ExtResource("1")
+shader_parameter/fill_color = Color(0.08, 0.10, 0.14, 1)
+shader_parameter/border_color = Color(0.2, 1.0, 0.5, 1)
+shader_parameter/border_width = 2.0
+shader_parameter/emission_strength = 2.0

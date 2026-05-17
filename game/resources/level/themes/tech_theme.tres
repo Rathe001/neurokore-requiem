@@ -1,8 +1,19 @@
-[gd_resource type="Resource" script_class="LevelTheme" load_steps=4 format=3]
+[gd_resource type="Resource" script_class="LevelTheme" load_steps=8 format=3]
+
+; Theme dual-state. Production: kit-bash models (wall_model / floor_model) +
+; wall_thickness 0.4 to match the panel models' design thickness.
+; Debug viz: toggled via `LevelBuilder.USE_DEBUG_LEVEL_VIZ = true`, which
+; ignores kit_model and falls back to procedural geometry + the debug
+; ShaderMaterial refs in wall_material / floor_material / *_alt. Both sets
+; of refs stay assigned here so flipping the toggle doesn't need theme edits.
 
 [ext_resource type="Script" path="res://scripts/level/level_theme.gd" id="1"]
 [ext_resource type="PackedScene" path="res://assets/models/objects/wall_industrial_panel/wall_industrial_panel.glb" id="wall_model"]
 [ext_resource type="PackedScene" path="res://assets/models/objects/floor_panel/floor_panel.glb" id="floor_model"]
+[ext_resource type="ShaderMaterial" path="res://resources/level/debug/wall_debug.tres" id="wall_mat"]
+[ext_resource type="ShaderMaterial" path="res://resources/level/debug/floor_debug.tres" id="floor_mat"]
+[ext_resource type="ShaderMaterial" path="res://resources/level/debug/wall_alt_debug.tres" id="wall_alt_mat"]
+[ext_resource type="ShaderMaterial" path="res://resources/level/debug/floor_alt_debug.tres" id="floor_alt_mat"]
 
 [resource]
 script = ExtResource("1")
@@ -17,6 +28,10 @@ floor_grid_size = 4.0
 wall_model_native_width = 2.0
 wall_model_native_height = 2.0
 floor_model_native_size = Vector2(1.92, 2.0)
+wall_material = ExtResource("wall_mat")
+floor_material = ExtResource("floor_mat")
+wall_material_alt = ExtResource("wall_alt_mat")
+floor_material_alt = ExtResource("floor_alt_mat")
 fluorescent_housing_size = Vector3(1.2, 0.25, 0.1)
 fluorescent_tube_size = Vector3(1.05, 0.12, 0.03)
 fluorescent_housing_color = Color(0.12, 0.12, 0.13, 1)

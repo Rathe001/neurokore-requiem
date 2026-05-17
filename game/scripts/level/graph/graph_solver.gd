@@ -125,6 +125,14 @@ static func solve(graph: LevelGraph) -> Array[LevelPiece]:
 
 		var corridor_copy: CorridorDef = c.corridor.duplicate()
 		corridor_copy.axis = _axis_for_wall(c.from_wall)
+		# Sync corridor.width to the connecting rooms' opening_width so the
+		# corridor walls extend the door jamb lines exactly — eliminates the
+		# perpendicular-offset class of misalignment at door/corridor joins.
+		# If the two rooms disagree on opening_width, take the smaller so we
+		# don't punch past either door's jamb.
+		var to_node: RoomNode = nodes[c.to_room]
+		var jamb_w := minf(from_node.room.opening_width, to_node.room.opening_width)
+		corridor_copy.width = jamb_w
 
 		var piece := LevelPiece.new()
 		piece.position = corridor_center

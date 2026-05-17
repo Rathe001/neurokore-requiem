@@ -109,15 +109,27 @@ static func create_trim_box(ctx: LevelBuildContext, pos: Vector3, sx: float, sy:
 
 static func build_corridor_walls(ctx: LevelBuildContext, center: Vector3, cd: CorridorDef) -> void:
 	var thick := ctx.theme.wall_thickness
-	var hw := cd.width * 0.5
+	# Wall center is offset OUTWARD by half-thickness from `cd.width / 2` so
+	# the wall's INNER face sits at ±cd.width/2 (= the corridor's walkable
+	# half-width). This means cd.width is the corridor's walkable interior
+	# width, and when corridor.width = door.opening_width (synced in
+	# graph_solver) the corridor wall's inner face lines up exactly with the
+	# door jamb edge. Without the +thick/2 offset, cd.width was wall-center
+	# distance and the walkable corridor was narrower than the door by
+	# wall_thickness — a visible step at the door/corridor junction.
+	var hw := cd.width * 0.5 + thick * 0.5
 	var wall_y := CORRIDOR_WALL_Y_BIAS
-	# Extend by ~thick (full room-wall-thickness) on each end instead of
-	# half. Previously the corridor wall reached only halfway into the
-	# room wall thickness, leaving a sub-pixel sliver between the wall
-	# end and the room's inner face that showed as a thin "gap" at every
-	# door opening. SEAM stays sub-millimetre so the now-larger overlap
-	# still avoids z-fight against the room geometry it abuts.
-	var ext := thick * 2.0 - SEAM * 2.0
+	# Length extension: walls butt against each room's outer wall face exactly.
+	# graph_solver puts the corridor's nominal endpoints at the connecting
+	# rooms' BOUNDARIES (= wall centerlines). The room outer face is `thick/2`
+	# closer to the corridor center than the boundary, so to end the corridor
+	# wall AT the outer face we shorten each end by `thick/2` → ext = -thick.
+	# Earlier we kept a SEAM overlap "into" the room wall to seal sub-pixel
+	# gaps, but with the new mitred room geometry that overlap puts both
+	# walls' top faces coplanar at y=h in a 0.4×0.02m strip and z-fights
+	# visibly. Clean butt-join (zero overlap) gives a single shared edge at
+	# the outer-face plane, which renders consistently.
+	var ext := -thick
 	if cd.axis == CorridorDef.Axis.Z:
 		create_wall(ctx, center + Vector3(hw, wall_y, 0), thick, cd.length + ext, ctx.wall_material_alt)
 		create_wall(ctx, center + Vector3(-hw, wall_y, 0), thick, cd.length + ext, ctx.wall_material_alt)
@@ -407,8 +419,15 @@ static func _find_first_mesh_in_kit(node: Node) -> Mesh:
 
 # ── Procedural Room Mesh ────────────────────────────────────────────────
 # A single mesh for all four walls of a room (with openings cut), produced
-# via SurfaceTool. Front faces, jamb reveals, and wall tops included.
-# Collision is built separately by build_room_collision().
+# via SurfaceTool. Corners are mitred at 45°: each wall's footprint is a
+# trapezoid whose inner edge stops at ±ix and outer edge stops at ±ox. Two
+# perpendicular walls' trapezoids meet along the same diagonal seam at each
+# room corner — no overlap, no gap, no exposed mitre face (the seam is the
+# shared boundary between the two walls' material, hidden from every
+# reachable viewpoint). Door openings split the wall into two segments,
+# each mitred at the corner end and flat at the door-jamb end; jamb
+# reveals are added at the door-opening sides. Collision is built
+# separately by _build_room_wall_collisions().
 
 static func build_room_mesh(ctx: LevelBuildContext, center: Vector3, rd: RoomDef) -> void:
 	var hx := rd.size.x * 0.5
@@ -422,24 +441,53 @@ static func build_room_mesh(ctx: LevelBuildContext, center: Vector3, rd: RoomDef
 	var oz := hz + ht
 	var ix := hx - ht
 	var iz := hz - ht
+	var hg: float = rd.opening_width * 0.5
 
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 
-	_add_ns_faces(st, cx, cz - oz, cz - iz, ox, ix, h,
-		RoomDef.Wall.NORTH in rd.openings, rd.opening_width, true)
-	_add_ns_faces(st, cx, cz + oz, cz + iz, ox, ix, h,
-		RoomDef.Wall.SOUTH in rd.openings, rd.opening_width, false)
-	_add_ew_faces(st, cz, cx + ox, cx + ix, oz, iz, h,
-		RoomDef.Wall.EAST in rd.openings, rd.opening_width, true)
-	_add_ew_faces(st, cz, cx - ox, cx - ix, oz, iz, h,
-		RoomDef.Wall.WEST in rd.openings, rd.opening_width, false)
+	# Room corner points (outer + inner) at y=0. Two perpendicular walls'
+	# trapezoids share the diagonal from `*_i` to `*_o` at each corner.
+	var nw_o := Vector3(cx - ox, 0, cz - oz)
+	var nw_i := Vector3(cx - ix, 0, cz - iz)
+	var ne_o := Vector3(cx + ox, 0, cz - oz)
+	var ne_i := Vector3(cx + ix, 0, cz - iz)
+	var se_o := Vector3(cx + ox, 0, cz + oz)
+	var se_i := Vector3(cx + ix, 0, cz + iz)
+	var sw_o := Vector3(cx - ox, 0, cz + oz)
+	var sw_i := Vector3(cx - ix, 0, cz + iz)
 
-	# Diagonal baffle quads inside each corner cube — seals any sub-pixel
-	# sightline that could pass between perpendicular wall faces meeting at
-	# a shared edge. Double-sided (two opposing vquads) so the face is
-	# visible regardless of camera angle.
-	_add_corner_baffles(st, cx, cz, ox, oz, ix, iz, h)
+	# NORTH wall (z=-oz outer, z=-iz inner, runs along X from NW to NE).
+	_add_mitred_wall(st, h,
+		nw_o, nw_i, ne_o, ne_i,
+		Vector3(cx - hg, 0, cz - oz), Vector3(cx - hg, 0, cz - iz),
+		Vector3(cx + hg, 0, cz - oz), Vector3(cx + hg, 0, cz - iz),
+		RoomDef.Wall.NORTH in rd.openings)
+	# SOUTH wall (z=+iz inner, z=+oz outer, runs along X from SW to SE).
+	_add_mitred_wall(st, h,
+		sw_o, sw_i, se_o, se_i,
+		Vector3(cx - hg, 0, cz + oz), Vector3(cx - hg, 0, cz + iz),
+		Vector3(cx + hg, 0, cz + oz), Vector3(cx + hg, 0, cz + iz),
+		RoomDef.Wall.SOUTH in rd.openings)
+	# EAST wall (x=+ox outer, x=+ix inner, runs along Z from NE to SE).
+	_add_mitred_wall(st, h,
+		ne_o, ne_i, se_o, se_i,
+		Vector3(cx + ox, 0, cz - hg), Vector3(cx + ix, 0, cz - hg),
+		Vector3(cx + ox, 0, cz + hg), Vector3(cx + ix, 0, cz + hg),
+		RoomDef.Wall.EAST in rd.openings)
+	# WEST wall (x=-ox outer, x=-ix inner, runs along Z from NW to SW).
+	_add_mitred_wall(st, h,
+		nw_o, nw_i, sw_o, sw_i,
+		Vector3(cx - ox, 0, cz - hg), Vector3(cx - ix, 0, cz - hg),
+		Vector3(cx - ox, 0, cz + hg), Vector3(cx - ix, 0, cz + hg),
+		RoomDef.Wall.WEST in rd.openings)
+
+	# No separate corner-mitre faces: each wall's trapezoidal top + outer/inner
+	# faces tile flush with its neighbour at the diagonal seam. The mitre is
+	# the shared boundary between two adjacent walls' material, hidden from
+	# every reachable viewpoint. Replaces the corner-cube baffles from the
+	# old overlap geometry — no overlap means no sub-pixel sightline blockers
+	# are needed.
 
 	var inst := MeshInstance3D.new()
 	inst.name = &"RoomWalls"
@@ -453,7 +501,9 @@ static func build_room_mesh(ctx: LevelBuildContext, center: Vector3, rd: RoomDef
 # Adds a vertical quad. bl/br are the two bottom corners; the face normal is
 # derived from the cross product and the winding is CCW from the normal side
 # (Godot's front-face convention). Normals are set explicitly because
-# generate_normals() averages vertices that share the same position.
+# generate_normals() averages vertices that share the same position. UVs are
+# set 0–1 over the quad so debug/PBR shaders that key off UV (e.g. the
+# debug-block border) render correctly.
 static func _vquad(st: SurfaceTool, bl: Vector3, br: Vector3, h: float) -> void:
 	# Extend below the floor plane so the wall-floor junction overlaps
 	# rather than meeting at a shared edge (seals rasterizer precision gaps).
@@ -463,8 +513,13 @@ static func _vquad(st: SurfaceTool, bl: Vector3, br: Vector3, h: float) -> void:
 	var top_right := br + Vector3(0, h + ROOM_WALL_FLOOR_SINK, 0)
 	var n := (br - bl).cross(tl - bl).normalized()
 	st.set_normal(n)
-	st.add_vertex(bl); st.add_vertex(top_right); st.add_vertex(br)
-	st.add_vertex(bl); st.add_vertex(tl); st.add_vertex(top_right)
+	# UVs: bl=(0,0), br=(1,0), top_right=(1,1), tl=(0,1).
+	st.set_uv(Vector2(0, 0)); st.add_vertex(bl)
+	st.set_uv(Vector2(1, 1)); st.add_vertex(top_right)
+	st.set_uv(Vector2(1, 0)); st.add_vertex(br)
+	st.set_uv(Vector2(0, 0)); st.add_vertex(bl)
+	st.set_uv(Vector2(0, 1)); st.add_vertex(tl)
+	st.set_uv(Vector2(1, 1)); st.add_vertex(top_right)
 
 
 # Adds a horizontal quad at height y with normal +Y (CCW from above).
@@ -475,116 +530,94 @@ static func _hquad_top(st: SurfaceTool, x0: float, z0: float, x1: float, z1: flo
 	var c := Vector3(x1, y, z1)
 	var d := Vector3(x1, y, z0)
 	st.set_normal(Vector3.UP)
-	st.add_vertex(a); st.add_vertex(c); st.add_vertex(b)
-	st.add_vertex(a); st.add_vertex(d); st.add_vertex(c)
+	st.set_uv(Vector2(0, 0)); st.add_vertex(a)
+	st.set_uv(Vector2(1, 1)); st.add_vertex(c)
+	st.set_uv(Vector2(0, 1)); st.add_vertex(b)
+	st.set_uv(Vector2(0, 0)); st.add_vertex(a)
+	st.set_uv(Vector2(1, 0)); st.add_vertex(d)
+	st.set_uv(Vector2(1, 1)); st.add_vertex(c)
 
 
-# North/South wall faces. outer_z/inner_z are world-space z of the two planes.
-static func _add_ns_faces(st: SurfaceTool, cx: float, outer_z: float, inner_z: float,
-		ox: float, ix: float, h: float, has_opening: bool, gap: float, is_north: bool) -> void:
-	var z0 := minf(outer_z, inner_z)
-	var z1 := maxf(outer_z, inner_z)
+# Adds one wall (full or split by a door opening) with mitred ends at the
+# room corners. Inputs are the four wall corner points at y=0:
+#   *_o : outer corner (room outer boundary, ±ox/±oz)
+#   *_i : inner corner (room inner boundary, ±ix/±iz)
+# Plus the door-opening edge points (used only when has_opening is true).
+# Wall axis direction is start→end; perpendicular thickness is outer→inner.
+# Each segment renders outer face, inner face, top quad (trapezoidal at the
+# mitred end), and a door-jamb reveal face when the segment terminates at
+# the opening. The mitred wall ends have no end-cap face — the perpendicular
+# wall's trapezoid covers that boundary from its own side.
+static func _add_mitred_wall(st: SurfaceTool, h: float,
+		start_o: Vector3, start_i: Vector3, end_o: Vector3, end_i: Vector3,
+		gap_start_o: Vector3, gap_start_i: Vector3,
+		gap_end_o: Vector3, gap_end_i: Vector3,
+		has_opening: bool) -> void:
+	if not has_opening:
+		_add_mitred_segment(st, start_o, start_i, end_o, end_i, h)
+		return
+	# Two segments flanking the door opening. Each has a mitred corner end
+	# and a flat door-jamb end. The flat end is where the door reveal sits.
+	_add_mitred_segment(st, start_o, start_i, gap_start_o, gap_start_i, h)
+	_add_mitred_segment(st, gap_end_o, gap_end_i, end_o, end_i, h)
+	# Door jamb reveal faces — the two perpendicular faces inside the opening.
+	# Each runs from the inner-edge gap point to the outer-edge gap point,
+	# with its normal pointing into the door gap (toward the other jamb).
+	_add_oriented_vquad(st, gap_start_i, gap_start_o, gap_end_i - gap_start_i, h)
+	_add_oriented_vquad(st, gap_end_i, gap_end_o, gap_start_i - gap_end_i, h)
 
-	if has_opening:
-		var hg := gap * 0.5
-		# Outer segments
-		if is_north:
-			_vquad(st, Vector3(cx - hg, 0, outer_z), Vector3(cx - ox, 0, outer_z), h)
-			_vquad(st, Vector3(cx + ox, 0, outer_z), Vector3(cx + hg, 0, outer_z), h)
-		else:
-			_vquad(st, Vector3(cx - ox, 0, outer_z), Vector3(cx - hg, 0, outer_z), h)
-			_vquad(st, Vector3(cx + hg, 0, outer_z), Vector3(cx + ox, 0, outer_z), h)
-		# Inner segments — extended to ±ox so the corner cube's inside face
-		# is covered. Stopping at ±ix would leave a visible gap where the
-		# perpendicular wall's inner face also stops short, producing a
-		# see-through hole at every room corner.
-		if is_north:
-			_vquad(st, Vector3(cx - ox, 0, inner_z), Vector3(cx - hg, 0, inner_z), h)
-			_vquad(st, Vector3(cx + hg, 0, inner_z), Vector3(cx + ox, 0, inner_z), h)
-		else:
-			_vquad(st, Vector3(cx - hg, 0, inner_z), Vector3(cx - ox, 0, inner_z), h)
-			_vquad(st, Vector3(cx + ox, 0, inner_z), Vector3(cx + hg, 0, inner_z), h)
-		# Reveal faces
-		if is_north:
-			_vquad(st, Vector3(cx - hg, 0, inner_z), Vector3(cx - hg, 0, outer_z), h)
-			_vquad(st, Vector3(cx + hg, 0, outer_z), Vector3(cx + hg, 0, inner_z), h)
-		else:
-			_vquad(st, Vector3(cx - hg, 0, outer_z), Vector3(cx - hg, 0, inner_z), h)
-			_vquad(st, Vector3(cx + hg, 0, inner_z), Vector3(cx + hg, 0, outer_z), h)
-		# Top segments
-		_hquad_top(st, cx - ox, z0, cx - hg, z1, h)
-		_hquad_top(st, cx + hg, z0, cx + ox, z1, h)
+
+# A wall segment with arbitrary 4-corner footprint. Builds outer face, inner
+# face, and top quad. End-cap faces (mitre corners, door reveals) are added
+# by the caller. Corners (all at y=0):
+#   so → eo : outer edge of the segment (faces outward)
+#   si → ei : inner edge (faces room interior)
+# Caller arranges so→si as the wall thickness vector at the start, eo→ei as
+# the thickness vector at the end — these can be axis-aligned (flat end) or
+# diagonal (mitred end), the helper handles both.
+static func _add_mitred_segment(st: SurfaceTool, so: Vector3, si: Vector3, eo: Vector3, ei: Vector3, h: float) -> void:
+	# Outer face: from so to eo, normal points outward (from inner toward outer).
+	_add_oriented_vquad(st, so, eo, so - si, h)
+	# Inner face: from si to ei, normal points inward (toward room interior).
+	_add_oriented_vquad(st, si, ei, si - so, h)
+	# Top quad: walk the segment perimeter CCW from +Y (outer→outer→inner→inner).
+	_quad_top(st, so, eo, ei, si, h)
+
+
+# Adds a vertical quad spanning from `a` to `b` at the base (extruded
+# upward by h), with the face normal oriented to match `desired_normal_dir`
+# (the helper flips winding if needed). Use this whenever the face's
+# orientation matters (it always does — wrong winding = backface culled).
+static func _add_oriented_vquad(st: SurfaceTool, a: Vector3, b: Vector3, desired_normal_dir: Vector3, h: float) -> void:
+	# _vquad's normal = (br - bl) × UP. We want this to align with
+	# desired_normal_dir. If (b - a) × UP is anti-parallel to desired_normal_dir,
+	# swap a and b so _vquad's winding produces the right normal.
+	var test := (b - a).cross(Vector3.UP)
+	if test.dot(desired_normal_dir) < 0.0:
+		_vquad(st, b, a, h)
 	else:
-		if is_north:
-			_vquad(st, Vector3(cx + ox, 0, outer_z), Vector3(cx - ox, 0, outer_z), h)
-			# Inner extended to ±ox (was ±ix) — covers the corner cube's
-			# inside face. See has_opening branch above for the same fix.
-			_vquad(st, Vector3(cx - ox, 0, inner_z), Vector3(cx + ox, 0, inner_z), h)
-		else:
-			_vquad(st, Vector3(cx - ox, 0, outer_z), Vector3(cx + ox, 0, outer_z), h)
-			_vquad(st, Vector3(cx + ox, 0, inner_z), Vector3(cx - ox, 0, inner_z), h)
-		_hquad_top(st, cx - ox, z0, cx + ox, z1, h)
+		_vquad(st, a, b, h)
 
 
-# East/West wall faces. outer_x/inner_x are world-space x of the two planes.
-static func _add_ew_faces(st: SurfaceTool, cz: float, outer_x: float, inner_x: float,
-		oz: float, iz: float, h: float, has_opening: bool, gap: float, is_east: bool) -> void:
-	var min_x := minf(outer_x, inner_x)
-	var max_x := maxf(outer_x, inner_x)
-
-	if has_opening:
-		var hg := gap * 0.5
-		# Outer segments
-		if is_east:
-			_vquad(st, Vector3(outer_x, 0, cz - hg), Vector3(outer_x, 0, cz - oz), h)
-			_vquad(st, Vector3(outer_x, 0, cz + oz), Vector3(outer_x, 0, cz + hg), h)
-		else:
-			_vquad(st, Vector3(outer_x, 0, cz - oz), Vector3(outer_x, 0, cz - hg), h)
-			_vquad(st, Vector3(outer_x, 0, cz + hg), Vector3(outer_x, 0, cz + oz), h)
-		# Inner segments — extended to ±oz so the corner cube's inside face
-		# is covered. See _add_ns_faces for the equivalent fix on N/S walls;
-		# the gap looked like a small see-through patch at every room corner.
-		if is_east:
-			_vquad(st, Vector3(inner_x, 0, cz - oz), Vector3(inner_x, 0, cz - hg), h)
-			_vquad(st, Vector3(inner_x, 0, cz + hg), Vector3(inner_x, 0, cz + oz), h)
-		else:
-			_vquad(st, Vector3(inner_x, 0, cz - hg), Vector3(inner_x, 0, cz - oz), h)
-			_vquad(st, Vector3(inner_x, 0, cz + oz), Vector3(inner_x, 0, cz + hg), h)
-		# Reveal faces
-		_vquad(st, Vector3(min_x, 0, cz - hg), Vector3(max_x, 0, cz - hg), h)
-		_vquad(st, Vector3(max_x, 0, cz + hg), Vector3(min_x, 0, cz + hg), h)
-		# Top segments — extended to ±oz (from ±iz) so the wall top covers
-		# the corner cube directly, not relying on the N/S wall top alone.
-		_hquad_top(st, min_x, cz - oz, max_x, cz - hg, h)
-		_hquad_top(st, min_x, cz + hg, max_x, cz + oz, h)
-	else:
-		if is_east:
-			_vquad(st, Vector3(outer_x, 0, cz + oz), Vector3(outer_x, 0, cz - oz), h)
-			# Inner extended to ±oz (was ±iz) — covers the corner cube's
-			# inside face. Same rationale as the has_opening branch above.
-			_vquad(st, Vector3(inner_x, 0, cz - oz), Vector3(inner_x, 0, cz + oz), h)
-		else:
-			_vquad(st, Vector3(outer_x, 0, cz - oz), Vector3(outer_x, 0, cz + oz), h)
-			_vquad(st, Vector3(inner_x, 0, cz + oz), Vector3(inner_x, 0, cz - oz), h)
-		# Extended to ±oz (from ±iz) — same corner-coverage fix as above.
-		_hquad_top(st, min_x, cz - oz, max_x, cz + oz, h)
-
-
-# Adds a double-sided diagonal vertical quad inside each of the four room
-# corner cubes. Each baffle runs from the inner-face edge (ix, iz) to the
-# outer-face edge (ox, oz), creating an opaque plane that blocks any
-# sub-pixel sightline through the corner where two perpendicular walls meet.
-static func _add_corner_baffles(st: SurfaceTool, cx: float, cz: float,
-		ox: float, oz: float, ix: float, iz: float, h: float) -> void:
-	# NE corner: inner edge at (cx+ix, cz-iz), outer edge at (cx+ox, cz-oz)
-	_vquad(st, Vector3(cx + ix, 0, cz - iz), Vector3(cx + ox, 0, cz - oz), h)
-	_vquad(st, Vector3(cx + ox, 0, cz - oz), Vector3(cx + ix, 0, cz - iz), h)
-	# NW corner: inner edge at (cx-ix, cz-iz), outer edge at (cx-ox, cz-oz)
-	_vquad(st, Vector3(cx - ox, 0, cz - oz), Vector3(cx - ix, 0, cz - iz), h)
-	_vquad(st, Vector3(cx - ix, 0, cz - iz), Vector3(cx - ox, 0, cz - oz), h)
-	# SE corner: inner edge at (cx+ix, cz+iz), outer edge at (cx+ox, cz+oz)
-	_vquad(st, Vector3(cx + ox, 0, cz + oz), Vector3(cx + ix, 0, cz + iz), h)
-	_vquad(st, Vector3(cx + ix, 0, cz + iz), Vector3(cx + ox, 0, cz + oz), h)
-	# SW corner: inner edge at (cx-ix, cz+iz), outer edge at (cx-ox, cz+oz)
-	_vquad(st, Vector3(cx - ix, 0, cz + iz), Vector3(cx - ox, 0, cz + oz), h)
-	_vquad(st, Vector3(cx - ox, 0, cz + oz), Vector3(cx - ix, 0, cz + iz), h)
+# A 4-corner horizontal quad at height h. The four points form the
+# perimeter; the helper picks CCW-from-+Y winding so the normal points up.
+# Handles both rectangles (uniform thickness walls) and trapezoids (mitred
+# wall tops where the outer edge is longer than the inner edge).
+static func _quad_top(st: SurfaceTool, p0: Vector3, p1: Vector3, p2: Vector3, p3: Vector3, h: float) -> void:
+	var a := p0 + Vector3(0, h, 0)
+	var b := p1 + Vector3(0, h, 0)
+	var c := p2 + Vector3(0, h, 0)
+	var d := p3 + Vector3(0, h, 0)
+	# Test perimeter winding: (b-a) × (c-a) should have positive Y for CCW.
+	if (b - a).cross(c - a).y < 0.0:
+		# Currently CW from +Y — reverse perimeter direction.
+		var tmp := b
+		b = d
+		d = tmp
+	st.set_normal(Vector3.UP)
+	st.set_uv(Vector2(0, 0)); st.add_vertex(a)
+	st.set_uv(Vector2(1, 0)); st.add_vertex(b)
+	st.set_uv(Vector2(1, 1)); st.add_vertex(c)
+	st.set_uv(Vector2(0, 0)); st.add_vertex(a)
+	st.set_uv(Vector2(1, 1)); st.add_vertex(c)
+	st.set_uv(Vector2(0, 1)); st.add_vertex(d)

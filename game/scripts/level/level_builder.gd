@@ -5,6 +5,19 @@ class_name LevelBuilder
 ## BuildContext so post-build operations (door lookup, respawn) can reuse the
 ## same caches and registries.
 
+## Debug visualization toggle. When `true`:
+##   - Kit-bash models (theme.wall_model / floor_model) are ignored
+##   - Procedural SurfaceTool walls + PlaneMesh floors are built with the
+##     debug materials assigned to theme.wall_material / floor_material
+##     (see `resources/level/debug/`)
+##   - theme.wall_thickness is overridden to DEBUG_WALL_THICKNESS so the
+##     trapezoidal wall geometry reads clearly at iso scale
+## Useful for verifying corridor/room alignment, mitre seams, and door
+## jamb geometry — set to true, reload Godot, send a screenshot. Set back
+## to false to return to the kit-bash production look.
+const USE_DEBUG_LEVEL_VIZ: bool = false
+const DEBUG_WALL_THICKNESS: float = 1.0
+
 @export var layout: LevelLayout
 
 var _ctx: LevelBuildContext
@@ -87,6 +100,11 @@ func _build_level() -> void:
 	var active_graph := _resolve_graph()
 	_pieces = _pieces_from_graph(active_graph)
 	_ctx = LevelBuildContext.create(self, layout, active_graph)
+	# Debug viz: thicken walls so the trapezoidal geometry reads at iso scale.
+	# Mutating the in-memory theme resource — doesn't persist to disk, and the
+	# next build (with debug off) will reload the file at the production value.
+	if USE_DEBUG_LEVEL_VIZ and _ctx.theme != null:
+		_ctx.theme.wall_thickness = DEBUG_WALL_THICKNESS
 	_index_room_pieces()
 	GroundBuilder.build(_ctx)
 	CeilingBuilder.build(_ctx)
@@ -213,28 +231,38 @@ func _pieces_from_graph(g: LevelGraph) -> Array[LevelPiece]:
 func _build_room(piece: LevelPiece) -> void:
 	var rd := piece.room
 	var center := piece.position
-	var hx := rd.size.x * 0.5
-	var hz := rd.size.y * 0.5
 	var thick := _ctx.theme.wall_thickness
 	# Per-instance identity (preferred) → RoomDef.id (legacy fallback).
 	var piece_id: StringName = piece.room_id if piece.room_id != &"" else rd.id
 
-	# No room-size quantization — kit builders adapt per-segment by
-	# computing actual_step = length / count, scaling each instance to
-	# fit exactly. Quantizing broke connections to corridors authored at
-	# the original size (a 6m room rounded to 8m left the corridor short
-	# of the new wall plane).
+	# Strict grid: quantize room size to the wall grid so kit panels and
+	# floor tiles fit edge-to-edge at exactly their native scale. Rounds
+	# to nearest grid multiple (min 1 panel-width = 1 grid). Procgen
+	# generators should already emit grid-aligned sizes; this is the
+	# defensive snap at build time. Opening width also quantized so door
+	# segments align to panel slots. Skipped when debug viz is on so
+	# rooms keep their authored sizes for visual inspection.
+	var use_kit_walls: bool = not USE_DEBUG_LEVEL_VIZ and _ctx.theme.wall_model != null
+	var use_kit_floors: bool = not USE_DEBUG_LEVEL_VIZ and _ctx.theme.floor_model != null
+	if use_kit_walls:
+		var g: float = _ctx.theme.wall_grid_size
+		var sx: float = round(rd.size.x / g) * g
+		var sy: float = round(rd.size.y / g) * g
+		rd.size = Vector2(maxf(g, sx), maxf(g, sy))
+		rd.opening_width = maxf(g, round(rd.opening_width / g) * g)
+	var hx := rd.size.x * 0.5
+	var hz := rd.size.y * 0.5
 
 	if rd.pit_floor:
 		PitBuilder.build_room_pit(_ctx, center, rd)
-	elif _ctx.theme.floor_model != null:
+	elif use_kit_floors:
 		FloorBuilder.build_piece_floor_kit(_ctx, center, rd.size.x, rd.size.y)
 	else:
 		FloorBuilder.build_piece_floor(_ctx, center, rd.size.x, rd.size.y)
 
 	# Walls: kit-bash 3D models when the theme provides them, fall back to
 	# the procedural single-mesh path otherwise.
-	if _ctx.theme.wall_model != null:
+	if use_kit_walls:
 		WallBuilder.build_room_walls_kit(_ctx, center, rd)
 	else:
 		WallBuilder.build_room_mesh(_ctx, center, rd)
@@ -305,15 +333,20 @@ func _build_corridor(piece: LevelPiece) -> void:
 	var cd := piece.corridor
 	var center := piece.position
 
-	# Kit builders adapt per-corridor (actual_step = length / count, each
-	# instance scaled to fit), so no quantization needed — keeps the
-	# corridor endpoints aligned with the connecting rooms.
+	# Strict grid: quantize corridor length and width to grid multiples so
+	# kit panels/tiles fit at native scale. Min 1 grid step on each axis.
+	var use_kit_walls: bool = not USE_DEBUG_LEVEL_VIZ and _ctx.theme.wall_model != null
+	var use_kit_floors: bool = not USE_DEBUG_LEVEL_VIZ and _ctx.theme.floor_model != null
+	if use_kit_walls:
+		var g: float = _ctx.theme.wall_grid_size
+		cd.length = maxf(g, round(cd.length / g) * g)
+		cd.width = maxf(g, round(cd.width / g) * g)
 
-	if _ctx.theme.wall_model != null:
+	if use_kit_walls:
 		WallBuilder.build_corridor_walls_kit(_ctx, center, cd)
 	else:
 		WallBuilder.build_corridor_walls(_ctx, center, cd)
-	if _ctx.theme.floor_model != null:
+	if use_kit_floors:
 		FloorBuilder.build_corridor_floor_kit(_ctx, center, cd)
 	else:
 		FloorBuilder.build_corridor_floor(_ctx, center, cd)

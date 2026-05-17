@@ -9,6 +9,8 @@
 - [Steam Playtest live](project_steam_playtest.md) — playtest live since 2026-05-05, v0.1.1 hotfix shipped 2026-05-06. Deploy infra in tools/steam/ (CHANGELOG-driven, prepare_build.py, deploy.sh/.bat); per-machine setup in DEPLOY.md
 - [deploy.bat Godot shim breaks step 3](project_deploy_godot_shim.md) — recurring trap: `call %GODOT%` resolves %~dp0 wrong, breaks export. Bit us in v0.3.0 + v0.4.0. Run Godot exe directly as workaround
 - [Level builder shader-overlap trap](project_level_builder_overlap.md) — corridor & room walls/floors geometrically overlap by design; using different shaders per piece causes z-fight flicker
+- [Mitred wall geometry](project_mitred_wall_geometry.md) — room walls use 45° trapezoidal mitre; two perpendicular walls tile flush at the corner diagonal, no exposed mitre face
+- [Level debug viz toggle](project_level_debug_viz.md) — `LevelBuilder.USE_DEBUG_LEVEL_VIZ` swaps kit-bash for procedural emissive-border geometry; flip and reload to verify alignment
 - [Level system architecture roadmap](project_level_architecture.md) — 3 layers: modular builders (done), declarative graph (done), procgen (deferred); new levels should use LevelGraph not pieces[]
 - [Zone lighting profiles](project_lighting_profiles.md) — proximity dim / global light behavior should be driven by per-zone profiles, not hardcoded constants (outdoor ≠ indoor)
 - [Enemy navigation systems](project_enemy_navigation.md) — crouch tunnels, pit-pillar nav links, leash override; navmesh agent_height MUST stay synced with enemy CROUCH_HEIGHT
