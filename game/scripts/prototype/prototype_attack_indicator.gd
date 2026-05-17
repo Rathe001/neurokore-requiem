@@ -749,7 +749,13 @@ static func _spawn_fireball_explosion(parent: Node, world_pos: Vector3, blast_ra
 	var light := _acquire_light()
 	light.light_color = palette["light"]
 	light.light_energy = 40.0 * intensity_mult
-	light.omni_range = blast_radius * 3.5
+	# Was blast_radius * 3.5 (≈17m for an RPG). At that range the light spilled
+	# through doorways into adjacent corridors and lit up rooms the player
+	# hasn't explored — visible even with shadows on because the geometry is
+	# line-of-sight through the door opening. The flipbook mesh + sparks already
+	# carry the "this is a huge blast" visual; the light just needs to brighten
+	# the immediate blast vicinity, not project 17m across the level.
+	light.omni_range = blast_radius * 1.5
 	light.omni_attenuation = 0.9
 	# Shadows enabled (was false) so the blast doesn't pour energy through
 	# walls and light up the OUTER faces of any room near the explosion.
