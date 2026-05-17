@@ -40,12 +40,14 @@ var _visual: MeshInstance3D
 
 
 func _ready() -> void:
-	# PILLAR (128) — bullets / combat-LOS rays see this as cover.
-	# Soft-cover props stop there. Hard-cover props (blocks_enemies)
-	# also join WORLD (1) so enemies physically bump them. Either way
-	# the prop is off the ENEMY layer (2), so enemy-vs-enemy navigation
-	# isn't poisoned by clutter sitting on the same layer.
-	collision_layer = (1 | 128) if blocks_enemies else 128
+	# PILLAR (128) only. Enemies / projectiles include layer 128 in their
+	# collision masks (same pattern as decorative_pillar.gd), so dropping
+	# WORLD (1) doesn't break "enemies bump these" or "bullets stop on
+	# these". The win: the visual LoS culler raycasts against WORLD only
+	# and would otherwise see destructibles as opaque blockers, hiding
+	# every enemy/pickup standing behind a barrel or exam table from the
+	# player's view. PILLAR is intentionally excluded from those rays.
+	collision_layer = 128
 	collision_mask = 0
 	add_to_group(&"enemies")
 	add_to_group(&"structures")
