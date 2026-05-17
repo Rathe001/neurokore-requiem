@@ -9,6 +9,16 @@ class_name FloorBuilder
 ## this file only handles the surface plane(s) and the perimeter trim.
 
 const FLOOR_OVERLAP := 0.3  ## extends piece floors past wall outer face (slightly > wall_thickness * 0.5)
+## Subdivision density for floor PlaneMesh, in vertices per meter. The
+## displacement ShaderMaterial needs subdivided geometry to actually deform —
+## without subdivision a 20m floor is 4 corner verts and no displacement is
+## visible. 1.0 = one extra vertex per meter (so a 20m floor gets a 20×20 grid).
+## Capped via FLOOR_SUBDIV_CAP per axis to bound the triangle count for huge
+## rooms. Always-on (not gated on whether the material is a displacement
+## shader) because the perf hit is small and a flat PlaneMesh suffers no
+## quality loss from extra verts.
+const FLOOR_SUBDIV_PER_METER := 1.0
+const FLOOR_SUBDIV_CAP := 32
 const PIT_TRIM_H := 0.12    ## height of raised lip at pit edges
 # Sub-millimetre vertical bias applied to corridor floor MESHES (not their
 # colliders) so the corridor loses the depth tie wherever it overlaps room
@@ -26,6 +36,8 @@ static func build_piece_floor(ctx: LevelBuildContext, center: Vector3, size_x: f
 static func build_exact_floor(ctx: LevelBuildContext, center: Vector3, size_x: float, size_z: float, mat: Material = null, mesh_y_bias: float = 0.0) -> void:
 	var mesh := PlaneMesh.new()
 	mesh.size = Vector2(size_x, size_z)
+	mesh.subdivide_width = clampi(int(size_x * FLOOR_SUBDIV_PER_METER), 1, FLOOR_SUBDIV_CAP)
+	mesh.subdivide_depth = clampi(int(size_z * FLOOR_SUBDIV_PER_METER), 1, FLOOR_SUBDIV_CAP)
 	var floor_mat := mat if mat != null else ctx.floor_material
 	if floor_mat != null:
 		mesh.material = floor_mat

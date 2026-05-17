@@ -323,6 +323,12 @@ func _build_corridor(piece: LevelPiece) -> void:
 func get_door(room_id: StringName, wall: RoomDef.Wall) -> Node:
 	# room_id is a per-instance id (RoomNode.id in graph mode, RoomDef.id in
 	# legacy mode) — same key DoorBuilder uses when registering.
+	# Null-guard: callers (e.g. prototype_root._wire_switches) may run before
+	# the level has finished building, before _ctx is populated. Returning
+	# null lets those callers no-op cleanly instead of crashing on the
+	# wall_keys lookup.
+	if _ctx == null:
+		return null
 	var key := StringName("%s_%s" % [room_id, _ctx.wall_keys[wall]])
 	return _ctx.doors.get(key)
 

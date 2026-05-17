@@ -38,19 +38,22 @@ UUID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 
 # Filename → role detection. Case-insensitive substring match in order;
 # first hit wins. Roles map to StandardMaterial3D fields in Godot.
-ROLE_PATTERNS = [
-    ("normal", ["normal", "_nrm", "_norm"]),
-    ("roughness", ["roughness", "_rough", "_rgh"]),
-    ("metallic", ["metallic", "_metal", "_mtl"]),
-    # AO: leading "ao_" (Blenderkit's AO_01.png) or "_ao_" mid-name, or
-    # the long-form "ambientocclusion". Must come before albedo so a name
-    # like "ao_basecolor" doesn't fall through to albedo first.
-    ("ao", ["ambientocclusion", "ao_", "_ao_", "_ao.", "_occl"]),
-    ("height", ["height", "displacement", "_disp", "_hgt"]),
-    ("emission", ["emissive", "emission", "_emit"]),
-    # albedo last so it doesn't shadow more-specific roles
-    ("albedo", ["basecolor", "diffuse", "albedo", "color"]),
-]
+# Role detection. The keys are role IDs we map to StandardMaterial3D slots;
+# the values are token keywords. Filenames are split on _ and -, and we
+# match keywords against tokens (right-most first) so the ROLE suffix wins
+# over substring noise from the asset name. Without this, an asset named
+# "Sci-Fi_Metal_Panels_BaseColor.png" routes to metallic because "metal"
+# appears in the asset name — we want it to route to albedo via the
+# "basecolor" suffix token.
+ROLE_KEYWORDS = {
+    "normal": ["normal", "normals", "nrm", "norm", "nor"],
+    "roughness": ["roughness", "rough", "rgh"],
+    "metallic": ["metallic", "metal", "mtl"],
+    "ao": ["ambientocclusion", "ao", "occl", "occlusion"],
+    "height": ["height", "displacement", "disp", "hgt", "bump"],
+    "emission": ["emissive", "emission", "emit"],
+    "albedo": ["basecolor", "diffuse", "albedo", "color"],
+}
 
 
 def fail(msg: str) -> "NoReturn":
@@ -152,11 +155,18 @@ def extract_textures(blend_path: Path, out_dir: Path) -> list[Path]:
 
 
 def detect_role(filename: str) -> str | None:
-    """Map filename to a role keyword. Returns None if no role matched."""
-    lower = filename.lower()
-    for role, keywords in ROLE_PATTERNS:
-        for kw in keywords:
-            if kw in lower:
+    """Map filename to a role keyword by tokenizing and matching from the
+    last underscore-token backwards. Token-based avoids the asset-name-
+    substring trap (e.g. "Sci-Fi_Metal_Panels_BaseColor.png" routes to
+    albedo via "basecolor", not metallic via "metal")."""
+    stem = filename.rsplit(".", 1)[0].lower()
+    # Tokenize on _, -, and digits (so "AO_01" → ["ao", "01"] → ["ao"]).
+    raw = stem.replace("-", "_").split("_")
+    tokens = [t.rstrip("0123456789") for t in raw if t.rstrip("0123456789")]
+    # Walk right-to-left so the trailing role-suffix wins over upstream noise.
+    for token in reversed(tokens):
+        for role, keywords in ROLE_KEYWORDS.items():
+            if token in keywords:
                 return role
     return None
 
@@ -199,7 +209,11 @@ def write_material_tres(target_name: str, role_map: dict[str, Path]) -> Path:
         role_to_props.append(("roughness_texture", add_ext(role_map["roughness"])))
     if "metallic" in role_map:
         role_to_props.append(("metallic_texture", add_ext(role_map["metallic"])))
-        role_to_props.append(("metallic", "1.0"))  # let the texture drive
+        # 0.35 — full metallic (1.0) plus a sub-pixel detail texture flickers
+        # hard under our overhead lights at iso. 0.35 keeps surfaces reading
+        # as metal without the harsh micro-specular shimmer. Tune up if a
+        # specific material needs full metallic punch.
+        role_to_props.append(("metallic", "0.35"))
     if "ao" in role_map:
         role_to_props.append(("ao_enabled", "true"))
         role_to_props.append(("ao_texture", add_ext(role_map["ao"])))
@@ -216,6 +230,11 @@ def write_material_tres(target_name: str, role_map: dict[str, Path]) -> Path:
         lines.append(f"[ext_resource type=\"Texture2D\" path=\"{path}\" id=\"{rid}\"]")
     lines.append("")
     lines.append("[resource]")
+    # NOTE: don't add # or ; comments inside the [resource] block — Godot's
+    # .tres parser is finicky and it caused level-build failures last time.
+    # texture_filter = 5 is FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC, which
+    # kills the iso-camera specular shimmer that bilinear+mipmap can't fix.
+    lines.append("texture_filter = 5")
     for prop, val in role_to_props:
         if val in ("true", "false") or "." in str(val):
             lines.append(f"{prop} = {val}")
@@ -236,6 +255,63 @@ def write_material_tres(target_name: str, role_map: dict[str, Path]) -> Path:
     # the right side of the tradeoff.
     lines.append("uv1_scale = Vector3(0.2, 0.2, 0.2)")
     out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    # If a height map was extracted, also produce a sibling
+    # <target>_displaced.tres that wraps displacement_floor.gdshader with
+    # all five textures + tuned defaults. The theme can use it as a
+    # floor_material_override when real geometric displacement is wanted
+    # (paired with subdivided PlaneMesh floors — see floor_builder.gd).
+    if "height" in role_map and "albedo" in role_map and "normal" in role_map \
+            and "roughness" in role_map and "metallic" in role_map:
+        _write_displaced_variant(target_name, role_map, out_path.parent)
+    return out_path
+
+
+def _write_displaced_variant(target_name: str, role_map: dict[str, Path], mat_dir: Path) -> Path:
+    """Sibling ShaderMaterial.tres that uses displacement_floor.gdshader.
+    Generated alongside the StandardMaterial3D when a height map is present."""
+    out_path = mat_dir / f"{target_name}_displaced.tres"
+
+    def rel_res(path: Path) -> str:
+        r = path.relative_to(ROOT).as_posix()
+        if r.startswith("game/"):
+            r = r[len("game/"):]
+        return f"res://{r}"
+
+    paths = {
+        "albedo": rel_res(role_map["albedo"]),
+        "normal": rel_res(role_map["normal"]),
+        "roughness": rel_res(role_map["roughness"]),
+        "metallic": rel_res(role_map["metallic"]),
+        "height": rel_res(role_map["height"]),
+    }
+    shader_path = "res://scripts/prototype/displacement_floor.gdshader"
+    lines = [
+        '[gd_resource type="ShaderMaterial" load_steps=7 format=3]',
+        "",
+        f'[ext_resource type="Shader" path="{shader_path}" id="shader"]',
+        f'[ext_resource type="Texture2D" path="{paths["albedo"]}" id="tex_albedo"]',
+        f'[ext_resource type="Texture2D" path="{paths["normal"]}" id="tex_normal"]',
+        f'[ext_resource type="Texture2D" path="{paths["roughness"]}" id="tex_roughness"]',
+        f'[ext_resource type="Texture2D" path="{paths["metallic"]}" id="tex_metallic"]',
+        f'[ext_resource type="Texture2D" path="{paths["height"]}" id="tex_height"]',
+        "",
+        "[resource]",
+        'shader = ExtResource("shader")',
+        "shader_parameter/uv_scale = 0.2",
+        "shader_parameter/normal_strength = 3.0",
+        "shader_parameter/displacement_strength = 0.3",
+        "shader_parameter/displacement_bias = 0.5",
+        "shader_parameter/metallic_factor = 0.35",
+        "shader_parameter/roughness_floor = 0.4",
+        'shader_parameter/albedo_texture = ExtResource("tex_albedo")',
+        'shader_parameter/normal_texture = ExtResource("tex_normal")',
+        'shader_parameter/roughness_texture = ExtResource("tex_roughness")',
+        'shader_parameter/metallic_texture = ExtResource("tex_metallic")',
+        'shader_parameter/height_texture = ExtResource("tex_height")',
+        "",
+    ]
+    out_path.write_text("\n".join(lines), encoding="utf-8")
+    print(f"[import_material] also wrote {out_path.relative_to(ROOT)} (displacement variant)")
     return out_path
 
 
