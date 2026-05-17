@@ -45,6 +45,13 @@ static func build_piece_floor_kit(ctx: LevelBuildContext, center: Vector3, size_
 	var mesh := WallBuilder._get_kit_mesh(ctx, t.floor_model, false)
 	if mesh == null:
 		return
+	# Same FLOOR_OVERLAP the procedural path uses — extends the floor +0.3m
+	# past the room/corridor edge so it overlaps into the wall thickness and
+	# adjacent piece's floor. Without this, the rasterizer sees a seam at
+	# every piece boundary (visible as a thin dark line at iso, fall-
+	# through gap in collision).
+	size_x += FLOOR_OVERLAP * 2.0
+	size_z += FLOOR_OVERLAP * 2.0
 	var grid: float = t.floor_grid_size
 	# Adaptive tiling — fit any size with no edge gaps. n = round(size/grid)
 	# (min 1), then actual_grid = size/n. Each tile is scaled to fill its

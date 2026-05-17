@@ -92,6 +92,16 @@ static func create_trim_box(ctx: LevelBuildContext, pos: Vector3, sx: float, sy:
 	var wall_mat := mat if mat != null else ctx.wall_material
 	if wall_mat != null:
 		mesh_inst.material_override = wall_mat
+	else:
+		# Fallback dark grey for trim boxes when no wall_material is set
+		# (e.g. kit-bash themes that dropped the procedural materials).
+		# Without this, trim renders as default white BoxMesh which is
+		# very visible from iso.
+		var fallback := StandardMaterial3D.new()
+		fallback.albedo_color = Color(0.12, 0.12, 0.14)
+		fallback.metallic = 0.3
+		fallback.roughness = 0.7
+		mesh_inst.material_override = fallback
 	body.add_child(mesh_inst)
 	ctx.root.add_child(body)
 	body.add_to_group(&"structures")
@@ -145,6 +155,16 @@ static func create_decorative_pillar(ctx: LevelBuildContext, pos: Vector3, size:
 	(mesh_inst.mesh as BoxMesh).size = Vector3(size.x, height, size.y)
 	if ctx.wall_material_alt != null:
 		mesh_inst.material_override = ctx.wall_material_alt
+	else:
+		# Fallback when no wall_material_alt is set (e.g. kit-bash themes).
+		# Plain dark grey BoxMesh so pillars don't render as default white
+		# spikes. If we ever want kit-styled pillars, replace this with a
+		# kit_pillar_model field on LevelTheme.
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = Color(0.12, 0.12, 0.14)
+		mat.metallic = 0.3
+		mat.roughness = 0.7
+		mesh_inst.material_override = mat
 	body.add_child(mesh_inst)
 
 	ctx.root.add_child(body)
@@ -221,11 +241,6 @@ static func build_corridor_walls_kit(ctx: LevelBuildContext, center: Vector3, cd
 	var thick_half: float = t.wall_thickness * 0.5
 	var along_z := cd.axis == CorridorDef.Axis.Z
 	var half_w := cd.width * 0.5
-	# Adaptive panel step — fits any corridor length without gaps at the
-	# ends. n_panels = round(length/grid), each panel scaled to length/n_panels.
-	var n_panels: int = max(1, int(round(cd.length / grid)))
-	var actual_step: float = cd.length / float(n_panels)
-	var x_scale: float = actual_step / native_w
 
 	var sides: Array[Dictionary]
 	if along_z:
@@ -241,16 +256,7 @@ static func build_corridor_walls_kit(ctx: LevelBuildContext, center: Vector3, cd
 
 	var transforms: Array[Transform3D] = []
 	for s: Dictionary in sides:
-		var axis: Vector3 = s["axis"]
-		var base_pos: Vector3 = s["base_pos"]
-		var y_rot: float = s["y_rot"]
-		var basis_x_up := Basis(Vector3.RIGHT, PI * 0.5)
-		var basis := Basis(Vector3.UP, y_rot) * basis_x_up
-		basis = basis.scaled(Vector3(x_scale, y_scale, 1.0))
-		for i in range(n_panels):
-			var slot_center: float = (i + 0.5) * actual_step - cd.length * 0.5
-			var pos := base_pos + axis * slot_center + Vector3(0, wall_h * 0.5, 0)
-			transforms.append(Transform3D(basis, pos))
+		_add_wall_segment(transforms, s["base_pos"], s["axis"], cd.length, s["y_rot"], wall_h, y_scale, grid, native_w)
 
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
@@ -281,20 +287,26 @@ static func build_room_walls_kit(ctx: LevelBuildContext, center: Vector3, rd: Ro
 	var native_h: float = maxf(0.01, t.wall_model_native_height)
 	var native_w: float = maxf(0.01, t.wall_model_native_width)
 	var y_scale: float = wall_h / native_h
-	var thick_half: float = t.wall_thickness * 0.5
 	var gap: float = rd.opening_width
 
+	# Panels positioned exactly at the room boundary. Earlier code used
+	# `±hz - thick_half` to align with the collision wall's interior face,
+	# but that put the visual panel 0.2m INSIDE the room, leaving a strip
+	# of floor (which extends FLOOR_OVERLAP past the boundary) visible
+	# beyond the wall from iso. With the panel at the boundary, the floor
+	# overlap hides behind the wall geometry instead.
 	var sides: Array[Dictionary] = [
-		{"side": RoomDef.Wall.NORTH, "axis": Vector3.RIGHT, "base_pos": Vector3(0, 0, -hz + thick_half), "length": rd.size.x, "y_rot": 0.0},
-		{"side": RoomDef.Wall.SOUTH, "axis": Vector3.RIGHT, "base_pos": Vector3(0, 0, hz - thick_half), "length": rd.size.x, "y_rot": PI},
-		{"side": RoomDef.Wall.EAST, "axis": Vector3.FORWARD, "base_pos": Vector3(hx - thick_half, 0, 0), "length": rd.size.y, "y_rot": PI * 0.5},
-		{"side": RoomDef.Wall.WEST, "axis": Vector3.FORWARD, "base_pos": Vector3(-hx + thick_half, 0, 0), "length": rd.size.y, "y_rot": -PI * 0.5},
+		{"side": RoomDef.Wall.NORTH, "axis": Vector3.RIGHT, "base_pos": Vector3(0, 0, -hz), "length": rd.size.x, "y_rot": 0.0},
+		{"side": RoomDef.Wall.SOUTH, "axis": Vector3.RIGHT, "base_pos": Vector3(0, 0, hz), "length": rd.size.x, "y_rot": PI},
+		{"side": RoomDef.Wall.EAST, "axis": Vector3.FORWARD, "base_pos": Vector3(hx, 0, 0), "length": rd.size.y, "y_rot": PI * 0.5},
+		{"side": RoomDef.Wall.WEST, "axis": Vector3.FORWARD, "base_pos": Vector3(-hx, 0, 0), "length": rd.size.y, "y_rot": -PI * 0.5},
 	]
 
 	# Collect all panel transforms first; then build a single MultiMesh
-	# with one draw call covering every wall panel in the room. Each side
-	# computes its own count + actual_step so it fits the wall length
-	# exactly — no gaps at the ends regardless of room size.
+	# with one draw call covering every wall panel in the room. Walls with
+	# door openings split into two segments (left + right of the gap),
+	# each independently adaptive — so the opening is exactly empty and
+	# the panel widths shrink to fit the remaining wall sections.
 	var transforms: Array[Transform3D] = []
 	for s: Dictionary in sides:
 		var side: RoomDef.Wall = s["side"] as RoomDef.Wall
@@ -302,23 +314,19 @@ static func build_room_walls_kit(ctx: LevelBuildContext, center: Vector3, rd: Ro
 		var base_pos: Vector3 = s["base_pos"]
 		var length: float = s["length"]
 		var y_rot: float = s["y_rot"]
-		var n_panels: int = max(1, int(round(length / grid)))
-		var actual_step: float = length / float(n_panels)
-		var x_scale: float = actual_step / native_w
 		var has_opening: bool = side in rd.openings
-		var open_min: float = -gap * 0.5
-		var open_max: float = gap * 0.5
-		# Composed orientation: rot_x = 90° stands the flat panel up, then
-		# y_rot spins it to face this wall's outward direction.
-		var basis_x_up := Basis(Vector3.RIGHT, PI * 0.5)
-		var basis := Basis(Vector3.UP, y_rot) * basis_x_up
-		basis = basis.scaled(Vector3(x_scale, y_scale, 1.0))
-		for i in range(n_panels):
-			var slot_center: float = (i + 0.5) * actual_step - length * 0.5
-			if has_opening and slot_center > open_min and slot_center < open_max:
-				continue
-			var pos := base_pos + axis * slot_center + Vector3(0, wall_h * 0.5, 0)
-			transforms.append(Transform3D(basis, pos))
+		if has_opening:
+			# Two segments flanking the opening. Each segment runs from one
+			# wall end to the opening edge, length = (wall_length - gap)/2.
+			# Segment centers are offset from base_pos by half-segment-length
+			# plus half-gap, so each segment sits flush against the opening.
+			var seg_len: float = (length - gap) * 0.5
+			if seg_len > 0.01:
+				var seg_offset: float = (length + gap) * 0.25  # midpoint of left seg
+				_add_wall_segment(transforms, base_pos - axis * seg_offset, axis, seg_len, y_rot, wall_h, y_scale, grid, native_w)
+				_add_wall_segment(transforms, base_pos + axis * seg_offset, axis, seg_len, y_rot, wall_h, y_scale, grid, native_w)
+		else:
+			_add_wall_segment(transforms, base_pos, axis, length, y_rot, wall_h, y_scale, grid, native_w)
 	if transforms.is_empty():
 		return
 
@@ -339,6 +347,33 @@ static func build_room_walls_kit(ctx: LevelBuildContext, center: Vector3, rd: Ro
 	ctx.root.add_child(mmi)
 	mmi.add_to_group(&"structures")
 	mmi.add_to_group(&"room_geometry")
+
+
+# Append wall-panel transforms for a continuous wall segment of `length`
+# meters, centered at `segment_center`, running along `axis`. Uses
+# adaptive placement (n_panels = round(length/grid), step = length/n)
+# so segments fit exactly with no end gaps. Shared by room walls (split
+# at doors) and corridor walls (one segment per side).
+static func _add_wall_segment(out: Array[Transform3D], segment_center: Vector3, axis: Vector3, length: float, y_rot: float, wall_h: float, y_scale: float, grid: float, native_w: float) -> void:
+	var n_panels: int = max(1, int(round(length / grid)))
+	var actual_step: float = length / float(n_panels)
+	var x_scale: float = actual_step / native_w
+	# Rotate -90° around X so the model's long Z axis (native 2m) becomes
+	# world +Y (height). +90° would have flipped it to -Y, leaving the
+	# panel upside-down. With this rotation:
+	#   local X (width) → world X (wall axis) — scale by x_scale
+	#   local Y (thickness) → world -Z — leave at native 0.15m
+	#   local Z (height) → world Y — scale by y_scale
+	# Note y_scale goes in the *third* slot of the scale vector because
+	# it applies to local Z (the height axis after rotation), not local Y
+	# (which is the thin axis).
+	var basis_x_up := Basis(Vector3.RIGHT, -PI * 0.5)
+	var basis := Basis(Vector3.UP, y_rot) * basis_x_up
+	basis = basis.scaled(Vector3(x_scale, 1.0, y_scale))
+	for i in range(n_panels):
+		var slot_center: float = (i + 0.5) * actual_step - length * 0.5
+		var pos := segment_center + axis * slot_center + Vector3(0, wall_h * 0.5, 0)
+		out.append(Transform3D(basis, pos))
 
 
 # Walks a PackedScene to extract its first MeshInstance3D's Mesh. Caches
