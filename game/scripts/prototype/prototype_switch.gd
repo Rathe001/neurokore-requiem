@@ -43,6 +43,7 @@ func _ready() -> void:
 	_omni.omni_range = LAMP_LIGHT_RANGE
 	_omni.omni_attenuation = 1.5
 	_omni.shadow_enabled = false
+	_omni.light_volumetric_fog_energy = 0.0
 	lamp.add_child(_omni)
 	super._ready()
 	_refresh_lamp()

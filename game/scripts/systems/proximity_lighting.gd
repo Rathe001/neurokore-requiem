@@ -19,7 +19,12 @@ extends Node
 
 const INNER_RADIUS := 4.0       # within this distance: full authored energy
 const OUTER_RADIUS := 12.0      # beyond this distance: DIM_FACTOR * authored energy
-const DIM_FACTOR := 0.05        # ambient level when no player nearby (line of sight)
+const DIM_FACTOR := 0.0         # full dark when no player nearby. Was 0.05 — at the
+								#   iso camera angle that 5% baseline lit the OUTER
+								#   walls of adjacent rooms with enough energy to read
+								#   as a halo / light bleed in the void surrounding
+								#   the level. With 0.0, lights truly turn off when
+								#   the player isn't near them.
 const OCCLUDED_DIM_FACTOR := 0.0  # ambient level when blocked by wall or closed door
 const WORLD_LAYER_MASK := 1     # walls + floors + doors
 const RAY_HEIGHT := 0.5         # low sample height — clears floor colliders but stays
@@ -68,6 +73,15 @@ func _process(delta: float) -> void:
 		return
 	var p := player.global_position
 	var from := p + Vector3(0, RAY_HEIGHT, 0)
+	# Room-gating: any light whose room isn't visible-together with the
+	# player's room (per ExplorationState) gets forced to 0 energy regardless
+	# of line-of-sight or distance. Without this, lights in adjacent rooms
+	# that are visible through a doorway have clear LoS, dim only by the
+	# distance fade, and still pour energy onto the OUTER faces of the
+	# player's room walls — visible as a halo around the level.
+	# player_room == &"" (hand-authored / legacy levels with no
+	# ExplorationState population) skips this check.
+	var player_room: StringName = ExplorationState.room_at_world(p)
 	# Framerate-independent damping: weight = 1 - e^(-rate * dt). At rate=6,
 	# this catches up ~63% of the gap each ~0.17s, masking raycast pop and
 	# distance-band edges as a smooth fade.
@@ -123,14 +137,18 @@ func _process(delta: float) -> void:
 			_blocked[key] = blocked
 		else:
 			blocked = _blocked[key]
-		if blocked:
+		var room_gated := false
+		if player_room != &"":
+			var light_room: StringName = ExplorationState.room_at_world(light.global_position)
+			room_gated = not ExplorationState.rooms_visible_together(player_room, light_room)
+		if blocked or room_gated:
 			factor = OCCLUDED_DIM_FACTOR
 		elif dist >= OUTER_RADIUS:
 			factor = DIM_FACTOR
 		else:
 			var t := smoothstep(INNER_RADIUS, OUTER_RADIUS, dist)
 			factor = lerp(1.0, DIM_FACTOR, t)
-		_visible[key] = (not blocked) and (dist < OUTER_RADIUS)
+		_visible[key] = (not blocked) and (not room_gated) and (dist < OUTER_RADIUS)
 		var target: float = baseline * factor
 		light.light_energy = lerp(light.light_energy, target, weight)
 	for key in to_remove:

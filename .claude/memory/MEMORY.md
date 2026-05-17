@@ -45,7 +45,9 @@
 - [Asset manifest](project_asset_manifest.md) — docs/assets.md tracks every third-party asset + license status; append a row when the user shares any new asset link
 - [Blenderkit normals — DO NOT auto-recalc](project_blenderkit_normals_fix.md) — bulk `Recalculate Outside` destroys intentionally-inverted detail (recessed panels, inner flaps); fix individual models by hand in Blender. Models are untracked in git — no rollback. Don't run `tools/fix_normals.py` without a filter
 - [call_deferred typed-arg gotcha](project_call_deferred_typed_args.md) — Godot 4 quirk: `call_deferred(&"m", typed_obj)` fails type-check; use `m.call_deferred(typed_obj)` (Callable form)
-- [Blenderkit import workflow](project_blenderkit_import.md) — tools/import_blenderkit.py converts a Blenderkit-cached .blend → .glb without modifying geometry; user downloads via Blender UI first to handle auth. NEVER bulk-recalc normals (destroys intentional geometry)
+- [Blenderkit import workflow](project_blenderkit_import.md) — tools/import_blenderkit.py converts a Blenderkit-cached .blend → .glb with UDIM handling, optional decimation, emission tint, doubleSided + opaque + modifier-apply baked in
+- [LoS culler transparency pass](project_los_culler_transparency_pass.md) — lerp asymptotes leave entities at transparency ~0.001, routes them through Godot's transparent pipeline; snap to exactly 0/1 within threshold
+- [Light volumetric fog energy](project_light_volumetric_fog_energy.md) — every Light3D needs light_volumetric_fog_energy = 0.0 explicitly; Godot's default of 1.0 scatters into FogVolumes and produces a screen-space halo even with env.volumetric_fog_enabled = false
 - [Health potion system](project_health_potion_system.md) — consumable slot, origin-gated potions, 3 charges, %-based HoT, heal preview on HP bar
 - [Weapon DPS balance](project_dps_balance_model.md) — 3-tier DPS by multi-target capability (26/23/20); damage scales by RARITY_BUDGET_MULT
 - [Resonance bar world-space](project_resonance_bar.md) — accelerator ramp bar moved from HUD to 3D cast bar under player; reuses health_bar.gdshader

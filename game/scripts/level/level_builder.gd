@@ -90,6 +90,7 @@ func _build_level() -> void:
 	_index_room_pieces()
 	GroundBuilder.build(_ctx)
 	CeilingBuilder.build(_ctx)
+	CeilingBuilder.build_void_cover(_ctx)
 	LightingBuilder.configure_fps_fog(_ctx)
 
 	for piece: LevelPiece in _pieces:

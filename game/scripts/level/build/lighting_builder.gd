@@ -163,7 +163,24 @@ static func _create_ceiling_light(ctx: LevelBuildContext, pos: Vector3, lc: Ligh
 	light.omni_range = randf_range(CEILING_LIGHT_RANGE_MIN, CEILING_LIGHT_RANGE_MAX)
 	light.omni_attenuation = CEILING_LIGHT_ATTENUATION
 	light.shadow_enabled = lc.shadows
-	light.light_volumetric_fog_energy = 0.4
+	# Tighter bias than Godot's 0.02 default. With CEILING_LIGHT_ENERGY_MAX
+	# at 11 and walls ~0.2m thick, the default bias was wide enough that
+	# the cubemap depth comparison let some light through the wall plane,
+	# visible as the OUTER wall surface reading lit. 0.005 closes that
+	# gap. Normal bias also halved — at 0.5 we were pushing the receiver
+	# plane half the wall thickness out into the wall, which made the
+	# leak worse, not better.
+	light.shadow_bias = 0.005
+	light.shadow_normal_bias = 0.5
+	# Was 0.4 — even with the global env's volumetric_fog_enabled = false,
+	# the per-room FogVolumes still received this energy and scattered it
+	# across screen pixels. Camera rays passing through fog (or near a
+	# FogVolume's edge) picked up the scatter, producing a diagonal V-shaped
+	# halo extending from room corners into the void. Setting to 0 means
+	# the ceiling fluorescents don't contribute to volumetric fog at all;
+	# the room mist still gets its base density from the FogVolume itself
+	# but won't be lit by these lights.
+	light.light_volumetric_fog_energy = 0.0
 	fixture.add_child(light)
 
 	_randomize_flicker_profile(fixture)

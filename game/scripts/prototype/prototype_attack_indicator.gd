@@ -752,7 +752,12 @@ static func _spawn_fireball_explosion(parent: Node, world_pos: Vector3, blast_ra
 	light.omni_range = blast_radius * 3.5
 	light.omni_attenuation = 0.9
 	light.shadow_enabled = false
-	light.light_volumetric_fog_energy = 0.25
+	# Was 0.25 — caused the V-halo through walls / past void cover every
+	# time an explosion fired. Volumetric fog scatter ignores shadow casters,
+	# so any non-zero value here bleeds into the screen-space fog pass and
+	# brightens the void around the level. The explosion's mesh/particle
+	# visuals carry the "explosion is bright" cue on their own.
+	light.light_volumetric_fog_energy = 0.0
 	parent.add_child(light)
 	light.global_position = world_pos
 

@@ -683,6 +683,7 @@ func _ready() -> void:
 	_fps_fill_light.omni_range = FPS_FILL_RANGE
 	_fps_fill_light.omni_attenuation = FPS_FILL_ATTENUATION
 	_fps_fill_light.shadow_enabled = false
+	_fps_fill_light.light_volumetric_fog_energy = 0.0
 	_fps_fill_light.visible = false
 	_fps_camera.add_child(_fps_fill_light)
 	var _fade_canvas := CanvasLayer.new()
@@ -3044,7 +3045,7 @@ func _toggle_fps() -> void:
 			_fps_camera.position = FPS_CROUCH_OFFSET if _crouching else FPS_HEAD_OFFSET
 			_fps_camera.current = true
 			_set_meshes_visible(visual, false)
-			_set_group_visible(&"fps_ceiling", true)
+			_set_group_cast_shadow(&"fps_ceiling", GeometryInstance3D.SHADOW_CASTING_SETTING_ON)
 			_set_fps_fog(true)
 			if _crosshair_root != null:
 				_crosshair_root.visible = true
@@ -3055,7 +3056,7 @@ func _toggle_fps() -> void:
 			_camera.current = true
 			_fps_camera.position = FPS_HEAD_OFFSET
 			_set_fps_fog(false)
-			_set_group_visible(&"fps_ceiling", false)
+			_set_group_cast_shadow(&"fps_ceiling", GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY)
 			_set_meshes_visible(visual, true)
 			if _crosshair_root != null:
 				_crosshair_root.visible = false
@@ -3076,6 +3077,16 @@ func _set_group_visible(group: StringName, make_visible: bool) -> void:
 	for node: Node in get_tree().get_nodes_in_group(group):
 		if node is Node3D:
 			(node as Node3D).visible = make_visible
+
+# Switches every GeometryInstance3D in `group` between SHADOWS_ONLY (invisible
+# but still occludes light) and ON (visible + casts shadow). Used by the FPS
+# toggle for the room ceilings — iso view wants them invisible-but-occluding
+# so ceiling fluorescents can't spray light over the wall tops, FPS view
+# wants them visible overhead so the player isn't staring at sky.
+func _set_group_cast_shadow(group: StringName, mode: GeometryInstance3D.ShadowCastingSetting) -> void:
+	for node: Node in get_tree().get_nodes_in_group(group):
+		if node is GeometryInstance3D:
+			(node as GeometryInstance3D).cast_shadow = mode
 
 func _set_fps_fog(enabled: bool) -> void:
 	if _fps_fill_light != null:
@@ -3232,7 +3243,17 @@ func _apply_light_item() -> void:
 		omni.omni_range = head.light_range
 		omni.omni_attenuation = 1.4
 		omni.shadow_enabled = true
-		omni.shadow_bias = 0.05
+		# Tight bias / normal_bias to keep the player's helmet light from
+		# bleeding through wall geometry onto the outer faces of walls —
+		# was 0.05 (looser than Godot's 0.02 default), which produced a
+		# visible halo on the outside of any wall the player stood near.
+		# Matches the ceiling fluorescent values in lighting_builder.
+		omni.shadow_bias = 0.005
+		omni.shadow_normal_bias = 0.5
+		# Match the ceiling fluorescent fix — Godot's default of 1.0 for
+		# this property let the headlight scatter into volumetric fog and
+		# produce a screen-space V-halo through walls / past the void cover.
+		omni.light_volumetric_fog_energy = 0.0
 		omni.light_color = head.light_color
 		omni.light_energy = head.light_energy
 		light = omni
@@ -3242,8 +3263,9 @@ func _apply_light_item() -> void:
 		spot.spot_attenuation = 1.0
 		spot.spot_angle_attenuation = 0.6
 		spot.shadow_enabled = true
-		spot.shadow_bias = 0.02
-		spot.shadow_normal_bias = 0.3
+		spot.shadow_bias = 0.005
+		spot.shadow_normal_bias = 0.5
+		spot.light_volumetric_fog_energy = 0.0
 		spot.light_color = head.light_color
 		spot.light_energy = head.light_energy
 		spot.spot_range = head.light_range
