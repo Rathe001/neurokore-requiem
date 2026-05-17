@@ -406,6 +406,19 @@ func _process(delta: float) -> void:
 		var target_t: float = 0.0 if los else 1.0
 		var current: float = _transparency.get(key, 1.0)
 		current = lerp(current, target_t, weight)
+		# lerp asymptotes — it never reaches exactly 0 or 1. When current
+		# is non-zero, Godot routes the GeometryInstance3D through the
+		# transparent rendering pipeline (no depth writes, back-to-front
+		# sort), which causes camera-angle-dependent face dropouts on
+		# multi-surface meshes. Snap to exactly 0 / 1 once we're close
+		# enough so visible entities stay in the opaque pass. Cause of
+		# the long-standing "textures look glitchy" feel across the
+		# whole game — every tracked entity was permanently in the
+		# transparent pass at transparency = ~0.001.
+		if current < 0.005:
+			current = 0.0
+		elif current > HIDE_THRESHOLD:
+			current = 1.0
 		_transparency[key] = current
 		# Show as soon as the target flips to visible — the alpha fade does the
 		# rest. Hide only once we've fully faded out, so a brief LoS flicker
