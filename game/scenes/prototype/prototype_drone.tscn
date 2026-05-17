@@ -18,13 +18,12 @@ collision_layer = 0
 collision_mask = 1
 script = ExtResource("script_drone")
 
-; Visual is the Blenderkit Sci-fi Droid Robot .glb at scale 0.3. Source
-; bbox is 2.29 × 1.8 × 2.7m with the pivot offset above the visual
-; centre (Y min ≈ -1.22). At scale 0.3 the drone lands at ~70 × 54 × 80cm
-; and the visual centre sits ~37cm below the hover point — looks natural
-; for a hovering sci-fi orb (the body hangs slightly below its tracker).
+; Visual is the Blenderkit Sci-fi Droid Robot .glb at scale 0.15. Source
+; bbox is 2.29 × 1.8 × 2.7m; at this scale the drone lands at ~34 × 27
+; × 40cm — sized for tier-5 swarms (~7 drones orbiting the player) to
+; read as a swarm rather than a wall of bodies.
 [node name="Mesh" parent="." instance=ExtResource("drone_visual")]
-transform = Transform3D(0.3, 0, 0, 0, 0.3, 0, 0, 0, 0.3, 0, 0, 0)
+transform = Transform3D(0.15, 0, 0, 0, 0.15, 0, 0, 0, 0.15, 0, 0, 0)
 
 [node name="Collision" type="CollisionShape3D" parent="."]
 shape = SubResource("shape_drone")
