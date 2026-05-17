@@ -107,13 +107,30 @@ func apply_theme(t: LevelTheme) -> void:
 func _resolve_materials(t: LevelTheme) -> Dictionary:
 	if _material_cache.has(t):
 		return _material_cache[t]
-	var wall := _make_material(t.wall_shader, t.wall_color, t.wall_metallic, t.wall_roughness, t.wall_shader_params)
-	var floor_m := _make_material(t.floor_shader, t.floor_color, t.floor_metallic, t.floor_roughness, t.floor_shader_params)
+	# Pre-baked material overrides take priority — used for Blenderkit-
+	# sourced PBR materials (StandardMaterial3D with texture set), bypasses
+	# the shader/color procedural path entirely.
+	var wall: Material = t.wall_material_override if t.wall_material_override != null \
+		else _make_material(t.wall_shader, t.wall_color, t.wall_metallic, t.wall_roughness, t.wall_shader_params)
+	var floor_m: Material = t.floor_material_override if t.floor_material_override != null \
+		else _make_material(t.floor_shader, t.floor_color, t.floor_metallic, t.floor_roughness, t.floor_shader_params)
 	# Alt materials fall back to the primary (not a fresh standard material)
 	# when no alt shader is supplied — corridors look the same as rooms
 	# unless the theme opts in to a variant.
-	var wall_alt: Material = _make_shader_material(t.wall_shader_alt, t.wall_shader_alt_params) if t.wall_shader_alt != null else wall
-	var floor_alt: Material = _make_shader_material(t.floor_shader_alt, t.floor_shader_alt_params) if t.floor_shader_alt != null else floor_m
+	var wall_alt: Material
+	if t.wall_material_alt_override != null:
+		wall_alt = t.wall_material_alt_override
+	elif t.wall_shader_alt != null:
+		wall_alt = _make_shader_material(t.wall_shader_alt, t.wall_shader_alt_params)
+	else:
+		wall_alt = wall
+	var floor_alt: Material
+	if t.floor_material_alt_override != null:
+		floor_alt = t.floor_material_alt_override
+	elif t.floor_shader_alt != null:
+		floor_alt = _make_shader_material(t.floor_shader_alt, t.floor_shader_alt_params)
+	else:
+		floor_alt = floor_m
 	var mats := {&"wall": wall, &"floor": floor_m, &"wall_alt": wall_alt, &"floor_alt": floor_alt}
 	_material_cache[t] = mats
 	return mats

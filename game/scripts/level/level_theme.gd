@@ -21,6 +21,17 @@ class_name LevelTheme
 @export var wall_shader_alt_params: Dictionary = {}
 @export var floor_shader_alt_params: Dictionary = {}
 
+# Optional pre-baked materials (e.g. StandardMaterial3D wired to a PBR
+# texture set imported via tools/import_blenderkit_material.py). When set,
+# these take priority over the shader / color paths above — the build
+# context uses them directly instead of constructing a procedural material.
+# Lets us drop a Blenderkit-sourced texture set onto a theme without
+# touching shader code.
+@export var wall_material_override: Material
+@export var floor_material_override: Material
+@export var wall_material_alt_override: Material
+@export var floor_material_alt_override: Material
+
 @export_group("Wall Material")
 @export var wall_color: Color = Color(0.2, 0.21, 0.24, 1)
 @export var wall_metallic: float = 0.3
