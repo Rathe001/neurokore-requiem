@@ -751,7 +751,14 @@ static func _spawn_fireball_explosion(parent: Node, world_pos: Vector3, blast_ra
 	light.light_energy = 40.0 * intensity_mult
 	light.omni_range = blast_radius * 3.5
 	light.omni_attenuation = 0.9
-	light.shadow_enabled = false
+	# Shadows enabled (was false) so the blast doesn't pour energy through
+	# walls and light up the OUTER faces of any room near the explosion.
+	# The light tweens out over EXPLOSION_DURATION (~1s) so the cubemap
+	# shadow render cost is bounded — only one explosion light at a time
+	# per blast, with intensity tweening down fast.
+	light.shadow_enabled = true
+	light.shadow_bias = 0.005
+	light.shadow_normal_bias = 0.5
 	# Was 0.25 — caused the V-halo through walls / past void cover every
 	# time an explosion fired. Volumetric fog scatter ignores shadow casters,
 	# so any non-zero value here bleeds into the screen-space fog pass and
