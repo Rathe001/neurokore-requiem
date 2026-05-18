@@ -43,6 +43,9 @@ _None added from third-party sources yet. Player + enemy + drone use Quaternius
 | Sci-Fi Industrial Panel | [Blenderkit](https://www.blenderkit.com/get-blenderkit/c862aced-0b3d-43e7-854c-2daf6efb57b6/) | Blenderkit — listed Free | `game/assets/models/objects/wall_industrial_panel/wall_industrial_panel.glb` | ⚠️ | Imported via tools/import_blenderkit.py — license TBD until verified |
 | Sci-fi floor panel | [Blenderkit](https://www.blenderkit.com/get-blenderkit/00de98b1-2397-40ad-a4d6-171772d5c2c4/) | Blenderkit — listed Free | `game/assets/models/objects/floor_panel/floor_panel.glb` | ⚠️ | Imported via tools/import_blenderkit.py — license TBD until verified |
 | Sci-fi floor panel | [Blenderkit](https://www.blenderkit.com/get-blenderkit/00de98b1-2397-40ad-a4d6-171772d5c2c4/) | Blenderkit — listed Free | `game/assets/models/objects/floor_panel/floor_panel.glb` | ⚠️ | Imported via tools/import_blenderkit.py — license TBD until verified |
+| PX Concrete Wall | [Blenderkit](https://www.blenderkit.com/get-blenderkit/515dacf4-61ac-42c2-9cf6-29b88983f1fd/) | Blenderkit — listed Free | `game/assets/models/objects/floor_panel_v2/floor_panel_v2.glb` | ⚠️ | Imported via tools/import_blenderkit.py — license TBD until verified |
+| Modular Fluted Wall Panel Cladding | [Blenderkit](https://www.blenderkit.com/get-blenderkit/906570d6-d9e4-4cf1-bf0b-7a108fffb573/) | Blenderkit — listed Free | `game/assets/models/objects/wall_panel_v2/wall_panel_v2.glb` | ⚠️ | Imported via tools/import_blenderkit.py — license TBD until verified |
+| Square Wall Tiles | [Blenderkit](https://www.blenderkit.com/get-blenderkit/b6d60730-2194-4441-a921-c13922a5e78d/) | Blenderkit — listed Free | `game/assets/models/objects/wall_panel_v3/wall_panel_v3.glb` | ⚠️ | Imported via tools/import_blenderkit.py — license TBD until verified |
 
 
 ## Audio — SFX (YouTube extracts)

@@ -229,15 +229,21 @@ static func build_low_ceiling(ctx: LevelBuildContext, center: Vector3, cd: Corri
 
 
 # ── Kit-Bash Room Walls ─────────────────────────────────────────────────
-# Instances theme.wall_model along each wall in grid steps. Each panel is
-# wall_grid_size meters wide (X), scaled vertically to wall_height. Doors
-# get skipped by leaving a gap of `opening_width` centered on the wall.
-# Collision is still handled by _build_room_wall_collisions in level_builder
-# (panels are visual-only).
+# Instances theme.wall_model once per wall segment, stretching the panel to
+# exactly fit the collision box (length, height, thickness all sized from
+# the corresponding collision dims). Mesh AABB is read at runtime so the
+# scaling is correct regardless of what dimensions the .glb actually has —
+# wall_model_native_* fields on LevelTheme are ignored. Doors split a wall
+# into two segments; each segment gets one stretched panel.
+# Collision is built separately by _build_room_wall_collisions in
+# level_builder; these MMIs are visual-only.
 
-# Kit-bash version of corridor walls. Two parallel rows along the corridor's
-# travel axis. No openings (doors live at the corridor's endpoints where it
-# joins the rooms). Builds a single MMI per corridor.
+# Kit-bash corridor walls. Two parallel walls along the corridor's travel
+# axis, each tiled with panels stretched to wall_height × wall_thickness.
+# Wall length splits into N panels of ~wall_grid_size each (round to fit),
+# so the kit's panel detail repeats along the wall instead of stretching.
+# Walls sit at ±(cd.width/2 + thick/2) perpendicular, matching the
+# procedural `build_corridor_walls` (cd.width = walkable width).
 static func build_corridor_walls_kit(ctx: LevelBuildContext, center: Vector3, cd: CorridorDef) -> void:
 	var t := ctx.theme
 	if t.wall_model == null:
@@ -245,46 +251,48 @@ static func build_corridor_walls_kit(ctx: LevelBuildContext, center: Vector3, cd
 	var mesh := _get_kit_mesh(ctx, t.wall_model, true)
 	if mesh == null:
 		return
-	var grid: float = t.wall_grid_size
-	var native_w: float = maxf(0.01, t.wall_model_native_width)
-	var native_h: float = maxf(0.01, t.wall_model_native_height)
+	# Raw AABB is what MMI actually renders (scene-transform-free vertex
+	# bounds). Visual AABB is what the .glb looks like in editor preview —
+	# used to choose a tile step that matches the design-time panel width.
+	var aabb: AABB = ctx.wall_kit_aabb
+	var tile_w: float = maxf(0.01, ctx.wall_kit_aabb_visual.size.x)
 	var wall_h: float = t.wall_height
-	var y_scale: float = wall_h / native_h
-	var thick_half: float = t.wall_thickness * 0.5
+	var thick: float = t.wall_thickness
 	var along_z := cd.axis == CorridorDef.Axis.Z
-	var half_w := cd.width * 0.5
+	var hw: float = cd.width * 0.5 + thick * 0.5
 
 	var sides: Array[Dictionary]
 	if along_z:
 		sides = [
-			{"axis": Vector3.FORWARD, "base_pos": Vector3(half_w - thick_half, 0, 0), "y_rot": PI * 0.5},
-			{"axis": Vector3.FORWARD, "base_pos": Vector3(-half_w + thick_half, 0, 0), "y_rot": -PI * 0.5},
+			{"axis": Vector3.FORWARD, "base_pos": Vector3(hw, 0, 0), "y_rot": PI * 0.5},
+			{"axis": Vector3.FORWARD, "base_pos": Vector3(-hw, 0, 0), "y_rot": -PI * 0.5},
 		]
 	else:
 		sides = [
-			{"axis": Vector3.RIGHT, "base_pos": Vector3(0, 0, half_w - thick_half), "y_rot": PI},
-			{"axis": Vector3.RIGHT, "base_pos": Vector3(0, 0, -half_w + thick_half), "y_rot": 0.0},
+			{"axis": Vector3.RIGHT, "base_pos": Vector3(0, 0, hw), "y_rot": PI},
+			{"axis": Vector3.RIGHT, "base_pos": Vector3(0, 0, -hw), "y_rot": 0.0},
 		]
 
+	# Wall length: cd.length - thick so the wall butts cleanly against each
+	# connecting room's outer face plane. Note: at L/X/T junctions where two
+	# perpendicular corridors share a room corner, the corridor walls
+	# overlap each other in a small corner cube (z-fight on coplanar tops).
+	# Acceptable for now; alternative (more trim) leaves visible gaps at
+	# every corridor-room junction, not just the perpendicular ones.
+	var wall_len: float = maxf(0.01, cd.length - thick)
 	var transforms: Array[Transform3D] = []
 	for s: Dictionary in sides:
-		_add_wall_segment(transforms, s["base_pos"], s["axis"], cd.length, s["y_rot"], wall_h, y_scale, grid, native_w)
+		_add_tiled_wall_segment(transforms, s["base_pos"], s["axis"], wall_len, wall_h, thick, tile_w, s["y_rot"], aabb)
 
-	var mm := MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_3D
-	mm.mesh = mesh
-	mm.instance_count = transforms.size()
-	for i in range(transforms.size()):
-		mm.set_instance_transform(i, transforms[i])
-
-	var mmi := MultiMeshInstance3D.new()
-	mmi.multimesh = mm
-	mmi.position = center
-	ctx.root.add_child(mmi)
-	mmi.add_to_group(&"structures")
-	mmi.add_to_group(&"room_geometry")
+	_commit_kit_mmi(ctx, center, mesh, transforms)
 
 
+# Kit-bash room walls. Each wall is tiled with panels along its length so
+# the kit's natural panel-width detail repeats instead of stretching.
+# Wall span includes the corner overlap (`rd.size + thick`) so the visual
+# matches the per-wall collision built by _build_room_wall_collisions.
+# Door openings split the wall into two jamb segments, sized to match the
+# jamb collision bodies exactly.
 static func build_room_walls_kit(ctx: LevelBuildContext, center: Vector3, rd: RoomDef) -> void:
 	var t := ctx.theme
 	if t.wall_model == null:
@@ -292,21 +300,15 @@ static func build_room_walls_kit(ctx: LevelBuildContext, center: Vector3, rd: Ro
 	var mesh := _get_kit_mesh(ctx, t.wall_model, true)
 	if mesh == null:
 		return
+	# See build_corridor_walls_kit for raw vs visual AABB rationale.
+	var aabb: AABB = ctx.wall_kit_aabb
+	var tile_w: float = maxf(0.01, ctx.wall_kit_aabb_visual.size.x)
 	var hx := rd.size.x * 0.5
 	var hz := rd.size.y * 0.5
-	var grid: float = t.wall_grid_size
 	var wall_h: float = t.wall_height
-	var native_h: float = maxf(0.01, t.wall_model_native_height)
-	var native_w: float = maxf(0.01, t.wall_model_native_width)
-	var y_scale: float = wall_h / native_h
+	var thick: float = t.wall_thickness
 	var gap: float = rd.opening_width
 
-	# Panels positioned exactly at the room boundary. Earlier code used
-	# `±hz - thick_half` to align with the collision wall's interior face,
-	# but that put the visual panel 0.2m INSIDE the room, leaving a strip
-	# of floor (which extends FLOOR_OVERLAP past the boundary) visible
-	# beyond the wall from iso. With the panel at the boundary, the floor
-	# overlap hides behind the wall geometry instead.
 	var sides: Array[Dictionary] = [
 		{"side": RoomDef.Wall.NORTH, "axis": Vector3.RIGHT, "base_pos": Vector3(0, 0, -hz), "length": rd.size.x, "y_rot": 0.0},
 		{"side": RoomDef.Wall.SOUTH, "axis": Vector3.RIGHT, "base_pos": Vector3(0, 0, hz), "length": rd.size.x, "y_rot": PI},
@@ -314,11 +316,6 @@ static func build_room_walls_kit(ctx: LevelBuildContext, center: Vector3, rd: Ro
 		{"side": RoomDef.Wall.WEST, "axis": Vector3.FORWARD, "base_pos": Vector3(-hx, 0, 0), "length": rd.size.y, "y_rot": -PI * 0.5},
 	]
 
-	# Collect all panel transforms first; then build a single MultiMesh
-	# with one draw call covering every wall panel in the room. Walls with
-	# door openings split into two segments (left + right of the gap),
-	# each independently adaptive — so the opening is exactly empty and
-	# the panel widths shrink to fit the remaining wall sections.
 	var transforms: Array[Transform3D] = []
 	for s: Dictionary in sides:
 		var side: RoomDef.Wall = s["side"] as RoomDef.Wall
@@ -326,95 +323,126 @@ static func build_room_walls_kit(ctx: LevelBuildContext, center: Vector3, rd: Ro
 		var base_pos: Vector3 = s["base_pos"]
 		var length: float = s["length"]
 		var y_rot: float = s["y_rot"]
-		var has_opening: bool = side in rd.openings
-		if has_opening:
-			# Two segments flanking the opening. Each segment runs from one
-			# wall end to the opening edge, length = (wall_length - gap)/2.
-			# Segment centers are offset from base_pos by half-segment-length
-			# plus half-gap, so each segment sits flush against the opening.
-			var seg_len: float = (length - gap) * 0.5
-			if seg_len > 0.01:
-				var seg_offset: float = (length + gap) * 0.25  # midpoint of left seg
-				_add_wall_segment(transforms, base_pos - axis * seg_offset, axis, seg_len, y_rot, wall_h, y_scale, grid, native_w)
-				_add_wall_segment(transforms, base_pos + axis * seg_offset, axis, seg_len, y_rot, wall_h, y_scale, grid, native_w)
+		var span: float = length + thick  # match collision: rd.size.* + thick
+		if side in rd.openings:
+			# Two segments flanking the opening. Each jamb's length matches
+			# the jamb collision body built by _build_room_wall_collisions.
+			var jamb_len: float = (span - gap) * 0.5
+			if jamb_len > 0.01:
+				var offset: float = (gap + jamb_len) * 0.5
+				_add_tiled_wall_segment(transforms, base_pos + axis * offset, axis, jamb_len, wall_h, thick, tile_w, y_rot, aabb)
+				_add_tiled_wall_segment(transforms, base_pos - axis * offset, axis, jamb_len, wall_h, thick, tile_w, y_rot, aabb)
 		else:
-			_add_wall_segment(transforms, base_pos, axis, length, y_rot, wall_h, y_scale, grid, native_w)
+			_add_tiled_wall_segment(transforms, base_pos, axis, span, wall_h, thick, tile_w, y_rot, aabb)
 	if transforms.is_empty():
 		return
 
+	_commit_kit_mmi(ctx, center, mesh, transforms)
+
+
+# Tiles N panels along a wall segment. Each panel's *length* axis (along the
+# wall) is scaled to the actual tiled step (length / N where N = round(
+# length / grid)), so panels stay close to their native width — the kit's
+# panel detail reads naturally instead of stretched. Height and thickness
+# are stretched on each panel to match wall_h × thick (the collision box's
+# vertical extent and perpendicular extent).
+#
+# Rotation chain: `Basis(UP, y_rot) * Basis(RIGHT, -PI/2)` maps the
+# model's local Z (height) onto world Y, local X (width) onto the wall
+# axis, and local Y (thickness) onto the perpendicular axis.
+static func _add_tiled_wall_segment(out: Array[Transform3D], segment_center: Vector3, axis: Vector3, length: float, wall_h: float, thick: float, grid: float, y_rot: float, aabb: AABB) -> void:
+	var native_w: float = maxf(0.0001, aabb.size.x)
+	var native_t: float = maxf(0.0001, aabb.size.y)
+	var native_h: float = maxf(0.0001, aabb.size.z)
+	var n_panels: int = max(1, int(round(length / maxf(0.01, grid))))
+	var step: float = length / float(n_panels)
+	# Rotation chain: X(-PI/2) maps the model's local Z onto world Y so the
+	# kit's "tall axis" becomes vertical. y_rot then picks each wall side.
+	# Assumes the kit panel's height runs along local Z (typical Blender
+	# Z-up export). If a kit's height is along local Y, drop the X rotation
+	# and swap the scale.y/scale.z below.
+	var basis := Basis(Vector3.UP, y_rot) * Basis(Vector3.RIGHT, -PI * 0.5)
+	basis = basis.scaled(Vector3(step / native_w, thick / native_t, wall_h / native_h))
+	# AABB-center compensation: the mesh's local-space AABB center may not
+	# be at the origin (a bottom-anchored panel has its center at +h/2 in
+	# local Z). Computing translation = center - basis * aabb_center makes
+	# the AABB center land at the slot center for each panel.
+	var aabb_center_local: Vector3 = aabb.position + aabb.size * 0.5
+	var rotated_center: Vector3 = basis * aabb_center_local
+	for i in range(n_panels):
+		var slot_offset: float = (i + 0.5) * step - length * 0.5
+		var slot_center: Vector3 = segment_center + axis * slot_offset + Vector3(0, wall_h * 0.5, 0)
+		out.append(Transform3D(basis, slot_center - rotated_center))
+
+
+# Wraps a transform list in a MultiMeshInstance3D parented to ctx.root at
+# `center`. Tags it as both `structures` (for general world queries) and
+# `room_geometry` (LoS culler hides this MMI when the player isn't near).
+static func _commit_kit_mmi(ctx: LevelBuildContext, center: Vector3, mesh: Mesh, transforms: Array[Transform3D]) -> void:
+	if transforms.is_empty():
+		return
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.mesh = mesh
 	mm.instance_count = transforms.size()
 	for i in range(transforms.size()):
 		mm.set_instance_transform(i, transforms[i])
-
 	var mmi := MultiMeshInstance3D.new()
 	mmi.multimesh = mm
 	mmi.position = center
-	# Group tag — LoS culler reads &"room_geometry" each physics tick and
-	# hides MMIs whose room isn't adjacent to the player's. Big perf win
-	# at horde density since each hidden MMI skips its vertex pass + any
-	# shadow-map contribution.
 	ctx.root.add_child(mmi)
 	mmi.add_to_group(&"structures")
 	mmi.add_to_group(&"room_geometry")
 
 
-# Append wall-panel transforms for a continuous wall segment of `length`
-# meters, centered at `segment_center`, running along `axis`. Uses
-# adaptive placement (n_panels = round(length/grid), step = length/n)
-# so segments fit exactly with no end gaps. Shared by room walls (split
-# at doors) and corridor walls (one segment per side).
-static func _add_wall_segment(out: Array[Transform3D], segment_center: Vector3, axis: Vector3, length: float, y_rot: float, wall_h: float, y_scale: float, grid: float, native_w: float) -> void:
-	var n_panels: int = max(1, int(round(length / grid)))
-	var actual_step: float = length / float(n_panels)
-	var x_scale: float = actual_step / native_w
-	# Rotate -90° around X so the model's long Z axis (native 2m) becomes
-	# world +Y (height). +90° would have flipped it to -Y, leaving the
-	# panel upside-down. With this rotation:
-	#   local X (width) → world X (wall axis) — scale by x_scale
-	#   local Y (thickness) → world -Z — leave at native 0.15m
-	#   local Z (height) → world Y — scale by y_scale
-	# Note y_scale goes in the *third* slot of the scale vector because
-	# it applies to local Z (the height axis after rotation), not local Y
-	# (which is the thin axis).
-	var basis_x_up := Basis(Vector3.RIGHT, -PI * 0.5)
-	var basis := Basis(Vector3.UP, y_rot) * basis_x_up
-	basis = basis.scaled(Vector3(x_scale, 1.0, y_scale))
-	for i in range(n_panels):
-		var slot_center: float = (i + 0.5) * actual_step - length * 0.5
-		var pos := segment_center + axis * slot_center + Vector3(0, wall_h * 0.5, 0)
-		out.append(Transform3D(basis, pos))
-
-
-# Walks a PackedScene to extract its first MeshInstance3D's Mesh. Caches
-# on ctx so we don't repeatedly instantiate the .glb across rooms.
+# Walks a PackedScene to extract its first MeshInstance3D's Mesh, plus
+# the EFFECTIVE AABB (baked with the .glb's root + intermediate-node
+# transforms). The raw `mesh.get_aabb()` returns vertex bounds in mesh-
+# local space and ignores the scene's transform chain — that's wrong
+# whenever the .glb has a root scale (common in Godot's .glb importer).
+# Caches both on ctx so we only instantiate the .glb scene once.
 static func _get_kit_mesh(ctx: LevelBuildContext, scene: PackedScene, is_wall: bool) -> Mesh:
 	if is_wall and ctx.wall_kit_mesh != null:
 		return ctx.wall_kit_mesh
 	if not is_wall and ctx.floor_kit_mesh != null:
 		return ctx.floor_kit_mesh
 	var inst := scene.instantiate()
-	var mesh := _find_first_mesh_in_kit(inst)
+	var result := _find_first_mesh_in_kit(inst)
 	inst.queue_free()
+	if result.is_empty():
+		return null
+	var mesh: Mesh = result[&"mesh"]
+	var xform: Transform3D = result[&"xform"]
+	var raw_aabb: AABB = mesh.get_aabb()
+	var visual_aabb: AABB = xform * raw_aabb
 	if is_wall:
 		ctx.wall_kit_mesh = mesh
+		ctx.wall_kit_aabb = raw_aabb
+		ctx.wall_kit_aabb_visual = visual_aabb
 	else:
 		ctx.floor_kit_mesh = mesh
+		ctx.floor_kit_aabb = raw_aabb
+		ctx.floor_kit_aabb_visual = visual_aabb
 	return mesh
 
 
-static func _find_first_mesh_in_kit(node: Node) -> Mesh:
+# Walks a PackedScene tree to find the first MeshInstance3D, returning the
+# mesh + the cumulative Transform3D from the scene root down to that node.
+# Multiplying that transform into the mesh's AABB gives the visual AABB
+# (what the scene would render if instantiated directly).
+static func _find_first_mesh_in_kit(node: Node, parent_xform: Transform3D = Transform3D.IDENTITY) -> Dictionary:
+	var xform := parent_xform
+	if node is Node3D:
+		xform = parent_xform * (node as Node3D).transform
 	if node is MeshInstance3D:
 		var mi := node as MeshInstance3D
 		if mi.mesh != null:
-			return mi.mesh
+			return {&"mesh": mi.mesh, &"xform": xform}
 	for child in node.get_children():
-		var m := _find_first_mesh_in_kit(child)
-		if m != null:
-			return m
-	return null
+		var result := _find_first_mesh_in_kit(child, xform)
+		if not result.is_empty():
+			return result
+	return {}
 
 
 # ── Procedural Room Mesh ────────────────────────────────────────────────

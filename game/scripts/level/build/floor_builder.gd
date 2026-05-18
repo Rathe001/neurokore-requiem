@@ -45,21 +45,31 @@ static func build_piece_floor_kit(ctx: LevelBuildContext, center: Vector3, size_
 	var mesh := WallBuilder._get_kit_mesh(ctx, t.floor_model, false)
 	if mesh == null:
 		return
-	# Same FLOOR_OVERLAP the procedural path uses — extends the floor +0.3m
-	# past the room/corridor edge so it overlaps into the wall thickness and
+	# Raw AABB = mesh vertex bounds (what MMI renders). Visual AABB = .glb
+	# bounds with scene transforms applied (what one panel looks like at
+	# design scale). Tile at visual size so kits repeat at design rhythm;
+	# scale each tile by step / raw so MMI renders the correct dimensions.
+	# Note: tile_d uses local Y (not Z) because the X(-PI/2) rotation
+	# applied below maps the model's local Y axis to world -Z (floor
+	# depth), and local Z to world Y (now the floor's vertical extent).
+	var aabb: AABB = ctx.floor_kit_aabb
+	var tile_w: float = maxf(0.01, ctx.floor_kit_aabb_visual.size.x)
+	var tile_d: float = maxf(0.01, ctx.floor_kit_aabb_visual.size.y)
+	# Same FLOOR_OVERLAP the procedural path uses — extends the floor past
+	# the room/corridor edge so it overlaps into the wall thickness and
 	# adjacent piece's floor. Without this, the rasterizer sees a seam at
 	# every piece boundary (visible as a thin dark line at iso, fall-
 	# through gap in collision).
 	size_x += FLOOR_OVERLAP * 2.0
 	size_z += FLOOR_OVERLAP * 2.0
-	var grid: float = t.floor_grid_size
-	# Adaptive tiling — fit any size with no edge gaps. n = round(size/grid)
-	# (min 1), then actual_grid = size/n. Each tile is scaled to fill its
-	# actual cell exactly, regardless of the model's native footprint.
-	var nx: int = max(1, int(round(size_x / grid)))
-	var nz: int = max(1, int(round(size_z / grid)))
-	var actual_grid_x: float = size_x / float(nx)
-	var actual_grid_z: float = size_z / float(nz)
+	# Adaptive tiling — fit any size with no edge gaps. n = round(size/tile)
+	# (min 1), then actual_step = size/n. Each tile is scaled to fill its
+	# actual cell exactly. Step is close to native tile size, slightly
+	# squeezed or stretched as needed to hit the room edges.
+	var nx: int = max(1, int(round(size_x / tile_w)))
+	var nz: int = max(1, int(round(size_z / tile_d)))
+	var actual_step_x: float = size_x / float(nx)
+	var actual_step_z: float = size_z / float(nz)
 	# Container body — hosts collision + group memberships. The MMI rides
 	# along as a child so the visuals follow the body's transform.
 	var body := StaticBody3D.new()
@@ -72,18 +82,24 @@ static func build_piece_floor_kit(ctx: LevelBuildContext, center: Vector3, size_
 	(col.shape as BoxShape3D).size = Vector3(size_x, 0.1, size_z)
 	col.position.y = -0.05
 	body.add_child(col)
-	# Build transforms for every tile, then a single MultiMesh covers them
-	# all with one draw call per material surface.
-	var origin_x := -size_x * 0.5 + actual_grid_x * 0.5
-	var origin_z := -size_z * 0.5 + actual_grid_z * 0.5
+	# Rotation: X(-PI/2) lays a "standing wall" model flat as a floor — the
+	# model's local Z axis (the wall's front-face normal) maps to world Y,
+	# putting the design face up. Per-axis scale: step_size / RAW_AABB_size
+	# (MMI ignores .glb scene transforms, so scale is relative to raw vertex
+	# bounds). Note: after the rotation the model's local Z is the WORLD-Y
+	# direction, so `tile_d` (which is aabb.size.z in raw) and thickness
+	# axes swap roles — that's handled by composing the rotation and scale.
+	var sx: float = actual_step_x / maxf(0.0001, aabb.size.x)
+	var sz: float = actual_step_z / maxf(0.0001, aabb.size.y)
+	var tile_basis := Basis(Vector3.RIGHT, -PI * 0.5).scaled(Vector3(sx, 1.0, sz))
+	# AABB-center compensation: a floor panel anchored at its corner (not
+	# center) would otherwise tile mis-aligned. Translation = slot_center -
+	# basis * aabb_center makes the AABB center land at each slot center.
+	var aabb_center_local: Vector3 = aabb.position + aabb.size * 0.5
+	var rotated_center: Vector3 = tile_basis * aabb_center_local
+	var origin_x := -size_x * 0.5 + actual_step_x * 0.5
+	var origin_z := -size_z * 0.5 + actual_step_z * 0.5
 	var n := nx * nz
-	# Scale each tile to fill actual_grid × actual_grid exactly. Combines
-	# the room-fit scaling with the native_size correction (model is 1.92m
-	# × 2m, scaling per-axis avoids gaps).
-	var native: Vector2 = t.floor_model_native_size
-	var sx: float = actual_grid_x / maxf(0.01, native.x)
-	var sz: float = actual_grid_z / maxf(0.01, native.y)
-	var tile_basis := Basis(Vector3.RIGHT, Vector3.UP, Vector3.BACK).scaled(Vector3(sx, 1.0, sz))
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.mesh = mesh
@@ -91,8 +107,8 @@ static func build_piece_floor_kit(ctx: LevelBuildContext, center: Vector3, size_
 	var i := 0
 	for ix in range(nx):
 		for iz in range(nz):
-			var pos := Vector3(origin_x + ix * actual_grid_x, mesh_y_bias, origin_z + iz * actual_grid_z)
-			mm.set_instance_transform(i, Transform3D(tile_basis, pos))
+			var slot_center := Vector3(origin_x + ix * actual_step_x, mesh_y_bias, origin_z + iz * actual_step_z)
+			mm.set_instance_transform(i, Transform3D(tile_basis, slot_center - rotated_center))
 			i += 1
 	var mmi := MultiMeshInstance3D.new()
 	mmi.multimesh = mm

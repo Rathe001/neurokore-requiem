@@ -11,6 +11,8 @@
 - [Level builder shader-overlap trap](project_level_builder_overlap.md) — corridor & room walls/floors geometrically overlap by design; using different shaders per piece causes z-fight flicker
 - [Mitred wall geometry](project_mitred_wall_geometry.md) — room walls use 45° trapezoidal mitre; two perpendicular walls tile flush at the corner diagonal, no exposed mitre face
 - [Level debug viz toggle](project_level_debug_viz.md) — `LevelBuilder.USE_DEBUG_LEVEL_VIZ` swaps kit-bash for procedural emissive-border geometry; flip and reload to verify alignment
+- [Kit panel scaling](project_kit_panel_scaling.md) — kit walls/floors cache raw + visual AABBs; raw drives MMI scale math, visual drives tile spacing
+- [Kit model axis conventions](project_kit_model_axis_conventions.md) — Blenderkit imports vary in which local axis is height; rotation chain in WallBuilder has to match per-model; watch for single-use scene-sets (e.g. wall+doorway combos) that aren't tileable
 - [Level system architecture roadmap](project_level_architecture.md) — 3 layers: modular builders (done), declarative graph (done), procgen (deferred); new levels should use LevelGraph not pieces[]
 - [Zone lighting profiles](project_lighting_profiles.md) — proximity dim / global light behavior should be driven by per-zone profiles, not hardcoded constants (outdoor ≠ indoor)
 - [Enemy navigation systems](project_enemy_navigation.md) — crouch tunnels, pit-pillar nav links, leash override; navmesh agent_height MUST stay synced with enemy CROUCH_HEIGHT

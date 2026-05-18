@@ -32,6 +32,18 @@ var wall_shapes: Dictionary = {}
 ## start null and stay null when the theme has no kit model assigned.
 var wall_kit_mesh: Mesh
 var floor_kit_mesh: Mesh
+## Raw vertex-space AABB of the kit mesh — what MultiMeshInstance3D sees
+## when it renders the mesh (the .glb's scene transforms are NOT applied
+## by MMI, only the per-instance transform we set). Used for SCALING
+## decisions: scale = target_size / raw_aabb.size.
+var wall_kit_aabb: AABB
+var floor_kit_aabb: AABB
+## Visual AABB with the .glb's node-chain transforms baked in (root scale,
+## etc.) — what the .glb looks like when instantiated as a regular scene.
+## Used for TILING decisions: how wide is one "native" panel in design
+## space, so we know how many tiles to lay out.
+var wall_kit_aabb_visual: AABB
+var floor_kit_aabb_visual: AABB
 ## Cache: LevelTheme → {wall, floor, wall_alt, floor_alt} so apply_theme()
 ## doesn't rebuild StandardMaterial3D / ShaderMaterial instances every time
 ## a piece swaps to an already-seen theme.
@@ -109,18 +121,29 @@ func apply_theme(t: LevelTheme) -> void:
 
 # Returns (and caches) the {wall, floor, wall_alt, floor_alt} set for a
 # given theme. First call per theme builds the materials; subsequent
-# calls hit the cache.
+# calls hit the cache. When LevelBuilder.USE_DEBUG_LEVEL_VIZ is on, the
+# theme's material slots are ignored and the debug ShaderMaterials are
+# loaded from `res://resources/level/debug/` instead — this keeps debug
+# viz working regardless of which materials the theme has authored, and
+# means production themes can leave the material slots null (kit-bash
+# walls don't need them; pillars/trim use a dark-grey fallback).
 func _resolve_materials(t: LevelTheme) -> Dictionary:
 	if _material_cache.has(t):
 		return _material_cache[t]
-	# Materials come pre-baked on the theme (imported from Blenderkit via
-	# tools/import_blenderkit_material.py). The _alt slots fall back to the
-	# primary when null so a theme can opt into a corridor variant without
-	# having to specify it.
-	var wall: Material = t.wall_material
-	var floor_m: Material = t.floor_material
-	var wall_alt: Material = t.wall_material_alt if t.wall_material_alt != null else wall
-	var floor_alt: Material = t.floor_material_alt if t.floor_material_alt != null else floor_m
+	var wall: Material
+	var floor_m: Material
+	var wall_alt: Material
+	var floor_alt: Material
+	if LevelBuilder.USE_DEBUG_LEVEL_VIZ:
+		wall = load("res://resources/level/debug/wall_debug.tres") as Material
+		floor_m = load("res://resources/level/debug/floor_debug.tres") as Material
+		wall_alt = load("res://resources/level/debug/wall_alt_debug.tres") as Material
+		floor_alt = load("res://resources/level/debug/floor_alt_debug.tres") as Material
+	else:
+		wall = t.wall_material
+		floor_m = t.floor_material
+		wall_alt = t.wall_material_alt if t.wall_material_alt != null else wall
+		floor_alt = t.floor_material_alt if t.floor_material_alt != null else floor_m
 	var mats := {&"wall": wall, &"floor": floor_m, &"wall_alt": wall_alt, &"floor_alt": floor_alt}
 	_material_cache[t] = mats
 	return mats
