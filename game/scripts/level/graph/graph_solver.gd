@@ -16,7 +16,11 @@ class_name GraphSolver
 ##   - Both referenced rooms must exist in graph.rooms.
 
 
-static func solve(graph: LevelGraph) -> Array[LevelPiece]:
+## `grid_size > 0` snaps every room size, corridor length, and opening width
+## to the kit's grid BEFORE positions are computed. Without this, the builder
+## quantized after placement, which made corridors over-shoot their connecting
+## rooms when grid-up rounding bumped a corridor's length past the gap.
+static func solve(graph: LevelGraph, grid_size: float = 0.0) -> Array[LevelPiece]:
 	var pieces: Array[LevelPiece] = []
 	if graph == null:
 		return pieces
@@ -34,6 +38,16 @@ static func solve(graph: LevelGraph) -> Array[LevelPiece]:
 		push_error("[GraphSolver] Anchor id '%s' not found in graph.rooms." % graph.anchor_id)
 		return pieces
 
+	# Pre-quantize each room's size / opening_width so position math and the
+	# emitted geometry stay in lockstep. Stored per-id so BFS and the room/
+	# corridor emit passes all read the same values.
+	var quantized_size: Dictionary = {}      # id -> Vector2
+	var quantized_opening: Dictionary = {}   # id -> float
+	for id_key: StringName in nodes.keys():
+		var rm: RoomDef = (nodes[id_key] as RoomNode).room
+		quantized_size[id_key] = _snap_vec2(rm.size, grid_size)
+		quantized_opening[id_key] = _snap_scalar(rm.opening_width, grid_size)
+
 	var positions: Dictionary = {}
 	var anchor: RoomNode = nodes[graph.anchor_id]
 	positions[anchor.id] = anchor.position
@@ -41,7 +55,6 @@ static func solve(graph: LevelGraph) -> Array[LevelPiece]:
 	var queue: Array = [anchor.id]
 	while queue.size() > 0:
 		var current_id: StringName = queue.pop_front()
-		var current_node: RoomNode = nodes[current_id]
 
 		for c: Connection in graph.connections:
 			if c == null:
@@ -71,11 +84,10 @@ static func solve(graph: LevelGraph) -> Array[LevelPiece]:
 				push_error("[GraphSolver] Connection %s↔%s has no corridor; skipping." % [c.from_room, c.to_room])
 				continue
 
-			var next_node: RoomNode = nodes[next_id]
 			var dir := _outward_dir(current_wall)
-			var current_along := _size_along(current_node.room.size, current_wall)
-			var next_along := _size_along(next_node.room.size, next_wall)
-			var corridor_len: float = c.corridor.length
+			var current_along := _size_along(quantized_size[current_id], current_wall)
+			var next_along := _size_along(quantized_size[next_id], next_wall)
+			var corridor_len := _snap_scalar(c.corridor.length, grid_size)
 			var computed: Vector3 = positions[current_id] + dir * (current_along * 0.5 + corridor_len + next_along * 0.5)
 
 			if positions.has(next_id):
@@ -89,12 +101,19 @@ static func solve(graph: LevelGraph) -> Array[LevelPiece]:
 				positions[next_id] = computed
 				queue.push_back(next_id)
 
-	# Emit room pieces
+	# Emit room pieces. Duplicate the RoomDef so the per-piece quantized size
+	# doesn't leak into the shared template (which would mutate state across
+	# rebuilds and break level previews that reuse the same RoomDef).
 	for id: StringName in positions.keys():
 		var node: RoomNode = nodes[id]
 		var piece := LevelPiece.new()
 		piece.position = positions[id]
-		piece.room = node.room
+		var room_for_piece: RoomDef = node.room
+		if grid_size > 0.0:
+			room_for_piece = node.room.duplicate()
+			room_for_piece.size = quantized_size[id]
+			room_for_piece.opening_width = quantized_opening[id]
+		piece.room = room_for_piece
 		piece.enemy_positions = node.enemy_positions
 		# Per-instance id from the graph node, NOT the RoomDef. Lets a generator
 		# reuse one RoomDef template across many distinct pieces without
@@ -118,21 +137,20 @@ static func solve(graph: LevelGraph) -> Array[LevelPiece]:
 		if not _are_opposite(c.from_wall, c.to_wall):
 			continue
 
-		var from_node: RoomNode = nodes[c.from_room]
 		var dir := _outward_dir(c.from_wall)
-		var from_along := _size_along(from_node.room.size, c.from_wall)
-		var corridor_center: Vector3 = positions[c.from_room] + dir * (from_along * 0.5 + c.corridor.length * 0.5)
+		var from_along := _size_along(quantized_size[c.from_room], c.from_wall)
+		var corridor_len := _snap_scalar(c.corridor.length, grid_size)
+		var corridor_center: Vector3 = positions[c.from_room] + dir * (from_along * 0.5 + corridor_len * 0.5)
 
 		var corridor_copy: CorridorDef = c.corridor.duplicate()
 		corridor_copy.axis = _axis_for_wall(c.from_wall)
+		corridor_copy.length = corridor_len
 		# Sync corridor.width to the connecting rooms' opening_width so the
 		# corridor walls extend the door jamb lines exactly — eliminates the
 		# perpendicular-offset class of misalignment at door/corridor joins.
 		# If the two rooms disagree on opening_width, take the smaller so we
 		# don't punch past either door's jamb.
-		var to_node: RoomNode = nodes[c.to_room]
-		var jamb_w := minf(from_node.room.opening_width, to_node.room.opening_width)
-		corridor_copy.width = jamb_w
+		corridor_copy.width = minf(quantized_opening[c.from_room], quantized_opening[c.to_room])
 
 		var piece := LevelPiece.new()
 		piece.position = corridor_center
@@ -145,9 +163,21 @@ static func solve(graph: LevelGraph) -> Array[LevelPiece]:
 		if not positions.has(id):
 			push_warning("[GraphSolver] Room '%s' is not reachable from anchor '%s'." % [id, graph.anchor_id])
 
-	_warn_on_overlaps(positions, nodes)
+	_warn_on_overlaps(positions, quantized_size)
 
 	return pieces
+
+
+static func _snap_scalar(v: float, grid: float) -> float:
+	if grid <= 0.0:
+		return v
+	return maxf(grid, round(v / grid) * grid)
+
+
+static func _snap_vec2(v: Vector2, grid: float) -> Vector2:
+	if grid <= 0.0:
+		return v
+	return Vector2(_snap_scalar(v.x, grid), _snap_scalar(v.y, grid))
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────
@@ -185,22 +215,24 @@ static func _axis_for_wall(wall: RoomDef.Wall) -> CorridorDef.Axis:
 	return CorridorDef.Axis.X
 
 
-# O(n²) AABB overlap check. Acceptable for n in the dozens; if a level grows
-# to hundreds of rooms, switch to a spatial bucket.
-static func _warn_on_overlaps(positions: Dictionary, nodes: Dictionary) -> void:
+# O(n²) AABB overlap check using the post-quantization sizes (so the check
+# reflects what the builder will actually emit, not the authored sizes).
+# Acceptable for n in the dozens; if a level grows to hundreds of rooms,
+# switch to a spatial bucket.
+static func _warn_on_overlaps(positions: Dictionary, quantized_size: Dictionary) -> void:
 	var ids: Array = positions.keys()
 	for i in ids.size():
 		var a_id: StringName = ids[i]
-		var a_node: RoomNode = nodes[a_id]
 		var a_pos: Vector3 = positions[a_id]
-		var a_hx := a_node.room.size.x * 0.5
-		var a_hz := a_node.room.size.y * 0.5
+		var a_sz: Vector2 = quantized_size[a_id]
+		var a_hx := a_sz.x * 0.5
+		var a_hz := a_sz.y * 0.5
 		for j in range(i + 1, ids.size()):
 			var b_id: StringName = ids[j]
-			var b_node: RoomNode = nodes[b_id]
 			var b_pos: Vector3 = positions[b_id]
-			var b_hx := b_node.room.size.x * 0.5
-			var b_hz := b_node.room.size.y * 0.5
+			var b_sz: Vector2 = quantized_size[b_id]
+			var b_hx := b_sz.x * 0.5
+			var b_hz := b_sz.y * 0.5
 			var dx := absf(a_pos.x - b_pos.x)
 			var dz := absf(a_pos.z - b_pos.z)
 			if dx < a_hx + b_hx and dz < a_hz + b_hz:

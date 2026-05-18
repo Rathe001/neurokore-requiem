@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://ce0o0n7ooofnx"
-path="res://.godot/imported/wall_panel_v3_Porcelain002_2K_Roughness.png-1c7a76f09a96108ff41664eec861980c.ctex"
+path.s3tc="res://.godot/imported/wall_panel_v3_Porcelain002_2K_Roughness.png-1c7a76f09a96108ff41664eec861980c.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "2c80b5b1796ad72f6eb5c81ca95de0cd"
@@ -14,11 +15,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/models/objects/wall_panel_v3/wall_panel_v3_Porcelain002_2K_Roughness.png"
-dest_files=["res://.godot/imported/wall_panel_v3_Porcelain002_2K_Roughness.png-1c7a76f09a96108ff41664eec861980c.ctex"]
+dest_files=["res://.godot/imported/wall_panel_v3_Porcelain002_2K_Roughness.png-1c7a76f09a96108ff41664eec861980c.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0
@@ -40,4 +41,4 @@ process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
 process/size_limit=0
-detect_3d/compress_to=1
+detect_3d/compress_to=0

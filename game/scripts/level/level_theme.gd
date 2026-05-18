@@ -1,7 +1,7 @@
 extends Resource
 class_name LevelTheme
 
-@export var wall_height: float = 4.5
+@export var wall_height: float = 3.0
 @export var wall_thickness: float = 0.4
 
 # Kit-bash models. When wall_model / floor_model are set the level builder
@@ -17,8 +17,8 @@ class_name LevelTheme
 @export var wall_grid_size: float = 4.0
 @export var floor_grid_size: float = 4.0
 # Native dimensions of the source models (before any kit-bash scaling).
-# - wall_model_native_width / _native_height: X width and Y height of the
-#   model in its source orientation (we rotate +90° X to stand it up).
+# These fields are informational — the builders read the mesh AABB at
+# runtime and auto-detect which axis is height vs thickness.
 # - floor_model_native_size: XZ footprint of the floor tile.
 # The builders scale each instance so it fills wall_grid_size × wall_height
 # (walls) or floor_grid_size × floor_grid_size (floors).

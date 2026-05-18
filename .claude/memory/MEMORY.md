@@ -13,6 +13,7 @@
 - [Level debug viz toggle](project_level_debug_viz.md) — `LevelBuilder.USE_DEBUG_LEVEL_VIZ` swaps kit-bash for procedural emissive-border geometry; flip and reload to verify alignment
 - [Kit panel scaling](project_kit_panel_scaling.md) — kit walls/floors cache raw + visual AABBs; raw drives MMI scale math, visual drives tile spacing
 - [Kit model axis conventions](project_kit_model_axis_conventions.md) — Blenderkit imports vary in which local axis is height; rotation chain in WallBuilder has to match per-model; watch for single-use scene-sets (e.g. wall+doorway combos) that aren't tileable
+- [Kit panel mitre pending](project_kit_panel_corner_mitre_pending.md) — `kit_panel_post_import.gd` now auto-normalizes wall/floor `.glb`s on import; corner mitre via shader clip is the next step (needed for arena-with-inner-room outer-wall visibility)
 - [Level system architecture roadmap](project_level_architecture.md) — 3 layers: modular builders (done), declarative graph (done), procgen (deferred); new levels should use LevelGraph not pieces[]
 - [Zone lighting profiles](project_lighting_profiles.md) — proximity dim / global light behavior should be driven by per-zone profiles, not hardcoded constants (outdoor ≠ indoor)
 - [Enemy navigation systems](project_enemy_navigation.md) — crouch tunnels, pit-pillar nav links, leash override; navmesh agent_height MUST stay synced with enemy CROUCH_HEIGHT
@@ -52,10 +53,12 @@
 - [Blenderkit import workflow](project_blenderkit_import.md) — tools/import_blenderkit.py converts a Blenderkit-cached .blend → .glb with UDIM handling, optional decimation, emission tint, doubleSided + opaque + modifier-apply baked in
 - [LoS culler transparency pass](project_los_culler_transparency_pass.md) — lerp asymptotes leave entities at transparency ~0.001, routes them through Godot's transparent pipeline; snap to exactly 0/1 within threshold
 - [Light volumetric fog energy](project_light_volumetric_fog_energy.md) — every Light3D needs light_volumetric_fog_energy = 0.0 explicitly; Godot's default of 1.0 scatters into FogVolumes and produces a screen-space halo even with env.volumetric_fog_enabled = false
-- [Health potion system](project_health_potion_system.md) — consumable slot, origin-gated potions, 3 charges, %-based HoT, heal preview on HP bar
+- [Recovery system](project_health_potion_system.md) — consumable slot, origin-gated Stimpack/Battery, 2-7 charges, %-based HoT, heal preview on HP bar
+- [Visual meter system](project_visual_meters.md) — ALL item types have meter bars; MODIFIER_BAR_DEFS for affix stats; Shift comparison shows union of bars; quality % on both panels; global Power bar with divider
 - [Weapon DPS balance](project_dps_balance_model.md) — 3-tier DPS by multi-target capability (26/23/20); damage scales by RARITY_BUDGET_MULT
 - [Resonance bar world-space](project_resonance_bar.md) — accelerator ramp bar moved from HUD to 3D cast bar under player; reuses health_bar.gdshader
 - [Destructibles + cover invariants](project_destructibles_cover.md) — collision is 1.6m tall regardless of mesh size; cover blocks standing fire too; projectile sweep routes PILLAR hits to damage path
 - [Procgen level realism pass](project_procgen_realism.md) — 25-40 room procgen with asylum clutter, facility rooms, pit design elements, doors
 - [move_and_slide velocity gotcha](project_move_and_slide_gotcha.md) — wall collisions zero velocity; jumping/dashing must inject momentum from input direction
+- [Always mirror memory to repo](feedback_mirror_memory_to_repo.md) — memory writes must hit both canonical + .claude/memory/ in repo, then commit; canonical-only causes cross-machine drift
 - [Project: Neurokore Requiem](project_neurokore_requiem.md) — Game design project: "Neurokore: Requiem"

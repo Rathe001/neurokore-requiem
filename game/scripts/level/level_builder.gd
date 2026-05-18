@@ -219,10 +219,18 @@ func _resolve_graph() -> LevelGraph:
 
 
 # Solves a graph into LevelPieces, or returns layout.pieces when graph is
-# null (legacy hand-authored pieces[] mode).
+# null (legacy hand-authored pieces[] mode). Passes the kit's grid size to
+# the solver so room positions land on the same grid the panels render at
+# — without this, downstream quantization slopped corridors past their
+# connecting rooms.
 func _pieces_from_graph(g: LevelGraph) -> Array[LevelPiece]:
 	if g != null:
-		return GraphSolver.solve(g)
+		# Pull theme from `layout` directly — _ctx isn't constructed until
+		# after this call (it consumes the pieces we're about to return).
+		var theme: LevelTheme = layout.theme
+		var use_kit_walls: bool = not USE_DEBUG_LEVEL_VIZ and theme != null and theme.wall_model != null
+		var grid: float = theme.wall_grid_size if use_kit_walls else 0.0
+		return GraphSolver.solve(g, grid)
 	return layout.pieces
 
 
@@ -235,21 +243,12 @@ func _build_room(piece: LevelPiece) -> void:
 	# Per-instance identity (preferred) → RoomDef.id (legacy fallback).
 	var piece_id: StringName = piece.room_id if piece.room_id != &"" else rd.id
 
-	# Strict grid: quantize room size to the wall grid so kit panels and
-	# floor tiles fit edge-to-edge at exactly their native scale. Rounds
-	# to nearest grid multiple (min 1 panel-width = 1 grid). Procgen
-	# generators should already emit grid-aligned sizes; this is the
-	# defensive snap at build time. Opening width also quantized so door
-	# segments align to panel slots. Skipped when debug viz is on so
-	# rooms keep their authored sizes for visual inspection.
+	# Grid alignment happens upstream: GraphSolver quantizes room sizes /
+	# opening widths against `theme.wall_grid_size` before computing piece
+	# positions, so by the time we reach here `rd` is already grid-aligned
+	# (or already a per-piece duplicate of the authored template).
 	var use_kit_walls: bool = not USE_DEBUG_LEVEL_VIZ and _ctx.theme.wall_model != null
 	var use_kit_floors: bool = not USE_DEBUG_LEVEL_VIZ and _ctx.theme.floor_model != null
-	if use_kit_walls:
-		var g: float = _ctx.theme.wall_grid_size
-		var sx: float = round(rd.size.x / g) * g
-		var sy: float = round(rd.size.y / g) * g
-		rd.size = Vector2(maxf(g, sx), maxf(g, sy))
-		rd.opening_width = maxf(g, round(rd.opening_width / g) * g)
 	var hx := rd.size.x * 0.5
 	var hz := rd.size.y * 0.5
 
@@ -292,11 +291,16 @@ func _build_room(piece: LevelPiece) -> void:
 # Per-wall collision bodies and door instances. Wall *visuals* come from the
 # single procedural room mesh; this loop only materialises physics + doors.
 func _build_room_wall_collisions(piece_id: StringName, rd: RoomDef, center: Vector3, hx: float, hz: float, thick: float) -> void:
+	# Collision spans match the visual wall spans (rd.size, no `+ thick`
+	# corner overlap) so collision and visual stop at the same plane. The
+	# thick-axis is added by the wall_sx/wall_sz expressions below, so two
+	# perpendicular collision walls still cover the corner via their
+	# thickness footprint.
 	var walls: Array[Dictionary] = [
-		{"side": RoomDef.Wall.NORTH, "pos": center + Vector3(0, 0, -hz), "span": rd.size.x + thick, "sx": 1.0, "sz": 0.0},
-		{"side": RoomDef.Wall.SOUTH, "pos": center + Vector3(0, 0, hz), "span": rd.size.x + thick, "sx": 1.0, "sz": 0.0},
-		{"side": RoomDef.Wall.EAST, "pos": center + Vector3(hx, 0, 0), "span": rd.size.y + thick, "sx": 0.0, "sz": 1.0},
-		{"side": RoomDef.Wall.WEST, "pos": center + Vector3(-hx, 0, 0), "span": rd.size.y + thick, "sx": 0.0, "sz": 1.0},
+		{"side": RoomDef.Wall.NORTH, "pos": center + Vector3(0, 0, -hz), "span": rd.size.x, "sx": 1.0, "sz": 0.0},
+		{"side": RoomDef.Wall.SOUTH, "pos": center + Vector3(0, 0, hz), "span": rd.size.x, "sx": 1.0, "sz": 0.0},
+		{"side": RoomDef.Wall.EAST, "pos": center + Vector3(hx, 0, 0), "span": rd.size.y, "sx": 0.0, "sz": 1.0},
+		{"side": RoomDef.Wall.WEST, "pos": center + Vector3(-hx, 0, 0), "span": rd.size.y, "sx": 0.0, "sz": 1.0},
 	]
 
 	for w: Dictionary in walls:
@@ -333,14 +337,12 @@ func _build_corridor(piece: LevelPiece) -> void:
 	var cd := piece.corridor
 	var center := piece.position
 
-	# Strict grid: quantize corridor length and width to grid multiples so
-	# kit panels/tiles fit at native scale. Min 1 grid step on each axis.
+	# Grid alignment happens upstream in GraphSolver, which quantizes corridor
+	# length/width against `theme.wall_grid_size` AND derives room positions
+	# from the quantized values — so a quantized corridor exactly spans the
+	# gap between its connecting rooms' outer faces.
 	var use_kit_walls: bool = not USE_DEBUG_LEVEL_VIZ and _ctx.theme.wall_model != null
 	var use_kit_floors: bool = not USE_DEBUG_LEVEL_VIZ and _ctx.theme.floor_model != null
-	if use_kit_walls:
-		var g: float = _ctx.theme.wall_grid_size
-		cd.length = maxf(g, round(cd.length / g) * g)
-		cd.width = maxf(g, round(cd.width / g) * g)
 
 	if use_kit_walls:
 		WallBuilder.build_corridor_walls_kit(_ctx, center, cd)

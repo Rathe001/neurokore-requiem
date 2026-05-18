@@ -1168,9 +1168,11 @@ func _on_perk_gained(perk: Perk) -> void:
 	# has a chance to (re)build the entry we want to land on. Without
 	# this, the lookup in _animate_perk_pip can run before the entry
 	# exists and fall through to the centre-screen fallback.
-	# Callable form preserves the typed Perk parameter — string-name
-	# call_deferred fails Godot 4's type check on Object args.
-	_animate_perk_pip.call_deferred(perk)
+	# Closure form avoids the Godot 4 deferred type-check bug — no typed
+	# arg crosses the deferred boundary.
+	(func() -> void:
+		if is_instance_valid(perk): _animate_perk_pip(perk)
+	).call_deferred()
 
 
 # Spawn a large stat-coloured tier roman that flies into the matching

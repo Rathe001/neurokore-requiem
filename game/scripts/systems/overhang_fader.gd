@@ -39,7 +39,9 @@ func _on_node_added(node: Node) -> void:
 	# synchronously during add_child, but callers commonly call add_to_group
 	# AFTER add_child, so checking the group here would miss them.
 	if node is MeshInstance3D:
-		_maybe_register.call_deferred(node)
+		(func() -> void:
+			if is_instance_valid(node): _maybe_register(node)
+		).call_deferred()
 
 func _maybe_register(node: Node) -> void:
 	if not is_instance_valid(node):

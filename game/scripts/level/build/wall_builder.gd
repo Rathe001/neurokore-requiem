@@ -261,13 +261,18 @@ static func build_corridor_walls_kit(ctx: LevelBuildContext, center: Vector3, cd
 	var along_z := cd.axis == CorridorDef.Axis.Z
 	var hw: float = cd.width * 0.5 + thick * 0.5
 
+	# y_rot orients the decorated face (+Y in model space) inward toward the
+	# corridor center. Same face-direction logic as room walls:
+	# face → (sin(y_rot), 0, cos(y_rot)) after cross rotation.
 	var sides: Array[Dictionary]
 	if along_z:
+		# Walls at ±X (like room E/W): face ∓X.
 		sides = [
-			{"axis": Vector3.FORWARD, "base_pos": Vector3(hw, 0, 0), "y_rot": PI * 0.5},
-			{"axis": Vector3.FORWARD, "base_pos": Vector3(-hw, 0, 0), "y_rot": -PI * 0.5},
+			{"axis": Vector3.FORWARD, "base_pos": Vector3(hw, 0, 0), "y_rot": -PI * 0.5},
+			{"axis": Vector3.FORWARD, "base_pos": Vector3(-hw, 0, 0), "y_rot": PI * 0.5},
 		]
 	else:
+		# Walls at ±Z (like room N/S): face ∓Z.
 		sides = [
 			{"axis": Vector3.RIGHT, "base_pos": Vector3(0, 0, hw), "y_rot": PI},
 			{"axis": Vector3.RIGHT, "base_pos": Vector3(0, 0, -hw), "y_rot": 0.0},
@@ -309,11 +314,17 @@ static func build_room_walls_kit(ctx: LevelBuildContext, center: Vector3, rd: Ro
 	var thick: float = t.wall_thickness
 	var gap: float = rd.opening_width
 
+	# y_rot orients the panel so its decorated face (+Y in model space) points
+	# INWARD toward the room center. After the cross rotation Basis(RIGHT,
+	# PI/2) that maps model Z→world -Y (height), model +Y ends up along +Z,
+	# then Basis(UP, y_rot) sweeps it to: (sin(y_rot), 0, cos(y_rot)).
+	# N: at -Z, inward=+Z → cos=1 → y_rot=0.    S: at +Z, inward=-Z → y_rot=PI.
+	# E: at +X, inward=-X → sin=-1 → y_rot=-PI/2.  W: at -X, inward=+X → y_rot=PI/2.
 	var sides: Array[Dictionary] = [
 		{"side": RoomDef.Wall.NORTH, "axis": Vector3.RIGHT, "base_pos": Vector3(0, 0, -hz), "length": rd.size.x, "y_rot": 0.0},
 		{"side": RoomDef.Wall.SOUTH, "axis": Vector3.RIGHT, "base_pos": Vector3(0, 0, hz), "length": rd.size.x, "y_rot": PI},
-		{"side": RoomDef.Wall.EAST, "axis": Vector3.FORWARD, "base_pos": Vector3(hx, 0, 0), "length": rd.size.y, "y_rot": PI * 0.5},
-		{"side": RoomDef.Wall.WEST, "axis": Vector3.FORWARD, "base_pos": Vector3(-hx, 0, 0), "length": rd.size.y, "y_rot": -PI * 0.5},
+		{"side": RoomDef.Wall.EAST, "axis": Vector3.FORWARD, "base_pos": Vector3(hx, 0, 0), "length": rd.size.y, "y_rot": -PI * 0.5},
+		{"side": RoomDef.Wall.WEST, "axis": Vector3.FORWARD, "base_pos": Vector3(-hx, 0, 0), "length": rd.size.y, "y_rot": PI * 0.5},
 	]
 
 	var transforms: Array[Transform3D] = []
@@ -323,7 +334,7 @@ static func build_room_walls_kit(ctx: LevelBuildContext, center: Vector3, rd: Ro
 		var base_pos: Vector3 = s["base_pos"]
 		var length: float = s["length"]
 		var y_rot: float = s["y_rot"]
-		var span: float = length + thick  # match collision: rd.size.* + thick
+		var span: float = length
 		if side in rd.openings:
 			# Two segments flanking the opening. Each jamb's length matches
 			# the jamb collision body built by _build_room_wall_collisions.
@@ -343,26 +354,38 @@ static func build_room_walls_kit(ctx: LevelBuildContext, center: Vector3, rd: Ro
 # Tiles N panels along a wall segment. Each panel's *length* axis (along the
 # wall) is scaled to the actual tiled step (length / N where N = round(
 # length / grid)), so panels stay close to their native width — the kit's
-# panel detail reads naturally instead of stretched. Height and thickness
-# are stretched on each panel to match wall_h × thick (the collision box's
-# vertical extent and perpendicular extent).
+# panel detail reads naturally instead of stretched. Height is scaled to
+# match wall_h; thickness is kept at native scale (the collision box
+# handles physics — the visual panel is decorative only, ~2cm thin).
 #
-# Rotation chain: `Basis(UP, y_rot) * Basis(RIGHT, -PI/2)` maps the
-# model's local Z (height) onto world Y, local X (width) onto the wall
-# axis, and local Y (thickness) onto the perpendicular axis.
+# Axis detection: Blender→glTF→Godot typically maps height to local Y
+# (Y-up), but some exports keep height in local Z. We detect which axis
+# is taller and choose the rotation/scale accordingly.
+# y_rot picks which wall side the panel faces.
 static func _add_tiled_wall_segment(out: Array[Transform3D], segment_center: Vector3, axis: Vector3, length: float, wall_h: float, thick: float, grid: float, y_rot: float, aabb: AABB) -> void:
 	var native_w: float = maxf(0.0001, aabb.size.x)
-	var native_t: float = maxf(0.0001, aabb.size.y)
-	var native_h: float = maxf(0.0001, aabb.size.z)
 	var n_panels: int = max(1, int(round(length / maxf(0.01, grid))))
 	var step: float = length / float(n_panels)
-	# Rotation chain: X(-PI/2) maps the model's local Z onto world Y so the
-	# kit's "tall axis" becomes vertical. y_rot then picks each wall side.
-	# Assumes the kit panel's height runs along local Z (typical Blender
-	# Z-up export). If a kit's height is along local Y, drop the X rotation
-	# and swap the scale.y/scale.z below.
-	var basis := Basis(Vector3.UP, y_rot) * Basis(Vector3.RIGHT, -PI * 0.5)
-	basis = basis.scaled(Vector3(step / native_w, thick / native_t, wall_h / native_h))
+	var scale_w: float = step / native_w
+	var height_in_y: bool = aabb.size.y > aabb.size.z
+	var native_h: float
+	var basis: Basis
+	var rotation: Basis
+	# Panel thickness is kept at native scale (~2.5cm) so the kit's decorative
+	# relief stays as authored. Corner gaps will be resolved by per-end mitre
+	# (planned), not by stretching the panel to wall_thickness.
+	if height_in_y:
+		native_h = maxf(0.0001, aabb.size.y)
+		rotation = Basis(Vector3.UP, y_rot)
+		# LOCAL-space scale: model x=width, y=height, z=thickness (native).
+		basis = rotation * Basis.from_scale(Vector3(scale_w, wall_h / native_h, 1.0))
+	else:
+		# Height in Z: rotate Z→Y via Basis(RIGHT, +PI/2). Positive angle
+		# keeps the panel right-side-up (model bottom → world bottom).
+		native_h = maxf(0.0001, aabb.size.z)
+		rotation = Basis(Vector3.UP, y_rot) * Basis(Vector3.RIGHT, PI * 0.5)
+		# LOCAL-space scale: model x=width, y=thickness (native), z=height.
+		basis = rotation * Basis.from_scale(Vector3(scale_w, 1.0, wall_h / native_h))
 	# AABB-center compensation: the mesh's local-space AABB center may not
 	# be at the origin (a bottom-anchored panel has its center at +h/2 in
 	# local Z). Computing translation = center - basis * aabb_center makes

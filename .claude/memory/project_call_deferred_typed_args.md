@@ -1,40 +1,37 @@
 ---
 name: call-deferred-typed-arg-gotcha
-description: "In Godot 4, call_deferred(&\"method\", typed_object_arg) fails the deferred-dispatch type check with \"Cannot convert argument 1 from Object to Object\". Always use the Callable form for deferred calls with typed Object args."
-metadata: 
-  node_type: memory
-  type: project
-  originSessionId: 8cb2236a-ff5a-4a76-8cc4-a33a9a8014b8
+description: "In Godot 4, both call_deferred(&\"method\", typed_obj) AND method.call_deferred(typed_obj) fail type check. Use closure form: (func(): method(arg)).call_deferred()"
+type: project
 ---
 
 **The bug:**
 ```gdscript
-call_deferred(&"_handle", node)  # ❌ Errors at deferred-dispatch time
+call_deferred(&"_handle", node)    # ❌ String-name form fails
+_handle.call_deferred(node)        # ❌ Callable form ALSO fails in 4.6.2
 ```
 Logs "Error calling deferred method: 'Node(...)::_handle': Cannot convert
-argument 1 from Object to Object" — once per call, can flood the
-debugger (172 errors per session was the worst case).
+argument 1 from Object to Object" — floods the debugger (498 errors in
+one session).
 
 **The fix:**
 ```gdscript
-_handle.call_deferred(node)  # ✅ Callable form preserves typing
+(func() -> void: _handle(node)).call_deferred()  # ✅ Closure captures arg
 ```
 
-**Why:** The string-name form of `call_deferred` looks up the method by
-name and re-binds arguments at deferred-dispatch time. The Variant-typed
-binding doesn't match the method's typed Object parameter on dispatch.
-The Callable form captures the binding at the call site, so types are
-preserved through the defer.
+**Why:** Both the string-name form AND the Callable form pass arguments
+through Variant at deferred-dispatch time. When the target method has a
+typed Object parameter (`func _handle(n: Node)`), the Variant→typed
+conversion fails. The closure form avoids this entirely — no argument
+crosses the deferred boundary; the closure captures `node` directly and
+calls the typed method synchronously inside.
 
-**How to apply:** Any `call_deferred(&"...", arg)` where `arg` is an
-Object subclass (Node, Resource, etc.) and the target method has a
-typed parameter (`func _handle(n: Node)` not `func _handle(n)`) → swap
-to `<method>.call_deferred(arg)`.
+**How to apply:** Any deferred call passing an Object subclass (Node,
+Resource, etc.) to a method with a typed parameter → wrap in a closure.
 
 No-arg `call_deferred(&"...")` is fine — the type-check bug only fires
 when there's a typed object being passed.
 
-**Known offenders fixed (search for `call_deferred(&"` if more turn up):**
-- ui_sounds.gd `_on_node_added` → `_try_wire.call_deferred(node)`
-- overhang_fader.gd `_on_node_added` → `_maybe_register.call_deferred(node)`
-- prototype_hud.gd → `_animate_perk_pip.call_deferred(perk)`
+**Known offenders fixed:**
+- ui_sounds.gd `_on_node_added` → closure form
+- overhang_fader.gd `_on_node_added` → closure form
+- prototype_hud.gd → check if `_animate_perk_pip.call_deferred(perk)` also needs fixing

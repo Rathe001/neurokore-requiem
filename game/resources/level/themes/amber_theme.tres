@@ -5,21 +5,21 @@
 ; read.
 
 [ext_resource type="Script" path="res://scripts/level/level_theme.gd" id="1"]
-[ext_resource type="PackedScene" path="res://assets/models/objects/wall_panel_v3/wall_panel_v3.glb" id="wall_model"]
+[ext_resource type="PackedScene" path="res://assets/models/objects/wall_panel_v4/wall_panel_v4.glb" id="wall_model"]
 [ext_resource type="PackedScene" path="res://assets/models/objects/floor_panel_v2/floor_panel_v2.glb" id="floor_model"]
 
 [resource]
 script = ExtResource("1")
 fps_fog_density = 0.35
 fps_fog_color = Color(0.012, 0.005, 0.002, 1)
-wall_height = 4.0
+wall_height = 3.0
 wall_thickness = 0.4
 wall_model = ExtResource("wall_model")
 floor_model = ExtResource("floor_model")
 wall_grid_size = 4.0
 floor_grid_size = 4.0
-wall_model_native_width = 2.0
-wall_model_native_height = 2.0
+wall_model_native_width = 2.71
+wall_model_native_height = 3.0
 floor_model_native_size = Vector2(1.92, 2.0)
 pit_depth = 5.0
 pit_ooze_color = Color(1.0, 0.45, 0.1, 1)
