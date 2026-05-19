@@ -170,15 +170,26 @@ static func _find_bone_either(skeleton: Skeleton3D, preferred: StringName) -> in
 static func activate(skeleton: Skeleton3D, kill_from: Vector3 = Vector3.ZERO, kill_force: float = 0.0) -> void:
 	if skeleton == null:
 		return
-	# Jolt only supports uniform scale on collision shapes. Mixamo bone
-	# bind matrices have tiny non-uniform scale residue (~0.99×1.01 etc)
-	# from FBX→Godot transform decomposition; without normalizing each
-	# PhysicalBone3D's basis here, Jolt spams a "_try_build_shape"
-	# warning for every bone every time simulation starts. Strip the
-	# scale by orthonormalizing the rotation portion of the basis.
+	# Snap every PhysicalBone3D to its CURRENT animated bone pose so when
+	# simulation flips on, the body starts from whatever the running /
+	# idle / attack animation had it doing, not the skeleton's bind pose
+	# (T-pose for Mixamo). Without this, physical_bones_start_simulation
+	# captures the bones at their _ready-time initial positions (bind
+	# pose) and corpses snap to T-pose at the moment of death.
+	#
+	# Also orthonormalizes the basis as a side benefit — Jolt rejects
+	# non-uniform collision scale, and Mixamo bone bind matrices carry
+	# tiny non-uniform scale residue from FBX→Godot decomposition.
 	for child in skeleton.get_children():
-		if child is PhysicalBone3D:
-			var pb := child as PhysicalBone3D
+		if not (child is PhysicalBone3D):
+			continue
+		var pb := child as PhysicalBone3D
+		var bone_idx: int = skeleton.find_bone(pb.bone_name)
+		if bone_idx >= 0:
+			var pose := skeleton.get_bone_global_pose(bone_idx)
+			pose.basis = pose.basis.orthonormalized()
+			pb.transform = pose
+		else:
 			pb.transform.basis = pb.transform.basis.orthonormalized()
 	skeleton.physical_bones_start_simulation()
 	if kill_force <= 0.0:
