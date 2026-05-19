@@ -121,7 +121,14 @@ static func create_fog_volume(ctx: LevelBuildContext, center: Vector3, size_x: f
 	# shader fades density above that anyway, so this is the rendering
 	# upper bound, not the visual one).
 	var fog_height: float = 1.6
-	fog.size = Vector3(size_x, fog_height, size_z)
+	# Shrink the volume by wall_thickness on each XZ axis so it sits
+	# strictly INSIDE the inner wall faces. The walls then geometrically
+	# occlude any fog voxel from being seen from outside the room — fixes
+	# the halo we get when the volume extends to the wall centerline (or
+	# past it) and voxels near the wall outer face render visible against
+	# the void.
+	var thick: float = ctx.theme.wall_thickness
+	fog.size = Vector3(maxf(0.1, size_x - thick), fog_height, maxf(0.1, size_z - thick))
 	# Centre the box vertically so its bottom face sits at world y = 0.
 	fog.position = center + Vector3(0, fog_height * 0.5, 0)
 	fog.material = _get_fog_material()
