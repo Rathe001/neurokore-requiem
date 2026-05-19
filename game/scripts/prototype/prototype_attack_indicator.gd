@@ -681,6 +681,12 @@ static func _spawn_fireball_explosion(parent: Node, world_pos: Vector3, blast_ra
 	var particles: GPUParticles3D = fx.get_node(^"Explosion1") as GPUParticles3D
 	var anim_lifetime: float = 1.4 if is_kinetic else 0.9
 	if particles != null:
+		# The flipbook quad faces the camera. With the OmniLight added below
+		# at energy 40 and shadow_enabled, the quad's back-face threw a
+		# huge wedge of shadow across everything outside the blast radius
+		# — the user saw it as "the whole room goes black except the
+		# smoke." Particles aren't physical shadow casters; disable.
+		particles.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		particles.lifetime = anim_lifetime
 		# Recolor the flipbook to match the palette. The shader has two
 		# gradient lookups keyed on sprite brightness:
@@ -834,6 +840,10 @@ static func _spawn_explosion_sparks(parent: Node, world_pos: Vector3, blast_radi
 	particles.lifetime = EXPLOSION_SPARK_LIFETIME
 	particles.explosiveness = 1.0
 	particles.local_coords = false
+	# Sparks don't cast shadow — same reason the main flipbook quad doesn't:
+	# the explosion's OmniLight at energy 40 would project shadow tracks
+	# from each spark across the room, darkening huge swathes of geometry.
+	particles.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 	var pm := ParticleProcessMaterial.new()
 	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
