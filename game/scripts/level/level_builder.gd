@@ -314,7 +314,6 @@ func _build_room(piece: LevelPiece) -> void:
 
 	LightingBuilder.place_room_fluorescents(_ctx, center, rd)
 	LightingBuilder.create_fill_light(_ctx, center, rd.size.x, rd.size.y)
-	LightingBuilder.create_fog_volume(_ctx, center, rd.size.x, rd.size.y)
 	LightingBuilder.create_room_particles(_ctx, center, rd.size.x, rd.size.y)
 	DecalBuilder.place_puddles(_ctx, center, hx, hz, rd)
 	ClutterBuilder.scatter_clutter(_ctx, center, hx, hz, rd, piece_id)
@@ -413,11 +412,10 @@ func _build_corridor(piece: LevelPiece) -> void:
 	var hl := cd.length * 0.5
 	var hx := hw if cd.axis == CorridorDef.Axis.Z else hl
 	var hz := hl if cd.axis == CorridorDef.Axis.Z else hw
-	var fog_x := cd.width if cd.axis == CorridorDef.Axis.Z else cd.length
-	var fog_z := cd.length if cd.axis == CorridorDef.Axis.Z else cd.width
-	LightingBuilder.create_fill_light(_ctx, center, fog_x, fog_z)
-	LightingBuilder.create_fog_volume(_ctx, center, fog_x, fog_z)
-	LightingBuilder.create_room_particles(_ctx, center, fog_x, fog_z)
+	var lighting_x := cd.width if cd.axis == CorridorDef.Axis.Z else cd.length
+	var lighting_z := cd.length if cd.axis == CorridorDef.Axis.Z else cd.width
+	LightingBuilder.create_fill_light(_ctx, center, lighting_x, lighting_z)
+	LightingBuilder.create_room_particles(_ctx, center, lighting_x, lighting_z)
 	var corridor_enemies: int = piece.enemy_count_override if piece.enemy_count_override >= 0 else cd.enemy_count
 	EnemySpawner.spawn_in_bounds(_ctx, piece, center, hx, hz, corridor_enemies, cd.enemy_scene, Vector2i.ZERO, cd.enemy_classes, piece.pack_chance_override)
 

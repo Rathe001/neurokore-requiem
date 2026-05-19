@@ -36,7 +36,6 @@ const KNOCKBACK_DURATION := CombatConstants.KNOCKBACK_DURATION
 const DEATH_HOLD := 0.9
 const INTERACT_RANGE_SQ := 4.0  # 2.0m — player must stand close to interact
 const PLAYER_WORLD_POS_PARAM := &"player_world_pos"
-const PLAYER_WORLD_VEL_PARAM := &"player_world_vel"
 
 const SKILL_INPUTS: Array[StringName] = [
 	&"fire",
@@ -1189,10 +1188,6 @@ func _process(delta: float) -> void:
 	if _is_remote_player():
 		return
 	RenderingServer.global_shader_parameter_set(PLAYER_WORLD_POS_PARAM, global_position)
-	# Fog shader uses this to extend the player's cleared-fog cylinder into
-	# a trailing wake along the velocity direction — without it, moving
-	# through fog only displaces a static circle around the player.
-	RenderingServer.global_shader_parameter_set(PLAYER_WORLD_VEL_PARAM, velocity)
 	# FPS hover used to run here, but its raycast errors under threaded
 	# physics ("Space state is inaccessible outside of physics process").
 	# The hover update was already throttled to FPS_HOVER_INTERVAL (~50ms),
