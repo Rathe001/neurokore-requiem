@@ -319,7 +319,12 @@ func _physics_process(_delta: float) -> void:
 		var geom := rg as Node3D
 		if geom == null:
 			continue
-		var should_hide := _room_blocks(geom, player_room)
+		# Geometry-permissive: ignore closed-door state when deciding whether
+		# the room's walls/floor render. Otherwise a closed door on an
+		# adjacent room would hide the wall it sits in and the door would
+		# appear to float in void.
+		var geom_room: StringName = ExplorationState.room_at_world(geom.global_position)
+		var should_hide := player_room != &"" and not ExplorationState.rooms_geometry_visible_together(player_room, geom_room)
 		if geom.visible == should_hide:
 			geom.visible = not should_hide
 	# Interactibles — static (doors, switches, crates). Re-raycast only when the

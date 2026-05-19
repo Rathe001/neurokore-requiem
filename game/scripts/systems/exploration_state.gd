@@ -47,6 +47,12 @@ var _piece_records: Array = []
 # disappears around the corner" leak that strict per-piece gating creates
 # when the player's perceptual "open space" spans two LevelGraph pieces.
 var _adjacent: Dictionary = {}
+# Maps sorted-pair-of-piece-ids → door node. Adjacency alone treats a closed-
+# door room as "visible together" with the player's piece (so loot, enemies,
+# and clutter inside it would render through the door); this lets the
+# entity-visibility check ask the door for its open/closed state and gate the
+# neighbour's contents accordingly.
+var _door_between: Dictionary = {}
 
 
 func _ready() -> void:
@@ -64,6 +70,7 @@ func reset() -> void:
 	_explored.clear()
 	_piece_records.clear()
 	_adjacent.clear()
+	_door_between.clear()
 	changed.emit()
 
 
@@ -161,21 +168,56 @@ func is_explored(room_id: StringName) -> bool:
 	return _explored.has(room_id)
 
 
-## True when both rooms should be visible at the same time — same room, or
-## directly-adjacent pieces (corridor↔room, room↔room sharing an opening).
-## LosCuller uses this to decide whether an entity in a different piece than
-## the player should still render. Pieces two hops away (room → corridor →
-## room) read as not-visible-together, so distant rooms stay hidden.
-## Empty room_ids are treated permissively (return true) so entities placed
-## outside any registered piece, or in legacy levels with no graph, keep
-## their pre-room-gating visibility.
+## True when the contents of `target_room` (loot, enemies, clutter, corpses,
+## ambient particles, room-gated interactables) should render while the player
+## stands in `player_room`. Same room is always visible-together; otherwise the
+## pieces must be directly adjacent AND any door between them must be open.
+## Pieces two hops away (room → corridor → room) read as not-visible-together,
+## so distant rooms stay hidden. Empty room_ids return true permissively so
+## entities placed outside any registered piece, or in legacy levels with no
+## graph, keep their pre-room-gating visibility.
+##
+## Note: room *geometry* (walls/floor/ceiling itself) uses
+## rooms_geometry_visible_together below, which ignores door state — the wall
+## holding a closed door still needs to render or the door appears to float in
+## void.
 func rooms_visible_together(player_room: StringName, target_room: StringName) -> bool:
+	if not rooms_geometry_visible_together(player_room, target_room):
+		return false
+	if player_room == target_room:
+		return true
+	var door := _door_between.get(_door_pair_key(player_room, target_room), null) as Node
+	if door == null:
+		return true
+	if door.has_method("is_open"):
+		return door.is_open()
+	return true
+
+
+## Geometry-permissive variant. Returns true for same-piece or adjacent pieces
+## regardless of door state. Used by LosCuller's room_geometry pass so the
+## boundary of a closed-door neighbour stays drawn (otherwise the door reads
+## as floating in front of a missing wall).
+func rooms_geometry_visible_together(player_room: StringName, target_room: StringName) -> bool:
 	if player_room == &"" or target_room == &"":
 		return true
 	if player_room == target_room:
 		return true
 	var neighbours: Array = _adjacent.get(player_room, [] as Array)
 	return target_room in neighbours
+
+
+## LevelBuilder calls this once per door after finalize_layout(), passing the
+## two pieces the door bridges. The pair key is order-independent so a single
+## entry covers visibility in both directions.
+func register_door(door: Node, piece_a: StringName, piece_b: StringName) -> void:
+	if door == null or piece_a == &"" or piece_b == &"" or piece_a == piece_b:
+		return
+	_door_between[_door_pair_key(piece_a, piece_b)] = door
+
+
+func _door_pair_key(a: StringName, b: StringName) -> StringName:
+	return StringName("%s|%s" % [a, b]) if String(a) < String(b) else StringName("%s|%s" % [b, a])
 
 
 # ── Reveal ────────────────────────────────────────────────────────────────

@@ -7,6 +7,10 @@ class_name DoorBuilder
 const DOOR_SCENE: PackedScene = preload("res://scenes/prototype/prototype_door.tscn")
 const DOOR_MESH_WIDTH := 4.0  # door scene mesh Z-extent (used for per-opening scale)
 const DOOR_MESH_HEIGHT := 4.5  # door scene mesh Y-extent (used for wall-height clamp)
+# Stop the door short of the ceiling so a visible lintel sits above it — the
+# open door then reads as tucking behind the wall, instead of dematerializing
+# into a flush ceiling line.
+const DOOR_LINTEL_RATIO := 0.85
 
 
 static func build_door(ctx: LevelBuildContext, piece_id: StringName, rd: RoomDef, side: RoomDef.Wall, wpos: Vector3) -> void:
@@ -19,7 +23,7 @@ static func build_door(ctx: LevelBuildContext, piece_id: StringName, rd: RoomDef
 	var perp := rd.size.x - thick if (side == RoomDef.Wall.NORTH or side == RoomDef.Wall.SOUTH) else rd.size.y - thick
 	door.scale.z = minf(rd.opening_width, perp) / DOOR_MESH_WIDTH
 	# Parent-scale Y so the slide animation (mesh.position.y in local space) compresses with the mesh.
-	door.scale.y = ctx.theme.wall_height / DOOR_MESH_HEIGHT
+	door.scale.y = (ctx.theme.wall_height * DOOR_LINTEL_RATIO) / DOOR_MESH_HEIGHT
 
 	if door is PrototypeDoor:
 		var pdoor := door as PrototypeDoor

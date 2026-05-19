@@ -186,6 +186,33 @@ func _register_exploration() -> void:
 	# graph pieces (room + corridor, two rooms with a wide opening). Built
 	# from the registered footprints, so it must come after the loop.
 	ExplorationState.finalize_layout()
+	_register_door_pairs()
+
+
+# Map each door to the two pieces it bridges so closed doors can suppress
+# contents visibility into the neighbour. Sampled 2m perpendicular-ish in all
+# four cardinal directions: two samples land in the door's host room, the
+# other two land in the neighbour piece, giving a unique pair. Run after
+# register_room + finalize_layout so room_at_world resolves correctly.
+func _register_door_pairs() -> void:
+	const STEP := 2.0
+	const OFFSETS: Array[Vector3] = [
+		Vector3(STEP, 0, 0), Vector3(-STEP, 0, 0),
+		Vector3(0, 0, STEP), Vector3(0, 0, -STEP),
+	]
+	for door_key in _ctx.doors:
+		var door := _ctx.doors[door_key] as Node3D
+		if not is_instance_valid(door):
+			continue
+		var p := door.global_position
+		var seen: Dictionary = {}
+		for off in OFFSETS:
+			var pid := ExplorationState.room_at_world(p + off)
+			if pid != &"":
+				seen[pid] = true
+		var ids: Array = seen.keys()
+		if ids.size() == 2:
+			ExplorationState.register_door(door, ids[0], ids[1])
 
 
 # Returns the graph that drives this build (generator output or
