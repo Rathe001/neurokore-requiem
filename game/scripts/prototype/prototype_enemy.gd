@@ -1729,7 +1729,7 @@ func _die(kill_from: Vector3 = Vector3.ZERO, kill_force: float = 0.0) -> void:
 		var skel := _find_skeleton(visual)
 		if skel != null and skel.has_meta(&"xbot_ragdoll_setup"):
 			print("[XBotRagdoll] Activating physics simulation on skeleton")
-			XBotRagdoll.activate(skel)
+			XBotRagdoll.activate(skel, kill_from, kill_force)
 			did_skeletal_ragdoll = true
 		else:
 			print("[XBotRagdoll] No physical-bone skeleton on visual; falling back to rigid-body corpse")

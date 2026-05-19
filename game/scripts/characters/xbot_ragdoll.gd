@@ -86,6 +86,13 @@ static func setup(skeleton: Skeleton3D) -> void:
 		# PrototypeRagdollCorpse policy.
 		pb.collision_layer = 32  # 1 << 5
 		pb.collision_mask = 1    # World layer
+		# Damping bleeds energy out of the simulation so corpses settle
+		# instead of flopping forever. Tuned to read as "limp but
+		# coherent" rather than "rag in a hurricane".
+		pb.linear_damp_mode = PhysicalBone3D.DAMP_MODE_REPLACE
+		pb.linear_damp = 1.8
+		pb.angular_damp_mode = PhysicalBone3D.DAMP_MODE_REPLACE
+		pb.angular_damp = 4.0
 		var caps := CapsuleShape3D.new()
 		caps.radius = radius
 		caps.height = _bone_length(skeleton, bone_idx, radius)
@@ -93,6 +100,16 @@ static func setup(skeleton: Skeleton3D) -> void:
 		col.shape = caps
 		pb.add_child(col)
 		skeleton.add_child(pb)
+		# Tighten the cone constraint so limbs don't hyperextend — Godot's
+		# defaults are very permissive (~90° swing). 35° swing + 20°
+		# twist reads as "joints hold roughly natural pose under gravity"
+		# without going fully rigid. Set AFTER the node is in the tree so
+		# the property paths resolve.
+		if joint_type == PhysicalBone3D.JOINT_TYPE_CONE:
+			pb.set("joint_constraints/swing_span", deg_to_rad(35.0))
+			pb.set("joint_constraints/twist_span", deg_to_rad(20.0))
+			pb.set("joint_constraints/bias", 0.6)
+			pb.set("joint_constraints/softness", 0.5)
 		bones_attached += 1
 	print("[XBotRagdoll] Attached %d PhysicalBone3D(s)" % bones_attached)
 	skeleton.set_meta(_META_KEY, true)
@@ -137,10 +154,39 @@ static func _find_bone_either(skeleton: Skeleton3D, preferred: StringName) -> in
 ## previously added by setup() becomes a falling rigid body; the
 ## Skeleton3D writes their world transforms back to its bones each
 ## frame, so the visual mesh deforms with the ragdoll.
-static func activate(skeleton: Skeleton3D) -> void:
+##
+## kill_from / kill_force apply an outward impulse along the (target -
+## source) direction with a small upward lift — equivalent to the
+## kick the old PrototypeRagdollCorpse capsule got on spawn. Pass
+## Vector3.ZERO + 0.0 to skip the kick (e.g. ambient death).
+static func activate(skeleton: Skeleton3D, kill_from: Vector3 = Vector3.ZERO, kill_force: float = 0.0) -> void:
 	if skeleton == null:
 		return
 	skeleton.physical_bones_start_simulation()
+	if kill_force <= 0.0:
+		return
+	# Direction from the hit source to the skeleton: pushes the corpse
+	# away from the player / projectile.
+	var dir: Vector3 = skeleton.global_position - kill_from
+	dir.y = 0.0
+	if dir.length_squared() < 0.0001:
+		dir = Vector3(0.0, 0.0, 1.0)
+	dir = dir.normalized()
+	# A bit of vertical lift makes the body kick off the ground rather
+	# than scoot — matches the visceral feel of the old capsule tumble.
+	dir.y = 0.5
+	dir = dir.normalized()
+	var impulse := dir * kill_force
+	# Hip + chest absorb the main impulse (they drag the rest along via
+	# joints). Distributing to every bone over-spins limbs since each
+	# bone is independently kicked.
+	for child in skeleton.get_children():
+		if not (child is PhysicalBone3D):
+			continue
+		var pb := child as PhysicalBone3D
+		var name := pb.bone_name
+		if name.contains("Hips") or name.contains("Spine"):
+			pb.apply_central_impulse(impulse)
 
 
 # Returns a sensible capsule height for the bone based on its rest-pose
