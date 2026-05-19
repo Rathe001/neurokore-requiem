@@ -31,13 +31,20 @@ shader_type spatial;
 render_mode blend_mix, cull_disabled, depth_draw_never;
 
 uniform vec3 fog_color : source_color = vec3(0.62, 0.66, 0.74);
-uniform float density : hint_range(0.0, 8.0) = 1.1;
+uniform float density : hint_range(0.0, 8.0) = 2.8;
 uniform float fog_top : hint_range(0.05, 5.0) = 0.65;
 uniform float falloff : hint_range(0.5, 6.0) = 2.4;
 uniform float noise_scale : hint_range(0.05, 2.0) = 0.55;
 uniform float noise_speed : hint_range(0.0, 0.5) = 0.11;
 uniform int march_steps : hint_range(4, 64) = 24;
 uniform float march_step_size : hint_range(0.05, 0.5) = 0.08;
+// Noise threshold for the "sparse wisps" look. Anything below this value
+// contributes zero density — only the noise peaks survive, so the floor
+// reads as patchy wisps drifting across clear ground instead of a
+// uniform blanket. wisp_softness widens the smoothstep band so the wisp
+// edges feather instead of being hard-clipped.
+uniform float wisp_threshold : hint_range(0.0, 1.0) = 0.5;
+uniform float wisp_softness : hint_range(0.01, 0.5) = 0.18;
 uniform float player_radius : hint_range(0.5, 5.0) = 1.6;
 uniform float player_strength : hint_range(0.0, 1.0) = 0.85;
 // Hard cap on the final alpha so even the worst case (camera looking
@@ -54,12 +61,10 @@ instance uniform vec2 box_half_extents_xz = vec2(2.0, 2.0);
 // from the box edge the fog is full strength; right at the edge alpha is
 // zero, smoothstep in between.
 uniform float edge_fade : hint_range(0.05, 2.0) = 0.7;
-// Faint self-emission so the fog doesn't go fully black in unlit corners
-// — without it, dim parts of the room (corridor mouths, far walls)
-// looked like the fog had simply stopped. A tiny baseline keeps the
-// volume readable everywhere the lit room is, fading naturally as the
-// floor itself fades into black.
-uniform float emission_floor : hint_range(0.0, 0.5) = 0.06;
+// Faint self-emission so wisps don't go fully black in unlit corners.
+// Scales with the wisp density so it only brightens the wisps themselves,
+// not the clear ground between them.
+uniform float emission_floor : hint_range(0.0, 0.5) = 0.04;
 
 global uniform vec3 player_world_pos;
 
@@ -95,6 +100,12 @@ float fbm3(vec3 p) {
 // Result is in [0, 1] — caller integrates it along the view ray.
 // Two noise layers drifting at different speeds + directions so they cross
 // each other and read as swirling fog rather than uniform pan.
+//
+// The noise field is then thresholded with smoothstep so only its peaks
+// contribute density: most of the volume returns 0 (clear ground),
+// patches above wisp_threshold ramp up to full density. That's the
+// "sparse wisps" look — discrete drifting cloud shapes rather than a
+// uniform blanket.
 float sample_density_at(vec3 wp) {
 	float y_t = clamp(wp.y / max(0.01, fog_top), 0.0, 1.0);
 	float h = pow(1.0 - y_t, falloff);
@@ -107,11 +118,12 @@ float sample_density_at(vec3 wp) {
 		TIME * noise_speed * 0.55,
 		TIME * noise_speed * 1.1);
 	float n = fbm3(npos_a) * 0.6 + fbm3(npos_b) * 0.4;
+	float wisp = smoothstep(wisp_threshold, wisp_threshold + wisp_softness, n);
 	vec3 to_player = wp - player_world_pos;
 	to_player.y = 0.0;
 	float player_t = smoothstep(0.0, player_radius, length(to_player));
 	float pf = mix(1.0 - player_strength, 1.0, player_t);
-	return h * (0.35 + 0.65 * n) * pf;
+	return h * wisp * pf;
 }
 
 varying vec3 world_pos;
