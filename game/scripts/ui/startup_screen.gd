@@ -25,6 +25,10 @@ var _mp_button: Button
 var _post_select_target: String = "sp"
 
 func _ready() -> void:
+	# Splash phase used a borderless transparent window so the logo's alpha
+	# channel showed the desktop through. Restore the OS frame + opacity
+	# now that the title scene is taking over.
+	_restore_window_chrome()
 	theme = UIThemeState.theme
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	# Title screen BGM. No-op if Music autoload reports the same track
@@ -56,6 +60,18 @@ func _exit_tree() -> void:
 	NetState.game_starting.disconnect(_on_game_starting)
 	if SteamState.initialized_changed.is_connected(_on_steam_initialized_changed):
 		SteamState.initialized_changed.disconnect(_on_steam_initialized_changed)
+
+
+# The project starts with a borderless, per-pixel-transparent window so the
+# boot splash image's alpha channel shows the desktop through (no OS chrome
+# around the logo). This restores standard window chrome / opacity once the
+# title scene takes over — game itself runs framed and opaque like normal.
+# DisplayServer.window_set_flag is the runtime-safe way to flip these; the
+# equivalent Window properties (borderless / transparent) work too but
+# are inconsistent across Godot 4 patch versions.
+func _restore_window_chrome() -> void:
+	DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_BORDERLESS, false)
+	DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_TRANSPARENT, false)
 
 
 func _build_settings_panel() -> void:

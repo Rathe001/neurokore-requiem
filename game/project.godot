@@ -17,7 +17,7 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 config/name="Neurokore: Requiem"
 run/main_scene="res://scenes/ui/startup_screen.tscn"
 config/features=PackedStringArray("4.6", "Forward Plus")
-boot_splash/bg_color=Color(0.02, 0.025, 0.035, 1)
+boot_splash/bg_color=Color(0, 0, 0, 0)
 boot_splash/stretch_mode=0
 boot_splash/image="res://assets/ui/boot_splash.png"
 config/icon="res://assets/ui/game.png"
@@ -78,6 +78,14 @@ window/size/window_width_override=1280
 window/size/window_height_override=720
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
+; Boot-splash phase only: the window starts borderless and per-pixel
+; transparent so the splash image's alpha channel lets the desktop show
+; through. startup_screen.gd restores both flags in its _ready() once
+; the splash hands off to the main scene, after which the game runs in
+; a normal framed/opaque window.
+window/per_pixel_transparency/allowed=true
+window/size/borderless=true
+window/size/transparent=true
 
 [input]
 
