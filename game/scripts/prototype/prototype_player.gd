@@ -662,7 +662,6 @@ func _ready() -> void:
 	# is_multiplayer_authority() returns false with no peer (default
 	# authority 1, unique_id 0), which would incorrectly route the
 	# baked-scene player down the remote path.
-	_spawn_fog_attractor()
 	if _is_remote_player():
 		_ready_remote()
 		return
@@ -826,21 +825,6 @@ func _is_remote_player() -> bool:
 	return not is_multiplayer_authority()
 
 
-# Attractor that pushes per-room GPUParticles3D ground fog away as the
-# player moves. Negative strength = repulsion. Spawned for every player
-# instance (local + remote) so co-op companions also visibly part the
-# fog. Cheap: a single attractor node, no per-frame code on our side —
-# the GPU does the field math.
-func _spawn_fog_attractor() -> void:
-	var attractor := GPUParticlesAttractorSphere3D.new()
-	attractor.name = &"FogAttractor"
-	attractor.radius = 1.3
-	attractor.strength = -3.0
-	attractor.attenuation = 1.5
-	# Centre at the player's feet so the parting reads as walking through
-	# ground mist rather than a floating bubble at torso height.
-	attractor.position = Vector3(0.0, 0.2, 0.0)
-	add_child(attractor)
 
 
 # Drives idle / run animation on a non-authority remote player using the

@@ -42,13 +42,15 @@ ssr_max_steps = 64
 ssr_fade_in = 0.15
 ssr_fade_out = 2.0
 ssr_depth_tolerance = 0.2
-; volumetric_fog disabled — replaced with per-room GPUParticles3D ground
-; fog (see LightingBuilder.create_fog_volume). The particle approach
-; can't leak through walls (no global pass) and reacts to the player
-; via the attractor parented to PrototypePlayer.
-volumetric_fog_enabled = false
+; Volumetric fog pass enabled — but global density is 0 so the ambient
+; pass contributes nothing on its own. Per-room FogVolume nodes (created
+; by LightingBuilder.create_fog_volume) add density inside their box
+; bounds via the custom fog_volume.gdshader. No Light3D in the scene
+; sets light_volumetric_fog_energy > 0, so the fog isn't lit/scattered
+; (that was the cause of the wall-edge halo the old setup had).
+volumetric_fog_enabled = true
 volumetric_fog_density = 0.0
-volumetric_fog_albedo = Color(0.7, 0.75, 0.85, 1)
+volumetric_fog_albedo = Color(0.72, 0.76, 0.82, 1)
 volumetric_fog_emission = Color(0.0, 0.0, 0.0, 1)
 volumetric_fog_anisotropy = 0.3
 volumetric_fog_length = 40.0

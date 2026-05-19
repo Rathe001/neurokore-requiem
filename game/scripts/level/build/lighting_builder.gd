@@ -87,147 +87,48 @@ const FOG_FLOOR_DENSITY := 6.0
 const FOG_HAZE_HEIGHT := 0.5
 const FOG_HAZE_DENSITY := 1.5
 
+const _FOG_SHADER: Shader = preload("res://scripts/level/build/fog_volume.gdshader")
+# One shared FogMaterial across every room's FogVolume. ShaderMaterial uniforms
+# can be set per-instance via FogVolume.material_override if a specific room
+# wants different density/colour later; for now every room reads from the
+# same material so tuning is one place.
+static var _fog_material: ShaderMaterial = null
+
+
+static func _get_fog_material() -> ShaderMaterial:
+	if _fog_material == null:
+		_fog_material = ShaderMaterial.new()
+		_fog_material.shader = _FOG_SHADER
+	return _fog_material
+
+
 static func create_fog_volume(ctx: LevelBuildContext, center: Vector3, size_x: float, size_z: float) -> void:
-	# Thick ground-cover fog via GPUParticles3D. Each particle is a wide
-	# horizontal PlaneMesh disc (~2-3m across) lying flat near the floor.
-	# Big sprites + high density + soft radial alpha = continuous ground
-	# layer that reads as solid fog rather than scattered puffs.
+	# Volumetric ground fog via a FogVolume + custom shader_type fog
+	# material. The FogVolume is a 3D BOX bound; the volumetric pass
+	# never samples outside it, so containment is geometric, not a
+	# collision-tunneling situation like the previous particle attempt.
 	#
-	# Physics reaction comes from two GPU-particle systems:
-	#   1. GPUParticlesAttractorSphere3D on the player (added by
-	#      PrototypePlayer._spawn_fog_attractor) parts fog as the player
-	#      moves through it.
-	#   2. GPUParticlesCollisionBox3D one-per-room-wall (created below)
-	#      gives the particles actual collision against the room walls,
-	#      so fog can't drift out of the room footprint visibly.
-	var p := GPUParticles3D.new()
-	p.name = &"GroundFog"
-	var area := size_x * size_z
-	# High density — big horizontal sprites need to overlap to read as a
-	# continuous layer. Clamp upper bound to keep large rooms from going
-	# wild.
-	p.amount = clampi(int(area * 1.8), 32, 96)
-	p.lifetime = 10.0
-	p.preprocess = 5.0
-	var wh := ctx.theme.wall_height
-	# Visibility AABB pinned to room footprint — anything that escapes
-	# anyway (shouldn't happen, but defensive) gets culled instead of
-	# floating in the void around the room.
-	p.visibility_aabb = AABB(
-		Vector3(-size_x * 0.5, -0.1, -size_z * 0.5),
-		Vector3(size_x, wh, size_z))
-
-	var mat := ParticleProcessMaterial.new()
-	mat.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-	# Emit with a larger margin from the walls (0.4 instead of 0.45) so
-	# turbulence doesn't push fresh particles past the wall plane before
-	# collision response kicks in.
-	mat.emission_box_extents = Vector3(size_x * 0.40, 0.15, size_z * 0.40)
-	# Very slow drift — fog should look almost still.
-	mat.direction = Vector3(0, 1, 0)
-	mat.spread = 15.0
-	mat.initial_velocity_min = 0.0
-	mat.initial_velocity_max = 0.03
-	mat.gravity = Vector3.ZERO
-	# Wide discs — overlap each other to form continuous coverage.
-	mat.scale_min = 1.8
-	mat.scale_max = 3.0
-	# Slow horizontal turbulence — particles meander, don't shoot up or
-	# escape past walls.
-	mat.turbulence_enabled = true
-	mat.turbulence_noise_strength = 0.10
-	mat.turbulence_noise_speed_random = 0.1
-	mat.turbulence_noise_speed = Vector3(0.03, 0.01, 0.03)
-	# Collision so particles bounce off walls instead of drifting through.
-	# Pairs with the GPUParticlesCollisionBox3D nodes spawned below.
-	mat.collision_mode = ParticleProcessMaterial.COLLISION_RIGID
-	mat.collision_bounce = 0.0  # no bounce — particles slide along the wall
-	mat.collision_friction = 0.4
-	# Fade in fast, hold, fade out slow — keeps density steady through the
-	# middle of each particle's life.
-	var alpha_gradient := Gradient.new()
-	alpha_gradient.set_color(0, Color(1, 1, 1, 0))
-	alpha_gradient.set_color(1, Color(1, 1, 1, 0))
-	alpha_gradient.add_point(0.1, Color(1, 1, 1, 1))
-	alpha_gradient.add_point(0.75, Color(1, 1, 1, 1))
-	var alpha_gradient_tex := GradientTexture1D.new()
-	alpha_gradient_tex.gradient = alpha_gradient
-	mat.color_ramp = alpha_gradient_tex
-	p.process_material = mat
-
-	# Soft circular alpha mask — turns the PlaneMesh from a hard rectangle
-	# into a fuzzy puff. Each disc's centre is opaque, edges fade out, so
-	# overlapping discs blend into continuous coverage.
-	var radial := Gradient.new()
-	radial.set_color(0, Color(1, 1, 1, 1))
-	radial.set_color(1, Color(1, 1, 1, 0))
-	radial.add_point(0.5, Color(1, 1, 1, 0.9))
-	var radial_tex := GradientTexture2D.new()
-	radial_tex.gradient = radial
-	radial_tex.fill = GradientTexture2D.FILL_RADIAL
-	radial_tex.fill_from = Vector2(0.5, 0.5)
-	radial_tex.fill_to = Vector2(1.0, 0.5)
-	radial_tex.width = 64
-	radial_tex.height = 64
-
-	# PlaneMesh lies flat on XZ by default (normal +Y) — exactly what we
-	# want for a ground-cover layer. No billboarding so discs stay
-	# horizontal regardless of camera angle.
-	var mesh := PlaneMesh.new()
-	mesh.size = Vector2(1.0, 1.0)
-	var draw_mat := StandardMaterial3D.new()
-	draw_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	draw_mat.billboard_mode = BaseMaterial3D.BILLBOARD_DISABLED
-	# Higher alpha than the wisp version — user wants thick solid cover.
-	# Each disc centre is ~50% opaque; overlapping discs build full thick
-	# fog. Edges fade via the radial mask so seams disappear.
-	draw_mat.albedo_color = Color(0.58, 0.62, 0.68, 0.5)
-	draw_mat.albedo_texture = radial_tex
-	draw_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	draw_mat.disable_receive_shadows = true
-	# Cull off — flat discs viewed from above need both sides visible if
-	# the camera ever tilts below.
-	draw_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	mesh.material = draw_mat
-	p.draw_pass_1 = mesh
-
-	p.transform.origin = center
-	ctx.root.add_child(p)
-	p.add_to_group(&"room_geometry")
-
-	# Per-wall GPUParticlesCollisionBox3D — the "reacts to physics" piece.
-	# Four walls per room, each a thin box just outside the room footprint.
-	# Particles colliding with these boxes can't drift past the wall plane,
-	# so the fog stays inside the room visually no matter how strong the
-	# turbulence is. (Regular CollisionShape3D bodies don't affect GPU
-	# particles — the GPU pipeline needs dedicated collision nodes.)
-	_create_fog_walls(ctx, center, size_x, size_z, wh)
-
-
-static func _create_fog_walls(ctx: LevelBuildContext, center: Vector3, size_x: float, size_z: float, wh: float) -> void:
-	# GPUParticlesCollisionBox3D uses SDF-based collision. Two failure
-	# modes if the boxes are too thin: (a) fast particles tunnel through
-	# in one frame, (b) the SDF voxelization sees only ~1 voxel of solid
-	# at the wall plane and the gradient is noisy. 0.5m thick + full
-	# wall height fixes both, and an extra 0.5m above the wall stops
-	# particles from drifting over the top.
-	var hx: float = size_x * 0.5
-	var hz: float = size_z * 0.5
-	var thick: float = 0.5
-	var box_h: float = wh + 1.0  # Full wall height + extra clearance.
-	var box_y: float = box_h * 0.5 - 0.5  # Bottom slightly below floor.
-	var configs: Array[Dictionary] = [
-		{"pos": Vector3(0, box_y, -hz), "ext": Vector3(hx, box_h * 0.5, thick * 0.5)},  # N
-		{"pos": Vector3(0, box_y,  hz), "ext": Vector3(hx, box_h * 0.5, thick * 0.5)},  # S
-		{"pos": Vector3( hx, box_y, 0), "ext": Vector3(thick * 0.5, box_h * 0.5, hz)},  # E
-		{"pos": Vector3(-hx, box_y, 0), "ext": Vector3(thick * 0.5, box_h * 0.5, hz)},  # W
-	]
-	for cfg in configs:
-		var collider := GPUParticlesCollisionBox3D.new()
-		collider.size = (cfg["ext"] as Vector3) * 2.0
-		collider.position = center + (cfg["pos"] as Vector3)
-		ctx.root.add_child(collider)
-		collider.add_to_group(&"room_geometry")
+	# Density is 3D-noise modulated for the "dry-ice billowing" look,
+	# concentrated near the floor via a height falloff, and parted by the
+	# player via a global shader uniform (player_world_pos) updated each
+	# frame from PrototypePlayer. No Light3D feeds the volumetric pass
+	# (light_volumetric_fog_energy stays at 0 everywhere), so there's no
+	# halo-through-wall artifact like the old un-shaded fog had.
+	var fog := FogVolume.new()
+	fog.name = &"GroundFog"
+	fog.shape = FogVolume.SHAPE_BOX
+	# Concentration height — fog ceiling sits ~1.4m above the floor (the
+	# shader fades density above that anyway, so this is the rendering
+	# upper bound, not the visual one).
+	var fog_height: float = 1.6
+	fog.size = Vector3(size_x, fog_height, size_z)
+	# Centre the box vertically so its bottom face sits at world y = 0.
+	fog.position = center + Vector3(0, fog_height * 0.5, 0)
+	fog.material = _get_fog_material()
+	ctx.root.add_child(fog)
+	# room_geometry → LoS-culled with the rest of the room geometry, so
+	# offscreen rooms cost nothing in the volumetric pass.
+	fog.add_to_group(&"room_geometry")
 
 
 # Per-room ambient dust particles — subtle floating motes that catch the
