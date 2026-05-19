@@ -1729,6 +1729,13 @@ func _die(kill_from: Vector3 = Vector3.ZERO, kill_force: float = 0.0) -> void:
 		var skel := _find_skeleton(visual)
 		if skel != null and skel.has_meta(&"xbot_ragdoll_setup"):
 			print("[XBotRagdoll] Activating physics simulation on skeleton")
+			# Stop the AnimationPlayer first — otherwise it keeps writing
+			# bone poses every frame, fighting the physics-driven bones
+			# and freezing the visible mesh in whatever animation pose
+			# (often T-pose because the run/idle clip was paused there
+			# during the death's set_physics_process(false)).
+			if anim_player != null:
+				anim_player.stop(true)
 			XBotRagdoll.activate(skel, kill_from, kill_force)
 			did_skeletal_ragdoll = true
 		else:

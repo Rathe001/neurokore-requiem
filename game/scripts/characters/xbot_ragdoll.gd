@@ -180,6 +180,18 @@ static func activate(skeleton: Skeleton3D, kill_from: Vector3 = Vector3.ZERO, ki
 	# Also orthonormalizes the basis as a side benefit — Jolt rejects
 	# non-uniform collision scale, and Mixamo bone bind matrices carry
 	# tiny non-uniform scale residue from FBX→Godot decomposition.
+	# Diagnostic: capture pre-simulation pose of the LeftArm so we can
+	# see at-a-glance whether the synced pose differs from bind / from
+	# the simulated result.
+	var dbg_idx: int = skeleton.find_bone("mixamorig_LeftArm")
+	if dbg_idx >= 0:
+		var dbg_pose := skeleton.get_bone_global_pose(dbg_idx)
+		var dbg_rest := skeleton.get_bone_global_rest(dbg_idx)
+		print("[XBotRagdoll] LeftArm pre-sim pose origin=%s rest origin=%s rot equal=%s" % [
+			dbg_pose.origin, dbg_rest.origin,
+			dbg_pose.basis.is_equal_approx(dbg_rest.basis)
+		])
+
 	for child in skeleton.get_children():
 		if not (child is PhysicalBone3D):
 			continue
