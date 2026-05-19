@@ -26,6 +26,7 @@ var _corpses: Array[Node3D] = []
 var _corpse_head: int = 0
 var _spec_overlay: SpecSelectOverlay
 var _host_disconnected_screen: HostDisconnectedScreen = null
+var _loading_screen: LoadingScreen = null
 @onready var _enemies_container: Node3D = get_node_or_null("EnemiesContainer") as Node3D
 @onready var _pickups_container: PickupsContainer = get_node_or_null("PickupsContainer") as PickupsContainer
 
@@ -230,6 +231,11 @@ func _do_reset_level(override_seed: int = 0) -> void:
 	# showing because mouse_exited doesn't fire reliably when the anchor body
 	# is removed from the tree mid-interaction.
 	get_tree().call_group(&"interactable_tooltip", &"hide_tooltip")
+	# Cover the screen so the player doesn't watch the world tear down + freeze
+	# during the rebuild. One process_frame ensures the loading overlay has
+	# actually painted before _build_level() locks the main thread.
+	_show_loading_screen("DESCENDING", "Generating sub-level")
+	await get_tree().process_frame
 	_clear_enemies()
 	_clear_corpses()
 	_clear_pickups()
@@ -270,6 +276,12 @@ func _do_reset_level(override_seed: int = 0) -> void:
 		# reset_state() override. Skipped on rebuild — those nodes were freed.
 		get_tree().call_group(&"resettable", &"reset_state")
 
+	# One more frame so the newly-built geometry renders before the cover
+	# fades — otherwise the player gets a single frame of bare floor before
+	# the lights and entities pop in.
+	await get_tree().process_frame
+	_hide_loading_screen()
+
 	# First completion: let the player choose a specialization before continuing.
 	if PlayerState.new_game_plus == 0:
 		_show_spec_select()
@@ -299,11 +311,34 @@ func _reset_player() -> void:
 	if PlayerState.active_save_id != "":
 		SaveManager.save_game(PlayerState.active_save_id)
 
+# ── Loading screen ────────────────────────────────────────────────────
+
+# Show a single LoadingScreen instance for the duration of a rebuild. Guards
+# against double-creation if reset_level is somehow re-triggered before the
+# previous one fades out.
+func _show_loading_screen(title: String, subtitle: String) -> void:
+	if _loading_screen == null or not is_instance_valid(_loading_screen):
+		_loading_screen = LoadingScreen.new()
+		add_child(_loading_screen)
+	_loading_screen.show_loading(title, subtitle)
+
+
+func _hide_loading_screen() -> void:
+	if _loading_screen == null or not is_instance_valid(_loading_screen):
+		return
+	_loading_screen.hide_loading()
+	# hide_loading queue_frees after the fade — drop our ref so the next
+	# transition creates a fresh instance instead of reusing a freed one.
+	_loading_screen = null
+
+
 # ── Multiplayer RPCs ──────────────────────────────────────────────────
 
 @rpc("authority", "call_remote", "reliable")
 func _client_reset_level(seed_val: int, is_procgen: bool) -> void:
 	get_tree().call_group(&"interactable_tooltip", &"hide_tooltip")
+	_show_loading_screen("DESCENDING", "Syncing with host")
+	await get_tree().process_frame
 	_clear_enemies()
 	_clear_corpses()
 	_clear_pickups()
@@ -322,6 +357,8 @@ func _client_reset_level(seed_val: int, is_procgen: bool) -> void:
 		# Legacy path: reset interactable states. Enemy respawn comes from host
 		# via MultiplayerSpawner — client skips respawn_enemies.
 		get_tree().call_group(&"resettable", &"reset_state")
+	await get_tree().process_frame
+	_hide_loading_screen()
 	# Clients also advance NG+ and reset player state.
 	if PlayerState.new_game_plus == 0:
 		_show_spec_select()
