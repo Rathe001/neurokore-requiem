@@ -65,3 +65,6 @@
 - [Procedural surface shader](project_procedural_surface_shader.md) — walls + floors via procedural_wall.gdshader; two ShaderMaterial instances (wall 1m / floor 2m) drive one shader; kit-panel pipeline still intact but unused
 - [Godot 4 shader gotchas](project_godot4_shader_gotchas.md) — 5 silent-failure modes: Vector3 vs Color, hint mutex, Image.create() noise, white-as-normal, GLSL redeclaration
 - [Level perf hierarchy](project_level_perf_hierarchy.md) — what actually mattered (tris/frame, then offscreen lights). HUD overlay (Lights/MMI/Particles/Draw/Tri) is the diagnostic.
+- [X Bot character pipeline](project_xbot_character.md) — Mixamo X Bot is player+enemy mesh; runtime AnimationLibrary merge from one-clip-per-FBX; shared BoneMap; ufbx scale=1.0 not 0.01
+- [X Bot ragdoll (WIP)](project_xbot_ragdoll.md) — per-bone PhysicalBone3D system; impulse works, T-pose snap on death is unsolved; diagnostic logging in place
+- [Godot 4 runtime gotchas](project_godot4_runtime_gotchas.md) — gi_mode default=STATIC kills VFX under SDFGI; depth_draw_opaque self-refs soft-particle alpha; Jolt rejects non-uniform scale; ufbx handles cm→m natively

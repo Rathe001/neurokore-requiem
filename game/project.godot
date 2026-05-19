@@ -117,17 +117,8 @@ move_right={
 
 [physics]
 
-3d/physics_engine="Jolt Physics"
-; Runs the physics step on its own thread so heavy ticks (large hordes,
-; navmesh raycasts, projectile sweeps) don't block render. Was previously
-; disabled because Jolt's strict-mode space-state guard threw errors on
-; direct_space_state access from _process — see the moved FPS hover query
-; in prototype_player.gd and proximity_lighting.gd, both of which now run
-; from _physics_process. If a new audit-miss shows up as a freeze or
-; "Space state is inaccessible" spam in the log, find the offending
-; _process / _ready / signal-handler call site and move it to
-; _physics_process (or queue it for the next tick).
 3d/run_on_separate_thread=true
+3d/physics_engine="Jolt Physics"
 
 [rendering]
 
