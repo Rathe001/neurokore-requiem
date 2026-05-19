@@ -1,5 +1,14 @@
 shader_type spatial;
-render_mode cull_back, depth_draw_opaque, diffuse_burley, specular_schlick_ggx;
+// cull_disabled: the mitred trapezoidal wall's end caps are diagonal
+// faces whose "outward" normal isn't a clean +X/-X or +Z/-Z direction —
+// it's at 45° in XZ. From an iso camera angle, one half of the room's
+// corners look at the cap's front face and the other half look at its
+// back, so any single cull_back orientation hides caps somewhere. Drawing
+// both sides ensures every corner is sealed regardless of camera angle.
+// Cost is minimal (the shader is fragment-bound, not vertex-bound) and
+// adjacent walls' coincident caps z-fight invisibly because they share
+// world-aligned panel UVs through the same shader.
+render_mode cull_disabled, depth_draw_opaque, diffuse_burley, specular_schlick_ggx;
 
 // Procedural worn-steel wall panel shader. Applied to the flat mitred wall
 // mesh produced by WallBuilder.build_room_mesh. Single shader covers all
