@@ -687,6 +687,14 @@ static func _spawn_fireball_explosion(parent: Node, world_pos: Vector3, blast_ra
 		# — the user saw it as "the whole room goes black except the
 		# smoke." Particles aren't physical shadow casters; disable.
 		particles.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		# Also keep the quad out of SDFGI: default gi_mode is STATIC, so
+		# SDFGI voxelizes the camera-facing quad as a solid wall for the
+		# duration of the particle's life. That carves a 8x8m occluder
+		# into the indirect-light cascade right at the explosion center,
+		# which renders as a dark rectangle dimming the floor underneath
+		# (the issue that appeared once SDFGI was re-enabled — explosions
+		# worked fine before because SDFGI wasn't sampling the quads).
+		particles.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
 		particles.lifetime = anim_lifetime
 		# Recolor the flipbook to match the palette. The shader has two
 		# gradient lookups keyed on sprite brightness:
@@ -818,6 +826,7 @@ static func _spawn_explosion_flash(parent: Node, world_pos: Vector3, blast_radiu
 	inst.mesh = mesh
 	inst.material_override = mat
 	inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	inst.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
 	# Start small so it pops into existence, scale up + fade fast.
 	inst.scale = Vector3.ONE * 0.3
 	parent.add_child(inst)
@@ -844,6 +853,10 @@ static func _spawn_explosion_sparks(parent: Node, world_pos: Vector3, blast_radi
 	# the explosion's OmniLight at energy 40 would project shadow tracks
 	# from each spark across the room, darkening huge swathes of geometry.
 	particles.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# Same SDFGI exclusion as the flipbook quad — sparks are transient,
+	# voxelizing them as STATIC GI makes them carve flickering occluders
+	# into the cascade.
+	particles.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
 
 	var pm := ParticleProcessMaterial.new()
 	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
