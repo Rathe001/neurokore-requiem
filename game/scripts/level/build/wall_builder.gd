@@ -641,12 +641,17 @@ static func build_room_mesh(ctx: LevelBuildContext, center: Vector3, rd: RoomDef
 		Vector3(cx - ox, 0, cz + hg), Vector3(cx - ix, 0, cz + hg),
 		RoomDef.Wall.WEST in rd.openings)
 
-	# No separate corner-mitre faces: each wall's trapezoidal top + outer/inner
-	# faces tile flush with its neighbour at the diagonal seam. The mitre is
-	# the shared boundary between two adjacent walls' material, hidden from
-	# every reachable viewpoint. Replaces the corner-cube baffles from the
-	# old overlap geometry — no overlap means no sub-pixel sightline blockers
-	# are needed.
+	# Corner caps: one vertical diagonal quad per room corner, sealing the
+	# open mitre slot where two perpendicular walls' trapezoids meet.
+	# Without these, the iso 45° camera can look down the diagonal slot
+	# into the hollow wall interior and out the open bottom — visible as a
+	# thin vertical gap right at each inside corner. We add caps centrally
+	# here (one per corner) rather than from inside each wall's segment,
+	# which would double-cap each corner and z-fight under cull_disabled.
+	_add_mitre_cap(st, nw_o, nw_i, h)
+	_add_mitre_cap(st, ne_o, ne_i, h)
+	_add_mitre_cap(st, se_o, se_i, h)
+	_add_mitre_cap(st, sw_o, sw_i, h)
 
 	var inst := MeshInstance3D.new()
 	inst.name = &"RoomWalls"
@@ -741,16 +746,12 @@ static func _add_mitred_segment(st: SurfaceTool, so: Vector3, si: Vector3, eo: V
 	_add_oriented_vquad(st, si, ei, si - so, h)
 	# Top quad: walk the segment perimeter CCW from +Y (outer→outer→inner→inner).
 	_quad_top(st, so, eo, ei, si, h)
-	# Mitre end caps — diagonal quads that close the open ends of the
-	# trapezoid volume. Without these the trapezoid is hollow on the two
-	# mitre diagonals; at room corners, two perpendicular walls' open
-	# mitres coincide on the same diagonal seam and the iso 45° camera
-	# can look straight down that slot into the hollow wall interior
-	# and out the open bottom. With caps in place, every wall is a
-	# closed solid; adjacent caps coincide on the seam and z-fight
-	# invisibly (same procedural shader, same world UVs → same colour).
-	_add_mitre_cap(st, so, si, h)
-	_add_mitre_cap(st, eo, ei, h)
+	# Mitre end caps are NOT added here — see build_room_mesh / _add_mitred_wall.
+	# Adding from inside the segment doubles caps at room corners (each adjacent
+	# wall adds its own at the shared corner) and the coincident faces z-fight
+	# visibly under cull_disabled. Corners are capped centrally in build_room_mesh
+	# (one cap per corner), and door-side ends are capped inline in
+	# _add_mitred_wall (no adjacent wall there, so single cap is safe).
 
 
 # Closes the open mitre end of a trapezoidal wall — a vertical quad
