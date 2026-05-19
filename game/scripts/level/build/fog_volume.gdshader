@@ -14,22 +14,36 @@
 //      around the player so the fog visibly opens up where they walk.
 
 shader_type spatial;
-render_mode unshaded, blend_mix, cull_back, depth_draw_never;
+// cull_disabled (was cull_back): when the camera is inside the box —
+// crouched FPS, camera at 0.7m, box extends 0.02m–0.47m — every face is
+// back-facing from inside, so cull_back rendered nothing. Disabling
+// culling renders both faces; the visible inner faces from a crouched
+// view give the player a tinted-around-them haze.
+render_mode unshaded, blend_mix, cull_disabled, depth_draw_never;
 
 uniform vec3 fog_color : source_color = vec3(0.62, 0.66, 0.74);
 uniform float density : hint_range(0.0, 8.0) = 0.55;
 uniform float fog_top : hint_range(0.05, 5.0) = 0.32;
 uniform float falloff : hint_range(0.5, 6.0) = 2.8;
 uniform float noise_scale : hint_range(0.05, 2.0) = 0.5;
-uniform float noise_speed : hint_range(0.0, 0.5) = 0.06;
+uniform float noise_speed : hint_range(0.0, 0.5) = 0.08;
 uniform int march_steps : hint_range(4, 64) = 20;
 uniform float march_step_size : hint_range(0.05, 0.5) = 0.08;
 uniform float player_radius : hint_range(0.5, 5.0) = 1.6;
 uniform float player_strength : hint_range(0.0, 1.0) = 0.85;
 // Hard cap on the final alpha so even the worst case (camera looking
 // edge-on through the long axis of the box) can't ever read as an opaque
-// wall. 0.35 keeps the fog readable but firmly subordinate to the floor.
+// wall. 0.32 keeps the fog readable but firmly subordinate to the floor.
 uniform float max_alpha : hint_range(0.0, 1.0) = 0.32;
+// Half-extents of the BoxMesh in local XZ. Set per-instance by the builder
+// via set_instance_shader_parameter — drives the edge fade so each room's
+// fog blends out at its boundary instead of having a hard rectangular
+// edge.
+instance uniform vec2 box_half_extents_xz = vec2(2.0, 2.0);
+// Width of the soft edge-fade band in world units. Outside this distance
+// from the box edge the fog is full strength; right at the edge alpha is
+// zero, smoothstep in between.
+uniform float edge_fade : hint_range(0.05, 2.0) = 0.7;
 
 global uniform vec3 player_world_pos;
 
@@ -63,25 +77,35 @@ float fbm3(vec3 p) {
 
 // Density at an arbitrary world-space sample point inside the fog box.
 // Result is in [0, 1] — caller integrates it along the view ray.
+// Two noise layers drifting at different speeds + directions so they cross
+// each other and read as swirling fog rather than uniform pan.
 float sample_density_at(vec3 wp) {
 	float y_t = clamp(wp.y / max(0.01, fog_top), 0.0, 1.0);
 	float h = pow(1.0 - y_t, falloff);
-	vec3 npos = wp * noise_scale + vec3(
+	vec3 npos_a = wp * noise_scale + vec3(
 		TIME * noise_speed,
-		TIME * noise_speed * 0.3,
-		TIME * noise_speed * 0.7);
-	float n = fbm3(npos);
+		TIME * noise_speed * 0.25,
+		TIME * noise_speed * 0.4);
+	vec3 npos_b = wp * noise_scale * 1.7 + vec3(
+		-TIME * noise_speed * 0.7,
+		TIME * noise_speed * 0.55,
+		TIME * noise_speed * 1.1);
+	float n = fbm3(npos_a) * 0.6 + fbm3(npos_b) * 0.4;
 	vec3 to_player = wp - player_world_pos;
 	to_player.y = 0.0;
 	float player_t = smoothstep(0.0, player_radius, length(to_player));
 	float pf = mix(1.0 - player_strength, 1.0, player_t);
-	return h * (0.4 + 0.6 * n) * pf;
+	return h * (0.35 + 0.65 * n) * pf;
 }
 
 varying vec3 world_pos;
+varying vec2 local_xz;
 
 void vertex() {
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	// VERTEX is in box-local coordinates, ranging from -size/2 to +size/2
+	// because we never apply additional scale to the MeshInstance3D.
+	local_xz = VERTEX.xz;
 }
 
 void fragment() {
@@ -107,6 +131,11 @@ void fragment() {
 	// Beer-Lambert alpha, then clamped by max_alpha so edge-on views can't
 	// produce wall-opaque results.
 	float alpha = clamp(1.0 - exp(-accum * density), 0.0, 1.0);
+	// Soft fade at the box edges so fog blends out instead of stopping at
+	// a hard rectangle. Distance from the local XZ position to the nearest
+	// box edge; smoothstep brings alpha to 0 as the fragment approaches.
+	vec2 dist_xz = box_half_extents_xz - abs(local_xz);
+	float edge_t = smoothstep(0.0, edge_fade, min(dist_xz.x, dist_xz.y));
 	ALBEDO = fog_color;
-	ALPHA = alpha * max_alpha;
+	ALPHA = alpha * max_alpha * edge_t;
 }

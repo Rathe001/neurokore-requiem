@@ -110,17 +110,20 @@ static func _get_fog_material() -> ShaderMaterial:
 
 
 static func create_fog_volume(ctx: LevelBuildContext, center: Vector3, size_x: float, size_z: float) -> void:
-	# Inset the box so it stops short of the wall plane on every side.
-	# Without the inset, the box face coincides exactly with the inner wall
-	# face; at glancing angles the camera can see a faint visible seam where
-	# the transparent box edge meets the opaque wall — pulling in by a
-	# quarter cell hides it inside the wall's silhouette.
+	# Inset the box so it stops short of the wall plane on every side. The
+	# edge fade in the shader handles the rest — fog dissolves smoothly
+	# inside the inset rather than stopping at a hard rectangle.
 	const INSET := 0.1
+	var box_sx := maxf(size_x - INSET * 2.0, 0.5)
+	var box_sz := maxf(size_z - INSET * 2.0, 0.5)
 	var box := BoxMesh.new()
-	box.size = Vector3(maxf(size_x - INSET * 2.0, 0.5), FOG_BOX_HEIGHT, maxf(size_z - INSET * 2.0, 0.5))
+	box.size = Vector3(box_sx, FOG_BOX_HEIGHT, box_sz)
 	var mi := MeshInstance3D.new()
 	mi.mesh = box
 	mi.material_override = _get_fog_material()
+	# Per-instance half-extents drive the shader's edge-fade. Single shared
+	# ShaderMaterial; instance uniforms supply the per-room dimensions.
+	mi.set_instance_shader_parameter(&"box_half_extents_xz", Vector2(box_sx * 0.5, box_sz * 0.5))
 	# Lift the box up by half its height so its bottom sits at FOG_BOX_BOTTOM
 	# (slightly above floor y=0).
 	mi.transform.origin = Vector3(center.x, FOG_BOX_BOTTOM + FOG_BOX_HEIGHT * 0.5, center.z)

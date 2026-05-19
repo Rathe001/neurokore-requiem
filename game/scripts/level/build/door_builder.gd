@@ -21,9 +21,24 @@ static func build_door(ctx: LevelBuildContext, piece_id: StringName, rd: RoomDef
 
 	var thick := ctx.theme.wall_thickness
 	var perp := rd.size.x - thick if (side == RoomDef.Wall.NORTH or side == RoomDef.Wall.SOUTH) else rd.size.y - thick
-	door.scale.z = minf(rd.opening_width, perp) / DOOR_MESH_WIDTH
+	var opening_w := minf(rd.opening_width, perp)
+	door.scale.z = opening_w / DOOR_MESH_WIDTH
 	# Parent-scale Y so the slide animation (mesh.position.y in local space) compresses with the mesh.
 	door.scale.y = (ctx.theme.wall_height * DOOR_LINTEL_RATIO) / DOOR_MESH_HEIGHT
+
+	# Fill the wall opening above the door with a lintel block. Without this,
+	# the wall builder cuts a full-wall-height hole for the door but the
+	# shortened door only fills the bottom 85% — leaving a visible open gap
+	# from door-top up to wall-top that the user can see through.
+	var door_world_height := ctx.theme.wall_height * DOOR_LINTEL_RATIO
+	var lintel_height := ctx.theme.wall_height - door_world_height
+	if lintel_height > 0.01:
+		var lintel_y := door_world_height + lintel_height * 0.5
+		var lintel_pos := wpos + Vector3(0.0, lintel_y, 0.0)
+		var along_x := side == RoomDef.Wall.EAST or side == RoomDef.Wall.WEST
+		var lintel_sx := thick if along_x else opening_w
+		var lintel_sz := opening_w if along_x else thick
+		WallBuilder.create_trim_box(ctx, lintel_pos, lintel_sx, lintel_height, lintel_sz)
 
 	if door is PrototypeDoor:
 		var pdoor := door as PrototypeDoor
