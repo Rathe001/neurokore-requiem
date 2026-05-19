@@ -8,7 +8,7 @@ class_name FloorBuilder
 ## Pit interiors (the shaft and ooze/spike floor) are owned by PitBuilder;
 ## this file only handles the surface plane(s) and the perimeter trim.
 
-const FLOOR_OVERLAP := 0.1  ## extends piece floors slightly past wall plane so the wall-floor seam stays hidden under the wall geometry. With strict-grid kit pieces aligned at wall planes, only a small overlap is needed (was 0.3m when we had non-grid sizes + adaptive scaling).
+const FLOOR_OVERLAP := 0.25  ## extends piece floors past the wall plane so the wall-floor seam stays hidden under the wall geometry. Needs to reach past the procedural wall's OUTER face: mitred trapezoidal walls (build_room_mesh) extend `wall_thickness/2` (0.2m at the standard 0.4m thickness) past rd.size on the outer side. 0.25 covers that with a small margin. If wall_thickness ever changes above 0.5m, bump this past `wall_thickness * 0.5 + 0.05` or the iso camera sees wall outer faces hanging over the void with no floor under them.
 ## Subdivision density for floor PlaneMesh, in vertices per meter. The
 ## displacement ShaderMaterial needs subdivided geometry to actually deform —
 ## without subdivision a 20m floor is 4 corner verts and no displacement is
