@@ -17,13 +17,13 @@ shader_type spatial;
 render_mode unshaded, blend_mix, cull_back, depth_draw_never;
 
 uniform vec3 fog_color : source_color = vec3(0.62, 0.66, 0.74);
-uniform float density : hint_range(0.0, 8.0) = 2.4;
-uniform float fog_top : hint_range(0.1, 5.0) = 1.2;
-uniform float falloff : hint_range(0.5, 5.0) = 1.8;
+uniform float density : hint_range(0.0, 8.0) = 1.4;
+uniform float fog_top : hint_range(0.1, 5.0) = 0.5;
+uniform float falloff : hint_range(0.5, 5.0) = 2.2;
 uniform float noise_scale : hint_range(0.05, 2.0) = 0.45;
 uniform float noise_speed : hint_range(0.0, 0.5) = 0.06;
-uniform int march_steps : hint_range(4, 32) = 12;
-uniform float march_step_size : hint_range(0.05, 0.5) = 0.18;
+uniform int march_steps : hint_range(4, 64) = 24;
+uniform float march_step_size : hint_range(0.05, 0.5) = 0.12;
 uniform float player_radius : hint_range(0.5, 5.0) = 1.6;
 uniform float player_strength : hint_range(0.0, 1.0) = 0.85;
 
@@ -87,12 +87,12 @@ void fragment() {
 	float t = 0.0;
 	for (int i = 0; i < march_steps; i++) {
 		vec3 sp = world_pos + view_dir_ws * t;
-		// Early-out when the ray exits the fog layer's vertical band — saves
-		// march steps near the top of the box and prevents the rare ray that
-		// arcs upward from accumulating phantom density.
-		if (sp.y > fog_top) {
-			break;
-		}
+		// Only early-out when the ray dips below the floor. The earlier
+		// "break above fog_top" check killed the iso top-face entry entirely
+		// (the camera enters the box at y > fog_top and immediately broke
+		// before sampling), so the floor fog never rendered from above. The
+		// height_factor inside sample_density_at returns 0 outside fog_top
+		// anyway, so wasted steps above the fog band contribute nothing.
 		if (sp.y < -0.05) {
 			break;
 		}
