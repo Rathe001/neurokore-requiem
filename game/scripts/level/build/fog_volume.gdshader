@@ -51,10 +51,15 @@ uniform float wisp_threshold : hint_range(0.0, 1.0) = 0.75;
 uniform float wisp_softness : hint_range(0.01, 0.5) = 0.12;
 uniform float player_radius : hint_range(0.5, 5.0) = 1.6;
 uniform float player_strength : hint_range(0.0, 1.0) = 0.85;
-// Hard cap on the final alpha. Lowered to keep the wisp-mode look
-// atmospheric — a wisp peak should suggest mist drifting, not read as
-// a solid puff. Crank back up to ~0.5 for thicker ground fog.
-uniform float max_alpha : hint_range(0.0, 1.0) = 0.22;
+// How long a wake the player drags through the fog. The trail length is
+// proportional to current speed: at 6 m/s and trail_seconds=0.5 the
+// wake reaches ~3 m behind the player and fades out at its tail.
+uniform float trail_seconds : hint_range(0.0, 1.5) = 0.5;
+uniform float trail_max_length : hint_range(0.5, 8.0) = 4.0;
+// Hard cap on the final alpha. Lower = more transparent wisps. 0.14
+// reads as a faint smoke hint; raise toward 0.3 for denser drifting
+// fog, 0.5+ for ground-cover style.
+uniform float max_alpha : hint_range(0.0, 1.0) = 0.14;
 // Half-extents of the BoxMesh in local XZ. Set per-instance by the builder
 // via set_instance_shader_parameter — drives the edge fade so each room's
 // fog blends out at its boundary instead of having a hard rectangular
@@ -70,6 +75,7 @@ uniform float edge_fade : hint_range(0.05, 2.0) = 0.7;
 uniform float emission_floor : hint_range(0.0, 0.5) = 0.02;
 
 global uniform vec3 player_world_pos;
+global uniform vec3 player_world_vel;
 
 float hash3(vec3 p) {
 	p = fract(p * 0.3183099 + 0.1);
@@ -134,9 +140,26 @@ float sample_density_at(vec3 wp) {
 	// Ridge transform: collapse smooth blobs into thin filaments.
 	float ridge = 1.0 - abs(n * 2.0 - 1.0);
 	float wisp = smoothstep(wisp_threshold, wisp_threshold + wisp_softness, ridge);
-	vec3 to_player = wp - player_world_pos;
-	to_player.y = 0.0;
-	float player_t = smoothstep(0.0, player_radius, length(to_player));
+	// Player wake: distance from the sample point to the segment running
+	// from the player's CURRENT position backward along their velocity
+	// vector. When standing still, the segment collapses to a point and
+	// this falls back to the original cylinder cutout. When moving, the
+	// cleared zone stretches into a trailing capsule that reads as the
+	// player parting the smoke as they walk through it.
+	vec2 wp_xz = wp.xz;
+	vec2 pp_xz = player_world_pos.xz;
+	vec2 pv_xz = player_world_vel.xz;
+	float speed = length(pv_xz);
+	float trail = min(speed * trail_seconds, trail_max_length);
+	vec2 tail_xz = pp_xz - (pv_xz / max(speed, 0.0001)) * trail;
+	vec2 seg = pp_xz - tail_xz;
+	float seg_len_sq = dot(seg, seg);
+	float seg_t = (seg_len_sq > 0.0001)
+		? clamp(dot(wp_xz - tail_xz, seg) / seg_len_sq, 0.0, 1.0)
+		: 0.0;
+	vec2 closest = tail_xz + seg * seg_t;
+	float dist_to_wake = length(wp_xz - closest);
+	float player_t = smoothstep(0.0, player_radius, dist_to_wake);
 	float pf = mix(1.0 - player_strength, 1.0, player_t);
 	return h * wisp * pf;
 }
