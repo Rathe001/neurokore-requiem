@@ -410,8 +410,23 @@ func _ready() -> void:
 	# animations come from the FBX directly and the library install just
 	# adds an unused namespace.
 	XBotAnimations.install_on(anim_player)
+	# Pre-build the per-bone ragdoll skeleton so _die() can flip it into
+	# physics simulation instantly. Deferred — the FBX's Skeleton3D may not
+	# be in the tree yet at the moment _ready fires, depending on the
+	# AnimationPlayer ready-order during scene activation. setup() is
+	# idempotent so pool re-acquire skips redundant work.
+	call_deferred(&"_setup_ragdoll")
 	_init_enemy()
 	_setup_hover()
+
+
+func _setup_ragdoll() -> void:
+	if visual == null:
+		return
+	var skel := visual.find_child("Skeleton3D", true, false) as Skeleton3D
+	if skel == null:
+		return
+	XBotRagdoll.setup(skel)
 
 func _init_enemy() -> void:
 	_generation += 1
@@ -1670,15 +1685,26 @@ func _die(kill_from: Vector3 = Vector3.ZERO, kill_force: float = 0.0) -> void:
 			p.on_enemy_killed()
 	_drop_credits()
 	_drop_item()
-	# Ragdoll path: spawn a physics-driven corpse with a clone of our visual
-	# and hide ours. Replaces the old death-anim / fallback rotation tween —
-	# the tumble + sink reads better than a static "lay flat" pose and lets
-	# explosions/players knock corpses around. The original CharacterBody3D
-	# stays in tree as an inert placeholder until DEATH_HOLD elapses, then
-	# becomes a registered corpse for the existing pool-eviction system.
-	_spawn_ragdoll_corpse(kill_from, kill_force)
+	# Ragdoll path. Two variants depending on which character mesh is in use:
+	#
+	#   X Bot (has the per-bone PhysicalBone3D rig built by XBotRagdoll.setup):
+	#     flip the Skeleton3D into physics mode so the whole rig goes limp
+	#     in place. Visual stays — the bones deform the mesh via the skin
+	#     binding as they fall. No rigid-body tumble corpse spawned.
+	#
+	#   Legacy UAL1 / Quaternius (no physical bones): fall through to the
+	#     old PrototypeRagdollCorpse spawn — duplicates the visual onto a
+	#     RigidBody3D capsule that tumbles together, hides the original.
+	var did_skeletal_ragdoll := false
 	if visual != null:
-		visual.visible = false
+		var skel := visual.find_child("Skeleton3D", true, false) as Skeleton3D
+		if skel != null and skel.has_meta(&"xbot_ragdoll_setup"):
+			XBotRagdoll.activate(skel)
+			did_skeletal_ragdoll = true
+	if not did_skeletal_ragdoll:
+		_spawn_ragdoll_corpse(kill_from, kill_force)
+		if visual != null:
+			visual.visible = false
 	var gen := _generation
 	await get_tree().create_timer(DEATH_HOLD).timeout
 	if not is_inside_tree() or _generation != gen:
