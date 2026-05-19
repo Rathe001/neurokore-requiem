@@ -54,7 +54,14 @@ func _ready() -> void:
 	# Catch lights that already exist when this autoload starts.
 	_scan(get_tree().root)
 
-func _process(delta: float) -> void:
+func _physics_process(delta: float) -> void:
+	# Runs on the physics tick (was _process). Jolt errors out on
+	# `world.direct_space_state` access from _process — strict about when
+	# physics state is readable, where the legacy GodotPhysics engine was
+	# silently lenient. 60Hz physics tick is plenty for ambient-light
+	# falloff smoothing; no perceptible difference vs. running at render
+	# rate.
+	#
 	# Quit-to-menu / level-change can leave _cached_player as a valid (not
 	# freed) instance whose tree has been torn down. get_world_3d() then
 	# returns an empty Ref<World3D> and direct_space_state on that is a

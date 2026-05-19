@@ -52,22 +52,21 @@ volumetric_fog_albedo = Color(0.7, 0.75, 0.85, 1)
 volumetric_fog_emission = Color(0.0, 0.0, 0.0, 1)
 volumetric_fog_anisotropy = 0.3
 volumetric_fog_length = 40.0
-; SDFGI — real-time global illumination. Bounce light from the ceiling
-; fluorescents and any emissive surfaces into shadows. The cell size +
-; cascade count below are conservative (range ~28m, suitable for a
-; few-room iso view); bounce_feedback gives multi-bounce light without
-; recomputing the cascades. ~3-5ms/frame on a typical desktop GPU; SDF
-; voxelization is cached so static geometry isn't reprocessed every
-; frame. Pair with use_occlusion to keep light bounce from leaking
-; through walls the way volumetric fog did.
-sdfgi_enabled = true
-sdfgi_use_occlusion = true
-sdfgi_cascades = 4
-sdfgi_min_cell_size = 0.4
-sdfgi_bounce_feedback = 0.5
-sdfgi_energy = 1.0
-sdfgi_normal_bias = 1.1
-sdfgi_probe_bias = 1.1
+; SDFGI parked — turning it on darkened the scene almost completely.
+; The "dark by design" lighting balance (ambient_light_source = BG,
+; near-black background_color) means direct fluorescent light is doing
+; almost all the visible lifting. SDFGI on top of that, with the visual
+; wall geometry being thinner (~2.5cm panels) than a usable SDF cell
+; size, ends up neither providing meaningful indirect light NOR getting
+; correct occlusion — net effect was a fully-black scene.
+;
+; To bring it back later: add invisible BoxMesh "GI proxies" matching
+; the collision-wall thickness on the LevelBuilder side (so the SDF
+; voxelization sees solid walls), drop sdfgi_min_cell_size to ~0.15,
+; and possibly switch ambient_light_source to AMBIENT_SOURCE_COLOR with
+; a small floor value so the scene degrades gracefully while cascades
+; build.
+sdfgi_enabled = false
 
 ; agent_height matches the enemy CROUCH_HEIGHT (1.0) so the navmesh routes
 ; through low-ceiling crawlspaces. Enemies detect overhead clearance at run
