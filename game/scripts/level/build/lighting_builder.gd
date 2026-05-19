@@ -91,21 +91,29 @@ static func create_fog_volume(ctx: LevelBuildContext, center: Vector3, size_x: f
 	# Per-room ground fog via GPUParticles3D. Replaced FogVolume + volumetric
 	# pass because the volumetric approach lit the ceiling fluorescents'
 	# scatter through wall edges (visible as a "halo" outside rooms). Each
-	# particle is a billboarded quad emitted in a thin slab near the floor,
-	# drifting slowly upward and outward — emission stays inside the room
-	# footprint and lifetimes are short enough that drift doesn't cross
-	# walls visibly. PrototypePlayer adds a GPUParticlesAttractorSphere3D
+	# particle is a Y-axis billboarded soft puff emitted in a thin slab near
+	# the floor, drifting slowly upward and outward — emission stays inside
+	# the room footprint and lifetimes are short enough that drift doesn't
+	# cross walls visibly. PrototypePlayer adds a GPUParticlesAttractorSphere3D
 	# child in _ready(), so the fog visibly parts as the player moves.
+	#
+	# Iso-camera notes:
+	# - BILLBOARD_FIXED_Y keeps sprites VERTICAL (rotating only around Y to
+	#   face camera). BILLBOARD_PARTICLES would tilt them flat on the floor
+	#   under the near-top-down view, reading as opaque floor tiles.
+	# - SHADING_MODE_UNSHADED so the fog isn't lit by the high-energy
+	#   fluorescent omnis (lighting it = bright white, no matter how low
+	#   the albedo alpha is).
+	# - Radial alpha mask via GradientTexture2D (FILL_RADIAL) softens each
+	#   sprite into a puff rather than a hard rectangle.
 	var p := GPUParticles3D.new()
 	p.name = &"GroundFog"
 	var area := size_x * size_z
-	# Sparse — these are large soft sprites, not dust motes.
-	p.amount = clampi(int(area * 0.4), 8, 24)
+	p.amount = clampi(int(area * 0.9), 18, 48)
 	p.lifetime = 7.0
 	# Pre-roll a chunk of the lifecycle so the room doesn't fade in from
 	# nothing when the player arrives.
 	p.preprocess = 4.0
-	# Generous AABB so the iso camera doesn't cull the fog plane.
 	var wh := ctx.theme.wall_height
 	p.visibility_aabb = AABB(
 		Vector3(-size_x * 0.6, 0.0, -size_z * 0.6),
@@ -113,51 +121,62 @@ static func create_fog_volume(ctx: LevelBuildContext, center: Vector3, size_x: f
 
 	var mat := ParticleProcessMaterial.new()
 	mat.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-	# Thin emission slab at floor level, spanning ~90% of the room footprint
-	# so fog doesn't spawn flush against walls.
+	# Thin emission slab at floor level, spanning ~90% of the room footprint.
 	mat.emission_box_extents = Vector3(size_x * 0.45, 0.04, size_z * 0.45)
 	mat.direction = Vector3(0, 1, 0)
 	mat.spread = 25.0
 	mat.initial_velocity_min = 0.02
 	mat.initial_velocity_max = 0.08
 	mat.gravity = Vector3.ZERO
-	mat.scale_min = 1.4
-	mat.scale_max = 2.4
+	# Small vertical cards — fog reads as a layered haze when many small
+	# soft puffs overlap, not when a few big cards stack.
+	mat.scale_min = 0.5
+	mat.scale_max = 0.9
 	mat.turbulence_enabled = true
 	mat.turbulence_noise_strength = 0.35
 	mat.turbulence_noise_speed_random = 0.2
 	mat.turbulence_noise_speed = Vector3(0.05, 0.02, 0.05)
 	# Fade in over the first 20% of life, hold, fade out over the last 30%.
-	# Without this each sprite pops in/out hard at the lifetime edges.
-	var gradient := Gradient.new()
-	gradient.set_color(0, Color(1, 1, 1, 0))
-	gradient.set_color(1, Color(1, 1, 1, 0))
-	gradient.add_point(0.2, Color(1, 1, 1, 1))
-	gradient.add_point(0.7, Color(1, 1, 1, 1))
-	var gradient_tex := GradientTexture1D.new()
-	gradient_tex.gradient = gradient
-	mat.color_ramp = gradient_tex
+	var alpha_gradient := Gradient.new()
+	alpha_gradient.set_color(0, Color(1, 1, 1, 0))
+	alpha_gradient.set_color(1, Color(1, 1, 1, 0))
+	alpha_gradient.add_point(0.2, Color(1, 1, 1, 1))
+	alpha_gradient.add_point(0.7, Color(1, 1, 1, 1))
+	var alpha_gradient_tex := GradientTexture1D.new()
+	alpha_gradient_tex.gradient = alpha_gradient
+	mat.color_ramp = alpha_gradient_tex
 	p.process_material = mat
 
-	# Soft billboard quad — relies on lighting for shadow/specular hits.
+	# Soft circular alpha mask via radial gradient — turns the QuadMesh
+	# from a hard rectangle into a fuzzy puff without needing a texture
+	# asset or custom shader.
+	var radial := Gradient.new()
+	radial.set_color(0, Color(1, 1, 1, 1))
+	radial.set_color(1, Color(1, 1, 1, 0))
+	var radial_tex := GradientTexture2D.new()
+	radial_tex.gradient = radial
+	radial_tex.fill = GradientTexture2D.FILL_RADIAL
+	radial_tex.fill_from = Vector2(0.5, 0.5)
+	radial_tex.fill_to = Vector2(1.0, 0.5)
+	radial_tex.width = 64
+	radial_tex.height = 64
+
 	var mesh := QuadMesh.new()
 	mesh.size = Vector2(1.0, 1.0)
 	var draw_mat := StandardMaterial3D.new()
-	draw_mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
-	draw_mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	# Cool, low-saturation grey-blue. Alpha tuned low so a few overlapping
-	# sprites build density without one solitary sprite reading as opaque.
-	draw_mat.albedo_color = Color(0.42, 0.46, 0.52, 0.16)
+	draw_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	draw_mat.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
+	# Cool grey-blue. Alpha is the final multiplier on the radial mask, so
+	# the effective opacity at sprite centre is this value; edges fade to 0.
+	draw_mat.albedo_color = Color(0.55, 0.60, 0.66, 0.22)
+	draw_mat.albedo_texture = radial_tex
 	draw_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	draw_mat.disable_receive_shadows = false
+	draw_mat.disable_receive_shadows = true
 	mesh.material = draw_mat
 	p.draw_pass_1 = mesh
 
 	p.transform.origin = center
 	ctx.root.add_child(p)
-	# Hidden when the room is offscreen — GPUParticles3D stops drawing AND
-	# simulating when visibility inherits false, so fog in distant rooms
-	# costs nothing.
 	p.add_to_group(&"room_geometry")
 
 
