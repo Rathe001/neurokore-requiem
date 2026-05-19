@@ -38,14 +38,15 @@ static func get_library() -> AnimationLibrary:
 	if _library != null:
 		return _library
 	_library = AnimationLibrary.new()
-	_extract(_library, &"idle", _IDLE_FBX, true)
-	_extract(_library, &"slow_run", _SLOW_RUN_FBX, true)
-	_extract(_library, &"fast_run", _FAST_RUN_FBX, true)
-	_extract(_library, &"punch", _PUNCH_FBX, false)
-	_extract(_library, &"fire", _FIRE_FBX, false)
-	_extract(_library, &"hit", _HIT_FBX, false)
-	_extract(_library, &"jump", _JUMP_FBX, false)
-	_extract(_library, &"death", _DEATH_FBX, false)
+	_extract(_library, &"idle", _IDLE_FBX, true, false)
+	_extract(_library, &"slow_run", _SLOW_RUN_FBX, true, true)
+	_extract(_library, &"fast_run", _FAST_RUN_FBX, true, true)
+	_extract(_library, &"punch", _PUNCH_FBX, false, false)
+	_extract(_library, &"fire", _FIRE_FBX, false, false)
+	_extract(_library, &"hit", _HIT_FBX, false, false)
+	_extract(_library, &"jump", _JUMP_FBX, false, false)
+	_extract(_library, &"death", _DEATH_FBX, false, false)
+	print("[XBotAnimations] Built library with: ", _library.get_animation_list())
 	return _library
 
 
@@ -64,7 +65,7 @@ static func install_on(ap: AnimationPlayer) -> void:
 # (idle / locomotion clips loop, one-shot clips like punch don't).
 # Duplicates the animation so per-instance modifications don't leak back
 # into the preloaded scene's cached resource.
-static func _extract(lib: AnimationLibrary, dst_name: StringName, src_scene: PackedScene, loop: bool) -> void:
+static func _extract(lib: AnimationLibrary, dst_name: StringName, src_scene: PackedScene, loop: bool, strip_hip_position: bool) -> void:
 	var inst: Node = src_scene.instantiate()
 	if inst == null:
 		return
@@ -81,6 +82,7 @@ static func _extract(lib: AnimationLibrary, dst_name: StringName, src_scene: Pac
 	if chosen == &"" and not names.is_empty():
 		chosen = names[0]
 	if chosen == &"":
+		print("[XBotAnimations] No animation found in ", src_scene.resource_path)
 		inst.queue_free()
 		return
 	var anim: Animation = ap.get_animation(chosen)
@@ -89,5 +91,32 @@ static func _extract(lib: AnimationLibrary, dst_name: StringName, src_scene: Pac
 		return
 	var dup: Animation = anim.duplicate()
 	dup.loop_mode = Animation.LOOP_LINEAR if loop else Animation.LOOP_NONE
+	if strip_hip_position:
+		_strip_hip_position(dup)
 	lib.add_animation(dst_name, dup)
 	inst.queue_free()
+
+
+# Mixamo bakes forward locomotion into the hip bone's position track.
+# For loopable run/walk clips we want the character's CharacterBody3D to
+# drive movement, so we zero the hip's position track — keeps the leg
+# animation but stops the visual from "running off" relative to the body.
+static func _strip_hip_position(anim: Animation) -> void:
+	for i in range(anim.get_track_count()):
+		if anim.track_get_type(i) != Animation.TYPE_POSITION_3D:
+			continue
+		var path_str := String(anim.track_get_path(i))
+		if not path_str.contains("Hips"):
+			continue
+		# Use the first key as the "rest" position so we keep authored
+		# vertical hip height; zero out forward translation by re-anchoring
+		# every key to the first one.
+		var key_count := anim.track_get_key_count(i)
+		if key_count == 0:
+			continue
+		var rest_pos: Vector3 = anim.track_get_key_value(i, 0)
+		for k in range(key_count):
+			# Keep Y (vertical bob) but lock X / Z to rest position.
+			var cur: Vector3 = anim.track_get_key_value(i, k)
+			anim.track_set_key_value(i, k, Vector3(rest_pos.x, cur.y, rest_pos.z))
+		break
