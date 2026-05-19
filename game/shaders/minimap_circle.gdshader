@@ -5,8 +5,16 @@ uniform float border_softness : hint_range(0.001, 0.1) = 0.01;
 uniform vec4 border_color : source_color = vec4(0.15, 0.5, 0.15, 0.6);
 uniform vec4 bg_color : source_color = vec4(0.04, 0.05, 0.04, 0.95);
 uniform vec4 path_color : source_color = vec4(0.25, 0.28, 0.25, 1.0);
+// Faded floor tint for "seen but not entered" pieces. Picked between
+// bg_color and path_color so the eye reads three distinct states (void /
+// previewed / explored) at a glance.
+uniform vec4 seen_color : source_color = vec4(0.12, 0.14, 0.12, 1.0);
 uniform float brightness_threshold : hint_range(0.0, 1.0) = 0.08;
 uniform float brightness_smoothing : hint_range(0.01, 0.3) = 0.06;
+// Texture luminance above this picks path_color (full), below picks
+// seen_color (faded). Painter encodes state via per-pixel luminance: void=0,
+// seen≈0.20, explored≈0.53.
+uniform float seen_threshold : hint_range(0.0, 1.0) = 0.32;
 uniform float opacity : hint_range(0.0, 1.0) = 1.0;
 
 // UV panning for baked minimap: offset and scale control which portion of the
@@ -51,15 +59,19 @@ void fragment() {
 	}
 
 	float lum = dot(tex.rgb, LUMINANCE_WEIGHTS);
-	// Anything above the threshold is "walkable surface" -> path color.
-	// Everything else is void -> background color.
-	float t = smoothstep(brightness_threshold, brightness_threshold + brightness_smoothing, lum);
-	vec3 final_rgb = mix(bg_color.rgb, path_color.rgb, t);
+	// Two-stage gate: t_visible ramps bg→seen at brightness_threshold,
+	// t_full ramps seen→path at seen_threshold. Pixels at low luminance
+	// (~0.20) land in the seen band; high-luminance pixels (~0.53) reach
+	// path_color.
+	float t_visible = smoothstep(brightness_threshold, brightness_threshold + brightness_smoothing, lum);
+	float t_full = smoothstep(seen_threshold, seen_threshold + brightness_smoothing, lum);
+	vec3 final_rgb = mix(bg_color.rgb, seen_color.rgb, t_visible);
+	final_rgb = mix(final_rgb, path_color.rgb, t_full);
 
 	// Border ring.
 	float border_t = smoothstep(1.0 - border_width * border_softness, 1.0, dist);
 	final_rgb = mix(final_rgb, border_color.rgb, border_t);
 
-	float base_alpha = mix(bg_color.a, 1.0, max(t, border_t));
+	float base_alpha = mix(bg_color.a, 1.0, max(t_visible, border_t));
 	COLOR = vec4(final_rgb, base_alpha * opacity);
 }

@@ -33,9 +33,12 @@ const BAKE_VIEWPORT_SIZE := Vector2i(1024, 1024)
 ## is fully transparent so the parent shader's bg_color shows through.
 const FLOOR_COLOR := Color(0.42, 0.55, 0.68, 0.95)
 ## Faded preview tint — pieces directly adjacent to a revealed piece but
-## not yet entered. Same hue as FLOOR_COLOR at ~35% the alpha so the eye
-## reads it as "you can see this is there, but you haven't been here."
-const FLOOR_COLOR_SEEN := Color(0.42, 0.55, 0.68, 0.32)
+## not yet entered. The minimap shader gates state by per-pixel luminance
+## (alpha is only used internally for the void_only painter check), so this
+## color needs a luminance value between brightness_threshold (0.08) and
+## seen_threshold (0.32) for the shader to render it as seen_color. RGB at
+## ~0.20 gives a luminance of ~0.20, comfortably inside the seen band.
+const FLOOR_COLOR_SEEN := Color(0.20, 0.20, 0.20, 1.0)
 const VOID_COLOR := Color(0.0, 0.0, 0.0, 0.0)
 
 ## Runtime view sizes control how much of the baked texture is visible.
