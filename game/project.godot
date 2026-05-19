@@ -74,18 +74,13 @@ UISounds="*res://scripts/audio/ui_sounds.gd"
 
 window/size/viewport_width=960
 window/size/viewport_height=540
+window/size/borderless=true
+window/size/transparent=true
 window/size/window_width_override=1280
 window/size/window_height_override=720
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
-; Boot-splash phase only: the window starts borderless and per-pixel
-; transparent so the splash image's alpha channel lets the desktop show
-; through. startup_screen.gd restores both flags in its _ready() once
-; the splash hands off to the main scene, after which the game runs in
-; a normal framed/opaque window.
 window/per_pixel_transparency/allowed=true
-window/size/borderless=true
-window/size/transparent=true
 
 [input]
 
@@ -123,12 +118,14 @@ move_right={
 [physics]
 
 3d/physics_engine="Jolt Physics"
+3d/run_on_separate_thread=true
 
 [rendering]
 
 textures/canvas_textures/default_texture_filter=0
 textures/default_filters/anisotropic_filtering_level=4
 anti_aliasing/quality/msaa_3d=2
+anti_aliasing/quality/use_taa=true
 anti_aliasing/quality/use_debanding=true
 environment/defaults/default_clear_color=Color(0.05, 0.05, 0.08, 1)
 

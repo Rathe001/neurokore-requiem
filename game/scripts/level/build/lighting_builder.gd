@@ -88,15 +88,77 @@ const FOG_HAZE_HEIGHT := 0.5
 const FOG_HAZE_DENSITY := 1.5
 
 static func create_fog_volume(ctx: LevelBuildContext, center: Vector3, size_x: float, size_z: float) -> void:
-	# DISABLED 2026-05-18 for perf: every Light3D in the scene sets
-	# `light_volumetric_fog_energy = 0.0`, so nothing actually lights the
-	# FogVolumes — they render as black and are invisible against the dark
-	# scene. But Godot still runs the volumetric pass for each FogVolume,
-	# which costs frame time per room (two volumes × N rooms). Skipping the
-	# creation outright recovers that cost. Restore this function body when
-	# we want lit volumetric fog again — and at the same time, decide which
-	# Light3Ds should have a non-zero light_volumetric_fog_energy.
-	return
+	# Per-room ground fog via GPUParticles3D. Replaced FogVolume + volumetric
+	# pass because the volumetric approach lit the ceiling fluorescents'
+	# scatter through wall edges (visible as a "halo" outside rooms). Each
+	# particle is a billboarded quad emitted in a thin slab near the floor,
+	# drifting slowly upward and outward — emission stays inside the room
+	# footprint and lifetimes are short enough that drift doesn't cross
+	# walls visibly. PrototypePlayer adds a GPUParticlesAttractorSphere3D
+	# child in _ready(), so the fog visibly parts as the player moves.
+	var p := GPUParticles3D.new()
+	p.name = &"GroundFog"
+	var area := size_x * size_z
+	# Sparse — these are large soft sprites, not dust motes.
+	p.amount = clampi(int(area * 0.4), 8, 24)
+	p.lifetime = 7.0
+	# Pre-roll a chunk of the lifecycle so the room doesn't fade in from
+	# nothing when the player arrives.
+	p.preprocess = 4.0
+	# Generous AABB so the iso camera doesn't cull the fog plane.
+	var wh := ctx.theme.wall_height
+	p.visibility_aabb = AABB(
+		Vector3(-size_x * 0.6, 0.0, -size_z * 0.6),
+		Vector3(size_x * 1.2, wh * 0.5, size_z * 1.2))
+
+	var mat := ParticleProcessMaterial.new()
+	mat.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	# Thin emission slab at floor level, spanning ~90% of the room footprint
+	# so fog doesn't spawn flush against walls.
+	mat.emission_box_extents = Vector3(size_x * 0.45, 0.04, size_z * 0.45)
+	mat.direction = Vector3(0, 1, 0)
+	mat.spread = 25.0
+	mat.initial_velocity_min = 0.02
+	mat.initial_velocity_max = 0.08
+	mat.gravity = Vector3.ZERO
+	mat.scale_min = 1.4
+	mat.scale_max = 2.4
+	mat.turbulence_enabled = true
+	mat.turbulence_noise_strength = 0.35
+	mat.turbulence_noise_speed_random = 0.2
+	mat.turbulence_noise_speed = Vector3(0.05, 0.02, 0.05)
+	# Fade in over the first 20% of life, hold, fade out over the last 30%.
+	# Without this each sprite pops in/out hard at the lifetime edges.
+	var gradient := Gradient.new()
+	gradient.set_color(0, Color(1, 1, 1, 0))
+	gradient.set_color(1, Color(1, 1, 1, 0))
+	gradient.add_point(0.2, Color(1, 1, 1, 1))
+	gradient.add_point(0.7, Color(1, 1, 1, 1))
+	var gradient_tex := GradientTexture1D.new()
+	gradient_tex.gradient = gradient
+	mat.color_ramp = gradient_tex
+	p.process_material = mat
+
+	# Soft billboard quad — relies on lighting for shadow/specular hits.
+	var mesh := QuadMesh.new()
+	mesh.size = Vector2(1.0, 1.0)
+	var draw_mat := StandardMaterial3D.new()
+	draw_mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+	draw_mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	# Cool, low-saturation grey-blue. Alpha tuned low so a few overlapping
+	# sprites build density without one solitary sprite reading as opaque.
+	draw_mat.albedo_color = Color(0.42, 0.46, 0.52, 0.16)
+	draw_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	draw_mat.disable_receive_shadows = false
+	mesh.material = draw_mat
+	p.draw_pass_1 = mesh
+
+	p.transform.origin = center
+	ctx.root.add_child(p)
+	# Hidden when the room is offscreen — GPUParticles3D stops drawing AND
+	# simulating when visibility inherits false, so fog in distant rooms
+	# costs nothing.
+	p.add_to_group(&"room_geometry")
 
 
 # Per-room ambient dust particles — subtle floating motes that catch the
