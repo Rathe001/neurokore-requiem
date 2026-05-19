@@ -35,6 +35,23 @@ class_name LevelTheme
 @export var wall_material_alt: Material
 @export var floor_material_alt: Material
 
+# Per-theme procedural-shader tints. When wall_material/floor_material are
+# null and the procedural shader path is active (see build_context), each
+# theme spawns its own ShaderMaterial instance carrying these uniforms on
+# top of the shared structural base. Variants should be SUBTLE — the goal
+# is family resemblance across rooms (a slightly warmer/cooler/dustier
+# variant of the same industrial steel), not wholesale palette swaps.
+# Defaults are identity = renders the neutral base.
+@export_group("Procedural Surface Tint")
+@export var wall_tint: Color = Color(1.0, 1.0, 1.0)
+@export_range(-0.5, 0.5, 0.01) var wall_wear_offset: float = 0.0
+@export_range(-0.3, 0.3, 0.01) var wall_metallic_offset: float = 0.0
+@export_range(-0.3, 0.3, 0.01) var wall_roughness_offset: float = 0.0
+@export var floor_tint: Color = Color(1.0, 1.0, 1.0)
+@export_range(-0.5, 0.5, 0.01) var floor_wear_offset: float = 0.0
+@export_range(-0.3, 0.3, 0.01) var floor_metallic_offset: float = 0.0
+@export_range(-0.3, 0.3, 0.01) var floor_roughness_offset: float = 0.0
+
 @export_group("FPS Fog")
 @export var fps_fog_density: float = 0.35
 @export var fps_fog_color: Color = Color(0.002, 0.003, 0.006)

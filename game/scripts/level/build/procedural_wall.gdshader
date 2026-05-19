@@ -97,6 +97,40 @@ uniform float rivet_radius : hint_range(0.0, 0.2) = 0.035;
 uniform float rivet_height : hint_range(0.0, 0.1) = 0.02;
 uniform vec3 rivet_color : source_color = vec3(0.42, 0.44, 0.48);
 
+// ── Architectural trim ───────────────────────────────────────────────────
+// Universal trim features that frame every wall. Identical across all
+// themes — they're the structural silhouette, not a per-zone variation.
+// Skipped on floors (no vertical extent to anchor against).
+//
+// Baseboard: a darker, slightly recessed band at the bottom of every wall.
+// Catches grime; reads as the kick-plate / dirt-line you find in any
+// industrial corridor. Disable with baseboard_height = 0.
+uniform float baseboard_height : hint_range(0.0, 0.5) = 0.18;
+uniform float baseboard_bevel : hint_range(0.0, 0.1) = 0.02;
+uniform float baseboard_recess : hint_range(0.0, 0.05) = 0.008;
+uniform float baseboard_roughness_boost : hint_range(0.0, 0.6) = 0.22;
+uniform vec3 baseboard_color : source_color = vec3(0.11, 0.12, 0.14);
+// Chair rail: a thin raised band running horizontally at chair_rail_y.
+// Acts as a horizontal silhouette break across every wall — the single
+// feature that does the most to stop "slab of metal" reads. Profile is
+// a smooth bell so it catches a thin specular highlight at iso angles.
+// Disable with chair_rail_thickness = 0.
+uniform float chair_rail_y : hint_range(0.5, 2.5) = 1.05;
+uniform float chair_rail_thickness : hint_range(0.0, 0.2) = 0.06;
+uniform float chair_rail_lip : hint_range(0.0, 0.05) = 0.012;
+uniform vec3 chair_rail_color : source_color = vec3(0.34, 0.36, 0.40);
+
+// ── Theme tints ──────────────────────────────────────────────────────────
+// Per-zone modulation off the base. Defaults are identity so theme=null
+// (or any theme that doesn't set these) renders the neutral base. Keep
+// deltas SUBTLE — the goal is family resemblance across rooms, not
+// wholesale palette swaps. Hard transitions only happen at corridor
+// boundaries (corridors stay on the neutral base by design).
+uniform vec3 tint_color : source_color = vec3(1.0, 1.0, 1.0);
+uniform float wear_offset : hint_range(-0.5, 0.5) = 0.0;
+uniform float metallic_offset : hint_range(-0.3, 0.3) = 0.0;
+uniform float roughness_offset : hint_range(-0.3, 0.3) = 0.0;
+
 varying vec3 v_world_pos;
 varying vec3 v_world_normal;
 
@@ -129,15 +163,45 @@ float fbm2(vec2 p) {
 	return vnoise(p) * 0.6 + vnoise(p * 2.3 + 17.0) * 0.4;
 }
 
+// Returns a 1-at-center, 0-at-edges trapezoidal mask for the chair rail at
+// world height `world_y`. Centered on `chair_rail_y`, total band thickness
+// `chair_rail_thickness`. Smooth transitions on each side so the gradient
+// reads as a bevel rather than a step.
+float chair_rail_mask(float world_y) {
+	if (chair_rail_thickness <= 0.0) {
+		return 0.0;
+	}
+	float rail_half = chair_rail_thickness * 0.5;
+	float rail_dist = abs(world_y - chair_rail_y);
+	return 1.0 - smoothstep(rail_half * 0.55, rail_half, rail_dist);
+}
+
+
+// Returns a 1-below, 0-above mask for the baseboard at world height
+// `world_y`. Smoothstep gives a bevel at the top edge so the normal kicks
+// outward (catches a thin highlight) where the baseboard meets the panel
+// face above.
+float baseboard_mask(float world_y) {
+	if (baseboard_height <= 0.0) {
+		return 0.0;
+	}
+	return 1.0 - smoothstep(baseboard_height, baseboard_height + baseboard_bevel, world_y);
+}
+
+
 // Surface height field. Combines:
 //   - Seam depression (negative h, runs around panel edges)
 //   - Raised border lip (positive h, sits just inside the seam)
 //   - Rivet domes (positive h, 4 per panel at inset corners)
+//   - Chair rail (positive h, horizontal band — walls only)
+//   - Baseboard recess (negative h, lower band — walls only)
 //
+// `is_wall` gates the trim contributions; floors share the shader but
+// don't have a meaningful vertical anchor for baseboard/chair rail.
 // Returns the world-space height offset from the geometric plane. Used
 // both by the albedo blend (deciding what color a fragment is) and the
 // finite-difference normal perturbation (gradient-based bevel direction).
-float surface_height(vec2 wall_uv) {
+float surface_height(vec2 wall_uv, bool is_wall) {
 	vec2 panel = vec2(panel_size_x, panel_size_y);
 	vec2 cell_uv = fract(wall_uv / panel);
 	vec2 edge_dist01 = min(cell_uv, 1.0 - cell_uv);
@@ -177,6 +241,15 @@ float surface_height(vec2 wall_uv) {
 		h += dome * dome * rivet_height;
 	}
 
+	// Trim — walls only. wall_uv.y IS world_y for walls (see fragment
+	// shader's wall_uv assignment); for floors we'd be reading world_z
+	// there, which doesn't correspond to "up" so trim is meaningless.
+	if (is_wall) {
+		float world_y = wall_uv.y;
+		h += chair_rail_mask(world_y) * chair_rail_lip;
+		h -= baseboard_mask(world_y) * baseboard_recess;
+	}
+
 	return h;
 }
 
@@ -205,6 +278,8 @@ void fragment() {
 	float min_edge = min(edge_dist_m.x, edge_dist_m.y);
 	float seam_t = smoothstep(seam_width, seam_width + seam_bevel, min_edge);
 
+	bool is_wall = !is_floor;
+
 	// ── Normal perturbation ────────────────────────────────────────────
 	// Sample the surface height field at three nearby points and finite-
 	// difference for the gradient. Sample spacing matters: it has to be
@@ -212,9 +287,9 @@ void fragment() {
 	// we resolve the ramp, but not so small that we hit floating-point
 	// precision issues. 5mm is a good compromise.
 	float eps = 0.005;
-	float h_c = surface_height(wall_uv);
-	float h_dx = surface_height(wall_uv + vec2(eps, 0.0));
-	float h_dy = surface_height(wall_uv + vec2(0.0, eps));
+	float h_c = surface_height(wall_uv, is_wall);
+	float h_dx = surface_height(wall_uv + vec2(eps, 0.0), is_wall);
+	float h_dy = surface_height(wall_uv + vec2(0.0, eps), is_wall);
 	float dhdx = (h_dx - h_c) / eps;
 	float dhdy = (h_dy - h_c) / eps;
 
@@ -250,8 +325,10 @@ void fragment() {
 	vec3 panel_albedo = base_color * (1.0 + jitter);
 
 	// Surface wear: 2-octave noise darkens random patches. Stylized as
-	// dirt/oxidation on the steel face.
-	float wear = fbm2(wall_uv * wear_noise_scale);
+	// dirt/oxidation on the steel face. `wear_offset` lets a theme dial
+	// the overall grime amount up or down so adjacent zones can read as
+	// "newer" vs "more decayed" without changing the wear pattern itself.
+	float wear = clamp(fbm2(wall_uv * wear_noise_scale) + wear_offset, 0.0, 1.0);
 	panel_albedo = mix(panel_albedo, panel_albedo * 0.55, wear * wear_albedo_strength);
 
 	// Compose albedo: seam → panel face, then layer border lip and rivets
@@ -296,17 +373,34 @@ void fragment() {
 		* splotch_strength;
 	composed = mix(composed, splotch_color, splotch);
 
+	// Trim — recolor the baseboard and chair rail bands AFTER splotches so
+	// trim reads as architectural (clean, defined) on top of the grime
+	// rather than being eaten by it. Walls only — masks return 0 on
+	// floors anyway via the surface_height gate, but we early-out here to
+	// avoid pointlessly mixing.
+	float trim_baseboard = is_wall ? baseboard_mask(wall_uv.y) : 0.0;
+	float trim_chair = is_wall ? chair_rail_mask(wall_uv.y) : 0.0;
+	composed = mix(composed, baseboard_color, trim_baseboard);
+	composed = mix(composed, chair_rail_color, trim_chair);
+
 	// Pixel-scale micro-noise on the final albedo. Centered on 0 (no net
 	// brightness shift), high frequency. Breaks up uniform regions just
 	// enough for the engine's debanding dither to blend in.
 	float micro = vnoise(wall_uv * micro_albedo_scale) - 0.5;
-	ALBEDO = composed * (1.0 + micro * 2.0 * micro_albedo_strength);
+	// Theme tint applied last — multiplicative, identity = vec3(1).
+	ALBEDO = composed * tint_color * (1.0 + micro * 2.0 * micro_albedo_strength);
 
 	// ── PBR ────────────────────────────────────────────────────────────
 	// Metallic only on the panel face — dirt in the seams kills the
 	// specular response there. Splotches reduce metallic further (grime
-	// is non-metallic).
-	METALLIC = metallic_value * seam_t * (1.0 - splotch * 0.8);
-	// Roughness shifts up with wear AND with splotches — grime is matte.
-	ROUGHNESS = clamp(roughness_value + wear * roughness_wear + splotch * 0.35, 0.0, 1.0);
+	// is non-metallic). Baseboard is dirty paint → no metal response.
+	// Theme tint adds a small offset (default 0).
+	METALLIC = clamp(metallic_value * seam_t * (1.0 - splotch * 0.8)
+			* (1.0 - trim_baseboard * 0.9) + metallic_offset, 0.0, 1.0);
+	// Roughness shifts up with wear, splotches, and baseboard grime.
+	// Theme can dial overall roughness up/down via roughness_offset.
+	ROUGHNESS = clamp(roughness_value + roughness_offset
+			+ wear * roughness_wear
+			+ splotch * 0.35
+			+ trim_baseboard * baseboard_roughness_boost, 0.0, 1.0);
 }

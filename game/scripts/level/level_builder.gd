@@ -112,17 +112,23 @@ func _build_level() -> void:
 	LightingBuilder.configure_fps_fog(_ctx)
 
 	for piece: LevelPiece in _pieces:
-		# Apply per-piece theme override (if any) for the duration of the
-		# build, then restore the layout default. Resolution order:
+		# Apply per-piece theme override (rooms only) for the duration of
+		# the build, then restore the layout default. Resolution order:
 		# piece.theme_override (per-instance, set by generator/solver) wins
-		# over RoomDef.theme_override / CorridorDef.theme_override
-		# (template-level). Null at every layer = leave the active theme.
-		var override: LevelTheme = piece.theme_override
-		if override == null:
-			if piece.room != null and piece.room.theme_override != null:
+		# over RoomDef.theme_override (template-level). Null at every layer
+		# = leave the active theme.
+		#
+		# Corridors deliberately ignore theme overrides — they always
+		# render with layout.theme so the corridor visual is consistent
+		# across the level and palette transitions only happen at the
+		# corridor↔room threshold (where the doorway is the visual focus).
+		# If a corridor needs a different look, set the layout's base
+		# theme rather than per-corridor overrides.
+		var override: LevelTheme = null
+		if piece.room != null:
+			override = piece.theme_override
+			if override == null and piece.room.theme_override != null:
 				override = piece.room.theme_override
-			elif piece.corridor != null and piece.corridor.theme_override != null:
-				override = piece.corridor.theme_override
 		if override != null:
 			_ctx.apply_theme(override)
 
