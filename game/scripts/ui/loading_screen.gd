@@ -52,20 +52,32 @@ func _ready() -> void:
 	set_process(false)
 
 
-## Static helper for change_scene_to_file transitions. Adds a LoadingScreen
-## as a direct child of get_tree().root (NOT current_scene) so it survives
-## the scene swap, then immediately shows it. PrototypeRoot._ready dismisses
-## it after the new level builds. Caller is expected to await one frame
-## before invoking change_scene_to_file so the cover renders before the
-## new scene's _ready chain locks the main thread.
-static func cover_scene_transition(title: String = "DESCENDING", subtitle: String = "Loading") -> LoadingScreen:
-	var screen := LoadingScreen.new()
+## Single-call helper for change_scene_to_file transitions. Adds a
+## LoadingScreen to tree.root (NOT current_scene, so it survives the swap),
+## yields for two frames so the cover actually paints before the new
+## scene's _ready chain locks the main thread, then triggers the scene
+## change. Caller should `await` so it doesn't run any code that depends
+## on the old scene after returning.
+##
+## PrototypeRoot._ready dismisses any LoadingScreen in the &"loading_screen"
+## group once its setup completes, so callers don't have to clean up.
+static func transition_to_scene(scene_path: String, title: String = "DESCENDING", subtitle: String = "Loading") -> void:
 	var tree := Engine.get_main_loop() as SceneTree
 	if tree == null:
-		return screen
+		return
+	var screen := LoadingScreen.new()
 	tree.root.add_child(screen)
 	screen.show_loading(title, subtitle)
-	return screen
+	# Two render frames before kicking off the scene change. One frame is
+	# necessary so the layer paints; the second buys a margin in case the
+	# user has v-sync stalls or the previous scene's _process happened to
+	# add deferred work that defers rendering by another tick. Without
+	# this, the cover only paints AFTER the new scene's _ready hitch
+	# finishes — which is exactly when we want it to be GONE, not
+	# starting to fade out.
+	await tree.process_frame
+	await tree.process_frame
+	tree.change_scene_to_file(scene_path)
 
 
 func show_loading(title: String = "DESCENDING", subtitle: String = "Generating sub-level") -> void:

@@ -1493,7 +1493,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		_set_crouch(true)
 		get_viewport().set_input_as_handled()
 	elif event.is_action_released(&"crouch"):
-		_set_crouch(false)
+		# Don't call _set_crouch(false) here — its ceiling probe queries
+		# direct_space_state, which is null under threaded physics when
+		# called from input context (crashes with "intersect_shape on null").
+		# The auto-uncrouch path in _physics_process (line ~1394) polls
+		# Input.is_physical_key_pressed(KEY_CTRL) every physics tick and
+		# handles the release safely from a physics-step context. The
+		# ~16ms delay between input release and uncrouch is imperceptible.
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed(&"toggle_view") and BuildInfo.dev_tools_enabled():
 		_handle_toggle_view()
@@ -3559,6 +3565,13 @@ func _would_hit_ceiling_if_standing() -> bool:
 	if _stand_test_shape == null:
 		return false
 	var space := get_world_3d().direct_space_state
+	# Threaded physics: direct_space_state is null when accessed outside the
+	# physics step. Callers reach this from input contexts via _set_crouch,
+	# so we have to fail-open here. The auto-uncrouch path in _physics_process
+	# re-tests every tick, so a "stood up under a ceiling" state immediately
+	# self-corrects on the next physics frame.
+	if space == null:
+		return false
 	var query := PhysicsShapeQueryParameters3D.new()
 	query.shape = _stand_test_shape
 	# Centre the slab probe between the top of the crouch capsule and

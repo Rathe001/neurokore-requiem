@@ -244,5 +244,4 @@ func _on_game_starting() -> void:
 
 
 func _change_to_game_scene() -> void:
-	LoadingScreen.cover_scene_transition()
-	get_tree().change_scene_to_file(GAME_SCENE)
+	LoadingScreen.transition_to_scene(GAME_SCENE)
