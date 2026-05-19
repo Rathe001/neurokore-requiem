@@ -116,7 +116,7 @@ static func create_fog_volume(ctx: LevelBuildContext, center: Vector3, size_x: f
 	# halo-through-wall artifact like the old un-shaded fog had.
 	var fog := FogVolume.new()
 	fog.name = &"GroundFog"
-	fog.shape = FogVolume.SHAPE_BOX
+	fog.shape = RenderingServer.FOG_VOLUME_SHAPE_BOX
 	# Concentration height — fog ceiling sits ~1.4m above the floor (the
 	# shader fades density above that anyway, so this is the rendering
 	# upper bound, not the visual one).
