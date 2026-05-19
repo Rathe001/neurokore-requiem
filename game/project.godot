@@ -118,16 +118,20 @@ move_right={
 [physics]
 
 3d/physics_engine="Jolt Physics"
-3d/run_on_separate_thread=true
+; 3d/run_on_separate_thread = true caused a freeze on level entry —
+; level builder + navmesh bake make synchronous physics queries during
+; _ready, which can deadlock with Jolt on its own thread. Leaving Jolt
+; on (already a big perf win on its own) and parking threaded physics
+; until we can audit the build path for sync queries.
 
 [rendering]
 
 textures/canvas_textures/default_texture_filter=0
 textures/default_filters/anisotropic_filtering_level=4
 anti_aliasing/quality/msaa_3d=2
-anti_aliasing/quality/use_taa=true
 anti_aliasing/quality/use_debanding=true
 environment/defaults/default_clear_color=Color(0.05, 0.05, 0.08, 1)
+anti_aliasing/quality/use_taa=true
 
 [shader_globals]
 
