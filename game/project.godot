@@ -17,14 +17,12 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 config/name="Neurokore: Requiem"
 run/main_scene="res://scenes/ui/startup_screen.tscn"
 config/features=PackedStringArray("4.6", "Forward Plus")
-config/icon="res://assets/ui/game.png"
-config/windows_native_icon="res://assets/ui/game.ico"
-config/macos_native_icon="res://assets/ui/game.icns"
 boot_splash/bg_color=Color(0.02, 0.025, 0.035, 1)
-boot_splash/image="res://assets/ui/logo-transparent.png"
-boot_splash/fullsize=false
-boot_splash/use_filter=true
-boot_splash/show_image=true
+boot_splash/stretch_mode=0
+boot_splash/image="res://assets/ui/boot_splash.png"
+config/icon="res://assets/ui/game.png"
+config/macos_native_icon="res://assets/ui/game.icns"
+config/windows_native_icon="res://assets/ui/game.ico"
 
 [audio]
 
