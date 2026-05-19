@@ -43,24 +43,42 @@ const _BONES: Array[Array] = [
 const _META_KEY: StringName = &"xbot_ragdoll_setup"
 
 
-## Adds PhysicalBone3D children to `skeleton` for each major Mixamo bone.
+static var _logged_bones: bool = false
+
+
+## Adds PhysicalBone3D children to `skeleton` for each major bone.
 ## Idempotent — sets a meta flag so a second call (e.g. enemy re-acquired
 ## from EntityPool) skips re-creating the bones.
+##
+## Tolerates two skeleton naming conventions:
+##   - Raw Mixamo:           "mixamorig_Hips", "mixamorig_LeftArm", ...
+##   - Humanoid profile:     "Hips", "LeftUpperArm", ...
+## The BoneMap retargeter sometimes rewrites the skeleton's bone names to
+## the SkeletonProfileHumanoid set, so we look up each entry under both
+## possible names.
 static func setup(skeleton: Skeleton3D) -> void:
 	if skeleton == null:
 		return
 	if skeleton.has_meta(_META_KEY):
 		return
+	if not _logged_bones:
+		var all_names: Array[String] = []
+		for i in range(skeleton.get_bone_count()):
+			all_names.append(skeleton.get_bone_name(i))
+		print("[XBotRagdoll] Skeleton has %d bones: %s" % [skeleton.get_bone_count(), all_names])
+		_logged_bones = true
+	var bones_attached := 0
 	for entry in _BONES:
-		var bone_name: StringName = entry[0]
+		var preferred: StringName = entry[0]
 		var mass: float = entry[1]
 		var radius: float = entry[2]
 		var joint_type: int = entry[3]
-		var bone_idx: int = skeleton.find_bone(bone_name)
+		var bone_idx: int = _find_bone_either(skeleton, preferred)
 		if bone_idx < 0:
 			continue
+		var actual_name := skeleton.get_bone_name(bone_idx)
 		var pb := PhysicalBone3D.new()
-		pb.bone_name = String(bone_name)
+		pb.bone_name = actual_name
 		pb.mass = mass
 		pb.joint_type = joint_type
 		# Layer 6 (Corpses) so the ragdoll collides with World only — live
@@ -75,7 +93,44 @@ static func setup(skeleton: Skeleton3D) -> void:
 		col.shape = caps
 		pb.add_child(col)
 		skeleton.add_child(pb)
+		bones_attached += 1
+	print("[XBotRagdoll] Attached %d PhysicalBone3D(s)" % bones_attached)
 	skeleton.set_meta(_META_KEY, true)
+
+
+# Looks for `preferred` on the skeleton; if missing, tries the equivalent
+# SkeletonProfileHumanoid name (LeftArm → LeftUpperArm, LeftLeg →
+# LeftLowerLeg, etc.) and the bare name with the "mixamorig_" prefix
+# stripped. Returns the matched bone index or -1.
+static func _find_bone_either(skeleton: Skeleton3D, preferred: StringName) -> int:
+	var idx := skeleton.find_bone(preferred)
+	if idx >= 0:
+		return idx
+	var stripped := String(preferred).replace("mixamorig_", "")
+	idx = skeleton.find_bone(stripped)
+	if idx >= 0:
+		return idx
+	# Mixamo → humanoid profile name translations.
+	const _MAP: Dictionary = {
+		"mixamorig_Spine1": "Chest",
+		"mixamorig_Spine2": "UpperChest",
+		"mixamorig_LeftArm": "LeftUpperArm",
+		"mixamorig_LeftForeArm": "LeftLowerArm",
+		"mixamorig_RightArm": "RightUpperArm",
+		"mixamorig_RightForeArm": "RightLowerArm",
+		"mixamorig_LeftUpLeg": "LeftUpperLeg",
+		"mixamorig_LeftLeg": "LeftLowerLeg",
+		"mixamorig_LeftFoot": "LeftFoot",
+		"mixamorig_RightUpLeg": "RightUpperLeg",
+		"mixamorig_RightLeg": "RightLowerLeg",
+		"mixamorig_RightFoot": "RightFoot",
+	}
+	var profile_name: String = _MAP.get(String(preferred), "")
+	if profile_name != "":
+		idx = skeleton.find_bone(profile_name)
+		if idx >= 0:
+			return idx
+	return -1
 
 
 ## Flips the skeleton into physics-driven mode. Every PhysicalBone3D
