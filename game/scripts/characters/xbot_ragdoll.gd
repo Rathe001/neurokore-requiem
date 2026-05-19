@@ -184,8 +184,8 @@ static func activate(skeleton: Skeleton3D, kill_from: Vector3 = Vector3.ZERO, ki
 		if not (child is PhysicalBone3D):
 			continue
 		var pb := child as PhysicalBone3D
-		var name := pb.bone_name
-		if name.contains("Hips") or name.contains("Spine"):
+		var bone_name_str: String = pb.bone_name
+		if bone_name_str.contains("Hips") or bone_name_str.contains("Spine"):
 			pb.apply_central_impulse(impulse)
 
 
