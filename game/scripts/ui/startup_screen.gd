@@ -25,10 +25,6 @@ var _mp_button: Button
 var _post_select_target: String = "sp"
 
 func _ready() -> void:
-	# Splash phase used a borderless transparent window so the logo's alpha
-	# channel showed the desktop through. Restore the OS frame + opacity
-	# now that the title scene is taking over.
-	_restore_window_chrome()
 	theme = UIThemeState.theme
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	# Title screen BGM. No-op if Music autoload reports the same track
@@ -42,6 +38,14 @@ func _ready() -> void:
 	_build_multiplayer_panels()
 	_build_version_stamp()
 	_show_main()
+	# Chrome restore is deferred until after the first scene frame draws.
+	# Restoring earlier (top of _ready) makes the window opaque BEFORE the
+	# boot-splash hand-off, leaving a beat where the splash image still
+	# renders but its transparent bg_color reads as black on the now-opaque
+	# window — visible as a fullscreen logo on black before the menu.
+	# Waiting for frame_post_draw ensures the title scene is already on
+	# screen when the chrome and opacity come back.
+	_defer_restore_window_chrome()
 	UIThemeState.changed.connect(_on_theme_changed)
 	# Lobby creation / join results drive the MP transition. The host's
 	# create-result triggers an immediate start_game (no waiting room);
@@ -64,12 +68,11 @@ func _exit_tree() -> void:
 
 # The project starts with a borderless, per-pixel-transparent window so the
 # boot splash image's alpha channel shows the desktop through (no OS chrome
-# around the logo). This restores standard window chrome / opacity once the
-# title scene takes over — game itself runs framed and opaque like normal.
-# DisplayServer.window_set_flag is the runtime-safe way to flip these; the
-# equivalent Window properties (borderless / transparent) work too but
-# are inconsistent across Godot 4 patch versions.
-func _restore_window_chrome() -> void:
+# around the logo). The title scene drawing its first frame is the trigger
+# to swap back to a normal framed opaque window — restoring sooner leaves
+# the splash visible on an already-opaque window for a beat (logo on black).
+func _defer_restore_window_chrome() -> void:
+	await RenderingServer.frame_post_draw
 	DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_BORDERLESS, false)
 	DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_TRANSPARENT, false)
 
