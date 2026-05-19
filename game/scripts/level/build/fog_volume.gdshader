@@ -43,8 +43,12 @@ uniform float march_step_size : hint_range(0.05, 0.5) = 0.08;
 // reads as patchy wisps drifting across clear ground instead of a
 // uniform blanket. wisp_softness widens the smoothstep band so the wisp
 // edges feather instead of being hard-clipped.
-uniform float wisp_threshold : hint_range(0.0, 1.0) = 0.55;
-uniform float wisp_softness : hint_range(0.01, 0.5) = 0.22;
+// Threshold against the RIDGE field (post-1-abs(2n-1) transform), which
+// has values concentrated in the upper half. 0.75 keeps only the
+// thin filament cores; lower it for thicker streaks, raise toward
+// 0.9 for only the wispiest threads.
+uniform float wisp_threshold : hint_range(0.0, 1.0) = 0.75;
+uniform float wisp_softness : hint_range(0.01, 0.5) = 0.12;
 uniform float player_radius : hint_range(0.5, 5.0) = 1.6;
 uniform float player_strength : hint_range(0.0, 1.0) = 0.85;
 // Hard cap on the final alpha. Lowered to keep the wisp-mode look
@@ -97,27 +101,39 @@ float fbm3(vec3 p) {
 
 // Density at an arbitrary world-space sample point inside the fog box.
 // Result is in [0, 1] — caller integrates it along the view ray.
-// Two noise layers drifting at different speeds + directions so they cross
-// each other and read as swirling fog rather than uniform pan.
 //
-// The noise field is then thresholded with smoothstep so only its peaks
-// contribute density: most of the volume returns 0 (clear ground),
-// patches above wisp_threshold ramp up to full density. That's the
-// "sparse wisps" look — discrete drifting cloud shapes rather than a
-// uniform blanket.
+// Three transforms to get smoke-like long thin wisps instead of fBM
+// blob-clouds:
+//   1. Anisotropic stretch — sample with vec3(0.35, 1.0, 1.5) scale, so
+//      features are ~4× longer along world X than world Z. The "long
+//      thin" axis is X (the same axis the time drift flows down), giving
+//      wind-blown smoke streaks.
+//   2. Domain warping — distort the sample position by a second
+//      lower-frequency fBM. Without this, the stretched noise reads as
+//      parallel straight lines; with it the streaks curve and tangle
+//      like actual smoke.
+//   3. Ridge transform — `1 - abs(2n - 1)` converts the noise's smooth
+//      blobs into thin peaked ridges. The resulting field looks like
+//      filaments rather than puffs.
 float sample_density_at(vec3 wp) {
 	float y_t = clamp(wp.y / max(0.01, fog_top), 0.0, 1.0);
 	float h = pow(1.0 - y_t, falloff);
-	vec3 npos_a = wp * noise_scale + vec3(
+	vec3 base = wp * vec3(0.35, 1.0, 1.5) * noise_scale;
+	vec3 anim = vec3(
 		TIME * noise_speed,
 		TIME * noise_speed * 0.25,
 		TIME * noise_speed * 0.4);
-	vec3 npos_b = wp * noise_scale * 1.7 + vec3(
-		-TIME * noise_speed * 0.7,
-		TIME * noise_speed * 0.55,
-		TIME * noise_speed * 1.1);
-	float n = fbm3(npos_a) * 0.6 + fbm3(npos_b) * 0.4;
-	float wisp = smoothstep(wisp_threshold, wisp_threshold + wisp_softness, n);
+	vec3 p = base + anim;
+	// Domain warp: 3 fBM samples at lower frequency give per-component
+	// offset to the actual lookup, bending the streaks.
+	vec3 warp = vec3(
+		fbm3(p * 0.55),
+		fbm3(p * 0.55 + vec3(7.2, 1.3, 4.7)),
+		fbm3(p * 0.55 + vec3(2.9, 5.4, 8.1)));
+	float n = fbm3(p + (warp - 0.5) * 1.6);
+	// Ridge transform: collapse smooth blobs into thin filaments.
+	float ridge = 1.0 - abs(n * 2.0 - 1.0);
+	float wisp = smoothstep(wisp_threshold, wisp_threshold + wisp_softness, ridge);
 	vec3 to_player = wp - player_world_pos;
 	to_player.y = 0.0;
 	float player_t = smoothstep(0.0, player_radius, length(to_player));
