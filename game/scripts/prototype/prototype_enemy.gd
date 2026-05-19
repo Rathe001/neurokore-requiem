@@ -403,6 +403,13 @@ func _ready() -> void:
 	_visuals.name = &"EnemyVisuals"
 	_visuals.setup(self)
 	add_child(_visuals)
+	# X Bot uses external animation FBXs (Mixamo workflow — one anim per
+	# file). Merge them into a named library on this enemy's AnimationPlayer
+	# so the candidate-array lookup in _play_anim can find them via
+	# "xbot/idle", "xbot/punch", etc. No-op for legacy UAL1 enemies; their
+	# animations come from the FBX directly and the library install just
+	# adds an unused namespace.
+	XBotAnimations.install_on(anim_player)
 	_init_enemy()
 	_setup_hover()
 

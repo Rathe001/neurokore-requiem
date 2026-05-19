@@ -6,7 +6,7 @@
 ; Visual differentiation beyond the floor ring is a polish pass.
 
 [ext_resource type="Script" path="res://scripts/prototype/prototype_enemy.gd" id="script_enemy"]
-[ext_resource type="PackedScene" path="res://art/3d/characters/quaternius/UAL1_Standard.glb" id="char_model"]
+[ext_resource type="PackedScene" path="res://assets/characters/x_bot/X Bot.fbx" id="char_model"]
 [ext_resource type="Shader" path="res://scripts/prototype/health_bar.gdshader" id="shader_health_bar"]
 [ext_resource type="Resource" path="res://resources/enemies/classes/basic_ranged.tres" id="class_basic_ranged"]
 
