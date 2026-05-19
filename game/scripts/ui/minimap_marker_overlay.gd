@@ -24,7 +24,10 @@ class_name MinimapMarkerOverlay
 const SWITCH_RADIUS_ACTIVE := 4.0
 const SWITCH_RADIUS_USED := 2.5
 const EXIT_RADIUS := 5.5
-const DOOR_SIZE := 4.0  # side length of the square door marker
+## Door marker is a thin bar oriented along the wall (door's local Z axis in
+## world space). Length sits in the wall plane; thickness juts perpendicular.
+const DOOR_BAR_LENGTH := 10.0
+const DOOR_BAR_THICKNESS := 3.0
 
 const SWITCH_COLOR_ACTIVE := Color(1.0, 0.85, 0.2, 1.0)
 const SWITCH_COLOR_USED := Color(0.45, 0.45, 0.45, 0.85)
@@ -78,7 +81,13 @@ func _draw() -> void:
 		elif node is PrototypeSwitch:
 			_draw_switch(pos, (node as PrototypeSwitch).is_used())
 		elif node is PrototypeDoor:
-			_draw_door(pos, (node as PrototypeDoor).is_locked())
+			# Door's local +Z is the wall's length direction (rotation_degrees.y
+			# of 0 keeps it along world Z; 90 rotates it onto world X). Project
+			# that to map space using the same iso basis the position uses so
+			# the bar lies flat against the wall pixels.
+			var wall_dir3: Vector3 = node.global_transform.basis.z
+			var wall_dir := Vector2(wall_dir3.dot(project_right), -wall_dir3.dot(project_up))
+			_draw_door(pos, wall_dir, (node as PrototypeDoor).is_locked())
 
 
 # Per-class visibility gate. Doors are special-cased: an open door has no
@@ -129,8 +138,21 @@ func _draw_exit(pos: Vector2, locked: bool) -> void:
 	draw_colored_polygon(pts, col)
 
 
-func _draw_door(pos: Vector2, locked: bool) -> void:
+func _draw_door(pos: Vector2, wall_dir: Vector2, locked: bool) -> void:
 	var col: Color = DOOR_COLOR_LOCKED if locked else DOOR_COLOR_CLOSED
 	col.a *= opacity
-	var half := DOOR_SIZE * 0.5
-	draw_rect(Rect2(pos - Vector2(half, half), Vector2(DOOR_SIZE, DOOR_SIZE)), col, true)
+	var dir: Vector2 = wall_dir
+	if dir.length_squared() < 0.0001:
+		dir = Vector2.RIGHT
+	else:
+		dir = dir.normalized()
+	var perp := Vector2(-dir.y, dir.x)
+	var half_len: float = DOOR_BAR_LENGTH * 0.5
+	var half_thk: float = DOOR_BAR_THICKNESS * 0.5
+	var corners := PackedVector2Array([
+		pos + dir * half_len + perp * half_thk,
+		pos + dir * half_len - perp * half_thk,
+		pos - dir * half_len - perp * half_thk,
+		pos - dir * half_len + perp * half_thk,
+	])
+	draw_colored_polygon(corners, col)
