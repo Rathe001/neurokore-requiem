@@ -134,15 +134,12 @@ static func create_fog_volume(ctx: LevelBuildContext, center: Vector3, size_x: f
 	mi.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
 	ctx.root.add_child(mi)
 	# room_geometry → LoS culler hides the fog when the room is offscreen,
-	# saving the per-fragment raymarch on a never-visible room. The
-	# explored_only group adds a second gate so fog never bleeds out of an
-	# unexplored adjacent room — without it the room next door reads as
-	# foggy through the doorway before the player has even entered it.
+	# saving the per-fragment raymarch on a never-visible room. We
+	# previously gated fog on explored state too, but the cut at the
+	# doorway between an explored and an unexplored room read worse than
+	# just letting fog drift into the next room — the player wants the
+	# atmospheric continuity, not a fog-stops-here line.
 	mi.add_to_group(&"room_geometry")
-	mi.add_to_group(&"explored_only")
-	# Start invisible. LosCuller flips it on the first physics tick once
-	# the player's room is resolved and the explored set is checked.
-	mi.visible = false
 
 
 # Per-room ambient dust particles — subtle floating motes that catch the

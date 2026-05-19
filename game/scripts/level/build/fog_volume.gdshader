@@ -14,12 +14,21 @@
 //      around the player so the fog visibly opens up where they walk.
 
 shader_type spatial;
+// Dropped `unshaded`: with it, the fog rendered as a uniform gradient
+// and looked artificial. Without it, the room's ceiling fluorescents
+// tint and brighten the fog directly — bright under lit fixtures,
+// dimmer in shadowed corners, color-shifted toward each room's
+// LightColor. We override NORMAL to world-up below so the lighting is
+// driven by overhead lights regardless of which face of the box this
+// fragment lives on (otherwise the box's vertical side faces would
+// catch sideways light and read as walls again).
+//
 // cull_disabled (was cull_back): when the camera is inside the box —
-// crouched FPS, camera at 0.7m, box extends 0.02m–0.47m — every face is
+// crouched FPS, camera at 0.7m, box extends 0.02m–0.92m — every face is
 // back-facing from inside, so cull_back rendered nothing. Disabling
 // culling renders both faces; the visible inner faces from a crouched
 // view give the player a tinted-around-them haze.
-render_mode unshaded, blend_mix, cull_disabled, depth_draw_never;
+render_mode blend_mix, cull_disabled, depth_draw_never;
 
 uniform vec3 fog_color : source_color = vec3(0.62, 0.66, 0.74);
 uniform float density : hint_range(0.0, 8.0) = 1.1;
@@ -138,5 +147,15 @@ void fragment() {
 	vec2 dist_xz = box_half_extents_xz - abs(local_xz);
 	float edge_t = smoothstep(0.0, edge_fade, min(dist_xz.x, dist_xz.y));
 	ALBEDO = fog_color;
+	// Force the fragment's lighting normal to world-up regardless of which
+	// face of the BoxMesh it lives on. Without this, side faces would
+	// catch sideways light and read as lit vertical walls; with it every
+	// fog pixel responds to overhead fluorescents the way a horizontal
+	// layer of mist would. NORMAL in the fragment shader is view-space,
+	// so we apply VIEW_MATRIX to the world-up vector.
+	NORMAL = mat3(VIEW_MATRIX) * vec3(0.0, 1.0, 0.0);
+	// Pure diffuse — fog has no specular highlights.
+	ROUGHNESS = 1.0;
+	METALLIC = 0.0;
 	ALPHA = alpha * max_alpha * edge_t;
 }
