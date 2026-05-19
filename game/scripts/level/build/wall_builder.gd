@@ -741,6 +741,48 @@ static func _add_mitred_segment(st: SurfaceTool, so: Vector3, si: Vector3, eo: V
 	_add_oriented_vquad(st, si, ei, si - so, h)
 	# Top quad: walk the segment perimeter CCW from +Y (outer→outer→inner→inner).
 	_quad_top(st, so, eo, ei, si, h)
+	# Mitre end caps — diagonal quads that close the open ends of the
+	# trapezoid volume. Without these the trapezoid is hollow on the two
+	# mitre diagonals; at room corners, two perpendicular walls' open
+	# mitres coincide on the same diagonal seam and the iso 45° camera
+	# can look straight down that slot into the hollow wall interior
+	# and out the open bottom. With caps in place, every wall is a
+	# closed solid; adjacent caps coincide on the seam and z-fight
+	# invisibly (same procedural shader, same world UVs → same colour).
+	_add_mitre_cap(st, so, si, h)
+	_add_mitre_cap(st, eo, ei, h)
+
+
+# Closes the open mitre end of a trapezoidal wall — a vertical quad
+# spanning from the outer corner to the inner corner of the mitre,
+# extruded up to h. Normal direction is the mitre bisector pointing
+# outward from the room (so backface culling keeps the cap visible from
+# outside; inside it's hidden by the inner face anyway). Two adjacent
+# walls' caps land on the same plane and z-fight invisibly — both render
+# identical world-aligned panel UVs through the procedural shader.
+static func _add_mitre_cap(st: SurfaceTool, outer: Vector3, inner: Vector3, h: float) -> void:
+	# Mitre bisector: average of the two halves of the diagonal direction,
+	# rotated 90° in XZ so it points perpendicular to the mitre line. For a
+	# 45° room corner this lands at the diagonal outward direction.
+	var dir := outer - inner
+	# Rotate (dx, dz) → (dz, -dx) to get a perpendicular in the XZ plane.
+	var n := Vector3(dir.z, 0.0, -dir.x).normalized()
+	# Make sure the normal points AWAY from the room centre. Heuristic: the
+	# outer corner is further from origin than the inner; the normal should
+	# have a positive dot with (outer.x, 0, outer.z) - (inner.x, 0, inner.z)
+	# averaged with the corner's outward direction. Simpler: take whichever
+	# of ±n has a positive dot with the outer-corner position relative to
+	# the segment midpoint.
+	var midpoint := (outer + inner) * 0.5
+	if n.dot(outer - midpoint) < 0.0:
+		n = -n
+	# _vquad's winding produces normal = (br - bl) × UP. Pick the order of
+	# (outer, inner) that matches our desired n.
+	var test := (inner - outer).cross(Vector3.UP)
+	if test.dot(n) < 0.0:
+		_vquad(st, inner, outer, h)
+	else:
+		_vquad(st, outer, inner, h)
 
 
 # Adds a vertical quad spanning from `a` to `b` at the base (extruded
