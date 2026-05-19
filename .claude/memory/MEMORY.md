@@ -13,7 +13,7 @@
 - [Level debug viz toggle](project_level_debug_viz.md) — `LevelBuilder.USE_DEBUG_LEVEL_VIZ` swaps kit-bash for procedural emissive-border geometry; flip and reload to verify alignment
 - [Kit panel scaling](project_kit_panel_scaling.md) — kit walls/floors cache raw + visual AABBs; raw drives MMI scale math, visual drives tile spacing
 - [Kit model axis conventions](project_kit_model_axis_conventions.md) — Blenderkit imports vary in which local axis is height; rotation chain in WallBuilder has to match per-model; watch for single-use scene-sets (e.g. wall+doorway combos) that aren't tileable
-- [Kit panel mitre pending](project_kit_panel_corner_mitre_pending.md) — `kit_panel_post_import.gd` now auto-normalizes wall/floor `.glb`s on import; corner mitre via shader clip is the next step (needed for arena-with-inner-room outer-wall visibility)
+- [Kit panel corner mitre](project_kit_panel_corner_mitre.md) — 45° INSTANCE_CUSTOM shader clip is built end-to-end (shader + post-import + MMI custom_data); dormant until a theme's wall_model points at a kit panel .glb
 - [Level system architecture roadmap](project_level_architecture.md) — 3 layers: modular builders (done), declarative graph (done), procgen (deferred); new levels should use LevelGraph not pieces[]
 - [Zone lighting profiles](project_lighting_profiles.md) — proximity dim / global light behavior should be driven by per-zone profiles, not hardcoded constants (outdoor ≠ indoor)
 - [Enemy navigation systems](project_enemy_navigation.md) — crouch tunnels, pit-pillar nav links, leash override; navmesh agent_height MUST stay synced with enemy CROUCH_HEIGHT
