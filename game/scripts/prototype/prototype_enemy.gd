@@ -1723,10 +1723,16 @@ func _die(kill_from: Vector3 = Vector3.ZERO, kill_force: float = 0.0) -> void:
 	#     RigidBody3D capsule that tumbles together, hides the original.
 	var did_skeletal_ragdoll := false
 	if visual != null:
-		var skel := visual.find_child("Skeleton3D", true, false) as Skeleton3D
+		# Same recursive class-based search as _setup_ragdoll — the
+		# skeleton node isn't always named "Skeleton3D" depending on the
+		# FBX import, and find_child(name) would miss it.
+		var skel := _find_skeleton(visual)
 		if skel != null and skel.has_meta(&"xbot_ragdoll_setup"):
+			print("[XBotRagdoll] Activating physics simulation on skeleton")
 			XBotRagdoll.activate(skel)
 			did_skeletal_ragdoll = true
+		else:
+			print("[XBotRagdoll] No physical-bone skeleton on visual; falling back to rigid-body corpse")
 	if not did_skeletal_ragdoll:
 		_spawn_ragdoll_corpse(kill_from, kill_force)
 		if visual != null:
