@@ -100,23 +100,23 @@ static func setup(skeleton: Skeleton3D) -> void:
 		col.shape = caps
 		pb.add_child(col)
 		skeleton.add_child(pb)
-		# Tighten the cone constraint so limbs don't hyperextend — Godot's
-		# defaults are very permissive (~90° swing). 35° swing + 20°
-		# twist reads as "limbs hold roughly natural pose under gravity"
-		# without going fully rigid.
+		# Cone constraint shape. The cone is CENTERED on the bone's rest
+		# orientation (Mixamo bind pose = T-pose for X Bot), so its
+		# swing_span dictates how far each limb can deviate from
+		# T-pose before the constraint clamps. At 40° the cone was
+		# locking shoulders / hips before limbs could fully fall to
+		# natural rest positions, so corpses froze splayed flat on the
+		# floor.
 		#
-		# Critical: bias near zero, softness near one. The cone's REST
-		# pose is the skeleton's BIND pose (T-pose for Mixamo) — bias
-		# governs how hard the constraint pulls bones BACK to that rest.
-		# At bias 0.6 the corpse collapsed into T-pose on the floor
-		# because the joints kept dragging limbs toward bind. At 0.05
-		# the cone still LIMITS rotation but doesn't actively restore
-		# to it — corpses stay in whatever pose they landed in.
+		# At 90° swing the cone is wide enough that gravity actually
+		# pulls arms/legs to natural fallen angles before they clamp.
+		# bias=0 makes the cone purely a LIMIT (no active restoring
+		# pull toward T-pose); softness=1 disables the spring-back.
 		if joint_type == PhysicalBone3D.JOINT_TYPE_CONE:
-			pb.set("joint_constraints/swing_span", deg_to_rad(40.0))
-			pb.set("joint_constraints/twist_span", deg_to_rad(25.0))
-			pb.set("joint_constraints/bias", 0.05)
-			pb.set("joint_constraints/softness", 0.95)
+			pb.set("joint_constraints/swing_span", deg_to_rad(90.0))
+			pb.set("joint_constraints/twist_span", deg_to_rad(60.0))
+			pb.set("joint_constraints/bias", 0.0)
+			pb.set("joint_constraints/softness", 1.0)
 			pb.set("joint_constraints/relaxation", 1.0)
 		bones_attached += 1
 	print("[XBotRagdoll] Attached %d PhysicalBone3D(s)" % bones_attached)
@@ -170,6 +170,16 @@ static func _find_bone_either(skeleton: Skeleton3D, preferred: StringName) -> in
 static func activate(skeleton: Skeleton3D, kill_from: Vector3 = Vector3.ZERO, kill_force: float = 0.0) -> void:
 	if skeleton == null:
 		return
+	# Jolt only supports uniform scale on collision shapes. Mixamo bone
+	# bind matrices have tiny non-uniform scale residue (~0.99×1.01 etc)
+	# from FBX→Godot transform decomposition; without normalizing each
+	# PhysicalBone3D's basis here, Jolt spams a "_try_build_shape"
+	# warning for every bone every time simulation starts. Strip the
+	# scale by orthonormalizing the rotation portion of the basis.
+	for child in skeleton.get_children():
+		if child is PhysicalBone3D:
+			var pb := child as PhysicalBone3D
+			pb.transform.basis = pb.transform.basis.orthonormalized()
 	skeleton.physical_bones_start_simulation()
 	if kill_force <= 0.0:
 		return
