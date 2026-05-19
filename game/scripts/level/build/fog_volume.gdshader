@@ -43,15 +43,14 @@ uniform float march_step_size : hint_range(0.05, 0.5) = 0.08;
 // reads as patchy wisps drifting across clear ground instead of a
 // uniform blanket. wisp_softness widens the smoothstep band so the wisp
 // edges feather instead of being hard-clipped.
-uniform float wisp_threshold : hint_range(0.0, 1.0) = 0.5;
-uniform float wisp_softness : hint_range(0.01, 0.5) = 0.18;
+uniform float wisp_threshold : hint_range(0.0, 1.0) = 0.55;
+uniform float wisp_softness : hint_range(0.01, 0.5) = 0.22;
 uniform float player_radius : hint_range(0.5, 5.0) = 1.6;
 uniform float player_strength : hint_range(0.0, 1.0) = 0.85;
-// Hard cap on the final alpha so even the worst case (camera looking
-// edge-on through the long axis of the box) can't ever read as an opaque
-// wall. 0.5 lets denser ground-fog moments read clearly without producing
-// a vertical wall when viewed from outside.
-uniform float max_alpha : hint_range(0.0, 1.0) = 0.5;
+// Hard cap on the final alpha. Lowered to keep the wisp-mode look
+// atmospheric — a wisp peak should suggest mist drifting, not read as
+// a solid puff. Crank back up to ~0.5 for thicker ground fog.
+uniform float max_alpha : hint_range(0.0, 1.0) = 0.22;
 // Half-extents of the BoxMesh in local XZ. Set per-instance by the builder
 // via set_instance_shader_parameter — drives the edge fade so each room's
 // fog blends out at its boundary instead of having a hard rectangular
@@ -64,7 +63,7 @@ uniform float edge_fade : hint_range(0.05, 2.0) = 0.7;
 // Faint self-emission so wisps don't go fully black in unlit corners.
 // Scales with the wisp density so it only brightens the wisps themselves,
 // not the clear ground between them.
-uniform float emission_floor : hint_range(0.0, 0.5) = 0.04;
+uniform float emission_floor : hint_range(0.0, 0.5) = 0.02;
 
 global uniform vec3 player_world_pos;
 
