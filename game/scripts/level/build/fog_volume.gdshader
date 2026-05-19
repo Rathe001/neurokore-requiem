@@ -18,6 +18,12 @@ uniform float falloff : hint_range(0.5, 5.0) = 1.6;
 uniform float noise_scale : hint_range(0.05, 2.0) = 0.45;
 uniform float noise_speed : hint_range(0.0, 0.5) = 0.07;
 uniform vec3 fog_color : source_color = vec3(0.72, 0.76, 0.82);
+// Self-emission so the fog is visible WITHOUT any Light3D feeding the
+// volumetric pass. The wall-halo artifact came specifically from
+// `light_volumetric_fog_energy > 0` lights scattering through fog at
+// glancing wall edges; with all lights set to 0, fog rendered as black.
+// EMISSION sidesteps that — fog appears lit without any light source.
+uniform float emission_strength : hint_range(0.0, 5.0) = 1.4;
 uniform float player_radius : hint_range(0.5, 5.0) = 1.6;
 uniform float player_strength : hint_range(0.0, 1.0) = 0.9;
 
@@ -76,6 +82,11 @@ void fog() {
 	float player_t = smoothstep(0.0, player_radius, length(to_player));
 	float player_factor = mix(1.0 - player_strength, 1.0, player_t);
 
-	DENSITY = density_strength * height_factor * (0.45 + 0.55 * n) * player_factor;
+	float density = density_strength * height_factor * (0.45 + 0.55 * n) * player_factor;
+	DENSITY = density;
 	ALBEDO = fog_color;
+	// Self-emit scaled by density so denser regions appear brighter — same
+	// behaviour you'd get from a light scattering through the fog, but the
+	// energy comes from the fog itself, not a Light3D (avoiding the halo).
+	EMISSION = fog_color * emission_strength * height_factor;
 }
