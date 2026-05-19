@@ -296,6 +296,7 @@ static func _build_pit_floor_ooze(ctx: LevelBuildContext, center: Vector3, inner
 	ooze_light.omni_attenuation = 1.8
 	ooze_light.shadow_enabled = false
 	ooze_light.light_volumetric_fog_energy = 0.0
+	ooze_light.light_bake_mode = Light3D.BAKE_STATIC
 	ooze_light.position = center + Vector3(0.0, ooze_y + 0.5, 0.0)
 	ctx.root.add_child(ooze_light)
 	ooze_light.add_to_group(&"room_geometry")
@@ -381,6 +382,7 @@ static func _build_pit_floor_spikes(ctx: LevelBuildContext, center: Vector3, inn
 	rim.omni_attenuation = 1.8
 	rim.shadow_enabled = false
 	rim.light_volumetric_fog_energy = 0.0
+	rim.light_bake_mode = Light3D.BAKE_STATIC
 	rim.position = center + Vector3(0.0, floor_y + 0.4, 0.0)
 	ctx.root.add_child(rim)
 	rim.add_to_group(&"room_geometry")
@@ -458,6 +460,7 @@ static func _build_pillar_marker_light(ctx: LevelBuildContext, top_xz_center: Ve
 	light.spot_attenuation = 1.4
 	light.shadow_enabled = false
 	light.light_volumetric_fog_energy = 0.0
+	light.light_bake_mode = Light3D.BAKE_STATIC
 	light.position = Vector3(top_xz_center.x, ceiling_y, top_xz_center.z)
 	light.rotation_degrees = Vector3(-90.0, 0.0, 0.0)
 	ctx.root.add_child(light)

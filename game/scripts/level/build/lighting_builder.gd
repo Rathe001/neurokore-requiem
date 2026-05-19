@@ -52,6 +52,10 @@ static func create_fill_light(ctx: LevelBuildContext, center: Vector3, size_x: f
 	light.omni_attenuation = 2.0
 	light.shadow_enabled = false
 	light.light_volumetric_fog_energy = 0.0
+	# Feed SDFGI's indirect-light pass — fill lights are subtle ambient
+	# washes, so even their tiny contribution helps SDFGI find some color
+	# to bounce off the back walls of dim rooms.
+	light.light_bake_mode = Light3D.BAKE_STATIC
 	light.transform.origin = center + Vector3(0, 2.0, 0)
 	ctx.root.add_child(light)
 	# room_geometry → LoS culler hides this light when the room is 2+ hops
@@ -191,6 +195,13 @@ static func _create_ceiling_light(ctx: LevelBuildContext, pos: Vector3, lc: Ligh
 	# the room mist still gets its base density from the FogVolume itself
 	# but won't be lit by these lights.
 	light.light_volumetric_fog_energy = 0.0
+	# Feed SDFGI so this fluorescent contributes to bounced indirect light.
+	# STATIC means the light position/color is baked into the cascade once;
+	# the flicker still animates the DIRECT light per-frame, only the
+	# (softer, slower-changing) indirect bounce stays cached. Without this,
+	# SDFGI sees no light sources in the level and the indirect pass is
+	# pitch black, defeating the point of enabling SDFGI.
+	light.light_bake_mode = Light3D.BAKE_STATIC
 	fixture.add_child(light)
 
 	_randomize_flicker_profile(fixture)

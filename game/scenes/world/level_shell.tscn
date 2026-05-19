@@ -23,8 +23,15 @@ background_mode = 1
 background_color = Color(0.002, 0.003, 0.006, 1)
 tonemap_mode = 2
 tonemap_exposure = 1.0
-ambient_light_source = 0
-ambient_light_energy = 0.0
+; ambient_light_source = AMBIENT_SOURCE_COLOR (1). Used to be BG (0) +
+; energy=0, which left the scene pitch black wherever direct fluorescent
+; light didn't reach. SDFGI fills most of those crevices with bounced
+; indirect light, but the cascades take a second to build on level entry
+; and a tiny color floor keeps the scene readable in the meantime.
+ambient_light_source = 1
+ambient_light_color = Color(0.04, 0.05, 0.07, 1)
+ambient_light_sky_contribution = 0.0
+ambient_light_energy = 0.25
 glow_enabled = true
 glow_intensity = 0.7
 glow_strength = 1.0
@@ -55,21 +62,26 @@ volumetric_fog_albedo = Color(0.72, 0.76, 0.82, 1)
 volumetric_fog_emission = Color(0.0, 0.0, 0.0, 1)
 volumetric_fog_anisotropy = 0.3
 volumetric_fog_length = 40.0
-; SDFGI parked — turning it on darkened the scene almost completely.
-; The "dark by design" lighting balance (ambient_light_source = BG,
-; near-black background_color) means direct fluorescent light is doing
-; almost all the visible lifting. SDFGI on top of that, with the visual
-; wall geometry being thinner (~2.5cm panels) than a usable SDF cell
-; size, ends up neither providing meaningful indirect light NOR getting
-; correct occlusion — net effect was a fully-black scene.
+; SDFGI re-enabled. The previous attempt rendered black because:
+;   (1) all our static fluorescents had light_bake_mode = DISABLED, so
+;       SDFGI had zero light sources to bounce; and
+;   (2) ambient was sourced from a near-black BG, giving no floor to
+;       fall back to while cascades were still building.
+; Both fixed in this commit — ceiling fluorescents, fill lights, and pit
+; rims all get BAKE_STATIC in their respective builders, and the ambient
+; source above is now COLOR with a tiny floor energy.
 ;
-; To bring it back later: add invisible BoxMesh "GI proxies" matching
-; the collision-wall thickness on the LevelBuilder side (so the SDF
-; voxelization sees solid walls), drop sdfgi_min_cell_size to ~0.15,
-; and possibly switch ambient_light_source to AMBIENT_SOURCE_COLOR with
-; a small floor value so the scene degrades gracefully while cascades
-; build.
-sdfgi_enabled = false
+; Cell size 0.15 m is the smallest that comfortably fits in our 0.4 m
+; wall thickness (~2.7 cells thick — solid SDF surface) while still
+; leaving SDFGI cascade memory budgets reasonable. Going smaller starts
+; over-resolving and slows cascade rebuilds during procgen transitions.
+sdfgi_enabled = true
+sdfgi_min_cell_size = 0.15
+sdfgi_cascades = 4
+sdfgi_use_occlusion = true
+sdfgi_bounces = 2
+sdfgi_normal_bias = 1.1
+sdfgi_energy = 1.0
 
 ; agent_height matches the enemy CROUCH_HEIGHT (1.0) so the navmesh routes
 ; through low-ceiling crawlspaces. Enemies detect overhead clearance at run
