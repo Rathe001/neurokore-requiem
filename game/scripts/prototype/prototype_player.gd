@@ -1188,12 +1188,11 @@ func _process(delta: float) -> void:
 	if _is_remote_player():
 		return
 	RenderingServer.global_shader_parameter_set(PLAYER_WORLD_POS_PARAM, global_position)
-	if _fps_mode:
-		_fps_hover_timer -= delta
-		if _fps_hover_timer <= 0.0:
-			_fps_hover_timer = FPS_HOVER_INTERVAL
-			_update_fps_hover()
-	else:
+	# FPS hover used to run here, but its raycast errors under threaded
+	# physics ("Space state is inaccessible outside of physics process").
+	# The hover update was already throttled to FPS_HOVER_INTERVAL (~50ms),
+	# so polling it from _physics_process (60 Hz) is visually identical.
+	if not _fps_mode:
 		_update_interact_cursor()
 	_tick_fps_mouse_mode()
 
@@ -1242,6 +1241,16 @@ func _physics_process(delta: float) -> void:
 	_tick_channel(delta)
 	_tick_hammer_wind_up(delta)
 	_tick_footsteps()
+
+	# Throttled FPS crosshair hover (raycast against interactables). Has to
+	# live in _physics_process because Jolt's threaded mode forbids direct
+	# space-state queries from _process. Same FPS_HOVER_INTERVAL throttle as
+	# before — 60 Hz physics tick is finer-grained than the throttle anyway.
+	if _fps_mode:
+		_fps_hover_timer -= delta
+		if _fps_hover_timer <= 0.0:
+			_fps_hover_timer = FPS_HOVER_INTERVAL
+			_update_fps_hover()
 
 	var on_floor := is_on_floor()
 
