@@ -78,24 +78,27 @@ static func configure_fps_fog(ctx: LevelBuildContext) -> void:
 	env.fog_density = t.fps_fog_density
 
 
-# Per-room FogVolume — low-lying "dry ice" fog that hugs the floor.
-# A thin slab (FOG_HEIGHT) sitting at floor level gives the dungeon a
-# ground-mist look without filling the room with smoke.
-# The iso camera sits at y≈14 looking nearly straight down. A thin slab
-# has almost no optical depth from that angle. Two stacked layers fake a
-# density gradient: a dense thin slab on the floor for the FPS view, and
-# a taller, softer layer above it that gives the iso camera enough depth
-# to accumulate visible fog while staying visually floor-weighted.
-const FOG_FLOOR_HEIGHT := 0.15
-const FOG_FLOOR_DENSITY := 6.0
-const FOG_HAZE_HEIGHT := 0.5
-const FOG_HAZE_DENSITY := 1.5
+# Per-room mesh-based ground fog. A transparent BoxMesh inside the room
+# carries the fog_volume.gdshader spatial shader (raymarch + 3D noise);
+# Godot's standard transparency depth-test guarantees walls and pillars
+# cull any fragment behind them. Replaces the earlier FogVolume approach
+# which couldn't be contained because emission + bloom leaked past wall
+# edges regardless of bounds.
+#
+# Box sits just above the floor and stops well below the ceiling — that's
+# what makes it read as "ground fog" rather than "the room is full of
+# smoke." Bottom inset prevents z-fighting with the floor mesh; top stops
+# at FOG_BOX_HEIGHT so the raymarch's vertical fade band is fully inside
+# the box (otherwise the ray exits the box before density reaches zero
+# and you see a hard mesh edge).
+const FOG_BOX_HEIGHT := 1.6
+const FOG_BOX_BOTTOM := 0.02
 
 const _FOG_SHADER: Shader = preload("res://scripts/level/build/fog_volume.gdshader")
-# One shared FogMaterial across every room's FogVolume. ShaderMaterial uniforms
-# can be set per-instance via FogVolume.material_override if a specific room
-# wants different density/colour later; for now every room reads from the
-# same material so tuning is one place.
+# One ShaderMaterial shared across every room's fog box. Uniforms set on it
+# (density, fog_color, etc.) apply globally — tune once, every room reflects
+# the change. If a specific room ever needs custom values, set
+# material_override on its MeshInstance3D.
 static var _fog_material: ShaderMaterial = null
 
 
@@ -106,15 +109,30 @@ static func _get_fog_material() -> ShaderMaterial:
 	return _fog_material
 
 
-static func create_fog_volume(ctx: LevelBuildContext, _center: Vector3, _size_x: float, _size_z: float) -> void:
-	# Fog parked. The volumetric pipeline (FogVolume + custom fog shader)
-	# couldn't deliver "pitch black outside walls" — emission + HDR bloom
-	# leaked brightness past wall edges no matter the FogVolume bounds.
-	# Re-implementation path is mesh-based: a transparent BoxMesh inside
-	# the room with a custom spatial shader doing noise + alpha, where
-	# Godot's standard depth-test occlusion guarantees nothing renders
-	# behind solid walls.
-	return
+static func create_fog_volume(ctx: LevelBuildContext, center: Vector3, size_x: float, size_z: float) -> void:
+	# Inset the box so it stops short of the wall plane on every side.
+	# Without the inset, the box face coincides exactly with the inner wall
+	# face; at glancing angles the camera can see a faint visible seam where
+	# the transparent box edge meets the opaque wall — pulling in by a
+	# quarter cell hides it inside the wall's silhouette.
+	const INSET := 0.1
+	var box := BoxMesh.new()
+	box.size = Vector3(maxf(size_x - INSET * 2.0, 0.5), FOG_BOX_HEIGHT, maxf(size_z - INSET * 2.0, 0.5))
+	var mi := MeshInstance3D.new()
+	mi.mesh = box
+	mi.material_override = _get_fog_material()
+	# Lift the box up by half its height so its bottom sits at FOG_BOX_BOTTOM
+	# (slightly above floor y=0).
+	mi.transform.origin = Vector3(center.x, FOG_BOX_BOTTOM + FOG_BOX_HEIGHT * 0.5, center.z)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# Don't let SDFGI voxelize the fog as solid geometry — without DISABLED
+	# the fog box would carve a wall-shaped hole into the indirect lighting
+	# cascade.
+	mi.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+	ctx.root.add_child(mi)
+	# room_geometry → LoS culler hides the fog when the room is offscreen,
+	# saving the per-fragment raymarch on a never-visible room.
+	mi.add_to_group(&"room_geometry")
 
 
 # Per-room ambient dust particles — subtle floating motes that catch the
