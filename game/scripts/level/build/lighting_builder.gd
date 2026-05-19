@@ -110,12 +110,16 @@ static func _get_fog_material() -> ShaderMaterial:
 
 
 static func create_fog_volume(ctx: LevelBuildContext, center: Vector3, size_x: float, size_z: float) -> void:
-	# Inset the box so it stops short of the wall plane on every side. The
-	# edge fade in the shader handles the rest — fog dissolves smoothly
-	# inside the inset rather than stopping at a hard rectangle.
-	const INSET := 0.1
-	var box_sx := maxf(size_x - INSET * 2.0, 0.5)
-	var box_sz := maxf(size_z - INSET * 2.0, 0.5)
+	# Negative inset: each piece's fog box extends OUT past the wall plane
+	# by ~half the wall thickness. Walls clip the side faces (the player
+	# never sees them), but at doorways and corridor mouths adjacent
+	# boxes overlap, so the fog reads as continuous instead of stopping
+	# and restarting at the piece boundary. The edge_fade in the shader
+	# still gives a soft falloff but now the fade-out from one box meets
+	# the fade-in of the next under the doorway lintel.
+	const OVERHANG := 0.4
+	var box_sx := maxf(size_x + OVERHANG * 2.0, 0.5)
+	var box_sz := maxf(size_z + OVERHANG * 2.0, 0.5)
 	var box := BoxMesh.new()
 	box.size = Vector3(box_sx, FOG_BOX_HEIGHT, box_sz)
 	var mi := MeshInstance3D.new()

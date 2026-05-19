@@ -54,6 +54,12 @@ instance uniform vec2 box_half_extents_xz = vec2(2.0, 2.0);
 // from the box edge the fog is full strength; right at the edge alpha is
 // zero, smoothstep in between.
 uniform float edge_fade : hint_range(0.05, 2.0) = 0.7;
+// Faint self-emission so the fog doesn't go fully black in unlit corners
+// — without it, dim parts of the room (corridor mouths, far walls)
+// looked like the fog had simply stopped. A tiny baseline keeps the
+// volume readable everywhere the lit room is, fading naturally as the
+// floor itself fades into black.
+uniform float emission_floor : hint_range(0.0, 0.5) = 0.06;
 
 global uniform vec3 player_world_pos;
 
@@ -124,8 +130,15 @@ void fragment() {
 	// the BoxMesh's quad triangles, which made the diagonal triangle seam
 	// visible as a line across the fog surface from above.
 	vec3 view_dir_ws = normalize(world_pos - CAMERA_POSITION_WORLD);
+	// Per-pixel jitter for the raymarch start. Without this, adjacent
+	// pixels sample density at the same depths along their rays, and the
+	// step boundaries become visible as concentric / diagonal banding
+	// across the fog surface. Offsetting each pixel's first sample by a
+	// hash of its screen UV decorrelates the steps and the bands dissolve
+	// into film-grain-like noise.
+	float jitter = fract(sin(dot(SCREEN_UV, vec2(12.9898, 78.233))) * 43758.5453);
+	float t = jitter * march_step_size;
 	float accum = 0.0;
-	float t = 0.0;
 	for (int i = 0; i < march_steps; i++) {
 		vec3 sp = world_pos + view_dir_ws * t;
 		// Only early-out when the ray dips below the floor. height_factor
@@ -157,5 +170,9 @@ void fragment() {
 	// Pure diffuse — fog has no specular highlights.
 	ROUGHNESS = 1.0;
 	METALLIC = 0.0;
+	// Baseline emission scaled by the same density. Keeps the fog faintly
+	// visible everywhere the room itself is, then naturally fades to
+	// black as the room's floor fades into the void.
+	EMISSION = fog_color * emission_floor * alpha;
 	ALPHA = alpha * max_alpha * edge_t;
 }
