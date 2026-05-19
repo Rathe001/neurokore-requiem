@@ -1,9 +1,9 @@
-[gd_resource type="ShaderMaterial" load_steps=13 format=3 uid="uid://cxhaa6i7bto07"]
+[gd_resource type="ShaderMaterial" format=3 uid="uid://cxhaa6i7bto07"]
 
 [ext_resource type="Shader" uid="uid://bfrlkbjyfakqt" path="res://assets/vfx/explosion/ExplosionShader.tres" id="1_c4nbu"]
-[ext_resource type="Texture2D" uid="uid://cp7mt63pvqla" path="res://assets/vfx/explosion/normal+.png" id="2_b2ebq"]
-[ext_resource type="Texture2D" uid="uid://uyri6m5dwm7q" path="res://assets/vfx/explosion/normal-.png" id="3_rbvhi"]
-[ext_resource type="Texture2D" uid="uid://d20w6nd6rhnk1" path="res://assets/vfx/explosion/smokesprite.png" id="4_254cs"]
+[ext_resource type="Texture2D" uid="uid://c5i2ub1vthxvl" path="res://assets/vfx/explosion/normal+.png" id="2_b2ebq"]
+[ext_resource type="Texture2D" uid="uid://b2ggapowwq4ic" path="res://assets/vfx/explosion/normal-.png" id="3_rbvhi"]
+[ext_resource type="Texture2D" uid="uid://cwok6ydx5qbrj" path="res://assets/vfx/explosion/smokesprite.png" id="4_254cs"]
 
 [sub_resource type="Gradient" id="Gradient_3pf84"]
 offsets = PackedFloat32Array(0.13, 0.448, 0.724)
@@ -40,13 +40,14 @@ shader_parameter/particle_h_frames = 8.0
 shader_parameter/particle_v_frames = 8.0
 shader_parameter/particles_anim_loop = false
 shader_parameter/still_frame = -1.0
-shader_parameter/Soft_limit = 0.1
-shader_parameter/blend_scale = 0.1
-shader_parameter/emission_falloff_multiplier = 0.5
 shader_parameter/tex_frg_2 = ExtResource("4_254cs")
 shader_parameter/tex_frg_27 = SubResource("GradientTexture1D_xiex5")
 shader_parameter/tex_frg_24 = SubResource("GradientTexture1D_yjpaa")
+shader_parameter/Soft_limit = 0.1
+shader_parameter/blend_scale = 0.1
+shader_parameter/emission_falloff_multiplier = 0.5
 shader_parameter/tex_frg_25 = SubResource("GradientTexture1D_nfn0e")
 shader_parameter/tex_frg_26 = SubResource("GradientTexture1D_awksa")
 shader_parameter/tex_frg_16 = ExtResource("2_b2ebq")
 shader_parameter/tex_frg_17 = ExtResource("3_rbvhi")
+shader_parameter/alpha_multiplier = 1.0

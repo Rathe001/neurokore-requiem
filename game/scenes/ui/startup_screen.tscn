@@ -1,8 +1,10 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene format=3 uid="uid://bsml1wdqn0a6c"]
 
-[ext_resource type="Script" path="res://scripts/ui/startup_screen.gd" id="script_startup"]
+[ext_resource type="Script" uid="uid://co63o6s4d13hr" path="res://scripts/ui/startup_screen.gd" id="script_startup"]
 
-[node name="StartupScreen" type="Control"]
+[node name="StartupScreen" type="Control" unique_id=748237376]
+layout_mode = 3
+anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 script = ExtResource("script_startup")
