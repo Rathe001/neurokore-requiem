@@ -110,30 +110,32 @@ static func create_fog_volume(ctx: LevelBuildContext, center: Vector3, size_x: f
 	p.lifetime = 10.0
 	p.preprocess = 5.0
 	var wh := ctx.theme.wall_height
-	# Tight Y range — fog hugs the floor. Generous X/Z so the iso camera
-	# doesn't cull at the room edges.
+	# Visibility AABB pinned to room footprint — anything that escapes
+	# anyway (shouldn't happen, but defensive) gets culled instead of
+	# floating in the void around the room.
 	p.visibility_aabb = AABB(
-		Vector3(-size_x * 0.6, -0.1, -size_z * 0.6),
-		Vector3(size_x * 1.2, 0.8, size_z * 1.2))
+		Vector3(-size_x * 0.5, -0.1, -size_z * 0.5),
+		Vector3(size_x, wh, size_z))
 
 	var mat := ParticleProcessMaterial.new()
 	mat.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-	# Emit across the full room footprint at floor level. Thicker slab
-	# than wisps (0.15 vs 0.04) so particles span a small Y range and
-	# stack visually instead of laying in one plane.
-	mat.emission_box_extents = Vector3(size_x * 0.45, 0.15, size_z * 0.45)
-	# Very slow drift — fog should look almost still, not actively rising.
+	# Emit with a larger margin from the walls (0.4 instead of 0.45) so
+	# turbulence doesn't push fresh particles past the wall plane before
+	# collision response kicks in.
+	mat.emission_box_extents = Vector3(size_x * 0.40, 0.15, size_z * 0.40)
+	# Very slow drift — fog should look almost still.
 	mat.direction = Vector3(0, 1, 0)
 	mat.spread = 15.0
 	mat.initial_velocity_min = 0.0
-	mat.initial_velocity_max = 0.04
+	mat.initial_velocity_max = 0.03
 	mat.gravity = Vector3.ZERO
 	# Wide discs — overlap each other to form continuous coverage.
 	mat.scale_min = 1.8
 	mat.scale_max = 3.0
-	# Slow horizontal turbulence — particles meander, don't shoot up.
+	# Slow horizontal turbulence — particles meander, don't shoot up or
+	# escape past walls.
 	mat.turbulence_enabled = true
-	mat.turbulence_noise_strength = 0.15
+	mat.turbulence_noise_strength = 0.10
 	mat.turbulence_noise_speed_random = 0.1
 	mat.turbulence_noise_speed = Vector3(0.03, 0.01, 0.03)
 	# Collision so particles bounce off walls instead of drifting through.
@@ -203,23 +205,27 @@ static func create_fog_volume(ctx: LevelBuildContext, center: Vector3, size_x: f
 
 
 static func _create_fog_walls(ctx: LevelBuildContext, center: Vector3, size_x: float, size_z: float, wh: float) -> void:
-	# `extents` for GPUParticlesCollisionBox3D is half-size. The walls sit
-	# OUTSIDE the room (at +/- half-size + a small margin) and are thin in
-	# the perpendicular axis, tall enough to clip rising particles too.
+	# GPUParticlesCollisionBox3D uses SDF-based collision. Two failure
+	# modes if the boxes are too thin: (a) fast particles tunnel through
+	# in one frame, (b) the SDF voxelization sees only ~1 voxel of solid
+	# at the wall plane and the gradient is noisy. 0.5m thick + full
+	# wall height fixes both, and an extra 0.5m above the wall stops
+	# particles from drifting over the top.
 	var hx: float = size_x * 0.5
 	var hz: float = size_z * 0.5
-	var thin: float = 0.05
-	var height: float = wh * 0.5
+	var thick: float = 0.5
+	var box_h: float = wh + 1.0  # Full wall height + extra clearance.
+	var box_y: float = box_h * 0.5 - 0.5  # Bottom slightly below floor.
 	var configs: Array[Dictionary] = [
-		{"pos": Vector3(0, height * 0.5, -hz), "ext": Vector3(hx, height, thin)},  # N
-		{"pos": Vector3(0, height * 0.5,  hz), "ext": Vector3(hx, height, thin)},  # S
-		{"pos": Vector3( hx, height * 0.5, 0), "ext": Vector3(thin, height, hz)},  # E
-		{"pos": Vector3(-hx, height * 0.5, 0), "ext": Vector3(thin, height, hz)},  # W
+		{"pos": Vector3(0, box_y, -hz), "ext": Vector3(hx, box_h * 0.5, thick * 0.5)},  # N
+		{"pos": Vector3(0, box_y,  hz), "ext": Vector3(hx, box_h * 0.5, thick * 0.5)},  # S
+		{"pos": Vector3( hx, box_y, 0), "ext": Vector3(thick * 0.5, box_h * 0.5, hz)},  # E
+		{"pos": Vector3(-hx, box_y, 0), "ext": Vector3(thick * 0.5, box_h * 0.5, hz)},  # W
 	]
 	for cfg in configs:
 		var collider := GPUParticlesCollisionBox3D.new()
-		collider.size = cfg["ext"] * 2.0  # `size` is full, our extents are half
-		collider.position = center + cfg["pos"]
+		collider.size = (cfg["ext"] as Vector3) * 2.0
+		collider.position = center + (cfg["pos"] as Vector3)
 		ctx.root.add_child(collider)
 		collider.add_to_group(&"room_geometry")
 
