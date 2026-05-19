@@ -422,11 +422,37 @@ func _ready() -> void:
 
 func _setup_ragdoll() -> void:
 	if visual == null:
+		print("[XBotRagdoll] _setup_ragdoll: visual is null")
 		return
-	var skel := visual.find_child("Skeleton3D", true, false) as Skeleton3D
+	# Find ANY Skeleton3D in the visual subtree — the FBX's Skeleton3D
+	# might not be named exactly "Skeleton3D" after the BoneMap retarget
+	# (some Godot versions rename it).
+	var skel := _find_skeleton(visual)
 	if skel == null:
+		print("[XBotRagdoll] _setup_ragdoll: no Skeleton3D under visual; children: ", _list_children(visual))
 		return
 	XBotRagdoll.setup(skel)
+
+
+# Walks a Node3D subtree looking for any Skeleton3D. find_child requires
+# matching the node name; for FBX imports the skeleton node may use a
+# different name depending on the source (e.g. "Armature", "GeneralSkeleton").
+func _find_skeleton(root: Node) -> Skeleton3D:
+	if root is Skeleton3D:
+		return root as Skeleton3D
+	for child in root.get_children():
+		var found := _find_skeleton(child)
+		if found != null:
+			return found
+	return null
+
+
+# Diagnostic-only: returns the immediate children's names for printing.
+func _list_children(root: Node) -> Array[String]:
+	var names: Array[String] = []
+	for child in root.get_children():
+		names.append("%s (%s)" % [child.name, child.get_class()])
+	return names
 
 func _init_enemy() -> void:
 	_generation += 1
