@@ -91,7 +91,7 @@ static func configure_fps_fog(ctx: LevelBuildContext) -> void:
 # at FOG_BOX_HEIGHT so the raymarch's vertical fade band is fully inside
 # the box (otherwise the ray exits the box before density reaches zero
 # and you see a hard mesh edge).
-const FOG_BOX_HEIGHT := 0.45
+const FOG_BOX_HEIGHT := 0.9
 const FOG_BOX_BOTTOM := 0.02
 
 const _FOG_SHADER: Shader = preload("res://scripts/level/build/fog_volume.gdshader")
@@ -134,8 +134,15 @@ static func create_fog_volume(ctx: LevelBuildContext, center: Vector3, size_x: f
 	mi.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
 	ctx.root.add_child(mi)
 	# room_geometry → LoS culler hides the fog when the room is offscreen,
-	# saving the per-fragment raymarch on a never-visible room.
+	# saving the per-fragment raymarch on a never-visible room. The
+	# explored_only group adds a second gate so fog never bleeds out of an
+	# unexplored adjacent room — without it the room next door reads as
+	# foggy through the doorway before the player has even entered it.
 	mi.add_to_group(&"room_geometry")
+	mi.add_to_group(&"explored_only")
+	# Start invisible. LosCuller flips it on the first physics tick once
+	# the player's room is resolved and the explored set is checked.
+	mi.visible = false
 
 
 # Per-room ambient dust particles — subtle floating motes that catch the

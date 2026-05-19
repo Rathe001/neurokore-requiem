@@ -22,19 +22,20 @@ shader_type spatial;
 render_mode unshaded, blend_mix, cull_disabled, depth_draw_never;
 
 uniform vec3 fog_color : source_color = vec3(0.62, 0.66, 0.74);
-uniform float density : hint_range(0.0, 8.0) = 0.55;
-uniform float fog_top : hint_range(0.05, 5.0) = 0.32;
-uniform float falloff : hint_range(0.5, 6.0) = 2.8;
-uniform float noise_scale : hint_range(0.05, 2.0) = 0.5;
-uniform float noise_speed : hint_range(0.0, 0.5) = 0.08;
-uniform int march_steps : hint_range(4, 64) = 20;
+uniform float density : hint_range(0.0, 8.0) = 1.1;
+uniform float fog_top : hint_range(0.05, 5.0) = 0.65;
+uniform float falloff : hint_range(0.5, 6.0) = 2.4;
+uniform float noise_scale : hint_range(0.05, 2.0) = 0.55;
+uniform float noise_speed : hint_range(0.0, 0.5) = 0.11;
+uniform int march_steps : hint_range(4, 64) = 24;
 uniform float march_step_size : hint_range(0.05, 0.5) = 0.08;
 uniform float player_radius : hint_range(0.5, 5.0) = 1.6;
 uniform float player_strength : hint_range(0.0, 1.0) = 0.85;
 // Hard cap on the final alpha so even the worst case (camera looking
 // edge-on through the long axis of the box) can't ever read as an opaque
-// wall. 0.32 keeps the fog readable but firmly subordinate to the floor.
-uniform float max_alpha : hint_range(0.0, 1.0) = 0.32;
+// wall. 0.5 lets denser ground-fog moments read clearly without producing
+// a vertical wall when viewed from outside.
+uniform float max_alpha : hint_range(0.0, 1.0) = 0.5;
 // Half-extents of the BoxMesh in local XZ. Set per-instance by the builder
 // via set_instance_shader_parameter — drives the edge fade so each room's
 // fog blends out at its boundary instead of having a hard rectangular

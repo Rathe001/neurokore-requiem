@@ -325,6 +325,14 @@ func _physics_process(_delta: float) -> void:
 		# appear to float in void.
 		var geom_room: StringName = ExplorationState.room_at_world(geom.global_position)
 		var should_hide := player_room != &"" and not ExplorationState.rooms_geometry_visible_together(player_room, geom_room)
+		# explored_only: an extra gate for things that shouldn't reveal an
+		# unexplored room's contents through an open doorway — fog boxes
+		# in particular, since seeing fog in the next room before you've
+		# stepped into it spoils the "this area is unknown" feeling. The
+		# room's walls / floor stay visible (they're physically there),
+		# but the fog itself waits for the player to actually enter.
+		if not should_hide and geom_room != &"" and geom.is_in_group(&"explored_only") and not ExplorationState.is_explored(geom_room):
+			should_hide = true
 		if geom.visible == should_hide:
 			geom.visible = not should_hide
 	# Interactibles — static (doors, switches, crates). Re-raycast only when the
