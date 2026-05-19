@@ -102,40 +102,15 @@ static func _get_fog_material() -> ShaderMaterial:
 	return _fog_material
 
 
-static func create_fog_volume(ctx: LevelBuildContext, center: Vector3, size_x: float, size_z: float) -> void:
-	# Volumetric ground fog via a FogVolume + custom shader_type fog
-	# material. The FogVolume is a 3D BOX bound; the volumetric pass
-	# never samples outside it, so containment is geometric, not a
-	# collision-tunneling situation like the previous particle attempt.
-	#
-	# Density is 3D-noise modulated for the "dry-ice billowing" look,
-	# concentrated near the floor via a height falloff, and parted by the
-	# player via a global shader uniform (player_world_pos) updated each
-	# frame from PrototypePlayer. No Light3D feeds the volumetric pass
-	# (light_volumetric_fog_energy stays at 0 everywhere), so there's no
-	# halo-through-wall artifact like the old un-shaded fog had.
-	var fog := FogVolume.new()
-	fog.name = &"GroundFog"
-	fog.shape = RenderingServer.FOG_VOLUME_SHAPE_BOX
-	# Concentration height — fog ceiling sits ~1.4m above the floor (the
-	# shader fades density above that anyway, so this is the rendering
-	# upper bound, not the visual one).
-	var fog_height: float = 1.6
-	# Shrink the volume by wall_thickness on each XZ axis so it sits
-	# strictly INSIDE the inner wall faces. The walls then geometrically
-	# occlude any fog voxel from being seen from outside the room — fixes
-	# the halo we get when the volume extends to the wall centerline (or
-	# past it) and voxels near the wall outer face render visible against
-	# the void.
-	var thick: float = ctx.theme.wall_thickness
-	fog.size = Vector3(maxf(0.1, size_x - thick), fog_height, maxf(0.1, size_z - thick))
-	# Centre the box vertically so its bottom face sits at world y = 0.
-	fog.position = center + Vector3(0, fog_height * 0.5, 0)
-	fog.material = _get_fog_material()
-	ctx.root.add_child(fog)
-	# room_geometry → LoS-culled with the rest of the room geometry, so
-	# offscreen rooms cost nothing in the volumetric pass.
-	fog.add_to_group(&"room_geometry")
+static func create_fog_volume(ctx: LevelBuildContext, _center: Vector3, _size_x: float, _size_z: float) -> void:
+	# Fog parked. The volumetric pipeline (FogVolume + custom fog shader)
+	# couldn't deliver "pitch black outside walls" — emission + HDR bloom
+	# leaked brightness past wall edges no matter the FogVolume bounds.
+	# Re-implementation path is mesh-based: a transparent BoxMesh inside
+	# the room with a custom spatial shader doing noise + alpha, where
+	# Godot's standard depth-test occlusion guarantees nothing renders
+	# behind solid walls.
+	return
 
 
 # Per-room ambient dust particles — subtle floating motes that catch the
