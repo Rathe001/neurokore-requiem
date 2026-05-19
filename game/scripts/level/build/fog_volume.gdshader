@@ -17,15 +17,19 @@ shader_type spatial;
 render_mode unshaded, blend_mix, cull_back, depth_draw_never;
 
 uniform vec3 fog_color : source_color = vec3(0.62, 0.66, 0.74);
-uniform float density : hint_range(0.0, 8.0) = 1.4;
-uniform float fog_top : hint_range(0.1, 5.0) = 0.5;
-uniform float falloff : hint_range(0.5, 5.0) = 2.2;
-uniform float noise_scale : hint_range(0.05, 2.0) = 0.45;
+uniform float density : hint_range(0.0, 8.0) = 0.55;
+uniform float fog_top : hint_range(0.05, 5.0) = 0.32;
+uniform float falloff : hint_range(0.5, 6.0) = 2.8;
+uniform float noise_scale : hint_range(0.05, 2.0) = 0.5;
 uniform float noise_speed : hint_range(0.0, 0.5) = 0.06;
-uniform int march_steps : hint_range(4, 64) = 24;
-uniform float march_step_size : hint_range(0.05, 0.5) = 0.12;
+uniform int march_steps : hint_range(4, 64) = 20;
+uniform float march_step_size : hint_range(0.05, 0.5) = 0.08;
 uniform float player_radius : hint_range(0.5, 5.0) = 1.6;
 uniform float player_strength : hint_range(0.0, 1.0) = 0.85;
+// Hard cap on the final alpha so even the worst case (camera looking
+// edge-on through the long axis of the box) can't ever read as an opaque
+// wall. 0.35 keeps the fog readable but firmly subordinate to the floor.
+uniform float max_alpha : hint_range(0.0, 1.0) = 0.32;
 
 global uniform vec3 player_world_pos;
 
@@ -75,33 +79,34 @@ float sample_density_at(vec3 wp) {
 }
 
 varying vec3 world_pos;
-varying vec3 view_dir_ws;
 
 void vertex() {
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
-	view_dir_ws = normalize(world_pos - CAMERA_POSITION_WORLD);
 }
 
 void fragment() {
+	// Compute view direction per-fragment instead of interpolating from
+	// vertex output — the previous setup interpolated view_dir_ws across
+	// the BoxMesh's quad triangles, which made the diagonal triangle seam
+	// visible as a line across the fog surface from above.
+	vec3 view_dir_ws = normalize(world_pos - CAMERA_POSITION_WORLD);
 	float accum = 0.0;
 	float t = 0.0;
 	for (int i = 0; i < march_steps; i++) {
 		vec3 sp = world_pos + view_dir_ws * t;
-		// Only early-out when the ray dips below the floor. The earlier
-		// "break above fog_top" check killed the iso top-face entry entirely
-		// (the camera enters the box at y > fog_top and immediately broke
-		// before sampling), so the floor fog never rendered from above. The
-		// height_factor inside sample_density_at returns 0 outside fog_top
-		// anyway, so wasted steps above the fog band contribute nothing.
+		// Only early-out when the ray dips below the floor. height_factor
+		// inside sample_density_at returns 0 outside fog_top so wasted
+		// steps above the fog band contribute nothing — we just keep
+		// marching until we exit the bottom.
 		if (sp.y < -0.05) {
 			break;
 		}
 		accum += sample_density_at(sp) * march_step_size;
 		t += march_step_size;
 	}
-	// Beer-Lambert-style alpha so dense regions read as solid without
-	// hard-clipping at 1.0.
+	// Beer-Lambert alpha, then clamped by max_alpha so edge-on views can't
+	// produce wall-opaque results.
 	float alpha = clamp(1.0 - exp(-accum * density), 0.0, 1.0);
 	ALBEDO = fog_color;
-	ALPHA = alpha;
+	ALPHA = alpha * max_alpha;
 }

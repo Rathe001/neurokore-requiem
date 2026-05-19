@@ -91,7 +91,7 @@ static func configure_fps_fog(ctx: LevelBuildContext) -> void:
 # at FOG_BOX_HEIGHT so the raymarch's vertical fade band is fully inside
 # the box (otherwise the ray exits the box before density reaches zero
 # and you see a hard mesh edge).
-const FOG_BOX_HEIGHT := 1.0
+const FOG_BOX_HEIGHT := 0.45
 const FOG_BOX_BOTTOM := 0.02
 
 const _FOG_SHADER: Shader = preload("res://scripts/level/build/fog_volume.gdshader")
