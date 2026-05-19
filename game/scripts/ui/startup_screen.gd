@@ -373,6 +373,7 @@ func _change_to_game_scene() -> void:
 	var tree := get_tree()
 	if tree == null:
 		return
+	LoadingScreen.cover_scene_transition()
 	tree.change_scene_to_file(GAME_SCENE)
 
 func _show_single_player() -> void:
@@ -399,6 +400,7 @@ func _on_character_selected(save_id: String) -> void:
 		# member-list metadata.
 		_show_global_chat()
 	else:
+		LoadingScreen.cover_scene_transition()
 		get_tree().change_scene_to_file(GAME_SCENE)
 
 
@@ -440,6 +442,7 @@ func _on_start_pressed() -> void:
 	if _post_select_target == "mp":
 		_show_global_chat()
 	else:
+		LoadingScreen.cover_scene_transition()
 		get_tree().change_scene_to_file(GAME_SCENE)
 
 

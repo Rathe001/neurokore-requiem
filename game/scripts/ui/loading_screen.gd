@@ -38,6 +38,11 @@ var _hiding: bool = false
 
 
 func _ready() -> void:
+	# Group membership lets PrototypeRoot dismiss any LoadingScreen on the
+	# tree from a single call_group, regardless of who created it (the
+	# rebuild path here, or the cross-scene cover_scene_transition helper
+	# that survives change_scene_to_file).
+	add_to_group(&"loading_screen")
 	layer = LOADING_LAYER
 	_build_ui()
 	# Instant cover — the player just triggered a transition and is staring
@@ -45,6 +50,22 @@ func _ready() -> void:
 	# rebuild hitch swallows the next several hundred ms anyway.
 	visible = false
 	set_process(false)
+
+
+## Static helper for change_scene_to_file transitions. Adds a LoadingScreen
+## as a direct child of get_tree().root (NOT current_scene) so it survives
+## the scene swap, then immediately shows it. PrototypeRoot._ready dismisses
+## it after the new level builds. Caller is expected to await one frame
+## before invoking change_scene_to_file so the cover renders before the
+## new scene's _ready chain locks the main thread.
+static func cover_scene_transition(title: String = "DESCENDING", subtitle: String = "Loading") -> LoadingScreen:
+	var screen := LoadingScreen.new()
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null:
+		return screen
+	tree.root.add_child(screen)
+	screen.show_loading(title, subtitle)
+	return screen
 
 
 func show_loading(title: String = "DESCENDING", subtitle: String = "Generating sub-level") -> void:
