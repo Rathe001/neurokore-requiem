@@ -639,6 +639,39 @@ func _process(delta: float) -> void:
 	var tree := get_tree()
 	var fps := Engine.get_frames_per_second()
 	var frame_ms := 1000.0 / maxf(float(fps), 1.0)
+	# Live light/MMI/particle counts. "Visible" walks the tree and checks
+	# is_visible_in_tree() so the LoS-cull state is reflected; "shadow"
+	# counts shadow-casting lights that are also visible (those are the
+	# expensive ones — invisible lights skip the shadow pass entirely).
+	var total_lights := 0
+	var visible_lights := 0
+	var shadow_lights := 0
+	var visible_mmi := 0
+	var total_particles := 0
+	var visible_particles := 0
+	for n in tree.get_root().find_children("*", "Light3D", true, false):
+		var light := n as Light3D
+		if light == null:
+			continue
+		total_lights += 1
+		if not light.is_visible_in_tree():
+			continue
+		visible_lights += 1
+		if light.shadow_enabled:
+			shadow_lights += 1
+	for n in tree.get_root().find_children("*", "MultiMeshInstance3D", true, false):
+		var mmi := n as MultiMeshInstance3D
+		if mmi != null and mmi.is_visible_in_tree():
+			visible_mmi += 1
+	for n in tree.get_root().find_children("*", "GPUParticles3D", true, false):
+		var p := n as GPUParticles3D
+		if p == null:
+			continue
+		total_particles += 1
+		if p.is_visible_in_tree():
+			visible_particles += 1
+	var draw_calls := int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
+	var tris := int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME))
 	debug_label.text = tr("HUD_DEBUG_OVERLAY_FORMAT") % [
 		fps,
 		frame_ms,
@@ -647,6 +680,9 @@ func _process(delta: float) -> void:
 		tree.get_nodes_in_group(&"pickups").size(),
 		tree.get_nodes_in_group(&"structures").size(),
 		tree.get_node_count(),
+		visible_lights, total_lights, shadow_lights,
+		visible_mmi, visible_particles, total_particles,
+		draw_calls, tris,
 	]
 
 func _bind_skill_slots(player: Node) -> void:

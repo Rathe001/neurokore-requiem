@@ -140,13 +140,87 @@ func _resolve_materials(t: LevelTheme) -> Dictionary:
 		wall_alt = load("res://resources/level/debug/wall_alt_debug.tres") as Material
 		floor_alt = load("res://resources/level/debug/floor_alt_debug.tres") as Material
 	else:
-		wall = t.wall_material
-		floor_m = t.floor_material
+		# Default material fallbacks for themes that leave material slots
+		# null (the kit-bash themes do this — the kit MMI shader provides
+		# the visual, no theme material needed). When kit_walls / kit_floors
+		# are disabled and we fall back to procedural geometry, the
+		# procedural mesh needs SOME material or it renders as default
+		# white BoxMesh. Dark concrete grey with PBR-tuned metal/rough
+		# reads well under the high-energy fluorescents.
+		wall = t.wall_material if t.wall_material != null else _default_wall_material()
+		floor_m = t.floor_material if t.floor_material != null else _default_floor_material()
 		wall_alt = t.wall_material_alt if t.wall_material_alt != null else wall
 		floor_alt = t.floor_material_alt if t.floor_material_alt != null else floor_m
 	var mats := {&"wall": wall, &"floor": floor_m, &"wall_alt": wall_alt, &"floor_alt": floor_alt}
 	_material_cache[t] = mats
 	return mats
+
+
+# Process-wide default materials cached after first use. Two distinct
+# ShaderMaterial instances driving the same shader so walls and floors
+# can have different panel sizes, rivet sizes, and PBR feel while sharing
+# the same shading logic (seams, bevel borders, rivets, wear, scratches).
+static var _default_wall_mat: ShaderMaterial = null
+static var _default_floor_mat: ShaderMaterial = null
+
+const _PROCEDURAL_WALL_SHADER: Shader = preload("res://scripts/level/build/procedural_wall.gdshader")
+
+
+# Walls: 1m panels, modest bevel border + small rivets, very reflective
+# (catches the ceiling fluorescents). Vertical surface so it doesn't get
+# worn from foot traffic — keep wear/roughness low.
+static func _default_wall_material() -> ShaderMaterial:
+	if _default_wall_mat == null:
+		var m := ShaderMaterial.new()
+		m.shader = _PROCEDURAL_WALL_SHADER
+		m.set_shader_parameter(&"panel_size_x", 1.0)
+		m.set_shader_parameter(&"panel_size_y", 1.0)
+		m.set_shader_parameter(&"seam_width", 0.018)
+		m.set_shader_parameter(&"seam_bevel", 0.04)
+		m.set_shader_parameter(&"seam_depth", 0.14)
+		m.set_shader_parameter(&"border_width", 0.04)
+		m.set_shader_parameter(&"border_height", 0.03)
+		m.set_shader_parameter(&"rivet_inset", 0.10)
+		m.set_shader_parameter(&"rivet_radius", 0.028)
+		m.set_shader_parameter(&"rivet_height", 0.015)
+		m.set_shader_parameter(&"metallic_value", 0.75)
+		m.set_shader_parameter(&"roughness_value", 0.32)
+		m.set_shader_parameter(&"roughness_wear", 0.18)
+		m.set_shader_parameter(&"wear_albedo_strength", 0.35)
+		_default_wall_mat = m
+	return _default_wall_mat
+
+
+# Floors: 2m panels (chunkier, fewer seams in the player's view), more
+# prominent bevel borders + larger rivets, slightly less reflective and
+# more worn since the player walks on them all match. Iso camera catches
+# floor reflections particularly well, so the metallic value still reads
+# strong even at higher roughness.
+static func _default_floor_material() -> ShaderMaterial:
+	if _default_floor_mat == null:
+		var m := ShaderMaterial.new()
+		m.shader = _PROCEDURAL_WALL_SHADER
+		m.set_shader_parameter(&"panel_size_x", 2.0)
+		m.set_shader_parameter(&"panel_size_y", 2.0)
+		m.set_shader_parameter(&"seam_width", 0.025)
+		m.set_shader_parameter(&"seam_bevel", 0.06)
+		m.set_shader_parameter(&"seam_depth", 0.18)
+		m.set_shader_parameter(&"border_width", 0.07)
+		m.set_shader_parameter(&"border_height", 0.04)
+		m.set_shader_parameter(&"rivet_inset", 0.16)
+		m.set_shader_parameter(&"rivet_radius", 0.045)
+		m.set_shader_parameter(&"rivet_height", 0.025)
+		m.set_shader_parameter(&"metallic_value", 0.7)
+		m.set_shader_parameter(&"roughness_value", 0.42)
+		m.set_shader_parameter(&"roughness_wear", 0.28)
+		m.set_shader_parameter(&"wear_albedo_strength", 0.5)
+		# Floors take foot traffic and spills — splotches turned on. Walls
+		# inherit the shader default (0.0, clean).
+		m.set_shader_parameter(&"splotch_strength", 0.55)
+		m.set_shader_parameter(&"splotch_scale", 1.6)
+		m.set_shader_parameter(&"splotch_threshold", 0.52)
+		_default_floor_mat = m
+	return _default_floor_mat
 
 
 func _apply_material_set(mats: Dictionary) -> void:

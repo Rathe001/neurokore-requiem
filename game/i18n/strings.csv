@@ -201,5 +201,5 @@ HUD_LEVEL_UP_TALENT_POINT,Talent point available (%d)
 HUD_LEVEL_FORMAT,Lvl. %d
 HUD_XP_FORMAT,%d / %d XP
 HUD_CREDITS_FORMAT,%d cr
-HUD_DEBUG_OVERLAY_FORMAT,"FPS: %d  (%.1f ms)\nEnemies: %d\nCorpses: %d\nPickups: %d\nStructures: %d\nTotal nodes: %d"
+HUD_DEBUG_OVERLAY_FORMAT,"FPS: %d  (%.1f ms)\nEnemies: %d\nCorpses: %d\nPickups: %d\nStructures: %d\nTotal nodes: %d\nLights: %d/%d  shadow %d\nMMI: %d  Particles: %d/%d\nDraw: %d  Tri/frm: %d"
 PICK_LABEL_FORMAT,%s / %s

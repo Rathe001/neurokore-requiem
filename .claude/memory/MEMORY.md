@@ -62,3 +62,6 @@
 - [move_and_slide velocity gotcha](project_move_and_slide_gotcha.md) — wall collisions zero velocity; jumping/dashing must inject momentum from input direction
 - [Always mirror memory to repo](feedback_mirror_memory_to_repo.md) — memory writes must hit both canonical + .claude/memory/ in repo, then commit; canonical-only causes cross-machine drift
 - [Project: Neurokore Requiem](project_neurokore_requiem.md) — Game design project: "Neurokore: Requiem"
+- [Procedural surface shader](project_procedural_surface_shader.md) — walls + floors via procedural_wall.gdshader; two ShaderMaterial instances (wall 1m / floor 2m) drive one shader; kit-panel pipeline still intact but unused
+- [Godot 4 shader gotchas](project_godot4_shader_gotchas.md) — 5 silent-failure modes: Vector3 vs Color, hint mutex, Image.create() noise, white-as-normal, GLSL redeclaration
+- [Level perf hierarchy](project_level_perf_hierarchy.md) — what actually mattered (tris/frame, then offscreen lights). HUD overlay (Lights/MMI/Particles/Draw/Tri) is the diagnostic.

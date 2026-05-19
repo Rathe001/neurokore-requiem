@@ -115,7 +115,7 @@ def locate_cached_blend(meta: dict) -> Path:
     return max(blends, key=lambda p: p.stat().st_size)
 
 
-def export_glb(blend_path: Path, out_path: Path, decimate_ratio: float = 0.05, tint_emission: str = "", texture_size: int = 1024) -> None:
+def export_glb(blend_path: Path, out_path: Path, decimate_ratio: float = 0.5, tint_emission: str = "", texture_size: int = 1024) -> None:
     """Drive Blender headless to open the .blend and export it as .glb
     with default settings. Does NOT modify geometry, normals, or materials."""
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -402,7 +402,7 @@ def main() -> None:
     p.add_argument("target_name")
     p.add_argument("--category", default="objects")
     p.add_argument("--license", default="Blenderkit — listed Free")
-    p.add_argument("--decimate", type=float, default=0.05,
+    p.add_argument("--decimate", type=float, default=0.5,
                    help="Mesh decimation ratio passed to Blender's Decimate "
                         "modifier (COLLAPSE). Default 0.05 (5%% of original) — "
                         "aggressive baseline for iso-camera kit pieces, where "

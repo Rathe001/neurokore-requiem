@@ -1,14 +1,13 @@
-[gd_resource type="Resource" script_class="LevelTheme" load_steps=4 format=3]
+[gd_resource type="Resource" script_class="LevelTheme" load_steps=2 format=3]
 
-; Production tech theme — kit-bash models. Material slots intentionally
-; null; pillars/trim/low-ceilings use the dark-grey fallback inside
-; WallBuilder. When LevelBuilder.USE_DEBUG_LEVEL_VIZ is true, BuildContext
-; loads the debug ShaderMaterials from res://resources/level/debug/
-; instead of reading these slots — no theme edits needed to toggle.
+; Production tech theme — fully procedural walls + floors. wall_model and
+; floor_model both null → both fall back to procedural geometry, which
+; BuildContext.\_default_{wall,floor}_material wraps in the shared
+; procedural_wall.gdshader (worn steel panel look). Toggle
+; USE_DEBUG_LEVEL_VIZ in level_builder to render the debug ShaderMaterials
+; from res://resources/level/debug/ instead.
 
 [ext_resource type="Script" path="res://scripts/level/level_theme.gd" id="1"]
-[ext_resource type="PackedScene" path="res://assets/models/objects/wall_panel_v4/wall_panel_v4.glb" id="wall_model"]
-[ext_resource type="PackedScene" path="res://assets/models/objects/floor_panel_v2/floor_panel_v2.glb" id="floor_model"]
 
 [resource]
 script = ExtResource("1")
@@ -16,8 +15,6 @@ fps_fog_density = 0.35
 fps_fog_color = Color(0.002, 0.003, 0.006, 1)
 wall_height = 3.0
 wall_thickness = 0.4
-wall_model = ExtResource("wall_model")
-floor_model = ExtResource("floor_model")
 wall_grid_size = 4.0
 floor_grid_size = 4.0
 wall_model_native_width = 2.71

@@ -62,8 +62,12 @@ static func create_wall(ctx: LevelBuildContext, pos: Vector3, size_x: float, siz
 	return body
 
 
-# Collision-only wall (no mesh) — room walls draw their geometry from the
-# single procedural room mesh, so jamb segments only need physics bodies.
+# Collision-only wall (no visible mesh) — room walls draw their geometry from
+# the kit panel MMI (or the procedural room mesh), so jamb segments only need
+# physics bodies. A SHADOW-ONLY BoxMesh child is attached so the wall still
+# occludes light from the per-room ceiling fluorescents — without this, kit-
+# panel MMIs (cast_shadow OFF) would let light leak through walls into
+# adjacent rooms. The shadow box matches the collision dims exactly.
 static func create_wall_body(ctx: LevelBuildContext, pos: Vector3, size_x: float, size_z: float) -> void:
 	var body := StaticBody3D.new()
 	body.transform.origin = pos + Vector3(0, ctx.theme.wall_height * 0.5, 0)
@@ -72,8 +76,47 @@ static func create_wall_body(ctx: LevelBuildContext, pos: Vector3, size_x: float
 	col.name = &"Collision"
 	col.shape = get_wall_shape(ctx, size_x, size_z)
 	body.add_child(col)
+	_add_shadow_caster(body, size_x, ctx.theme.wall_height, size_z)
 	ctx.root.add_child(body)
 	body.add_to_group(&"structures")
+	# room_geometry → LoS culler hides this body when the room is offscreen.
+	# Shadow-only meshes still incur shadow-pass cost when their parent is
+	# visible, so culling them with the rest of the room geometry is what
+	# actually buys the perf win.
+	body.add_to_group(&"room_geometry")
+
+
+# Attaches an invisible BoxMesh child to `parent` that casts shadow only.
+# 12-tri silhouette; the per-cubemap-face cost is negligible compared to the
+# detailed kit panel geometry it replaces in the shadow pass.
+static func _add_shadow_caster(parent: Node3D, sx: float, sy: float, sz: float) -> void:
+	var caster := MeshInstance3D.new()
+	caster.name = &"ShadowCaster"
+	var box := BoxMesh.new()
+	box.size = Vector3(sx, sy, sz)
+	caster.mesh = box
+	caster.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+	parent.add_child(caster)
+
+
+# Corner-cube shadow caster: a `thick × h × thick` invisible BoxMesh at a
+# room corner. Plugs the gap between two perpendicular wall bodies (which
+# stop at the room boundary, `span/2` from center) and the kit-panel MMIs
+# (which extend `thick/2` past that into the corner cube). Without it,
+# ceiling fluorescents in adjacent rooms light through the corner.
+static func create_corner_cube_shadow(ctx: LevelBuildContext, world_xz: Vector3) -> void:
+	var thick: float = ctx.theme.wall_thickness
+	var h: float = ctx.theme.wall_height
+	var caster := MeshInstance3D.new()
+	caster.name = &"CornerCubeShadow"
+	var box := BoxMesh.new()
+	box.size = Vector3(thick, h, thick)
+	caster.mesh = box
+	caster.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+	caster.position = Vector3(world_xz.x, h * 0.5, world_xz.z)
+	ctx.root.add_child(caster)
+	caster.add_to_group(&"structures")
+	caster.add_to_group(&"room_geometry")
 
 
 # Trim box: small wall-material box used as a raised lip at pit edges.
@@ -286,10 +329,26 @@ static func build_corridor_walls_kit(ctx: LevelBuildContext, center: Vector3, cd
 	# every corridor-room junction, not just the perpendicular ones.
 	var wall_len: float = maxf(0.01, cd.length - thick)
 	var transforms: Array[Transform3D] = []
+	var custom_data: Array[Color] = []
 	for s: Dictionary in sides:
-		_add_tiled_wall_segment(transforms, s["base_pos"], s["axis"], wall_len, wall_h, thick, tile_w, s["y_rot"], aabb)
+		_add_tiled_wall_segment(transforms, custom_data, s["base_pos"], s["axis"], wall_len, wall_h, thick, tile_w, s["y_rot"], aabb)
 
-	_commit_kit_mmi(ctx, center, mesh, transforms)
+	_commit_kit_mmi(ctx, center, mesh, transforms, custom_data)
+
+	# Collision + shadow casters for each corridor wall side. The kit MMI
+	# above is visual-only (no collision, no shadow); without these the
+	# player would clip through corridor walls AND fluorescents in adjacent
+	# rooms would light through them. Sizing matches the procedural
+	# `build_corridor_walls` extents (`thick` perpendicular, `wall_len`
+	# along the corridor axis).
+	for s: Dictionary in sides:
+		var base_pos: Vector3 = s["base_pos"]
+		var axis: Vector3 = s["axis"]
+		# axis = wall-tangent (along its length). Wall extent: wall_len along
+		# this axis, `thick` along the perpendicular horizontal axis.
+		var col_sx: float = wall_len if absf(axis.x) > 0.5 else thick
+		var col_sz: float = wall_len if absf(axis.z) > 0.5 else thick
+		create_wall_body(ctx, center + base_pos, col_sx, col_sz)
 
 
 # Kit-bash room walls. Each wall is tiled with panels along its length so
@@ -328,91 +387,140 @@ static func build_room_walls_kit(ctx: LevelBuildContext, center: Vector3, rd: Ro
 	]
 
 	var transforms: Array[Transform3D] = []
+	var custom_data: Array[Color] = []
 	for s: Dictionary in sides:
 		var side: RoomDef.Wall = s["side"] as RoomDef.Wall
 		var axis: Vector3 = s["axis"]
 		var base_pos: Vector3 = s["base_pos"]
 		var length: float = s["length"]
 		var y_rot: float = s["y_rot"]
-		var span: float = length
+		# Visual span extends `thick` past nominal length so the leftmost and
+		# rightmost panels reach into the corner cubes (where two perpendicular
+		# walls meet). The mitre clip in kit_panel.gdshader then splits the
+		# overlap diagonally — without this extension the corner cubes are
+		# visibly empty no matter what the mitre flags say. Collision still
+		# uses `rd.size` (built in _build_room_wall_collisions), so the visual
+		# extension doesn't change the walkable footprint.
+		var span: float = length + thick
 		if side in rd.openings:
 			# Two segments flanking the opening. Each jamb's length matches
 			# the jamb collision body built by _build_room_wall_collisions.
 			var jamb_len: float = (span - gap) * 0.5
 			if jamb_len > 0.01:
 				var offset: float = (gap + jamb_len) * 0.5
-				_add_tiled_wall_segment(transforms, base_pos + axis * offset, axis, jamb_len, wall_h, thick, tile_w, y_rot, aabb)
-				_add_tiled_wall_segment(transforms, base_pos - axis * offset, axis, jamb_len, wall_h, thick, tile_w, y_rot, aabb)
+				_add_tiled_wall_segment(transforms, custom_data, base_pos + axis * offset, axis, jamb_len, wall_h, thick, tile_w, y_rot, aabb)
+				_add_tiled_wall_segment(transforms, custom_data, base_pos - axis * offset, axis, jamb_len, wall_h, thick, tile_w, y_rot, aabb)
 		else:
-			_add_tiled_wall_segment(transforms, base_pos, axis, span, wall_h, thick, tile_w, y_rot, aabb)
+			_add_tiled_wall_segment(transforms, custom_data, base_pos, axis, span, wall_h, thick, tile_w, y_rot, aabb)
 	if transforms.is_empty():
 		return
 
-	_commit_kit_mmi(ctx, center, mesh, transforms)
+	_commit_kit_mmi(ctx, center, mesh, transforms, custom_data)
 
 
-# Tiles N panels along a wall segment. Each panel's *length* axis (along the
-# wall) is scaled to the actual tiled step (length / N where N = round(
-# length / grid)), so panels stay close to their native width — the kit's
-# panel detail reads naturally instead of stretched. Height is scaled to
-# match wall_h; thickness is kept at native scale (the collision box
-# handles physics — the visual panel is decorative only, ~2cm thin).
+# Tiles panels across a wall segment in BOTH dimensions. Horizontally, N
+# panels of ~native width tile across `length`. Vertically, M panels of
+# ~native height stack to fill `wall_h`. Stretching is minimal in each
+# axis (step / native), so authored detail reads naturally instead of
+# getting distorted into tall narrow strips when the panel's native size
+# doesn't match the wall span (e.g. wall_panel_v6 is a 1m floor tile used
+# as a 3m wall — without vertical tiling it'd stretch 3x).
+#
+# Mitre flags depend only on horizontal index — corner cubes are vertical
+# columns at room corners, so every row of the leftmost / rightmost panel
+# needs the same diagonal clip.
 #
 # Axis detection: Blender→glTF→Godot typically maps height to local Y
 # (Y-up), but some exports keep height in local Z. We detect which axis
-# is taller and choose the rotation/scale accordingly.
-# y_rot picks which wall side the panel faces.
-static func _add_tiled_wall_segment(out: Array[Transform3D], segment_center: Vector3, axis: Vector3, length: float, wall_h: float, thick: float, grid: float, y_rot: float, aabb: AABB) -> void:
+# is taller and choose the rotation/scale accordingly. y_rot picks which
+# wall side the panel faces.
+static func _add_tiled_wall_segment(out: Array[Transform3D], custom_data_out: Array[Color], segment_center: Vector3, axis: Vector3, length: float, wall_h: float, thick: float, grid: float, y_rot: float, aabb: AABB) -> void:
 	var native_w: float = maxf(0.0001, aabb.size.x)
 	var n_panels: int = max(1, int(round(length / maxf(0.01, grid))))
 	var step: float = length / float(n_panels)
 	var scale_w: float = step / native_w
 	var height_in_y: bool = aabb.size.y > aabb.size.z
 	var native_h: float
-	var basis: Basis
-	var rotation: Basis
-	# Panel thickness is kept at native scale (~2.5cm) so the kit's decorative
-	# relief stays as authored. Corner gaps will be resolved by per-end mitre
-	# (planned), not by stretching the panel to wall_thickness.
 	if height_in_y:
 		native_h = maxf(0.0001, aabb.size.y)
+	else:
+		native_h = maxf(0.0001, aabb.size.z)
+	# Vertical tile count: round wall_h to the nearest multiple of native_h
+	# so panels stack with minimal vertical squash/stretch. wall_h=3, native=1
+	# gives 3 stacked rows; wall_h=3, native=3 gives 1 row (current behaviour
+	# for assets authored at full wall height like wall_panel_v5).
+	var n_v: int = max(1, int(round(wall_h / native_h)))
+	var step_v: float = wall_h / float(n_v)
+	var v_scale: float = step_v / native_h
+	var rotation: Basis
+	var basis: Basis
+	# Panel thickness is kept at native scale — the canonical AABB.size.y is
+	# the post-import-thickened value (≈ wall_thickness, see kit_panel
+	# post-import). Multiplying by 1 keeps it at that authored thickness.
+	if height_in_y:
 		rotation = Basis(Vector3.UP, y_rot)
 		# LOCAL-space scale: model x=width, y=height, z=thickness (native).
-		basis = rotation * Basis.from_scale(Vector3(scale_w, wall_h / native_h, 1.0))
+		basis = rotation * Basis.from_scale(Vector3(scale_w, v_scale, 1.0))
 	else:
 		# Height in Z: rotate Z→Y via Basis(RIGHT, +PI/2). Positive angle
 		# keeps the panel right-side-up (model bottom → world bottom).
-		native_h = maxf(0.0001, aabb.size.z)
 		rotation = Basis(Vector3.UP, y_rot) * Basis(Vector3.RIGHT, PI * 0.5)
 		# LOCAL-space scale: model x=width, y=thickness (native), z=height.
-		basis = rotation * Basis.from_scale(Vector3(scale_w, 1.0, wall_h / native_h))
+		basis = rotation * Basis.from_scale(Vector3(scale_w, 1.0, v_scale))
 	# AABB-center compensation: the mesh's local-space AABB center may not
 	# be at the origin (a bottom-anchored panel has its center at +h/2 in
 	# local Z). Computing translation = center - basis * aabb_center makes
 	# the AABB center land at the slot center for each panel.
 	var aabb_center_local: Vector3 = aabb.position + aabb.size * 0.5
 	var rotated_center: Vector3 = basis * aabb_center_local
-	for i in range(n_panels):
-		var slot_offset: float = (i + 0.5) * step - length * 0.5
-		var slot_center: Vector3 = segment_center + axis * slot_offset + Vector3(0, wall_h * 0.5, 0)
-		out.append(Transform3D(basis, slot_center - rotated_center))
+	for j in range(n_v):
+		var v_offset: float = (j + 0.5) * step_v
+		for i in range(n_panels):
+			var slot_offset: float = (i + 0.5) * step - length * 0.5
+			var slot_center: Vector3 = segment_center + axis * slot_offset + Vector3(0, v_offset, 0)
+			out.append(Transform3D(basis, slot_center - rotated_center))
+			# Mitre flags + per-instance scale:
+			#   .r (x) = mitre_left  (1 if first column of the segment)
+			#   .g (y) = mitre_right (1 if last column of the segment)
+			#   .b (z) = scale_w     (panel's X-axis Transform3D scale)
+			# Vertical rows share the same horizontal mitre status — the
+			# corner cube is a vertical column running from floor to ceiling.
+			var mitre_left: float = 1.0 if i == 0 else 0.0
+			var mitre_right: float = 1.0 if i == n_panels - 1 else 0.0
+			custom_data_out.append(Color(mitre_left, mitre_right, scale_w, 0.0))
 
 
 # Wraps a transform list in a MultiMeshInstance3D parented to ctx.root at
 # `center`. Tags it as both `structures` (for general world queries) and
 # `room_geometry` (LoS culler hides this MMI when the player isn't near).
-static func _commit_kit_mmi(ctx: LevelBuildContext, center: Vector3, mesh: Mesh, transforms: Array[Transform3D]) -> void:
+# `custom_data` (same length as `transforms`) supplies per-instance values
+# the kit_panel.gdshader reads from INSTANCE_CUSTOM (mitre flags etc).
+# Pass an empty array when not needed and custom-data export stays off.
+static func _commit_kit_mmi(ctx: LevelBuildContext, center: Vector3, mesh: Mesh, transforms: Array[Transform3D], custom_data: Array[Color] = []) -> void:
 	if transforms.is_empty():
 		return
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
+	var use_custom: bool = custom_data.size() == transforms.size()
+	mm.use_custom_data = use_custom
 	mm.mesh = mesh
 	mm.instance_count = transforms.size()
 	for i in range(transforms.size()):
 		mm.set_instance_transform(i, transforms[i])
+		if use_custom:
+			mm.set_instance_custom_data(i, custom_data[i])
 	var mmi := MultiMeshInstance3D.new()
 	mmi.multimesh = mm
 	mmi.position = center
+	# Kit panels are too detailed to cast shadow per-cubemap-face on every
+	# shadow-casting light. The post-import script replaces the mesh with
+	# an ArrayMesh, which loses Godot's auto-generated shadow mesh — so each
+	# face of each shadow cubemap renders the FULL panel geometry. At 58M
+	# tri/frame that was the dominant bottleneck. Shadows are now cast by
+	# invisible BoxMesh caster boxes (see create_wall_shadow_caster /
+	# build_corridor_walls_kit) which are 12 tris each and reproduce the
+	# same wall silhouette for shadow purposes.
+	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	ctx.root.add_child(mmi)
 	mmi.add_to_group(&"structures")
 	mmi.add_to_group(&"room_geometry")

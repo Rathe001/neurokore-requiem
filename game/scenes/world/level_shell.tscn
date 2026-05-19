@@ -32,7 +32,22 @@ glow_bloom = 0.05
 glow_blend_mode = 1
 glow_hdr_threshold = 0.9
 glow_hdr_scale = 2.0
-volumetric_fog_enabled = true
+; SSR (screen-space reflections) — needed for the procedural worn-steel
+; wall shader to actually reflect the ceiling lights, floor, and other
+; walls. Without SSR, metallic surfaces only catch direct specular
+; highlights from light sources (still shiny, but no environmental
+; reflection). Costs ~0.5ms/frame at 64 max steps; we have headroom.
+ssr_enabled = true
+ssr_max_steps = 64
+ssr_fade_in = 0.15
+ssr_fade_out = 2.0
+ssr_depth_tolerance = 0.2
+; volumetric_fog_enabled disabled 2026-05-18 — no Light3D sets
+; light_volumetric_fog_energy > 0 and FogVolume creation is also disabled
+; (LightingBuilder.create_fog_volume), so the pass renders nothing but
+; still pays the per-frame cost. Re-enable + set density when you want
+; fog back AND wire at least one light to feed it.
+volumetric_fog_enabled = false
 volumetric_fog_density = 0.0
 volumetric_fog_albedo = Color(0.7, 0.75, 0.85, 1)
 volumetric_fog_emission = Color(0.0, 0.0, 0.0, 1)

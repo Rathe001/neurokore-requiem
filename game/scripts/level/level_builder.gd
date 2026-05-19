@@ -330,6 +330,17 @@ func _build_room_wall_collisions(piece_id: StringName, rd: RoomDef, center: Vect
 			var wall_sz := span * sz + thick * sx
 			WallBuilder.create_wall_body(_ctx, wpos, wall_sx, wall_sz)
 
+	# Corner-cube shadow casters. The kit-panel MMIs extend `span + thick`
+	# (into the 0.4×0.4 corner cubes where two perpendicular walls meet),
+	# but the wall bodies above stop at `span`. Without these, the corner
+	# cubes have a visible panel facing inward but no shadow caster behind
+	# them, and ceiling fluorescents in adjacent rooms pour light through
+	# the corner geometry — visible as bright spots on every panel near a
+	# corner. A `thick × h × thick` shadow-only box at each of the four
+	# room corners plugs the gap.
+	for corner in [Vector3(hx, 0, hz), Vector3(-hx, 0, hz), Vector3(hx, 0, -hz), Vector3(-hx, 0, -hz)]:
+		WallBuilder.create_corner_cube_shadow(_ctx, center + corner)
+
 
 # ── Corridors ─────────────────────────────────────────────────────────────
 

@@ -54,6 +54,11 @@ static func create_fill_light(ctx: LevelBuildContext, center: Vector3, size_x: f
 	light.light_volumetric_fog_energy = 0.0
 	light.transform.origin = center + Vector3(0, 2.0, 0)
 	ctx.root.add_child(light)
+	# room_geometry → LoS culler hides this light when the room is 2+ hops
+	# away from the player. Light3D.visible = false fully disables the light
+	# (no shadow cubemap render, no contribution to lit pixels), so the cost
+	# of "all rooms lit at once" drops to "only adjacent rooms lit at once".
+	light.add_to_group(&"room_geometry")
 
 
 # Pre-configures WorldEnvironment fog from the theme so the FPS-mode toggle
@@ -83,28 +88,15 @@ const FOG_HAZE_HEIGHT := 0.5
 const FOG_HAZE_DENSITY := 1.5
 
 static func create_fog_volume(ctx: LevelBuildContext, center: Vector3, size_x: float, size_z: float) -> void:
-	# Dense floor slab — visible in FPS, provides the "dry ice" floor line.
-	var floor_vol := FogVolume.new()
-	floor_vol.size = Vector3(size_x, FOG_FLOOR_HEIGHT, size_z)
-	floor_vol.shape = RenderingServer.FOG_VOLUME_SHAPE_BOX
-	var floor_mat := FogMaterial.new()
-	floor_mat.density = FOG_FLOOR_DENSITY
-	floor_mat.albedo = Color(0.6, 0.65, 0.75)
-	floor_vol.material = floor_mat
-	floor_vol.transform.origin = center + Vector3(0, FOG_FLOOR_HEIGHT * 0.5, 0)
-	ctx.root.add_child(floor_vol)
-	# Taller haze layer — low density, gives the iso camera enough ray depth
-	# to see the fog. Still floor-anchored (bottom at y=0) so it reads as
-	# ground mist rather than room-filling smoke.
-	var haze_vol := FogVolume.new()
-	haze_vol.size = Vector3(size_x, FOG_HAZE_HEIGHT, size_z)
-	haze_vol.shape = RenderingServer.FOG_VOLUME_SHAPE_BOX
-	var haze_mat := FogMaterial.new()
-	haze_mat.density = FOG_HAZE_DENSITY
-	haze_mat.albedo = Color(0.55, 0.6, 0.7)
-	haze_vol.material = haze_mat
-	haze_vol.transform.origin = center + Vector3(0, FOG_HAZE_HEIGHT * 0.5, 0)
-	ctx.root.add_child(haze_vol)
+	# DISABLED 2026-05-18 for perf: every Light3D in the scene sets
+	# `light_volumetric_fog_energy = 0.0`, so nothing actually lights the
+	# FogVolumes — they render as black and are invisible against the dark
+	# scene. But Godot still runs the volumetric pass for each FogVolume,
+	# which costs frame time per room (two volumes × N rooms). Skipping the
+	# creation outright recovers that cost. Restore this function body when
+	# we want lit volumetric fog again — and at the same time, decide which
+	# Light3Ds should have a non-zero light_volumetric_fog_energy.
+	return
 
 
 # Per-room ambient dust particles — subtle floating motes that catch the
@@ -149,6 +141,10 @@ static func create_room_particles(ctx: LevelBuildContext, center: Vector3, size_
 	p.draw_pass_1 = mesh
 	p.transform.origin = center + Vector3(0, wh * 0.5, 0)
 	ctx.root.add_child(p)
+	# room_geometry → hidden when the room is 2+ hops from the player.
+	# GPUParticles3D stops drawing AND stops simulating when visibility
+	# inherits as false, so offscreen rooms cost nothing.
+	p.add_to_group(&"room_geometry")
 
 
 # ── internals ────────────────────────────────────────────────────────────
@@ -186,6 +182,11 @@ static func _create_ceiling_light(ctx: LevelBuildContext, pos: Vector3, lc: Ligh
 	_randomize_flicker_profile(fixture)
 	fixture.setup(light, null)
 	ctx.root.add_child(fixture)
+	# room_geometry → hidden when the room is 2+ hops from the player. The
+	# child OmniLight3D's visibility inherits from the fixture, so the
+	# shadow-cubemap render and light contribution both disappear when the
+	# room is offscreen — the biggest perf lever at multi-room scale.
+	fixture.add_to_group(&"room_geometry")
 
 
 # Roll a flicker profile per fixture: most lights are steady, some twitch

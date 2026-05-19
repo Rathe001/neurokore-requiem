@@ -1,11 +1,9 @@
-[gd_resource type="Resource" script_class="LevelTheme" load_steps=4 format=3]
+[gd_resource type="Resource" script_class="LevelTheme" load_steps=2 format=3]
 
-; Industrial-cladding theme for the chain's middle section. See tech_theme
-; for the kit/debug material toggle pattern.
+; Industrial-cladding theme — fully procedural walls + floors. See
+; tech_theme for the toggle pattern.
 
 [ext_resource type="Script" path="res://scripts/level/level_theme.gd" id="1"]
-[ext_resource type="PackedScene" path="res://assets/models/objects/wall_panel_v4/wall_panel_v4.glb" id="wall_model"]
-[ext_resource type="PackedScene" path="res://assets/models/objects/floor_panel_v2/floor_panel_v2.glb" id="floor_model"]
 
 [resource]
 script = ExtResource("1")
@@ -13,8 +11,6 @@ fps_fog_density = 0.35
 fps_fog_color = Color(0.005, 0.005, 0.006, 1)
 wall_height = 3.0
 wall_thickness = 0.4
-wall_model = ExtResource("wall_model")
-floor_model = ExtResource("floor_model")
 wall_grid_size = 4.0
 floor_grid_size = 4.0
 wall_model_native_width = 2.71
