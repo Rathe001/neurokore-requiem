@@ -113,16 +113,22 @@ func _detonate() -> void:
 	# damage (linear from CORPSE_IMPULSE_MAX at the center to MIN at the
 	# blast edge). Cheap iteration since corpses are short-lived (~20s) and
 	# capped in count.
+	# Two corpse types coexist in &"ragdoll_corpses":
+	#   - PrototypeRagdollCorpse: legacy rigid-capsule corpses
+	#   - PrototypeEnemy: X Bot skeletal corpses (post death-animation,
+	#     lazy-activates its PhysicalBone3D ragdoll on first impulse)
+	# Casting to a specific subclass filtered the new path out entirely.
+	# Duck-type on the method instead so both flavours respond.
 	for c in get_tree().get_nodes_in_group(&"ragdoll_corpses"):
-		var rb := c as PrototypeRagdollCorpse
-		if rb == null or not is_instance_valid(rb):
+		if c == null or not is_instance_valid(c) or not c.has_method(&"apply_explosion_impulse"):
 			continue
-		var dist := rb.global_position.distance_to(global_position)
+		var corpse_pos: Vector3 = (c as Node3D).global_position
+		var dist := corpse_pos.distance_to(global_position)
 		if dist > blast_radius:
 			continue
 		var t := dist / blast_radius
 		var force: float = lerp(CORPSE_IMPULSE_MAX, CORPSE_IMPULSE_MIN, t)
-		rb.apply_explosion_impulse(global_position, force)
+		c.apply_explosion_impulse(global_position, force)
 	if grenade_type == Skill.GrenadeType.CLUSTER and not is_cluster_child:
 		_spawn_cluster_children()
 	# Brief delay so the trail particles finish fading before we hide the node.

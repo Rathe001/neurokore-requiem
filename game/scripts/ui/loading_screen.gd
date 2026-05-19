@@ -44,6 +44,14 @@ func _ready() -> void:
 	# that survives change_scene_to_file).
 	add_to_group(&"loading_screen")
 	layer = LOADING_LAYER
+	# Run regardless of pause. PrototypeRoot calls hide_loading() right
+	# before showing SpecSelectOverlay (post-descent), and SpecSelectOverlay
+	# sets `get_tree().paused = true` on _ready. With the default
+	# process_mode the fade-out tween freezes mid-animation and the cover
+	# stays visible on top of the spec select panel — looks like the loader
+	# is stuck. PROCESS_MODE_ALWAYS keeps the tween advancing through the
+	# pause so the cover finishes fading and queue_frees normally.
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	_build_ui()
 	# Instant cover — the player just triggered a transition and is staring
 	# at a frozen world, so any fade-in would be wasted frames before the

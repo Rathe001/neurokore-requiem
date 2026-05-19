@@ -412,10 +412,14 @@ func _ready() -> void:
 	XBotAnimations.install_on(anim_player)
 	# Pre-build the per-bone ragdoll skeleton so _die() can flip it into
 	# physics simulation instantly. Deferred — the FBX's Skeleton3D may not
-	# be in the tree yet at the moment _ready fires, depending on the
-	# AnimationPlayer ready-order during scene activation. setup() is
-	# idempotent so pool re-acquire skips redundant work.
-	call_deferred(&"_setup_ragdoll")
+	# Physics-bone ragdoll disabled — death pose comes from the Mixamo
+	# death animation now (see _on_died for the play call). The setup
+	# function builds 20 PhysicalBone3D children per skeleton which we
+	# never activate; skipping the call saves the per-enemy memory and
+	# physics-server registration overhead. XBotRagdoll.setup() / activate()
+	# stay defined for revival when Godot's PhysicalBoneSimulator can
+	# initialize bodies from the current pose instead of the rest pose.
+	# call_deferred(&"_setup_ragdoll")
 	_init_enemy()
 	_setup_hover()
 
@@ -656,6 +660,13 @@ func _pool_release() -> void:
 ## Re-initialize an enemy returned from the pool.
 func reset() -> void:
 	remove_from_group(&"corpses")
+	remove_from_group(&"ragdoll_corpses")
+	# Clear lazy-activated ragdoll state so the pooled enemy starts its
+	# next life as a fresh non-ragdoll. The PhysicalBone3D children that
+	# XBotRagdoll.setup added remain attached but they're not simulating
+	# (physical_bones_stop_simulation would be cleaner — re-evaluate if
+	# pool-recycled enemies show stuck physics state).
+	_ragdoll_activated = false
 	# Restore the visual the ragdoll spawn hid on death — pool re-acquire
 	# would otherwise show an invisible enemy.
 	if visual != null:
@@ -828,7 +839,20 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 	if NetState.is_in_lobby():
 		_client_show_hit.rpc(amount, multistrike, is_crit)
 	if _health <= 0:
-		_die(knockback_from, knockback_strength)
+		# Baseline death knockback even for weapons that carry no
+		# knockback_bonus / skill.knockback (most normal weapons —
+		# pistol, sniper, rifle, etc. — carry 0 by design so they don't
+		# push enemies around mid-combat). The death moment IS where we
+		# want a visible reaction, so derive a baseline from the killing
+		# blow's damage. Big hits → bodies fly; little hits → modest
+		# slide. The skill/weapon-driven knockback_strength still wins
+		# when present (special skills, knockback_bonus affixes).
+		var death_kb := knockback_strength
+		if death_kb <= 0.0:
+			# 0.4 m/damage gives sniper-class shots (50+ dmg) ≈ 20 force
+			# = 8m slide + 2.4m arc; trash mob 5dmg = 2 force = 1m slide.
+			death_kb = clampf(float(amount) * 0.4, 3.0, 25.0)
+		_die(knockback_from, death_kb)
 
 ## Helper — DEAD is the only state in which the enemy should ignore inputs
 ## (damage, animation triggers, hover). All other states are "alive enough."
@@ -1711,36 +1735,50 @@ func _die(kill_from: Vector3 = Vector3.ZERO, kill_force: float = 0.0) -> void:
 			p.on_enemy_killed()
 	_drop_credits()
 	_drop_item()
-	# Ragdoll path. Two variants depending on which character mesh is in use:
+	# Death-pose path. Two variants depending on which character mesh is
+	# in use:
 	#
-	#   X Bot (has the per-bone PhysicalBone3D rig built by XBotRagdoll.setup):
-	#     flip the Skeleton3D into physics mode so the whole rig goes limp
-	#     in place. Visual stays — the bones deform the mesh via the skin
-	#     binding as they fall. No rigid-body tumble corpse spawned.
+	#   X Bot (has the Mixamo death animation in the AnimationLibrary):
+	#     play "xbot/death" and let it ride to the last frame. The
+	#     animation is non-looping so the player holds at the final
+	#     fallen pose after it finishes — that's the corpse visual.
 	#
-	#   Legacy UAL1 / Quaternius (no physical bones): fall through to the
-	#     old PrototypeRagdollCorpse spawn — duplicates the visual onto a
-	#     RigidBody3D capsule that tumbles together, hides the original.
-	var did_skeletal_ragdoll := false
-	if visual != null:
-		# Same recursive class-based search as _setup_ragdoll — the
-		# skeleton node isn't always named "Skeleton3D" depending on the
-		# FBX import, and find_child(name) would miss it.
-		var skel := _find_skeleton(visual)
-		if skel != null and skel.has_meta(&"xbot_ragdoll_setup"):
-			print("[XBotRagdoll] Activating physics simulation on skeleton")
-			# Stop the AnimationPlayer first — otherwise it keeps writing
-			# bone poses every frame, fighting the physics-driven bones
-			# and freezing the visible mesh in whatever animation pose
-			# (often T-pose because the run/idle clip was paused there
-			# during the death's set_physics_process(false)).
-			if anim_player != null:
-				anim_player.stop(true)
-			XBotRagdoll.activate(skel, kill_from, kill_force)
-			did_skeletal_ragdoll = true
-		else:
-			print("[XBotRagdoll] No physical-bone skeleton on visual; falling back to rigid-body corpse")
-	if not did_skeletal_ragdoll:
+	#     Replaces the per-bone PhysicsBone3D ragdoll attempt — Godot
+	#     4.6.2's PhysicalBoneSimulator initializes every rigid body from
+	#     the bone REST pose (T-pose for Mixamo) regardless of script
+	#     state, so corpses snapped to T-pose. See
+	#     `project_xbot_ragdoll` memory for the diagnostic history.
+	#
+	#   Legacy UAL1 / Quaternius (no AnimationLibrary): fall through to
+	#     the old PrototypeRagdollCorpse spawn — duplicates the visual
+	#     onto a RigidBody3D capsule that tumbles, hides the original.
+	var did_death_anim := false
+	if anim_player != null:
+		# Random Mixamo death clip per kill — variety beats every corpse
+		# falling identically. XBotAnimations loads ~6 different ones.
+		var death_anim := XBotAnimations.random_death_anim()
+		if anim_player.has_animation(death_anim):
+			# Drop any leftover combo callback / queued animation. play()
+			# overrides whatever's playing, including a held idle/run loop.
+			anim_player.play(death_anim)
+			did_death_anim = true
+			# Ragdoll is NOT auto-activated when the animation finishes —
+			# Godot 4's PhysicalBoneSimulator initializes bodies from the
+			# rest pose, which would visibly snap the corpse from the
+			# fallen animation pose to T-pose. Instead we stay in the
+			# authored fallen pose forever, and lazily activate the
+			# ragdoll only when something actually needs to move the
+			# corpse (an explosion). At that point the body is already
+			# in motion from the impulse, so the rest-pose snap blends
+			# into the throw instead of standing out.
+			#
+			# Join the &"ragdoll_corpses" group at death so explosion
+			# code (PrototypeGrenade / PrototypeProjectile blasts) finds
+			# the corpse before any ragdoll setup has run.
+			add_to_group(&"ragdoll_corpses")
+	if did_death_anim and kill_force > 0.0:
+		_apply_death_knockback(kill_from, kill_force)
+	if not did_death_anim:
 		_spawn_ragdoll_corpse(kill_from, kill_force)
 		if visual != null:
 			visual.visible = false
@@ -1749,6 +1787,105 @@ func _die(kill_from: Vector3 = Vector3.ZERO, kill_force: float = 0.0) -> void:
 	if not is_inside_tree() or _generation != gen:
 		return
 	_become_corpse()
+
+# Slides the enemy body away from `kill_from` over a short duration so
+# the kill feels weighted — substitutes for the physics-impulse knockback
+# the old ragdoll path applied. Distance is scaled by `kill_force` but
+# clamped so high-roll crits don't yeet bodies across rooms; we want a
+# punctuating shove, not a rocket launch.
+#
+# Doesn't replicate in MP — host runs damage authoritatively, the death
+# RPC fires on every peer with the same kill_from/kill_force, so every
+# peer's local enemy slides the same way independently.
+# Tuning: typical melee/pistol kill_force ≈ 5, sniper ≈ 20, RPG ≈ 25+.
+# At 0.9 m/force, force=5 = 4.5m slide, force=20 = 15m (clamped). Arc
+# height is generous so big hits genuinely launch bodies. Drop these
+# if hits feel too cartoon-y, raise for more carnage.
+const _KNOCKBACK_DURATION: float = 0.55
+const _KNOCKBACK_DISTANCE_PER_FORCE: float = 0.9
+const _KNOCKBACK_MAX_DISTANCE: float = 15.0
+const _KNOCKBACK_ARC_HEIGHT_PER_FORCE: float = 0.22
+const _KNOCKBACK_ARC_HEIGHT_MAX: float = 5.0
+# Tracks whether ragdoll physics has been activated yet on this corpse.
+# Lazy activation pattern: the corpse stays in its authored death-animation
+# pose until something (an explosion) actually needs to move it. First call
+# to apply_explosion_impulse triggers the activation; subsequent calls
+# just push the already-active ragdoll.
+var _ragdoll_activated: bool = false
+
+
+# Apply an impulse to the corpse, throwing it via physics. Matches the
+# signature PrototypeRagdollCorpse uses so explosion code (PrototypeGrenade,
+# PrototypeProjectile blasts) calls uniformly across both corpse types.
+#
+# On first call this lazily SETS UP and ACTIVATES the ragdoll. The
+# physics activation snaps each bone to its rest pose (a known Godot 4
+# simulator limitation — see `project_xbot_ragdoll` memory), but that
+# snap is hidden by the impulse-driven motion: the body starts moving
+# the same frame it activates, so the viewer perceives "explosion threw
+# the corpse" rather than "corpse first popped to T-pose then flew".
+const _EXPLOSION_FORCE_MULT: float = 8.0  # impulse scale; tune for carnage
+func apply_explosion_impulse(force_origin: Vector3, force_strength: float) -> void:
+	if visual == null:
+		return
+	var skel := _find_skeleton(visual)
+	if skel == null:
+		return
+	var fresh_activation := false
+	if not _ragdoll_activated:
+		XBotRagdoll.setup(skel)
+		XBotRagdoll.activate(skel, Vector3.ZERO, 0.0)
+		_ragdoll_activated = true
+		fresh_activation = true
+	var dir: Vector3 = global_position - force_origin
+	var dist: float = maxf(dir.length(), 0.1)
+	dir = dir.normalized() if dist > 0.0001 else Vector3.UP
+	dir.y = maxf(dir.y, 0.5)  # strong upward bias so bodies launch, not skid
+	dir = dir.normalized()
+	# Distance falloff — close to explosion = full strength, far = trail off.
+	var falloff: float = clampf(1.0 - (dist / 8.0), 0.1, 1.0)
+	# Wait one physics frame after a fresh activation so the rigid bodies
+	# are actually registered with the physics server before we push them
+	# — apply_central_impulse on a body that hasn't been simulated yet is
+	# silently dropped.
+	if fresh_activation:
+		await get_tree().physics_frame
+		if not is_instance_valid(self) or not is_instance_valid(skel):
+			return
+	for child in skel.get_children():
+		if not (child is PhysicalBone3D):
+			continue
+		# Apply to EVERY bone, not just hip+spine — gives the "exploded
+		# body" look where limbs go flying in different directions instead
+		# of the whole corpse moving as a stiff unit.
+		var pb := child as PhysicalBone3D
+		pb.apply_central_impulse(dir * force_strength * pb.mass * falloff * _EXPLOSION_FORCE_MULT)
+
+
+func _apply_death_knockback(kill_from: Vector3, kill_force: float) -> void:
+	if kill_from == Vector3.ZERO:
+		return
+	var dir: Vector3 = global_position - kill_from
+	dir.y = 0.0
+	if dir.length_squared() < 0.0001:
+		return
+	dir = dir.normalized()
+	var distance: float = minf(kill_force * _KNOCKBACK_DISTANCE_PER_FORCE, _KNOCKBACK_MAX_DISTANCE)
+	var arc_h: float = minf(kill_force * _KNOCKBACK_ARC_HEIGHT_PER_FORCE, _KNOCKBACK_ARC_HEIGHT_MAX)
+	var target_x: float = global_position.x + dir.x * distance
+	var target_z: float = global_position.z + dir.z * distance
+	var ground_y: float = global_position.y
+	var peak_y: float = ground_y + arc_h
+	# X/Z slide cubic ease-out (impulse-decay feel), Y is a two-stage arc:
+	# quadratic-out up to peak, then quadratic-in (gravity-like) back down.
+	# parallel() makes step N run alongside step N-1; the unparallel'd
+	# final tween runs sequentially after the previous parallel batch.
+	var tween := create_tween()
+	tween.tween_property(self, "global_position:x", target_x, _KNOCKBACK_DURATION).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tween.parallel().tween_property(self, "global_position:z", target_z, _KNOCKBACK_DURATION).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tween.parallel().tween_property(self, "global_position:y", peak_y, _KNOCKBACK_DURATION * 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.tween_property(self, "global_position:y", ground_y, _KNOCKBACK_DURATION * 0.6).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+
 
 func _drop_credits() -> void:
 	if randf() >= credit_drop_chance:

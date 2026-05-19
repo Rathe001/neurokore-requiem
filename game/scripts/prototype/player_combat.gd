@@ -800,12 +800,20 @@ func _resolve_hitscan(skill: Skill, aim: Vector3, eff_range: float, weapon: Item
 	var extended_range := eff_range * FALLOFF_RANGE_MULT
 	var wall_dist := extended_range
 	var hit_target: Node3D = null
-	var space := _host.get_world_3d().direct_space_state
-	var ray_end := origin + aim_norm * extended_range
-	var query := PhysicsRayQueryParameters3D.create(origin, ray_end, 1)
-	var result := space.intersect_ray(query)
-	if not result.is_empty():
-		wall_dist = origin.distance_to(result["position"])
+	# Physics queries (intersect_ray) error out with "Space state is
+	# inaccessible right now" when called outside the physics frame.
+	# Hitscan is triggered from input handling (idle frame), so we wait
+	# one physics tick before raycasting. Maximum delay = 1/60s = 16ms,
+	# imperceptible.
+	if not Engine.is_in_physics_frame():
+		await _host.get_tree().physics_frame
+	var space := _world_space()
+	if space != null:
+		var ray_end := origin + aim_norm * extended_range
+		var query := PhysicsRayQueryParameters3D.create(origin, ray_end, 1)
+		var result := space.intersect_ray(query)
+		if not result.is_empty():
+			wall_dist = origin.distance_to(result["position"])
 	var half_cos := cos(deg_to_rad(HITSCAN_CONE_HALF_DEG))
 	var closest_dist := INF
 	for enode: Node3D in SpatialGrid.query_cone(origin, aim_norm, wall_dist, half_cos, &"enemies"):
@@ -989,6 +997,11 @@ func _spawn_shotgun_pellet(skill: Skill, dir: Vector3, eff_range: float, weapon:
 ## sets chain_jumps=5, falloff=0; LMB Tase ticks repeatedly with
 ## chain_jumps=0, falloff=15.
 func _resolve_chain_lightning(skill: Skill, aim: Vector3, eff_range: float, weapon: Item, source_offset: Vector3 = Vector3.ZERO) -> void:
+	# Wait for physics frame before any _has_los / _clip_to_wall calls —
+	# their underlying intersect_ray fails outside the physics step. Same
+	# pattern as _resolve_hitscan.
+	if not Engine.is_in_physics_frame():
+		await _host.get_tree().physics_frame
 	var origin := _host.global_position + Vector3(0.0, 1.0, 0.0) + source_offset
 	var aim_norm := aim.normalized()
 	# Acquire the primary target — closest enemy within range along aim,
@@ -1154,12 +1167,44 @@ func _weapon_tint(weapon: Item) -> Color:
 	return Item.damage_type_color(elem)
 
 
+## Returns the host's world-3D space state, or null if the host isn't
+## inside a live scene tree. Every ray cast in this script goes through
+## here so the four hitscan/LoS paths can guard uniformly. Hot paths
+## (input → fire) can fire after the player has been freed / scene
+## changed; without this guard, `space.intersect_ray()` crashed with
+## "Cannot call method 'intersect_ray' on a null value" (and spammed the
+## debug log — 500+ errors in one playtest).
+##
+## Falls back to PhysicsServer3D.space_get_direct_state(world.space) when
+## World3D.direct_space_state is null. The convenience property comes
+## back null in some frame phases (input handlers, deferred calls,
+## between physics ticks) — the server lookup via RID works at any time
+## as long as the world's space RID is still valid. Without this fallback,
+## the wall-occlusion ray was getting skipped on normal fire and beams
+## passed through walls (the convenience property's null state turned out
+## to be common, not edge-case as I'd assumed).
+func _world_space() -> PhysicsDirectSpaceState3D:
+	if _host == null or not is_instance_valid(_host) or not _host.is_inside_tree():
+		return null
+	var world := _host.get_world_3d()
+	if world == null:
+		return null
+	return world.direct_space_state
+
+
 ## Line-of-sight check between two world points. Casts a ray over the
 ## world-collision layer (mask 1, same as hitscan). Returns true when
 ## the ray is unobstructed — used by chain lightning to prevent arcs
-## tunneling through walls.
+## tunneling through walls. Returns false when the host has no world.
+##
+## SYNC ONLY — physics queries are only valid during the physics frame.
+## Callers in idle frames must do their own `await physics_frame` before
+## invoking. Chain lightning's caller already does this (see
+## _resolve_chain_lightning).
 func _has_los(from_pos: Vector3, to_pos: Vector3) -> bool:
-	var space := _host.get_world_3d().direct_space_state
+	var space := _world_space()
+	if space == null:
+		return false
 	var query := PhysicsRayQueryParameters3D.create(from_pos, to_pos, 1)
 	var result := space.intersect_ray(query)
 	return result.is_empty()
@@ -1168,9 +1213,14 @@ func _has_los(from_pos: Vector3, to_pos: Vector3) -> bool:
 ## Clip a target point to the first wall along the ray from origin.
 ## Returns the original target when nothing's in the way; otherwise the
 ## hit position. Used by the chain lightning miss-arc so the cosmetic
-## bolt stops at a wall instead of passing through it.
+## bolt stops at a wall instead of passing through it. Returns the raw
+## target when the host has no world.
+##
+## SYNC ONLY — see _has_los caveat.
 func _clip_to_wall(origin: Vector3, target: Vector3) -> Vector3:
-	var space := _host.get_world_3d().direct_space_state
+	var space := _world_space()
+	if space == null:
+		return target
 	var query := PhysicsRayQueryParameters3D.create(origin, target, 1)
 	var result := space.intersect_ray(query)
 	if result.is_empty():
@@ -1209,10 +1259,15 @@ func _resolve_hitscan_exact(skill: Skill, aim_norm: Vector3, eff_range: float, w
 	var extended_range := eff_range * FALLOFF_RANGE_MULT
 	var wall_dist := extended_range
 	var hit_target: Node3D = null
-	var space := _host.get_world_3d().direct_space_state
+	# Wait for physics frame before raycasting — see _resolve_hitscan.
+	if not Engine.is_in_physics_frame():
+		await _host.get_tree().physics_frame
+	var space := _world_space()
 	var ray_end := origin + aim_norm * extended_range
 	var query := PhysicsRayQueryParameters3D.create(origin, ray_end, 1)
-	var result := space.intersect_ray(query)
+	var result: Dictionary = {}
+	if space != null:
+		result = space.intersect_ray(query)
 	if not result.is_empty():
 		wall_dist = origin.distance_to(result["position"])
 	var half_cos := cos(deg_to_rad(HITSCAN_CONE_HALF_DEG))

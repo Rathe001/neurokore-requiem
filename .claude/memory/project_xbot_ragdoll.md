@@ -1,78 +1,33 @@
 ---
 name: xbot-ragdoll
-description: "X Bot per-bone ragdoll: PhysicalBone3D × 20 major bones with cone joints + capsule shapes. Status: WIP — bones still snap to T-pose on death even after pose-sync. Diagnostic logging in place."
+description: X Bot death = random Mixamo death animation + tween-knockback + lazy ragdoll on explosion. Solved differently than originally planned.
 type: project
 ---
 
-**Status (2026-05-19).** Per-bone ragdoll setup compiles, simulates,
-and accepts kill-impulses on hip + spine (corpses get sent flying
-correctly). **Unsolved**: corpses visually snap to T-pose on
-simulation start, regardless of which animation was playing at the
-moment of death. Diagnostic logging added in
-`XBotRagdoll.activate()` logs the LeftArm pre-sim pose vs. its
-bind-rest — first thing to check on resume.
+**Status (2026-05-19): resolved by abandoning physics-driven death.** Per-bone ragdoll setup still exists but is no longer the death visual — Godot 4.6.2's `PhysicalBoneSimulator` initialises every rigid body from the bone's REST pose (T-pose for Mixamo) regardless of any pre-start state we set, so corpses snapped to T-pose at activation. Six different workaround approaches all failed (`stop(true)`, `process_mode = DISABLED`, `pb.transform` pre-start, `set_bone_pose_*` lock, `pb.global_transform` post-start, `set_bone_rest` swap — each either didn't change the snap or introduced Jolt non-uniform-scale errors).
 
-**Architecture.** `xbot_ragdoll.gd` is a static helper, two methods:
-- `setup(skeleton)` — called deferred from `PrototypeEnemy._ready`.
-  Adds 20 PhysicalBone3D children to the Skeleton3D (hips, spine ×3,
-  neck, head, both arms (shoulder/upper/lower/hand), both legs
-  (thigh/calf/foot)). Skips fingers. Each PhysicalBone3D gets a
-  CapsuleShape3D sized to the bone's rest-length, anatomical mass
-  (hips 12kg → hands 0.8kg, total ~68kg), joint_type=CONE,
-  layer 6 (Corpses), and joint_constraints set with 90° swing /
-  60° twist / bias=0 / softness=1. Tolerates both `mixamorig_*`
-  and humanoid profile bone names (BoneMap retarget may rename).
-  Idempotent — sets `xbot_ragdoll_setup` meta on the skeleton.
-- `activate(skeleton, kill_from, kill_force)` — orthonormalizes each
-  PhysicalBone3D's basis (kills Jolt non-uniform scale spam), syncs
-  each PhysicalBone3D's transform to its bone's `get_bone_global_pose`
-  (intended to inherit the death-moment animated pose), then calls
-  `physical_bones_start_simulation()`. Applies a kill-direction
-  impulse to Hips+Spine bones, scaled `dir * kill_force * pb.mass * 6.0`.
+**Current death flow** (`PrototypeEnemy._die`):
 
-**What works.**
-- 20 PhysicalBone3D nodes attach correctly per skeleton (diagnostic
-  print confirms).
-- `physical_bones_start_simulation()` runs.
-- Kill-impulse launches corpses with appropriate velocity (impulse
-  must be Newton-seconds = mass × Δv, hence the per-bone-mass scale).
-- Joints hold the skeleton together — no detaching limbs.
+1. **Random Mixamo death animation** from `XBotAnimations.random_death_anim()`. Six clips load into the library as `death_0`-`death_5`: "Death", "Death From The Front", "Death From Right", "Flying Back Death", "Standing Death Backward 01", "Standing Death Forward 01". Non-looping, holds final frame.
+2. **Knockback tween** on the CharacterBody3D's `global_position` over `_KNOCKBACK_DURATION=0.55s`. X/Z slide is cubic ease-out (~0.9 m / kill_force, clamped to 15m), Y is a two-stage parabolic arc (quad-out up to peak, quad-in back down). Bodies actually launch and arc on big hits.
+3. **Baseline knockback for normal weapons**: most weapon skills have `knockback = 0` by design (no mid-combat push). At kill time, if `knockback_strength <= 0`, the death code derives a baseline from damage: `clampf(damage * 0.4, 3.0, 25.0)`. Sniper-class hits get force ≈ 20; trash-mob chip damage gets force ≈ 3.
+4. **Lazy ragdoll on explosion** — corpse joins `&"ragdoll_corpses"` group at death. `apply_explosion_impulse(origin, force)` lazily runs `XBotRagdoll.setup` + `activate` on first call, then `await get_tree().physics_frame` (apply_central_impulse on a body that hasn't yet been simulated is silently dropped), then applies impulse to every PhysicalBone3D with `force * mass * falloff * _EXPLOSION_FORCE_MULT(=8.0)` plus strong upward bias. The T-pose snap on activation is hidden by the immediate explosive motion.
 
-**What doesn't work.**
-- Corpses land in T-pose configuration regardless of what animation
-  was playing alive. Attempts so far:
-  - Tightened cone (40° swing, bias 0.6) → corpses pulled toward T.
-  - Widened cone (90° swing, bias 0) → corpses still T-pose-ish.
-  - Synced PhysicalBone3D transforms from `get_bone_global_pose`
-    before simulation start → no visible change.
-  - `anim_player.stop(true)` before activate → unchanged.
+**Group iteration was a separate bug**: `PrototypeGrenade._detonate` and `PrototypeProjectile`'s blast path both cast to `PrototypeRagdollCorpse` when walking the group, which silently filtered out X Bot enemies (which are `PrototypeEnemy`). Fixed by duck-typing — `c.has_method(&"apply_explosion_impulse")`. Both corpse types coexist in the same group.
 
-**Suspected root cause.** Either (a) the AnimationPlayer never wrote
-actual deformation to the skeleton — bones stay at bind rest because
-the X Bot animations' track paths target the wrong bone names after
-the BoneMap retarget pass, OR (b) `physical_bones_start_simulation`
-internally resets bones to bind before reading from PhysicalBone3D
-transforms. The diagnostic line `[XBotRagdoll] LeftArm pre-sim pose
-origin=... rest origin=... rot equal=true/false` will tell us
-which: `rot equal=true` → (a); `rot equal=false` → (b).
+**Player does NOT collide with corpses** — player.tscn `collision_mask = 195` (no layer 6 / Corpses bit 32). Bodies are visual-only against the player; explosions are the only interaction.
 
-**Tuning constants** (`xbot_ragdoll.gd` top of file):
-- `_BONES` array — (bone_name, mass_kg, capsule_radius_m, joint_type)
-- Joint config in setup loop: `swing_span`, `twist_span`, `bias`,
-  `softness`, `relaxation`
-- `IMPULSE_SCALE` in activate (currently 6.0): launch magnitude
+**What `XBotRagdoll.setup` / `activate` still does** (still used for lazy explosion ragdoll):
 
-**Integration.** `PrototypeEnemy._die` branches on
-`skel.has_meta("xbot_ragdoll_setup")`: if true, stops AnimationPlayer
-+ calls `XBotRagdoll.activate(skel, kill_from, kill_force)`. If
-false (legacy UAL1 char_model), falls through to the existing
-`PrototypeRagdollCorpse` rigid-body tumble. The fallback should
-stay supported — easiest hedge if the per-bone path proves
-fundamentally broken is to revert _die to always use it.
+- `setup(skeleton)`: adds 20 PhysicalBone3D children with capsule shapes, anatomical mass (hips 12kg → hands 0.8kg), cone joints (swing 90°, twist 60°). Layer 6 (Corpses), mask 1 (World). Idempotent via `xbot_ragdoll_setup` meta. **No longer called from `_ready`** — invoked lazily by `apply_explosion_impulse` to save the per-enemy memory on living enemies. Cone-twist `bias` / `softness` / `relaxation` params are NOT set because Jolt rejects them with warnings — only `swing_span` and `twist_span`.
+- `activate(skeleton, kill_from, kill_force)`: orthonormalizes each PB basis (Mixamo bind-matrix scale residue would otherwise spam Jolt warnings), syncs each `pb.transform` to bone global pose, calls `physical_bones_start_simulation`. Caller now passes `Vector3.ZERO, 0.0` for the impulse because we apply it ourselves per-bone in `apply_explosion_impulse`.
 
-**If pivoting away from per-bone ragdoll**, the alternative the user
-already considered was "play death animation, then static corpse" —
-no physics, just freeze on the last animation frame. Much simpler
-implementation (no PhysicalBone3D setup), preserves the authored
-Mixamo death pose. Trade-off: explosions/players can't physics-kick
-the corpse.
+**Tuning constants** in `prototype_enemy.gd`:
+- `_KNOCKBACK_DURATION` (0.55s) — total launch duration
+- `_KNOCKBACK_DISTANCE_PER_FORCE` (0.9 m/force) — slide distance
+- `_KNOCKBACK_MAX_DISTANCE` (15m) — slide clamp
+- `_KNOCKBACK_ARC_HEIGHT_PER_FORCE` (0.22 m/force) — peak arc height
+- `_KNOCKBACK_ARC_HEIGHT_MAX` (5m) — arc clamp
+- `_EXPLOSION_FORCE_MULT` (8.0) — explosion impulse scale on top of force × mass × falloff
+
+**If returning to physics ragdoll** (e.g. Godot fixes the rest-pose-init quirk in a future version): the lazy-activate path in `apply_explosion_impulse` already does it. Move the `XBotRagdoll.setup` + `activate` call to fire on death anim finish instead of explosion to make corpses pushable by player movement.

@@ -115,9 +115,11 @@ static func setup(skeleton: Skeleton3D) -> void:
 		if joint_type == PhysicalBone3D.JOINT_TYPE_CONE:
 			pb.set("joint_constraints/swing_span", deg_to_rad(90.0))
 			pb.set("joint_constraints/twist_span", deg_to_rad(60.0))
-			pb.set("joint_constraints/bias", 0.0)
-			pb.set("joint_constraints/softness", 1.0)
-			pb.set("joint_constraints/relaxation", 1.0)
+			# bias / softness / relaxation are Bullet-physics-era params.
+			# Jolt Physics ignores them and warns each time you set one
+			# ("Cone twist joint softness is not supported when using Jolt
+			# Physics"). 500+ warnings in a single playtest. Skip setting
+			# them at all — defaults from Godot are fine for Jolt.
 		bones_attached += 1
 	print("[XBotRagdoll] Attached %d PhysicalBone3D(s)" % bones_attached)
 	skeleton.set_meta(_META_KEY, true)
@@ -192,6 +194,23 @@ static func activate(skeleton: Skeleton3D, kill_from: Vector3 = Vector3.ZERO, ki
 			dbg_pose.basis.is_equal_approx(dbg_rest.basis)
 		])
 
+	# Minimal activation: align each PhysicalBone3D's transform with the
+	# bone's current animated pose (orthonormalize basis to drop Mixamo
+	# bind-matrix scale residue), then start simulation.
+	#
+	# THIS DOES NOT FIX THE T-POSE SNAP. Verified empirically across a
+	# session of attempts (set_bone_pose pre-start, set_bone_rest swap,
+	# pb.global_transform teleport after start) — Godot 4.6.2's
+	# PhysicalBoneSimulator initializes every rigid body from the bone's
+	# REST pose (T-pose for Mixamo) regardless of any pre-start state we
+	# can set in script. The only writes that DID land introduced Jolt
+	# non-uniform-scale errors from skeleton-parent transform residue.
+	#
+	# Keeping ragdoll code in place as the existing memory entry
+	# `project_xbot_ragdoll` flags this as unsolved — corpses will T-pose
+	# until either Godot's simulator matures or we switch to playing the
+	# Mixamo death animation as the death pose (see "ragdoll path
+	# alternative" discussion in session log).
 	for child in skeleton.get_children():
 		if not (child is PhysicalBone3D):
 			continue

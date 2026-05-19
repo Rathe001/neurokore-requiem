@@ -809,16 +809,19 @@ func _explode(impact_pos: Vector3) -> void:
 	# Same falloff curve as the grenade's _detonate impulse so AoE shots
 	# (charged plasma, future explosive projectiles) feel consistent with
 	# thrown explosives.
+	# Duck-type — see PrototypeGrenade._detonate. The X Bot skeletal-corpse
+	# path uses PrototypeEnemy (not PrototypeRagdollCorpse) so the old cast
+	# silently dropped them.
 	for c in get_tree().get_nodes_in_group(&"ragdoll_corpses"):
-		var rb := c as PrototypeRagdollCorpse
-		if rb == null or not is_instance_valid(rb):
+		if c == null or not is_instance_valid(c) or not c.has_method(&"apply_explosion_impulse"):
 			continue
-		var d := rb.global_position.distance_to(impact_pos)
+		var corpse_pos: Vector3 = (c as Node3D).global_position
+		var d := corpse_pos.distance_to(impact_pos)
 		if d > blast_radius:
 			continue
 		var t := d / blast_radius
 		var force: float = lerp(CORPSE_IMPULSE_MAX, CORPSE_IMPULSE_MIN, t)
-		rb.apply_explosion_impulse(impact_pos, force)
+		c.apply_explosion_impulse(impact_pos, force)
 
 
 func _apply_exile_curse_if_active(enemy: Node) -> void:

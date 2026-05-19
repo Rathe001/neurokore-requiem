@@ -26,7 +26,26 @@ const _PUNCH_FBX: PackedScene = preload("res://assets/characters/x_bot/Punching.
 const _FIRE_FBX: PackedScene = preload("res://assets/characters/x_bot/Firing Rifle.fbx")
 const _HIT_FBX: PackedScene = preload("res://assets/characters/x_bot/Hit Reaction.fbx")
 const _JUMP_FBX: PackedScene = preload("res://assets/characters/x_bot/Jumping.fbx")
-const _DEATH_FBX: PackedScene = preload("res://assets/characters/x_bot/Death From The Front.fbx")
+
+# Multiple death animations — randomly selected per kill for variety.
+# Keyed `death_0` through `death_N`; random_death_anim() picks one.
+# Add new Mixamo death FBXs to this array; they'll auto-key in order.
+const _DEATH_FBXS: Array[PackedScene] = [
+	preload("res://assets/characters/x_bot/Death From The Front.fbx"),
+	preload("res://assets/characters/x_bot/Death From Right.fbx"),
+	preload("res://assets/characters/x_bot/Death.fbx"),
+	preload("res://assets/characters/x_bot/Flying Back Death.fbx"),
+	preload("res://assets/characters/x_bot/Standing Death Backward 01.fbx"),
+	preload("res://assets/characters/x_bot/Standing Death Forward 01.fbx"),
+	preload("res://assets/characters/x_bot/Standing Death Forward 02.fbx"),
+	preload("res://assets/characters/x_bot/Standing Death Left 01.fbx"),
+	preload("res://assets/characters/x_bot/Standing Death Left 02.fbx"),
+	preload("res://assets/characters/x_bot/Standing React Death Backward.fbx"),
+	preload("res://assets/characters/x_bot/Standing React Death Forward.fbx"),
+	preload("res://assets/characters/x_bot/Standing React Death Left.fbx"),
+	preload("res://assets/characters/x_bot/Sword And Shield Death.fbx"),
+	preload("res://assets/characters/x_bot/Two Handed Sword Death.fbx"),
+]
 
 const LIBRARY_NAME: StringName = &"xbot"
 
@@ -45,9 +64,19 @@ static func get_library() -> AnimationLibrary:
 	_extract(_library, &"fire", _FIRE_FBX, false, false)
 	_extract(_library, &"hit", _HIT_FBX, false, false)
 	_extract(_library, &"jump", _JUMP_FBX, false, false)
-	_extract(_library, &"death", _DEATH_FBX, false, false)
+	for i in _DEATH_FBXS.size():
+		_extract(_library, StringName("death_%d" % i), _DEATH_FBXS[i], false, false)
 	print("[XBotAnimations] Built library with: ", _library.get_animation_list())
 	return _library
+
+
+## Returns a random qualified animation key ("xbot/death_N") for the
+## enemy death handler to play. N is uniformly distributed over the loaded
+## death clips.
+static func random_death_anim() -> StringName:
+	var n: int = _DEATH_FBXS.size()
+	var idx: int = randi() % maxi(n, 1)
+	return StringName("%s/death_%d" % [LIBRARY_NAME, idx])
 
 
 ## Adds the X Bot library to an AnimationPlayer, idempotently. If the
