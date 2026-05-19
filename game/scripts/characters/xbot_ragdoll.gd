@@ -102,14 +102,22 @@ static func setup(skeleton: Skeleton3D) -> void:
 		skeleton.add_child(pb)
 		# Tighten the cone constraint so limbs don't hyperextend — Godot's
 		# defaults are very permissive (~90° swing). 35° swing + 20°
-		# twist reads as "joints hold roughly natural pose under gravity"
-		# without going fully rigid. Set AFTER the node is in the tree so
-		# the property paths resolve.
+		# twist reads as "limbs hold roughly natural pose under gravity"
+		# without going fully rigid.
+		#
+		# Critical: bias near zero, softness near one. The cone's REST
+		# pose is the skeleton's BIND pose (T-pose for Mixamo) — bias
+		# governs how hard the constraint pulls bones BACK to that rest.
+		# At bias 0.6 the corpse collapsed into T-pose on the floor
+		# because the joints kept dragging limbs toward bind. At 0.05
+		# the cone still LIMITS rotation but doesn't actively restore
+		# to it — corpses stay in whatever pose they landed in.
 		if joint_type == PhysicalBone3D.JOINT_TYPE_CONE:
-			pb.set("joint_constraints/swing_span", deg_to_rad(35.0))
-			pb.set("joint_constraints/twist_span", deg_to_rad(20.0))
-			pb.set("joint_constraints/bias", 0.6)
-			pb.set("joint_constraints/softness", 0.5)
+			pb.set("joint_constraints/swing_span", deg_to_rad(40.0))
+			pb.set("joint_constraints/twist_span", deg_to_rad(25.0))
+			pb.set("joint_constraints/bias", 0.05)
+			pb.set("joint_constraints/softness", 0.95)
+			pb.set("joint_constraints/relaxation", 1.0)
 		bones_attached += 1
 	print("[XBotRagdoll] Attached %d PhysicalBone3D(s)" % bones_attached)
 	skeleton.set_meta(_META_KEY, true)
@@ -176,7 +184,13 @@ static func activate(skeleton: Skeleton3D, kill_from: Vector3 = Vector3.ZERO, ki
 	# than scoot — matches the visceral feel of the old capsule tumble.
 	dir.y = 0.5
 	dir = dir.normalized()
-	var impulse := dir * kill_force
+	# apply_central_impulse takes impulse in N·s = mass × Δv. Scaling
+	# by the bone's own mass gives a uniform Δv across hips + spine
+	# regardless of the per-bone mass split. The 6× multiplier turns
+	# typical knockback_strength values (5–25) into noticeable corpse
+	# trajectories (~30–150 N·s on the hip's 12 kg gives a 2.5–12 m/s
+	# launch); below that, the impulse was a gentle nudge.
+	const IMPULSE_SCALE := 6.0
 	# Hip + chest absorb the main impulse (they drag the rest along via
 	# joints). Distributing to every bone over-spins limbs since each
 	# bone is independently kicked.
@@ -186,7 +200,7 @@ static func activate(skeleton: Skeleton3D, kill_from: Vector3 = Vector3.ZERO, ki
 		var pb := child as PhysicalBone3D
 		var bone_name_str: String = pb.bone_name
 		if bone_name_str.contains("Hips") or bone_name_str.contains("Spine"):
-			pb.apply_central_impulse(impulse)
+			pb.apply_central_impulse(dir * kill_force * pb.mass * IMPULSE_SCALE)
 
 
 # Returns a sensible capsule height for the bone based on its rest-pose
