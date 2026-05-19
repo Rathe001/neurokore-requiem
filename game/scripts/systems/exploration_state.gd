@@ -24,6 +24,13 @@ extends Node
 
 signal changed
 signal room_revealed(room_id: StringName)
+## Fired the first time `room_id` becomes directly adjacent to a revealed
+## piece — a "faded preview" signal. Minimap paints these at reduced alpha
+## so the player gets a hint of where the connected corridors / rooms lead
+## before walking into them. Sticky once set; doesn't fire on subsequent
+## reveals of the same room. Always precedes room_revealed for a given id
+## (the room is glimpsed via adjacency before being walked into).
+signal room_seen(room_id: StringName)
 
 const CELL_SIZE := 4.0
 const _INV_CELL_SIZE := 1.0 / CELL_SIZE
@@ -33,6 +40,12 @@ var _cell_to_room: Dictionary = {}
 # StringName -> true. Membership = "this room has been revealed at some point
 # during the current run."
 var _explored: Dictionary = {}
+# StringName -> true. Membership = "this room has been seen (adjacent to a
+# revealed piece) at some point during the current run." Disjoint from
+# _explored in the same logical sense the minimap cares about: a piece in
+# _explored may also be in _seen, but the painter prefers full-color
+# (explored) rendering over faded (seen-only).
+var _seen: Dictionary = {}
 # Per-piece XZ footprints captured during register_room. Used by
 # finalize_layout() to compute adjacency; cleared on reset.
 # Each entry: {"id": StringName, "cx": float, "cz": float, "hx": float, "hz": float}
@@ -68,6 +81,7 @@ func reset_level() -> void:
 func reset() -> void:
 	_cell_to_room.clear()
 	_explored.clear()
+	_seen.clear()
 	_piece_records.clear()
 	_adjacent.clear()
 	_door_between.clear()
@@ -168,6 +182,10 @@ func is_explored(room_id: StringName) -> bool:
 	return _explored.has(room_id)
 
 
+func is_seen(room_id: StringName) -> bool:
+	return _seen.has(room_id)
+
+
 ## True when the contents of `target_room` (loot, enemies, clutter, corpses,
 ## ambient particles, room-gated interactables) should render while the player
 ## stands in `player_room`. Same room is always visible-together; otherwise the
@@ -224,15 +242,36 @@ func _door_pair_key(a: StringName, b: StringName) -> StringName:
 
 ## Marks `room_id` explored. Idempotent — re-revealing a room is a no-op.
 ## Host broadcasts to peers; clients calling this directly only update local
-## state (host's RPC is the authoritative source for them).
+## state (host's RPC is the authoritative source for them). Also marks each
+## directly-adjacent piece as "seen" the first time, giving the minimap
+## faded-preview rects for the corridors / rooms branching off the player's
+## current location before they're entered.
 func reveal_room(room_id: StringName) -> void:
 	if room_id == &"" or _explored.has(room_id):
 		return
 	_explored[room_id] = true
+	_mark_neighbours_seen(room_id)
 	room_revealed.emit(room_id)
 	changed.emit()
 	if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
 		_client_reveal.rpc(room_id)
+
+
+# Adjacency-walks `room_id` and marks each neighbour as seen (idempotent, only
+# fires the signal/RPC on the first transition per neighbour). Door-blind: a
+# room behind a closed door still earns its faded preview, since "I know a
+# room is back there" is useful navigation info even when you can't yet see
+# into it.
+func _mark_neighbours_seen(room_id: StringName) -> void:
+	var neighbours: Array = _adjacent.get(room_id, [] as Array)
+	for n in neighbours:
+		var sid := n as StringName
+		if _seen.has(sid):
+			continue
+		_seen[sid] = true
+		room_seen.emit(sid)
+		if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
+			_client_seen.rpc(sid)
 
 
 ## Late-join sync. Host calls this with a peer_id when a new player joins
@@ -242,6 +281,12 @@ func reveal_room(room_id: StringName) -> void:
 func sync_to_peer(peer_id: int) -> void:
 	if not multiplayer.is_server():
 		return
+	# Seen first so the client's bulk-reveal sees both sets consistent. Order
+	# doesn't strictly matter — the painter overlays full color on top of any
+	# pre-existing faded paint — but emitting seen first matches the runtime
+	# ordering (room_seen always precedes room_revealed for a given id).
+	var seen_ids: Array = _seen.keys()
+	_client_bulk_seen.rpc_id(peer_id, seen_ids)
 	var ids: Array = _explored.keys()
 	_client_bulk_reveal.rpc_id(peer_id, ids)
 
@@ -256,6 +301,14 @@ func _client_reveal(room_id: StringName) -> void:
 
 
 @rpc("authority", "call_remote", "reliable")
+func _client_seen(room_id: StringName) -> void:
+	if room_id == &"" or _seen.has(room_id):
+		return
+	_seen[room_id] = true
+	room_seen.emit(room_id)
+
+
+@rpc("authority", "call_remote", "reliable")
 func _client_bulk_reveal(ids: Array) -> void:
 	var added := false
 	for id in ids:
@@ -267,3 +320,13 @@ func _client_bulk_reveal(ids: Array) -> void:
 		added = true
 	if added:
 		changed.emit()
+
+
+@rpc("authority", "call_remote", "reliable")
+func _client_bulk_seen(ids: Array) -> void:
+	for id in ids:
+		var sid := id as StringName
+		if sid == &"" or _seen.has(sid):
+			continue
+		_seen[sid] = true
+		room_seen.emit(sid)

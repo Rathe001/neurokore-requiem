@@ -32,6 +32,10 @@ const BAKE_VIEWPORT_SIZE := Vector2i(1024, 1024)
 ## reads as "passable space" against the void background. Bake background
 ## is fully transparent so the parent shader's bg_color shows through.
 const FLOOR_COLOR := Color(0.42, 0.55, 0.68, 0.95)
+## Faded preview tint — pieces directly adjacent to a revealed piece but
+## not yet entered. Same hue as FLOOR_COLOR at ~35% the alpha so the eye
+## reads it as "you can see this is there, but you haven't been here."
+const FLOOR_COLOR_SEEN := Color(0.42, 0.55, 0.68, 0.32)
 const VOID_COLOR := Color(0.0, 0.0, 0.0, 0.0)
 
 ## Runtime view sizes control how much of the baked texture is visible.
@@ -131,11 +135,13 @@ func _ready() -> void:
 	if _player != null:
 		_radar.set_player(_player)
 
-	# Fog-of-war hook: paint newly-revealed rooms onto the bake image.
-	# Connected once — ExplorationState is an autoload so it persists
-	# across rebakes; we don't need to reconnect on rebuild.
+	# Fog-of-war hooks: room_revealed paints full color; room_seen paints the
+	# adjacency-preview faded color. Both are connected once — ExplorationState
+	# is an autoload so the signals persist across rebakes.
 	if not ExplorationState.room_revealed.is_connected(_on_room_revealed):
 		ExplorationState.room_revealed.connect(_on_room_revealed)
+	if not ExplorationState.room_seen.is_connected(_on_room_seen):
+		ExplorationState.room_seen.connect(_on_room_seen)
 
 	_bake_map()
 	_apply_layout()
@@ -218,27 +224,40 @@ func _bake_map() -> void:
 
 	_bake_image = Image.create(BAKE_VIEWPORT_SIZE.x, BAKE_VIEWPORT_SIZE.y, false, Image.FORMAT_RGBA8)
 	_bake_image.fill(VOID_COLOR)
-	# Paint only the rects that belong to rooms already in the explored set.
-	# On initial load this is usually empty (player hasn't moved yet) so the
-	# image starts blank; LosCuller's first reveal_room fires within a
-	# physics tick of spawn and lights the starting room.
-	# Rects with no room_id (legacy levels with no ExplorationState
-	# population) get painted unconditionally so we don't break those.
+	# Paint state-by-state. Explored beats seen (full color overwrites the
+	# faded preview); seen-but-not-explored beats void. Rects with no room_id
+	# (legacy levels with no ExplorationState population) get full color
+	# unconditionally so we don't break those.
+	# On initial load both sets are usually empty (player hasn't moved yet)
+	# so the image starts blank; LosCuller's first reveal_room fires within
+	# a physics tick of spawn and lights the starting room plus its
+	# neighbours.
+	# Two passes so explored rects can sit on top of any seen rects that
+	# overlap them at boundaries — seen uses void_only painting, so the
+	# pass order only matters if a piece switches state mid-bake (it can't).
+	for entry in _walkable_rects:
+		var rid: StringName = entry["room_id"]
+		if rid != &"" and not ExplorationState.is_explored(rid) and ExplorationState.is_seen(rid):
+			_paint_rect_into_bake(entry["rect"], FLOOR_COLOR_SEEN, true)
 	for entry in _walkable_rects:
 		var rid: StringName = entry["room_id"]
 		if rid == &"" or ExplorationState.is_explored(rid):
-			_paint_rect_into_bake(entry["rect"])
+			_paint_rect_into_bake(entry["rect"], FLOOR_COLOR)
 
 	_bake_texture = ImageTexture.create_from_image(_bake_image)
 	_texture_rect.texture = _bake_texture
 
 
 # Paints one walkable rect (world XZ coordinates) onto _bake_image using
-# the bake's center+ortho mapping. Used both for initial bake and for
-# incremental reveals; caller is responsible for pushing the texture
-# update after a batch of paints (so a multi-rect room only triggers one
-# GPU upload).
-func _paint_rect_into_bake(rect: Rect2) -> void:
+# the bake's center+ortho mapping with the given fill color. Used by both
+# initial bake and incremental seen/revealed updates; caller is responsible
+# for pushing the texture update after a batch of paints (so a multi-rect
+# room only triggers one GPU upload).
+#
+# void_only=true skips pixels that are already painted, used for SEEN paints
+# so a seen corridor's overlap-extended rect (FLOOR_OVERLAP pushes ~3 px past
+# the piece boundary) can't dim the adjacent explored room's border pixels.
+func _paint_rect_into_bake(rect: Rect2, color: Color, void_only: bool = false) -> void:
 	if _bake_image == null:
 		return
 	var px_per_world := float(BAKE_VIEWPORT_SIZE.x) / _bake_ortho
@@ -248,23 +267,44 @@ func _paint_rect_into_bake(rect: Rect2) -> void:
 	var px_size: Vector2 = rect.size * px_per_world
 	var px_rect := Rect2i(int(round(px_min.x)), int(round(px_min.y)), int(round(px_size.x)), int(round(px_size.y)))
 	px_rect = px_rect.intersection(image_bounds)
-	if px_rect.size.x > 0 and px_rect.size.y > 0:
-		_bake_image.fill_rect(px_rect, FLOOR_COLOR)
+	if px_rect.size.x <= 0 or px_rect.size.y <= 0:
+		return
+	if not void_only:
+		_bake_image.fill_rect(px_rect, color)
+		return
+	for y in range(px_rect.position.y, px_rect.position.y + px_rect.size.y):
+		for x in range(px_rect.position.x, px_rect.position.x + px_rect.size.x):
+			if _bake_image.get_pixel(x, y).a == 0.0:
+				_bake_image.set_pixel(x, y, color)
 
 
 # ExplorationState.room_revealed handler. Paints every walkable rect
-# tagged with the revealed room onto the existing bake image — one room
-# typically has one rect (its floor) plus corridors-coming-in rects from
-# adjacent pieces, but we only paint exact-match here so corridors light
-# up when their own id is revealed, not when an adjacent room reveals.
+# tagged with the revealed room onto the existing bake image in full color
+# — overwrites any previous faded-preview pixels from the seen state.
 func _on_room_revealed(room_id: StringName) -> void:
+	_repaint_room(room_id, FLOOR_COLOR, false)
+
+
+# ExplorationState.room_seen handler. Paints the room's rects at faded
+# alpha so the player sees a preview of adjacent corridors / rooms before
+# walking into them. Skipped if the room is already explored (full color
+# wins; we don't want to dim a previously-revealed piece). void_only so the
+# overlap band at the piece boundary doesn't tint an already-explored
+# neighbour.
+func _on_room_seen(room_id: StringName) -> void:
+	if ExplorationState.is_explored(room_id):
+		return
+	_repaint_room(room_id, FLOOR_COLOR_SEEN, true)
+
+
+func _repaint_room(room_id: StringName, color: Color, void_only: bool) -> void:
 	if _bake_image == null or _bake_texture == null:
 		return
 	var painted := false
 	for entry in _walkable_rects:
 		if entry["room_id"] != room_id:
 			continue
-		_paint_rect_into_bake(entry["rect"])
+		_paint_rect_into_bake(entry["rect"], color, void_only)
 		painted = true
 	if painted:
 		_bake_texture.update(_bake_image)
