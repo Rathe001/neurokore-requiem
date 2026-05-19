@@ -1,14 +1,19 @@
 extends Control
 class_name MinimapMarkerOverlay
 
-## Draws switch / exit markers on the minimap. Markers are filtered by
-## ExplorationState — only pieces the player has revealed contribute
+## Draws switch / exit / door markers on the minimap. Markers are filtered
+## by ExplorationState — only pieces the player has revealed contribute
 ## markers, so an unexplored room's switches don't spoil their location.
 ##
 ## Switches render as small filled circles; an unused switch is yellow
 ## and slightly larger so it reads as "still to do," while a used switch
 ## drops to a dim grey. The level exit is a diamond — red when locked,
-## green once the boss is dead and the player can descend.
+## green once the boss is dead and the player can descend. Closed doors
+## appear as small squares (green for unlocked, red for locked) and pop
+## off the map once they open. Door visibility checks BOTH adjacent
+## pieces (not just whichever cell the door's transform lands in) so a
+## door on the far side of a not-yet-entered room reappears the moment
+## the player enters the neighbouring corridor.
 ##
 ## Positioning uses the same iso projection basis as ScannerRadar so
 ## markers line up with the rotated map texture. The parent Minimap
@@ -19,11 +24,14 @@ class_name MinimapMarkerOverlay
 const SWITCH_RADIUS_ACTIVE := 4.0
 const SWITCH_RADIUS_USED := 2.5
 const EXIT_RADIUS := 5.5
+const DOOR_SIZE := 4.0  # side length of the square door marker
 
 const SWITCH_COLOR_ACTIVE := Color(1.0, 0.85, 0.2, 1.0)
 const SWITCH_COLOR_USED := Color(0.45, 0.45, 0.45, 0.85)
 const EXIT_COLOR_LOCKED := Color(0.95, 0.3, 0.25, 1.0)
 const EXIT_COLOR_UNLOCKED := Color(0.3, 0.95, 0.4, 1.0)
+const DOOR_COLOR_LOCKED := Color(0.95, 0.3, 0.25, 1.0)
+const DOOR_COLOR_CLOSED := Color(0.3, 0.95, 0.4, 1.0)
 
 ## Parent Minimap writes these every frame from _update_pan so the overlay
 ## projects relative to whatever the user is currently looking at —
@@ -57,11 +65,7 @@ func _draw() -> void:
 		var node := n as Node3D
 		if node == null or not node.is_inside_tree():
 			continue
-		var room_id: StringName = ExplorationState.room_at_world(node.global_position)
-		# Empty room_id (legacy levels without ExplorationState population)
-		# falls through to always-render so hand-authored prototype scenes
-		# still show their markers.
-		if room_id != &"" and not ExplorationState.is_explored(room_id):
+		if not _should_render_marker(node):
 			continue
 		var pos := _project(node.global_position, center, px_per_world)
 		# Clip to the visible map circle so markers don't render in the
@@ -73,6 +77,29 @@ func _draw() -> void:
 			_draw_exit(pos, (node as PrototypeExit).is_locked())
 		elif node is PrototypeSwitch:
 			_draw_switch(pos, (node as PrototypeSwitch).is_used())
+		elif node is PrototypeDoor:
+			_draw_door(pos, (node as PrototypeDoor).is_locked())
+
+
+# Per-class visibility gate. Doors are special-cased: an open door has no
+# marker, and a closed door checks BOTH adjacent pieces so it appears as
+# soon as either room/corridor is explored. Everything else falls back to
+# the room_at_world check (empty room_id passes for legacy hand-authored
+# scenes that skip ExplorationState population).
+func _should_render_marker(node: Node3D) -> bool:
+	if node is PrototypeDoor:
+		var pdoor := node as PrototypeDoor
+		if pdoor.is_open():
+			return false
+		var a := pdoor.minimap_piece_a
+		var b := pdoor.minimap_piece_b
+		if a == &"" and b == &"":
+			return true  # un-registered (e.g., hand-authored door) — always show
+		return ExplorationState.is_explored(a) or ExplorationState.is_explored(b)
+	var room_id: StringName = ExplorationState.room_at_world(node.global_position)
+	if room_id == &"":
+		return true
+	return ExplorationState.is_explored(room_id)
 
 
 func _project(world_pos: Vector3, center: Vector2, px_per_world: float) -> Vector2:
@@ -100,3 +127,10 @@ func _draw_exit(pos: Vector2, locked: bool) -> void:
 		pos + Vector2(-r, 0.0),
 	])
 	draw_colored_polygon(pts, col)
+
+
+func _draw_door(pos: Vector2, locked: bool) -> void:
+	var col: Color = DOOR_COLOR_LOCKED if locked else DOOR_COLOR_CLOSED
+	col.a *= opacity
+	var half := DOOR_SIZE * 0.5
+	draw_rect(Rect2(pos - Vector2(half, half), Vector2(DOOR_SIZE, DOOR_SIZE)), col, true)

@@ -48,8 +48,17 @@ var _frame_bars: Array[MeshInstance3D] = []
 
 const _DOOR_SHADER: Shader = preload("res://scripts/prototype/tech_door.gdshader")
 
+## Pieces the door bridges, populated by LevelBuilder._register_door_pairs.
+## MinimapMarkerOverlay shows the door iff at least one of these is in the
+## explored set — checking both sides means the door appears as soon as
+## the player has been in either of the rooms it connects.
+var minimap_piece_a: StringName = &""
+var minimap_piece_b: StringName = &""
+
+
 func _ready() -> void:
 	add_to_group(&"doors")
+	add_to_group(&"minimap_marker")
 	if unlock_on_boss:
 		add_to_group(&"boss_listeners")
 	_rest_y = mesh.position.y

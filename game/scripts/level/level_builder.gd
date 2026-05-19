@@ -213,6 +213,14 @@ func _register_door_pairs() -> void:
 		var ids: Array = seen.keys()
 		if ids.size() == 2:
 			ExplorationState.register_door(door, ids[0], ids[1])
+			# Also stash both ids on the door itself so the minimap marker
+			# overlay can light it up the moment EITHER adjacent piece is
+			# explored, instead of relying on room_at_world (which only
+			# returns whichever cell the door's exact position falls into).
+			if door is PrototypeDoor:
+				var pdoor := door as PrototypeDoor
+				pdoor.minimap_piece_a = ids[0]
+				pdoor.minimap_piece_b = ids[1]
 
 
 # Returns the graph that drives this build (generator output or
