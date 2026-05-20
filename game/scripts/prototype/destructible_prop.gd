@@ -70,7 +70,7 @@ func _register_spatial() -> void:
 	SpatialGrid.register(self, &"enemies")
 
 
-func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_strength: float = 0.0, multistrike: int = 1, is_crit: bool = false, _weapon_base_id: StringName = &"") -> void:
+func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_strength: float = 0.0, multistrike: int = 1, is_crit: bool = false, _weapon_base_id: StringName = &"", _is_explosion: bool = false) -> void:
 	if not _alive:
 		return
 	# In MP only the host applies damage; clients route hits via the
@@ -89,12 +89,12 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 
 
 @rpc("any_peer", "call_remote", "reliable")
-func request_damage(amount: int, knockback_from: Vector3, knockback_strength: float, multistrike: int, is_crit: bool) -> void:
+func request_damage(amount: int, knockback_from: Vector3, knockback_strength: float, multistrike: int, is_crit: bool, weapon_base_id: StringName = &"", is_explosion: bool = false) -> void:
 	if not multiplayer.is_server():
 		return
 	if not is_inside_tree():
 		return
-	take_damage(amount, knockback_from, knockback_strength, multistrike, is_crit)
+	take_damage(amount, knockback_from, knockback_strength, multistrike, is_crit, weapon_base_id, is_explosion)
 
 
 ## Host → all clients: play hit feedback locally. Unreliable because a
