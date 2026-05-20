@@ -85,6 +85,7 @@ var _debug_overlay_accum: float = 0.0
 var _state_flashlight: bool = false
 var _state_crouch: bool = false
 var _minimap: Minimap
+var _ngp_label: Label
 var _controls_panel: PanelContainer
 var _talent_btn: Button
 var _talent_btn_glow_phase: float = 0.0
@@ -105,6 +106,7 @@ func _ready() -> void:
 	UIThemeState.changed.connect(_apply_theme)
 	PlayerState.level_changed.connect(_on_level_changed)
 	PlayerState.xp_changed.connect(_repaint_xp)
+	PlayerState.new_game_plus_changed.connect(_on_ngp_changed)
 	# Buffs bar repopulates on any of the signals that can shift the active
 	# perk set: gear swap (stats), tier crossing, class/spec change. PerkState
 	# already collapses these into its own perks_changed, but we hook the
@@ -172,6 +174,8 @@ func _exit_tree() -> void:
 	UIThemeState.changed.disconnect(_apply_theme)
 	PlayerState.level_changed.disconnect(_on_level_changed)
 	PlayerState.xp_changed.disconnect(_repaint_xp)
+	if PlayerState.new_game_plus_changed.is_connected(_on_ngp_changed):
+		PlayerState.new_game_plus_changed.disconnect(_on_ngp_changed)
 	PerkState.perks_changed.disconnect(_update_buffs_bar)
 	PlayerState.class_changed.disconnect(_on_class_or_spec_changed)
 	PlayerState.spec_changed.disconnect(_on_class_or_spec_changed)
@@ -186,6 +190,10 @@ func _exit_tree() -> void:
 
 func _on_level_changed(_new: int, _old: int) -> void:
 	_update_avatar_panel()
+
+
+func _on_ngp_changed(_v: int) -> void:
+	_refresh_ngp_label()
 
 
 func _on_class_or_spec_changed(_id: StringName) -> void:
@@ -750,6 +758,40 @@ func _build_minimap(player: Node) -> void:
 	# If scanner is already equipped, activate radar overlay.
 	if player.has_method(&"is_scanner_active"):
 		_minimap.scanner_active = player.is_scanner_active()
+	_build_ngp_pill()
+
+
+# NG+ pill anchored top-right ABOVE the minimap circle, so the player
+# can see at a glance which run they're on. Hidden on NG+0 to avoid
+# clutter on fresh characters.
+func _build_ngp_pill() -> void:
+	_ngp_label = Label.new()
+	_ngp_label.add_theme_font_size_override(&"font_size", 14)
+	_ngp_label.add_theme_color_override(&"font_color", Color(1.0, 0.78, 0.35))
+	_ngp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_ngp_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Anchor to top-right, then offset left by minimap width so it
+	# sits over the minimap circle's top dead-corner area.
+	_ngp_label.anchor_left = 1.0
+	_ngp_label.anchor_right = 1.0
+	_ngp_label.anchor_top = 0.0
+	_ngp_label.anchor_bottom = 0.0
+	# Minimap is 170×170 anchored top-right with 12px margin.
+	# Place this label centered over the top of that square.
+	_ngp_label.offset_left = -182.0  # -170 - 12
+	_ngp_label.offset_right = -12.0
+	_ngp_label.offset_top = 0.0
+	_ngp_label.offset_bottom = 20.0
+	root.add_child(_ngp_label)
+	_refresh_ngp_label()
+
+
+func _refresh_ngp_label() -> void:
+	if _ngp_label == null:
+		return
+	var ngp := PlayerState.new_game_plus
+	_ngp_label.text = ("NG+%d" % ngp) if ngp > 0 else ""
+	_ngp_label.visible = ngp > 0
 
 func _build_controls_panel() -> void:
 	# Hide the old full-width hints label at the top of the screen.

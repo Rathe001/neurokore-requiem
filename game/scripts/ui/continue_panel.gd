@@ -195,10 +195,22 @@ func _add_character_row(save: Dictionary) -> void:
 
 	var level_label := Label.new()
 	level_label.text = "Lv. %d" % save.get("level", 1)
-	level_label.add_theme_font_size_override(&"font_size", 10)
-	level_label.add_theme_color_override(&"font_color", Color(0.65, 0.68, 0.72))
+	level_label.add_theme_font_size_override(&"font_size", 13)
+	level_label.add_theme_color_override(&"font_color", Color(0.92, 0.94, 0.97))
 	level_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	detail_hbox.add_child(level_label)
+
+	# New Game Plus count — what "level" the player is on in the
+	# beat-the-game-and-restart sense. Hidden on fresh characters
+	# (NG+0) since it would just clutter the row.
+	var ngp: int = int(save.get("new_game_plus", 0))
+	if ngp > 0:
+		var ngp_label := Label.new()
+		ngp_label.text = "NG+%d" % ngp
+		ngp_label.add_theme_font_size_override(&"font_size", 13)
+		ngp_label.add_theme_color_override(&"font_color", Color(1.0, 0.78, 0.35))
+		ngp_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		detail_hbox.add_child(ngp_label)
 
 	if hardcore:
 		var hc_label := Label.new()

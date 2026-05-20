@@ -9,6 +9,10 @@ signal talents_changed
 signal level_changed(new_level: int, old_level: int)
 signal xp_changed(current_xp: int, xp_to_next: int)
 signal leveled_up(new_level: int, hp_gain: int)
+## Fires when new_game_plus changes (post-clear reset, or restored from
+## save). Lets HUD elements that key off the NG+ value (e.g. the pill
+## above the minimap) refresh without polling.
+signal new_game_plus_changed(value: int)
 
 # XP curve: each level requires ~1.35× the previous, so leveling slows as you
 # climb. With XP_PER_ENEMY_LEVEL=20, a level-1 enemy is 20 xp; a level-5 enemy

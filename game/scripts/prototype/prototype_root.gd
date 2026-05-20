@@ -328,6 +328,7 @@ func _reset_player() -> void:
 	if player.has_method(&"respawn"):
 		player.respawn()
 	PlayerState.new_game_plus += 1
+	PlayerState.new_game_plus_changed.emit(PlayerState.new_game_plus)
 	if player.has_signal(&"notification_requested"):
 		player.emit_signal(&"notification_requested", tr(&"HUD_BANNER_LEVEL_RESET") % PlayerState.new_game_plus)
 	if PlayerState.active_save_id != "":
@@ -426,6 +427,7 @@ func _build_snapshot() -> Dictionary:
 @rpc("authority", "call_remote", "reliable")
 func _deliver_snapshot(snapshot: Dictionary) -> void:
 	PlayerState.new_game_plus = int(snapshot.get(&"ng_plus", 0))
+	PlayerState.new_game_plus_changed.emit(PlayerState.new_game_plus)
 	if _enemies_container != null and _enemies_container is EnemiesContainer:
 		(_enemies_container as EnemiesContainer).apply_snapshot(snapshot.get(&"enemies", []))
 	if _pickups_container != null:

@@ -273,6 +273,7 @@ func _deserialize_player(data: Dictionary) -> void:
 	PlayerState.xp_to_next = int(data.get("xp_to_next", PlayerState.STARTING_XP_TO_NEXT))
 	PlayerState.talent_points_total = int(data.get("talent_points_total", 0))
 	PlayerState.new_game_plus = int(data.get("new_game_plus", 0))
+	PlayerState.new_game_plus_changed.emit(PlayerState.new_game_plus)
 	PlayerState.saved_credits = int(data.get("credits", 0))
 	PlayerState.saved_resource_current = float(data.get("resource_current", 0.0))
 	PlayerState.saved_level_hp_bonus = int(data.get("level_hp_bonus", 0))
@@ -523,6 +524,7 @@ func _read_save_summary(path: String) -> Dictionary:
 		"class_id": str(player.get("class_id", "")),
 		"spec_id": str(player.get("spec_id", "")),
 		"level": int(player.get("level", 1)),
+		"new_game_plus": int(player.get("new_game_plus", 0)),
 		"hardcore": bool(player.get("hardcore", false)),
 		"mode_id": str(player.get("mode_id", "sp")),
 		"avatar_id": int(player.get("avatar_id", 0)),
