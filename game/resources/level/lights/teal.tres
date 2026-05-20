@@ -8,4 +8,4 @@ color = Color(0.2, 0.85, 1.0, 1)
 energy = 6.0
 light_range = 8.0
 attenuation = 1.2
-shadows = true
+shadows = false

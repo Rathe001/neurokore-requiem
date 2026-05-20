@@ -661,12 +661,20 @@ func _pool_release() -> void:
 func reset() -> void:
 	remove_from_group(&"corpses")
 	remove_from_group(&"ragdoll_corpses")
-	# Clear lazy-activated ragdoll state so the pooled enemy starts its
-	# next life as a fresh non-ragdoll. The PhysicalBone3D children that
-	# XBotRagdoll.setup added remain attached but they're not simulating
-	# (physical_bones_stop_simulation would be cleaner — re-evaluate if
-	# pool-recycled enemies show stuck physics state).
-	_ragdoll_activated = false
+	# Clear ragdoll state so the pooled enemy starts its next life as a
+	# fresh non-ragdoll. PhysicalBone3D children that setup() attached
+	# stay on the skeleton — XBotRagdoll.setup is idempotent so a
+	# re-acquired enemy doesn't rebuild them. If sim was still running
+	# (unlikely with the 2s settle stop but possible if the corpse was
+	# evicted mid-launch), stop it now so the freshly-spawned enemy
+	# isn't part physics-driven.
+	if _ragdoll_simulating and visual != null:
+		var skel := _find_skeleton(visual)
+		if skel != null:
+			skel.physical_bones_stop_simulation()
+	_ragdoll_simulating = false
+	_ragdoll_settle_timer = 0.0
+	set_process(false)
 	# Restore the visual the ragdoll spawn hid on death — pool re-acquire
 	# would otherwise show an invisible enemy.
 	if visual != null:
@@ -793,6 +801,18 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 	_last_hit_weapon_base_id = weapon_base_id
 	_last_hit_was_crit = is_crit
 	_visuals.update_health_bar()
+	# Blood burst per hit. Direction = away from the shooter (or upward
+	# fallback when knockback_from isn't set, e.g. DoT ticks). Crits get
+	# a bigger spray; the kill case below adds another, larger one.
+	var hit_pos := global_position + Vector3(0.0, 1.0, 0.0)
+	var blood_dir: Vector3 = (hit_pos - knockback_from)
+	blood_dir.y = 0.5
+	if blood_dir.length_squared() < 0.0001:
+		blood_dir = Vector3.UP
+	else:
+		blood_dir = blood_dir.normalized()
+	var hit_mult: float = 3.0 if is_crit else 1.5
+	PrototypeAttackIndicator.spawn_blood_burst(get_parent(), hit_pos, blood_dir, hit_mult)
 	var head := global_position + Vector3(0.0, 1.8, 0.0)
 	DamageNumber.spawn(get_parent(), head, amount, multistrike, is_crit)
 	# Subliminal "this is landing" layer. -15 dB was inaudible against the
@@ -1735,6 +1755,25 @@ func _die(kill_from: Vector3 = Vector3.ZERO, kill_force: float = 0.0) -> void:
 			p.on_enemy_killed()
 	_drop_credits()
 	_drop_item()
+	# Death blood — bigger spray than per-hit, plus a floor splatter at
+	# the kill location. Crit kills get a more dramatic burst (sniper-
+	# style explosive exit wound feel). Splatter decal is single-instance
+	# per kill regardless of crit (the dismemberment kick is the crit
+	# visual upgrade; doubling decals would just flood the floor cap).
+	var death_pos := global_position + Vector3(0.0, 1.0, 0.0)
+	var death_dir: Vector3 = (death_pos - kill_from) if kill_from != Vector3.ZERO else Vector3.UP
+	death_dir.y = 0.7
+	death_dir = death_dir.normalized()
+	var death_mult: float = 6.0 if _last_hit_was_crit else 4.0
+	PrototypeAttackIndicator.spawn_blood_burst(get_parent(), death_pos, death_dir, death_mult)
+	# Kill scene = primary splat + 2-4 satellite stains. Direction
+	# biases the spray pattern away from the shooter so the gore arcs
+	# toward where the body's heading.
+	PrototypeAttackIndicator.spawn_blood_kill_scene(get_parent(), global_position, death_dir)
+	# Wall splatter — cast horizontally in the spray direction; if we
+	# hit a wall, paint it. Crits get extra perpendicular shots so the
+	# wall mess looks more chaotic (1 main + 2 spread).
+	_try_spawn_wall_blood(death_pos, death_dir, _last_hit_was_crit)
 	# Death = immediate limp ragdoll. Two variants depending on which
 	# character mesh is in use:
 	#
@@ -1764,13 +1803,25 @@ func _die(kill_from: Vector3 = Vector3.ZERO, kill_force: float = 0.0) -> void:
 			if anim_player != null:
 				anim_player.stop(true)
 			XBotRagdoll.setup(skel)
+			# Crit kills dismember 1-2 random tip bones (hands/feet/forearms).
+			# Must happen between setup() and activate() — the dismember
+			# step sets `joint_type = JOINT_TYPE_NONE` on the chosen bones,
+			# and that value is read by physical_bones_start_simulation in
+			# activate(). After sim starts, the dismembered bones have no
+			# parent joint and fly free when impulses apply.
+			var dismembered: Array[PhysicalBone3D] = []
+			if _last_hit_was_crit:
+				dismembered = XBotRagdoll.dismember_random_tips(skel, 2)
 			# Pass ZERO/0 — the kill impulse goes through
 			# apply_explosion_impulse below so it benefits from the
 			# physics-frame await (apply_central_impulse on a body that
 			# hasn't yet been simulated is silently dropped, and the
 			# impulse-inside-activate path doesn't await).
 			XBotRagdoll.activate(skel, Vector3.ZERO, 0.0)
-			_ragdoll_activated = true
+			_ragdoll_setup_done = true
+			_ragdoll_simulating = true
+			_ragdoll_settle_timer = 0.0
+			set_process(true)  # _tick_ragdoll_settle runs while simulating
 			add_to_group(&"ragdoll_corpses")
 			did_skeletal_ragdoll = true
 			if kill_force > 0.0:
@@ -1786,6 +1837,13 @@ func _die(kill_from: Vector3 = Vector3.ZERO, kill_force: float = 0.0) -> void:
 				await get_tree().physics_frame
 				if is_inside_tree() and is_instance_valid(self):
 					apply_explosion_impulse(kill_from, kill_force * 0.4)
+					# Extra outward boost on dismembered tips so they
+					# actually fly off the body, not just dangle. Direction
+					# is opposite the kill source (same as the main launch),
+					# magnitude tuned to be punchy without sending hands
+					# into orbit.
+					if not dismembered.is_empty():
+						_apply_dismember_kick(kill_from, dismembered)
 	if not did_skeletal_ragdoll:
 		_spawn_ragdoll_corpse(kill_from, kill_force)
 		if visual != null:
@@ -1796,11 +1854,65 @@ func _die(kill_from: Vector3 = Vector3.ZERO, kill_force: float = 0.0) -> void:
 		return
 	_become_corpse()
 
-# Tracks whether ragdoll physics has been activated yet on this corpse.
-# Set true in `_die` when the skeletal ragdoll spawns; checked by
-# apply_explosion_impulse so explosion-driven impulses skip the setup
-# step on a corpse that's already simulating.
-var _ragdoll_activated: bool = false
+# Ragdoll state. `_setup` is one-shot (PhysicalBone3D children built);
+# `_simulating` flips on/off as the body launches → settles → gets
+# explosion-pushed → settles again. The settle check runs in _process
+# while simulating and calls physical_bones_stop_simulation() once the
+# corpse has been at rest for _RAGDOLL_SETTLE_DURATION. Without this,
+# 100 max corpses × 20 active rigid bodies = 2000 perpetually-integrated
+# rigid bodies in the physics scene even when nothing's moving.
+var _ragdoll_setup_done: bool = false
+var _ragdoll_simulating: bool = false
+var _ragdoll_settle_timer: float = 0.0
+const _RAGDOLL_SETTLE_VELOCITY: float = 0.15  # m/s — below this counts as "at rest"
+const _RAGDOLL_SETTLE_DURATION: float = 1.0   # seconds at rest before freezing
+
+
+func _process(delta: float) -> void:
+	if _ragdoll_simulating:
+		_tick_ragdoll_settle(delta)
+
+
+# Polls every PhysicalBone3D's linear_velocity once per render frame.
+# Cheap — ~20 vector length-squared reads. When the max bone velocity
+# is below _RAGDOLL_SETTLE_VELOCITY for _RAGDOLL_SETTLE_DURATION
+# straight, calls physical_bones_stop_simulation() so the simulator
+# stops integrating these bodies. Re-acquired by apply_explosion_impulse
+# (which calls physical_bones_start_simulation again before pushing).
+func _tick_ragdoll_settle(delta: float) -> void:
+	if visual == null:
+		return
+	var skel := _find_skeleton(visual)
+	if skel == null:
+		return
+	var thresh_sq: float = _RAGDOLL_SETTLE_VELOCITY * _RAGDOLL_SETTLE_VELOCITY
+	var still := true
+	for child in skel.get_children():
+		if not (child is PhysicalBone3D):
+			continue
+		if (child as PhysicalBone3D).linear_velocity.length_squared() >= thresh_sq:
+			still = false
+			break
+	if not still:
+		_ragdoll_settle_timer = 0.0
+		return
+	_ragdoll_settle_timer += delta
+	if _ragdoll_settle_timer >= _RAGDOLL_SETTLE_DURATION:
+		skel.physical_bones_stop_simulation()
+		_ragdoll_simulating = false
+		_ragdoll_settle_timer = 0.0
+		set_process(false)
+		# Blood pool grows under the settled corpse. Position uses the
+		# hip bone if available (corpse may have slid/launched far from
+		# the original CharacterBody3D global_position during the
+		# ragdoll), otherwise falls back to enemy origin.
+		var pool_pos := global_position
+		var hip_idx: int = skel.find_bone(&"mixamorig_Hips")
+		if hip_idx < 0:
+			hip_idx = skel.find_bone(&"Hips")
+		if hip_idx >= 0:
+			pool_pos = skel.global_transform * skel.get_bone_global_pose(hip_idx).origin
+		PrototypeAttackIndicator.spawn_blood_pool(get_parent(), pool_pos)
 
 
 # Apply an impulse to the corpse via the active physics ragdoll. Matches
@@ -1813,6 +1925,73 @@ var _ragdoll_activated: bool = false
 # "push the rigid bodies" path. Pushes every bone, not just hip+spine,
 # so limbs go flying in different directions — reads as "the explosion
 # threw the body apart" rather than "the body slid sideways".
+# Extra outward impulse applied to dismembered tip bones (hands / feet /
+# forearms) on crit kills. The body-wide explosion impulse already
+# pushes every bone — this adds an additional kick along the same
+# direction so the now-unconstrained tips clearly separate from the
+# torso instead of falling alongside it. Tuned to read as "limb flies
+# off" not "limb yeeted into orbit".
+const _DISMEMBER_KICK_FORCE: float = 12.0
+func _apply_dismember_kick(kill_from: Vector3, bones: Array[PhysicalBone3D]) -> void:
+	var dir: Vector3 = global_position - kill_from
+	dir.y = 0.0
+	if dir.length_squared() < 0.0001:
+		dir = Vector3(0.0, 1.0, 0.0)
+	else:
+		dir = dir.normalized()
+		dir.y = 0.7  # bias up so parts arc, not skid along the floor
+		dir = dir.normalized()
+	for pb in bones:
+		# Per-bone mass keeps Δv consistent: small hand (0.8kg) and big
+		# foot (1.5kg) end up at similar launch speeds.
+		pb.apply_central_impulse(dir * _DISMEMBER_KICK_FORCE * pb.mass)
+
+
+# Wall blood splatter — casts horizontally in the spray direction; if
+# the ray hits a wall (vertical surface, |normal.y| < 0.6), spawns a
+# decal there. Crits cast three rays: the main spray direction plus
+# ±45° perpendicular spread so the wall mess is more dramatic.
+#
+# Async because intersect_ray requires the physics frame; awaiting one
+# is harmless here — _die already has a longer DEATH_HOLD wait below.
+const _WALL_BLOOD_MAX_RANGE: float = 6.0
+const _WALL_BLOOD_FLOOR_NORMAL_THRESHOLD: float = 0.6  # |n.y| above = floor/ceiling
+func _try_spawn_wall_blood(start_pos: Vector3, spray_dir: Vector3, is_crit: bool) -> void:
+	if not Engine.is_in_physics_frame():
+		await get_tree().physics_frame
+		if not is_inside_tree() or not is_instance_valid(self):
+			return
+	var world := get_world_3d()
+	if world == null or not world.space.is_valid():
+		return
+	var space := PhysicsServer3D.space_get_direct_state(world.space)
+	if space == null:
+		return
+	# Cast horizontally in the spray direction (drop Y so we hit walls,
+	# not floors/ceilings).
+	var dir := Vector3(spray_dir.x, 0.0, spray_dir.z)
+	if dir.length_squared() < 0.0001:
+		return
+	dir = dir.normalized()
+	# Build the cast list. Crits get spread; normal kills get one cast.
+	var cast_dirs: Array[Vector3] = [dir]
+	if is_crit:
+		var spread_l := dir.rotated(Vector3.UP, deg_to_rad(45.0))
+		var spread_r := dir.rotated(Vector3.UP, deg_to_rad(-45.0))
+		cast_dirs.append(spread_l)
+		cast_dirs.append(spread_r)
+	for d in cast_dirs:
+		var query := PhysicsRayQueryParameters3D.create(start_pos, start_pos + d * _WALL_BLOOD_MAX_RANGE, 1)
+		var result := space.intersect_ray(query)
+		if result.is_empty():
+			continue
+		var hit_normal: Vector3 = result["normal"]
+		# Skip floors / ceilings — those get the regular floor splat path.
+		if absf(hit_normal.y) > _WALL_BLOOD_FLOOR_NORMAL_THRESHOLD:
+			continue
+		PrototypeAttackIndicator.spawn_blood_wall_splatter(get_parent(), result["position"], hit_normal)
+
+
 const _EXPLOSION_FORCE_MULT: float = 8.0  # impulse scale; tune for carnage
 func apply_explosion_impulse(force_origin: Vector3, force_strength: float) -> void:
 	if visual == null:
@@ -1820,6 +1999,19 @@ func apply_explosion_impulse(force_origin: Vector3, force_strength: float) -> vo
 	var skel := _find_skeleton(visual)
 	if skel == null:
 		return
+	# Re-activate simulation if the corpse had settled and stopped. PBs
+	# stay attached, so physical_bones_start_simulation just resumes the
+	# integration. Need a physics_frame await after re-start so impulses
+	# aren't dropped — same hazard as the initial death activation.
+	var was_settled := _ragdoll_setup_done and not _ragdoll_simulating
+	if was_settled:
+		skel.physical_bones_start_simulation()
+		_ragdoll_simulating = true
+		_ragdoll_settle_timer = 0.0
+		set_process(true)
+		await get_tree().physics_frame
+		if not is_instance_valid(self) or not is_instance_valid(skel):
+			return
 	var dir: Vector3 = global_position - force_origin
 	var dist: float = maxf(dir.length(), 0.1)
 	dir = dir.normalized() if dist > 0.0001 else Vector3.UP
@@ -1832,6 +2024,9 @@ func apply_explosion_impulse(force_origin: Vector3, force_strength: float) -> vo
 			continue
 		var pb := child as PhysicalBone3D
 		pb.apply_central_impulse(dir * force_strength * pb.mass * falloff * _EXPLOSION_FORCE_MULT)
+	# Bodies are moving again — reset the settle timer so the new motion
+	# isn't immediately re-frozen by an already-counting-up timer.
+	_ragdoll_settle_timer = 0.0
 
 
 func _drop_credits() -> void:

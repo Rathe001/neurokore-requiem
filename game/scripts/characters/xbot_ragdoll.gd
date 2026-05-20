@@ -160,6 +160,42 @@ static func _find_bone_either(skeleton: Skeleton3D, preferred: StringName) -> in
 	return -1
 
 
+## Marks a random subset of "tip" bones (hands, feet, forearms) for
+## dismemberment by setting joint_type = JOINT_TYPE_NONE — so when
+## physical_bones_start_simulation runs next, no joint is created and
+## the bone becomes a free rigid body. Return the picked PhysicalBone3D
+## list so the caller can apply extra impulse to send them flying.
+##
+## MUST be called AFTER `setup(skel)` and BEFORE `activate(skel, ...)`
+## — the joint_type read happens at simulation start.
+static func dismember_random_tips(skeleton: Skeleton3D, max_count: int = 2) -> Array[PhysicalBone3D]:
+	var pool: Array[PhysicalBone3D] = []
+	for child in skeleton.get_children():
+		if not (child is PhysicalBone3D):
+			continue
+		var pb := child as PhysicalBone3D
+		var n := String(pb.bone_name)
+		# Tip bones — limbs that read cleanly when separated. ForeArms
+		# detach below the elbow ("forearm fly-off"), Hands at the wrist,
+		# Feet at the ankle. Head is intentionally excluded — decapitation
+		# is a step further than what most crits should produce.
+		if n.ends_with("Hand") or n.ends_with("Foot") or n.ends_with("ForeArm"):
+			pool.append(pb)
+	if pool.is_empty():
+		return []
+	pool.shuffle()
+	var count: int = mini(max_count, pool.size())
+	# Randomise count in [1, max_count] so not every crit kill produces
+	# the same number of flying parts.
+	count = randi_range(1, count)
+	var picked: Array[PhysicalBone3D] = []
+	for i in count:
+		var pb := pool[i]
+		pb.joint_type = PhysicalBone3D.JOINT_TYPE_NONE
+		picked.append(pb)
+	return picked
+
+
 ## Flips the skeleton into physics-driven mode. Every PhysicalBone3D
 ## previously added by setup() becomes a falling rigid body; the
 ## Skeleton3D writes their world transforms back to its bones each

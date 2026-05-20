@@ -32,9 +32,34 @@ static func tick(
 			var scene := body.get_tree().current_scene
 			if scene != null:
 				PrototypeAttackIndicator.spawn_footstep_puff(scene, pos)
+				_handle_bloody_footstep(body, scene, pos, delta_v)
 		var floor_key := detect_floor_type(body)
 		WeaponSounds.play_generic(floor_key, pos, volume_db, at_listener)
 	return [accum, pos]
+
+
+# Bloody footprint emission. Refresh-then-spawn order:
+#   1. If currently standing in any blood decal, recharge the counter
+#      to BLOODY_STEPS_INITIAL so the next print is full-intensity.
+#   2. Spawn the print using the current counter (post-recharge) and
+#      decrement.
+# step_idx alternates L/R lateral offset so prints don't stack on the
+# player's centerline — reads as actual footsteps, not a single trail.
+static func _handle_bloody_footstep(body: CharacterBody3D, scene: Node, pos: Vector3, move_delta: Vector3) -> void:
+	if PrototypeAttackIndicator.is_in_blood(pos):
+		body.set_meta(&"bloody_steps_remaining", PrototypeAttackIndicator.BLOODY_STEPS_INITIAL)
+	var remaining: int = int(body.get_meta(&"bloody_steps_remaining", 0))
+	if remaining <= 0:
+		return
+	var step_idx: int = int(body.get_meta(&"bloody_step_idx", 0))
+	var move_dir: Vector3 = move_delta.normalized() if move_delta.length_squared() > 0.0001 else Vector3.FORWARD
+	# Right vector in the XZ plane = UP × forward.
+	var right: Vector3 = Vector3.UP.cross(move_dir).normalized()
+	var lateral: Vector3 = right * (0.18 if step_idx % 2 == 0 else -0.18)
+	var intensity: float = float(remaining) / float(PrototypeAttackIndicator.BLOODY_STEPS_INITIAL)
+	PrototypeAttackIndicator.spawn_blood_footprint(scene, pos + lateral, move_dir, intensity)
+	body.set_meta(&"bloody_steps_remaining", remaining - 1)
+	body.set_meta(&"bloody_step_idx", step_idx + 1)
 
 
 ## Check the floor body under a CharacterBody3D for a material-type group.
