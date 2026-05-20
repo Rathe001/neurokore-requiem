@@ -1206,8 +1206,14 @@ func _on_perk_gained(perk: Perk) -> void:
 	# exists and fall through to the centre-screen fallback.
 	# Closure form avoids the Godot 4 deferred type-check bug — no typed
 	# arg crosses the deferred boundary.
+	# instance_id capture (perk is a Resource, ref-counted, but `self`
+	# is captured implicitly via _animate_perk_pip — the HUD can be
+	# freed on level reload between the signal and the deferred call).
+	var hud_id: int = get_instance_id()
 	(func() -> void:
-		if is_instance_valid(perk): _animate_perk_pip(perk)
+		var h := instance_from_id(hud_id) as PrototypeHud
+		if h != null and is_instance_valid(perk):
+			h._animate_perk_pip(perk)
 	).call_deferred()
 
 
@@ -1268,7 +1274,14 @@ func _animate_perk_pip(perk: Perk) -> void:
 	var fade := create_tween()
 	fade.tween_interval(_PIP_TRAVEL_DURATION + _PIP_HOLD)
 	fade.tween_property(pip, "modulate:a", 0.0, _PIP_FADE)
-	fade.tween_callback(pip.queue_free)
+	# instance_id capture so a HUD reset / scene change doesn't trip
+	# "Lambda capture freed" when the timer fires on a stale pip.
+	var pip_id: int = pip.get_instance_id()
+	fade.tween_callback(func() -> void:
+		var n := instance_from_id(pip_id) as Node
+		if n != null:
+			n.queue_free()
+	)
 
 
 func _buff_entry_for_stat(stat_id: StringName) -> Control:

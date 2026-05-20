@@ -25,10 +25,15 @@ func _on_node_added(node: Node) -> void:
 	# Deferred so the node is fully in the tree and ready. Closure avoids
 	# the Godot 4 deferred type-check bug ("Cannot convert argument 1 from
 	# Object to Object") — no argument crosses the deferred boundary.
-	# Validity check inside the closure guards against nodes freed before
-	# the deferred frame.
+	#
+	# instance_from_id (int capture) instead of an Object capture — see
+	# OverhangFader for the rationale; node_added fires on every node
+	# added, so on level reload we get a wave of freed-Object lambdas.
+	var node_id: int = node.get_instance_id()
 	(func() -> void:
-		if is_instance_valid(node): _try_wire(node)
+		var n := instance_from_id(node_id) as Node
+		if n != null:
+			_try_wire(n)
 	).call_deferred()
 
 

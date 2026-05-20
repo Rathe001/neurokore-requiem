@@ -215,28 +215,37 @@ func resolve_skill_hit(skill: Skill, aim: Vector3, weapon: Item, source_offset: 
 			# other short.
 			_apply_melee_combo_shake(weapon, combo_step)
 			_resolve_cone(skill, aim, eff_range, weapon)
+			# Resolve self through instance_from_id at fire time — see the
+			# fire timer in PrototypePlayer for the lambda-capture
+			# rationale. PlayerCombat is a Node (player child) so the
+			# implicit self capture would be invalidated by a level
+			# reload during the multistrike stagger.
+			var self_id := get_instance_id()
 			for extra in hits - 1:
 				var delay := MULTISTRIKE_STAGGER * float(extra + 1)
 				_host.get_tree().create_timer(delay).timeout.connect(func() -> void:
-					if not _host._alive:
+					var c := instance_from_id(self_id) as PlayerCombat
+					if c == null or c._host == null or not c._host._alive:
 						return
 					if not skip_cone_visual:
 						if is_knife:
-							CombatVisuals.spawn_blade_slash(_host, aim, eff_range, visual_cone_deg)
+							CombatVisuals.spawn_blade_slash(c._host, aim, eff_range, visual_cone_deg)
 						else:
-							CombatVisuals.spawn_hit_cone(_host, aim, eff_range, visual_cone_deg)
-					_resolve_cone(skill, aim, eff_range, weapon)
+							CombatVisuals.spawn_hit_cone(c._host, aim, eff_range, visual_cone_deg)
+					c._resolve_cone(skill, aim, eff_range, weapon)
 				, CONNECT_ONE_SHOT)
 		Skill.TargetingMode.AOE_RADIAL:
 			CombatVisuals.spawn_hit_radial(_host, eff_range)
 			_resolve_aoe(skill, eff_range, weapon)
+			var self_id := get_instance_id()
 			for extra in hits - 1:
 				var delay := MULTISTRIKE_STAGGER * float(extra + 1)
 				_host.get_tree().create_timer(delay).timeout.connect(func() -> void:
-					if not _host._alive:
+					var c := instance_from_id(self_id) as PlayerCombat
+					if c == null or c._host == null or not c._host._alive:
 						return
-					CombatVisuals.spawn_hit_radial(_host, eff_range)
-					_resolve_aoe(skill, eff_range, weapon)
+					CombatVisuals.spawn_hit_radial(c._host, eff_range)
+					c._resolve_aoe(skill, eff_range, weapon)
 				, CONNECT_ONE_SHOT)
 		Skill.TargetingMode.PROJECTILE:
 			for i in hits:
@@ -371,14 +380,16 @@ func _try_double_tap(skill: Skill, aim: Vector3, eff_range: float, weapon: Item,
 	if chance <= 0.0 or randf() >= chance:
 		return
 	var tap_aim := _last_resolved_aim
+	var self_id := get_instance_id()
 	_host.get_tree().create_timer(DOUBLE_TAP_DELAY).timeout.connect(func() -> void:
-		if not _host._alive:
+		var c := instance_from_id(self_id) as PlayerCombat
+		if c == null or c._host == null or not c._host._alive:
 			return
 		match skill.targeting_mode:
 			Skill.TargetingMode.PROJECTILE:
-				_spawn_projectile_exact(skill, tap_aim, eff_range, weapon, source_offset)
+				c._spawn_projectile_exact(skill, tap_aim, eff_range, weapon, source_offset)
 			Skill.TargetingMode.HITSCAN:
-				_resolve_hitscan_exact(skill, tap_aim, eff_range, weapon, source_offset)
+				c._resolve_hitscan_exact(skill, tap_aim, eff_range, weapon, source_offset)
 	, CONNECT_ONE_SHOT)
 
 # ---------------------------------------------------------------------------

@@ -38,9 +38,18 @@ func _on_node_added(node: Node) -> void:
 	# Defer the group check by one tree-process step. node_added fires
 	# synchronously during add_child, but callers commonly call add_to_group
 	# AFTER add_child, so checking the group here would miss them.
+	#
+	# Capture instance_id (int) instead of the Node reference — node_added
+	# fires for EVERY node added to the tree (hundreds per level build),
+	# so during a level reload the deferred batch can include a node that
+	# was added then immediately freed in the same frame. An Object
+	# capture would log "Lambda capture freed" once per such node.
 	if node is MeshInstance3D:
+		var node_id: int = node.get_instance_id()
 		(func() -> void:
-			if is_instance_valid(node): _maybe_register(node)
+			var n := instance_from_id(node_id) as MeshInstance3D
+			if n != null:
+				_maybe_register(n)
 		).call_deferred()
 
 func _maybe_register(node: Node) -> void:

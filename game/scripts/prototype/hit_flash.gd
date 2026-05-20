@@ -39,11 +39,23 @@ static func play(host: Node, root: Node3D, prior: Tween = null, color: Color = F
 
 	var tween := host.create_tween()
 	tween.tween_property(overlay, "albedo_color:a", 0.0, FLASH_DURATION)
+	# Capture instance IDs (ints) instead of Object references — when
+	# the enemy dies mid-flash (common during multi-hit combos), the
+	# captured MeshInstance3D references would be freed and Godot's
+	# lambda machinery rejects the entire callback with "Lambda capture
+	# at index 0 was freed" BEFORE the body's is_instance_valid checks
+	# can run. Ints are value types and can't be freed.
+	var mesh_ids: Array[int] = []
+	for m in meshes:
+		mesh_ids.append(m.get_instance_id())
+	var overlay_id: int = overlay.get_instance_id()
 	tween.finished.connect(func() -> void:
-		for m: MeshInstance3D in meshes:
-			# `material_overlay == overlay` guards against another flash having
+		var ov := instance_from_id(overlay_id)
+		for mid in mesh_ids:
+			var m := instance_from_id(mid) as MeshInstance3D
+			# material_overlay == ov guards against another flash having
 			# replaced the overlay between this one starting and finishing.
-			if is_instance_valid(m) and m.material_overlay == overlay:
+			if m != null and m.material_overlay == ov:
 				m.material_overlay = null
 	)
 	return tween

@@ -69,6 +69,10 @@ func get_spec_origin(spec_id: StringName) -> StringName:
 	return CLASS_DEFINITIONS.get(spec_id, {}).get(&"origin", &"analog")
 
 ## Resolve a legacy stat abbreviation or class name to the class color.
-static func color_for_id(id: StringName) -> Color:
+## Not `static` because all callsites access it via the AttributeState
+## autoload instance — Godot 4 warns when you call a static method
+## through an instance reference, so we drop `static` to match how
+## it's used.
+func color_for_id(id: StringName) -> Color:
 	var class_id: StringName = STAT_TO_CLASS.get(id, id)
 	return CLASS_COLORS.get(class_id, Color.WHITE)

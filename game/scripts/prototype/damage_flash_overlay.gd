@@ -43,4 +43,13 @@ func flash(damage: int, max_health: int) -> void:
 	_rect.visible = true
 	_tween = create_tween()
 	_tween.tween_property(_rect, "color:a", 0.0, FLASH_DURATION).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-	_tween.tween_callback(func() -> void: _rect.visible = false)
+	# Capture _rect's instance ID instead of the reference — on a level
+	# reload the CanvasLayer + _rect can be queue_freed while a pending
+	# tween callback is still scheduled, which would log "Lambda capture
+	# freed" once per pending flash.
+	var rect_id: int = _rect.get_instance_id()
+	_tween.tween_callback(func() -> void:
+		var r := instance_from_id(rect_id) as ColorRect
+		if r != null:
+			r.visible = false
+	)

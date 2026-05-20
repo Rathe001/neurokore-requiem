@@ -189,7 +189,15 @@ func stop_channel_loop(player: AudioStreamPlayer3D) -> void:
 		return
 	var tw := player.create_tween()
 	tw.tween_property(player, "volume_db", -40.0, CHANNEL_FADE_OUT)
-	tw.tween_callback(SFX.release_player.bind(player))
+	# instance_id capture — see HitFlash for the rationale. Binding
+	# `player` into a Callable would fail with "Lambda capture freed"
+	# if the audio pool reclaims the player before the fade finishes.
+	var player_id: int = player.get_instance_id()
+	tw.tween_callback(func() -> void:
+		var p := instance_from_id(player_id) as AudioStreamPlayer3D
+		if p != null:
+			SFX.release_player(p)
+	)
 
 
 # ── Generic sounds (not weapon-specific) ────────────────────────────────────

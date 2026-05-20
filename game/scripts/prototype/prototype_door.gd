@@ -280,7 +280,14 @@ func _request_interact() -> void:
 	toggle()
 	_client_set_open.rpc(_open)
 	# Brief cooldown prevents two near-simultaneous RPCs from toggling twice.
-	get_tree().create_timer(0.15).timeout.connect(func() -> void: _interact_cooldown = false)
+	# instance_id capture — door may be freed (level reload) during the
+	# 150ms cooldown window.
+	var door_id: int = get_instance_id()
+	get_tree().create_timer(0.15).timeout.connect(func() -> void:
+		var d := instance_from_id(door_id) as PrototypeDoor
+		if d != null:
+			d._interact_cooldown = false
+	)
 
 
 @rpc("authority", "call_remote", "reliable")

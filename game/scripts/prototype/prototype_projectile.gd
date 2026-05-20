@@ -692,6 +692,17 @@ func _on_body_entered(body: Node3D) -> void:
 				pierce_count -= 1
 				_hit = false
 				return
+	elif blast_radius > 0.0 and not is_ghost:
+		# AoE projectile (RPG, charged plasma) hit a non-target body — a
+		# decorative pillar, a structure prop, or a non-damageable world
+		# collider. The sweep raycast in _physics_process catches most
+		# world hits first, but body_entered can fire on the same frame
+		# (or earlier on the spawn frame if the muzzle clips geometry),
+		# so we need this fallback. Without it, RPG rounds silently
+		# passed through pillars without detonating. Ghosts (MP visual
+		# echoes) suppress — the firing peer's _explode RPC replicates
+		# the boom; doubling it would show two bursts.
+		_explode(global_position)
 	_release()
 
 

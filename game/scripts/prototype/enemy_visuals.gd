@@ -10,9 +10,6 @@ var _outlined_meshes: Array[MeshInstance3D] = []
 var _hovered: bool = false
 var _tooltip_locked: bool = false
 
-# Material cache for model tinting — avoids duplicating shared materials.
-var _tint_cache: Dictionary = {}
-
 # Static outline materials (shared across all enemies).
 static var _s_outline_mat: StandardMaterial3D
 static var _s_outline_mat_locked: StandardMaterial3D
@@ -29,7 +26,6 @@ func reset() -> void:
 	_hovered = false
 	_tooltip_locked = false
 	_outlined_meshes.clear()
-	_tint_cache.clear()
 
 
 # ── Hover & Outline ────────────────────────────────────────────────────────
@@ -213,26 +209,41 @@ func apply_floor_ring_tint_color(color: Color) -> void:
 
 # ── Model tint ─────────────────────────────────────────────────────────────
 
+## Color-codes the enemy to signal class / affix / named identity.
+## Re-implemented as an ALBEDO blend (not emission) so the tint reads
+## at any lighting level without making the enemy self-lit. Pure
+## emission lit them up in dark rooms; multiplying albedo just shifts
+## the surface color and lets the room's lights still control how
+## visible the enemy is.
 func apply_model_tint(color: Color) -> void:
 	if _host.visual == null:
 		return
 	_walk_and_tint(_host.visual, color)
 
+
 func _walk_and_tint(node: Node, color: Color) -> void:
 	if node is MeshInstance3D:
 		var mi: MeshInstance3D = node
-		for surf_idx in mi.get_surface_override_material_count():
-			var base_mat := mi.mesh.surface_get_material(surf_idx) if mi.mesh != null else null
+		var surf_count: int = mi.mesh.get_surface_count() if mi.mesh != null else 0
+		for surf_idx in surf_count:
+			var base_mat := mi.mesh.surface_get_material(surf_idx)
 			if base_mat == null:
 				continue
-			var key := base_mat.resource_path if base_mat.resource_path != "" else str(base_mat.get_instance_id())
-			if not _tint_cache.has(key):
-				_tint_cache[key] = base_mat.duplicate()
-			var mat: BaseMaterial3D = _tint_cache[key]
+			# Duplicate so we don't mutate the shared resource (every
+			# enemy of this archetype would otherwise share the tint).
+			var mat: BaseMaterial3D = base_mat.duplicate()
 			if mat is StandardMaterial3D:
-				mat.emission_enabled = true
-				mat.emission = color
-				mat.emission_energy_multiplier = 0.4
+				# Lerp from white toward the tint at 55% strength —
+				# tints the surface clearly while preserving most of
+				# the base brightness so the mesh doesn't darken in
+				# already-dim rooms. emission stays OFF, so the
+				# enemy doesn't self-illuminate.
+				var blend: float = 0.55
+				mat.albedo_color = Color(
+					lerpf(1.0, color.r, blend),
+					lerpf(1.0, color.g, blend),
+					lerpf(1.0, color.b, blend),
+				)
 			mi.set_surface_override_material(surf_idx, mat)
 	for child in node.get_children():
 		_walk_and_tint(child, color)

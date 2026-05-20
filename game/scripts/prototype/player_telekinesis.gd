@@ -35,13 +35,25 @@ func tick(delta: float) -> void:
 	if targets.is_empty():
 		return
 	var dmg := int(round(float(TELEKINESIS_BASE_DAMAGE) * 1.0))
+	var self_id := get_instance_id()
 	for i in targets.size():
 		var captured_target: Node3D = targets[i]
 		if i == 0:
 			_spawn_grab(captured_target, dmg)
 		else:
+			# Capture instance IDs instead of references — both self
+			# (Node child of player) and the target enemy can be freed
+			# during the bolt stagger (player death, target killed by
+			# previous bolt, level reload). SceneTreeTimers fire
+			# regardless, so an Object capture would log "Lambda
+			# capture freed".
+			var target_id := captured_target.get_instance_id()
 			_host.get_tree().create_timer(TELEKINESIS_BOLT_STAGGER * float(i)).timeout.connect(
-				func() -> void: _spawn_grab(captured_target, dmg),
+				func() -> void:
+					var s := instance_from_id(self_id) as PlayerTelekinesis
+					var t := instance_from_id(target_id) as Node3D
+					if s != null and t != null:
+						s._spawn_grab(t, dmg),
 				CONNECT_ONE_SHOT)
 
 

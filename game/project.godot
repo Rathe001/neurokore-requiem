@@ -26,7 +26,7 @@ config/windows_native_icon="res://assets/ui/game.ico"
 
 [audio]
 
-buses/default_bus_layout="res://resources/audio/default_bus_layout.tres"
+buses/default_bus_layout="uid://dlil4mard06e"
 
 [autoload]
 

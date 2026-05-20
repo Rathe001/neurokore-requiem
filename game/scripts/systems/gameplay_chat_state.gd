@@ -143,7 +143,8 @@ func _publish_self() -> void:
 # back to the origin class_id (&"analog" / &"cyborg") for unspecced
 # characters. Both keys live in AttributeState.CLASS_COLORS, so
 # AttributeState.color_for_id handles either correctly.
-static func resolved_self_class_id() -> StringName:
+## Not `static` — see AttributeState.color_for_id for the rationale.
+func resolved_self_class_id() -> StringName:
 	if PlayerState.spec_id != &"":
 		return PlayerState.spec_id
 	return PlayerState.class_id

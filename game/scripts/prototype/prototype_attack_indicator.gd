@@ -115,6 +115,30 @@ static func _release_light(light: OmniLight3D) -> void:
 		light.queue_free()
 
 
+# --- Lambda-safe deferred-free helpers --------------------------------
+# Binding `node.queue_free` (or any method on `node`) directly into a
+# Callable means the captured Object reference must still be valid when
+# the Callable fires. If the level reloads mid-VFX (or the node is
+# otherwise freed between schedule and fire), Godot rejects the entire
+# Callable with "Lambda capture at index 0 was freed". These helpers
+# capture the instance ID (an int, never freed) and re-resolve it at
+# call time instead.
+static func _free_later(node: Node) -> Callable:
+	var nid: int = node.get_instance_id()
+	return func() -> void:
+		var n := instance_from_id(nid) as Node
+		if n != null:
+			n.queue_free()
+
+
+static func _release_light_later(light: OmniLight3D) -> Callable:
+	var lid: int = light.get_instance_id()
+	return func() -> void:
+		var l := instance_from_id(lid) as OmniLight3D
+		if l != null:
+			_release_light(l)
+
+
 static func spawn(host: Node3D, skill: Skill, aim: Vector3, attack_range: float = 0.0) -> void:
 	var eff_range := attack_range if attack_range > 0.0 else skill.skill_range
 	# Airstrike skills (Tactical Strike) skip the directional line
@@ -245,7 +269,7 @@ static func spawn_airstrike_marker(host: Node3D, skill: Skill, eff_range: float)
 	pulse.set_loops(int(ceil(lifetime / 0.7)) + 1)
 	var killer := node.create_tween()
 	killer.tween_interval(lifetime)
-	killer.tween_callback(node.queue_free)
+	killer.tween_callback(_free_later(node))
 
 static func spawn_cone(host: Node3D, aim: Vector3, attack_range: float, cone_deg: float, wind_up: float = 0.0) -> void:
 	if not _telegraphs_enabled():
@@ -375,7 +399,7 @@ static func spawn_lightning_arc(host: Node3D, from_pos: Vector3, to_pos: Vector3
 	# clears the previous arc smoothly across the full duration.
 	var tween := inst.create_tween()
 	tween.tween_property(mat, "shader_parameter/intensity", 0.0, duration)
-	tween.tween_callback(inst.queue_free)
+	tween.tween_callback(_free_later(inst))
 
 
 static func spawn_beam(host: Node3D, aim: Vector3, length: float, source_offset: Vector3 = Vector3.ZERO, tint_override: Color = Color(0.0, 0.0, 0.0, 0.0)) -> void:
@@ -452,9 +476,9 @@ static func spawn_beam(host: Node3D, aim: Vector3, length: float, source_offset:
 	tween.tween_property(glow_mat, "emission_energy_multiplier", 0.0, BEAM_FADE)
 	tween.tween_property(impact_light, "light_energy", 0.0, BEAM_FADE).set_ease(Tween.EASE_IN)
 	tween.tween_property(mid_light, "light_energy", 0.0, BEAM_FADE).set_ease(Tween.EASE_IN)
-	tween.chain().tween_callback(_release_light.bind(impact_light))
-	tween.chain().tween_callback(_release_light.bind(mid_light))
-	tween.chain().tween_callback(node.queue_free)
+	tween.chain().tween_callback(_release_light_later(impact_light))
+	tween.chain().tween_callback(_release_light_later(mid_light))
+	tween.chain().tween_callback(_free_later(node))
 
 # Brief impact flash + spark burst spawned at a hit point — mini version of
 # the explosion VFX stack (flash sphere + radial sparks + omni light), no
@@ -510,7 +534,7 @@ static func spawn_impact_burst(host: Node3D, world_pos: Vector3, color_override:
 	flash_tween.tween_property(flash_inst, "scale", Vector3.ONE * 1.4, IMPACT_FLASH_DURATION).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_EXPO)
 	flash_tween.tween_property(flash_mat, "albedo_color:a", 0.0, IMPACT_FLASH_DURATION).set_ease(Tween.EASE_IN)
 	flash_tween.tween_property(flash_mat, "emission_energy_multiplier", 0.0, IMPACT_FLASH_DURATION).set_ease(Tween.EASE_IN)
-	flash_tween.chain().tween_callback(flash_inst.queue_free)
+	flash_tween.chain().tween_callback(_free_later(flash_inst))
 
 	# ── Omni light ────────────────────────────────────────────────────
 	var light := _acquire_light()
@@ -568,7 +592,7 @@ static func spawn_impact_burst(host: Node3D, world_pos: Vector3, color_override:
 
 	parent.add_child(particles)
 	particles.global_position = world_pos
-	particles.get_tree().create_timer(IMPACT_SPARK_LIFETIME + 0.15).timeout.connect(particles.queue_free)
+	particles.get_tree().create_timer(IMPACT_SPARK_LIFETIME + 0.15).timeout.connect(_free_later(particles))
 
 
 # ── Blood / gore ───────────────────────────────────────────────────────
@@ -589,60 +613,126 @@ static func spawn_impact_burst(host: Node3D, world_pos: Vector3, color_override:
 # Procedural textures are generated once at startup and shared by every
 # decal of the same type — no per-decal image work.
 
-# Very dark venous red. Wet blood is nearly black where light doesn't
-# hit it directly — the apparent brightness comes from glossy specular
-# highlights where the surface catches ceiling lights, not from a bright
-# diffuse color. So we keep the base color extremely low and rely on
-# low roughness (set per-material below + ORM texture for decals) to
-# produce the wet sheen.
-const BLOOD_COLOR: Color = Color(0.085, 0.008, 0.008)
-const BLOOD_DROPLET_LIFETIME: float = 0.85
-# Decals share a single texture each — splatter is irregular, pool is
-# smoother. ORM texture (Occlusion/Roughness/Metallic, packed RGB) is
-# shared across all blood decals and contributes a low-roughness layer
-# to the floor surface where blood is present — this is what gives the
-# liquid sheen. Without it, decals are matte and look like dried paint.
-# All three textures generated lazily on first use, cached statically.
-static var _blood_splatter_texture: Texture2D = null
-static var _blood_pool_texture: Texture2D = null
+# ── Blood / fluid palette ──────────────────────────────────────────────
+#
+# Every blood-spawning function takes a `blood_type` StringName so a
+# future Cyborg can bleed fluorescent blue and a Machine can leak black
+# oil without code changes elsewhere. PrototypeEnemy stores its own
+# blood_type (default &"human") and threads it through every spawn call.
+#
+# Adding a new fluid type is a single entry in BLOOD_PALETTES — all the
+# texture generators, decal spawns, and particle bursts pick up the new
+# color automatically. Textures cache per-blood_type so a horde of mixed
+# enemies costs at most one texture per kind × fluid type, not per kill.
+#
+# Color philosophy (kept consistent across types):
+#   Diffuse is kept VERY dark / saturated. The apparent brightness comes
+#   from glossy specular (low ORM roughness) catching ceiling lights —
+#   that wet sheen is what reads as "fresh liquid". A brighter diffuse
+#   would flatten into "painted on", not "spilled".
+const BLOOD_TYPE_HUMAN: StringName = &"human"
+const BLOOD_TYPE_CYBORG: StringName = &"cyborg"
+const BLOOD_TYPE_MACHINE: StringName = &"machine"
+const BLOOD_PALETTES: Dictionary = {
+	# Dark venous red — wet blood is near-black in shadow.
+	&"human": Color(0.13, 0.015, 0.012),
+	# Fluorescent cyan-blue — placeholder for Cyborg fluid. Brighter than
+	# blood so the wet sheen reads at a glance even on dim floors.
+	&"cyborg": Color(0.06, 0.45, 0.95),
+	# Black oil — very dark with a subtle blue cast so it doesn't read as
+	# generic "shadow under the body".
+	&"machine": Color(0.02, 0.022, 0.03),
+}
+const BLOOD_DROPLET_LIFETIME: float = 0.45
+
+static func blood_color_for(blood_type: StringName) -> Color:
+	# Dictionary.get returns Variant — cast to Color so static typing
+	# downstream (texture generators, particle materials) doesn't trip.
+	var c: Variant = BLOOD_PALETTES.get(blood_type, BLOOD_PALETTES[BLOOD_TYPE_HUMAN])
+	return c as Color
+
+# Multiple splatter texture variants per blood type, baked once and
+# picked from at random per spawn so adjacent decals don't read as
+# stamped duplicates. Each variant has a matching normal map derived
+# from the alpha gradient for slight surface relief at iso angles.
+# ORM texture (Occlusion/Roughness/Metallic, packed RGB) is shared
+# across all blood decals regardless of fluid color and drives the
+# wet sheen via low roughness.
+const _SPLATTER_VARIANT_COUNT: int = 4
+static var _blood_splatter_variants: Dictionary = {}   # StringName -> Array[Texture2D]
+static var _blood_splatter_normals: Dictionary = {}    # StringName -> Array[Texture2D]
+# Wall splatters need their own variant set — every streak forced
+# to point along the texture's +V axis so once the decal's V is
+# aligned with world-down by _wall_drip_twist_angle, the streaks
+# visibly run down the wall as gravity drips.
+static var _blood_wall_splatter_variants: Dictionary = {}
+static var _blood_wall_splatter_normals: Dictionary = {}
 static var _blood_orm_texture: Texture2D = null
-# Ring buffer of active blood decals — oldest is queue_free'd when the
-# cap is hit. Single global cap across all corpses so a horde-kill
-# moment doesn't blanket the floor with hundreds of decals.
-const BLOOD_DECAL_MAX: int = 100
+# Boot-print silhouettes — same right/left mirror system as before, but
+# both variants now multiply across fluid types (so a player who walks
+# through cyborg blood leaves blue prints).
+static var _blood_bootprint_right_textures: Dictionary = {}
+static var _blood_bootprint_left_textures: Dictionary = {}
+# Ring buffer of active blood decals — oldest fades out when the cap
+# is hit. Single global cap across all corpses + per-hit residue.
+# 250 gives clearly-bloodier rooms before the FIFO eviction kicks in,
+# at a modest perf cost (decals are frustum-culled so offscreen ones
+# are nearly free; in-camera cost is sampling overhead per pixel).
+const BLOOD_DECAL_MAX: int = 250
 static var _blood_decal_ring: Array[Decal] = []
 static var _blood_decal_head: int = 0
 
 
-static func spawn_blood_burst(parent: Node, world_pos: Vector3, direction: Vector3 = Vector3.UP, count_mult: float = 1.0) -> void:
+static func spawn_blood_burst(parent: Node, world_pos: Vector3, direction: Vector3 = Vector3.UP, count_mult: float = 1.0, blood_type: StringName = BLOOD_TYPE_HUMAN) -> void:
 	if parent == null:
 		return
 	var particles := GPUParticles3D.new()
+	# Same pattern as the working CombatVisuals.spawn_impact_burst: set
+	# emitting=true here, then add_child + global_position. Godot defers
+	# the actual emission to after the node is in the tree, by which
+	# point the world position has been assigned.
 	particles.emitting = true
 	particles.one_shot = true
-	particles.amount = clampi(int(22.0 * count_mult), 10, 150)
+	particles.amount = clampi(int(14.0 * count_mult), 8, 90)
 	particles.lifetime = BLOOD_DROPLET_LIFETIME
 	particles.explosiveness = 1.0
 	particles.local_coords = false
+	# Transient VFX — opt out of SDFGI baking (gi_mode default STATIC
+	# treats the burst as solid geometry and darkens the room behind it)
+	# and shadow casting (a few dozen tiny droplets making per-frame
+	# shadow updates is expensive and visually noisy).
+	particles.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+	particles.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 	var pm := ParticleProcessMaterial.new()
+	# Tight emission origin — small sphere reads as "from the wound"
+	# at iso scale. The cone spread below is what shapes the spray.
 	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
-	pm.emission_sphere_radius = 0.12
-	# Bias the spray along `direction` with a wide hemispherical spread —
-	# big enough that droplets cone out, narrow enough that the spray
-	# reads as "from the wound" rather than a random fireworks ball.
+	pm.emission_sphere_radius = 0.04
 	pm.direction = direction.normalized() if direction.length_squared() > 0.0001 else Vector3.UP
-	pm.spread = 70.0
-	pm.initial_velocity_min = 1.5 * count_mult
-	pm.initial_velocity_max = 4.0 * count_mult
+	# Spread is the half-angle around `direction`, so 25° here gives a
+	# 50° cone — narrow enough to read as a focused exit-wound jet
+	# instead of an omnidirectional puff.
+	pm.spread = 25.0
+	pm.initial_velocity_min = 4.0 * count_mult
+	pm.initial_velocity_max = 7.5 * count_mult
 	# Strong gravity so droplets arc back down quickly — sells "drips
 	# falling to the floor" not "particles flying off into the void".
 	pm.gravity = Vector3(0.0, -12.0, 0.0)
 	pm.damping_min = 0.5
 	pm.damping_max = 2.0
-	pm.scale_min = 0.03
-	pm.scale_max = 0.08
-	pm.color = BLOOD_COLOR
+	# ParticleProcessMaterial.scale_min/max is a MULTIPLIER on the mesh
+	# size. 0.7-1.3 gives natural per-droplet variation around the
+	# mesh's base radius (0.035 m / ~7 cm diameter below).
+	pm.scale_min = 0.7
+	pm.scale_max = 1.3
+	# Droplet color = palette base (the same dark venous tone the floor
+	# splatter decals use). Visibility comes from the emission term
+	# below, not from brightening the diffuse — keeping the diffuse
+	# dark means the mist reads as the same fluid as the splatters it
+	# leaves behind.
+	var droplet_color := blood_color_for(blood_type)
+	pm.color = droplet_color
 	# Droplets shrink as they travel — masks the moment they vanish.
 	var curve := Curve.new()
 	curve.add_point(Vector2(0.0, 1.0))
@@ -653,30 +743,195 @@ static func spawn_blood_burst(parent: Node, world_pos: Vector3, direction: Vecto
 	pm.scale_curve = curve_tex
 	particles.process_material = pm
 
-	# Tiny sphere mesh as the droplet visual. Unshaded so the deep
-	# blood color reads regardless of room lighting.
+	# Sphere mesh — smaller droplets read as a quick mist rather than
+	# gore chunks. 3.5 cm radius × scale 0.7-1.3 = 2.5-4.5 cm radius
+	# (~5-9 cm diameter on screen).
 	var droplet_mesh := SphereMesh.new()
-	droplet_mesh.radius = 0.04
-	droplet_mesh.height = 0.08
+	droplet_mesh.radius = 0.035
+	droplet_mesh.height = 0.07
 	droplet_mesh.radial_segments = 5
 	droplet_mesh.rings = 3
 	var droplet_mat := StandardMaterial3D.new()
-	droplet_mat.albedo_color = BLOOD_COLOR
-	droplet_mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
-	droplet_mat.metallic = 0.0
-	# Low roughness = glossy. The droplets are dark in shadow but glint
-	# bright where ceiling fluorescents hit at the right angle — wet-
-	# liquid sheen instead of matte paint. Going below ~0.18 starts to
-	# look like polished plastic; this is the sweet spot.
-	droplet_mat.roughness = 0.22
-	droplet_mat.specular = 0.6
+	droplet_mat.albedo_color = droplet_color
+	# Emission carries the visible color. Without it, the
+	# particle_vertex_color × albedo product squares the color down to
+	# near-black at iso distance against a dim floor — verified
+	# empirically that an UNSHADED-only droplet was invisible even at
+	# bumped sizes / counts. Multiplier 2.5 gives a clear, slightly
+	# glowing droplet without looking radioactive (cf. explosion sparks
+	# at 4.0 which intentionally look hot).
+	droplet_mat.emission_enabled = true
+	droplet_mat.emission = droplet_color
+	# 3.5 puts the droplet in the readable-at-iso range without losing
+	# the dark blood hue. 2.0 matched the splatter base color exactly
+	# but was hard to spot against dim floors; 4.0 was punchy crimson
+	# that looked detached from the splatters. 3.5 is the middle ground
+	# — clearly visible mist that still reads as the same fluid as the
+	# stains it leaves on the ground.
+	droplet_mat.emission_energy_multiplier = 3.5
+	droplet_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	droplet_mesh.material = droplet_mat
 	particles.draw_pass_1 = droplet_mesh
 
 	parent.add_child(particles)
 	particles.global_position = world_pos
 	# Free shortly after the last particle dies. lifetime + small tail.
-	particles.get_tree().create_timer(BLOOD_DROPLET_LIFETIME + 0.3).timeout.connect(particles.queue_free)
+	particles.get_tree().create_timer(BLOOD_DROPLET_LIFETIME + 0.3).timeout.connect(_free_later(particles))
+	# Per-droplet landing decals — sample N trajectories within the
+	# burst cone and place a tiny drop at each predicted landing point.
+	# Fire-and-forget: the function awaits a process frame internally so
+	# its raycasts run safely outside any active physics-signal flush.
+	_paint_mist_droplets(parent, world_pos, pm.direction, blood_type, count_mult)
+
+
+# Samples N particle trajectories from the burst cone and stamps a tiny
+# decal at each predicted landing position (floor or wall, whichever
+# the ballistic / linear path intersects first). Matches the
+# distribution of the GPUParticles3D burst — same cone half-angle, same
+# velocity range, same gravity — so droplets paint where the player
+# saw them fly.
+#
+# Async (await process_frame) so intersect_ray runs outside the physics
+# step's signal-flush window, where space state is locked. Caller does
+# NOT await — call as a regular function, the work happens later.
+const _MIST_CONE_HALF_ANGLE_RAD: float = deg_to_rad(25.0)
+const _MIST_GRAVITY: float = 12.0  # matches pm.gravity.y magnitude in spawn_blood_burst
+static func _paint_mist_droplets(parent: Node, origin: Vector3, direction: Vector3, blood_type: StringName, count_mult: float) -> void:
+	if parent == null:
+		return
+	var node := parent as Node3D
+	if node == null or not node.is_inside_tree():
+		return
+	# Wait for the NEXT physics_frame — Godot 4.6.2's process_frame
+	# can still fire inside the physics signal-flush window when chained
+	# from a body_entered callback, so process_frame wasn't enough.
+	# Same pattern as PrototypeEnemy._try_spawn_wall_blood (which has
+	# the same flush-window problem). Unconditional await — if we're
+	# already mid-physics-frame, we still wait for the NEXT one, so
+	# the previous frame's flush is fully done before we query.
+	await node.get_tree().physics_frame
+	if not is_instance_valid(node) or not node.is_inside_tree():
+		return
+	var space := node.get_world_3d().direct_space_state
+	if space == null:
+		return
+	if direction.length_squared() < 0.0001:
+		return
+	var dir_n := direction.normalized()
+	# Build perpendicular basis vectors for cone sampling. Pick an `up`
+	# reference that's not parallel to dir_n (otherwise the cross
+	# product degenerates).
+	var up_ref: Vector3 = Vector3.UP if absf(dir_n.y) < 0.95 else Vector3.RIGHT
+	var right_axis: Vector3 = dir_n.cross(up_ref).normalized()
+	# Sample count scales modestly with hit_mult so blade crits paint
+	# more drops than a non-crit bullet — but capped tight so even a
+	# horde-scale fight doesn't queue dozens of decals + raycasts per
+	# physics step. 2-6 drops per hit; larger drop size (see
+	# _spawn_mist_drop_floor) means coverage stays similar to the old
+	# 4-10 count.
+	var sample_count: int = clampi(int(round(2.0 * count_mult)), 2, 6)
+	var query := PhysicsRayQueryParameters3D.new()
+	query.collision_mask = _DECAL_WALL_MASK
+	query.collide_with_areas = false
+	query.collide_with_bodies = true
+	for i in sample_count:
+		# Pick a random direction in the cone: rotate dir_n by `theta`
+		# around an axis perpendicular to dir_n, where the axis itself
+		# is rotated by `phi` around dir_n to sweep the cone surface.
+		var theta: float = randf() * _MIST_CONE_HALF_ANGLE_RAD
+		var phi: float = randf() * TAU
+		var spin_axis: Vector3 = right_axis.rotated(dir_n, phi)
+		var sample_dir: Vector3 = dir_n.rotated(spin_axis, theta).normalized()
+		# Velocity range matches the GPU particle range in spawn_blood_burst.
+		var speed: float = randf_range(4.0 * count_mult, 7.5 * count_mult)
+		var vel: Vector3 = sample_dir * speed
+		# Solve ballistic landing on y=0: y(t) = origin.y + vy*t - 6t² = 0
+		# Quadratic in t: 6t² - vy*t - origin.y = 0 → t = (vy + √(vy² + 24·oy)) / 12
+		var oy: float = origin.y
+		var vy: float = vel.y
+		var disc: float = vy * vy + (2.0 * _MIST_GRAVITY * oy)
+		if disc < 0.0:
+			continue
+		var t_land: float = (vy + sqrt(disc)) / _MIST_GRAVITY
+		if t_land <= 0.0:
+			continue
+		var landing: Vector3 = origin + vel * t_land + Vector3(0.0, -0.5 * _MIST_GRAVITY * t_land * t_land, 0.0)
+		# Check whether a wall intercepts the line from origin to landing.
+		# We use a straight ray (not the curved arc) — at the short
+		# distances/times involved, the discrepancy is invisible.
+		query.from = origin
+		query.to = landing
+		var hit := space.intersect_ray(query)
+		if hit.is_empty():
+			# Clean trajectory → drop lands on the floor at the
+			# ballistic landing point.
+			_spawn_mist_drop_floor(parent, Vector3(landing.x, 0.0, landing.z), blood_type)
+			continue
+		var normal: Vector3 = hit.get("normal", Vector3.UP)
+		var hit_pos: Vector3 = hit.get("position", landing)
+		if absf(normal.y) > 0.6:
+			# Floor / ceiling — paint as a floor drop at the hit point.
+			_spawn_mist_drop_floor(parent, Vector3(hit_pos.x, 0.0, hit_pos.z), blood_type)
+		else:
+			_spawn_mist_drop_wall(parent, hit_pos, normal, blood_type)
+
+
+# Floor drop — 25-45 cm wide. Earlier 8-18 cm was too small to read at
+# iso distance; bumped to be clearly visible while still smaller than
+# the 1.4-2.5 m kill-scene main splats.
+static func _spawn_mist_drop_floor(parent: Node, world_pos: Vector3, blood_type: StringName) -> void:
+	# Independent X/Z + wide range so per-hit drops have visible shape
+	# and size variation — some round and small, some elongated, some
+	# nearly as big as a kill satellite.
+	var drop_size := Vector3(randf_range(0.20, 0.65), 0.4, randf_range(0.20, 0.65))
+	# Drop lands inside an existing splat → grow it instead of stacking.
+	# Tighter inner ratio (0.4) than kill scenes so drops at the rim of
+	# a pool still spawn fresh, only dead-center drops merge.
+	var new_avg_size: float = (drop_size.x + drop_size.z) * 0.5
+	if _try_grow_existing_decal(world_pos, new_avg_size, 0.4):
+		return
+	var decal := Decal.new()
+	var variant := _get_blood_splatter_variant(blood_type)
+	decal.texture_albedo = variant[&"albedo"]
+	decal.texture_normal = variant[&"normal"]
+	decal.texture_orm = _get_blood_orm_texture()
+	decal.size = drop_size
+	decal.modulate = _decal_color_jitter()
+	decal.upper_fade = 0.05
+	decal.lower_fade = 0.05
+	decal.albedo_mix = 1.0
+	decal.cull_mask = BLOOD_DECAL_CULL_LAYER
+	decal.rotation.y = randf() * TAU
+	parent.add_child(decal)
+	# Tiny per-spawn Y jitter to avoid z-fight against other floor decals.
+	decal.global_position = Vector3(world_pos.x, randf_range(_DECAL_Y_JITTER_MIN, _DECAL_Y_JITTER_MAX), world_pos.z)
+	_track_blood_decal(decal)
+
+
+# Wall drop — same size band as floor drops, projected along the
+# surface normal of whatever the droplet hit.
+static func _spawn_mist_drop_wall(parent: Node, world_pos: Vector3, wall_normal: Vector3, blood_type: StringName) -> void:
+	if wall_normal.length_squared() < 0.0001:
+		return
+	var decal := Decal.new()
+	var variant := _get_blood_wall_splatter_variant(blood_type)
+	decal.texture_albedo = variant[&"albedo"]
+	decal.texture_normal = variant[&"normal"]
+	decal.texture_orm = _get_blood_orm_texture()
+	decal.size = Vector3(randf_range(0.20, 0.65), 0.4, randf_range(0.20, 0.65))
+	decal.modulate = _decal_color_jitter()
+	decal.upper_fade = 0.05
+	decal.lower_fade = 0.05
+	decal.albedo_mix = 1.0
+	decal.cull_mask = BLOOD_DECAL_CULL_LAYER
+	parent.add_child(decal)
+	decal.global_position = world_pos + wall_normal.normalized() * 0.03
+	var rot := Quaternion(Vector3.UP, wall_normal.normalized())
+	# Gravity-aligned twist: aim the texture's V axis at world-down
+	# projected into the wall plane, so drip streaks visibly run down.
+	var twist := Basis(wall_normal.normalized(), _wall_drip_twist_angle(wall_normal))
+	decal.global_basis = twist * Basis(rot)
+	_track_blood_decal(decal)
 
 
 # Kill-scene splatter pattern — one big primary decal at the kill point
@@ -684,10 +939,10 @@ static func spawn_blood_burst(parent: Node, world_pos: Vector3, direction: Vecto
 # proper "gory mess" rather than a single neat stamp. Direction biases
 # the satellites away from the shooter so the spray pattern matches the
 # kill direction (~70% of satellites in the away-from-shooter arc).
-static func spawn_blood_kill_scene(parent: Node, world_pos: Vector3, spray_dir: Vector3 = Vector3.ZERO) -> void:
+static func spawn_blood_kill_scene(parent: Node, world_pos: Vector3, spray_dir: Vector3 = Vector3.ZERO, blood_type: StringName = BLOOD_TYPE_HUMAN) -> void:
 	if parent == null:
 		return
-	spawn_blood_decal(parent, world_pos)
+	spawn_blood_decal(parent, world_pos, blood_type)
 	var satellite_count: int = randi_range(2, 4)
 	var spray_xz: Vector2 = Vector2.ZERO
 	if spray_dir.length_squared() > 0.0001:
@@ -702,32 +957,73 @@ static func spawn_blood_kill_scene(parent: Node, world_pos: Vector3, spray_dir: 
 			angle = spray_angle + randf_range(-PI * 0.4, PI * 0.4)
 		var dist: float = randf_range(0.6, 2.2)
 		var offset := Vector3(sin(angle), 0.0, cos(angle)) * dist
-		spawn_blood_decal(parent, world_pos + offset)
+		spawn_blood_decal(parent, world_pos + offset, blood_type)
 
 
-static func spawn_blood_decal(parent: Node, world_pos: Vector3) -> void:
+static func spawn_blood_decal(parent: Node, world_pos: Vector3, blood_type: StringName = BLOOD_TYPE_HUMAN) -> void:
 	if parent == null:
 		return
+	# Wide size range — 0.6 m to 2.5 m — so a kill scene's main + 2-4
+	# satellite splats vary clearly in scale. Independent X/Z gives
+	# shape variation too (squashed wide, squashed long, near-square).
+	var requested_size := Vector3(randf_range(0.6, 2.5), 0.6, randf_range(0.6, 2.5))
+	# If this spawn lands inside an existing splat, grow the existing
+	# one instead of stacking a new stamp on top. Same texture, just
+	# a larger size — accumulating hits build a visibly bigger pool.
+	var new_avg_size: float = (requested_size.x + requested_size.z) * 0.5
+	if _try_grow_existing_decal(world_pos, new_avg_size, 0.55):
+		return
 	var decal := Decal.new()
-	decal.texture_albedo = _get_blood_splatter_texture()
+	var variant := _get_blood_splatter_variant(blood_type)
+	decal.texture_albedo = variant[&"albedo"]
+	decal.texture_normal = variant[&"normal"]
 	decal.texture_orm = _get_blood_orm_texture()
-	decal.size = Vector3(randf_range(1.4, 2.5), 0.6, randf_range(1.4, 2.5))
-	# Modulate at 1.0 — we get the dark look from the texture itself now,
-	# not from dimming a brighter texture. albedo_mix high so the dark
-	# red dominates where blood is; the ORM contribution drives the
-	# floor's roughness DOWN underneath, producing the wet glossy sheen.
-	decal.modulate = Color(1.0, 1.0, 1.0, 1.0)
-	decal.upper_fade = 0.35
-	decal.lower_fade = 0.35
+	# Provisional size — the deferred clamp below shrinks this if walls
+	# are near.
+	decal.size = requested_size
+	# Per-decal brightness jitter — simulates fresh vs older spray so
+	# consecutive splats don't all read at identical value.
+	decal.modulate = _decal_color_jitter()
+	# Tight fades — the splatter texture carries hard edges (lobed core
+	# + thin streak arms + drops). Wider fades would soften the outline
+	# back into a smooth blob.
+	decal.upper_fade = 0.05
+	decal.lower_fade = 0.05
 	decal.albedo_mix = 1.0
+	decal.cull_mask = BLOOD_DECAL_CULL_LAYER
 	# Decals project along their -Y by default; rotate randomly around Y
 	# so adjacent splats don't look identical.
 	decal.rotation.y = randf() * TAU
 	parent.add_child(decal)
-	# Drop the decal at floor height (y ≈ 0) so it projects onto the
-	# actual ground regardless of where the body died (chest height etc).
-	decal.global_position = Vector3(world_pos.x, 0.0, world_pos.z)
+	# Drop the decal at floor height (y ≈ 0) plus a tiny per-spawn
+	# jitter so overlapping floor decals don't z-fight (every decal
+	# has a unique sort depth). Projection volume is ~0.6 m tall so a
+	# 1.5 cm shift is invisible.
+	decal.global_position = Vector3(world_pos.x, randf_range(_DECAL_Y_JITTER_MIN, _DECAL_Y_JITTER_MAX), world_pos.z)
 	_track_blood_decal(decal)
+	# Defer the wall clamp — see provisional-size comment above. The
+	# decal exists at full requested size for one frame, then resizes
+	# once physics queries are safe (next process frame).
+	_apply_wall_clamp_deferred(decal, world_pos, requested_size)
+
+
+# Reads the world's physics space (now safely outside any signal flush)
+# and resizes the decal to fit inside nearby walls. No-op if the decal
+# was freed in the meantime (e.g. ring-buffer eviction). Uses await
+# physics_frame because Godot 4.6.2's process_frame can still fire
+# during the physics signal-flush window when called from a chain
+# triggered by body_entered. Same pattern as PrototypeEnemy._try_spawn
+# _wall_blood.
+static func _apply_wall_clamp_deferred(decal: Decal, world_pos: Vector3, requested_size: Vector3) -> void:
+	if not is_instance_valid(decal) or not decal.is_inside_tree():
+		return
+	await decal.get_tree().physics_frame
+	if not is_instance_valid(decal) or not decal.is_inside_tree():
+		return
+	var parent := decal.get_parent()
+	if parent == null:
+		return
+	decal.size = _clamp_decal_size_to_walls(parent, world_pos, requested_size)
 
 
 # Wall splatter — same albedo + ORM textures as the floor splatter, but
@@ -740,22 +1036,26 @@ static func spawn_blood_decal(parent: Node, world_pos: Vector3) -> void:
 # then -Y points INTO the wall and the projection lands flush on the
 # face. Slight offset along the normal keeps the decal from z-fighting
 # with the wall surface.
-static func spawn_blood_wall_splatter(parent: Node, world_pos: Vector3, wall_normal: Vector3) -> void:
+static func spawn_blood_wall_splatter(parent: Node, world_pos: Vector3, wall_normal: Vector3, blood_type: StringName = BLOOD_TYPE_HUMAN) -> void:
 	if parent == null:
 		return
 	if wall_normal.length_squared() < 0.0001:
 		return
 	var decal := Decal.new()
-	decal.texture_albedo = _get_blood_splatter_texture()
+	var variant := _get_blood_wall_splatter_variant(blood_type)
+	decal.texture_albedo = variant[&"albedo"]
+	decal.texture_normal = variant[&"normal"]
 	decal.texture_orm = _get_blood_orm_texture()
 	# Slightly smaller than floor splats on average — wall splats look
 	# better as a few medium hits than one huge stamp, since vertical
-	# surfaces read smaller at iso distance.
-	decal.size = Vector3(randf_range(1.0, 1.8), 0.4, randf_range(1.0, 1.8))
-	decal.modulate = Color(1.0, 1.0, 1.0, 1.0)
-	decal.upper_fade = 0.3
-	decal.lower_fade = 0.3
+	# surfaces read smaller at iso distance. Wide range so multiple
+	# wall splats from one fight stack visually distinct.
+	decal.size = Vector3(randf_range(0.5, 1.8), 0.4, randf_range(0.5, 1.8))
+	decal.modulate = _decal_color_jitter()
+	decal.upper_fade = 0.05
+	decal.lower_fade = 0.05
 	decal.albedo_mix = 1.0
+	decal.cull_mask = BLOOD_DECAL_CULL_LAYER
 	parent.add_child(decal)
 	# 3cm offset along the normal keeps the decal off the wall surface
 	# itself (z-fighting prevention).
@@ -763,53 +1063,185 @@ static func spawn_blood_wall_splatter(parent: Node, world_pos: Vector3, wall_nor
 	# Build a basis whose +Y axis is the wall_normal. Quaternion(from, to)
 	# rotates the from-vector to align with to-vector; applying it to
 	# the default Y-up basis means the decal's local Y now points along
-	# wall_normal. Random twist around Y so adjacent splats don't look
-	# identical at the same hit angle.
+	# wall_normal. The twist now aligns the texture's V axis with world-
+	# down (projected onto the wall plane) so drip streaks visibly run
+	# down the wall — was random before, which let some splats look
+	# like blood was running sideways or upward.
 	var rot := Quaternion(Vector3.UP, wall_normal.normalized())
-	var twist := Basis(wall_normal.normalized(), randf() * TAU)
+	var twist := Basis(wall_normal.normalized(), _wall_drip_twist_angle(wall_normal))
 	decal.global_basis = twist * Basis(rot)
-	_track_blood_decal(decal)
-
-
-static func spawn_blood_pool(parent: Node, world_pos: Vector3, radius: float = 1.3) -> void:
-	if parent == null:
-		return
-	var decal := Decal.new()
-	decal.texture_albedo = _get_blood_pool_texture()
-	decal.texture_orm = _get_blood_orm_texture()
-	# Pools start small and grow over ~0.8s to feel like the body is
-	# bleeding out, not "popped into existence".
-	var final_size := Vector3(radius * 2.0, 0.5, radius * 2.0)
-	decal.size = final_size * 0.25
-	decal.modulate = Color(1.0, 1.0, 1.0, 1.0)
-	decal.upper_fade = 0.4
-	decal.lower_fade = 0.4
-	decal.albedo_mix = 1.0
-	decal.rotation.y = randf() * TAU
-	parent.add_child(decal)
-	decal.global_position = Vector3(world_pos.x, 0.0, world_pos.z)
-	var grow_tween := decal.create_tween()
-	grow_tween.set_ease(Tween.EASE_OUT)
-	grow_tween.set_trans(Tween.TRANS_CUBIC)
-	grow_tween.tween_property(decal, "size", final_size, 0.8)
 	_track_blood_decal(decal)
 
 
 # ── Blood decal infrastructure ─────────────────────────────────────────
 
+# Duration of the fade-out tween when a decal gets evicted by the ring
+# buffer. Bumped 1.6 → 2.5 alongside the BLOOD_DECAL_MAX bump — at
+# higher cap, more decals are evicting concurrently, and 2.5 s reads
+# as a softer dissolve rather than a quick pop.
+const _BLOOD_DECAL_FADE_DURATION: float = 2.5
+
+# Visual layer that floors / walls / static world meshes occupy (default
+# layer 1). Decals project onto every VisualInstance3D whose `layers`
+# bit intersects this mask — so by setting every blood decal's
+# cull_mask to BLOOD_DECAL_CULL_LAYER, and moving character meshes off
+# that layer (see PrototypeEnemy._isolate_visual_from_decals), splats
+# never paint themselves onto a moving corpse / live enemy.
+const BLOOD_DECAL_CULL_LAYER: int = 1
+
+# Z-fight jitter range for floor decals. All floor splats sit at y=0,
+# so two decals projecting onto the same floor pixel have identical
+# render depth and the GPU sort is undefined — flickers when the
+# camera moves. A per-spawn random Y offset in [1 mm, 15 mm] makes
+# every decal's depth unique without visibly lifting them off the
+# floor (the projection volume is ~40-60 cm tall, so a 1.5 cm shift
+# is invisible at iso distance).
+const _DECAL_Y_JITTER_MIN: float = 0.001
+const _DECAL_Y_JITTER_MAX: float = 0.015
+# Wall drip jitter — drips don't run perfectly plumb (surface texture,
+# capillary action). ±15° around the vertical alignment keeps the
+# downward read while looking natural.
+const _WALL_DRIP_JITTER_RAD: float = PI / 12.0
+
+
+# Returns the angle (radians) around `wall_normal` needed to align the
+# decal's local Z axis (texture V axis) with world-down projected onto
+# the wall plane — so the splatter's drip-streaks read as running down
+# the wall. Returns 0 for near-horizontal surfaces (floor/ceiling
+# hits) since the "down" direction has no meaning in the wall plane.
+static func _wall_drip_twist_angle(wall_normal: Vector3) -> float:
+	var n: Vector3 = wall_normal.normalized()
+	# Horizontal surface — no gravity direction in the plane.
+	if absf(n.y) > 0.95:
+		return randf() * TAU
+	# Default decal basis (Y-up → wall_normal via shortest-arc rotation).
+	var rot_basis := Basis(Quaternion(Vector3.UP, n))
+	var current_z: Vector3 = rot_basis.z
+	# Project world DOWN onto the wall plane.
+	var down_in_plane: Vector3 = Vector3.DOWN - n * Vector3.DOWN.dot(n)
+	if down_in_plane.length_squared() < 0.0001:
+		return 0.0
+	down_in_plane = down_in_plane.normalized()
+	var angle: float = current_z.signed_angle_to(down_in_plane, n)
+	# Small twist jitter so adjacent wall splats don't look like a
+	# perfectly-stenciled column of drips.
+	angle += randf_range(-_WALL_DRIP_JITTER_RAD, _WALL_DRIP_JITTER_RAD)
+	return angle
+
+# Mask + margin for the wall-clamp raycasts. World layer (1) holds room
+# walls, corridor walls, and ceiling. The horizontal cast at y=0.6 only
+# intercepts vertical surfaces (walls + door jambs), so the floor and
+# ceiling on the same layer don't interfere. Pillars sit on layer 128
+# and are deliberately excluded — splatter painting on the SIDE of a
+# pillar reads as "blood hit the pillar", which is fine.
+const _DECAL_WALL_MASK: int = 1
+# Margin pulls the clamp slightly inside the wall so the decal doesn't
+# z-fight or graze the wall's collision surface.
+const _DECAL_WALL_MARGIN: float = 0.1
+
+# Returns a shrunk-to-fit decal size that won't extend past any wall
+# within the requested footprint. Casts 8 rays (cardinals + diagonals)
+# from the decal origin at waist height. The shortest hit distance
+# determines the maximum half-extent the rotated decal can have without
+# poking through a wall — sqrt(2)/2 factor accounts for the worst-case
+# 45° random rotation applied at spawn.
+static func _clamp_decal_size_to_walls(parent: Node, world_pos: Vector3, requested_size: Vector3) -> Vector3:
+	var node := parent as Node3D
+	if node == null or not node.is_inside_tree():
+		return requested_size
+	var space := node.get_world_3d().direct_space_state
+	if space == null:
+		return requested_size
+	# Worst-case half-extent after a 45° Y rotation. The decal's bbox
+	# corners are at half_size * sqrt(2)/2 from the center along any
+	# axis after rotation, so we cast that far in every direction.
+	var requested_half_extent: float = maxf(requested_size.x, requested_size.z) * 0.5 * sqrt(2.0)
+	var origin := Vector3(world_pos.x, 0.6, world_pos.z)
+	var dirs: Array[Vector3] = [
+		Vector3(1.0, 0.0, 0.0),
+		Vector3(-1.0, 0.0, 0.0),
+		Vector3(0.0, 0.0, 1.0),
+		Vector3(0.0, 0.0, -1.0),
+		Vector3(0.7071, 0.0, 0.7071),
+		Vector3(-0.7071, 0.0, 0.7071),
+		Vector3(0.7071, 0.0, -0.7071),
+		Vector3(-0.7071, 0.0, -0.7071),
+	]
+	var min_dist: float = requested_half_extent
+	var query := PhysicsRayQueryParameters3D.new()
+	query.collision_mask = _DECAL_WALL_MASK
+	query.collide_with_areas = false
+	query.collide_with_bodies = true
+	for d in dirs:
+		query.from = origin
+		query.to = origin + d * requested_half_extent
+		var hit := space.intersect_ray(query)
+		if hit.is_empty():
+			continue
+		var hit_pos: Vector3 = hit["position"]
+		var dist: float = origin.distance_to(hit_pos) - _DECAL_WALL_MARGIN
+		if dist < min_dist:
+			min_dist = dist
+	# If walls are extremely close, floor the size at 0.4 m so the
+	# splatter doesn't vanish entirely (a tiny dot is better than no
+	# kill feedback when somebody dies pressed against a wall).
+	min_dist = maxf(min_dist, 0.4)
+	# Convert allowed half-extent back to axis-aligned size — divide
+	# by the sqrt(2)/2 worst-case factor so the rotated bbox stays
+	# within wall bounds.
+	var max_axis_size: float = min_dist * 2.0 / sqrt(2.0)
+	return Vector3(
+		minf(requested_size.x, max_axis_size),
+		requested_size.y,
+		minf(requested_size.z, max_axis_size),
+	)
+
 # Stamp a new decal into the global ring. When BLOOD_DECAL_MAX is hit
-# the oldest decal gets queue_free'd. Decals are otherwise persistent
-# (no per-decal fade timer) — they last until evicted, matching the
-# corpse model where dead-things persist until they're recycled.
+# the oldest decal fades out over _BLOOD_DECAL_FADE_DURATION then
+# queue_free's — no more abrupt pops when the cap is hit.
+# Footprints self-free via their own tween (see spawn_blood_footprint),
+# so the ring slot may hold a freed reference by the time eviction
+# fires. is_instance_valid catches that before the strict-typed
+# _fade_and_free signature would reject the freed Object.
 static func _track_blood_decal(decal: Decal) -> void:
 	if _blood_decal_ring.size() < BLOOD_DECAL_MAX:
 		_blood_decal_ring.append(decal)
 		return
-	var oldest := _blood_decal_ring[_blood_decal_head]
-	if is_instance_valid(oldest):
-		oldest.queue_free()
+	var oldest: Variant = _blood_decal_ring[_blood_decal_head]
+	if is_instance_valid(oldest) and oldest is Decal:
+		_fade_and_free(oldest as Decal)
 	_blood_decal_ring[_blood_decal_head] = decal
 	_blood_decal_head = (_blood_decal_head + 1) % BLOOD_DECAL_MAX
+
+
+# Tweens a decal's modulate.alpha to 0 over the fade duration, then
+# frees it. Safe to call with a null / freed reference — the
+# is_instance_valid guard short-circuits before any tween mutation.
+# Detaches the decal from the ring (slot is overwritten by the caller)
+# so a still-tweening decal doesn't get double-fade'd if its slot is
+# re-evicted later.
+static func _fade_and_free(decal: Decal) -> void:
+	if not is_instance_valid(decal):
+		return
+	if not decal.is_inside_tree():
+		decal.queue_free()
+		return
+	# Decals don't auto-die when the parent does; if the decal's owner
+	# scene is unloading the tween would tween a soon-to-be-orphan, so
+	# fall back to direct free in that case (parent removal triggers
+	# free anyway).
+	var tween := decal.create_tween()
+	tween.tween_property(decal, ^"modulate:a", 0.0, _BLOOD_DECAL_FADE_DURATION)
+	# Capture instance_id (int — value type) instead of the Decal
+	# reference so the lambda doesn't trip Godot's "Lambda capture
+	# freed" guard when a concurrent free path (e.g. footprint self-
+	# fade) destroys the decal before this callback runs.
+	var decal_id: int = decal.get_instance_id()
+	tween.tween_callback(func() -> void:
+		var d := instance_from_id(decal_id) as Node
+		if d != null:
+			d.queue_free()
+	)
 
 
 # ── Bloody footprints ──────────────────────────────────────────────────
@@ -819,10 +1251,19 @@ static func _track_blood_decal(decal: Decal) -> void:
 # distance-based against the existing _blood_decal_ring (cheap — bounded
 # by BLOOD_DECAL_MAX). Footsteps.tick (called per-step by both player
 # and enemy) drives the refresh + spawn cycle via two metas on the body:
-# `bloody_steps_remaining` and `bloody_step_idx` (for L/R alternation).
-# Bumped 8 → 18 so footprints stay readable across longer walks — at 8
-# the trail dried up before the player crossed even a single corridor.
-const BLOODY_STEPS_INITIAL: int = 18
+# `bloody_steps_remaining` and `bloody_step_idx` (for L/R alternation
+# of both lateral offset and the boot-print silhouette mirror).
+# At BLOODY_FOOTSTEP_DISTANCE = 0.7 m, 10 prints cover ~7 m — about a
+# room's width or one short corridor before the trail dries up. Each
+# print also self-cleans via the fade timer in spawn_blood_footprint,
+# so even at this count the floor doesn't accumulate trails over time.
+const BLOODY_STEPS_INITIAL: int = 10
+# Footprint self-fade: linger fully visible for _FOOTPRINT_HOLD seconds,
+# then tween modulate.alpha to 0 over _FOOTPRINT_FADE seconds and free.
+# Independent of the global _blood_decal_ring eviction so prints clean
+# themselves up even when the cap hasn't been hit.
+const _FOOTPRINT_HOLD: float = 6.0
+const _FOOTPRINT_FADE: float = 2.5
 
 
 # True if `world_pos` is inside any tracked blood decal's horizontal
@@ -845,116 +1286,468 @@ static func is_in_blood(world_pos: Vector3) -> bool:
 # walking through blood is full, last step before drying is faint.
 # `forward_dir` orients the print so it points along the walking
 # direction (otherwise random orientation reads as "puddle drips", not
-# "footprints").
-static func spawn_blood_footprint(parent: Node, world_pos: Vector3, forward_dir: Vector3, intensity: float) -> void:
+# "footprints"). `right_foot` selects between the right-foot silhouette
+# and its mirror so a trail of prints alternates L/R.
+static func spawn_blood_footprint(parent: Node, world_pos: Vector3, forward_dir: Vector3, intensity: float, right_foot: bool = true, blood_type: StringName = BLOOD_TYPE_HUMAN) -> void:
 	if parent == null:
 		return
 	var decal := Decal.new()
-	decal.texture_albedo = _get_blood_splatter_texture()
+	decal.texture_albedo = _get_blood_bootprint_texture(right_foot, blood_type)
 	decal.texture_orm = _get_blood_orm_texture()
-	# Footprint-ish proportions (longer than wide). At iso distance the
-	# rough splatter texture reads as a smudge — not a literal boot
-	# print, but clearly "stained shoe stamped here". Bumped from
-	# 0.32/0.5 to 0.50/0.75 so the prints actually catch the eye —
-	# previous size was nearly invisible against the floor at iso scale.
-	decal.size = Vector3(0.50, 0.4, 0.75)
-	# Intensity scales the modulate alpha (controls overall presence as
-	# the footprint counter ticks down). Color stays full so wet sheen
-	# is consistent across all prints. Floor the alpha at 0.4 so even
-	# the faintest dying-off prints stay visible enough to follow as a
-	# trail.
-	decal.modulate = Color(1.0, 1.0, 1.0, clampf(intensity * 0.6 + 0.4, 0.4, 1.0))
+	# Boot-shaped silhouette baked into the texture, so decal size is the
+	# physical print footprint at iso scale: ~30 cm wide × 42 cm long.
+	# Y is the vertical projection volume — kept generous so the projector
+	# wraps prints onto step lips. Width tuned so the print reads as a
+	# boot at iso distance, not a narrow streak.
+	decal.size = Vector3(0.30, 0.4, 0.42)
+	# Linear ramp from full → 10% alpha across the bloody-step counter.
+	# First print after stepping in blood is full strength; each
+	# successive print loses ~1/N of the alpha as the foot wipes its
+	# load off, so the trail visibly dries up rather than ending
+	# abruptly at a hard floor (was clamped to 0.4 — last prints looked
+	# identical to mid-trail prints, making the end of the trail
+	# feel like the player just stopped tracking blood).
+	# Per-print brightness jitter on top of the intensity ramp — a fresh
+	# print of an old foot might still vary slightly in saturation.
+	decal.modulate = _decal_color_jitter(lerpf(0.1, 1.0, intensity))
 	decal.upper_fade = 0.4
 	decal.lower_fade = 0.4
 	decal.albedo_mix = 1.0
+	decal.cull_mask = BLOOD_DECAL_CULL_LAYER
 	# Orient along movement direction. forward_dir is XZ-plane; yaw is
 	# atan2(x, z) so the prints point where the player is going.
 	if forward_dir.length_squared() > 0.0001:
 		decal.rotation.y = atan2(forward_dir.x, forward_dir.z)
 	parent.add_child(decal)
-	decal.global_position = Vector3(world_pos.x, 0.0, world_pos.z)
+	# Tiny per-spawn Y jitter to avoid z-fight against other floor decals.
+	decal.global_position = Vector3(world_pos.x, randf_range(_DECAL_Y_JITTER_MIN, _DECAL_Y_JITTER_MAX), world_pos.z)
 	_track_blood_decal(decal)
+	# Self-fade: each print lingers for _FOOTPRINT_HOLD, then tweens
+	# to alpha 0 and queue_free's. Independent of the ring buffer so
+	# prints clean themselves up rather than accumulating across a
+	# session — kill splatters stay (more dramatic, fewer of them),
+	# footprints don't.
+	var initial_alpha: float = decal.modulate.a
+	var fade_tween := decal.create_tween()
+	fade_tween.tween_interval(_FOOTPRINT_HOLD)
+	fade_tween.tween_property(decal, ^"modulate:a", 0.0, _FOOTPRINT_FADE).from(initial_alpha)
+	# Capture instance_id (int) so lambda doesn't bind to the Object —
+	# see _fade_and_free for the freed-receiver race rationale.
+	var decal_id: int = decal.get_instance_id()
+	fade_tween.tween_callback(func() -> void:
+		var d := instance_from_id(decal_id) as Node
+		if d != null:
+			d.queue_free()
+	)
 
 
-# Procedural splatter texture — irregular blob via multiple overlapping
-# circular stamps with falloff. 128x128 keeps generation cheap; the
-# decal projector blurs the edges further so resolution doesn't matter.
-static func _get_blood_splatter_texture() -> Texture2D:
-	if _blood_splatter_texture != null:
-		return _blood_splatter_texture
+# Procedurally-baked boot print silhouette in the fluid color. Heel oval
+# + arch bridge + ball/toe oval, with the bridge biased toward the outer
+# edge so the arch (inner edge) curves in — that asymmetry is what
+# distinguishes a right print from a left. Mirrored variant flips the
+# entire shape across the centerline axis. Cached per (foot side ×
+# blood_type) — at 128² each, all fluid variants together fit in a few
+# hundred KB.
+static func _get_blood_bootprint_texture(right_foot: bool, blood_type: StringName) -> Texture2D:
+	var cache: Dictionary = _blood_bootprint_right_textures if right_foot else _blood_bootprint_left_textures
+	if cache.has(blood_type):
+		return cache[blood_type]
+	var tex := ImageTexture.create_from_image(_make_bootprint_image(not right_foot, blood_color_for(blood_type)))
+	cache[blood_type] = tex
+	return tex
+
+
+# Render a single 128² boot-print silhouette. Coordinate system: nx ∈
+# [-1, 1] across width, ny ∈ [-1, 1] along length (ny=-1 heel, ny=+1
+# toe). Combines three soft-edged primitives — heel ellipse, arch
+# bridge, ball+toe ellipse — and takes the max coverage at each pixel.
+# When `mirrored` is true, x is negated before evaluation, flipping the
+# arch curve to the opposite side (left foot).
+static func _make_bootprint_image(mirrored: bool, fluid_color: Color) -> Image:
+	var size := 128
+	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	# Heel: round-ish lobe at the back.
+	var heel_cx := -0.05
+	var heel_cy := -0.62
+	var heel_rx := 0.34
+	var heel_ry := 0.30
+	# Ball/toe: larger lobe at the front, offset slightly outward.
+	var ball_cx := 0.06
+	var ball_cy := 0.28
+	var ball_rx := 0.42
+	var ball_ry := 0.62
+	# Arch bridge: rectangle linking heel to ball, biased toward the
+	# outer edge so the inner side reads as a hollow arch.
+	var bridge_y0 := -0.45
+	var bridge_y1 := 0.10
+	var bridge_x_inner := -0.06   # arch (inner) edge
+	var bridge_x_outer := 0.22    # outer edge
+	# Edge softness: ramp width over which alpha fades from 1→0. About
+	# 4 px in the 128² source — projector + albedo_mix smooths further.
+	var edge_ramp := 0.06
+	for py in size:
+		for px in size:
+			var nx_raw := (float(px) / float(size - 1)) * 2.0 - 1.0
+			var ny := (float(py) / float(size - 1)) * 2.0 - 1.0
+			# Decal3D's V axis maps such that the image's bottom row aligns
+			# with the decal's +Z (= forward_dir after the atan2 rotation
+			# in spawn_blood_footprint). Place the toe at the BOTTOM of
+			# the image (ny=+1) so it lands ahead of the heel along the
+			# direction of travel. Using ny directly — no flip — puts
+			# ball_cy=0.28 in the lower half of the image and heel_cy=-0.62
+			# in the upper half.
+			var ny_flipped := ny
+			var x := -nx_raw if mirrored else nx_raw
+			# Coverage = 1 - normalized radial distance (negative outside).
+			var heel_cov: float = 1.0 - sqrt(
+				pow((x - heel_cx) / heel_rx, 2.0) + pow((ny_flipped - heel_cy) / heel_ry, 2.0)
+			)
+			var ball_cov: float = 1.0 - sqrt(
+				pow((x - ball_cx) / ball_rx, 2.0) + pow((ny_flipped - ball_cy) / ball_ry, 2.0)
+			)
+			# Bridge: distance to the nearest rect edge, normalized.
+			var bridge_cov: float = -1.0
+			if ny_flipped >= bridge_y0 and ny_flipped <= bridge_y1 and x >= bridge_x_inner and x <= bridge_x_outer:
+				var dx_in := x - bridge_x_inner
+				var dx_out := bridge_x_outer - x
+				var dy_in := ny_flipped - bridge_y0
+				var dy_out := bridge_y1 - ny_flipped
+				bridge_cov = minf(minf(dx_in, dx_out), minf(dy_in, dy_out)) / 0.15
+			var cov: float = maxf(maxf(heel_cov, ball_cov), bridge_cov)
+			if cov <= 0.0:
+				continue
+			var alpha: float = clampf(cov / edge_ramp, 0.0, 1.0)
+			# Fluid color comes from BLOOD_PALETTES — human red by default,
+			# cyborg blue / machine oil when the source enemy bleeds those.
+			img.set_pixel(px, py, Color(fluid_color.r, fluid_color.g, fluid_color.b, alpha))
+	return img
+
+
+# Returns one of _SPLATTER_VARIANT_COUNT cached splatter shapes for the
+# blood type, picked at random. Lazily bakes every variant on first
+# miss. Each variant has a matching normal map (see _get_blood_
+# splatter_normal_for) keyed by the same index, so callers should use
+# _get_blood_splatter_variant if they need both.
+static func _get_blood_splatter_texture(blood_type: StringName) -> Texture2D:
+	var variants := _ensure_splatter_variants(blood_type)
+	return variants[randi() % variants.size()] as Texture2D
+
+
+# Returns a {albedo, normal} pair from the variants cache — picks one
+# index at random and pulls the matching textures from both arrays so
+# the surface relief lines up with the splatter shape.
+static func _get_blood_splatter_variant(blood_type: StringName) -> Dictionary:
+	var variants := _ensure_splatter_variants(blood_type)
+	var idx: int = randi() % variants.size()
+	return {
+		&"albedo": variants[idx],
+		&"normal": (_blood_splatter_normals[blood_type] as Array)[idx],
+	}
+
+
+# Lazy-bakes the full variant set for a blood type. Each variant uses
+# the same algorithm (lobed core + streak arms + satellite drops) with
+# a different RNG seed, so they're recognizably "the same kind of
+# splatter" but never identical. The normal map per variant is derived
+# from the alpha gradient (see _make_splatter_normal).
+static func _ensure_splatter_variants(blood_type: StringName) -> Array:
+	if _blood_splatter_variants.has(blood_type):
+		return _blood_splatter_variants[blood_type]
+	var fluid_color := blood_color_for(blood_type)
+	var albedos: Array[Texture2D] = []
+	var normals: Array[Texture2D] = []
+	for i in _SPLATTER_VARIANT_COUNT:
+		# Coprime offset so each variant gets uncorrelated noise phases.
+		var seed: int = 0x1B100D + i * 0x9E3779B9
+		var albedo_img := _make_splatter_image(seed, fluid_color)
+		albedos.append(ImageTexture.create_from_image(albedo_img))
+		normals.append(ImageTexture.create_from_image(_make_splatter_normal(albedo_img)))
+	_blood_splatter_variants[blood_type] = albedos
+	_blood_splatter_normals[blood_type] = normals
+	return albedos
+
+
+# Wall-variant cache: same baking algorithm, but `wall_mode = true`
+# pins every streak's bias direction along +V (texture down). When
+# the decal's V axis is aligned with world-down at spawn (see
+# _wall_drip_twist_angle), those streaks visibly run down the wall
+# as gravity drips. Different seed offset from floor variants so the
+# two sets don't share shapes by accident.
+static func _ensure_wall_splatter_variants(blood_type: StringName) -> Array:
+	if _blood_wall_splatter_variants.has(blood_type):
+		return _blood_wall_splatter_variants[blood_type]
+	var fluid_color := blood_color_for(blood_type)
+	var albedos: Array[Texture2D] = []
+	var normals: Array[Texture2D] = []
+	for i in _SPLATTER_VARIANT_COUNT:
+		var seed: int = 0x77A1100 + i * 0x9E3779B9
+		var albedo_img := _make_splatter_image(seed, fluid_color, true)
+		albedos.append(ImageTexture.create_from_image(albedo_img))
+		normals.append(ImageTexture.create_from_image(_make_splatter_normal(albedo_img)))
+	_blood_wall_splatter_variants[blood_type] = albedos
+	_blood_wall_splatter_normals[blood_type] = normals
+	return albedos
+
+
+# Pulls a {albedo, normal} pair from the wall-variant cache — the wall
+# equivalent of _get_blood_splatter_variant.
+static func _get_blood_wall_splatter_variant(blood_type: StringName) -> Dictionary:
+	var variants := _ensure_wall_splatter_variants(blood_type)
+	var idx: int = randi() % variants.size()
+	return {
+		&"albedo": variants[idx],
+		&"normal": (_blood_wall_splatter_normals[blood_type] as Array)[idx],
+	}
+
+
+# Bakes one splatter shape. Per-variant parameters (driven by `seed`)
+# control lobe count, elongation, streak distribution, and density —
+# so successive variants produce visibly different shapes instead of
+# all reading as the same butterfly silhouette.
+# `wall_mode` overrides the streak distribution: streaks are forced
+# along the image's +V axis (downward in texture space) at near-max
+# bias strength so the splat reads as gravity drips when the decal's
+# V is aligned with world-down at spawn time. Used by wall splatter
+# spawns; floor variants get the standard random distribution.
+static func _make_splatter_image(seed: int, fluid_color: Color, wall_mode: bool = false) -> Image:
 	var size := 128
 	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
 	img.fill(Color(0, 0, 0, 0))
 	var rng := RandomNumberGenerator.new()
-	rng.seed = 0xB100D
+	rng.seed = seed
 	var center := Vector2(size, size) * 0.5
-	# 18 overlapping blobs (was 10) so the splatter overlaps more — more
-	# blobs running together reads as a liquid puddle, sparse blobs
-	# read as paint flecks.
-	for blob_idx in 18:
-		var angle := rng.randf() * TAU
-		var dist := rng.randf() * float(size) * 0.30
-		var blob_center := center + Vector2(cos(angle), sin(angle)) * dist
-		var blob_radius := rng.randf_range(18.0, 38.0)
-		var blob_radius_sq := blob_radius * blob_radius
-		var min_y: int = int(maxf(0.0, blob_center.y - blob_radius))
-		var max_y: int = int(minf(float(size), blob_center.y + blob_radius))
-		var min_x: int = int(maxf(0.0, blob_center.x - blob_radius))
-		var max_x: int = int(minf(float(size), blob_center.x + blob_radius))
-		for y in range(min_y, max_y):
-			for x in range(min_x, max_x):
-				var dx := float(x) - blob_center.x
-				var dy := float(y) - blob_center.y
-				var d_sq := dx * dx + dy * dy
-				if d_sq > blob_radius_sq:
-					continue
-				# Smoother quadratic falloff (was pow(t, 1.4)). The
-				# softer shoulder lets adjacent blobs blend without
-				# visible seams — looks like spilled liquid pooling,
-				# not stamped paint dots.
-				var t := 1.0 - sqrt(d_sq / blob_radius_sq)
-				t = t * t
-				# Additive accumulation (was max). Where blobs overlap
-				# the alpha builds up to a richer red, mirroring how
-				# real liquid splashes pool thicker at impact points.
-				var existing := img.get_pixel(x, y)
-				var new_a: float = minf(existing.a + t * 0.8, 1.0)
-				# Dark venous red — see BLOOD_COLOR rationale. The decal's
-				# low-roughness ORM contribution gives the wet sheen on
-				# top, so the diffuse can be very dark without the result
-				# looking dull.
-				img.set_pixel(x, y, Color(0.13, 0.015, 0.012, new_a))
-	_blood_splatter_texture = ImageTexture.create_from_image(img)
-	return _blood_splatter_texture
-
-
-# Pool texture — single large disc with smooth radial alpha falloff and
-# subtle edge noise so pools don't look perfectly circular.
-static func _get_blood_pool_texture() -> Texture2D:
-	if _blood_pool_texture != null:
-		return _blood_pool_texture
-	var size := 128
-	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
-	img.fill(Color(0, 0, 0, 0))
-	var center := Vector2(size, size) * 0.5
-	var max_radius := float(size) * 0.45
+	# Pull per-variant shape parameters first — these are what make
+	# each variant look like a different KIND of splat, not a rotation
+	# of the same shape.
+	# Wall mode: tighter core, more streaks, vertical elongation, and
+	# nearly-pure downward bias so the splat reads as "impact blob with
+	# gravity drips" rather than a radial impact.
+	var core_radius_frac: float
+	var primary_lobes: int
+	var primary_amp: float
+	var secondary_amp: float
+	var elongation_axis: float
+	var elongation_factor: float
+	var streak_count: int
+	var streak_bias_angle: float
+	var streak_bias_strength: float
+	var drop_count: int
+	if wall_mode:
+		core_radius_frac = rng.randf_range(0.10, 0.18)   # smaller blob — drips do the work
+		primary_lobes = rng.randi_range(2, 5)
+		primary_amp = rng.randf_range(0.10, 0.22)
+		secondary_amp = rng.randf_range(0.03, 0.08)
+		elongation_axis = PI * 0.5                        # force vertical elongation
+		elongation_factor = rng.randf_range(1.10, 1.50)   # always elongated downward
+		streak_count = rng.randi_range(10, 20)            # more drips
+		streak_bias_angle = PI * 0.5                      # image-down
+		streak_bias_strength = rng.randf_range(0.95, 1.0) # near-purely down
+		drop_count = rng.randi_range(8, 16)
+	else:
+		core_radius_frac = rng.randf_range(0.14, 0.26)
+		primary_lobes = rng.randi_range(2, 7)
+		# Softer amplitudes than the original 0.20-0.45 / 0.05-0.18 — at
+		# higher lobe counts those produced literal flower / star
+		# silhouettes. 0.12-0.28 (and 0.03-0.10 secondary) reads as
+		# "irregular blob" instead of "geometric petal".
+		primary_amp = rng.randf_range(0.12, 0.28)
+		secondary_amp = rng.randf_range(0.03, 0.10)
+		# Elongation: stretches the core along a random axis. factor=1
+		# is circular; factor>1 stretches that axis. Combined with
+		# random lobe counts, gives ovals, peanuts, asymmetric blobs.
+		elongation_axis = rng.randf() * TAU
+		elongation_factor = rng.randf_range(0.75, 1.45)
+		# 0 = uniform radial, 0.85 = strongly directional. Wide range so
+		# some variants are balanced and some read as one-sided sprays.
+		streak_count = rng.randi_range(4, 16)
+		streak_bias_angle = rng.randf() * TAU
+		streak_bias_strength = rng.randf_range(0.0, 0.85)
+		drop_count = rng.randi_range(4, 18)
+	var secondary_lobes: int = primary_lobes * 2 + rng.randi_range(0, 3)
+	# Off-center core: in floor mode, the core shifts toward the spray
+	# direction by a fraction of its radius — pooled blood concentrates
+	# slightly past the impact point. In wall mode, the core is pinned
+	# to the UPPER third of the texture so drips below it stay within
+	# texture bounds.
+	var core_offset_dist: float = rng.randf_range(0.0, 0.30)
+	var alpha := PackedFloat32Array()
+	alpha.resize(size * size)
+	# ── Layer 1: lobed + elongated + off-center core ──────────────────
+	var core_base_r: float = float(size) * core_radius_frac
+	var phase_1: float = rng.randf() * TAU
+	var phase_2: float = rng.randf() * TAU
+	# Elongation basis vectors.
+	var elong_dir := Vector2(cos(elongation_axis), sin(elongation_axis))
+	var elong_perp := Vector2(-elong_dir.y, elong_dir.x)
+	# Core position:
+	#   • wall mode → upper 30% of the texture so streaks below it have
+	#     room to extend down before clipping at V=1.
+	#   • floor mode → near texture center, offset slightly toward the
+	#     spray direction (asymmetric impact pool).
+	var spray_dir := Vector2(cos(streak_bias_angle), sin(streak_bias_angle))
+	var core_center: Vector2
+	if wall_mode:
+		core_center = Vector2(float(size) * 0.5, float(size) * 0.28)
+	else:
+		core_center = center + spray_dir * (core_base_r * core_offset_dist)
 	for y in size:
 		for x in size:
-			var dx := float(x) - center.x
-			var dy := float(y) - center.y
-			var d := sqrt(dx * dx + dy * dy)
-			# Edge noise — 8-petal sin warp on the effective radius.
-			var angle := atan2(dy, dx)
-			var noise := sin(angle * 6.0) * 4.0 + cos(angle * 11.0) * 2.0
-			var effective_r := max_radius + noise
-			if d >= effective_r:
+			var dx := float(x) - core_center.x
+			var dy := float(y) - core_center.y
+			# Project to the elongation frame, then squash the perp
+			# axis by 1/elongation_factor so the splat extends along
+			# elong_dir.
+			var proj_along: float = dx * elong_dir.x + dy * elong_dir.y
+			var proj_perp: float = (dx * elong_perp.x + dy * elong_perp.y) / elongation_factor
+			var d: float = sqrt(proj_along * proj_along + proj_perp * proj_perp)
+			var angle: float = atan2(proj_perp, proj_along)
+			# Two harmonic components with per-variant lobe counts and
+			# softened amplitudes — irregular silhouettes without
+			# geometric petals.
+			var perturb: float = (
+				core_base_r * primary_amp * sin(angle * float(primary_lobes) + phase_1)
+				+ core_base_r * secondary_amp * sin(angle * float(secondary_lobes) + phase_2)
+			)
+			var effective_r := core_base_r + perturb
+			if d <= effective_r:
+				var edge_t: float = clampf((effective_r - d) / 3.5, 0.0, 1.0)
+				alpha[y * size + x] = maxf(alpha[y * size + x], edge_t)
+	# ── Layer 2: streak arms ──────────────────────────────────────────
+	# Streak origin:
+	#   • wall mode → emanate from the impact blob (core_center). Drips
+	#     should start at the blob's edge and trail down, not radiate
+	#     from texture center.
+	#   • floor mode → emanate from texture center (the impact point);
+	#     core_center is the slightly-offset pool position.
+	var streak_origin: Vector2 = core_center if wall_mode else center
+	for i in streak_count:
+		# Bias the streak direction toward streak_bias_angle by
+		# streak_bias_strength. At strength 0, every streak is uniform-
+		# random radial; at 0.7, most cluster within ~45° of the bias.
+		var raw_angle: float = rng.randf() * TAU
+		var angle: float = lerp_angle(raw_angle, streak_bias_angle, streak_bias_strength)
+		# Streak length: wall drips need to be LONG (much further than
+		# floor splatter streaks) to read as gravity trails; floor
+		# streaks stay shorter so the splat outline isn't dominated by
+		# spike arms.
+		var length: float
+		var base_thick: float
+		if wall_mode:
+			# Bounded so the drip stays inside the texture: max
+			# extension = size - core_center.y - margin.
+			var max_drip: float = float(size) - core_center.y - 4.0
+			length = rng.randf_range(core_base_r * 1.5, max_drip)
+			base_thick = rng.randf_range(0.9, 2.2)  # thin, drip-like
+		else:
+			length = rng.randf_range(core_base_r * 1.15, float(size) * 0.46)
+			base_thick = rng.randf_range(1.4, 3.6)
+		var inner: Vector2 = streak_origin + Vector2(cos(angle), sin(angle)) * (core_base_r * (0.9 if wall_mode else 0.65))
+		var outer: Vector2 = streak_origin + Vector2(cos(angle), sin(angle)) * length
+		var min_x: int = int(maxf(0.0, minf(inner.x, outer.x) - base_thick - 1.0))
+		var max_x: int = int(minf(float(size), maxf(inner.x, outer.x) + base_thick + 1.0))
+		var min_y: int = int(maxf(0.0, minf(inner.y, outer.y) - base_thick - 1.0))
+		var max_y: int = int(minf(float(size), maxf(inner.y, outer.y) + base_thick + 1.0))
+		var ab: Vector2 = outer - inner
+		var ab_len_sq: float = maxf(ab.length_squared(), 0.0001)
+		for py in range(min_y, max_y):
+			for px in range(min_x, max_x):
+				var p := Vector2(float(px), float(py))
+				var t: float = clampf((p - inner).dot(ab) / ab_len_sq, 0.0, 1.0)
+				var closest := inner + ab * t
+				var d := p.distance_to(closest)
+				var local_thick: float = base_thick * lerpf(1.0, 0.25, t)
+				if d <= local_thick:
+					var edge_t: float = clampf((local_thick - d) / 2.5, 0.0, 1.0)
+					alpha[py * size + px] = maxf(alpha[py * size + px], edge_t)
+		var tip_r: float = rng.randf_range(1.5, 3.5)
+		var tip_min_x: int = int(maxf(0.0, outer.x - tip_r - 1.0))
+		var tip_max_x: int = int(minf(float(size), outer.x + tip_r + 1.0))
+		var tip_min_y: int = int(maxf(0.0, outer.y - tip_r - 1.0))
+		var tip_max_y: int = int(minf(float(size), outer.y + tip_r + 1.0))
+		for py in range(tip_min_y, tip_max_y):
+			for px in range(tip_min_x, tip_max_x):
+				var d := Vector2(float(px), float(py)).distance_to(outer)
+				if d <= tip_r:
+					var edge_t: float = clampf((tip_r - d) / 2.0, 0.0, 1.0)
+					alpha[py * size + px] = maxf(alpha[py * size + px], edge_t)
+	# ── Layer 3: satellite drops ──────────────────────────────────────
+	# Drops follow the same directional bias as streaks so a one-sided
+	# splash variant has all its drops on one side too.
+	# Wall mode: drops emanate from the impact blob (not texture center)
+	# and stay tightly along the downward direction — small flecks of
+	# blood that broke off the main drips and ran down independently.
+	var drop_origin: Vector2 = core_center if wall_mode else center
+	var drop_bias_strength: float = streak_bias_strength if wall_mode else streak_bias_strength * 0.7
+	for i in drop_count:
+		var raw_angle: float = rng.randf() * TAU
+		var angle: float = lerp_angle(raw_angle, streak_bias_angle, drop_bias_strength)
+		var dist_max: float = float(size) * 0.46
+		if wall_mode:
+			# Cap so drops stay inside the texture below the blob.
+			dist_max = minf(dist_max, float(size) - core_center.y - 4.0)
+		var dist: float = rng.randf_range(core_base_r * 1.4, dist_max)
+		var drop_center: Vector2 = drop_origin + Vector2(cos(angle), sin(angle)) * dist
+		var drop_r: float = rng.randf_range(0.9, 2.6)
+		var dx0: int = int(maxf(0.0, drop_center.x - drop_r - 1.0))
+		var dx1: int = int(minf(float(size), drop_center.x + drop_r + 1.0))
+		var dy0: int = int(maxf(0.0, drop_center.y - drop_r - 1.0))
+		var dy1: int = int(minf(float(size), drop_center.y + drop_r + 1.0))
+		for py in range(dy0, dy1):
+			for px in range(dx0, dx1):
+				var d := Vector2(float(px), float(py)).distance_to(drop_center)
+				if d <= drop_r:
+					var edge_t: float = clampf((drop_r - d) / 1.5, 0.0, 1.0)
+					alpha[py * size + px] = maxf(alpha[py * size + px], edge_t)
+	for y in size:
+		for x in size:
+			var a: float = alpha[y * size + x]
+			if a > 0.02:
+				img.set_pixel(x, y, Color(fluid_color.r, fluid_color.g, fluid_color.b, a))
+	return img
+
+
+# Derive a tangent-space normal map from the splatter's alpha gradient.
+# Where alpha is uniform (the bulk of the splat) the normal points
+# straight up (0, 0, 1) — perfectly flat. Near the edge where alpha
+# falls off, the gradient gives a subtle slope that reads as a wet lip
+# / surface tension bead at iso angles. RGB encoding is the standard
+# (x, y, z) ∈ [-1,1] → (r, g, b) ∈ [0,1] mapping Godot expects.
+static func _make_splatter_normal(albedo_image: Image) -> Image:
+	var size := albedo_image.get_width()
+	var normal_img := Image.create(size, size, false, Image.FORMAT_RGB8)
+	normal_img.fill(Color(0.5, 0.5, 1.0))  # flat normal default
+	# Strength controls how pronounced the rim relief is. Subtle (1.2)
+	# so the splat doesn't look 3D-modelled — just catches a hint of
+	# specular at glancing angles.
+	var strength: float = 1.2
+	for y in range(1, size - 1):
+		for x in range(1, size - 1):
+			var center_a: float = albedo_image.get_pixel(x, y).a
+			if center_a < 0.05:
 				continue
-			var t := 1.0 - (d / effective_r)
-			t = pow(t, 0.85)
-			# Dark venous red — same rationale as the splatter texture.
-			img.set_pixel(x, y, Color(0.10, 0.01, 0.008, t * 0.95))
-	_blood_pool_texture = ImageTexture.create_from_image(img)
-	return _blood_pool_texture
+			var a_left: float = albedo_image.get_pixel(x - 1, y).a
+			var a_right: float = albedo_image.get_pixel(x + 1, y).a
+			var a_up: float = albedo_image.get_pixel(x, y - 1).a
+			var a_down: float = albedo_image.get_pixel(x, y + 1).a
+			var gx: float = (a_right - a_left) * 0.5
+			var gy: float = (a_down - a_up) * 0.5
+			# Normal slopes outward where alpha drops, giving the rim a
+			# slight bevel. Negative sign so the gradient points "uphill"
+			# toward the splat's interior.
+			var nx: float = -gx * strength
+			var ny: float = -gy * strength
+			var nz: float = 1.0
+			var inv_len: float = 1.0 / sqrt(nx * nx + ny * ny + nz * nz)
+			nx *= inv_len
+			ny *= inv_len
+			nz *= inv_len
+			normal_img.set_pixel(x, y, Color(
+				nx * 0.5 + 0.5,
+				ny * 0.5 + 0.5,
+				nz,
+			))
+	return normal_img
 
 
 # ORM texture for all blood decals. Uniform tiny image — every pixel
@@ -963,17 +1756,75 @@ static func _get_blood_pool_texture() -> Texture2D:
 # alongside the albedo texture; where the albedo alpha is non-zero,
 # this ORM data overrides the underlying floor's roughness/metallic.
 # Channels: R = ambient occlusion (1 = no occlusion), G = roughness
-# (0.06 = near-mirror / freshly-spilled liquid sheen), B = metallic.
-# Was 0.18 ("glossy painted-on" look). Dropped to 0.06 so the splatter
-# actually catches a specular highlight from ceiling lights — that
-# bright reflection is what reads as "wet liquid" vs "dried red paint".
+# (0.20 = wet matte — glossy enough to read as liquid, not so mirror-
+# like it produces lens-flare specular at iso angles), B = metallic.
+# 0.06 was previously too sharp: ceiling fluorescents caught it as
+# small bright points that read more like glowing pixels than wet
+# blood. 0.20 keeps the sheen but softens the highlight.
 static func _get_blood_orm_texture() -> Texture2D:
 	if _blood_orm_texture != null:
 		return _blood_orm_texture
 	var img := Image.create(4, 4, false, Image.FORMAT_RGB8)
-	img.fill(Color(1.0, 0.06, 0.0))
+	img.fill(Color(1.0, 0.20, 0.0))
 	_blood_orm_texture = ImageTexture.create_from_image(img)
 	return _blood_orm_texture
+
+
+# Maximum size a single decal can grow to via merge accumulation.
+# Caps the "blood pool grows as more lands" behaviour so sustained
+# fights produce visible pools without one decal eating the room.
+const _DECAL_MAX_GROWN_SIZE: float = 4.0
+
+# If `world_pos` lands inside an existing decal's inner coverage,
+# grow that decal slightly to absorb the new spawn and return true —
+# caller skips the actual Decal3D creation. Net effect: overlapping
+# spawns merge into a single growing pool instead of stacking as
+# layered stamps. `inner_ratio` controls how close the new spawn must
+# be to the existing decal's center to count as "inside": 0.55 for
+# kill scenes (loose — gravelly satellites still merge), 0.40 for
+# mist drops (tight — drops can still build density at the rim).
+# `new_avg_size` is the size the new decal WOULD have had; the
+# existing decal grows by ~25% of that to absorb the area.
+# Capped at _DECAL_MAX_GROWN_SIZE so an old pool plateaus instead of
+# growing unbounded — beyond cap, just skip silently.
+static func _try_grow_existing_decal(world_pos: Vector3, new_avg_size: float, inner_ratio: float = 0.55) -> bool:
+	var best: Decal = null
+	var best_dist_sq: float = INF
+	for d_var in _blood_decal_ring:
+		if not is_instance_valid(d_var):
+			continue
+		var d: Decal = d_var as Decal
+		if d == null:
+			continue
+		var dx := world_pos.x - d.global_position.x
+		var dz := world_pos.z - d.global_position.z
+		var d_sq: float = dx * dx + dz * dz
+		var avg_radius: float = (d.size.x + d.size.z) * 0.25
+		var threshold: float = avg_radius * inner_ratio
+		if d_sq < threshold * threshold and d_sq < best_dist_sq:
+			best = d
+			best_dist_sq = d_sq
+	if best == null:
+		return false
+	# Existing decal already at cap — accept the merge (skip the new
+	# spawn) but don't grow further.
+	if best.size.x >= _DECAL_MAX_GROWN_SIZE and best.size.z >= _DECAL_MAX_GROWN_SIZE:
+		return true
+	var growth: float = new_avg_size * 0.25
+	best.size.x = minf(best.size.x + growth, _DECAL_MAX_GROWN_SIZE)
+	best.size.z = minf(best.size.z + growth, _DECAL_MAX_GROWN_SIZE)
+	return true
+
+
+# Per-decal modulate jitter. Multiplies all three RGB channels by the
+# same scalar (centered near 1.0) so the underlying palette hue is
+# preserved but brightness varies across decals — simulating fresh
+# arterial spray vs slightly-older venous flow. Uniform tint so
+# decals still read as the same fluid. `alpha` is passed through so
+# callers that already encode an intensity (footprints) preserve theirs.
+static func _decal_color_jitter(alpha: float = 1.0) -> Color:
+	var v: float = randf_range(0.70, 1.15)
+	return Color(v, v, v, alpha)
 
 
 # AoE explosion burst — flipbook fireball + flash + sparks, palette-keyed
@@ -1153,7 +2004,7 @@ static func _spawn_fireball_explosion(parent: Node, world_pos: Vector3, blast_ra
 	# Add to tree after configuring — particle emits on first frame.
 	parent.add_child(fx)
 	fx.global_position = world_pos
-	fx.get_tree().create_timer(anim_lifetime + 0.3).timeout.connect(fx.queue_free)
+	fx.get_tree().create_timer(anim_lifetime + 0.3).timeout.connect(_free_later(fx))
 
 	# Omni light pulse — surrounding floor / walls / enemies light up
 	# in the explosion's color. Two-stage fade: peak holds briefly at
@@ -1197,7 +2048,7 @@ static func _spawn_fireball_explosion(parent: Node, world_pos: Vector3, blast_ra
 	var light_tween := light.create_tween()
 	light_tween.tween_property(light, "light_energy", 14.0 * intensity_mult, 0.15).set_ease(Tween.EASE_OUT)
 	light_tween.tween_property(light, "light_energy", 0.0, EXPLOSION_DURATION).set_ease(Tween.EASE_IN)
-	light_tween.tween_callback(_release_light.bind(light))
+	light_tween.tween_callback(_release_light_later(light))
 
 	# Instant flash sphere — bright unshaded white-hot pop that
 	# precedes the flipbook's first visible frame. Reads as the
@@ -1241,7 +2092,7 @@ static func _spawn_explosion_flash(parent: Node, world_pos: Vector3, blast_radiu
 	tween.tween_property(inst, "scale", Vector3.ONE * 1.4, EXPLOSION_FLASH_DURATION).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_EXPO)
 	tween.tween_property(mat, "albedo_color:a", 0.0, EXPLOSION_FLASH_DURATION).set_ease(Tween.EASE_IN)
 	tween.tween_property(mat, "emission_energy_multiplier", 0.0, EXPLOSION_FLASH_DURATION).set_ease(Tween.EASE_IN)
-	tween.chain().tween_callback(inst.queue_free)
+	tween.chain().tween_callback(_free_later(inst))
 
 
 # Bright outward-spraying spark particles. One-shot burst sized to the
@@ -1310,7 +2161,7 @@ static func _spawn_explosion_sparks(parent: Node, world_pos: Vector3, blast_radi
 	particles.global_position = world_pos
 	# Cleanup after the burst — lifetime is short, but pad so the tail
 	# fully fades.
-	particles.get_tree().create_timer(EXPLOSION_SPARK_LIFETIME + 0.2).timeout.connect(particles.queue_free)
+	particles.get_tree().create_timer(EXPLOSION_SPARK_LIFETIME + 0.2).timeout.connect(_free_later(particles))
 
 
 # Energy-weapon AoE — keeps the existing translucent-bubble look that
@@ -1358,8 +2209,8 @@ static func _spawn_energy_explosion(parent: Node, world_pos: Vector3, blast_radi
 	tween.tween_property(mat, "albedo_color:a", 0.0, EXPLOSION_DURATION).set_ease(Tween.EASE_IN)
 	tween.tween_property(mat, "emission_energy_multiplier", 0.0, EXPLOSION_DURATION * 0.8).set_ease(Tween.EASE_IN)
 	tween.tween_property(light, "light_energy", 0.0, EXPLOSION_DURATION).set_ease(Tween.EASE_IN)
-	tween.chain().tween_callback(_release_light.bind(light))
-	tween.chain().tween_callback(inst.queue_free)
+	tween.chain().tween_callback(_release_light_later(light))
+	tween.chain().tween_callback(_free_later(inst))
 
 
 static func spawn_hit_cone(host: Node3D, aim: Vector3, attack_range: float, cone_deg: float) -> void:
@@ -1441,7 +2292,7 @@ static func spawn_hammer_impact(host: Node3D) -> void:
 	var tween := inst.create_tween()
 	tween.tween_property(mat, "shader_parameter/progress", 1.0, HAMMER_IMPACT_DURATION) \
 		.set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
-	tween.tween_callback(inst.queue_free)
+	tween.tween_callback(_free_later(inst))
 
 
 # ── Footstep dust puffs ─────────────────────────────────────────────────────
@@ -1563,7 +2414,7 @@ static func spawn_footstep_puff(parent: Node3D, world_pos: Vector3) -> void:
 	# so the very last frame renders before tear-down.
 	var t := p.create_tween()
 	t.tween_interval(FOOTSTEP_LIFETIME + 0.15)
-	t.tween_callback(p.queue_free)
+	t.tween_callback(_free_later(p))
 
 
 # ── Blade slash (1H knife / melee_1h hit visual) ────────────────────────────
@@ -1682,7 +2533,7 @@ static func _spawn_one_slash(host: Node3D, forward: Vector3, mid_dist: float, co
 	# the visible streak and its transparency in one ease.
 	var tween := inst.create_tween()
 	tween.tween_property(mat, "shader_parameter/intensity", 0.0, SLASH_DURATION).set_ease(Tween.EASE_IN)
-	tween.tween_callback(inst.queue_free)
+	tween.tween_callback(_free_later(inst))
 
 # Detached from host so the wave stays where it was unleashed even if the
 # host moves or rotates during the effect. forward == ZERO means no orientation
@@ -1708,7 +2559,7 @@ static func _spawn_shockwave(host: Node3D, world_pos: Vector3, mesh: Mesh, forwa
 	var tween := node.create_tween().set_parallel(true)
 	tween.tween_property(node, "scale", Vector3.ONE, duration).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	tween.tween_property(mat, "shader_parameter/intensity", 0.0, duration).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	tween.chain().tween_callback(node.queue_free)
+	tween.chain().tween_callback(_free_later(node))
 
 static func _telegraphs_enabled() -> bool:
 	if DebugState.config == null:
@@ -1726,7 +2577,7 @@ static func _play_fade(node: MeshInstance3D, mat: StandardMaterial3D, wind_up: f
 		mat.albedo_color.a = 0.4
 		tween.tween_property(mat, "albedo_color:a", 1.0, wind_up)
 	tween.tween_property(mat, "albedo_color:a", 0.0, FADE_DURATION)
-	tween.tween_callback(node.queue_free)
+	tween.tween_callback(_free_later(node))
 
 static func _cone_mesh(radius: float, angle_deg: float) -> ArrayMesh:
 	var key := Vector2(radius, angle_deg)
@@ -1939,7 +2790,7 @@ static func spawn_muzzle_flash(host: Node3D, barrel_pos: Vector3, is_bullet: boo
 	light.global_position = barrel_pos
 	var tween := light.create_tween()
 	tween.tween_property(light, "light_energy", 0.0, MUZZLE_FLASH_DURATION).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-	tween.tween_callback(_release_light.bind(light))
+	tween.tween_callback(_release_light_later(light))
 
 
 # ── Telegraph material ───────────────────────────────────────────────────────

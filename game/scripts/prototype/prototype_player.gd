@@ -1073,7 +1073,13 @@ func _play_levelup_vfx() -> void:
 		_damage_flash._tween = _damage_flash.create_tween()
 		_damage_flash._tween.tween_property(_damage_flash._rect, "color:a", 0.0, 0.2) \
 			.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-		_damage_flash._tween.tween_callback(func() -> void: _damage_flash._rect.visible = false)
+		# instance_id capture to survive level reload between schedule + fire.
+		var flash_rect_id: int = _damage_flash._rect.get_instance_id()
+		_damage_flash._tween.tween_callback(func() -> void:
+			var r := instance_from_id(flash_rect_id) as ColorRect
+			if r != null:
+				r.visible = false
+		)
 	# Camera shake — small celebratory jolt.
 	var cam := get_viewport().get_camera_3d() as PrototypeCamera
 	if cam != null:
@@ -1104,7 +1110,14 @@ func _play_levelup_vfx() -> void:
 		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	tween.tween_property(ring, "position:y", 0.6, 0.7) \
 		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tween.chain().tween_callback(ring.queue_free)
+	# instance_id capture instead of direct method bind — see comment on
+	# the dismember prop free in prototype_enemy.gd.
+	var ring_id: int = ring.get_instance_id()
+	tween.chain().tween_callback(func() -> void:
+		var n := instance_from_id(ring_id) as Node
+		if n != null:
+			n.queue_free()
+	)
 
 func _recompute_stat_bonuses() -> void:
 	# Aggregate all gear-driven bonuses from every equipped slot.
@@ -1824,18 +1837,24 @@ func _cast_lmb_combat() -> void:
 		var captured_skill := skill
 		var captured_item := item
 		var captured_offset := _arm_offset_for_slot(slot, aim_right)
-		# Schedule the actual hit at fire_delay. Re-aim at lock-on time so a
-		# moving target still gets tracked even though the volley was queued
-		# at LMB-press.
+		# Resolve `self` through instance_from_id at fire time. Implicit
+		# `self` captures (via `_alive`, `_combat`, etc.) would log a
+		# "Lambda capture freed" error if the player dies / level reloads
+		# between LMB-press and the wind-up timer firing — SceneTreeTimers
+		# survive scene reloads, so this fires AFTER the new level loads
+		# without `p`. Skill/Item are Resources (RefCounted) so their
+		# captures keep them alive on their own — no ID dance needed.
+		var player_id: int = get_instance_id()
 		get_tree().create_timer(fire_delay).timeout.connect(func() -> void:
-			if not _alive:
+			var p := instance_from_id(player_id) as PrototypePlayer
+			if p == null or not p._alive:
 				return
 			var fire_aim := aim
-			if _lock_target != null:
-				var refreshed := _aim_direction()
+			if p._lock_target != null:
+				var refreshed := p._aim_direction()
 				if refreshed != Vector3.ZERO:
 					fire_aim = refreshed
-			_combat.resolve_skill_hit(captured_skill, fire_aim, captured_item, captured_offset)
+			p._combat.resolve_skill_hit(captured_skill, fire_aim, captured_item, captured_offset)
 		, CONNECT_ONE_SHOT)
 
 	# Animation + movement stop only when the main weapon fired this volley.

@@ -55,6 +55,7 @@
 - [Light volumetric fog energy](project_light_volumetric_fog_energy.md) — every Light3D needs light_volumetric_fog_energy = 0.0 explicitly; Godot's default of 1.0 scatters into FogVolumes and produces a screen-space halo even with env.volumetric_fog_enabled = false
 - [Recovery system](project_health_potion_system.md) — consumable slot, origin-gated Stimpack/Battery, 2-7 charges, %-based HoT, heal preview on HP bar
 - [Visual meter system](project_visual_meters.md) — ALL item types have meter bars; MODIFIER_BAR_DEFS for affix stats; Shift comparison shows union of bars; quality % on both panels; global Power bar with divider
+- [Blood palette + fluid types](project_blood_palette.md) — BLOOD_PALETTES dict (human/cyborg/machine) + per-enemy @export blood_type threaded through every spawn_blood_* call
 - [Weapon DPS balance](project_dps_balance_model.md) — 3-tier DPS by multi-target capability (26/23/20); damage scales by RARITY_BUDGET_MULT
 - [Resonance bar world-space](project_resonance_bar.md) — accelerator ramp bar moved from HUD to 3D cast bar under player; reuses health_bar.gdshader
 - [Destructibles + cover invariants](project_destructibles_cover.md) — collision is 1.6m tall regardless of mesh size; cover blocks standing fire too; projectile sweep routes PILLAR hits to damage path
@@ -68,3 +69,4 @@
 - [X Bot character pipeline](project_xbot_character.md) — Mixamo X Bot is player+enemy mesh; runtime AnimationLibrary merge from one-clip-per-FBX; shared BoneMap; ufbx scale=1.0 not 0.01
 - [X Bot ragdoll](project_xbot_ragdoll.md) — death = random Mixamo death anim + tween knockback; per-bone PhysicalBone3D ragdoll kicked lazily on explosion (Godot init quirk made physics-on-death snap to T-pose)
 - [Godot 4 runtime gotchas](project_godot4_runtime_gotchas.md) — gi_mode default=STATIC kills VFX under SDFGI; depth_draw_opaque self-refs soft-particle alpha; Jolt rejects non-uniform scale; ufbx handles cm→m natively
+- [Lambda capture freed](project_lambda_capture_freed.md) — SceneTreeTimers/node_added/etc survive scene reloads; lambdas with Node captures fired post-reload spam "Lambda capture at index 0 was freed"; capture instance_id (int) and re-resolve via instance_from_id

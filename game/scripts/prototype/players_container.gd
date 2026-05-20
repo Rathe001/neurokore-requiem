@@ -128,4 +128,12 @@ func _fade_and_free(player: PrototypePlayer) -> void:
 	# Brief shrink-down so disconnects don't look like a hard pop.
 	var tw := create_tween()
 	tw.tween_property(player, "scale", Vector3(0.01, 0.01, 0.01), 0.25)
-	tw.tween_callback(player.queue_free)
+	# instance_id capture — multiplayer disconnect race could free the
+	# player before the tween completes, and binding queue_free directly
+	# would trip "Lambda capture freed".
+	var player_id: int = player.get_instance_id()
+	tw.tween_callback(func() -> void:
+		var n := instance_from_id(player_id) as Node
+		if n != null:
+			n.queue_free()
+	)

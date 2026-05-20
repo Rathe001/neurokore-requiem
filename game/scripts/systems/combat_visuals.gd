@@ -364,6 +364,11 @@ func _release_anchor(anchor: Node3D) -> void:
 ## `_release_anchor` — if anything's still hanging on the anchor when
 ## the timer fires, it gets queue_freed instead of pooled.
 func _release_anchor_delayed(anchor: Node3D, delay: float) -> void:
+	# instance_id capture — autoload self is safe, but `anchor` can be
+	# queue_freed (level reload) before the timer fires.
+	var anchor_id: int = anchor.get_instance_id()
 	get_tree().create_timer(delay).timeout.connect(func() -> void:
-		_release_anchor(anchor)
+		var a := instance_from_id(anchor_id) as Node3D
+		if a != null:
+			_release_anchor(a)
 	)

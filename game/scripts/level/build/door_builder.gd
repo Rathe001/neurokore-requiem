@@ -30,14 +30,26 @@ static func build_door(ctx: LevelBuildContext, piece_id: StringName, rd: RoomDef
 	# the wall builder cuts a full-wall-height hole for the door but the
 	# shortened door only fills the bottom 85% — leaving a visible open gap
 	# from door-top up to wall-top that the user can see through.
+	#
+	# Insets on every axis to avoid coplanar z-fighting:
+	#   • TOP: lintel top would otherwise = wall_height = ceiling.y → z-fight
+	#     against ceiling's bottom face.
+	#   • SIDES: lintel ends would otherwise meet the jamb inner faces flush
+	#     → z-fight along the seam.
+	# 1 cm inset on each face is invisible at iso but breaks every shared
+	# plane.
+	const _LINTEL_INSET := 0.01
 	var door_world_height := ctx.theme.wall_height * DOOR_LINTEL_RATIO
-	var lintel_height := ctx.theme.wall_height - door_world_height
-	if lintel_height > 0.01:
-		var lintel_y := door_world_height + lintel_height * 0.5
+	var lintel_gap := ctx.theme.wall_height - door_world_height
+	if lintel_gap > 0.02:
+		var lintel_height := lintel_gap - _LINTEL_INSET * 2.0
+		# Center in the gap so the lintel has equal clearance above (to
+		# the ceiling) and below (to the door's closed-state top).
+		var lintel_y := door_world_height + lintel_gap * 0.5
 		var lintel_pos := wpos + Vector3(0.0, lintel_y, 0.0)
 		var along_x := side == RoomDef.Wall.EAST or side == RoomDef.Wall.WEST
-		var lintel_sx := thick if along_x else opening_w
-		var lintel_sz := opening_w if along_x else thick
+		var lintel_sx := (thick if along_x else opening_w) - _LINTEL_INSET * 2.0
+		var lintel_sz := (opening_w if along_x else thick) - _LINTEL_INSET * 2.0
 		WallBuilder.create_trim_box(ctx, lintel_pos, lintel_sx, lintel_height, lintel_sz)
 
 	if door is PrototypeDoor:

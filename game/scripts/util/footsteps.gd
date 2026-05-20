@@ -3,6 +3,12 @@ extends RefCounted
 ## Shared footstep accumulation + floor-type detection.
 ## Both PrototypePlayer and PrototypeEnemy call tick() each physics frame.
 
+# Bloody footprints fire on their own sub-stride accumulator, not the
+# audio/dust footstep threshold. A real heel-to-heel gait is ~70 cm; at
+# the old 1.7 m audio cadence prints landed every other stride and the
+# trail looked sparse and oversized.
+const BLOODY_FOOTSTEP_DISTANCE: float = 0.7
+
 ## Accumulate horizontal distance and emit a footstep when threshold crossed.
 ## Returns the updated [accum, last_pos] so callers can store them. Pass
 ## spawn_puff = true for the local player (enemy puffs are too noisy at scale).
@@ -25,6 +31,17 @@ static func tick(
 	var d := delta_v.length()
 	if d < 0.001:
 		return [accum, pos]
+	# Bloody trail runs on its own short-stride accumulator so prints
+	# land at every footfall, not every other audio step. Cheap early-
+	# out inside _handle_bloody_footstep when not in blood.
+	if spawn_puff:
+		var bloody_accum: float = float(body.get_meta(&"bloody_accum", 0.0)) + d
+		if bloody_accum >= BLOODY_FOOTSTEP_DISTANCE:
+			bloody_accum = 0.0
+			var bloody_scene := body.get_tree().current_scene
+			if bloody_scene != null:
+				_handle_bloody_footstep(body, bloody_scene, pos, delta_v)
+		body.set_meta(&"bloody_accum", bloody_accum)
 	accum += d
 	if accum >= distance_threshold:
 		accum = 0.0
@@ -32,7 +49,6 @@ static func tick(
 			var scene := body.get_tree().current_scene
 			if scene != null:
 				PrototypeAttackIndicator.spawn_footstep_puff(scene, pos)
-				_handle_bloody_footstep(body, scene, pos, delta_v)
 		var floor_key := detect_floor_type(body)
 		WeaponSounds.play_generic(floor_key, pos, volume_db, at_listener)
 	return [accum, pos]
@@ -43,8 +59,8 @@ static func tick(
 #      to BLOODY_STEPS_INITIAL so the next print is full-intensity.
 #   2. Spawn the print using the current counter (post-recharge) and
 #      decrement.
-# step_idx alternates L/R lateral offset so prints don't stack on the
-# player's centerline — reads as actual footsteps, not a single trail.
+# step_idx parity drives both the lateral offset (L/R of body centerline)
+# AND which boot-print silhouette is used (right-foot vs mirrored).
 static func _handle_bloody_footstep(body: CharacterBody3D, scene: Node, pos: Vector3, move_delta: Vector3) -> void:
 	if PrototypeAttackIndicator.is_in_blood(pos):
 		body.set_meta(&"bloody_steps_remaining", PrototypeAttackIndicator.BLOODY_STEPS_INITIAL)
@@ -55,9 +71,12 @@ static func _handle_bloody_footstep(body: CharacterBody3D, scene: Node, pos: Vec
 	var move_dir: Vector3 = move_delta.normalized() if move_delta.length_squared() > 0.0001 else Vector3.FORWARD
 	# Right vector in the XZ plane = UP × forward.
 	var right: Vector3 = Vector3.UP.cross(move_dir).normalized()
-	var lateral: Vector3 = right * (0.18 if step_idx % 2 == 0 else -0.18)
+	var right_foot: bool = step_idx % 2 == 0
+	# Lateral half-stance: ~10 cm off centerline matches the new 22 cm
+	# print width without overlapping its mirror across the midline.
+	var lateral: Vector3 = right * (0.10 if right_foot else -0.10)
 	var intensity: float = float(remaining) / float(PrototypeAttackIndicator.BLOODY_STEPS_INITIAL)
-	PrototypeAttackIndicator.spawn_blood_footprint(scene, pos + lateral, move_dir, intensity)
+	PrototypeAttackIndicator.spawn_blood_footprint(scene, pos + lateral, move_dir, intensity, right_foot)
 	body.set_meta(&"bloody_steps_remaining", remaining - 1)
 	body.set_meta(&"bloody_step_idx", step_idx + 1)
 
