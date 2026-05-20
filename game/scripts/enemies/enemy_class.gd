@@ -27,6 +27,20 @@ enum SupportRole {
 ## Weapon archetype this class carries (e.g. &"smg", &"plasma_rifle",
 ## &"blade"). Used for future visual attachment and identity.
 @export var weapon_id: StringName = &""
+## Character mesh used for this class. Optional override — when null,
+## the enemy scene's authored default mesh (vanguard for melee,
+## alien for ranged) is kept. Set this on a class .tres to give
+## that archetype a distinct silhouette (e.g. military_man for
+## elite ranged variants, crypto for support / utility classes).
+## Must be an FBX/GLB that uses the same Mixamo bonemap as X Bot so
+## the shared animation library still plays.
+@export var character_mesh: PackedScene
+## Per-class Y-axis rotation (radians) applied to the swapped mesh's
+## Character node. Used to correct meshes authored facing the wrong
+## axis (e.g. military_man is authored facing +Y where X Bot faces
+## -Y, so PI flips it around). Default 0 means "no rotation". Only
+## meaningful when character_mesh is set.
+@export var mesh_yaw_offset: float = 0.0
 
 @export_group("Attack")
 @export var attack_mode: AttackMode = AttackMode.MELEE

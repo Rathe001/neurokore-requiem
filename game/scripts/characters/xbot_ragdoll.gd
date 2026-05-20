@@ -43,7 +43,6 @@ const _BONES: Array[Array] = [
 const _META_KEY: StringName = &"xbot_ragdoll_setup"
 
 
-static var _logged_bones: bool = false
 
 
 ## Adds PhysicalBone3D children to `skeleton` for each major bone.
@@ -61,13 +60,6 @@ static func setup(skeleton: Skeleton3D) -> void:
 		return
 	if skeleton.has_meta(_META_KEY):
 		return
-	if not _logged_bones:
-		var all_names: Array[String] = []
-		for i in range(skeleton.get_bone_count()):
-			all_names.append(skeleton.get_bone_name(i))
-		print("[XBotRagdoll] Skeleton has %d bones: %s" % [skeleton.get_bone_count(), all_names])
-		_logged_bones = true
-	var bones_attached := 0
 	for entry in _BONES:
 		var preferred: StringName = entry[0]
 		var mass: float = entry[1]
@@ -100,6 +92,16 @@ static func setup(skeleton: Skeleton3D) -> void:
 		col.shape = caps
 		pb.add_child(col)
 		skeleton.add_child(pb)
+		# Jolt rejects non-uniform global scale on bodies. New character
+		# meshes (vanguard / alien / military_man / crypto) import with
+		# small non-uniform scale baked into the visual ancestor chain
+		# (typical FBX import residue), which every PhysicalBone3D
+		# inherits — spamming `_try_build_shape: Failed to correctly
+		# scale body` once per limb per spawn. Counter-scale locally so
+		# the body lands at uniform global scale.
+		var gs := pb.global_transform.basis.get_scale()
+		if not (is_equal_approx(gs.x, gs.y) and is_equal_approx(gs.y, gs.z)):
+			pb.scale = Vector3(1.0 / gs.x, 1.0 / gs.y, 1.0 / gs.z)
 		# Cone constraint shape. The cone is CENTERED on the bone's rest
 		# orientation (Mixamo bind pose = T-pose for X Bot), so its
 		# swing_span dictates how far each limb can deviate from
@@ -120,8 +122,6 @@ static func setup(skeleton: Skeleton3D) -> void:
 			# ("Cone twist joint softness is not supported when using Jolt
 			# Physics"). 500+ warnings in a single playtest. Skip setting
 			# them at all — defaults from Godot are fine for Jolt.
-		bones_attached += 1
-	print("[XBotRagdoll] Attached %d PhysicalBone3D(s)" % bones_attached)
 	skeleton.set_meta(_META_KEY, true)
 
 
@@ -208,45 +208,19 @@ static func dismember_random_tips(skeleton: Skeleton3D, max_count: int = 2) -> A
 static func activate(skeleton: Skeleton3D, kill_from: Vector3 = Vector3.ZERO, kill_force: float = 0.0) -> void:
 	if skeleton == null:
 		return
-	# Snap every PhysicalBone3D to its CURRENT animated bone pose so when
-	# simulation flips on, the body starts from whatever the running /
-	# idle / attack animation had it doing, not the skeleton's bind pose
-	# (T-pose for Mixamo). Without this, physical_bones_start_simulation
-	# captures the bones at their _ready-time initial positions (bind
-	# pose) and corpses snap to T-pose at the moment of death.
+	# Align each PhysicalBone3D with the bone's current animated pose
+	# before flipping on simulation, so the ragdoll inherits whatever
+	# the running / idle / attack animation had it doing rather than the
+	# bind pose. Orthonormalizing the basis is a side benefit — Mixamo
+	# bind matrices carry tiny non-uniform scale residue that Jolt
+	# rejects on collision shapes.
 	#
-	# Also orthonormalizes the basis as a side benefit — Jolt rejects
-	# non-uniform collision scale, and Mixamo bone bind matrices carry
-	# tiny non-uniform scale residue from FBX→Godot decomposition.
-	# Diagnostic: capture pre-simulation pose of the LeftArm so we can
-	# see at-a-glance whether the synced pose differs from bind / from
-	# the simulated result.
-	var dbg_idx: int = skeleton.find_bone("mixamorig_LeftArm")
-	if dbg_idx >= 0:
-		var dbg_pose := skeleton.get_bone_global_pose(dbg_idx)
-		var dbg_rest := skeleton.get_bone_global_rest(dbg_idx)
-		print("[XBotRagdoll] LeftArm pre-sim pose origin=%s rest origin=%s rot equal=%s" % [
-			dbg_pose.origin, dbg_rest.origin,
-			dbg_pose.basis.is_equal_approx(dbg_rest.basis)
-		])
-
-	# Minimal activation: align each PhysicalBone3D's transform with the
-	# bone's current animated pose (orthonormalize basis to drop Mixamo
-	# bind-matrix scale residue), then start simulation.
-	#
-	# THIS DOES NOT FIX THE T-POSE SNAP. Verified empirically across a
-	# session of attempts (set_bone_pose pre-start, set_bone_rest swap,
-	# pb.global_transform teleport after start) — Godot 4.6.2's
-	# PhysicalBoneSimulator initializes every rigid body from the bone's
-	# REST pose (T-pose for Mixamo) regardless of any pre-start state we
-	# can set in script. The only writes that DID land introduced Jolt
-	# non-uniform-scale errors from skeleton-parent transform residue.
-	#
-	# Keeping ragdoll code in place as the existing memory entry
-	# `project_xbot_ragdoll` flags this as unsolved — corpses will T-pose
-	# until either Godot's simulator matures or we switch to playing the
-	# Mixamo death animation as the death pose (see "ragdoll path
-	# alternative" discussion in session log).
+	# Caveat (Godot 4.6.2): PhysicalBoneSimulator still initializes each
+	# rigid body from the bone's REST pose regardless of pre-start
+	# transforms, so a body activated cold snaps to T-pose for a frame.
+	# Death no longer uses cold ragdoll — see prototype_enemy._die: the
+	# death animation plays first and ragdoll only kicks in when an
+	# explosion shoves the corpse. See memory `project_xbot_ragdoll`.
 	for child in skeleton.get_children():
 		if not (child is PhysicalBone3D):
 			continue
@@ -258,6 +232,12 @@ static func activate(skeleton: Skeleton3D, kill_from: Vector3 = Vector3.ZERO, ki
 			pb.transform = pose
 		else:
 			pb.transform.basis = pb.transform.basis.orthonormalized()
+		# Same Jolt non-uniform-scale guard as setup(): if the skeleton's
+		# ancestor chain has non-uniform scale, counter it locally so the
+		# body's global scale stays uniform at simulation start.
+		var gs := pb.global_transform.basis.get_scale()
+		if not (is_equal_approx(gs.x, gs.y) and is_equal_approx(gs.y, gs.z)):
+			pb.scale = Vector3(1.0 / gs.x, 1.0 / gs.y, 1.0 / gs.z)
 	skeleton.physical_bones_start_simulation()
 	if kill_force <= 0.0:
 		return

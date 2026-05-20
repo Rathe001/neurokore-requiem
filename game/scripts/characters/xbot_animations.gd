@@ -66,7 +66,6 @@ static func get_library() -> AnimationLibrary:
 	_extract(_library, &"jump", _JUMP_FBX, false, false)
 	for i in _DEATH_FBXS.size():
 		_extract(_library, StringName("death_%d" % i), _DEATH_FBXS[i], false, false)
-	print("[XBotAnimations] Built library with: ", _library.get_animation_list())
 	return _library
 
 
@@ -111,7 +110,7 @@ static func _extract(lib: AnimationLibrary, dst_name: StringName, src_scene: Pac
 	if chosen == &"" and not names.is_empty():
 		chosen = names[0]
 	if chosen == &"":
-		print("[XBotAnimations] No animation found in ", src_scene.resource_path)
+		push_warning("[XBotAnimations] No animation found in %s" % src_scene.resource_path)
 		inst.queue_free()
 		return
 	var anim: Animation = ap.get_animation(chosen)

@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="EnemyClass" load_steps=4 format=3]
+[gd_resource type="Resource" script_class="EnemyClass" load_steps=5 format=3]
 
 ; Melee + heal-aura combo. Walks in like a blade fighter but every
 ; 12 seconds tops up nearby allies (and itself) by a 10-20% chunk of max HP
@@ -9,12 +9,15 @@
 [ext_resource type="Script" path="res://scripts/enemies/enemy_class.gd" id="script"]
 [ext_resource type="Resource" path="res://resources/enemies/skills/ground_slam.tres" id="ground_slam"]
 [ext_resource type="Resource" path="res://resources/enemies/skills/blade_attack.tres" id="basic_attack"]
+[ext_resource type="PackedScene" path="res://assets/characters/crypto/crypto_idle.fbx" id="char_mesh"]
 
 [resource]
 script = ExtResource("script")
 id = &"melee_healer"
 label = "Field Medic"
 weapon_id = &"blade"
+character_mesh = ExtResource("char_mesh")
+mesh_yaw_offset = 3.14159
 basic_attack = ExtResource("basic_attack")
 skill_pool = [ExtResource("ground_slam")]
 attack_mode = 0

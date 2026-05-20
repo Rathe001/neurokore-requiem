@@ -289,6 +289,13 @@ const NAME_PALETTE_NUMBERED: Array[String] = ["Subject", "Specimen", "Unit"]
 ##   - The kill drop's rarity is floored at named.guaranteed_drop_rarity.
 @export var named_monster: NamedMonster
 
+## Fluid the enemy bleeds — picked up by every blood spawn (burst,
+## splatter, pool, wall splat, bootprint trail from corpses they fall
+## near). &"human" / &"cyborg" / &"machine" map to colors in
+## PrototypeAttackIndicator.BLOOD_PALETTES; add an entry there to support
+## a new fluid. Default keeps existing trash mobs bleeding red.
+@export var blood_type: StringName = &"human"
+
 @onready var visual: Node3D = $Visual
 @onready var anim_player: AnimationPlayer = $Visual/Character/AnimationPlayer
 @onready var health_bar: MeshInstance3D = $HealthBar
@@ -414,6 +421,7 @@ func _ready() -> void:
 	# animations come from the FBX directly and the library install just
 	# adds an unused namespace.
 	XBotAnimations.install_on(anim_player)
+	_isolate_visual_from_decals()
 	# Pre-build the per-bone ragdoll skeleton so _die() can flip it into
 	# physics simulation instantly. Deferred — the FBX's Skeleton3D may not
 	# Physics-bone ragdoll disabled — death pose comes from the Mixamo
@@ -426,18 +434,147 @@ func _ready() -> void:
 	# call_deferred(&"_setup_ragdoll")
 	_init_enemy()
 	_setup_hover()
+	# Normalise scene-default mesh's bones too — alien/vanguard might
+	# also use non-mixamorig_ prefixes (we know vanguard is fine, but
+	# this is safe / idempotent).
+	if visual != null:
+		var default_skel := _find_skeleton(visual)
+		if default_skel != null:
+			_normalize_skeleton_bone_prefix(visual, default_skel)
+
+
+# Move every MeshInstance3D under `visual` off the default visual layer
+# (1) onto layer 2. Blood decals project with cull_mask = layer 1 only,
+# so decals stop painting themselves onto the character mesh — which
+# would otherwise stick to the world-space spot where the decal was
+# spawned, looking detached when the corpse moves (ragdoll launch, sink
+# tween). The camera's default cull_mask covers all 20 layers, so
+# layer-2 meshes remain visible to the player.
+func _isolate_visual_from_decals() -> void:
+	if visual == null:
+		return
+	_walk_set_visual_layers(visual, 2)
+
+
+static func _walk_set_visual_layers(node: Node, mask: int) -> void:
+	if node is VisualInstance3D:
+		(node as VisualInstance3D).layers = mask
+	for child in node.get_children():
+		_walk_set_visual_layers(child, mask)
+
+
+# Normalises non-standard Mixamo bone-name prefixes so the shared X Bot
+# animation library plays on any rig. Some FBX exports use `mixamorig1_`
+# (Mixamo re-exports through Blender often add the `1`), `mixamorig:`
+# (colon convention), etc. X Bot animations target `mixamorig_*` paths
+# directly, so a mesh with any other prefix would T-pose.
+#
+# Two-part rename: Skeleton3D bone names AND every MeshInstance3D's
+# Skin bind names. Renaming only the bones leaves the mesh's skin
+# bindings pointing at the OLD names → vertices can't find their bones
+# → limbs detach and float (see the "broken specimen" symptom). The
+# Skin binds use a separate name table and must be patched too.
+static func _normalize_skeleton_bone_prefix(visual_root: Node, skel: Skeleton3D) -> int:
+	if skel == null or skel.get_bone_count() == 0:
+		return 0
+	var first: String = skel.get_bone_name(0)
+	var prefix_from: String = ""
+	if first.begins_with("mixamorig1_"):
+		prefix_from = "mixamorig1_"
+	elif first.begins_with("mixamorig:"):
+		prefix_from = "mixamorig:"
+	# Already on the canonical mixamorig_ prefix → nothing to do.
+	if prefix_from == "":
+		return 0
+	var prefix_to := "mixamorig_"
+	var renamed: int = 0
+	for i in skel.get_bone_count():
+		var bn: String = skel.get_bone_name(i)
+		if bn.begins_with(prefix_from):
+			skel.set_bone_name(i, prefix_to + bn.substr(prefix_from.length()))
+			renamed += 1
+	# Walk from the FBX/visual root because MeshInstance3D children
+	# typically sit as siblings to Skeleton3D (not under it). Skin is
+	# shared-by-reference, so duplicate before patching to avoid
+	# corrupting the cached resource for future spawns of this FBX.
+	if visual_root != null:
+		_rebind_skins_under(visual_root, prefix_from, prefix_to)
+	return renamed
+
+
+static func _rebind_skins_under(node: Node, prefix_from: String, prefix_to: String) -> void:
+	if node is MeshInstance3D:
+		var mi: MeshInstance3D = node
+		if mi.skin != null:
+			var new_skin: Skin = mi.skin.duplicate()
+			var n: int = new_skin.get_bind_count()
+			for i in n:
+				var bind_name: String = new_skin.get_bind_name(i)
+				if bind_name.begins_with(prefix_from):
+					new_skin.set_bind_name(i, prefix_to + bind_name.substr(prefix_from.length()))
+			mi.skin = new_skin
+	for child in node.get_children():
+		_rebind_skins_under(child, prefix_from, prefix_to)
+
+
+# Replaces the Visual/Character child mesh with the EnemyClass's
+# character_mesh override (if any). Re-resolves `anim_player`, reinstalls
+# the X Bot animation library on the new AnimationPlayer, and reapplies
+# decal-layer isolation. Idempotent — if the current Character is
+# already the requested mesh, this skips the swap. Called from
+# _init_enemy on every spawn so pool re-acquires with a different class
+# pick up the right mesh too.
+func _apply_class_mesh() -> void:
+	if enemy_class == null or enemy_class.character_mesh == null:
+		return
+	if visual == null:
+		return
+	# Skip if the current Character already came from this scene —
+	# checking scene_file_path is the cheapest way to compare since
+	# PackedScene resource_path is canonical.
+	var current_char := visual.get_node_or_null(^"Character") as Node3D
+	if current_char != null and current_char.scene_file_path == enemy_class.character_mesh.resource_path:
+		return
+	if current_char != null:
+		visual.remove_child(current_char)
+		current_char.queue_free()
+	var new_char := enemy_class.character_mesh.instantiate() as Node3D
+	if new_char == null:
+		return
+	new_char.name = "Character"
+	visual.add_child(new_char)
+	# Per-class yaw correction for meshes authored facing the wrong
+	# axis (military_man faces opposite X Bot, so the class sets PI).
+	if absf(enemy_class.mesh_yaw_offset) > 0.0001:
+		new_char.rotation.y = enemy_class.mesh_yaw_offset
+	# Re-resolve anim_player — the @onready cached the OLD Character's
+	# AnimationPlayer, which is about to be freed. find_child walks the
+	# subtree because the FBX-imported scene's AnimationPlayer node may
+	# be at a non-fixed path depending on importer version.
+	var new_ap := new_char.find_child("AnimationPlayer", true, false) as AnimationPlayer
+	if new_ap != null:
+		anim_player = new_ap
+		XBotAnimations.install_on(anim_player)
+	# Re-apply layer isolation so blood decals don't paint on the new
+	# mesh — _ready's call ran on the old subtree.
+	_isolate_visual_from_decals()
+	# Normalise non-standard bone prefixes (mixamorig1_, mixamorig:) to
+	# the canonical mixamorig_ that X Bot animations target. Without
+	# this, crypto-skinned enemies T-pose because the animation tracks
+	# can't find matching bone names on the new skeleton.
+	var new_skel := _find_skeleton(new_char)
+	if new_skel != null:
+		_normalize_skeleton_bone_prefix(new_char, new_skel)
 
 
 func _setup_ragdoll() -> void:
 	if visual == null:
-		print("[XBotRagdoll] _setup_ragdoll: visual is null")
 		return
 	# Find ANY Skeleton3D in the visual subtree — the FBX's Skeleton3D
 	# might not be named exactly "Skeleton3D" after the BoneMap retarget
 	# (some Godot versions rename it).
 	var skel := _find_skeleton(visual)
 	if skel == null:
-		print("[XBotRagdoll] _setup_ragdoll: no Skeleton3D under visual; children: ", _list_children(visual))
 		return
 	XBotRagdoll.setup(skel)
 
@@ -454,13 +591,6 @@ func _find_skeleton(root: Node) -> Skeleton3D:
 			return found
 	return null
 
-
-# Diagnostic-only: returns the immediate children's names for printing.
-func _list_children(root: Node) -> Array[String]:
-	var names: Array[String] = []
-	for child in root.get_children():
-		names.append("%s (%s)" % [child.name, child.get_class()])
-	return names
 
 func _init_enemy() -> void:
 	_generation += 1
@@ -480,6 +610,11 @@ func _init_enemy() -> void:
 		_hit_tween.kill()
 		_hit_tween = null
 	_apply_level_stats()
+	# Apply the EnemyClass's character_mesh override AFTER _apply_level_stats
+	# so any named-monster class swap (which happens inside that function)
+	# is in effect first — the named monster's class drives the mesh, not
+	# the spawner-set base class.
+	_apply_class_mesh()
 	# _apply_level_stats handles boss / named visual scale; capture
 	# whatever it landed on as the rest pose so the hit-squash tween
 	# returns here instead of stomping back to Vector3.ONE.
@@ -678,15 +813,14 @@ func reset() -> void:
 			skel.physical_bones_stop_simulation()
 	_ragdoll_simulating = false
 	_ragdoll_settle_timer = 0.0
-	# Clear bleed-out so a re-acquired pool corpse doesn't keep
-	# dripping under the freshly-spawned enemy.
-	_bleed_out_t = -1.0
-	_bleed_tick_t = 0.0
+	_despawn_token += 1  # cancels any pending corpse-despawn timer
 	set_process(false)
 	# Restore the visual the ragdoll spawn hid on death — pool re-acquire
-	# would otherwise show an invisible enemy.
+	# would otherwise show an invisible enemy. Also reset the sink tween's
+	# position offset so a recycled body doesn't spawn half-buried.
 	if visual != null:
 		visual.visible = true
+		visual.position = Vector3.ZERO
 	_init_enemy()
 	# EnemySpawner sets global_position right before calling reset(), so
 	# capturing here gives us the correct spawn point even when the enemy
@@ -823,7 +957,22 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 	else:
 		blood_dir = blood_dir.normalized()
 	var hit_mult: float = 3.0 if is_crit else 1.5
-	PrototypeAttackIndicator.spawn_blood_burst(get_parent(), hit_pos, blood_dir, hit_mult)
+	# Blade weapons (melee_1h) ship a built-in bleed status, so the
+	# kinetic-impact spray reads bigger to match — extra droplets +
+	# extra velocity sells "slashed open" vs "shot through". Doubles
+	# the multiplier on top of the crit bonus.
+	if weapon_base_id == &"melee_1h":
+		hit_mult *= 2.0
+	# Shift the burst toward the exit side — pushing 30 cm along the shot
+	# direction (XZ only, so the height stays at chest level) means the
+	# spray emerges from the far side of the enemy mesh, not its centre.
+	# Reads as an exit wound; without the offset, the first few frames of
+	# droplets are buried inside the X Bot body.
+	var exit_offset := Vector3(blood_dir.x, 0.0, blood_dir.z)
+	if exit_offset.length_squared() > 0.0001:
+		exit_offset = exit_offset.normalized() * 0.30
+	var burst_pos := hit_pos + exit_offset
+	PrototypeAttackIndicator.spawn_blood_burst(get_parent(), burst_pos, blood_dir, hit_mult, blood_type)
 	var head := global_position + Vector3(0.0, 1.8, 0.0)
 	DamageNumber.spawn(get_parent(), head, amount, multistrike, is_crit)
 	# Subliminal "this is landing" layer. -15 dB was inaudible against the
@@ -1776,11 +1925,11 @@ func _die(kill_from: Vector3 = Vector3.ZERO, kill_force: float = 0.0) -> void:
 	death_dir.y = 0.7
 	death_dir = death_dir.normalized()
 	var death_mult: float = 6.0 if _last_hit_was_crit else 4.0
-	PrototypeAttackIndicator.spawn_blood_burst(get_parent(), death_pos, death_dir, death_mult)
+	PrototypeAttackIndicator.spawn_blood_burst(get_parent(), death_pos, death_dir, death_mult, blood_type)
 	# Kill scene = primary splat + 2-4 satellite stains. Direction
 	# biases the spray pattern away from the shooter so the gore arcs
 	# toward where the body's heading.
-	PrototypeAttackIndicator.spawn_blood_kill_scene(get_parent(), global_position, death_dir)
+	PrototypeAttackIndicator.spawn_blood_kill_scene(get_parent(), global_position, death_dir, blood_type)
 	# Wall splatter — cast horizontally in the spray direction; if we
 	# hit a wall, paint it. Crits get extra perpendicular shots so the
 	# wall mess looks more chaotic (1 main + 2 spread).
@@ -1838,33 +1987,24 @@ func _die(kill_from: Vector3 = Vector3.ZERO, kill_force: float = 0.0) -> void:
 			_ragdoll_settle_timer = 0.0
 			set_process(true)  # _tick_ragdoll_settle runs while simulating
 			add_to_group(&"ragdoll_corpses")
-			# Start the bleed-out clock — pool starts forming after
-			# _BLEED_OUT_DELAY and lasts _BLEED_OUT_DURATION. If the
-			# corpse gets shoved by an explosion during that window,
-			# the trail-vs-pool branch in _tick_bleed_out kicks in.
-			_start_bleed_out()
 			did_skeletal_ragdoll = true
-			if kill_force > 0.0:
-				# Treat the kill like an instant explosion at the shooter's
-				# position. Same impulse math handles both — body launches
-				# away from kill_from with vertical lift, every bone gets
-				# pushed. Death impulses are scaled down vs explosion
-				# impulses because kill_force ranges higher (baseline +
-				# weapon affixes can push force=20+ for big hits) and the
-				# shared _EXPLOSION_FORCE_MULT=8 multiplier compounds. At
-				# 0.4 was room-launch level; 0.15 still cartoony. 0.05
-				# gives sniper hits (force=20) ~8 m/s on the hip — visible
-				# shove and arc but bodies fall in roughly the same square.
-				# Trash mobs (force=3) get ~1.2 m/s — they tip and slump
-				# instead of sliding. Explosion path untouched.
+			# Body launch + dismember kick. Two independent triggers:
+			#   - kill_force > 0: kinetic kill, launch body away from
+			#     shooter (sniper round, etc.). 0.05 scale tunes for
+			#     "visible shove + arc" without yeeting bodies room-
+			#     length. Trash force=3 → 1.2 m/s; sniper force=20 → 8 m/s.
+			#   - dismembered non-empty: limbs need their own outward kick
+			#     OR they just dangle in place (no joint to inherit body
+			#     motion from). Apply even on DoT/zero-force kills so the
+			#     detach actually reads visually.
+			# Both paths need a physics_frame await so the sim is live
+			# when impulses land — apply_central_impulse on a body that
+			# hasn't yet been simulated is silently dropped.
+			if kill_force > 0.0 or not dismembered.is_empty():
 				await get_tree().physics_frame
 				if is_inside_tree() and is_instance_valid(self):
-					apply_explosion_impulse(kill_from, kill_force * 0.05)
-					# Extra outward boost on dismembered tips so they
-					# actually fly off the body, not just dangle. Direction
-					# is opposite the kill source (same as the main launch),
-					# magnitude tuned to be punchy without sending hands
-					# into orbit.
+					if kill_force > 0.0:
+						apply_explosion_impulse(kill_from, kill_force * 0.05)
 					if not dismembered.is_empty():
 						_apply_dismember_kick(kill_from, dismembered)
 	if not did_skeletal_ragdoll:
@@ -1890,32 +2030,33 @@ var _ragdoll_settle_timer: float = 0.0
 const _RAGDOLL_SETTLE_VELOCITY: float = 0.15  # m/s — below this counts as "at rest"
 const _RAGDOLL_SETTLE_DURATION: float = 1.0   # seconds at rest before freezing
 
-# Bleed-out: pool grows under the corpse a couple seconds after death,
-# trail drips spawn if the corpse keeps moving (explosion-shoved across
-# the floor). Replaces the previous single-shot pool spawn at settle.
-# Ticks while _bleed_out_t >= 0; sets itself to -1 when the bleed-out
-# window closes (corpse has finished bleeding, no more decals spawn).
-var _bleed_out_t: float = -1.0
-var _bleed_tick_t: float = 0.0
-var _bleed_last_drip_pos: Vector3 = Vector3.ZERO
-const _BLEED_OUT_DELAY: float = 1.8     # seconds before bleeding visibly starts
-const _BLEED_OUT_DURATION: float = 11.0 # seconds of active bleeding (delay-inclusive)
-const _BLEED_TICK_INTERVAL: float = 0.55
-const _BLEED_TRAIL_THRESHOLD: float = 0.35  # hip movement per tick that promotes pool → drip
-const _BLEED_TRAIL_RADIUS: float = 0.32
-const _BLEED_POOL_RADIUS: float = 0.55
+# Increments on every settle/shove — _despawn_after_settle captures the
+# value at scheduling time and aborts if it doesn't match when its
+# timer fires (i.e. corpse was shoved again, or pool re-acquired us).
+var _despawn_token: int = 0
+# Delay between ragdoll settling and the corpse starting to sink. Long
+# enough that the kill-time splatter is the visual focus, short enough
+# that bodies don't overstay their welcome at horde scale.
+const _CORPSE_DESPAWN_DELAY: float = 5.0
+# Duration of the sink-into-the-floor tween that hides the corpse before
+# we release it. Avoids the "body abruptly disappears" snap by easing
+# the visual down past Y=0. Depth is generous enough that the full
+# skeleton (hip ~1m, head ~1.7m) ends up below the floor by the time
+# the tween finishes.
+#
+# Scale-squash was tried initially but Jolt Physics rejects any non-
+# uniform scale on collision shapes — the squash propagated through the
+# Skeleton3D to every PhysicalBone3D capsule, flooding the debugger
+# with "Failed to correctly scale body" warnings. Position-only sink
+# leaves the skeleton uniformly scaled, no warnings.
+const _CORPSE_SINK_DURATION: float = 1.4
+const _CORPSE_SINK_DEPTH: float = 1.6     # m the visual drops past origin
 
 
 func _process(delta: float) -> void:
 	if _ragdoll_simulating:
 		_tick_ragdoll_settle(delta)
-	if _bleed_out_t >= 0.0:
-		_bleed_out_t += delta
-		_tick_bleed_out(delta)
-	# Turn process off only when both systems are idle. Either can re-enable
-	# it (_ragdoll_simulating by apply_explosion_impulse, _bleed_out_t by
-	# _start_bleed_out called from _die).
-	if not _ragdoll_simulating and _bleed_out_t < 0.0:
+	else:
 		set_process(false)
 
 
@@ -1947,69 +2088,60 @@ func _tick_ragdoll_settle(delta: float) -> void:
 		skel.physical_bones_stop_simulation()
 		_ragdoll_simulating = false
 		_ragdoll_settle_timer = 0.0
+		# Settle hook handles the slow-grow puddle + corpse-despawn timer.
 		# Don't disable _process here — the bleed-out ticker may still be
 		# running. _process's combined guard at the bottom handles it.
+		_on_ragdoll_settled()
 
 
-# Kick off the bleed-out timer at death — _process picks up the
-# bleeding from there. Idempotent (a re-acquired pooled enemy clears
-# its state in reset).
-func _start_bleed_out() -> void:
-	_bleed_out_t = 0.0
-	_bleed_tick_t = 0.0
-	_bleed_last_drip_pos = _hip_world_pos()
-	set_process(true)
+# Called once the ragdoll has been at rest for _RAGDOLL_SETTLE_DURATION.
+# Schedules the corpse despawn. If the corpse gets shoved by another
+# explosion before the despawn timer fires, apply_explosion_impulse
+# bumps _despawn_token to invalidate the pending despawn — a fresh
+# _on_ragdoll_settled then reschedules when the body comes to rest
+# again. Death-time splatters carry the visual blood; no per-corpse
+# pool is spawned here (removed to let the death splatter shapes read
+# instead of getting covered by a smooth puddle).
+func _on_ragdoll_settled() -> void:
+	_despawn_token += 1
+	_schedule_corpse_despawn(_despawn_token)
 
 
-# Periodic blood spawn under the corpse. Two modes depending on
-# whether the body is moving (explosion-shoved, ragdoll active) or
-# settled:
-#   - Settled: pool grows at the hip — repeated overlapping decals
-#     deepen and widen the puddle.
-#   - Moving: spawn smaller trail decals at the midpoint between the
-#     last drip and the current position so the trail reads as a
-#     continuous smear, not isolated dots.
-# Stops after _BLEED_OUT_DURATION so the enemy's decal contribution
-# is bounded — otherwise a long-lived corpse would consume the global
-# BLOOD_DECAL_MAX ring by itself.
-func _tick_bleed_out(_delta: float) -> void:
-	if _bleed_out_t < _BLEED_OUT_DELAY:
+# Coroutine: wait _CORPSE_DESPAWN_DELAY, sink the corpse into the floor,
+# then release. Token check at every await so a re-shove (which bumps
+# _despawn_token) or pool re-acquire (which bumps _generation) aborts
+# the chain without releasing a live enemy.
+func _schedule_corpse_despawn(token: int) -> void:
+	var gen := _generation
+	await get_tree().create_timer(_CORPSE_DESPAWN_DELAY).timeout
+	if not is_inside_tree() or _generation != gen:
 		return
-	if _bleed_out_t > _BLEED_OUT_DELAY + _BLEED_OUT_DURATION:
-		_bleed_out_t = -1.0
-		return
-	_bleed_tick_t += _delta
-	if _bleed_tick_t < _BLEED_TICK_INTERVAL:
-		return
-	_bleed_tick_t = 0.0
-	var pos := _hip_world_pos()
-	var moved: float = pos.distance_to(_bleed_last_drip_pos)
-	var parent := get_parent()
-	if parent == null:
-		return
-	if moved >= _BLEED_TRAIL_THRESHOLD:
-		var mid: Vector3 = _bleed_last_drip_pos.lerp(pos, 0.5)
-		PrototypeAttackIndicator.spawn_blood_pool(parent, mid, _BLEED_TRAIL_RADIUS)
-	else:
-		PrototypeAttackIndicator.spawn_blood_pool(parent, pos, _BLEED_POOL_RADIUS)
-	_bleed_last_drip_pos = pos
-
-
-# Resolves the hip bone's current world position (post-ragdoll). Falls
-# back to the CharacterBody3D's origin if the skeleton isn't found —
-# never null-derefs, so safe to call from anywhere on a corpse.
-func _hip_world_pos() -> Vector3:
-	if visual == null:
-		return global_position
-	var skel := _find_skeleton(visual)
-	if skel == null:
-		return global_position
-	var hip_idx: int = skel.find_bone(&"mixamorig_Hips")
-	if hip_idx < 0:
-		hip_idx = skel.find_bone(&"Hips")
-	if hip_idx < 0:
-		return global_position
-	return skel.global_transform * skel.get_bone_global_pose(hip_idx).origin
+	if token != _despawn_token:
+		return  # cancelled by a shove or pool re-acquire
+	if _ragdoll_simulating:
+		return  # safety: still moving (shouldn't happen given _despawn_token gating)
+	# Sink the visual into the floor so the body fades out instead of
+	# popping. Position-only — see _CORPSE_SINK_DEPTH note for why we
+	# don't scale. Quadratic ease-in starts gentle (you notice it begin)
+	# and accelerates (last 30% is fast — no lingering half-buried body).
+	if visual != null:
+		var sink_tween := create_tween()
+		sink_tween.set_ease(Tween.EASE_IN)
+		sink_tween.set_trans(Tween.TRANS_QUAD)
+		var target_y: float = visual.position.y - _CORPSE_SINK_DEPTH
+		sink_tween.tween_property(visual, ^"position:y", target_y, _CORPSE_SINK_DURATION)
+		await sink_tween.finished
+		# Re-check: a shove during the sink (rare — collision is off and
+		# the body's already half-buried) or a level reset could invalidate
+		# us between the timer fire and now.
+		if not is_inside_tree() or _generation != gen:
+			return
+		if token != _despawn_token:
+			return
+	# Drop ourselves out of the corpse_manager ring so it doesn't try to
+	# evict (and double-release) a pool-recycled body later.
+	get_tree().call_group(&"corpse_manager", &"deregister_corpse", self)
+	EntityPool.release(self)
 
 
 # Apply an impulse to the corpse via the active physics ragdoll. Matches
@@ -2028,7 +2160,25 @@ func _hip_world_pos() -> Vector3:
 # direction so the now-unconstrained tips clearly separate from the
 # torso instead of falling alongside it. Tuned to read as "limb flies
 # off" not "limb yeeted into orbit".
-const _DISMEMBER_KICK_FORCE: float = 12.0
+const _DISMEMBER_KICK_FORCE: float = 18.0  # Δv ~14-18 m/s on hand/foot mass — limbs should clearly arc away, not dangle
+# Lifetime of the cosmetic flying-limb prop spawned on dismemberment.
+# Long enough to land + roll, short enough that horde fights don't
+# accumulate dozens of detached limbs in the scene.
+const _DISMEMBER_PROP_LIFETIME: float = 4.0
+# Skin tint of the cosmetic limb prop. X Bot is a generic figure — pick
+# a neutral mid-tone that reads as "flesh" without trying to match the
+# actual character texture. Sits dark enough that the blood splatters
+# overlapping it stay legible.
+const _DISMEMBER_PROP_COLOR: Color = Color(0.55, 0.42, 0.36)
+
+# Spawns separate physics-driven limb props at each dismembered bone +
+# kicks the underlying ragdoll. Mixamo X Bot has a single skinned mesh
+# spanning all bones, so flipping a bone's joint_type to NONE on its
+# own just produces a rubber-arm stretch — the mesh vertices follow the
+# detached bone but don't visually separate. The cosmetic props are
+# what actually reads to the player as "limb flew off": discrete
+# RigidBody3D capsules at the bone position, launched with the same
+# outward bias as the body kick, free after _DISMEMBER_PROP_LIFETIME.
 func _apply_dismember_kick(kill_from: Vector3, bones: Array[PhysicalBone3D]) -> void:
 	var dir: Vector3 = global_position - kill_from
 	dir.y = 0.0
@@ -2042,6 +2192,80 @@ func _apply_dismember_kick(kill_from: Vector3, bones: Array[PhysicalBone3D]) -> 
 		# Per-bone mass keeps Δv consistent: small hand (0.8kg) and big
 		# foot (1.5kg) end up at similar launch speeds.
 		pb.apply_central_impulse(dir * _DISMEMBER_KICK_FORCE * pb.mass)
+		_spawn_dismember_prop(pb, dir)
+
+
+# Cosmetic flying-limb prop — a small flesh-toned capsule spawned at
+# the dismembered bone's current world position, given an outward
+# velocity + random spin, and freed after _DISMEMBER_PROP_LIFETIME.
+# Collides with the world but not enemies / player (corpse layer 32,
+# world mask 1) so it doesn't shove anyone around as it lands.
+func _spawn_dismember_prop(bone: PhysicalBone3D, kick_dir: Vector3) -> void:
+	if not is_instance_valid(bone):
+		return
+	var parent := get_parent()
+	if parent == null:
+		return
+	var bone_pos := bone.global_position
+	# Hand / foot / forearm dimensions — slightly different per part so a
+	# trail of detached limbs reads as a mix, not a row of identical
+	# pills. Default to "forearm" size for unknown bone names.
+	var prop_radius: float = 0.05
+	var prop_height: float = 0.20
+	var name_str := String(bone.bone_name)
+	if name_str.ends_with("Hand"):
+		prop_radius = 0.045
+		prop_height = 0.12
+	elif name_str.ends_with("Foot"):
+		prop_radius = 0.055
+		prop_height = 0.20
+	# Build the rigid body + collision + visual mesh.
+	var rb := RigidBody3D.new()
+	rb.collision_layer = 32  # corpses
+	rb.collision_mask = 1    # world only — doesn't shove player/enemies
+	rb.gravity_scale = 1.4
+	rb.mass = bone.mass * 0.6
+	var col := CollisionShape3D.new()
+	var caps := CapsuleShape3D.new()
+	caps.radius = prop_radius
+	caps.height = prop_height
+	col.shape = caps
+	rb.add_child(col)
+	var mesh_inst := MeshInstance3D.new()
+	var cmesh := CapsuleMesh.new()
+	cmesh.radius = prop_radius
+	cmesh.height = prop_height
+	cmesh.radial_segments = 6
+	cmesh.rings = 2
+	mesh_inst.mesh = cmesh
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = _DISMEMBER_PROP_COLOR
+	mat.roughness = 0.7
+	mesh_inst.material_override = mat
+	# Don't cast shadow — at horde scale dozens of tiny flying capsules
+	# making per-frame shadow updates is wasted work.
+	mesh_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	rb.add_child(mesh_inst)
+	parent.add_child(rb)
+	rb.global_position = bone_pos
+	# Launch with the same outward bias as the body kick, plus random
+	# spin so each prop tumbles differently.
+	rb.linear_velocity = kick_dir * _DISMEMBER_KICK_FORCE * 0.6
+	rb.angular_velocity = Vector3(
+		randf_range(-12.0, 12.0),
+		randf_range(-12.0, 12.0),
+		randf_range(-12.0, 12.0),
+	)
+	# Capture the rigid body's instance_id (int — value type) instead of
+	# binding queue_free directly to the Object. If the prop is freed
+	# early (level reset, scene unload) before the timer fires, the
+	# bound Callable would trip "Lambda capture freed" warnings.
+	var rb_id: int = rb.get_instance_id()
+	get_tree().create_timer(_DISMEMBER_PROP_LIFETIME).timeout.connect(func() -> void:
+		var node := instance_from_id(rb_id) as Node
+		if node != null:
+			node.queue_free()
+	)
 
 
 # Wall blood splatter — casts horizontally in the spray direction; if
@@ -2086,7 +2310,7 @@ func _try_spawn_wall_blood(start_pos: Vector3, spray_dir: Vector3, is_crit: bool
 		# Skip floors / ceilings — those get the regular floor splat path.
 		if absf(hit_normal.y) > _WALL_BLOOD_FLOOR_NORMAL_THRESHOLD:
 			continue
-		PrototypeAttackIndicator.spawn_blood_wall_splatter(get_parent(), result["position"], hit_normal)
+		PrototypeAttackIndicator.spawn_blood_wall_splatter(get_parent(), result["position"], hit_normal, blood_type)
 
 
 const _EXPLOSION_FORCE_MULT: float = 8.0  # impulse scale; tune for carnage
@@ -2106,6 +2330,9 @@ func apply_explosion_impulse(force_origin: Vector3, force_strength: float) -> vo
 		_ragdoll_simulating = true
 		_ragdoll_settle_timer = 0.0
 		set_process(true)
+		# Cancel the pending corpse-despawn — the body is moving again.
+		# When it settles a second time, _on_ragdoll_settled reschedules.
+		_despawn_token += 1
 		await get_tree().physics_frame
 		if not is_instance_valid(self) or not is_instance_valid(skel):
 			return

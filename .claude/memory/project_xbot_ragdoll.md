@@ -2,8 +2,8 @@
 name: xbot-ragdoll
 description: X Bot death = random Mixamo death animation + tween-knockback + lazy ragdoll on explosion. Solved differently than originally planned.
 type: project
+originSessionId: 82d6aba9-5758-48bf-8247-4867da37ca36
 ---
-
 **Status (2026-05-19): resolved by abandoning physics-driven death.** Per-bone ragdoll setup still exists but is no longer the death visual — Godot 4.6.2's `PhysicalBoneSimulator` initialises every rigid body from the bone's REST pose (T-pose for Mixamo) regardless of any pre-start state we set, so corpses snapped to T-pose at activation. Six different workaround approaches all failed (`stop(true)`, `process_mode = DISABLED`, `pb.transform` pre-start, `set_bone_pose_*` lock, `pb.global_transform` post-start, `set_bone_rest` swap — each either didn't change the snap or introduced Jolt non-uniform-scale errors).
 
 **Current death flow** (`PrototypeEnemy._die`):
@@ -21,6 +21,8 @@ type: project
 
 - `setup(skeleton)`: adds 20 PhysicalBone3D children with capsule shapes, anatomical mass (hips 12kg → hands 0.8kg), cone joints (swing 90°, twist 60°). Layer 6 (Corpses), mask 1 (World). Idempotent via `xbot_ragdoll_setup` meta. **No longer called from `_ready`** — invoked lazily by `apply_explosion_impulse` to save the per-enemy memory on living enemies. Cone-twist `bias` / `softness` / `relaxation` params are NOT set because Jolt rejects them with warnings — only `swing_span` and `twist_span`.
 - `activate(skeleton, kill_from, kill_force)`: orthonormalizes each PB basis (Mixamo bind-matrix scale residue would otherwise spam Jolt warnings), syncs each `pb.transform` to bone global pose, calls `physical_bones_start_simulation`. Caller now passes `Vector3.ZERO, 0.0` for the impulse because we apply it ourselves per-bone in `apply_explosion_impulse`.
+
+**New-mesh trap (2026-05-20)**: non-X-Bot Mixamo meshes (vanguard, alien, military_man, crypto — all introduced for archetype identity) import with tiny non-uniform scale baked into the visual ancestor chain above the skeleton. Every PhysicalBone3D inherits that scale at attach AND at activation, spamming `_try_build_shape: Failed to correctly scale body` once per limb per spawn (5000+ in a short playtest). Fix lives in `xbot_ragdoll.gd` in two spots — both `setup()` (right after `skeleton.add_child(pb)`) AND `activate()` (right after `pb.transform = pose`) measure `pb.global_transform.basis.get_scale()` and, if non-uniform, set `pb.scale = Vector3(1/gs.x, 1/gs.y, 1/gs.z)` to land at uniform global scale. Local scale is non-uniform but Jolt evaluates the body's world-space shape and is happy. The `orthonormalized()` call alone is insufficient because it strips scale from the LOCAL basis only — the parent chain re-introduces it via global composition. **Assumes the parent chain's scale is constant** (true for current FBX imports; would break if any ancestor animates scale).
 
 **Tuning constants** in `prototype_enemy.gd`:
 - `_KNOCKBACK_DURATION` (0.55s) — total launch duration
