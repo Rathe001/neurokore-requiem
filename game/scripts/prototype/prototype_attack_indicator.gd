@@ -820,7 +820,9 @@ static func _track_blood_decal(decal: Decal) -> void:
 # by BLOOD_DECAL_MAX). Footsteps.tick (called per-step by both player
 # and enemy) drives the refresh + spawn cycle via two metas on the body:
 # `bloody_steps_remaining` and `bloody_step_idx` (for L/R alternation).
-const BLOODY_STEPS_INITIAL: int = 8
+# Bumped 8 → 18 so footprints stay readable across longer walks — at 8
+# the trail dried up before the player crossed even a single corridor.
+const BLOODY_STEPS_INITIAL: int = 18
 
 
 # True if `world_pos` is inside any tracked blood decal's horizontal
@@ -852,12 +854,16 @@ static func spawn_blood_footprint(parent: Node, world_pos: Vector3, forward_dir:
 	decal.texture_orm = _get_blood_orm_texture()
 	# Footprint-ish proportions (longer than wide). At iso distance the
 	# rough splatter texture reads as a smudge — not a literal boot
-	# print, but clearly "stained shoe stamped here".
-	decal.size = Vector3(0.32, 0.4, 0.5)
+	# print, but clearly "stained shoe stamped here". Bumped from
+	# 0.32/0.5 to 0.50/0.75 so the prints actually catch the eye —
+	# previous size was nearly invisible against the floor at iso scale.
+	decal.size = Vector3(0.50, 0.4, 0.75)
 	# Intensity scales the modulate alpha (controls overall presence as
 	# the footprint counter ticks down). Color stays full so wet sheen
-	# is consistent across all prints.
-	decal.modulate = Color(1.0, 1.0, 1.0, clampf(intensity, 0.0, 1.0))
+	# is consistent across all prints. Floor the alpha at 0.4 so even
+	# the faintest dying-off prints stay visible enough to follow as a
+	# trail.
+	decal.modulate = Color(1.0, 1.0, 1.0, clampf(intensity * 0.6 + 0.4, 0.4, 1.0))
 	decal.upper_fade = 0.4
 	decal.lower_fade = 0.4
 	decal.albedo_mix = 1.0
@@ -882,12 +888,14 @@ static func _get_blood_splatter_texture() -> Texture2D:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 0xB100D
 	var center := Vector2(size, size) * 0.5
-	# 10 overlapping blobs at random positions form an irregular splatter.
-	for blob_idx in 10:
+	# 18 overlapping blobs (was 10) so the splatter overlaps more — more
+	# blobs running together reads as a liquid puddle, sparse blobs
+	# read as paint flecks.
+	for blob_idx in 18:
 		var angle := rng.randf() * TAU
-		var dist := rng.randf() * float(size) * 0.25
+		var dist := rng.randf() * float(size) * 0.30
 		var blob_center := center + Vector2(cos(angle), sin(angle)) * dist
-		var blob_radius := rng.randf_range(14.0, 30.0)
+		var blob_radius := rng.randf_range(18.0, 38.0)
 		var blob_radius_sq := blob_radius * blob_radius
 		var min_y: int = int(maxf(0.0, blob_center.y - blob_radius))
 		var max_y: int = int(minf(float(size), blob_center.y + blob_radius))
@@ -900,10 +908,17 @@ static func _get_blood_splatter_texture() -> Texture2D:
 				var d_sq := dx * dx + dy * dy
 				if d_sq > blob_radius_sq:
 					continue
+				# Smoother quadratic falloff (was pow(t, 1.4)). The
+				# softer shoulder lets adjacent blobs blend without
+				# visible seams — looks like spilled liquid pooling,
+				# not stamped paint dots.
 				var t := 1.0 - sqrt(d_sq / blob_radius_sq)
-				t = pow(t, 1.4)
+				t = t * t
+				# Additive accumulation (was max). Where blobs overlap
+				# the alpha builds up to a richer red, mirroring how
+				# real liquid splashes pool thicker at impact points.
 				var existing := img.get_pixel(x, y)
-				var new_a: float = maxf(existing.a, t)
+				var new_a: float = minf(existing.a + t * 0.8, 1.0)
 				# Dark venous red — see BLOOD_COLOR rationale. The decal's
 				# low-roughness ORM contribution gives the wet sheen on
 				# top, so the diffuse can be very dark without the result
@@ -948,12 +963,15 @@ static func _get_blood_pool_texture() -> Texture2D:
 # alongside the albedo texture; where the albedo alpha is non-zero,
 # this ORM data overrides the underlying floor's roughness/metallic.
 # Channels: R = ambient occlusion (1 = no occlusion), G = roughness
-# (0.18 = very glossy / wet), B = metallic (0 = dielectric).
+# (0.06 = near-mirror / freshly-spilled liquid sheen), B = metallic.
+# Was 0.18 ("glossy painted-on" look). Dropped to 0.06 so the splatter
+# actually catches a specular highlight from ceiling lights — that
+# bright reflection is what reads as "wet liquid" vs "dried red paint".
 static func _get_blood_orm_texture() -> Texture2D:
 	if _blood_orm_texture != null:
 		return _blood_orm_texture
 	var img := Image.create(4, 4, false, Image.FORMAT_RGB8)
-	img.fill(Color(1.0, 0.18, 0.0))
+	img.fill(Color(1.0, 0.06, 0.0))
 	_blood_orm_texture = ImageTexture.create_from_image(img)
 	return _blood_orm_texture
 

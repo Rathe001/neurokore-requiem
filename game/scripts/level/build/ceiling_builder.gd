@@ -66,18 +66,25 @@ static func build(ctx: LevelBuildContext) -> void:
 	body.collision_layer = 1
 	body.collision_mask = 0
 	body.position = Vector3(0.0, t.wall_height, 0.0)
-	# Slightly thinner than wall thickness — just enough to register the
-	# ray sweep and stop a fast-moving projectile that arcs upward.
+	# Thicker than the previous 0.1 m so fast-moving projectiles
+	# (RPG, sniper bullets) can't tunnel through in a single physics
+	# tick, and so ragdoll bones with high upward impulse can't squeeze
+	# into the ceiling and get stuck there. 0.6 m gives enough depth
+	# that even Jolt's discrete CCD catches the sweep.
 	var col := CollisionShape3D.new()
 	col.name = &"Collision"
 	col.shape = BoxShape3D.new()
-	# Collision stays sized to the level proper — the visual mesh was
-	# enlarged to extend the SHADOWS_ONLY caster into the void, but we
-	# don't want projectile sweeps or LoS rays terminating on invisible
-	# ceiling out past the playable area.
-	var col_size := ctx.layout.ground_size
-	(col.shape as BoxShape3D).size = Vector3(col_size.x, 0.1, col_size.y)
-	col.position.y = 0.05  # box top sits at wall_height + 0.1, bottom at wall_height
+	# Match the visual mesh's SHADOW_OVERHANG extension. The previous
+	# size = layout.ground_size assumed every level fit inside that
+	# bound, but procgen levels can extend past it (the room/corridor
+	# layout is generated per-run). Result was RPGs flying off the
+	# top of corridors that reached the level edge, and ragdoll bones
+	# popping through the ceiling in those same rooms. Visual mesh
+	# already covers the over-extended area, so collision matching
+	# it is correct.
+	var col_size := ctx.layout.ground_size + Vector2(SHADOW_OVERHANG * 2.0, SHADOW_OVERHANG * 2.0)
+	(col.shape as BoxShape3D).size = Vector3(col_size.x, 0.6, col_size.y)
+	col.position.y = 0.3  # box top wall_height+0.6, bottom flush with wall_height
 	body.add_child(col)
 
 	var inst := MeshInstance3D.new()

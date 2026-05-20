@@ -320,6 +320,10 @@ var _state: State = State.IDLE
 var _health: int
 var _last_hit_weapon_base_id: StringName = &""
 var _last_hit_was_crit: bool = false
+# Set in take_damage; consumed by _die's dismemberment roll. Explosion
+# deaths get a 25% dismember chance; crits always dismember regardless
+# of damage source.
+var _last_hit_was_explosion: bool = false
 var _knockback_vel: Vector3 = Vector3.ZERO
 var _knockback_remain: float = 0.0
 var _attack_cd: float = 0.0
@@ -674,6 +678,10 @@ func reset() -> void:
 			skel.physical_bones_stop_simulation()
 	_ragdoll_simulating = false
 	_ragdoll_settle_timer = 0.0
+	# Clear bleed-out so a re-acquired pool corpse doesn't keep
+	# dripping under the freshly-spawned enemy.
+	_bleed_out_t = -1.0
+	_bleed_tick_t = 0.0
 	set_process(false)
 	# Restore the visual the ragdoll spawn hid on death — pool re-acquire
 	# would otherwise show an invisible enemy.
@@ -744,22 +752,22 @@ func refresh_locked_tooltip() -> void:
 ## the hit to the host via RPC. Hit visuals (damage number, flash, squash)
 ## are broadcast to ALL clients by the host's take_damage via _client_show_hit,
 ## so the client path no longer spawns local feedback.
-static func deal_damage(target: Node3D, amount: int, knockback_from: Vector3, knockback_strength: float = 0.0, multistrike: int = 1, is_crit: bool = false, weapon_base_id: StringName = &"") -> void:
+static func deal_damage(target: Node3D, amount: int, knockback_from: Vector3, knockback_strength: float = 0.0, multistrike: int = 1, is_crit: bool = false, weapon_base_id: StringName = &"", is_explosion: bool = false) -> void:
 	if NetState.is_in_lobby() and not NetState.is_host():
-		target.request_damage.rpc_id(1, amount, knockback_from, knockback_strength, multistrike, is_crit, weapon_base_id)
+		target.request_damage.rpc_id(1, amount, knockback_from, knockback_strength, multistrike, is_crit, weapon_base_id, is_explosion)
 		return
-	target.take_damage(amount, knockback_from, knockback_strength, multistrike, is_crit, weapon_base_id)
+	target.take_damage(amount, knockback_from, knockback_strength, multistrike, is_crit, weapon_base_id, is_explosion)
 
 ## RPC endpoint: any peer can request damage on an enemy. Only the host
 ## (authority) actually applies it — clients' local take_damage is gated.
 ## Clients call `request_damage.rpc_id(1, ...)` to route hits to the host.
 @rpc("any_peer", "call_remote", "reliable")
-func request_damage(amount: int, knockback_from: Vector3, knockback_strength: float, multistrike: int, is_crit: bool, weapon_base_id: StringName = &"") -> void:
+func request_damage(amount: int, knockback_from: Vector3, knockback_strength: float, multistrike: int, is_crit: bool, weapon_base_id: StringName = &"", is_explosion: bool = false) -> void:
 	if not multiplayer.is_server():
 		return
 	if not is_inside_tree():
 		return
-	take_damage(amount, knockback_from, knockback_strength, multistrike, is_crit, weapon_base_id)
+	take_damage(amount, knockback_from, knockback_strength, multistrike, is_crit, weapon_base_id, is_explosion)
 
 ## Host → all clients: play hit visuals (damage number, squash, flash).
 ## Sent from take_damage after the host applies damage so every client
@@ -772,13 +780,16 @@ func _client_show_hit(amount: int, multistrike: int, is_crit: bool) -> void:
 	_visuals.play_hit_squash()
 	_hit_flash_tween = HitFlash.play(self, visual, _hit_flash_tween)
 
-func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_strength: float = 0.0, multistrike: int = 1, is_crit: bool = false, weapon_base_id: StringName = &"") -> void:
+func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_strength: float = 0.0, multistrike: int = 1, is_crit: bool = false, weapon_base_id: StringName = &"", is_explosion: bool = false) -> void:
 	if not _is_alive():
 		return
 	# Clients don't apply damage locally — they route hits through
 	# request_damage RPC to the host.
 	if _is_remote_enemy():
 		return
+	# Captured for _die — drives the dismemberment roll (crits always
+	# dismember, explosion deaths roll 25%).
+	_last_hit_was_explosion = is_explosion
 	if DebugState.config != null and DebugState.config.one_shot_enemies:
 		amount = max(amount, max_health)
 	# Returning enemies (leash tripped) take ~5% damage and skip CC. Without
@@ -1810,7 +1821,11 @@ func _die(kill_from: Vector3 = Vector3.ZERO, kill_force: float = 0.0) -> void:
 			# activate(). After sim starts, the dismembered bones have no
 			# parent joint and fly free when impulses apply.
 			var dismembered: Array[PhysicalBone3D] = []
-			if _last_hit_was_crit:
+			# Crit deaths always dismember (any weapon). Explosion deaths
+			# roll a 25% chance. Both paths take 2 random tip bones —
+			# hands/feet/forearms most likely to break off in either case.
+			var should_dismember := _last_hit_was_crit or (_last_hit_was_explosion and randf() < 0.25)
+			if should_dismember:
 				dismembered = XBotRagdoll.dismember_random_tips(skel, 2)
 			# Pass ZERO/0 — the kill impulse goes through
 			# apply_explosion_impulse below so it benefits from the
@@ -1823,6 +1838,11 @@ func _die(kill_from: Vector3 = Vector3.ZERO, kill_force: float = 0.0) -> void:
 			_ragdoll_settle_timer = 0.0
 			set_process(true)  # _tick_ragdoll_settle runs while simulating
 			add_to_group(&"ragdoll_corpses")
+			# Start the bleed-out clock — pool starts forming after
+			# _BLEED_OUT_DELAY and lasts _BLEED_OUT_DURATION. If the
+			# corpse gets shoved by an explosion during that window,
+			# the trail-vs-pool branch in _tick_bleed_out kicks in.
+			_start_bleed_out()
 			did_skeletal_ragdoll = true
 			if kill_force > 0.0:
 				# Treat the kill like an instant explosion at the shooter's
@@ -1832,13 +1852,14 @@ func _die(kill_from: Vector3 = Vector3.ZERO, kill_force: float = 0.0) -> void:
 				# impulses because kill_force ranges higher (baseline +
 				# weapon affixes can push force=20+ for big hits) and the
 				# shared _EXPLOSION_FORCE_MULT=8 multiplier compounds. At
-				# 0.4 every kill was launching bodies across rooms; 0.15
-				# keeps sniper hits visibly punchy without sending the
-				# corpse into orbit. Tune here, not on the explosion side
-				# (don't want to flatten real grenades).
+				# 0.4 was room-launch level; 0.15 still cartoony. 0.05
+				# gives sniper hits (force=20) ~8 m/s on the hip — visible
+				# shove and arc but bodies fall in roughly the same square.
+				# Trash mobs (force=3) get ~1.2 m/s — they tip and slump
+				# instead of sliding. Explosion path untouched.
 				await get_tree().physics_frame
 				if is_inside_tree() and is_instance_valid(self):
-					apply_explosion_impulse(kill_from, kill_force * 0.15)
+					apply_explosion_impulse(kill_from, kill_force * 0.05)
 					# Extra outward boost on dismembered tips so they
 					# actually fly off the body, not just dangle. Direction
 					# is opposite the kill source (same as the main launch),
@@ -1869,10 +1890,33 @@ var _ragdoll_settle_timer: float = 0.0
 const _RAGDOLL_SETTLE_VELOCITY: float = 0.15  # m/s — below this counts as "at rest"
 const _RAGDOLL_SETTLE_DURATION: float = 1.0   # seconds at rest before freezing
 
+# Bleed-out: pool grows under the corpse a couple seconds after death,
+# trail drips spawn if the corpse keeps moving (explosion-shoved across
+# the floor). Replaces the previous single-shot pool spawn at settle.
+# Ticks while _bleed_out_t >= 0; sets itself to -1 when the bleed-out
+# window closes (corpse has finished bleeding, no more decals spawn).
+var _bleed_out_t: float = -1.0
+var _bleed_tick_t: float = 0.0
+var _bleed_last_drip_pos: Vector3 = Vector3.ZERO
+const _BLEED_OUT_DELAY: float = 1.8     # seconds before bleeding visibly starts
+const _BLEED_OUT_DURATION: float = 11.0 # seconds of active bleeding (delay-inclusive)
+const _BLEED_TICK_INTERVAL: float = 0.55
+const _BLEED_TRAIL_THRESHOLD: float = 0.35  # hip movement per tick that promotes pool → drip
+const _BLEED_TRAIL_RADIUS: float = 0.32
+const _BLEED_POOL_RADIUS: float = 0.55
+
 
 func _process(delta: float) -> void:
 	if _ragdoll_simulating:
 		_tick_ragdoll_settle(delta)
+	if _bleed_out_t >= 0.0:
+		_bleed_out_t += delta
+		_tick_bleed_out(delta)
+	# Turn process off only when both systems are idle. Either can re-enable
+	# it (_ragdoll_simulating by apply_explosion_impulse, _bleed_out_t by
+	# _start_bleed_out called from _die).
+	if not _ragdoll_simulating and _bleed_out_t < 0.0:
+		set_process(false)
 
 
 # Polls every PhysicalBone3D's linear_velocity once per render frame.
@@ -1903,18 +1947,69 @@ func _tick_ragdoll_settle(delta: float) -> void:
 		skel.physical_bones_stop_simulation()
 		_ragdoll_simulating = false
 		_ragdoll_settle_timer = 0.0
-		set_process(false)
-		# Blood pool grows under the settled corpse. Position uses the
-		# hip bone if available (corpse may have slid/launched far from
-		# the original CharacterBody3D global_position during the
-		# ragdoll), otherwise falls back to enemy origin.
-		var pool_pos := global_position
-		var hip_idx: int = skel.find_bone(&"mixamorig_Hips")
-		if hip_idx < 0:
-			hip_idx = skel.find_bone(&"Hips")
-		if hip_idx >= 0:
-			pool_pos = skel.global_transform * skel.get_bone_global_pose(hip_idx).origin
-		PrototypeAttackIndicator.spawn_blood_pool(get_parent(), pool_pos)
+		# Don't disable _process here — the bleed-out ticker may still be
+		# running. _process's combined guard at the bottom handles it.
+
+
+# Kick off the bleed-out timer at death — _process picks up the
+# bleeding from there. Idempotent (a re-acquired pooled enemy clears
+# its state in reset).
+func _start_bleed_out() -> void:
+	_bleed_out_t = 0.0
+	_bleed_tick_t = 0.0
+	_bleed_last_drip_pos = _hip_world_pos()
+	set_process(true)
+
+
+# Periodic blood spawn under the corpse. Two modes depending on
+# whether the body is moving (explosion-shoved, ragdoll active) or
+# settled:
+#   - Settled: pool grows at the hip — repeated overlapping decals
+#     deepen and widen the puddle.
+#   - Moving: spawn smaller trail decals at the midpoint between the
+#     last drip and the current position so the trail reads as a
+#     continuous smear, not isolated dots.
+# Stops after _BLEED_OUT_DURATION so the enemy's decal contribution
+# is bounded — otherwise a long-lived corpse would consume the global
+# BLOOD_DECAL_MAX ring by itself.
+func _tick_bleed_out(_delta: float) -> void:
+	if _bleed_out_t < _BLEED_OUT_DELAY:
+		return
+	if _bleed_out_t > _BLEED_OUT_DELAY + _BLEED_OUT_DURATION:
+		_bleed_out_t = -1.0
+		return
+	_bleed_tick_t += _delta
+	if _bleed_tick_t < _BLEED_TICK_INTERVAL:
+		return
+	_bleed_tick_t = 0.0
+	var pos := _hip_world_pos()
+	var moved: float = pos.distance_to(_bleed_last_drip_pos)
+	var parent := get_parent()
+	if parent == null:
+		return
+	if moved >= _BLEED_TRAIL_THRESHOLD:
+		var mid: Vector3 = _bleed_last_drip_pos.lerp(pos, 0.5)
+		PrototypeAttackIndicator.spawn_blood_pool(parent, mid, _BLEED_TRAIL_RADIUS)
+	else:
+		PrototypeAttackIndicator.spawn_blood_pool(parent, pos, _BLEED_POOL_RADIUS)
+	_bleed_last_drip_pos = pos
+
+
+# Resolves the hip bone's current world position (post-ragdoll). Falls
+# back to the CharacterBody3D's origin if the skeleton isn't found —
+# never null-derefs, so safe to call from anywhere on a corpse.
+func _hip_world_pos() -> Vector3:
+	if visual == null:
+		return global_position
+	var skel := _find_skeleton(visual)
+	if skel == null:
+		return global_position
+	var hip_idx: int = skel.find_bone(&"mixamorig_Hips")
+	if hip_idx < 0:
+		hip_idx = skel.find_bone(&"Hips")
+	if hip_idx < 0:
+		return global_position
+	return skel.global_transform * skel.get_bone_global_pose(hip_idx).origin
 
 
 # Apply an impulse to the corpse via the active physics ragdoll. Matches

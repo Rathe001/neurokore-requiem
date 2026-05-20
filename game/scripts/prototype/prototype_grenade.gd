@@ -100,7 +100,8 @@ func _detonate() -> void:
 		if n.has_method(&"is_player_friendly") and n.is_player_friendly():
 			continue
 		var dmg := _roll_damage()
-		PrototypeEnemy.deal_damage(n, dmg, global_position, eff_knockback, 1, false)
+		# is_explosion=true gates the 25% dismemberment roll in _die.
+		PrototypeEnemy.deal_damage(n, dmg, global_position, eff_knockback, 1, false, &"", true)
 		_apply_exile_curse_if_active(n)
 		match grenade_type:
 			Skill.GrenadeType.STUN:
@@ -108,7 +109,7 @@ func _detonate() -> void:
 					n.apply_stun(STUN_DURATION)
 			Skill.GrenadeType.INCENDIARY:
 				var burn := maxi(1, int(round(float(dmg) * 0.5)))
-				PrototypeEnemy.deal_damage(n, burn, global_position, 0.0, 1, false)
+				PrototypeEnemy.deal_damage(n, burn, global_position, 0.0, 1, false, &"", true)
 	# Toss any ragdoll corpses caught in the blast — same falloff curve as
 	# damage (linear from CORPSE_IMPULSE_MAX at the center to MIN at the
 	# blast edge). Cheap iteration since corpses are short-lived (~20s) and
