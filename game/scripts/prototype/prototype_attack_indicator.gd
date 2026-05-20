@@ -888,7 +888,37 @@ static func _paint_mist_droplets(parent: Node, origin: Vector3, direction: Vecto
 # Floor drop — 25-45 cm wide. Earlier 8-18 cm was too small to read at
 # iso distance; bumped to be clearly visible while still smaller than
 # the 1.4-2.5 m kill-scene main splats.
+## Returns true when `world_pos`'s X/Z falls inside any active pit's
+## footprint. Iterates the `pit_zones` group (populated by pit_builder
+## via the kill-area Area3D, one entry per pit), reading each pit's
+## BoxShape3D bounds and testing the spawn point against them. Cheap —
+## levels carry ~5-15 pits, no physics queries.
+static func _is_over_pit(parent: Node, world_pos: Vector3) -> bool:
+	if parent == null or not (parent is Node) or parent.get_tree() == null:
+		return false
+	for n in parent.get_tree().get_nodes_in_group(&"pit_zones"):
+		if not (n is Area3D):
+			continue
+		var area := n as Area3D
+		var col: CollisionShape3D = null
+		for child in area.get_children():
+			if child is CollisionShape3D:
+				col = child as CollisionShape3D
+				break
+		if col == null or not (col.shape is BoxShape3D):
+			continue
+		var box := col.shape as BoxShape3D
+		var hx: float = box.size.x * 0.5
+		var hz: float = box.size.z * 0.5
+		var ap: Vector3 = area.global_position
+		if absf(world_pos.x - ap.x) <= hx and absf(world_pos.z - ap.z) <= hz:
+			return true
+	return false
+
+
 static func _spawn_mist_drop_floor(parent: Node, world_pos: Vector3, blood_type: StringName) -> void:
+	if _is_over_pit(parent, world_pos):
+		return
 	# Independent X/Z + wide range so per-hit drops have visible shape
 	# and size variation — some round and small, some elongated, some
 	# nearly as big as a kill satellite.
@@ -971,6 +1001,8 @@ static func spawn_blood_kill_scene(parent: Node, world_pos: Vector3, spray_dir: 
 
 static func spawn_blood_decal(parent: Node, world_pos: Vector3, blood_type: StringName = BLOOD_TYPE_HUMAN) -> void:
 	if parent == null:
+		return
+	if _is_over_pit(parent, world_pos):
 		return
 	# Wide size range — 0.6 m to 2.5 m — so a kill scene's main + 2-4
 	# satellite splats vary clearly in scale. Independent X/Z gives

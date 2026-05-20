@@ -13,6 +13,10 @@ are mandatory.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Blood decals no longer paint into pits.** Kill scenes spawned near a pit edge had their satellite splats and floor mist drops land in the empty space above the pit, leaving floating bloodstains hanging mid-air. Decals now skip any spawn point that falls inside an active pit's XZ footprint.
+
 ## [0.4.1] - 2026-05-20
 
 ### Added

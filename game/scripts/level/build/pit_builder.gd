@@ -85,6 +85,11 @@ static func _create_pit_kill_area(ctx: LevelBuildContext, center: Vector3, inner
 		if body.has_method(&"take_damage"):
 			body.take_damage(9999, Vector3.ZERO, 0.0)
 	)
+	# Group tag so blood decals can skip painting on the empty space
+	# above a pit. PrototypeAttackIndicator iterates this group and
+	# checks XZ membership of each spawn point against every pit's
+	# footprint.
+	kill.add_to_group(&"pit_zones")
 	ctx.root.add_child(kill)
 
 
