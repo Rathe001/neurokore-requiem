@@ -1831,12 +1831,14 @@ func _die(kill_from: Vector3 = Vector3.ZERO, kill_force: float = 0.0) -> void:
 				# pushed. Death impulses are scaled down vs explosion
 				# impulses because kill_force ranges higher (baseline +
 				# weapon affixes can push force=20+ for big hits) and the
-				# shared _EXPLOSION_FORCE_MULT=8 multiplier was making
-				# every kill look like a grenade. 0.4 brings sniper-class
-				# hits to a satisfying-but-not-cartoony launch.
+				# shared _EXPLOSION_FORCE_MULT=8 multiplier compounds. At
+				# 0.4 every kill was launching bodies across rooms; 0.15
+				# keeps sniper hits visibly punchy without sending the
+				# corpse into orbit. Tune here, not on the explosion side
+				# (don't want to flatten real grenades).
 				await get_tree().physics_frame
 				if is_inside_tree() and is_instance_valid(self):
-					apply_explosion_impulse(kill_from, kill_force * 0.4)
+					apply_explosion_impulse(kill_from, kill_force * 0.15)
 					# Extra outward boost on dismembered tips so they
 					# actually fly off the body, not just dangle. Direction
 					# is opposite the kill source (same as the main launch),
