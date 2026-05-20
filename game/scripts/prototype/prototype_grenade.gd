@@ -17,8 +17,12 @@ const CLUSTER_ARC_HEIGHT := 1.2
 # Linear-impulse force applied to ragdoll corpses caught in the blast.
 # Falls off linearly from MAX at blast center to MIN at the edge so a corpse
 # adjacent to the boom genuinely launches but a corpse on the rim only nudges.
-const CORPSE_IMPULSE_MAX: float = 12.0
-const CORPSE_IMPULSE_MIN: float = 3.0
+# apply_explosion_impulse multiplies these by per-bone mass × _EXPLOSION_
+# FORCE_MULT (8); at the old 12/3 a hip-center hit netted ~96 m/s, corpses
+# yeeted across the room faster than the eye could follow. 1.5/0.4 caps the
+# hip launch at ~12 m/s (brisk-jog × 3) — dramatic but trackable.
+const CORPSE_IMPULSE_MAX: float = 1.5
+const CORPSE_IMPULSE_MIN: float = 0.4
 const _GRENADE_SCENE: PackedScene = preload("res://scenes/prototype/prototype_grenade.tscn")
 
 var target_position: Vector3

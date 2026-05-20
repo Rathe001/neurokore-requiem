@@ -159,9 +159,11 @@ const BULLET_PROJECTILE_COLOR: Color = Color(0.92, 0.92, 0.88, 0.65)
 # Linear-impulse force applied to ragdoll corpses caught in an AoE shot's
 # blast. Same scale as grenade explosions (CORPSE_IMPULSE_MAX/MIN in
 # prototype_grenade.gd) so a charged plasma shot and a frag grenade feel
-# similar at the corpse-physics level.
-const CORPSE_IMPULSE_MAX: float = 12.0
-const CORPSE_IMPULSE_MIN: float = 3.0
+# similar at the corpse-physics level. See the comment block in
+# prototype_grenade.gd for the math behind 1.5/0.4 (RPG corpse-shove was
+# previously netting ~96 m/s on the hip — across the room in a heartbeat).
+const CORPSE_IMPULSE_MAX: float = 1.5
+const CORPSE_IMPULSE_MIN: float = 0.4
 
 static var _player_material: StandardMaterial3D = null
 static var _enemy_material: StandardMaterial3D = null
