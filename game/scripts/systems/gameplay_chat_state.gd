@@ -26,6 +26,11 @@ const MAX_HISTORY: int = 50
 # sender via Steam.getLobbyMemberData and paints the name in the
 # matching class color.
 const CLASS_KEY: String = "class"
+# Steam lobby member data key for each peer's selected gender ("male" or
+# "female"). PlayersContainer reads this on remote-peer spawn to assign
+# the correct Mixamo player mesh; without it every remote avatar would
+# fall back to the tscn's default (male).
+const GENDER_KEY: String = "gender"
 
 ## True while the in-game chat panel's text input has focus. Player input
 ## (movement, skills, hotkeys) reads this every frame to gate input polling
@@ -136,6 +141,24 @@ func _publish_self() -> void:
 	if NetState.lobby_id == 0:
 		return
 	Steam.setLobbyMemberData(NetState.lobby_id, CLASS_KEY, String(resolved_self_class_id()))
+	Steam.setLobbyMemberData(NetState.lobby_id, GENDER_KEY, String(PlayerState.gender))
+
+
+## Resolve the gender ("male" / "female") published by another peer in
+## this gameplay lobby. Maps a Godot peer id → Steam id → reads the
+## GENDER_KEY member-data string. Returns &"male" as a safe default
+## (matches the player.tscn default mesh) when the peer hasn't yet
+## published or when the plugin can't resolve the Steam id.
+func gender_for_peer(peer_id: int) -> StringName:
+	if NetState.lobby_id == 0:
+		return &"male"
+	var steam_id: int = NetState.steam_id_for_peer(peer_id)
+	if steam_id == 0:
+		return &"male"
+	var raw: String = Steam.getLobbyMemberData(NetState.lobby_id, steam_id, GENDER_KEY)
+	if raw == "female":
+		return &"female"
+	return &"male"
 
 
 # Returns the most specific class identity for color resolution: spec_id

@@ -23,9 +23,12 @@ const _IDLE_FBX: PackedScene = preload("res://assets/characters/x_bot/Idle.fbx")
 const _SLOW_RUN_FBX: PackedScene = preload("res://assets/characters/x_bot/Slow Run.fbx")
 const _FAST_RUN_FBX: PackedScene = preload("res://assets/characters/x_bot/Fast Run.fbx")
 const _PUNCH_FBX: PackedScene = preload("res://assets/characters/x_bot/Punching.fbx")
-const _FIRE_FBX: PackedScene = preload("res://assets/characters/x_bot/Firing Rifle.fbx")
+const _FIRE_FBX: PackedScene = preload("res://assets/characters/x_bot/Firing Rifle2.fbx")
 const _HIT_FBX: PackedScene = preload("res://assets/characters/x_bot/Hit Reaction.fbx")
 const _JUMP_FBX: PackedScene = preload("res://assets/characters/x_bot/Jumping.fbx")
+const _JOG_FBX: PackedScene = preload("res://assets/characters/x_bot/Jog Forward.fbx")
+const _CROUCH_WALK_FBX: PackedScene = preload("res://assets/characters/x_bot/Crouched Walking.fbx")
+const _FIRE_MOVE_FBX: PackedScene = preload("res://assets/characters/x_bot/Strafing.fbx")
 
 # Multiple death animations — randomly selected per kill for variety.
 # Keyed `death_0` through `death_N`; random_death_anim() picks one.
@@ -61,9 +64,27 @@ static func get_library() -> AnimationLibrary:
 	_extract(_library, &"slow_run", _SLOW_RUN_FBX, true, true)
 	_extract(_library, &"fast_run", _FAST_RUN_FBX, true, true)
 	_extract(_library, &"punch", _PUNCH_FBX, false, false)
-	_extract(_library, &"fire", _FIRE_FBX, false, false)
+	# Fire loops so LMB-hold (and enemy sustained ranged fire) reads as a
+	# steady firing pose rather than a per-shot retrigger. The Mixamo
+	# "Firing Rifle" clip is a short recoil cycle that loops cleanly —
+	# calling _play_anim with the same key during continuous fire is a
+	# no-op (no restart), so cycle drift across shots is invisible.
+	# strip_hip_position=true zeros the baked-in forward drift Mixamo's
+	# clip has on the hips track — without it the player's visual creeps
+	# forward each cycle while the CharacterBody3D stays put.
+	_extract(_library, &"fire", _FIRE_FBX, true, true)
 	_extract(_library, &"hit", _HIT_FBX, false, false)
 	_extract(_library, &"jump", _JUMP_FBX, false, false)
+	# Locomotion: jog is the new "default run" tempo; crouch_walk drives
+	# the crouch-moving state. Both loop and strip the Mixamo hip-position
+	# track so the CharacterBody3D's velocity drives travel, not the clip.
+	_extract(_library, &"jog", _JOG_FBX, true, true)
+	_extract(_library, &"crouch_walk", _CROUCH_WALK_FBX, true, true)
+	# Strafing — used whenever the player is moving AND holding the fire
+	# input with a ranged weapon. Upper body keeps the rifle aimed forward,
+	# legs play a tactical sidestep cycle. Loops + hip-stripped so the
+	# CharacterBody3D's velocity drives travel.
+	_extract(_library, &"fire_move", _FIRE_MOVE_FBX, true, true)
 	for i in _DEATH_FBXS.size():
 		_extract(_library, StringName("death_%d" % i), _DEATH_FBXS[i], false, false)
 	return _library

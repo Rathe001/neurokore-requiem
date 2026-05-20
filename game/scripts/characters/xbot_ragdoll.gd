@@ -43,6 +43,70 @@ const _BONES: Array[Array] = [
 const _META_KEY: StringName = &"xbot_ragdoll_setup"
 
 
+## Walks the MeshInstance3D subtree under `root` and assigns a default
+## StandardMaterial3D to any surface whose active material resolves to
+## null. RenderingServer fires `material_casts_shadows: Parameter
+## "material" is null` (and friends) at startup when even a single mesh
+## surface ships without a material — typical of FBX imports where the
+## DCC tool didn't bake a material slot for every sub-mesh.
+##
+## The default material is intentionally bland (mid-grey, low metallic);
+## anything important should have its own material assigned in the FBX.
+## This is a safety net to silence the renderer warnings, not a
+## replacement for proper material authoring.
+static func ensure_surface_materials(root: Node) -> void:
+	if root == null:
+		return
+	if root is MeshInstance3D:
+		var mi := root as MeshInstance3D
+		if mi.mesh != null:
+			for i in range(mi.mesh.get_surface_count()):
+				if mi.get_active_material(i) == null:
+					var mat := StandardMaterial3D.new()
+					mat.albedo_color = Color(0.6, 0.6, 0.6)
+					mat.roughness = 0.85
+					mat.metallic = 0.0
+					mi.set_surface_override_material(i, mat)
+	for child in root.get_children():
+		ensure_surface_materials(child)
+
+
+## Walks from `skeleton` UP through its Node3D ancestors (stopping at
+## `stop_at` exclusive), replacing any non-uniform basis with an
+## orthonormalized basis carrying the average of the three axis scales.
+## After this runs, the entire chain from `skeleton` to just below
+## `stop_at` is guaranteed uniform-scaled.
+##
+## Why: Mixamo FBXs imported with apply_root_scale carry small per-axis
+## scale residue (~0.99/1.01) on intermediate Armature/Skeleton nodes.
+## The per-PhysicalBone3D `pb.scale = 1/gs` compensation in setup() and
+## activate() only fully cancels parent scale when the parent basis is
+## axis-aligned. With rotation mixed in (which Mixamo's bone orientations
+## always have), the component-wise inverse leaves a residual non-uniform
+## global scale that Jolt re-evaluates and warns about every physics
+## frame during ragdoll simulation — historically tens of thousands of
+## _try_build_shape warnings per session.
+##
+## Doing it once at spawn permanently sanitises the chain. The visual
+## cost is the averaged scale (~0.998 vs 1.0) — imperceptible at iso.
+## Idempotent via `_PARENT_CHAIN_META`.
+const _PARENT_CHAIN_META: StringName = &"xbot_ragdoll_chain_normalized"
+static func normalize_parent_chain_scale(skeleton: Skeleton3D, stop_at: Node) -> void:
+	if skeleton == null:
+		return
+	if skeleton.has_meta(_PARENT_CHAIN_META):
+		return
+	skeleton.set_meta(_PARENT_CHAIN_META, true)
+	var node: Node = skeleton
+	while node != null and node != stop_at and node is Node3D:
+		var nx := node as Node3D
+		var s: Vector3 = nx.transform.basis.get_scale()
+		if not (is_equal_approx(s.x, s.y) and is_equal_approx(s.y, s.z)):
+			var avg: float = (s.x + s.y + s.z) / 3.0
+			nx.transform.basis = nx.transform.basis.orthonormalized().scaled(Vector3.ONE * avg)
+		node = nx.get_parent()
+
+
 
 
 ## Adds PhysicalBone3D children to `skeleton` for each major bone.

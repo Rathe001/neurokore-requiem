@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://dvgg1bytqur6x"
-path="res://.godot/imported/player_female_idle.fbx-ebb2259bff02ff365aeb4280f18c20ea.scn"
+uid="uid://coctn7dboq3rp"
+path="res://.godot/imported/Jog Forward.fbx-94c797b68152fad6b400b356935f3680.scn"
 
 [deps]
 
-source_file="res://assets/characters/player_female/player_female_idle.fbx"
-dest_files=["res://.godot/imported/player_female_idle.fbx-ebb2259bff02ff365aeb4280f18c20ea.scn"]
+source_file="res://assets/characters/x_bot/Jog Forward.fbx"
+dest_files=["res://.godot/imported/Jog Forward.fbx-94c797b68152fad6b400b356935f3680.scn"]
 
 [params]
 
@@ -17,7 +17,7 @@ nodes/root_type=""
 nodes/root_name=""
 nodes/root_script=null
 nodes/apply_root_scale=true
-nodes/root_scale=1.2
+nodes/root_scale=1.0
 nodes/import_as_skeleton_bones=false
 nodes/use_name_suffixes=true
 nodes/use_node_type_suffixes=true

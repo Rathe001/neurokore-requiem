@@ -229,6 +229,7 @@ const MAX_AGGRO_CASCADE := 2
 const ANIM_IDLE := CombatConstants.ANIM_IDLE
 const ANIM_RUN := CombatConstants.ANIM_RUN
 const ANIM_ATTACK := CombatConstants.ANIM_ATTACK
+const ANIM_FIRE := CombatConstants.ANIM_FIRE
 const ANIM_CROUCH_IDLE := CombatConstants.ANIM_CROUCH_IDLE
 const ANIM_CROUCH_RUN: Array[StringName] = [&"Crouch_Walk_Forward", &"Crouch_Walk", &"CROUCH_WALK", &"Crouch_Idle", &"CROUCH_IDLE"]
 const ANIM_JUMP := CombatConstants.ANIM_JUMP
@@ -565,6 +566,16 @@ func _apply_class_mesh() -> void:
 	var new_skel := _find_skeleton(new_char)
 	if new_skel != null:
 		_normalize_skeleton_bone_prefix(new_char, new_skel)
+		# Bake uniform scale into the FBX's intermediate Armature / Skeleton
+		# nodes so future PhysicalBone3D children Jolt builds at ragdoll
+		# time inherit a clean parent chain. Stop at Visual so we don't
+		# touch the CharacterBody3D itself. See xbot_ragdoll comment for
+		# the historical Jolt _try_build_shape spam this prevents.
+		XBotRagdoll.normalize_parent_chain_scale(new_skel, visual)
+	# Backfill null surface materials so the renderer doesn't spam
+	# material_casts_shadows / material_is_animated warnings about FBX
+	# sub-meshes that imported without a material slot.
+	XBotRagdoll.ensure_surface_materials(new_char)
 
 
 func _setup_ragdoll() -> void:
@@ -1357,7 +1368,16 @@ func _remote_physics_process() -> void:
 				collision.set_deferred(&"disabled", true)
 			if health_bar != null:
 				health_bar.visible = false
-			_play_anim(ANIM_DEATH, 1.0)
+			# Mirror the authority-path death visual: pick a random Mixamo
+			# death anim. The legacy xbot/death (singular) candidate in
+			# ANIM_DEATH never matches the library (which keys deaths as
+			# xbot/death_0..N), so clients used to fall through to no
+			# anim and the skeleton crumbled limp. Authority ragdoll
+			# state is not synced today, so anim is the only client-side
+			# death visual.
+			var death_anim: StringName = XBotAnimations.random_death_anim()
+			if not _play_anim([death_anim] as Array[StringName], 1.0):
+				_play_anim(ANIM_DEATH, 1.0)
 		return
 	_state = synced_state as State
 	# Update health bar from synced values.

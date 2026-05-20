@@ -10,7 +10,7 @@
 ; on the remote side).
 
 [ext_resource type="Script" path="res://scripts/prototype/prototype_player.gd" id="script_player"]
-[ext_resource type="PackedScene" path="res://art/3d/characters/quaternius/UAL1_Standard.glb" id="char_model_player"]
+[ext_resource type="PackedScene" path="res://assets/characters/player_male/player_male_idle.fbx" id="char_model_player"]
 [ext_resource type="Resource" path="res://resources/skills/energy.tres" id="pool_energy"]
 
 [sub_resource type="StandardMaterial3D" id="mat_ring_player"]

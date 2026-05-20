@@ -31,6 +31,14 @@ signal weapon_ammo_changed
 
 const ITEM_PICKUP_SCENE: PackedScene = preload("res://scenes/prototype/prototype_item_pickup.tscn")
 const UNARMED_SKILL: Skill = preload("res://resources/skills/unarmed_attack.tres")
+const _PLAYER_MALE_SCENE: PackedScene = preload("res://assets/characters/player_male/player_male_idle.fbx")
+const _PLAYER_FEMALE_SCENE: PackedScene = preload("res://assets/characters/player_female/player_female_idle.fbx")
+# Per-gender vertical correction. Male FBX has its origin at the feet, so it
+# sits flush with the CharacterBody3D's floor. Female FBX has the origin
+# slightly above the feet — scaled up via the .import root_scale, that
+# offset pushes her geometry into the floor. Lift the Character node by
+# this much to compensate.
+const _PLAYER_FEMALE_Y_OFFSET: float = 0.02
 
 const KNOCKBACK_DURATION := CombatConstants.KNOCKBACK_DURATION
 const DEATH_HOLD := 0.9
@@ -52,12 +60,19 @@ const ANIM_IDLE := CombatConstants.ANIM_IDLE
 const ANIM_RUN := CombatConstants.ANIM_RUN
 const ANIM_WALK_BACK: Array[StringName] = [&"Walk"]
 const ANIM_CROUCH_IDLE := CombatConstants.ANIM_CROUCH_IDLE
-const ANIM_CROUCH_MOVE: Array[StringName] = [&"Crouch_Fwd", &"Crouch_Fwd_Loop"]
+const ANIM_CROUCH_MOVE: Array[StringName] = [&"xbot/crouch_walk", &"Crouch_Fwd", &"Crouch_Fwd_Loop"]
 const ANIM_ATTACK := CombatConstants.ANIM_ATTACK
+const ANIM_FIRE := CombatConstants.ANIM_FIRE
+const ANIM_FIRE_MOVE := CombatConstants.ANIM_FIRE_MOVE
 const ANIM_JUMP_START: Array[StringName] = [&"Jump_Start"]
 const ANIM_JUMP_AIR: Array[StringName] = [&"Jump"]
 const ANIM_JUMP_LAND: Array[StringName] = [&"Jump_Land"]
-const ANIM_INTERACT: Array[StringName] = [&"Interact"]
+## "Interact" is the legacy Quaternius name; the X Bot library has no
+## dedicated interact clip, so we fall back to xbot/idle to suppress the
+## no-match warning. The visual effect is that the player keeps playing
+## idle during a door/switch interaction — a real interact gesture would
+## need a Mixamo grab/lever clip threaded through XBotAnimations.
+const ANIM_INTERACT: Array[StringName] = [&"Interact", &"xbot/idle"]
 const ANIM_DEATH := CombatConstants.ANIM_DEATH
 
 const CROUCH_SPEED_FACTOR := 0.45
@@ -113,9 +128,14 @@ const FACE_BY_VELOCITY_MIN := 0.5
 # FOOTSTEP_DISTANCE 1.4, a step fires every ~0.23s — so we need the jog
 # cycle (~1s source clip, 2 contacts) to complete in ~0.47s → factor ~2.6.
 # Tune by eye: feet should plant cleanly with no slide at full sprint.
-const RUN_ANIM_SPEED_FACTOR := 1.8
-const RUN_ANIM_SPEED_MIN := 1.0
-const RUN_ANIM_SPEED_MAX := 3.2
+#
+# Reset to 1.0 for Mixamo xbot/fast_run: the source clip is already authored
+# at a brisk cadence matched to ~6 m/s travel, so the old 1.8 (tuned for the
+# slower Quaternius Jog_Fwd) made feet shuffle visibly. Sprint still ramps
+# via SPRINT_SPEED_FACTOR on top of this base.
+const RUN_ANIM_SPEED_FACTOR := 1.0
+const RUN_ANIM_SPEED_MIN := 0.6
+const RUN_ANIM_SPEED_MAX := 2.0
 
 @export var move_speed: float = 6.0
 @export var accel: float = 30.0
@@ -153,6 +173,13 @@ const FLASHLIGHT_OVER_LIFT := 0.8
 
 var class_id: StringName = &""
 var spec_id: StringName = &""
+## For remote (non-authority) peers in MP, this stores the gender published
+## by that peer via Steam lobby member data. PlayersContainer sets it
+## before add_child so _apply_gender_appearance can pick the right mesh
+## without consulting the LOCAL PlayerState.gender (which would always
+## be the local player's gender, not the remote's). Empty string means
+## "use PlayerState.gender" — the SP / authority path.
+var remote_gender: StringName = &""
 var _base_mat: StandardMaterial3D = null
 var _combat: PlayerCombat
 var _camera: Camera3D
@@ -740,6 +767,10 @@ func _ready() -> void:
 	add_child(_recovery)
 	_build_resonance_bar()
 	PerkState.perks_changed.connect(_doomsayer.reconcile)
+	# Gender-correct mesh swap must happen before the visual-layer pass and
+	# before anim_player wiring — the swap re-resolves anim_player and the
+	# subsequent calls operate on the new subtree.
+	_apply_gender_appearance()
 	# Put player meshes on an extra render layer so equipped lights can
 	# exclude it from shadow casting (no self-shadow under own flashlight,
 	# and no self-shadow under the omni-directional Radiant lamp).
@@ -790,6 +821,14 @@ func _ready() -> void:
 # the player's behavior is intentionally inert because it's driven by
 # the authority on another peer.
 func _ready_remote() -> void:
+	# remote_gender must be set by PlayersContainer before add_child for
+	# the swap to pick the right mesh. If it's still empty here (a remote
+	# spawned before gender lobby data was replicated), apply_gender will
+	# fall back to PlayerState.gender, and a later refresh_gender() call
+	# from PlayersContainer's lobby_data_update listener will swap.
+	_apply_gender_appearance()
+	if anim_player != null:
+		XBotAnimations.install_on(anim_player)
 	_ensure_loop(ANIM_IDLE)
 	_ensure_loop(ANIM_RUN)
 	_ensure_loop(ANIM_WALK_BACK)
@@ -852,12 +891,106 @@ func _build_stat_vfx() -> void:
 	controller.setup(visual, _base_mat)
 
 func _apply_class_appearance() -> void:
+	# Was tinting the whole Visual subtree via material_override to give
+	# the old flat-shaded Quaternius character a class color. The Mixamo
+	# player meshes (player_male / player_female) carry authored PBR
+	# textures we want visible, so we no longer override their materials.
+	# _base_mat stays around for StatVFXController, which only uses it as
+	# an emission scratch material.
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = UIThemeState.palette.player_color
 	mat.metallic = 0.1
 	mat.roughness = 0.6
 	_base_mat = mat
-	_tint_meshes(visual, mat)
+
+
+## Public hook for PlayersContainer to call when Steam pushes a lobby data
+## update for this peer (e.g. their gender was set after their Player node
+## was already spawned). Re-runs the swap if the resolved gender no longer
+## matches the current Character mesh.
+func refresh_remote_gender(new_gender: StringName) -> void:
+	if remote_gender == new_gender:
+		return
+	remote_gender = new_gender
+	_apply_gender_appearance()
+
+
+# Swaps the Visual/Character mesh to match PlayerState.gender (local) or
+# remote_gender (remote MP avatar) and installs the X Bot animation library
+# on the new AnimationPlayer. Mirrors the enemy's _apply_class_mesh pattern.
+# Must run BEFORE anim_player.animation_finished is connected and BEFORE
+# _play_anim(ANIM_IDLE) — otherwise the @onready anim_player still points
+# at the freed FBX's AnimationPlayer.
+func _apply_gender_appearance() -> void:
+	if visual == null:
+		return
+	# For remote peers in MP, remote_gender holds the gender published by
+	# that peer through the gameplay lobby. Local / SP path falls back to
+	# PlayerState.gender as before.
+	var effective_gender: StringName = remote_gender if remote_gender != &"" else PlayerState.gender
+	var is_female: bool = effective_gender == &"female"
+	var scene: PackedScene = _PLAYER_FEMALE_SCENE if is_female else _PLAYER_MALE_SCENE
+	var y_offset: float = _PLAYER_FEMALE_Y_OFFSET if is_female else 0.0
+	var current_char := visual.get_node_or_null(^"Character") as Node3D
+	if current_char == null or current_char.scene_file_path != scene.resource_path:
+		if current_char != null:
+			visual.remove_child(current_char)
+			current_char.queue_free()
+		var new_char := scene.instantiate() as Node3D
+		if new_char != null:
+			new_char.name = "Character"
+			# Match the static tscn's 180° yaw — Mixamo FBX root faces the
+			# opposite direction from what the Visual node's facing logic
+			# expects.
+			new_char.rotation.y = PI
+			new_char.position.y = y_offset
+			visual.add_child(new_char)
+			var new_ap := new_char.find_child("AnimationPlayer", true, false) as AnimationPlayer
+			if new_ap != null:
+				anim_player = new_ap
+	else:
+		# No swap needed; just re-apply the Y offset in case the default tscn
+		# instance was at 0.
+		current_char.position.y = y_offset
+	if anim_player != null:
+		XBotAnimations.install_on(anim_player)
+	# Bake uniform scale into the FBX's intermediate Armature / Skeleton
+	# nodes so any future PhysicalBone3D children Jolt builds inherit a
+	# clean parent chain. Without this, Mixamo's per-axis scale residue
+	# triggers Jolt _try_build_shape warnings — historically the source
+	# of huge log spam during sessions with ragdoll deaths. The player
+	# doesn't ragdoll today, but the visual layer pass and any future
+	# physics body on the rig benefit equally.
+	var skel := _find_player_skeleton()
+	if skel != null:
+		XBotRagdoll.normalize_parent_chain_scale(skel, visual)
+	# Backfill null surface materials so the renderer doesn't spam null-
+	# material warnings about FBX sub-meshes that imported without a
+	# material slot. The PBR meshes still keep their real textures —
+	# this only patches surfaces where the FBX had no material at all.
+	var character := visual.get_node_or_null(^"Character")
+	if character != null:
+		XBotRagdoll.ensure_surface_materials(character)
+
+
+# Walks the visual subtree looking for any Skeleton3D. FBX skeleton node
+# name varies by importer version; find_child name-only search would miss
+# renamed cases.
+func _find_player_skeleton() -> Skeleton3D:
+	if visual == null:
+		return null
+	return _find_skeleton_recursive(visual)
+
+
+static func _find_skeleton_recursive(root: Node) -> Skeleton3D:
+	if root is Skeleton3D:
+		return root as Skeleton3D
+	for child in root.get_children():
+		var found := _find_skeleton_recursive(child)
+		if found != null:
+			return found
+	return null
+
 
 func _tint_meshes(node: Node, mat: Material) -> void:
 	if node is MeshInstance3D:
@@ -1445,7 +1578,23 @@ func _physics_process(delta: float) -> void:
 			else:
 				_play_anim(ANIM_JUMP_AIR, 1.0, 0.15)
 		elif not _interacting:
-			if _want_dir.length_squared() > 0.01:
+			# Ranged-fire override: while the player holds LMB/RMB with a
+			# bullet weapon equipped, keep the looping firing-rifle pose
+			# regardless of movement. Without this, between each per-shot
+			# _lmb_busy window the state machine drops back to idle/run
+			# and the next shot restarts ANIM_FIRE from frame 0 — reads
+			# as the character spasming through aim-and-recoil over and
+			# over instead of holding the gun out.
+			var firing_held: bool = false
+			if _is_aim_input_held():
+				var held_weapon: Item = InventoryState.get_equipped(&"weapon")
+				firing_held = held_weapon != null and held_weapon.is_bullet_weapon()
+			if firing_held:
+				# Moving + firing → strafe (legs walk, rifle stays up).
+				# Standing still + firing → fire (rifle recoil cycle only).
+				anim_player.speed_scale = 1.0
+				_play_anim(_ranged_fire_anim(), 1.0, 0.15)
+			elif _want_dir.length_squared() > 0.01:
 				# Fixed animation speed — sprint and backing are the only
 				# modifiers. All speed control goes through speed_scale
 				# (never custom_speed in _play_anim) so the rate can't
@@ -1866,7 +2015,15 @@ func _cast_lmb_combat() -> void:
 			break
 	if main_fired:
 		_face_direction(aim)
-		_play_anim(ANIM_ATTACK, 1.4)
+		# Ranged weapons play the looping firing-rifle pose; melee + unarmed
+		# fall back to the punch/swing animation. Ranged picks the strafe
+		# variant when moving so it agrees with the per-tick anim picker —
+		# otherwise the two sites alternate between FIRE / FIRE_MOVE and
+		# restart the loop every shot.
+		if main_item != null and main_item.is_bullet_weapon():
+			_play_anim(_ranged_fire_anim(), 1.0)
+		else:
+			_play_anim(ANIM_ATTACK, 1.4)
 		_ied.toss_trap(_cursor_offset())
 	# Hold the player still for the main weapon's wind-up only. Extra arms
 	# don't contribute to the stop — Forged stays mobile while extras fire.
@@ -1999,7 +2156,14 @@ func _cast_skill(skill: Skill) -> void:
 	_attack_aim = aim
 	_attack_weapon = weapon
 	_face_direction(aim)
-	_play_anim(ANIM_ATTACK, 1.4)
+	# Ranged skills (RPG, sniper alt-fire, etc.) use the firing-rifle pose;
+	# melee skills and class skills with no weapon fall back to the swing
+	# animation. Same FIRE / FIRE_MOVE branch as the LMB path so the
+	# per-tick picker doesn't undo our choice.
+	if weapon != null and weapon.is_bullet_weapon():
+		_play_anim(_ranged_fire_anim(), 1.0)
+	else:
+		_play_anim(ANIM_ATTACK, 1.4)
 	PrototypeAttackIndicator.spawn(self, skill, aim, _combat.effective_range(skill, weapon))
 	# Fire SFX plays at LMB press, NOT at projectile spawn. For wind-up
 	# weapons like the RPG the .wav has a baked-in "charging" pre-roll;
@@ -2907,7 +3071,14 @@ func _die() -> void:
 	_doomsayer.cleanup()
 	_shield.cleanup()
 	_grenade.cleanup()
-	var played := _play_anim(ANIM_DEATH, 1.0)
+	# XBotAnimations exposes deaths as xbot/death_0..N, not the generic
+	# xbot/death. Pick a random one via the library helper and fall back
+	# to the legacy candidate list (Quaternius / older meshes) if the
+	# library isn't installed on this mesh.
+	var death_anim: StringName = XBotAnimations.random_death_anim()
+	var played := _play_anim([death_anim] as Array[StringName], 1.0)
+	if not played:
+		played = _play_anim(ANIM_DEATH, 1.0)
 	if not played and anim_player != null:
 		anim_player.pause()
 	if visual != null:
@@ -3462,6 +3633,17 @@ func _is_aim_input_held() -> bool:
 				continue
 		return true
 	return false
+
+# Picks the right firing pose for the current movement state so every
+# ranged-fire trigger site agrees with the per-tick anim picker. Without
+# this, an explicit _play_anim(ANIM_FIRE) at shot time would alternate
+# against the picker's _play_anim(ANIM_FIRE_MOVE) and restart the loop
+# every shot.
+func _ranged_fire_anim() -> Array[StringName]:
+	if _want_dir.length_squared() > 0.01:
+		return ANIM_FIRE_MOVE
+	return ANIM_FIRE
+
 
 func _play_anim(candidates: Array[StringName], speed: float = 1.0, blend: float = 0.0) -> bool:
 	if anim_player == null:

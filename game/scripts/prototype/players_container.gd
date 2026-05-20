@@ -49,6 +49,12 @@ func _ready() -> void:
 		_spawn_for(int(peer_id))
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
+	# Each peer publishes their selected gender into the gameplay lobby's
+	# member data on join. Listen for the data-update callback so remote
+	# avatars whose gender data arrived AFTER their Player spawn still
+	# resolve to the right Mixamo mesh.
+	if not Steam.lobby_data_update.is_connected(_on_lobby_data_update):
+		Steam.lobby_data_update.connect(_on_lobby_data_update)
 
 
 # Convenience for camera / HUD wiring — both want the player whose input
@@ -110,9 +116,35 @@ func _spawn_for(peer_id: int) -> PrototypePlayer:
 	# set_multiplayer_authority must run BEFORE add_child so the
 	# attached synchronizer picks up the right authority on tree-enter.
 	player.set_multiplayer_authority(peer_id)
+	# Resolve and stash the peer's published gender BEFORE add_child so
+	# _ready_remote's _apply_gender_appearance picks the right mesh on
+	# first render. Local / SP spawns leave remote_gender empty so
+	# PlayerState.gender wins. Late-arriving lobby data is handled by
+	# _on_lobby_data_update below.
+	if NetState.is_in_lobby() and peer_id != multiplayer.get_unique_id():
+		player.remote_gender = GameplayChatState.gender_for_peer(peer_id)
 	add_child(player)
 	_spawned[peer_id] = player
 	return player
+
+
+# Steam delivers a data-update callback whenever any member's lobby
+# member-data changes — including a peer publishing their gender after
+# our spawn already ran. Walk the spawned remotes and re-resolve their
+# gender; PrototypePlayer.refresh_remote_gender is a no-op when nothing
+# changed.
+func _on_lobby_data_update(updated_lobby_id: int, _member_id: int, _success: int) -> void:
+	if NetState.lobby_id == 0 or updated_lobby_id != NetState.lobby_id:
+		return
+	var local_id: int = multiplayer.get_unique_id()
+	for peer_id_v in _spawned.keys():
+		var peer_id: int = int(peer_id_v)
+		if peer_id == local_id:
+			continue
+		var player: PrototypePlayer = _spawned[peer_id] as PrototypePlayer
+		if player == null or not is_instance_valid(player):
+			continue
+		player.refresh_remote_gender(GameplayChatState.gender_for_peer(peer_id))
 
 
 func _despawn_for(peer_id: int) -> void:
