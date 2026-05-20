@@ -13,6 +13,8 @@ are mandatory.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-05-20
+
 ### Added
 
 - **Mixamo character meshes** — player (male / female) and enemies (vanguard, alien, military_man, crypto) swapped from the placeholder Quaternius low-poly model to Mixamo X Bot–compatible meshes with authored PBR textures. Player gender is picked from character creation and drives the mesh at spawn.
