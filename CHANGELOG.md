@@ -13,6 +13,31 @@ are mandatory.
 
 ## [Unreleased]
 
+### Added
+
+- **Mixamo character meshes** — player (male / female) and enemies (vanguard, alien, military_man, crypto) swapped from the placeholder Quaternius low-poly model to Mixamo X Bot–compatible meshes with authored PBR textures. Player gender is picked from character creation and drives the mesh at spawn.
+- **MP per-peer gender plumbing** — each peer publishes their selected gender into the coop lobby's member data, so remote avatars in MP now render with the correct mesh instead of all defaulting to player_male.
+- **Ranged firing pose** — equipping any bullet weapon plays a dedicated Firing Rifle animation while LMB or RMB is held, with a Strafing variant when moving so the upper body stays aimed and the legs walk. Enemies with ranged classes hold the same firing pose during their cast windup. Melee attacks keep the original swing.
+- **Locomotion animation set** — added Jog Forward (new default run cadence, replacing Fast Run as the primary), Crouched Walking, and 14 Mixamo death clips that the player randomly picks from on death.
+- **Sci-fi monitor model** swapped in for the puzzle Switch, scaled and grounded so it sits flush on the floor.
+- **NG+ pill in the HUD and character select** — current New Game Plus value displays above the minimap in-game and beside the character's level in the continue panel. Hidden on NG+0 to avoid clutter on fresh runs.
+
+### Changed
+
+- **Blood spray distance tightened** — droplet burst speed cut roughly in half so gore reads as a wound spray instead of arcing 2–3m past the body. Floor decals and visible particles stay in lockstep via shared constants.
+- **SSR step count lowered** from 64 to 24 — kills the cross-screen ghosting where muzzle flash and bullet trails bled onto reflective surfaces on the opposite side of the screen during combat, while keeping local environmental reflections on the procedural worn-steel walls.
+- **Boot splash logo resized** — was rendering at full main-menu source resolution (2912×1632) and dominating the screen; pre-resized to 1024×574 for a sensible centered native-pixel-size splash.
+- **Removed the flat-color player tint** that overrode the new Mixamo PBR textures with the class accent. Characters now show their authored materials.
+
+### Fixed
+
+- **Enemy ragdoll Jolt warning spam** — Mixamo FBX imports carry small per-axis scale residue (~0.99/1.01) on intermediate Armature/Skeleton nodes that the per-PhysicalBone3D counter-scale couldn't fully cancel under rotated parent bases. A new parent-chain normalize step at character spawn pre-bakes uniform scale onto every ancestor, eliminating the `_try_build_shape: Failed to correctly scale body` spam that historically piled up tens of thousands of warnings per session.
+- **"material is null" renderer warnings** — FBX sub-meshes that imported without a material slot now get a default StandardMaterial3D assigned at spawn so RenderingServer doesn't probe a null material for shadow culling. Real PBR textures stay; only blank slots get patched.
+- **Player death no longer crumbles to a T-pose blob** — the `ANIM_DEATH` candidate list looked for a non-existent generic key; replaced with a random pick from the 14 `xbot/death_N` clips. The same fix is applied to the enemy MP-client death path so coop client avatars don't crumble after a host kill either.
+- **Crouch animation no-match log spam** — crouch idle and crouch move fall back to standing idle and slow_run candidates while dedicated Mixamo crouch clips aren't yet wired into every state. Crouched Walking now serves the actual crouch-move case.
+- **Switch interaction outline** restored after the box-mesh body was replaced with the sci-fi monitor glb.
+- **MP fix**: enemy death visual now also synchronizes for non-host clients (was previously hitting the same generic-death no-match the player suffered).
+
 ## [0.4.0] - 2026-05-15
 
 ### Added
