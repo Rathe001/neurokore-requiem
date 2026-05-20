@@ -52,6 +52,7 @@ _None added from third-party sources yet. Player + enemy + drone use Quaternius
 | Sci-Fi Floor Panel | [Blenderkit](https://www.blenderkit.com/get-blenderkit/d08e1de0-59a0-4b75-ae3b-42ecdeb95c01/) | Blenderkit — listed Free | `game/assets/models/objects/wall_panel_v5/wall_panel_v5.glb` | ⚠️ | Imported via tools/import_blenderkit.py — license TBD until verified |
 | PX Concrete Wall | [Blenderkit](https://www.blenderkit.com/get-blenderkit/515dacf4-61ac-42c2-9cf6-29b88983f1fd/) | Blenderkit — listed Free | `game/assets/models/objects/floor_panel_v2/floor_panel_v2.glb` | ⚠️ | Imported via tools/import_blenderkit.py — license TBD until verified |
 | Stylized Stone Tiles | [Blenderkit](https://www.blenderkit.com/get-blenderkit/3f56d640-ef31-45bc-a845-c5df5047886c/) | Blenderkit — listed Free | `game/assets/models/objects/wall_panel_v6/wall_panel_v6.glb` | ⚠️ | Imported via tools/import_blenderkit.py — license TBD until verified |
+| Sci-fi monitor | [Blenderkit](https://www.blenderkit.com/get-blenderkit/7c08bb26-003e-4422-a917-f9ea41803e57/) | Blenderkit — listed Free | `game/assets/models/objects/switch_console/switch_console.glb` | ⚠️ | Imported via tools/import_blenderkit.py — license TBD until verified |
 
 
 ## Audio — SFX (YouTube extracts)

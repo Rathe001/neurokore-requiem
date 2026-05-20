@@ -644,6 +644,15 @@ const BLOOD_PALETTES: Dictionary = {
 	&"machine": Color(0.02, 0.022, 0.03),
 }
 const BLOOD_DROPLET_LIFETIME: float = 0.45
+# Burst droplet speed range. Tightened from 4.0–7.5 m/s — earlier values
+# threw droplets 2–3 m past the body and read as a projectile arc; the
+# tighter range keeps the spray clustered around the wound while gravity
+# still pulls drops down within BLOOD_DROPLET_LIFETIME. Both the GPU
+# particle material and the landing-decal ballistic sampler key off
+# these constants, so changing one site won't desync visible-vs-painted
+# travel distances.
+const BLOOD_BURST_SPEED_MIN: float = 2.0
+const BLOOD_BURST_SPEED_MAX: float = 4.0
 
 static func blood_color_for(blood_type: StringName) -> Color:
 	# Dictionary.get returns Variant — cast to Color so static typing
@@ -714,8 +723,8 @@ static func spawn_blood_burst(parent: Node, world_pos: Vector3, direction: Vecto
 	# 50° cone — narrow enough to read as a focused exit-wound jet
 	# instead of an omnidirectional puff.
 	pm.spread = 25.0
-	pm.initial_velocity_min = 4.0 * count_mult
-	pm.initial_velocity_max = 7.5 * count_mult
+	pm.initial_velocity_min = BLOOD_BURST_SPEED_MIN * count_mult
+	pm.initial_velocity_max = BLOOD_BURST_SPEED_MAX * count_mult
 	# Strong gravity so droplets arc back down quickly — sells "drips
 	# falling to the floor" not "particles flying off into the void".
 	pm.gravity = Vector3(0.0, -12.0, 0.0)
@@ -843,7 +852,7 @@ static func _paint_mist_droplets(parent: Node, origin: Vector3, direction: Vecto
 		var spin_axis: Vector3 = right_axis.rotated(dir_n, phi)
 		var sample_dir: Vector3 = dir_n.rotated(spin_axis, theta).normalized()
 		# Velocity range matches the GPU particle range in spawn_blood_burst.
-		var speed: float = randf_range(4.0 * count_mult, 7.5 * count_mult)
+		var speed: float = randf_range(BLOOD_BURST_SPEED_MIN * count_mult, BLOOD_BURST_SPEED_MAX * count_mult)
 		var vel: Vector3 = sample_dir * speed
 		# Solve ballistic landing on y=0: y(t) = origin.y + vy*t - 6t² = 0
 		# Quadratic in t: 6t² - vy*t - origin.y = 0 → t = (vy + √(vy² + 24·oy)) / 12

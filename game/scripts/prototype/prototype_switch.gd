@@ -22,7 +22,6 @@ const LAMP_LIGHT_RANGE := 6.0
 @export var target_door: NodePath
 @export var action: Action = Action.TOGGLE
 
-@onready var mesh: MeshInstance3D = $Mesh
 @onready var lamp: MeshInstance3D = $Lamp
 
 var _used: bool = false
@@ -81,7 +80,9 @@ func _on_mouse_exited() -> void:
 	_blink_t = 0.0
 
 func _get_outline_source() -> MeshInstance3D:
-	return mesh
+	# Switch body is now a glb model (sci-fi monitor) — outline targets
+	# the lamp, the only authored MeshInstance3D under this scene.
+	return lamp
 
 # Clear the "used" lamp state so the switch is interactable again after reset.
 func reset_state() -> void:

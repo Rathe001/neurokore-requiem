@@ -44,8 +44,15 @@ glow_hdr_scale = 2.0
 ; walls. Without SSR, metallic surfaces only catch direct specular
 ; highlights from light sources (still shiny, but no environmental
 ; reflection). Costs ~0.5ms/frame at 64 max steps; we have headroom.
+;
+; max_steps capped at 24: longer ray walks let SSR drag bright muzzle-flash
+; and bullet-trail pixels across the screen onto reflective surfaces on the
+; opposite side (visible as a pink/red glow on otherwise-matte props during
+; combat). 24 keeps local environmental reflections — ceiling lights on the
+; floor near them, wall-to-wall — without pulling far-off-screen brightness
+; into the local frame.
 ssr_enabled = true
-ssr_max_steps = 64
+ssr_max_steps = 24
 ssr_fade_in = 0.15
 ssr_fade_out = 2.0
 ssr_depth_tolerance = 0.2
