@@ -46,17 +46,19 @@ const MISS_DB := -6.0
 # Per-play variance — slight pitch/volume jitter so repeated fires
 # don't read as a mechanical pulse.
 #
-# Enemies are slightly lower-pitched and quieter than the player so
-# horde fights don't blur into a single wash and offscreen incoming
-# fire telegraphs before you see the source. The original
-# differentiation was 0.78-0.92 + -6 dB which changed the weapon's
-# timbre — enemy fire sounded like "wrong" effects rather than the
-# same weapon. The current numbers overlap the player range at the
-# top end (0.96) so the same gun still reads as the same gun.
+# Enemies use a slightly lower pitch range than the player so horde
+# fights don't blur into one wash and offscreen incoming fire
+# telegraphs before you see the source. Ranges overlap at 0.96 so
+# the same weapon still reads as the same weapon — the previous
+# 0.78-0.92 floor pushed enemy fire into "wrong gun" timbre.
+#
+# Volume parity (no enemy attenuation) — AudioStreamPlayer3D's
+# distance falloff plus the iso camera already handle "is it me or
+# someone offscreen", so a blanket dB cut would be redundant.
 const PLAYER_PITCH_RANGE := Vector2(0.96, 1.04)
 const ENEMY_PITCH_RANGE := Vector2(0.90, 0.96)
 const VOLUME_JITTER_DB := 1.5  # ± this many dB on top of the category offset
-const ENEMY_ATTEN_DB := -2.0   # blanket cut so enemy fire sits behind player SFX
+const ENEMY_ATTEN_DB := 0.0    # no blanket cut — spatial attenuation handles it
 
 # Mapping from enemy weapon_id → player weapon_base_id so enemies reuse the
 # same sound sets. Enemies that carry a weapon with no player equivalent
