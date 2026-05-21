@@ -1311,16 +1311,18 @@ static func spawn_blood_on_receivers(parent: Node, kill_pos: Vector3, blood_type
 	# spreads naturally across the area.
 	receivers.shuffle()
 	var painted: int = 0
-	# Lift origin WELL above floor-standing props (chairs, crates,
-	# tables, pillars). The previous +0.3 m origin could land INSIDE a
-	# standing prop's collision box for kills that happened right next
-	# to it — rays starting inside a body return empty (no entry hit),
-	# so every nearby prop got skipped. Aiming from ~2 m down onto the
-	# receiver's position guarantees the ray crosses the prop's top
-	# surface from outside, returning a clean hit + normal.
-	var origin := Vector3(kill_pos.x, kill_pos.y + 2.0, kill_pos.z)
+	# Visibility ray: from kill point at chest height (1 m above floor)
+	# to the receiver's visual AABB center. Walls (collision layer 1)
+	# block this — if the kill couldn't actually see the prop, no
+	# splatter. We do NOT raycast against the prop itself: many props
+	# have tiny gameplay collision shapes (the switch console is only
+	# 0.7 m tall while its visible mesh is 2.5 m+), so a hit-test
+	# against collision would land at floor level, not on the visible
+	# geometry. Instead we trust the AABB center as the target and rely
+	# on the decal's own cull_mask + projection volume to paint
+	# whatever mesh-layer-8 geometry happens to be there.
 	var query := PhysicsRayQueryParameters3D.new()
-	query.collision_mask = _OBJECT_BLOOD_RAY_MASK
+	query.collision_mask = 1  # WORLD only — walls block, props don't
 	query.collide_with_areas = false
 	query.collide_with_bodies = true
 	for receiver_var in receivers:
@@ -1329,27 +1331,63 @@ static func spawn_blood_on_receivers(parent: Node, kill_pos: Vector3, blood_type
 		if not (receiver_var is Node3D) or not is_instance_valid(receiver_var):
 			continue
 		var receiver := receiver_var as Node3D
-		# Aim at the receiver's body origin. The ray descends from the
-		# elevated origin and enters the collision box from above — top
-		# faces, side faces, anything within the prop's silhouette is a
-		# valid impact point.
-		query.from = origin
-		query.to = receiver.global_position
+		var visual_center := _receiver_visual_center(receiver)
+		# Cast from kill point at chest height to the visual center.
+		# Any wall in between = skip.
+		query.from = kill_pos + Vector3(0.0, 1.0, 0.0)
+		query.to = visual_center
 		query.exclude = []
 		var hit := space.intersect_ray(query)
-		if hit.is_empty():
+		if not hit.is_empty():
+			# Wall (or any WORLD-layer geometry) between kill and prop —
+			# kill couldn't actually splatter onto it.
 			continue
-		# The hit must BE on the receiver (or its physics body). Walls/
-		# floor on layer 1 also block; if the ray hits a wall first the
-		# receiver is occluded and we skip — exactly the "don't paint
-		# what the kill couldn't actually splatter" guarantee.
-		var collider: Object = hit.get("collider")
-		if collider != receiver:
-			continue
-		var impact_pos: Vector3 = hit["position"]
-		var impact_normal: Vector3 = hit["normal"]
-		_spawn_object_blood_decal(receiver, impact_pos, impact_normal, kill_pos, blood_type)
+		# Projection direction = horizontal kill→receiver vector. Paints
+		# the side of the prop FACING the kill (which is the surface that
+		# would actually get hit by spray). Top-down projection would
+		# only land on the prop's top face — wrong for tall props with
+		# small top surfaces (consoles, pillars, doors).
+		var to_recv := visual_center - kill_pos
+		to_recv.y = 0.0  # keep projection horizontal
+		var proj_normal: Vector3 = to_recv.normalized() if to_recv.length_squared() > 0.0001 else Vector3.UP
+		# Normal points OUT of the prop's surface toward the kill — flip
+		# direction so the decal projects INTO the prop.
+		_spawn_object_blood_decal(receiver, visual_center, -proj_normal, kill_pos, blood_type)
 		painted += 1
+
+
+# AABB center of every VisualInstance3D descendant of `node`, in world
+# space. Used as the splat target instead of the physics body's
+# global_position because gameplay collision shapes often don't match
+# visible mesh height — a console switch's 0.7 m collision box can't
+# represent where its 2.5 m visible mesh actually is.
+static func _receiver_visual_center(node: Node3D) -> Vector3:
+	var aabbs: Array[AABB] = []
+	_collect_visual_aabbs(node, aabbs)
+	if aabbs.is_empty():
+		# Fallback: no VisualInstance3D children resolved — use the body
+		# origin lifted to ~0.5 m so the decal isn't stuck at floor level.
+		return node.global_position + Vector3(0.0, 0.5, 0.0)
+	var combined: AABB = aabbs[0]
+	for i in range(1, aabbs.size()):
+		combined = combined.merge(aabbs[i])
+	return combined.get_center()
+
+
+# Recursive walk that collects every VisualInstance3D's world-space
+# AABB. AABB is a value type, so we accumulate into an Array and
+# merge at the caller.
+static func _collect_visual_aabbs(node: Node, out: Array[AABB]) -> void:
+	if node is VisualInstance3D:
+		var vi := node as VisualInstance3D
+		# Skip our own outline / blood copies that may have been
+		# spawned earlier — they'd skew the center toward an attached
+		# decal's projection volume rather than the real geometry.
+		if vi.name != &"OutlineCopy":
+			var aabb := vi.get_aabb()
+			out.append(vi.global_transform * aabb)
+	for child in node.get_children():
+		_collect_visual_aabbs(child, out)
 
 
 # Spawn one side-projected decal on `receiver`. Texture uses the
@@ -1369,9 +1407,14 @@ static func _spawn_object_blood_decal(receiver: Node3D, impact_pos: Vector3, imp
 	# the silhouette so multiple stamps don't read as identical.
 	var dist: float = kill_pos.distance_to(impact_pos)
 	var size_scale: float = clampf(1.0 - dist / OBJECT_BLOOD_RADIUS, 0.35, 1.0)
+	# size.y is the projection DEPTH along the decal's local -Y. For
+	# horizontal side-projection (decal +Y = surface normal pointing
+	# back to the kill), size.y is how far the projection extends INTO
+	# the prop. 1.8 m reaches through ~all standing prop widths. x/z
+	# are the splat's footprint on the prop's facing surface.
 	decal.size = Vector3(
 		randf_range(0.4, 0.9) * size_scale,
-		0.5,  # projection depth — small enough to not paint past the prop
+		1.8,
 		randf_range(0.4, 0.9) * size_scale,
 	)
 	decal.modulate = _decal_color_jitter()
