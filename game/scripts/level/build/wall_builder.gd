@@ -192,12 +192,21 @@ static func create_decorative_pillar(ctx: LevelBuildContext, pos: Vector3, size:
 	body.name = &"DecorativePillar"
 	body.input_ray_pickable = false
 	body.transform.origin = Vector3(pos.x, height * 0.5, pos.z)
-	# Layer 8 (Pillars) — its own physics layer so player/enemy/projectile
-	# movement + impacts ALL collide with pillars (their masks include
-	# Layer 8) while LoS culling and ProximityLighting (which mask Layer 1
-	# only) ignore them. End result: pillars block bullets and bodies
-	# without darkening the screen by eating proximity-light raycasts.
-	body.collision_layer = 128
+	# WORLD (1) + PILLAR (128). WORLD makes enemy movement collide
+	# (enemy mask intentionally drops PILLAR so they phase through
+	# destructible knee-high clutter — see EnemyAfflictions); without
+	# the WORLD bit here, enemies walked right into the pillar volume
+	# and fired from inside it, defeating cover. PILLAR keeps the bullet-
+	# sweep + combat-LoS contract that projectile.gd and los_culler.gd
+	# rely on.
+	#
+	# Side effect: visual LoS culler (WORLD-only) and ProximityLighting
+	# (WORLD-only) now see pillars. Mutual cover (enemies behind pillars
+	# fade out for the player) is the desired behavior — they're tall
+	# solid columns, not knee-high clutter. The lighting dim is real but
+	# pillars are sparse enough for the effect to read as natural
+	# occlusion rather than darkening artifacts.
+	body.collision_layer = 1 | 128
 	body.collision_mask = 0
 
 	var col := CollisionShape3D.new()
