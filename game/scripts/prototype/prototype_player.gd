@@ -1942,6 +1942,15 @@ func _cast_lmb_combat() -> void:
 		# Bullet weapons: ammo gates fire (and is_reloading() blocks). Energy
 		# weapons: resource cost gates fire. Helper centralises both checks.
 		if is_main and not _skill_can_fire(item, skill, true):
+			# Empty-magazine LMB on a bullet weapon kicks an auto-reload.
+			# The post-fire trigger in _skill_pay_cost (line ~2946) handles
+			# the normal "you just spent your last round" case, but it can't
+			# cover the load-in-with-0-ammo path (fire gate skips the slot
+			# before pay_cost runs) — without this the player has to press
+			# R manually after loading a save with an empty mag. Skip when
+			# already reloading so we don't restart the timer.
+			if item.is_bullet_weapon() and not is_reloading():
+				start_reload()
 			continue
 		ready_fires.append({"slot": slot, "item": item, "skill": skill, "is_main": is_main})
 
