@@ -988,7 +988,7 @@ const POOL_INITIAL_DIAMETER: float = 0.3        # tiny "fresh splash" at spawn
 const POOL_TARGET_MIN_DIAMETER: float = 1.2     # smallest final pool from a single kill
 const POOL_TARGET_MAX_DIAMETER: float = 1.8     # largest before merge growth
 const POOL_MAX_DIAMETER: float = 6.0            # cap on any pool's grown diameter
-const POOL_GROWTH_DURATION: float = 0.8         # initial-to-final spread time
+const POOL_GROWTH_DURATION: float = 4.5         # slow ooze — player shouldn't see the growth tween in motion
 # Attach: if a new kill lands within this distance of an existing
 # pool's *edge*, grow that pool to encompass the new spawn instead of
 # stamping fresh. Fresh stamps still happen for kills in clear space.
@@ -1327,6 +1327,9 @@ static func spawn_blood_on_receivers(parent: Node, kill_pos: Vector3, blood_type
 	# squared filter is microseconds — well below the cost of the four
 	# raycasts the function will issue anyway.
 	var all_receivers := node.get_tree().get_nodes_in_group(OBJECT_BLOOD_RECEIVER_GROUP)
+	# TEMP DIAGNOSTIC — surface whether the receiver pipeline is even
+	# finding anything. Remove once object blood is verified working.
+	print("[BLOOD-RECV] total receivers in group: %d, kill at %s" % [all_receivers.size(), kill_pos])
 	if all_receivers.is_empty():
 		return
 	var radius_sq: float = OBJECT_BLOOD_RADIUS * OBJECT_BLOOD_RADIUS
@@ -1335,8 +1338,10 @@ static func spawn_blood_on_receivers(parent: Node, kill_pos: Vector3, blood_type
 		if not (r_var is Node3D) or not is_instance_valid(r_var):
 			continue
 		var r := r_var as Node3D
-		if r.global_position.distance_squared_to(kill_pos) <= radius_sq:
+		var d_sq := r.global_position.distance_squared_to(kill_pos)
+		if d_sq <= radius_sq:
 			receivers.append(r)
+	print("[BLOOD-RECV] in-radius: %d" % receivers.size())
 	if receivers.is_empty():
 		return
 	# Shuffle so a horde clustered next to one prop doesn't always paint
@@ -1374,7 +1379,9 @@ static func spawn_blood_on_receivers(parent: Node, kill_pos: Vector3, blood_type
 		if not hit.is_empty():
 			# Wall (or any WORLD-layer geometry) between kill and prop —
 			# kill couldn't actually splatter onto it.
+			print("[BLOOD-RECV] blocked by %s at %s" % [hit.get("collider"), hit.get("position")])
 			continue
+		print("[BLOOD-RECV] painting %s at visual_center %s" % [receiver.name, visual_center])
 		# Projection direction = horizontal kill→receiver vector. Paints
 		# the side of the prop FACING the kill (which is the surface that
 		# would actually get hit by spray). Top-down projection would
