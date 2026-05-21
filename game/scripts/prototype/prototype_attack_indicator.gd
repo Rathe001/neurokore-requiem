@@ -1656,7 +1656,7 @@ const OBJECT_BLOOD_LAYER: int = 8
 # nearly opaque while staying below the 1.0 "flat paint" threshold the
 # memory warned about. Floor / character / wall splat decals continue
 # to use BLOOD_DECAL_ALBEDO_MIX (0.92).
-const OBJECT_BLOOD_ALBEDO_MIX: float = 0.99
+const OBJECT_BLOOD_ALBEDO_MIX: float = 0.96
 const OBJECT_BLOOD_RECEIVER_GROUP: StringName = &"blood_receiver"
 const OBJECT_BLOOD_RADIUS: float = 5.0
 const OBJECT_BLOOD_MAX_PER_KILL: int = 4

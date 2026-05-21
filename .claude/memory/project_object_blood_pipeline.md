@@ -54,12 +54,13 @@ is settled.
 - `BLOOD_DECAL_ALBEDO_MIX = 0.92` for floor pool, character splat,
   wall splatter, droplet, and footprint decals. 0.82 was too
   washed-out, 1.0 reads as flat paint, 0.92 was the landing point.
-- `OBJECT_BLOOD_ALBEDO_MIX = 0.99` for the prop side + top decals.
+- `OBJECT_BLOOD_ALBEDO_MIX = 0.96` for the prop side + top decals.
   Props are typically lit brighter than floor (direct fluorescent
   overhead, no shadowing from ceiling), so the project-wide 0.92 read
-  as nearly-invisible against bright prop materials. Bumped to 0.99
-  on 2026-05-21 — close to fully opaque without crossing the "flat
-  paint" 1.0 threshold.
+  as nearly-invisible against bright prop materials. Bumped 0.92 →
+  0.99 → 0.96 on 2026-05-21; 0.99 read as flat paint, 0.96 lets the
+  surface barely peek through which preserves the "just-spilled"
+  texture feel without bleaching out.
 
 **Why:** Blood/gore is intentionally a major aesthetic — receiver
 opt-in pattern was chosen so adding new paintable object classes
