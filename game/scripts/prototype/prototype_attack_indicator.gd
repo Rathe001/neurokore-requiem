@@ -2299,60 +2299,118 @@ static func _get_blood_orm_texture() -> Texture2D:
 # fights produce visible pools without one decal eating the room.
 const _DECAL_MAX_GROWN_SIZE: float = 8.0
 
-# If `world_pos` lands inside an existing decal's inner coverage,
-# grow that decal slightly to absorb the new spawn and return true —
-# caller skips the actual Decal3D creation. Net effect: overlapping
-# spawns merge into a single growing pool instead of stacking as
-# layered stamps. `inner_ratio` controls how close the new spawn must
-# be to the existing decal's center to count as "inside": 0.55 for
-# kill scenes (loose — gravelly satellites still merge), 0.40 for
-# mist drops (tight — drops can still build density at the rim).
-# `new_avg_size` is the size the new decal WOULD have had; the
-# existing decal grows by ~25% of that to absorb the area.
-# Capped at _DECAL_MAX_GROWN_SIZE so an old pool plateaus instead of
-# growing unbounded — beyond cap, just skip silently.
-static func _try_grow_existing_decal(world_pos: Vector3, new_avg_size: float, inner_ratio: float = 0.55) -> bool:
+# Physical-overlap merge. If `world_pos` would stamp a footprint that
+# overlaps an existing pool's footprint (treating both as XZ circles),
+# absorb the new spawn into that pool — grow it to contain both, then
+# cascade-absorb any OTHER pools the now-larger pool overlaps. Models
+# real-liquid behaviour: two splatters that touch are one pool.
+#
+# Returns true if a merge happened (caller skips the fresh stamp);
+# false if no overlap and the caller should stamp a new decal.
+#
+# `inner_ratio` is kept for API compatibility but no longer used for
+# the threshold test — overlap = (distance < r1 + r2), always.
+static func _try_grow_existing_decal(world_pos: Vector3, new_avg_size: float, _inner_ratio: float = 0.55) -> bool:
+	var new_r: float = new_avg_size * 0.5
 	var best: Decal = null
-	var best_dist_sq: float = INF
+	var best_dist: float = INF
 	for d_var in _blood_decal_ring:
 		if not is_instance_valid(d_var):
 			continue
 		var d: Decal = d_var as Decal
 		if d == null:
 			continue
-		var dx := world_pos.x - d.global_position.x
-		var dz := world_pos.z - d.global_position.z
-		var d_sq: float = dx * dx + dz * dz
-		var avg_radius: float = (d.size.x + d.size.z) * 0.25
-		var threshold: float = avg_radius * inner_ratio
-		if d_sq < threshold * threshold and d_sq < best_dist_sq:
+		var dx: float = world_pos.x - d.global_position.x
+		var dz: float = world_pos.z - d.global_position.z
+		var dist: float = sqrt(dx * dx + dz * dz)
+		var existing_r: float = (d.size.x + d.size.z) * 0.25
+		# Overlap = combined radii exceed centre distance. Pick the
+		# CLOSEST overlapping pool so the merge is always into the most
+		# locally relevant pool (not a far-away one we happen to graze).
+		if dist < new_r + existing_r and dist < best_dist:
 			best = d
-			best_dist_sq = d_sq
+			best_dist = dist
 	if best == null:
 		return false
 	# Re-stamp the sort offset to the latest counter on EVERY merge so
 	# the growing pool stays on top of any older stamps it visually
-	# overlaps. Without this the pool keeps its original (now-stale)
-	# offset and newer small stamps that land outside its merge zone
-	# but inside its visual footprint render on top — which reads as
-	# z-fight flicker when the camera moves (the pool "winks out"
-	# under fresh stamps as their antialiased edges shift). Refresh
-	# applies even at the size cap: a cap-sized pool that's just
-	# absorbed a fresh hit IS the most recent thing in that area.
+	# overlaps (otherwise newer outside-spawns paint over it).
 	_blood_sort_counter += 1
 	best.sorting_offset = float(_blood_sort_counter) * _BLOOD_SORT_STEP
-	# Existing decal already at cap — accept the merge (skip the new
-	# spawn) but don't grow further.
-	if best.size.x >= _DECAL_MAX_GROWN_SIZE and best.size.z >= _DECAL_MAX_GROWN_SIZE:
+	# Compute the new bounding circle that contains both the existing
+	# pool and the new spawn. centre shifts toward the new spawn
+	# proportionally to its radius weight; radius grows to encompass
+	# both. Two formulas, one per case (existing already contains the
+	# new spawn vs. genuine extension).
+	var existing_r: float = (best.size.x + best.size.z) * 0.25
+	var to_new := Vector3(world_pos.x - best.global_position.x, 0.0, world_pos.z - best.global_position.z)
+	var d_centre: float = to_new.length()
+	if d_centre + new_r <= existing_r:
+		# New spawn is entirely inside the existing pool — no growth,
+		# just the sort-offset refresh above.
 		return true
-	# Grow by 60% of the merged stamp's avg size (was 25%) — pools
-	# should visibly accumulate when a horde dies in the same area,
-	# not creep up imperceptibly. With _DECAL_MAX_GROWN_SIZE = 8.0
-	# pools can reach genuine "room covered" scale.
-	var growth: float = new_avg_size * 0.60
-	best.size.x = minf(best.size.x + growth, _DECAL_MAX_GROWN_SIZE)
-	best.size.z = minf(best.size.z + growth, _DECAL_MAX_GROWN_SIZE)
+	# Bounding circle: centre is on the line between the two centres,
+	# offset from the existing centre by (d + new_r - existing_r) / 2.
+	var shift: float = (d_centre + new_r - existing_r) * 0.5
+	var new_radius: float = (d_centre + new_r + existing_r) * 0.5
+	# Cap growth so one pool can't eat the whole level.
+	new_radius = minf(new_radius, _DECAL_MAX_GROWN_SIZE * 0.5)
+	if d_centre > 0.0001:
+		best.global_position += (to_new / d_centre) * shift
+	# Size is the full diameter (Decal3D's size is a box's full extent,
+	# not a half-extent).
+	var new_diameter: float = new_radius * 2.0
+	best.size.x = new_diameter
+	best.size.z = new_diameter
+	# Cascade-absorb any other pools the grown decal now overlaps —
+	# real liquids don't stay separate just because they were placed
+	# one at a time, they coalesce on contact.
+	_absorb_overlapping_pools(best)
 	return true
+
+
+# After a pool grows, scan the ring for OTHER pools whose footprints
+# now overlap the grown pool's footprint. Absorb each (grow the host
+# to contain both, fast-fade the absorbed). Repeats until no further
+# overlaps remain — the "ink drop hits another ink drop" cascade.
+# Bounded by ring size so worst case is O(BLOOD_DECAL_MAX) per call.
+static func _absorb_overlapping_pools(host: Decal) -> void:
+	if not is_instance_valid(host):
+		return
+	var max_iterations: int = 6  # safety belt against pathological cascades
+	while max_iterations > 0:
+		max_iterations -= 1
+		var host_r: float = (host.size.x + host.size.z) * 0.25
+		var found_absorb: bool = false
+		for d_var in _blood_decal_ring:
+			if not is_instance_valid(d_var) or d_var == host:
+				continue
+			var d: Decal = d_var as Decal
+			if d == null:
+				continue
+			var dx: float = host.global_position.x - d.global_position.x
+			var dz: float = host.global_position.z - d.global_position.z
+			var dist: float = sqrt(dx * dx + dz * dz)
+			var d_r: float = (d.size.x + d.size.z) * 0.25
+			if dist >= host_r + d_r:
+				continue
+			# Overlap — extend host bounds to include d, then drop d.
+			if dist + d_r > host_r:
+				var shift: float = (dist + d_r - host_r) * 0.5
+				var new_r: float = (dist + d_r + host_r) * 0.5
+				new_r = minf(new_r, _DECAL_MAX_GROWN_SIZE * 0.5)
+				if dist > 0.0001:
+					host.global_position -= Vector3(dx, 0.0, dz) / dist * shift
+				host.size.x = new_r * 2.0
+				host.size.z = new_r * 2.0
+			# Fast-fade the absorbed pool so it doesn't pop out — it's
+			# already inside the host's footprint now, the fade just
+			# softens the disappearance over a few frames.
+			_fade_and_free(d)
+			found_absorb = true
+			break  # rescan from the top (host_r changed)
+		if not found_absorb:
+			break
 
 
 # Per-decal modulate jitter. Multiplies all three RGB channels by the
