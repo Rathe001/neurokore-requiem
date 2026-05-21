@@ -939,22 +939,30 @@ func _build_stats_text(item: Item, equipped: Item = null, force_text: bool = fal
 		if mod != null:
 			var active := BehaviorModRegistry.is_active(item.behavior_mod_id)
 			var name_color := "#6fdf6f" if active else "#808890"
-			var body_color := "#cfe5cf" if active else "#6e7479"
-			lines.append("")  # blank line separator above the mod block
-			lines.append("[color=%s][b]Mod: %s[/b][/color]" % [name_color, mod.display_name])
-			# Rolled param values, e.g. "Walk speed penalty: 12.4%"
+			var body_color := "#a7afb3"
+			# Compact 3-line block: name + optional preview tag, then a
+			# single line of bullet-separated param values, then a small
+			# dim description. The body-text "Mod: ..." line that used to
+			# live here is gone — the colored mod name carries that role.
+			var name_line := "[color=%s][b]%s[/b][/color]" % [name_color, mod.display_name]
+			if not active and not mod.is_implemented:
+				name_line += "  [color=#7a7e80][font_size=10][preview][/font_size][/color]"
+			lines.append(name_line)
+			var param_parts: Array[String] = []
 			for key in mod.param_ranges:
 				if not item.mod_params.has(key):
 					continue
 				var raw_value: float = float(item.mod_params[key])
 				var label := _format_mod_param_label(String(key))
 				var value_str := _format_mod_param_value(String(key), raw_value)
-				lines.append("[color=%s]  %s: %s[/color]" % [body_color, label, value_str])
-			# Description text — wraps via the tooltip's existing autowrap.
+				param_parts.append("%s [color=#dfe6e9]%s[/color]" % [label, value_str])
+			if not param_parts.is_empty():
+				lines.append("[color=%s][font_size=11]%s[/font_size][/color]" % [body_color, "  •  ".join(param_parts)])
 			if mod.description != "":
-				lines.append("[color=%s][i]%s[/i][/color]" % [body_color, mod.description])
-			if not active and not mod.is_implemented:
-				lines.append("[color=%s][i](preview — not yet active)[/i][/color]" % body_color)
+				# Multi-paragraph descriptions get joined with " — " so
+				# the tooltip stays compact. Render small + dim, no italic.
+				var desc_compact := mod.description.replace("\n\n", " — ").replace("\n", " ")
+				lines.append("[color=#8a9094][font_size=10]%s[/font_size][/color]" % desc_compact)
 	# Legacy head light mod (pre-behavior-mod-system items). Skip when the
 	# new behavior_mod_id is set — the new block above covers it.
 	if item.behavior_mod_id == &"" and item.light_mod != Item.LightMod.NONE:
@@ -1109,35 +1117,60 @@ func _stat_display_name(stat_id: StringName) -> String:
 	return _STAT_LABELS.get(stat_id, (stat_id as String).capitalize())
 
 
-# Behavior-mod param key → human label. Param keys follow the convention
-# used in the .tres files (snake_case ending in unit, e.g.
-# "walk_speed_penalty_pct", "cooldown_sec"). Strip the trailing unit hint
-# and title-case the rest so the tooltip reads naturally.
+# Behavior-mod param key → human label. The .tres param keys follow a
+# snake_case convention ending in a unit hint ("_pct", "_sec", "_m",
+# etc.) plus optional adjective tails ("_of_base", "_of_max_hp",
+# "_per_100_res"). Strip the unit + tail and title-case the remainder
+# so labels read naturally without per-mod hand-authoring.
+#
+# Order matters: longer suffixes must be checked before shorter prefixes
+# (e.g. "_pct_of_base" before "_pct"), and "_per_sec" before "_sec".
+const _PARAM_LABEL_SUFFIXES: Array[String] = [
+	"_pct_of_base", "_pct_of_max_hp", "_pct_of_player", "_pct_of_fall_distance",
+	"_per_100_res", "_per_sec",
+	"_pct", "_sec", "_m", "_deg", "_multiplier",
+]
 func _format_mod_param_label(key: String) -> String:
 	var stripped := key
-	for suffix in ["_pct", "_sec", "_m", "_per_sec", "_per_100_res", "_deg", "_multiplier"]:
+	for suffix in _PARAM_LABEL_SUFFIXES:
 		if stripped.ends_with(suffix):
 			stripped = stripped.substr(0, stripped.length() - suffix.length())
 			break
-	return stripped.replace("_", " ").capitalize()
+	# Sentence-case (first letter only) — title-case of every word reads
+	# like a heading and looks heavy inline.
+	var spaced := stripped.replace("_", " ")
+	if spaced.is_empty():
+		return spaced
+	return spaced.substr(0, 1).to_upper() + spaced.substr(1)
 
 
-# Behavior-mod param value → formatted display string with the right
-# unit suffix inferred from the key (consistent with _format_mod_param_
-# label so the value matches the label's stripped unit).
+# Behavior-mod param value → formatted display string. Picks unit and
+# precision from the key suffix; mirrors the label-stripping table so
+# label+value read as one phrase ("Chain damage 31% of base").
 func _format_mod_param_value(key: String, raw: float) -> String:
+	# Order matches _PARAM_LABEL_SUFFIXES so the longest suffix wins.
+	if key.ends_with("_pct_of_base"):
+		return "%.0f%% of base" % raw
+	if key.ends_with("_pct_of_max_hp"):
+		return "%.0f%% of max HP" % raw
+	if key.ends_with("_pct_of_player"):
+		return "%.0f%% of player" % raw
+	if key.ends_with("_pct_of_fall_distance"):
+		return "%.0f%% of fall dmg" % raw
+	if key.ends_with("_per_100_res"):
+		return "%.0f%% per 100 res" % raw
+	if key.ends_with("_per_sec"):
+		return "%.1f/s" % raw
 	if key.ends_with("_pct"):
-		return "%.1f%%" % raw
-	if key.ends_with("_sec") or key.ends_with("_per_sec"):
-		return "%.2fs" % raw if key.ends_with("_sec") else "%.1f/s" % raw
+		return "%.0f%%" % raw
+	if key.ends_with("_sec"):
+		return "%.1fs" % raw
 	if key.ends_with("_m"):
 		return "%.1fm" % raw
 	if key.ends_with("_deg"):
 		return "%.0f°" % raw
 	if key.ends_with("_multiplier"):
 		return "%.2f×" % raw
-	if key.ends_with("_per_100_res"):
-		return "%.1f%% per 100" % raw
 	# Fallback — raw float with one decimal.
 	return "%.1f" % raw
 
