@@ -927,11 +927,11 @@ static func _spawn_mist_drop_floor(parent: Node, world_pos: Vector3, blood_type:
 	# and size variation — some round and small, some elongated, some
 	# nearly as big as a kill satellite.
 	var drop_size := Vector3(randf_range(0.20, 0.65), 0.4, randf_range(0.20, 0.65))
-	# Tight merge zone (0.18) so most mist droplets stamp fresh — see
-	# spawn_blood_decal for the rationale on dropping the wide-merge
-	# behaviour now that sorting_offset removes the z-fight risk.
+	# Mist droplets feed existing pools at a moderate threshold (0.35) —
+	# slightly tighter than kill scenes so drops along the rim still
+	# stamp fresh, but center-pile drops grow the local pool.
 	var new_avg_size: float = (drop_size.x + drop_size.z) * 0.5
-	if _try_grow_existing_decal(world_pos, new_avg_size, 0.18):
+	if _try_grow_existing_decal(world_pos, new_avg_size, 0.35):
 		return
 	var decal := Decal.new()
 	var variant := _get_blood_splatter_variant(blood_type)
@@ -1030,11 +1030,12 @@ static func spawn_blood_decal(parent: Node, world_pos: Vector3, blood_type: Stri
 	# one instead of stacking a new stamp on top. Same texture, just
 	# a larger size — accumulating hits build a visibly bigger pool.
 	var new_avg_size: float = (requested_size.x + requested_size.z) * 0.5
-	# Very tight merge threshold. Anything but a near-direct overlap
-	# stamps as a fresh decal so the room actually fills. sorting_offset
-	# in _track_blood_decal handles the z-fight risk that the wider
-	# merge zone used to defend against.
-	if _try_grow_existing_decal(world_pos, new_avg_size, 0.10):
+	# Wider merge zone (0.45) than the tight-stamp pass, paired with
+	# the higher growth factor (0.60) and the larger cap (8 m) in
+	# _try_grow_existing_decal. Net behavior: cluster-kills feed into
+	# a few VISIBLY GROWING pools instead of producing a confetti of
+	# small splats. Spawns OUTSIDE existing pools still stamp fresh.
+	if _try_grow_existing_decal(world_pos, new_avg_size, 0.45):
 		return
 	var decal := Decal.new()
 	var variant := _get_blood_splatter_variant(blood_type)
@@ -2062,7 +2063,7 @@ static func _get_blood_orm_texture() -> Texture2D:
 # Maximum size a single decal can grow to via merge accumulation.
 # Caps the "blood pool grows as more lands" behaviour so sustained
 # fights produce visible pools without one decal eating the room.
-const _DECAL_MAX_GROWN_SIZE: float = 4.0
+const _DECAL_MAX_GROWN_SIZE: float = 8.0
 
 # If `world_pos` lands inside an existing decal's inner coverage,
 # grow that decal slightly to absorb the new spawn and return true —
@@ -2099,7 +2100,11 @@ static func _try_grow_existing_decal(world_pos: Vector3, new_avg_size: float, in
 	# spawn) but don't grow further.
 	if best.size.x >= _DECAL_MAX_GROWN_SIZE and best.size.z >= _DECAL_MAX_GROWN_SIZE:
 		return true
-	var growth: float = new_avg_size * 0.25
+	# Grow by 60% of the merged stamp's avg size (was 25%) — pools
+	# should visibly accumulate when a horde dies in the same area,
+	# not creep up imperceptibly. With _DECAL_MAX_GROWN_SIZE = 8.0
+	# pools can reach genuine "room covered" scale.
+	var growth: float = new_avg_size * 0.60
 	best.size.x = minf(best.size.x + growth, _DECAL_MAX_GROWN_SIZE)
 	best.size.z = minf(best.size.z + growth, _DECAL_MAX_GROWN_SIZE)
 	return true
