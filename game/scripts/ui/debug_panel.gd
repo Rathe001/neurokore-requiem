@@ -1,7 +1,11 @@
 extends Control
 
-const PANEL_POS := Vector2(12.0, 44.0)
-const PANEL_SIZE := Vector2(170.0, 224.0)
+# Anchored below the HotkeyHints column (which spans y=12-260 in the
+# default HUD layout). Bumping past the hints stops the debug panel
+# from sitting on top of the keybind list. Width stayed at 170 to fit
+# the longest option label without wrap.
+const PANEL_POS := Vector2(12.0, 272.0)
+const PANEL_SIZE := Vector2(170.0, 260.0)
 
 const STAT_KEY_WIDTH := 70.0
 
@@ -80,6 +84,8 @@ func _build_layout() -> void:
 
 	vbox.add_child(HSeparator.new())
 	_add_retro_filter_row(vbox)
+	vbox.add_child(HSeparator.new())
+	_add_action_button(vbox, "Force Unlock Doors", _force_unlock_all_doors)
 	vbox.add_child(HSeparator.new())
 
 	var cfg: DebugConfig = DebugState.config
@@ -179,3 +185,36 @@ func _set_bool(key: StringName, value: bool) -> void:
 	if cfg == null:
 		return
 	cfg.set(key, value)
+
+
+# Renders a single button row that fires `on_press` when clicked.
+# Used for one-shot debug actions (unblock impossible puzzles,
+# kill all enemies, etc.) that don't fit the boolean-toggle pattern.
+func _add_action_button(parent: VBoxContainer, label_text: String, on_press: Callable) -> void:
+	var btn := Button.new()
+	btn.text = label_text
+	btn.add_theme_font_size_override(&"font_size", UIThemeState.palette.font_size_tooltip)
+	btn.pressed.connect(on_press)
+	parent.add_child(btn)
+
+
+# Walks every PrototypeDoor in the tree and calls unlock() until each is
+# fully open. Unblocks procgen levels that generated a puzzle the player
+# physically can't solve (e.g. fewer switch host cells than the boss
+# room's connection count demanded). Doesn't touch MissionState; the
+# counter may remain "(3/7)" but the door is physically open so the
+# player can proceed to the next level.
+func _force_unlock_all_doors() -> void:
+	var tree := get_tree()
+	if tree == null:
+		return
+	for n in tree.get_nodes_in_group(&"resettable"):
+		if not (n is PrototypeDoor):
+			continue
+		var door := n as PrototypeDoor
+		# Drain the counter via the public API so MP clients receive the
+		# unlock RPC the same way they would from a switch press.
+		var guard := 32  # paranoia loop cap — door requires at most 9 unlocks
+		while door.locked and guard > 0:
+			door.unlock()
+			guard -= 1
