@@ -34,15 +34,21 @@ Currently wired: `DestructibleProp`, `HoverableInteractable`,
   Workaround: group iteration via `get_nodes_in_group`, not
   `SpatialGrid.query_radius`.
 
-**Known unfixed: visibility on short flat props.** Side projection
-(decal +Y = horizontal toward kill) paints the kill-facing vertical
-face. Tall pillars read great because the side IS what the iso camera
-sees. Short flat props (loot crates, security barriers, exam tables)
-read mostly TOP from the iso angle, so the side paint is on a face
-the camera barely sees. The diagnostic confirmed layers/visibility/
-spawn all work — pure projection-angle issue. Likely fix when the
-user comes back: add a SECOND top-down decal per receiver
-(`proj_normal = Vector3.UP`) so the visible top face also gets paint.
+**Resolved (2026-05-21): short flat props now get a second top-down
+decal.** Each receiver inside the spawn radius now gets BOTH a
+side-projected decal (existing behavior, paints the kill-facing
+vertical face — reads on tall pillars) AND a top-down decal that
+projects from just above the AABB top-face center downward. Top
+decal's projection depth = the AABB height clamped to [0.4, 1.5] so a
+tall pillar's stamp doesn't reach into the floor and a short crate's
+still covers top-to-bottom. `_spawn_object_blood_decal` now takes an
+optional `projection_depth` param (default 1.8 for side-paint). The
+two-call site is `spawn_blood_on_receivers` after the visibility ray
+clears. `OBJECT_BLOOD_MAX_PER_KILL` still counts RECEIVERS (4),
+producing up to 8 decals/kill — well under the BLOOD_DECAL_MAX
+ring-buffer cap. Diagnostic `print()` calls in the visibility-ray
+path also removed in the same pass since the layers/raycast question
+is settled.
 
 **Opacity dial:** `BLOOD_DECAL_ALBEDO_MIX` constant (currently 0.92)
 threads through all 6 decal spawn sites (floor pool, character splat,

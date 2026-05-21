@@ -1388,20 +1388,38 @@ static func spawn_blood_on_receivers(parent: Node, kill_pos: Vector3, blood_type
 		if not hit.is_empty():
 			# Wall (or any WORLD-layer geometry) between kill and prop —
 			# kill couldn't actually splatter onto it.
-			print("[BLOOD-RECV] blocked by %s at %s" % [hit.get("collider"), hit.get("position")])
 			continue
-		print("[BLOOD-RECV] painting %s at visual_center %s" % [receiver.name, visual_center])
-		# Projection direction = horizontal kill→receiver vector. Paints
-		# the side of the prop FACING the kill (which is the surface that
-		# would actually get hit by spray). Top-down projection would
-		# only land on the prop's top face — wrong for tall props with
-		# small top surfaces (consoles, pillars, doors).
+		# Two-decal paint per receiver:
+		#   1. Side decal — horizontal kill→receiver projection. Reads on
+		#      tall props (pillars, consoles, doors) where the iso camera
+		#      sees the kill-facing vertical face.
+		#   2. Top decal — top-down projection onto the prop's top face.
+		#      Carries the splat for short flat props (loot crates,
+		#      barriers, exam tables) where the iso camera mostly sees
+		#      the top and the side paint lands on a barely-visible face.
+		# Spawning both unconditionally means tall props get a redundant
+		# top stamp on a small face (cheap, invisible) and short props
+		# get the top paint they need — no per-prop classification.
 		var to_recv := visual_center - kill_pos
-		to_recv.y = 0.0  # keep projection horizontal
+		to_recv.y = 0.0
 		var proj_normal: Vector3 = to_recv.normalized() if to_recv.length_squared() > 0.0001 else Vector3.UP
-		# Normal points OUT of the prop's surface toward the kill — flip
-		# direction so the decal projects INTO the prop.
+		# Side paint. Normal points OUT (toward the kill); negate so the
+		# decal's +Y axis is the surface normal facing AWAY from the kill,
+		# and the projection extends INTO the prop.
 		_spawn_object_blood_decal(receiver, visual_center, -proj_normal, kill_pos, blood_type)
+		# Top paint. Decal sits just above the AABB top-face center with
+		# its +Y axis = UP. Projection depth matches the prop's height
+		# (clamped) so a tall pillar's stamp doesn't reach into the floor
+		# and a short crate's still covers the whole top-to-bottom range.
+		var aabb := _receiver_visual_aabb(receiver)
+		if aabb.size.y > 0.05:
+			var top_pos := Vector3(
+				visual_center.x,
+				aabb.position.y + aabb.size.y,
+				visual_center.z,
+			)
+			var top_depth := clampf(aabb.size.y, 0.4, 1.5)
+			_spawn_object_blood_decal(receiver, top_pos, Vector3.UP, kill_pos, blood_type, top_depth)
 		painted += 1
 
 
@@ -1411,16 +1429,24 @@ static func spawn_blood_on_receivers(parent: Node, kill_pos: Vector3, blood_type
 # visible mesh height — a console switch's 0.7 m collision box can't
 # represent where its 2.5 m visible mesh actually is.
 static func _receiver_visual_center(node: Node3D) -> Vector3:
+	var combined := _receiver_visual_aabb(node)
+	if combined.size == Vector3.ZERO:
+		return node.global_position + Vector3(0.0, 0.5, 0.0)
+	return combined.get_center()
+
+
+# Combined world-space AABB of every VisualInstance3D descendant.
+# Returns AABB(node.global_position, Vector3.ZERO) when no visuals
+# resolve so the caller can detect the "no geometry" case.
+static func _receiver_visual_aabb(node: Node3D) -> AABB:
 	var aabbs: Array[AABB] = []
 	_collect_visual_aabbs(node, aabbs)
 	if aabbs.is_empty():
-		# Fallback: no VisualInstance3D children resolved — use the body
-		# origin lifted to ~0.5 m so the decal isn't stuck at floor level.
-		return node.global_position + Vector3(0.0, 0.5, 0.0)
+		return AABB(node.global_position, Vector3.ZERO)
 	var combined: AABB = aabbs[0]
 	for i in range(1, aabbs.size()):
 		combined = combined.merge(aabbs[i])
-	return combined.get_center()
+	return combined
 
 
 # Recursive walk that collects every VisualInstance3D's world-space
@@ -1443,7 +1469,7 @@ static func _collect_visual_aabbs(node: Node, out: Array[AABB]) -> void:
 # wall_splatter variant (drip-oriented) because most prop hits are
 # vertical surfaces; floor variants would look wrong drip-side-up on
 # a chair side.
-static func _spawn_object_blood_decal(receiver: Node3D, impact_pos: Vector3, impact_normal: Vector3, kill_pos: Vector3, blood_type: StringName) -> void:
+static func _spawn_object_blood_decal(receiver: Node3D, impact_pos: Vector3, impact_normal: Vector3, kill_pos: Vector3, blood_type: StringName, projection_depth: float = 1.8) -> void:
 	if not is_instance_valid(receiver):
 		return
 	var decal := Decal.new()
@@ -1457,14 +1483,16 @@ static func _spawn_object_blood_decal(receiver: Node3D, impact_pos: Vector3, imp
 	var dist: float = kill_pos.distance_to(impact_pos)
 	var size_scale: float = clampf(1.0 - dist / (OBJECT_BLOOD_RADIUS * 1.5), 0.6, 1.0)
 	# size.y is the projection DEPTH along the decal's local -Y. For
-	# horizontal side-projection (decal +Y = surface normal pointing
-	# back to the kill), size.y is how far the projection extends INTO
-	# the prop. 1.8 m reaches through ~all standing prop widths. x/z
-	# are the splat's footprint on the prop's facing surface.
-	# Increased to 0.7-1.4 m so the splat reads at iso distance.
+	# side projection (decal +Y = surface normal pointing back to the
+	# kill), size.y is how far the projection extends INTO the prop.
+	# For top-down projection (decal +Y = UP), size.y is the vertical
+	# depth from the top face downward. Caller passes the right value
+	# via projection_depth — 1.8 m default suits side-paint on standing
+	# props; top-paint uses the AABB height clamped to a smaller cap.
+	# x/z are the splat's footprint on the projected surface.
 	decal.size = Vector3(
 		randf_range(0.7, 1.4) * size_scale,
-		1.8,
+		projection_depth,
 		randf_range(0.7, 1.4) * size_scale,
 	)
 	decal.modulate = _decal_color_jitter()
