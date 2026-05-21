@@ -1283,7 +1283,14 @@ static func spawn_blood_on_receivers(parent: Node, kill_pos: Vector3, blood_type
 	# spreads naturally across the area.
 	receivers.shuffle()
 	var painted: int = 0
-	var origin := kill_pos + Vector3(0.0, 0.3, 0.0)  # lift slightly off floor so the ray doesn't graze it
+	# Lift origin WELL above floor-standing props (chairs, crates,
+	# tables, pillars). The previous +0.3 m origin could land INSIDE a
+	# standing prop's collision box for kills that happened right next
+	# to it — rays starting inside a body return empty (no entry hit),
+	# so every nearby prop got skipped. Aiming from ~2 m down onto the
+	# receiver's position guarantees the ray crosses the prop's top
+	# surface from outside, returning a clean hit + normal.
+	var origin := Vector3(kill_pos.x, kill_pos.y + 2.0, kill_pos.z)
 	var query := PhysicsRayQueryParameters3D.new()
 	query.collision_mask = _OBJECT_BLOOD_RAY_MASK
 	query.collide_with_areas = false
@@ -1294,14 +1301,12 @@ static func spawn_blood_on_receivers(parent: Node, kill_pos: Vector3, blood_type
 		if not (receiver_var is Node3D) or not is_instance_valid(receiver_var):
 			continue
 		var receiver := receiver_var as Node3D
-		# Aim at the receiver's torso area (slightly above origin). For
-		# floor-level props (low chairs / debris) this still resolves to
-		# the prop's top surface from the raycast; for tall props (cell
-		# bars / pillars) it lands on the side wall around chest height
-		# — both read correctly.
-		var aim_pos: Vector3 = receiver.global_position + Vector3(0.0, 0.6, 0.0)
+		# Aim at the receiver's body origin. The ray descends from the
+		# elevated origin and enters the collision box from above — top
+		# faces, side faces, anything within the prop's silhouette is a
+		# valid impact point.
 		query.from = origin
-		query.to = aim_pos
+		query.to = receiver.global_position
 		query.exclude = []
 		var hit := space.intersect_ray(query)
 		if hit.is_empty():
@@ -2239,17 +2244,19 @@ static func _make_splatter_normal(albedo_image: Image) -> Image:
 # footprint to be glossy and dielectric. The Decal node samples this
 # alongside the albedo texture; where the albedo alpha is non-zero,
 # this ORM data overrides the underlying floor's roughness/metallic.
-# Channels: R = ambient occlusion (1 = no occlusion), G = roughness
-# (0.20 = wet matte — glossy enough to read as liquid, not so mirror-
-# like it produces lens-flare specular at iso angles), B = metallic.
-# 0.06 was previously too sharp: ceiling fluorescents caught it as
-# small bright points that read more like glowing pixels than wet
-# blood. 0.20 keeps the sheen but softens the highlight.
+# Channels: R = ambient occlusion (1 = no occlusion), G = roughness, B = metallic.
+#
+# Roughness history: 0.06 caught ceiling lights as bright glowing
+# pixels. 0.20 softened that but on huge merged pools (post-density
+# pass) the cumulative specular still read as a screen-wide mirror,
+# flickering hard as the camera moved. 0.45 is a duller wet sheen —
+# still reads as liquid (not matte rubber) but doesn't bake ceiling
+# fluorescents into a shifting glare across pool surfaces.
 static func _get_blood_orm_texture() -> Texture2D:
 	if _blood_orm_texture != null:
 		return _blood_orm_texture
 	var img := Image.create(4, 4, false, Image.FORMAT_RGB8)
-	img.fill(Color(1.0, 0.20, 0.0))
+	img.fill(Color(1.0, 0.45, 0.0))
 	_blood_orm_texture = ImageTexture.create_from_image(img)
 	return _blood_orm_texture
 
