@@ -458,12 +458,18 @@ func _ready() -> void:
 # so decals stop painting themselves onto the character mesh — which
 # would otherwise stick to the world-space spot where the decal was
 # spawned, looking detached when the corpse moves (ragdoll launch, sink
-# tween). The camera's default cull_mask covers all 20 layers, so
-# layer-2 meshes remain visible to the player.
+# tween).
+#
+# Layer 3 (mask = 4) is the CHARACTER_BLOOD layer — the parallel
+# "blood ON characters" pipeline (PrototypeAttackIndicator.spawn_blood_on_character)
+# parents its decals to the visual root and targets only this layer,
+# so the splat moves with the body but world-blood decals still
+# ignore the character. Setting BOTH bits keeps the visual rendered
+# (camera sees all 20 layers) and receives character-blood projections.
 func _isolate_visual_from_decals() -> void:
 	if visual == null:
 		return
-	_walk_set_visual_layers(visual, 2)
+	_walk_set_visual_layers(visual, 2 | PrototypeAttackIndicator.CHARACTER_BLOOD_LAYER)
 
 
 static func _walk_set_visual_layers(node: Node, mask: int) -> void:
@@ -1041,6 +1047,13 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 		aggro()
 	_visuals.play_hit_squash()
 	_hit_flash_tween = HitFlash.play(self, visual, _hit_flash_tween)
+	# Splatter blood ON the character itself — parented to visual so it
+	# follows movement / animation / ragdoll. Uses knockback_from as the
+	# impact direction reference; falls back to a small forward offset
+	# when knockback_from is zero (channel weapons, DoT ticks).
+	if visual != null:
+		var impact_pos: Vector3 = knockback_from if knockback_from != Vector3.ZERO else global_position + Vector3(0, 1.0, 0)
+		PrototypeAttackIndicator.spawn_blood_on_character(visual, impact_pos, blood_type)
 	_visuals.refresh_tooltip_if_hovered()
 	# Broadcast hit visuals to all clients so every player sees every hit's
 	# damage number, squash, and flash — not just the attacker.

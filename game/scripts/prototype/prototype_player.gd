@@ -983,6 +983,21 @@ func _apply_gender_appearance() -> void:
 	var character := visual.get_node_or_null(^"Character")
 	if character != null:
 		XBotRagdoll.ensure_surface_materials(character)
+	# Move every MeshInstance3D on the player onto layer 2 (rendered
+	# but invisible to floor blood decals at cull_mask=1) plus the
+	# CHARACTER_BLOOD_LAYER so spawn_blood_on_character can paint
+	# splatter that follows the body. Same scheme as PrototypeEnemy.
+	_walk_player_visual_layers(visual, 2 | PrototypeAttackIndicator.CHARACTER_BLOOD_LAYER)
+
+
+# Same recursive walk PrototypeEnemy uses — kept local so the player
+# doesn't have to depend on the enemy script. Sets `layers` on every
+# VisualInstance3D descendant of `node`.
+func _walk_player_visual_layers(node: Node, mask: int) -> void:
+	if node is VisualInstance3D:
+		(node as VisualInstance3D).layers = mask
+	for child in node.get_children():
+		_walk_player_visual_layers(child, mask)
 
 
 # Walks the visual subtree looking for any Skeleton3D. FBX skeleton node
@@ -1099,6 +1114,11 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 	_out_of_combat_t = 0.0
 	_hp_regen_accum = 0.0
 	_hit_flash_tween = HitFlash.play(self, visual, _hit_flash_tween)
+	# Splatter blood on the player's own mesh too — mirrors the enemy
+	# take_damage hook so taking hits in combat actually shows.
+	if visual != null:
+		var impact_pos: Vector3 = knockback_from if knockback_from != Vector3.ZERO else global_position + Vector3(0, 1.0, 0)
+		PrototypeAttackIndicator.spawn_blood_on_character(visual, impact_pos)
 	if _damage_flash != null:
 		_damage_flash.flash(amount, max_health)
 	WeaponSounds.play_generic(&"hit_player", global_position)

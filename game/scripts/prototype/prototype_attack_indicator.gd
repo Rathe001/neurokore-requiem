@@ -1015,7 +1015,11 @@ static func spawn_blood_decal(parent: Node, world_pos: Vector3, blood_type: Stri
 	# Wide size range — 0.6 m to 2.5 m — so a kill scene's main + 2-4
 	# satellite splats vary clearly in scale. Independent X/Z gives
 	# shape variation too (squashed wide, squashed long, near-square).
-	var requested_size := Vector3(randf_range(0.6, 2.5), 0.6, randf_range(0.6, 2.5))
+	# size.y is projection depth (decals project along -Y). Bumped from
+	# 0.6 → 2.0 so props standing on the floor (chairs, tables, cell
+	# bars, decorative pillars) catch splatter on their lower torso,
+	# not just the floor underneath them.
+	var requested_size := Vector3(randf_range(0.6, 2.5), 2.0, randf_range(0.6, 2.5))
 	# If this spawn lands inside an existing splat, grow the existing
 	# one instead of stacking a new stamp on top. Same texture, just
 	# a larger size — accumulating hits build a visibly bigger pool.
@@ -1128,6 +1132,99 @@ static func spawn_blood_wall_splatter(parent: Node, world_pos: Vector3, wall_nor
 	_track_blood_decal(decal)
 
 
+# ── Character blood (decals parented to a character's visual) ────────
+#
+# spawn_blood_on_character() projects a small splatter onto the
+# character mesh itself. The decal is a CHILD of the character's
+# visual root, so it follows movement / animation / ragdoll launches
+# naturally — no "decal stuck in 3D space while corpse slides away"
+# bug. cull_mask = CHARACTER_BLOOD_LAYER, which only character
+# meshes opt into (via `_walk_set_visual_layers(visual, 2 | 4)`),
+# so the decal can't paint world geometry or other characters.
+#
+# Per-character cap (5 splats); a fade tween clears each one over
+# CHARACTER_BLOOD_FADE_DURATION (12 s) and queue_frees on completion.
+# The per-character list is stored in the visual's `_blood_decals`
+# meta to avoid touching every character class.
+static func spawn_blood_on_character(character_visual: Node3D, world_impact_pos: Vector3, blood_type: StringName = BLOOD_TYPE_HUMAN) -> void:
+	if character_visual == null or not is_instance_valid(character_visual):
+		return
+	if not character_visual.is_inside_tree():
+		return
+	# Per-character lifecycle list. Tracks live decals so we can evict
+	# the oldest when the cap is hit and detect freed entries.
+	var list: Array = character_visual.get_meta(&"_blood_decals", []) as Array
+	# Compact any freed entries before measuring against the cap —
+	# tweens can free decals out of order (level reset, character
+	# culling) and stale references shouldn't count toward the cap.
+	var live: Array = []
+	for d_var in list:
+		if is_instance_valid(d_var):
+			live.append(d_var)
+	if live.size() >= CHARACTER_BLOOD_MAX_PER_CHAR:
+		# Evict the oldest decal — fade it out immediately.
+		var oldest: Variant = live.pop_front()
+		if oldest is Decal:
+			_fade_character_blood_decal(oldest as Decal, 0.5)
+	# Local-space position: project the world impact into the character's
+	# frame so the decal sits on the surface of the body where the hit
+	# landed. Lift Y by ~1.0 so it projects DOWN through the torso /
+	# head region rather than sideways through the feet.
+	var local_impact: Vector3 = character_visual.global_transform.affine_inverse() * world_impact_pos
+	var decal := Decal.new()
+	var variant := _get_blood_splatter_variant(blood_type)
+	decal.texture_albedo = variant[&"albedo"]
+	decal.texture_normal = variant[&"normal"]
+	decal.texture_orm = _get_blood_orm_texture()
+	# Small footprint (humanoid surface area); tall projection volume
+	# so the splat covers the character even at extreme pose angles
+	# (a kicked-up leg, a turning torso).
+	decal.size = Vector3(randf_range(0.30, 0.55), 1.6, randf_range(0.30, 0.55))
+	decal.modulate = _decal_color_jitter()
+	decal.upper_fade = 0.1
+	decal.lower_fade = 0.1
+	decal.albedo_mix = 1.0
+	decal.cull_mask = CHARACTER_BLOOD_LAYER
+	decal.rotation.y = randf() * TAU
+	# Position at local impact, lifted to torso height. Clamp the XZ
+	# component to a small radius around the character's local origin
+	# so the splatter lands on the body even if the impact world-pos
+	# was an arm-length away (e.g. ranged hits compute from the
+	# character's pivot).
+	var planar := Vector2(local_impact.x, local_impact.z)
+	if planar.length() > 0.4:
+		planar = planar.normalized() * 0.4
+	decal.position = Vector3(planar.x, 1.0, planar.y)
+	character_visual.add_child(decal)
+	live.append(decal)
+	character_visual.set_meta(&"_blood_decals", live)
+	# Hold for most of the fade duration, then taper alpha to 0 and
+	# queue_free. Tween hosted on the decal itself so a freed character
+	# carrying it doesn't strand the tween.
+	_fade_character_blood_decal(decal, CHARACTER_BLOOD_FADE_DURATION)
+
+
+# Internal: kick off (or replace) a decal's fade-and-free tween.
+# `duration` is the total time before queue_free.
+static func _fade_character_blood_decal(decal: Decal, duration: float) -> void:
+	if not is_instance_valid(decal) or not decal.is_inside_tree():
+		return
+	var tween := decal.create_tween()
+	# Hold roughly 60% of the duration at full alpha, then fade for
+	# the remaining 40%. Sustained-presence + visible-fade reads
+	# better than a slow linear ramp the whole time.
+	var hold := duration * 0.6
+	var fade := maxf(duration - hold, 0.2)
+	tween.tween_interval(hold)
+	tween.tween_property(decal, "modulate:a", 0.0, fade)
+	var decal_id: int = decal.get_instance_id()
+	tween.tween_callback(func() -> void:
+		var d := instance_from_id(decal_id) as Node
+		if d != null:
+			d.queue_free()
+	)
+
+
 # ── Blood decal infrastructure ─────────────────────────────────────────
 
 # Duration of the fade-out tween when a decal gets evicted by the ring
@@ -1143,6 +1240,17 @@ const _BLOOD_DECAL_FADE_DURATION: float = 2.5
 # that layer (see PrototypeEnemy._isolate_visual_from_decals), splats
 # never paint themselves onto a moving corpse / live enemy.
 const BLOOD_DECAL_CULL_LAYER: int = 1
+
+# Character-blood decals are parented to a character's visual root so
+# they follow the body as it moves. They project onto a dedicated
+# visual layer (bit 3, mask = 4) that character meshes opt into via
+# `_walk_set_visual_layers(visual, 2 | 4)`; world-blood decals use
+# layer 1 only and ignore characters. Outline-compositor highlights
+# stay on layer 20 (bit 19), unaffected. Per-character cap + fade
+# tween below.
+const CHARACTER_BLOOD_LAYER: int = 4
+const CHARACTER_BLOOD_MAX_PER_CHAR: int = 5
+const CHARACTER_BLOOD_FADE_DURATION: float = 12.0
 
 # Z-fight jitter range for floor decals. All floor splats sit at y=0,
 # so two decals projecting onto the same floor pixel have identical
