@@ -693,7 +693,10 @@ static var _blood_bootprint_left_textures: Dictionary = {}
 # are nearly free; in-camera cost is sampling overhead per pixel).
 const BLOOD_DECAL_MAX: int = 400
 static var _blood_decal_ring: Array[Decal] = []
-static var _blood_decal_head: int = 0
+# Monotonic per-decal stamp used as the secondary sort key when the
+# eviction scan picks "smallest, then oldest". Strictly increasing
+# across all blood spawns, so a smaller value = older decal.
+static var _blood_insert_seq: int = 0
 
 
 # Single gate for every blood spawn path. Players who flip
@@ -1806,14 +1809,42 @@ static func _track_blood_decal(decal: Decal) -> void:
 	# footprints) inherits the fix.
 	_blood_sort_counter += 1
 	decal.sorting_offset = float(_blood_sort_counter) * _BLOOD_SORT_STEP
+	# Stamp the decal with age (monotonic insertion counter) and visible
+	# XZ footprint area. The eviction scan uses both — primary key is
+	# area (smallest evicted first because small mist drops carry low
+	# storytelling value AND big pools cost more per-frame render time),
+	# secondary key is age (oldest of equal-area evicted first).
+	_blood_insert_seq += 1
+	decal.set_meta(&"_blood_seq", _blood_insert_seq)
+	decal.set_meta(&"_blood_area", decal.size.x * decal.size.z)
 	if _blood_decal_ring.size() < BLOOD_DECAL_MAX:
 		_blood_decal_ring.append(decal)
 		return
-	var oldest: Variant = _blood_decal_ring[_blood_decal_head]
-	if is_instance_valid(oldest) and oldest is Decal:
-		_fade_and_free(oldest as Decal)
-	_blood_decal_ring[_blood_decal_head] = decal
-	_blood_decal_head = (_blood_decal_head + 1) % BLOOD_DECAL_MAX
+	# Ring full — scan for lowest-priority entry. O(N) per eviction at
+	# N = 400; ~50 decals/sec at horde scale gives ~20k comparisons/sec,
+	# trivial compared to the rendering cost the eviction avoids.
+	var best_idx: int = -1
+	var best_area: float = INF
+	var best_seq: int = 0x7FFFFFFF
+	for i in _blood_decal_ring.size():
+		var slot: Variant = _blood_decal_ring[i]
+		if not is_instance_valid(slot) or not (slot is Decal):
+			# Stale slot (decal freed by its own tween, e.g. footprints
+			# that self-free) — reuse immediately, no priority comparison.
+			best_idx = i
+			break
+		var d := slot as Decal
+		var a: float = float(d.get_meta(&"_blood_area", 0.0))
+		var s: int = int(d.get_meta(&"_blood_seq", 0))
+		if a < best_area or (a == best_area and s < best_seq):
+			best_area = a
+			best_seq = s
+			best_idx = i
+	if best_idx >= 0:
+		var evict: Variant = _blood_decal_ring[best_idx]
+		if is_instance_valid(evict) and evict is Decal:
+			_fade_and_free(evict as Decal)
+		_blood_decal_ring[best_idx] = decal
 
 
 # Tweens a decal's modulate.alpha to 0 over the fade duration, then
