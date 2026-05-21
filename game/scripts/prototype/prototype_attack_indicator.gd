@@ -996,11 +996,12 @@ static func spawn_blood_kill_scene(parent: Node, world_pos: Vector3, spray_dir: 
 	if parent == null or _blood_disabled():
 		return
 	spawn_blood_decal(parent, world_pos, blood_type)
-	# Heavy satellite count — the user reads "majority of the room
-	# painted" as the goal, and at 4-7 per kill a 30-enemy wipe still
-	# left visible bare floor. 8-14 satellites + tighter merge zone +
-	# 400-decal cap together push toward genuine room saturation.
-	var satellite_count: int = randi_range(8, 14)
+	# Moderate satellite count. Higher counts (was 8-14) made a SINGLE
+	# kill instantly form a big pool because the overlap-merge absorbed
+	# all satellites into the main. 5-8 is enough variety per kill
+	# without forming a 5m+ pool on the first death — pools now grow
+	# over multiple kills as designed.
+	var satellite_count: int = randi_range(5, 8)
 	var spray_xz: Vector2 = Vector2.ZERO
 	if spray_dir.length_squared() > 0.0001:
 		spray_xz = Vector2(spray_dir.x, spray_dir.z).normalized()
@@ -1012,9 +1013,12 @@ static func spawn_blood_kill_scene(parent: Node, world_pos: Vector3, spray_dir: 
 		if spray_xz != Vector2.ZERO and randf() < 0.7:
 			var spray_angle := atan2(spray_xz.x, spray_xz.y)
 			angle = spray_angle + randf_range(-PI * 0.4, PI * 0.4)
-		# Wider distribution (was 0.6-2.2) so 8-14 satellites cover more
-		# floor area instead of piling near the kill point.
-		var dist: float = randf_range(0.8, 3.5)
+		# Tightened (was 0.8-3.5) so satellites stay closer to the kill.
+		# With overlap-merge, far satellites at 3.5 m forced the merged
+		# pool's bounding circle out to cover them — a single kill
+		# produced a ~5 m pool. 0.6-2.0 keeps the initial pool human-
+		# scale; subsequent kills extend it naturally.
+		var dist: float = randf_range(0.6, 2.0)
 		var offset := Vector3(sin(angle), 0.0, cos(angle)) * dist
 		spawn_blood_decal(parent, world_pos + offset, blood_type)
 	# Paint side-projected blood on any objects in the OBJECT_BLOOD
@@ -1040,7 +1044,10 @@ static func spawn_blood_decal(parent: Node, world_pos: Vector3, blood_type: Stri
 	# splatter; that's traded for not painting walls accidentally.
 	# Tall-prop coverage would need a separate dedicated pipeline
 	# (per-prop physics raycast on hit + side-projection decal).
-	var requested_size := Vector3(randf_range(0.6, 2.5), 0.6, randf_range(0.6, 2.5))
+	# Tighter top end (was 0.6-2.5). Big initial stamps + overlap-merge =
+	# one kill instantly produces a 5 m pool. Smaller stamps let pools
+	# build gradually as kills accumulate.
+	var requested_size := Vector3(randf_range(0.5, 1.4), 0.6, randf_range(0.5, 1.4))
 	# If this spawn lands inside an existing splat, grow the existing
 	# one instead of stacking a new stamp on top. Same texture, just
 	# a larger size — accumulating hits build a visibly bigger pool.
@@ -1472,7 +1479,7 @@ const CHARACTER_BLOOD_FADE_DURATION: float = 12.0
 # don't cross-contaminate.
 const OBJECT_BLOOD_LAYER: int = 8
 const OBJECT_BLOOD_RECEIVER_GROUP: StringName = &"blood_receiver"
-const OBJECT_BLOOD_RADIUS: float = 3.0
+const OBJECT_BLOOD_RADIUS: float = 5.0
 const OBJECT_BLOOD_MAX_PER_KILL: int = 4
 const OBJECT_BLOOD_FADE_DURATION: float = 14.0
 # Physics layers the kill→receiver visibility ray queries:
