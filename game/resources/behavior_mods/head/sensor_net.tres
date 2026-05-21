@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="BehaviorMod" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/behavior_mod.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"sensor_net"
+display_name = "Sensor Net"
+slot = &"head"
+description = "Minimap pings every enemy through walls on a steady cadence.
+
+Trade: no light at all — dark zones stay dark."
+param_ranges = {
+"ping_interval_sec": [1.2, 2.0]
+}
+is_implemented = false
+condition_id = &""
+class_restriction = &""

@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="BehaviorMod" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/behavior_mod.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"silenced_treads"
+display_name = "Silenced Treads"
+slot = &"feet"
+description = "Enemies don't hear footsteps — you can sprint past unaware patrols.
+
+Trade: first shot after stealth deals −X% damage (silenced gear weakens the round)."
+param_ranges = {
+"detection_cone_reduction_pct": [40.0, 70.0],
+"first_shot_damage_penalty_pct": [10.0, 25.0]
+}
+is_implemented = false
+condition_id = &""
+class_restriction = &""

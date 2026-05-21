@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="BehaviorMod" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/behavior_mod.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"slip_step"
+display_name = "Slip-Step"
+slot = &"legs"
+description = "Successfully dodging a melee swing triggers a 1.5m sidestep in your move direction.
+
+Trade: −X% damage reduction (lighter armor needed for the reflex)."
+param_ranges = {
+"cooldown_sec": [1.0, 1.8],
+"dr_penalty_pct": [5.0, 12.0]
+}
+is_implemented = false
+condition_id = &""
+class_restriction = &""

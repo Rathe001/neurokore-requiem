@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="BehaviorMod" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/behavior_mod.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"ghost_field"
+display_name = "Ghost Field"
+slot = &"chest"
+description = "Lethal damage drops you to 1 HP with 1.5s of untargetability instead of killing you.
+
+Trade: cannot pick up loot while the field is on cooldown."
+param_ranges = {
+"cooldown_sec": [90.0, 180.0]
+}
+is_implemented = false
+condition_id = &""
+class_restriction = &""

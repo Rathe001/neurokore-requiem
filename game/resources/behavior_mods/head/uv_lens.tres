@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="BehaviorMod" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/behavior_mod.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"uv_lens"
+display_name = "UV Lens"
+slot = &"head"
+description = "Reveals hidden caches, secret doors, and trap wires within range.
+
+Trade: each shot strobes the lens — crit feedback frames briefly blanked after each fire."
+param_ranges = {
+"reveal_radius_m": [6.0, 10.0]
+}
+is_implemented = false
+condition_id = &""
+class_restriction = &""

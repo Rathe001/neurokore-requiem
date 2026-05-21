@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="BehaviorMod" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/behavior_mod.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"glide_pads"
+display_name = "Glide Pads"
+slot = &"legs"
+description = "Jumping preserves horizontal momentum with much more air control — long-jump feel off ledges.
+
+Trade: −X% jump height (the pads dump some vertical impulse into glide)."
+param_ranges = {
+"air_control_bonus_pct": [20.0, 40.0],
+"jump_height_penalty_pct": [10.0, 20.0]
+}
+is_implemented = false
+condition_id = &""
+class_restriction = &""

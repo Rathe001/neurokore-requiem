@@ -383,6 +383,8 @@ func _serialize_item(item: Item) -> Dictionary:
 		"light_energy": item.light_energy,
 		"light_range": item.light_range,
 		"light_color": _color_to_array(item.light_color),
+		"behavior_mod_id": str(item.behavior_mod_id),
+		"mod_params": item.mod_params.duplicate(),
 		"stat_modifiers": _serialize_stat_modifiers(item.stat_modifiers),
 	}
 	return d
@@ -432,6 +434,8 @@ func _deserialize_item(data: Dictionary) -> Item:
 	item.light_energy = float(data.get("light_energy", 1.2))
 	item.light_range = float(data.get("light_range", 12.0))
 	item.light_color = _array_to_color(data.get("light_color", [1, 1, 1, 1]))
+	item.behavior_mod_id = StringName(data.get("behavior_mod_id", ""))
+	item.mod_params = (data.get("mod_params", {}) as Dictionary).duplicate()
 	item.stat_modifiers = _deserialize_stat_modifiers(data.get("stat_modifiers", {}))
 	# Legacy save backfill — items rolled before icon_path existed
 	# load with the field empty. Re-derive it from sub_type using the

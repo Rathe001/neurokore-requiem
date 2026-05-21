@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="BehaviorMod" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/behavior_mod.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"servo_stride"
+display_name = "Servo Stride"
+slot = &"legs"
+description = "Sprint costs no resource.
+
+Trade: −X% base walk speed (the servos eat your normal stride to spool the sprint power)."
+param_ranges = {
+"walk_speed_penalty_pct": [5.0, 15.0]
+}
+is_implemented = false
+condition_id = &""
+class_restriction = &""

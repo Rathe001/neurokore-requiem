@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="BehaviorMod" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/behavior_mod.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"crouch_tactician"
+display_name = "Crouch Tactician"
+slot = &"legs"
+description = "Crouch movement speed equals normal walking speed. Accuracy buff while crouched.
+
+Trade: cannot sprint at all."
+param_ranges = {
+"crouch_accuracy_bonus_pct": [5.0, 15.0]
+}
+is_implemented = false
+condition_id = &""
+class_restriction = &""

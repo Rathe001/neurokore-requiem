@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="BehaviorMod" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/behavior_mod.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"quickdraw_servos"
+display_name = "Quickdraw Servos"
+slot = &"hands"
+description = "The first shot after swapping weapons is a guaranteed crit.
+
+Trade: −X% magazine size on bullet weapons."
+param_ranges = {
+"crit_bonus_pct": [25.0, 50.0],
+"mag_penalty_pct": [10.0, 20.0]
+}
+is_implemented = false
+condition_id = &""
+class_restriction = &""

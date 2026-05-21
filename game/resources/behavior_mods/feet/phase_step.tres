@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="BehaviorMod" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/behavior_mod.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"phase_step"
+display_name = "Phase Step"
+slot = &"feet"
+description = "Taking damage briefly phases you 0.6m in your current movement direction.
+
+Trade: −X% max HP."
+param_ranges = {
+"cooldown_sec": [4.0, 8.0],
+"max_hp_penalty_pct": [6.0, 12.0]
+}
+is_implemented = false
+condition_id = &""
+class_restriction = &""

@@ -207,6 +207,18 @@ func _backfill_damage_type_from_base() -> void:
 @export var light_range: float = 12.0
 @export var light_color: Color = Color.WHITE
 
+## Behavior mod identifier (per BehaviorMod resource). Empty StringName
+## means no mod rolled (Common drops + items that didn't get a mod from
+## ItemRoller). The actual BehaviorMod resource is resolved at lookup
+## time via BehaviorModRegistry so saves stay slim (just the id, not the
+## whole resource path).
+@export var behavior_mod_id: StringName = &""
+## Rolled parameter values for the behavior mod, keyed by param name
+## (String). Sampled from the mod's param_ranges at ItemRoller time so
+## the same mod plays differently from drop to drop (e.g. a Jetpack at
+## 22 res/sec vs one at 26). Empty Dictionary on items without a mod.
+@export var mod_params: Dictionary = {}
+
 @export_group("Stats")
 ## Flat stat / modifier bonuses applied when this item is equipped.
 ## Keys are StringName — direct combat bonuses (&"damage_reduction",
@@ -338,6 +350,8 @@ func to_dict() -> Dictionary:
 	d[&"light_energy"] = light_energy
 	d[&"light_range"] = light_range
 	d[&"light_color"] = [light_color.r, light_color.g, light_color.b, light_color.a]
+	d[&"behavior_mod_id"] = String(behavior_mod_id)
+	d[&"mod_params"] = mod_params.duplicate()
 	d[&"fire_skill"] = fire_skill.resource_path if fire_skill != null else ""
 	d[&"alt_fire_skill"] = alt_fire_skill.resource_path if alt_fire_skill != null else ""
 	# stat_modifiers keys are StringName; convert to String for safe RPC transit.
@@ -382,6 +396,8 @@ static func from_dict(d: Dictionary) -> Item:
 	item.light_range = float(d.get(&"light_range", 12.0))
 	var lc: Array = d.get(&"light_color", [1, 1, 1, 1])
 	item.light_color = Color(lc[0], lc[1], lc[2], lc[3])
+	item.behavior_mod_id = StringName(d.get(&"behavior_mod_id", ""))
+	item.mod_params = (d.get(&"mod_params", {}) as Dictionary).duplicate()
 	var skill_path: String = d.get(&"fire_skill", "")
 	if skill_path != "":
 		item.fire_skill = load(skill_path) as Skill

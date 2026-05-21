@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="BehaviorMod" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/behavior_mod.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"reflex_loader"
+display_name = "Reflex Loader"
+slot = &"hands"
+description = "Reload speed scales with current resource — more resource, faster reload.
+
+Trade: −X% damage when resource is empty."
+param_ranges = {
+"reload_reduction_per_100_res": [30.0, 50.0],
+"empty_damage_penalty_pct": [8.0, 18.0]
+}
+is_implemented = false
+condition_id = &""
+class_restriction = &""

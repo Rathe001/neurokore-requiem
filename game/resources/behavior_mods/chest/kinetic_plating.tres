@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="BehaviorMod" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/behavior_mod.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"kinetic_plating"
+display_name = "Kinetic Plating"
+slot = &"chest"
+description = "Any single hit at or above the threshold triggers a brief invulnerability window.
+
+Trade: 8s lockout before it can fire again."
+param_ranges = {
+"threshold_pct_max_hp": [25.0, 50.0],
+"iframe_duration_sec": [0.4, 0.7]
+}
+is_implemented = false
+condition_id = &""
+class_restriction = &""

@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="BehaviorMod" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/behavior_mod.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"jetpack"
+display_name = "Jetpack"
+slot = &"back"
+description = "Hold jump for sustained vertical thrust, draining resource per second.
+
+Trade: −2 to −4 inventory slots (the rig displaces your pack)."
+param_ranges = {
+"drain_per_sec": [18.0, 26.0],
+"max_altitude_m": [4.0, 6.0],
+"inventory_slot_penalty": [2.0, 4.0]
+}
+is_implemented = false
+condition_id = &""
+class_restriction = &""

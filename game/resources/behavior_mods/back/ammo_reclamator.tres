@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="BehaviorMod" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/behavior_mod.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"ammo_reclamator"
+display_name = "Ammo Reclamator"
+slot = &"back"
+description = "Each kill has a chance to refund one round to your current magazine.
+
+Trade: weapon-swap speed reduced by 50%."
+param_ranges = {
+"refund_chance_pct": [8.0, 18.0]
+}
+is_implemented = false
+condition_id = &""
+class_restriction = &""

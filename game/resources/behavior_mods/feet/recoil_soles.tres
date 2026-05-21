@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="BehaviorMod" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/behavior_mod.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"recoil_soles"
+display_name = "Recoil Soles"
+slot = &"feet"
+description = "Landing from a fall above threshold height fires a shockwave (damage scales with fall distance).
+
+Trade: 1s landed-slow after every jump."
+param_ranges = {
+"shockwave_radius_m": [2.0, 4.0],
+"damage_pct_of_fall_distance": [30.0, 60.0]
+}
+is_implemented = false
+condition_id = &""
+class_restriction = &""

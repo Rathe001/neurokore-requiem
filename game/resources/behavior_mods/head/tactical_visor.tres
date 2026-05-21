@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="BehaviorMod" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/behavior_mod.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"tactical_visor"
+display_name = "Tactical Visor"
+slot = &"head"
+description = "Forward cone light that follows the cursor. Bright down-range; dark everywhere else.
+
+Trade: no peripheral or rear vision."
+param_ranges = {
+"cone_half_angle_deg": [25.0, 50.0]
+}
+is_implemented = false
+condition_id = &""
+class_restriction = &""

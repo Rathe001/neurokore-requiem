@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="BehaviorMod" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/behavior_mod.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"phase_cloak"
+display_name = "Phase Cloak"
+slot = &"back"
+description = "Sprinting drains resource and cloaks you against enemies beyond a distance threshold.
+
+Trade: cannot fire while cloaked."
+param_ranges = {
+"drain_per_sec": [10.0, 18.0],
+"visibility_threshold_m": [6.0, 10.0]
+}
+is_implemented = false
+condition_id = &""
+class_restriction = &""

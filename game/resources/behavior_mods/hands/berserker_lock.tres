@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="BehaviorMod" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/behavior_mod.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"berserker_lock"
+display_name = "Berserker Lock"
+slot = &"hands"
+description = "Holding fire ramps your fire rate over 2 seconds up to a cap.
+
+Trade: accuracy degrades along the ramp curve."
+param_ranges = {
+"max_fire_rate_multiplier": [1.35, 1.60],
+"max_accuracy_drop_pct": [10.0, 25.0]
+}
+is_implemented = false
+condition_id = &""
+class_restriction = &""

@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="BehaviorMod" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/behavior_mod.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"mag_boots"
+display_name = "Mag-Boots"
+slot = &"feet"
+description = "Briefly walk on vertical walls — climb up to 2m and back.
+
+Trade: −X% sprint speed (heavy electromagnets drag at speed)."
+param_ranges = {
+"wall_walk_duration_sec": [2.0, 4.0],
+"sprint_speed_penalty_pct": [8.0, 16.0]
+}
+is_implemented = false
+condition_id = &""
+class_restriction = &""
