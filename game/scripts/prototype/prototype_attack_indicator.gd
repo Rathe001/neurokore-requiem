@@ -964,7 +964,7 @@ static func _spawn_mist_drop_wall(parent: Node, world_pos: Vector3, wall_normal:
 	# projected into the wall plane, so drip streaks visibly run down.
 	var twist := Basis(wall_normal.normalized(), _wall_drip_twist_angle(wall_normal))
 	decal.global_basis = twist * Basis(rot)
-	_track_blood_decal(decal)
+	_track_blood_decal(decal, BLOOD_PRIORITY_WALL)
 
 
 # Kill-scene splatter pattern — one big primary decal at the kill point
@@ -1192,7 +1192,7 @@ static func spawn_blood_wall_splatter(parent: Node, world_pos: Vector3, wall_nor
 	var rot := Quaternion(Vector3.UP, wall_normal.normalized())
 	var twist := Basis(wall_normal.normalized(), _wall_drip_twist_angle(wall_normal))
 	decal.global_basis = twist * Basis(rot)
-	_track_blood_decal(decal)
+	_track_blood_decal(decal, BLOOD_PRIORITY_WALL)
 
 
 # ── Character blood (decals parented to a character's visual) ────────
@@ -1797,7 +1797,17 @@ static func _clamp_decal_size_to_walls(parent: Node, world_pos: Vector3, request
 # so the ring slot may hold a freed reference by the time eviction
 # fires. is_instance_valid catches that before the strict-typed
 # _fade_and_free signature would reject the freed Object.
-static func _track_blood_decal(decal: Decal) -> void:
+# Keep-priority tiers used by the eviction scan. Higher = kept longer.
+# Walls outrank floors because they're visually less likely to be
+# replaced by future spawns (every future kill drops more floor blood
+# but only some kills splatter the wall) AND because vertical surfaces
+# carry the "this happened here" feel more strongly than yet-another
+# pool on the ground.
+const BLOOD_PRIORITY_FLOOR: int = 1
+const BLOOD_PRIORITY_WALL: int = 2
+
+
+static func _track_blood_decal(decal: Decal, keep_priority: int = BLOOD_PRIORITY_FLOOR) -> void:
 	# Strictly-monotonic sorting_offset so the renderer never picks
 	# between two co-positioned decals frame-to-frame. The Y jitter
 	# elsewhere isn't enough — at iso distance the camera-distance
@@ -1809,14 +1819,15 @@ static func _track_blood_decal(decal: Decal) -> void:
 	# footprints) inherits the fix.
 	_blood_sort_counter += 1
 	decal.sorting_offset = float(_blood_sort_counter) * _BLOOD_SORT_STEP
-	# Stamp the decal with age (monotonic insertion counter) and visible
-	# XZ footprint area. The eviction scan uses both — primary key is
-	# area (smallest evicted first because small mist drops carry low
-	# storytelling value AND big pools cost more per-frame render time),
-	# secondary key is age (oldest of equal-area evicted first).
+	# Stamp the decal with keep-priority (wall vs floor), age (monotonic
+	# insertion counter), and visible XZ footprint area. Eviction scan
+	# sorts ascending across all three keys in that order — lowest
+	# priority first (floor before wall), then smallest area (mist
+	# drops before pools), then oldest (older seq before newer).
 	_blood_insert_seq += 1
 	decal.set_meta(&"_blood_seq", _blood_insert_seq)
 	decal.set_meta(&"_blood_area", decal.size.x * decal.size.z)
+	decal.set_meta(&"_blood_priority", keep_priority)
 	if _blood_decal_ring.size() < BLOOD_DECAL_MAX:
 		_blood_decal_ring.append(decal)
 		return
@@ -1824,6 +1835,7 @@ static func _track_blood_decal(decal: Decal) -> void:
 	# N = 400; ~50 decals/sec at horde scale gives ~20k comparisons/sec,
 	# trivial compared to the rendering cost the eviction avoids.
 	var best_idx: int = -1
+	var best_priority: int = 0x7FFFFFFF
 	var best_area: float = INF
 	var best_seq: int = 0x7FFFFFFF
 	for i in _blood_decal_ring.size():
@@ -1834,9 +1846,18 @@ static func _track_blood_decal(decal: Decal) -> void:
 			best_idx = i
 			break
 		var d := slot as Decal
+		var p: int = int(d.get_meta(&"_blood_priority", BLOOD_PRIORITY_FLOOR))
 		var a: float = float(d.get_meta(&"_blood_area", 0.0))
 		var s: int = int(d.get_meta(&"_blood_seq", 0))
-		if a < best_area or (a == best_area and s < best_seq):
+		var beats_best := false
+		if p < best_priority:
+			beats_best = true
+		elif p == best_priority and a < best_area:
+			beats_best = true
+		elif p == best_priority and a == best_area and s < best_seq:
+			beats_best = true
+		if beats_best:
+			best_priority = p
 			best_area = a
 			best_seq = s
 			best_idx = i
