@@ -64,9 +64,13 @@ const ANIM_CROUCH_MOVE: Array[StringName] = [&"xbot/crouch_walk", &"Crouch_Fwd",
 const ANIM_ATTACK := CombatConstants.ANIM_ATTACK
 const ANIM_FIRE := CombatConstants.ANIM_FIRE
 const ANIM_FIRE_MOVE := CombatConstants.ANIM_FIRE_MOVE
-const ANIM_JUMP_START: Array[StringName] = [&"Jump_Start"]
-const ANIM_JUMP_AIR: Array[StringName] = [&"Jump"]
-const ANIM_JUMP_LAND: Array[StringName] = [&"Jump_Land"]
+## X Bot has a single Jumping.fbx clip covering takeoff → airborne →
+## landing in one animation, so all three jump states reference the
+## same key. Legacy Quaternius names kept as fallbacks for any old
+## rig still mounted, but the player now ships X Bot by default.
+const ANIM_JUMP_START: Array[StringName] = [&"xbot/jump", &"Jump_Start"]
+const ANIM_JUMP_AIR: Array[StringName] = [&"xbot/jump", &"Jump"]
+const ANIM_JUMP_LAND: Array[StringName] = [&"xbot/jump", &"Jump_Land"]
 ## "Interact" is the legacy Quaternius name; the X Bot library has no
 ## dedicated interact clip, so we fall back to xbot/idle to suppress the
 ## no-match warning. The visual effect is that the player keeps playing
@@ -1525,16 +1529,22 @@ func _physics_process(delta: float) -> void:
 			# it. Reduced cap (60% of ground speed) and reduced accel so
 			# the rise still feels weighty; just enough lateral influence
 			# to clear knee-high clutter when starting from rest.
+			#
+			# Asymmetric application by design: only accelerates UP TO the
+			# air cap. A running jump (lateral speed already above the cap)
+			# coasts at its launch velocity for the entire arc — without
+			# this, `move_toward(flat, air_target)` would drag running
+			# jumps from ~8m/s down to ~4.8m/s and kill any pillar-hop
+			# distance. Standing-still jumps still get lateral nudges
+			# because they start below the cap.
 			const AIR_CONTROL_SPEED_FACTOR: float = 0.6
 			const AIR_CONTROL_ACCEL_FACTOR: float = 0.5
 			var flat := Vector2(velocity.x, velocity.z)
-			var air_target := Vector2(wish_dir.x, wish_dir.z) * move_speed * AIR_CONTROL_SPEED_FACTOR
-			# If existing horizontal speed exceeds the air cap (running jump),
-			# don't drag it back — only let air input ADD lateral velocity.
-			if wish_dir.length_squared() > 0.01:
-				var max_speed: float = maxf(flat.length(), air_target.length())
+			var air_cap: float = move_speed * AIR_CONTROL_SPEED_FACTOR
+			if wish_dir.length_squared() > 0.01 and flat.length() < air_cap:
+				var air_target := Vector2(wish_dir.x, wish_dir.z) * air_cap
 				var air_step := accel * AIR_CONTROL_ACCEL_FACTOR * delta
-				flat = flat.move_toward(air_target.limit_length(max_speed), air_step)
+				flat = flat.move_toward(air_target, air_step)
 				velocity.x = flat.x
 				velocity.z = flat.y
 	# Capture the wished horizontal motion before move_and_slide so step-up can
