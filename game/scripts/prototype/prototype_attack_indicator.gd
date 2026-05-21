@@ -927,11 +927,11 @@ static func _spawn_mist_drop_floor(parent: Node, world_pos: Vector3, blood_type:
 	# and size variation — some round and small, some elongated, some
 	# nearly as big as a kill satellite.
 	var drop_size := Vector3(randf_range(0.20, 0.65), 0.4, randf_range(0.20, 0.65))
-	# Drop lands inside an existing splat → grow it instead of stacking.
-	# Tighter inner ratio (0.4) than kill scenes so drops at the rim of
-	# a pool still spawn fresh, only dead-center drops merge.
+	# Tight merge zone (0.18) so most mist droplets stamp fresh — see
+	# spawn_blood_decal for the rationale on dropping the wide-merge
+	# behaviour now that sorting_offset removes the z-fight risk.
 	var new_avg_size: float = (drop_size.x + drop_size.z) * 0.5
-	if _try_grow_existing_decal(world_pos, new_avg_size, 0.4):
+	if _try_grow_existing_decal(world_pos, new_avg_size, 0.18):
 		return
 	var decal := Decal.new()
 	var variant := _get_blood_splatter_variant(blood_type)
@@ -986,7 +986,11 @@ static func spawn_blood_kill_scene(parent: Node, world_pos: Vector3, spray_dir: 
 	if parent == null:
 		return
 	spawn_blood_decal(parent, world_pos, blood_type)
-	var satellite_count: int = randi_range(2, 4)
+	# More satellites per kill (was 2-4). With the merge zone tightened
+	# elsewhere these mostly stamp as distinct decals — the BLOOD_DECAL_MAX
+	# cap is the real upper bound on density, and a horde wipe should
+	# move us toward it instead of well under it.
+	var satellite_count: int = randi_range(4, 7)
 	var spray_xz: Vector2 = Vector2.ZERO
 	if spray_dir.length_squared() > 0.0001:
 		spray_xz = Vector2(spray_dir.x, spray_dir.z).normalized()
@@ -1016,7 +1020,13 @@ static func spawn_blood_decal(parent: Node, world_pos: Vector3, blood_type: Stri
 	# one instead of stacking a new stamp on top. Same texture, just
 	# a larger size — accumulating hits build a visibly bigger pool.
 	var new_avg_size: float = (requested_size.x + requested_size.z) * 0.5
-	if _try_grow_existing_decal(world_pos, new_avg_size, 0.55):
+	# Tight merge threshold (0.55 → 0.20). The previous wide zone meant
+	# any kill within ~0.44 m of an existing pool got absorbed instead
+	# of stamping a fresh splat, so the BLOOD_DECAL_MAX cap of 250 never
+	# filled. With z-fight resolved via sorting_offset, overlapping
+	# stamps are visually safe — we now want a room PAINTED in blood
+	# rather than a few growing pools.
+	if _try_grow_existing_decal(world_pos, new_avg_size, 0.20):
 		return
 	var decal := Decal.new()
 	var variant := _get_blood_splatter_variant(blood_type)
