@@ -13,6 +13,10 @@ are mandatory.
 
 ## [Unreleased]
 
+### Added
+
+- **Behavior modifiers on armor drops** — every armor piece above Common rarity (Uncommon 50% chance, Rare/Unique 100%) now rolls one behavior modifier from a slot-specific pool. Mods are the identity layer: two chest pieces with identical stats and different mods play differently. 24 mods designed across six slots (head, chest, hands, legs, feet, back). Tooltip renders the mod with rolled param values and bright-green/dim-gray coloring based on whether the mod is currently active. Drops weight 85/15 toward already-active mods vs preview ("not yet wired") mods, so most drops feel live with the occasional roadmap-by-loot tease for upcoming behaviors. First two reference effects live now: **Servo Stride** (sprint costs no resource) and **Ammo Reclamator** (kills refund a round to your magazine).
+
 ### Fixed
 
 - **Blood decals no longer paint into pits.** Kill scenes spawned near a pit edge had their satellite splats and floor mist drops land in the empty space above the pit, leaving floating bloodstains hanging mid-air. Decals now skip any spawn point that falls inside an active pit's XZ footprint.
