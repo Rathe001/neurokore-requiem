@@ -2128,7 +2128,11 @@ static func _try_grow_existing_decal(world_pos: Vector3, new_avg_size: float, in
 # decals still read as the same fluid. `alpha` is passed through so
 # callers that already encode an intensity (footprints) preserve theirs.
 static func _decal_color_jitter(alpha: float = 1.0) -> Color:
-	var v: float = randf_range(0.70, 1.15)
+	# Narrow range (was 0.70-1.15) — the wide spread read as different
+	# palettes ("dried brown" vs "fresh bright red") side by side, not
+	# as subtle freshness variance. ±8% keeps a hint of variation
+	# without breaking the unified red read.
+	var v: float = randf_range(0.92, 1.08)
 	return Color(v, v, v, alpha)
 
 
