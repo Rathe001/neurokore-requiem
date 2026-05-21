@@ -100,9 +100,9 @@ sdfgi_energy = 1.0
 ; e.g. "cool shadows + warm highlights" looks that the three scalar
 ; knobs can't reach.
 adjustment_enabled = true
-adjustment_brightness = 0.95
-adjustment_contrast = 1.15
-adjustment_saturation = 1.2
+adjustment_brightness = 0.88
+adjustment_contrast = 1.30
+adjustment_saturation = 1.40
 
 ; agent_height matches the enemy CROUCH_HEIGHT (1.0) so the navmesh routes
 ; through low-ceiling crawlspaces. Enemies detect overhead clearance at run

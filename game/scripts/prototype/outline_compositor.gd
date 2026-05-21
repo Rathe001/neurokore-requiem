@@ -159,9 +159,12 @@ func attach(mesh: MeshInstance3D, color: Color = Color.WHITE) -> void:
 	flat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	flat.albedo_color = color
 	flat.cull_mode = BaseMaterial3D.CULL_DISABLED  # see both sides; outline reads the full silhouette
-	# Override every surface so multi-material meshes also render flat.
-	for i in mesh.mesh.get_surface_count():
-		copy.set_surface_override_material(i, flat)
+	# material_override > per-surface set_surface_override_material here —
+	# the latter doubles `material_*: Parameter "material" is null` renderer
+	# warnings because the SHADOW-pass query still touches the underlying
+	# Mesh's surface materials (which can be null on FBX imports).
+	# material_override short-circuits that path entirely.
+	copy.material_override = flat
 	parent.add_child(copy)
 	_copies[key] = copy
 
@@ -188,12 +191,11 @@ func set_color(mesh: MeshInstance3D, color: Color) -> void:
 		_copies.erase(key)
 		return
 	var mi := copy as MeshInstance3D
-	if mi == null or mi.mesh == null:
+	if mi == null:
 		return
-	for i in mi.mesh.get_surface_count():
-		var m := mi.get_surface_override_material(i)
-		if m is StandardMaterial3D:
-			(m as StandardMaterial3D).albedo_color = color
+	var m := mi.material_override
+	if m is StandardMaterial3D:
+		(m as StandardMaterial3D).albedo_color = color
 
 
 # ── Internals ───────────────────────────────────────────────────────────────

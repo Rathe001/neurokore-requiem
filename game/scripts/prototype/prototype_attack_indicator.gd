@@ -1037,9 +1037,9 @@ static func spawn_blood_decal(parent: Node, world_pos: Vector3, blood_type: Stri
 	decal.rotation.y = randf() * TAU
 	parent.add_child(decal)
 	# Drop the decal at floor height (y ≈ 0) plus a tiny per-spawn
-	# jitter so overlapping floor decals don't z-fight (every decal
-	# has a unique sort depth). Projection volume is ~0.6 m tall so a
-	# 1.5 cm shift is invisible.
+	# jitter. _track_blood_decal also assigns a unique sorting_offset
+	# (the actual z-fight fix); jitter is kept because it helps the
+	# renderer keep decal batches distinct.
 	decal.global_position = Vector3(world_pos.x, randf_range(_DECAL_Y_JITTER_MIN, _DECAL_Y_JITTER_MAX), world_pos.z)
 	_track_blood_decal(decal)
 	# Defer the wall clamp — see provisional-size comment above. The
@@ -1139,6 +1139,16 @@ const BLOOD_DECAL_CULL_LAYER: int = 1
 # is invisible at iso distance).
 const _DECAL_Y_JITTER_MIN: float = 0.001
 const _DECAL_Y_JITTER_MAX: float = 0.015
+# Monotonically increasing counter applied to Decal.sorting_offset so
+# every spawned blood decal has a strictly distinct sort position.
+# Without this two overlapping splats compete for the same depth and
+# the renderer alternates which one wins per-frame — visible as a
+# z-fight flicker on settled pools. Negative step → newer decals
+# render on top of older ones, which reads correctly (fresh blood
+# overrides dried). Reset at level load so the counter doesn't drift
+# arbitrarily far across sessions.
+static var _blood_sort_counter: int = 0
+const _BLOOD_SORT_STEP: float = -0.001
 # Wall drip jitter — drips don't run perfectly plumb (surface texture,
 # capillary action). ±15° around the vertical alignment keeps the
 # downward read while looking natural.
@@ -1245,6 +1255,17 @@ static func _clamp_decal_size_to_walls(parent: Node, world_pos: Vector3, request
 # fires. is_instance_valid catches that before the strict-typed
 # _fade_and_free signature would reject the freed Object.
 static func _track_blood_decal(decal: Decal) -> void:
+	# Strictly-monotonic sorting_offset so the renderer never picks
+	# between two co-positioned decals frame-to-frame. The Y jitter
+	# elsewhere isn't enough — at iso distance the camera-distance
+	# delta between two decals 1.5 cm apart in Y is below the depth
+	# sort's practical resolution and the picker flickers. Negative
+	# step → newer decals render on top of older ones, which reads
+	# correctly (fresh blood overrides dried). Centralised here so
+	# every spawn path (kill scene, mist droplets, wall splatter,
+	# footprints) inherits the fix.
+	_blood_sort_counter += 1
+	decal.sorting_offset = float(_blood_sort_counter) * _BLOOD_SORT_STEP
 	if _blood_decal_ring.size() < BLOOD_DECAL_MAX:
 		_blood_decal_ring.append(decal)
 		return
