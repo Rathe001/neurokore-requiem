@@ -10,10 +10,6 @@ var _outlined_meshes: Array[MeshInstance3D] = []
 var _hovered: bool = false
 var _tooltip_locked: bool = false
 
-# Static outline materials (shared across all enemies).
-static var _s_outline_mat: StandardMaterial3D
-static var _s_outline_mat_locked: StandardMaterial3D
-
 # Floor ring material instance (per-enemy, owns its emission color).
 var _floor_ring_mat: StandardMaterial3D
 
@@ -23,6 +19,12 @@ func setup(host: PrototypeEnemy) -> void:
 
 
 func reset() -> void:
+	# Detach any outline copies the compositor is holding for our meshes
+	# before clearing the list — otherwise pool-acquired enemies of a
+	# different class would carry over the previous outline.
+	for m in _outlined_meshes:
+		if is_instance_valid(m):
+			OutlineCompositor.detach(m)
 	_hovered = false
 	_tooltip_locked = false
 	_outlined_meshes.clear()
@@ -46,29 +48,21 @@ func _walk_meshes(node: Node) -> void:
 		_walk_meshes(child)
 
 func refresh_outline() -> void:
-	if _s_outline_mat == null:
-		# Opaque white + grow-and-cull-front to match HoverableInteractable's
-		# look (chests / switches / doors). The previous 0.6 alpha read as
-		# too subtle on the new humanoid character meshes.
-		_s_outline_mat = StandardMaterial3D.new()
-		_s_outline_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		_s_outline_mat.albedo_color = Color.WHITE
-		_s_outline_mat.cull_mode = BaseMaterial3D.CULL_FRONT
-		_s_outline_mat.grow = true
-		_s_outline_mat.grow_amount = PrototypeEnemy.OUTLINE_GROW
-	if _s_outline_mat_locked == null:
-		_s_outline_mat_locked = StandardMaterial3D.new()
-		_s_outline_mat_locked.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		_s_outline_mat_locked.albedo_color = PrototypeEnemy.OUTLINE_LOCKED_COLOR
-		_s_outline_mat_locked.cull_mode = BaseMaterial3D.CULL_FRONT
-		_s_outline_mat_locked.grow = true
-		_s_outline_mat_locked.grow_amount = PrototypeEnemy.OUTLINE_GROW
-	var mat: StandardMaterial3D = _s_outline_mat_locked if _tooltip_locked else _s_outline_mat
+	# Outline now routes through OutlineCompositor (screen-space silhouette)
+	# instead of the previous grow+cull-front material_overlay trick. The old
+	# approach drew every hard-normal seam as an internal line on the new
+	# Mixamo character meshes; the screen-space version gives a clean single
+	# silhouette regardless of mesh authoring. material_overlay also no longer
+	# fights with HitFlash for the same slot.
 	var should_show := _hovered or _tooltip_locked
+	var color: Color = PrototypeEnemy.OUTLINE_LOCKED_COLOR if _tooltip_locked else Color.WHITE
 	for mesh in _outlined_meshes:
 		if not is_instance_valid(mesh):
 			continue
-		mesh.material_overlay = mat if should_show else null
+		if should_show:
+			OutlineCompositor.attach(mesh, color)
+		else:
+			OutlineCompositor.detach(mesh)
 
 
 func on_mouse_entered() -> void:

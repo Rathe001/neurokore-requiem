@@ -6,19 +6,18 @@ extends StaticBody3D
 # loop can restore initial state. Subclasses provide the outline source mesh,
 # tooltip text, and any reset behavior.
 
-const OUTLINE_GROW := 0.06
-
 @export var display_name: String = ""
 
-var _outline: MeshInstance3D
+# The MeshInstance3D the OutlineCompositor wraps when the mouse enters
+# this body. Resolved once in _ready via _get_outline_source(); cached so
+# _on_mouse_exited can detach against the same source.
+var _outline_source: MeshInstance3D
 
 func _ready() -> void:
 	add_to_group(&"interactables")
 	add_to_group(&"resettable")
 	SpatialGrid.register(self, &"interactables")
-	var src := _get_outline_source()
-	if src != null and src.mesh != null:
-		_build_outline(src)
+	_outline_source = _get_outline_source()
 	mouse_entered.connect(_on_mouse_entered)
 	mouse_exited.connect(_on_mouse_exited)
 
@@ -36,34 +35,20 @@ func _get_tooltip_text() -> String:
 func reset_state() -> void:
 	pass
 
-func _build_outline(src: MeshInstance3D) -> void:
-	_outline = MeshInstance3D.new()
-	_outline.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var st := SurfaceTool.new()
-	st.create_from(src.mesh, 0)
-	_outline.mesh = st.commit()
-	var m := StandardMaterial3D.new()
-	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	m.albedo_color = Color.WHITE
-	m.cull_mode = BaseMaterial3D.CULL_FRONT
-	m.grow = true
-	m.grow_amount = OUTLINE_GROW
-	_outline.material_override = m
-	_outline.visible = false
-	src.add_child(_outline)
 
 func _on_mouse_entered() -> void:
-	if _outline != null:
-		_outline.visible = true
+	if _outline_source != null:
+		OutlineCompositor.attach(_outline_source, Color.WHITE)
 	add_to_group(&"hovered_clickable")
 	add_to_group(&"tooltip_target")
 	var text := _get_tooltip_text()
 	if text != "":
 		get_tree().call_group(&"interactable_tooltip", &"show_text", text)
 
+
 func _on_mouse_exited() -> void:
-	if _outline != null:
-		_outline.visible = false
+	if _outline_source != null:
+		OutlineCompositor.detach(_outline_source)
 	remove_from_group(&"hovered_clickable")
 	remove_from_group(&"tooltip_target")
 	get_tree().call_group(&"interactable_tooltip", &"hide_tooltip")

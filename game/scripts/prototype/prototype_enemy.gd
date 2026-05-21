@@ -895,22 +895,6 @@ func _on_mouse_exited() -> void:
 	_visuals.on_mouse_exited()
 	remove_from_group(&"tooltip_target")
 
-# HitFlash and EnemyVisuals.refresh_outline both write to the same
-# `material_overlay` slot — only one material can occupy it. When the
-# flash tween finishes it nulls the overlay, which also wipes any
-# hover outline the player is still drawing. Re-applying the outline
-# in the tween's `finished` signal restores it (no-op if the mouse
-# isn't currently over the enemy). instance_id capture so a freed
-# enemy mid-flash doesn't trip the lambda-capture guard.
-func _restore_outline_after(tween: Tween) -> void:
-	if tween == null or not tween.is_valid():
-		return
-	var enemy_id: int = get_instance_id()
-	tween.finished.connect(func() -> void:
-		var e := instance_from_id(enemy_id) as PrototypeEnemy
-		if e != null and e._visuals != null:
-			e._visuals.refresh_outline()
-	, CONNECT_ONE_SHOT)
 
 func set_tooltip_locked(on: bool) -> void:
 	_visuals.set_tooltip_locked(on)
@@ -952,7 +936,6 @@ func _client_show_hit(amount: int, multistrike: int, is_crit: bool) -> void:
 	DamageNumber.spawn(get_parent(), head, amount, multistrike, is_crit)
 	_visuals.play_hit_squash()
 	_hit_flash_tween = HitFlash.play(self, visual, _hit_flash_tween)
-	_restore_outline_after(_hit_flash_tween)
 
 func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_strength: float = 0.0, multistrike: int = 1, is_crit: bool = false, weapon_base_id: StringName = &"", is_explosion: bool = false) -> void:
 	if not _is_alive():
@@ -1053,7 +1036,6 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 		aggro()
 	_visuals.play_hit_squash()
 	_hit_flash_tween = HitFlash.play(self, visual, _hit_flash_tween)
-	_restore_outline_after(_hit_flash_tween)
 	_visuals.refresh_tooltip_if_hovered()
 	# Broadcast hit visuals to all clients so every player sees every hit's
 	# damage number, squash, and flash — not just the attacker.
@@ -1105,7 +1087,6 @@ func heal(amount: int) -> void:
 	var gained := _health - before
 	if gained > 0:
 		_hit_flash_tween = HitFlash.play(self, visual, _hit_flash_tween, HitFlash.HEAL_COLOR)
-		_restore_outline_after(_hit_flash_tween)
 		var head := global_position + Vector3(0.0, 1.8, 0.0)
 		DamageNumber.spawn_heal(get_parent(), head, gained)
 
