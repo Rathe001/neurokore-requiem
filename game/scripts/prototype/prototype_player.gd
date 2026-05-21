@@ -1141,6 +1141,15 @@ func on_enemy_killed() -> void:
 		if barrier_mult > 0.0:
 			bok = int(round(float(bok) * (1.0 + barrier_mult)))
 		_add_barrier(bok)
+	# Ammo Reclamator (backpack mod) — chance to refund one round to the
+	# current weapon's magazine on each kill. Quiet failure when nothing
+	# is equipped or the weapon isn't a bullet weapon.
+	var refund_chance := BehaviorModRegistry.get_active_param(&"backpack", &"ammo_reclamator", &"refund_chance_pct", 0.0)
+	if refund_chance > 0.0 and randf() * 100.0 < refund_chance:
+		var weapon: Item = InventoryState.get_equipped(&"weapon")
+		if weapon != null and weapon.is_bullet_weapon() and weapon.ammo_current < weapon.ammo_max:
+			weapon.ammo_current += 1
+			InventoryState.equipment_changed.emit()
 
 
 func _has_melee_equipped() -> bool:
@@ -1472,7 +1481,13 @@ func _physics_process(delta: float) -> void:
 			if _chromatic != null:
 				_chromatic.set_active(_sprinting)
 			if _sprinting and not infinite_res:
-				var drain := SPRINT_RESOURCE_PER_SEC * delta
+				# Servo Stride (legs mod) zeroes the sprint resource cost.
+				# Tradeoff (walk speed penalty) is applied separately
+				# wherever move_speed gets computed — see #68's wiring.
+				var sprint_cost: float = SPRINT_RESOURCE_PER_SEC
+				if BehaviorModRegistry.is_mod_equipped_and_active(&"legs", &"servo_stride"):
+					sprint_cost = 0.0
+				var drain := sprint_cost * delta
 				var was_above_zero := _resource_current > 0.0
 				_resource_current = maxf(0.0, _resource_current - drain)
 				_emit_resource_if_changed()

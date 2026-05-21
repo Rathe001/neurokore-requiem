@@ -6,13 +6,13 @@
 script = ExtResource("1_script")
 id = &"ammo_reclamator"
 display_name = "Ammo Reclamator"
-slot = &"back"
+slot = &"backpack"
 description = "Each kill has a chance to refund one round to your current magazine.
 
 Trade: weapon-swap speed reduced by 50%."
 param_ranges = {
 "refund_chance_pct": [8.0, 18.0]
 }
-is_implemented = false
+is_implemented = true
 condition_id = &""
 class_restriction = &""

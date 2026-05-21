@@ -6,7 +6,7 @@
 script = ExtResource("1_script")
 id = &"drone_bay"
 display_name = "Combat Drone Bay"
-slot = &"back"
+slot = &"backpack"
 description = "A small autonomous drone hovers above you and fires at locked or hovered targets at a fraction of your weapon DPS.
 
 Trade: −X% reload speed (the drone intercepts your shells for its own magazine)."

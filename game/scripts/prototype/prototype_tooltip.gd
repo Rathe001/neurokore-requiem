@@ -929,8 +929,35 @@ func _build_stats_text(item: Item, equipped: Item = null, force_text: bool = fal
 		var elem_color := Item.damage_type_color(elem_type)
 		var elem_hex := "#%02x%02x%02x" % [int(elem_color.r * 255), int(elem_color.g * 255), int(elem_color.b * 255)]
 		lines.append("Element: [color=%s]%s[/color]" % [elem_hex, elem_label])
-	# Head light mod
-	if item.light_mod != Item.LightMod.NONE:
+	# Behavior mod — identity-layer modifier. Bright green = currently
+	# active (implemented + any condition met); dim gray = preview / not
+	# yet active. Renders rolled param values inline so two drops of the
+	# same mod read differently. See BehaviorModRegistry for the
+	# active/inactive resolution.
+	if item.behavior_mod_id != &"":
+		var mod := BehaviorModRegistry.get_mod(item.behavior_mod_id)
+		if mod != null:
+			var active := BehaviorModRegistry.is_active(item.behavior_mod_id)
+			var name_color := "#6fdf6f" if active else "#808890"
+			var body_color := "#cfe5cf" if active else "#6e7479"
+			lines.append("")  # blank line separator above the mod block
+			lines.append("[color=%s][b]Mod: %s[/b][/color]" % [name_color, mod.display_name])
+			# Rolled param values, e.g. "Walk speed penalty: 12.4%"
+			for key in mod.param_ranges:
+				if not item.mod_params.has(key):
+					continue
+				var raw_value: float = float(item.mod_params[key])
+				var label := _format_mod_param_label(String(key))
+				var value_str := _format_mod_param_value(String(key), raw_value)
+				lines.append("[color=%s]  %s: %s[/color]" % [body_color, label, value_str])
+			# Description text — wraps via the tooltip's existing autowrap.
+			if mod.description != "":
+				lines.append("[color=%s][i]%s[/i][/color]" % [body_color, mod.description])
+			if not active and not mod.is_implemented:
+				lines.append("[color=%s][i](preview — not yet active)[/i][/color]" % body_color)
+	# Legacy head light mod (pre-behavior-mod-system items). Skip when the
+	# new behavior_mod_id is set — the new block above covers it.
+	if item.behavior_mod_id == &"" and item.light_mod != Item.LightMod.NONE:
 		var mod_name := "Light"
 		match item.light_mod:
 			Item.LightMod.FLASHLIGHT: mod_name = "Flashlight"
@@ -1080,6 +1107,39 @@ const _STAT_LABELS: Dictionary = {
 
 func _stat_display_name(stat_id: StringName) -> String:
 	return _STAT_LABELS.get(stat_id, (stat_id as String).capitalize())
+
+
+# Behavior-mod param key → human label. Param keys follow the convention
+# used in the .tres files (snake_case ending in unit, e.g.
+# "walk_speed_penalty_pct", "cooldown_sec"). Strip the trailing unit hint
+# and title-case the rest so the tooltip reads naturally.
+func _format_mod_param_label(key: String) -> String:
+	var stripped := key
+	for suffix in ["_pct", "_sec", "_m", "_per_sec", "_per_100_res", "_deg", "_multiplier"]:
+		if stripped.ends_with(suffix):
+			stripped = stripped.substr(0, stripped.length() - suffix.length())
+			break
+	return stripped.replace("_", " ").capitalize()
+
+
+# Behavior-mod param value → formatted display string with the right
+# unit suffix inferred from the key (consistent with _format_mod_param_
+# label so the value matches the label's stripped unit).
+func _format_mod_param_value(key: String, raw: float) -> String:
+	if key.ends_with("_pct"):
+		return "%.1f%%" % raw
+	if key.ends_with("_sec") or key.ends_with("_per_sec"):
+		return "%.2fs" % raw if key.ends_with("_sec") else "%.1f/s" % raw
+	if key.ends_with("_m"):
+		return "%.1fm" % raw
+	if key.ends_with("_deg"):
+		return "%.0f°" % raw
+	if key.ends_with("_multiplier"):
+		return "%.2f×" % raw
+	if key.ends_with("_per_100_res"):
+		return "%.1f%% per 100" % raw
+	# Fallback — raw float with one decimal.
+	return "%.1f" % raw
 
 
 func _build_skill_stats_text(skill: Skill, source: Item) -> String:

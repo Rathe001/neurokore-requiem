@@ -234,6 +234,11 @@ func roll(main_type: String, item_level: int, rarity: StringName, rng: RandomNum
 	# Universal secondary bonuses — every equippable item can roll +HP and +resource.
 	_roll_universal_bonuses(item, item_level, rarity, rng)
 
+	# Behavior mod — identity-layer modifier. Rolls on armor slots only;
+	# weapons/offhands/consumables get nothing. See _roll_behavior_mod for
+	# the per-rarity probabilities and the implemented/preview weighting.
+	_roll_behavior_mod(item, rarity, rng)
+
 	item.name_key = _build_name(main_type, item.sub_type, affix_labels, rng, item.model_name)
 	return item
 
@@ -492,6 +497,64 @@ func _roll_boots_stats(item: Item, item_level: int, rarity: StringName, rng: Ran
 
 ## Roll universal +HP and +resource bonuses. Every equippable item can get these.
 ## The amount scales with item level; chance scales with rarity.
+# Per-rarity chance an armor item rolls a behavior mod at all. Common
+# drops never get a mod (mod = identity-layer flavor, white items stay
+# bland); higher rarity guarantees one. Numbers can be retuned in #67's
+# soak pass.
+const MOD_ROLL_CHANCE: Dictionary = {
+	&"common": 0.0,
+	&"magic":  0.5,
+	&"rare":   1.0,
+	&"unique": 1.0,
+}
+# When a mod IS rolled, what fraction of the time it's drawn from the
+# implemented pool vs. the preview (unimplemented) pool. Bias toward
+# already-working mods so most drops feel "real," with the remainder
+# being a fun "this is coming" preview. See docs/systems.md "Behavior
+# mods" + the UX design discussion.
+const MOD_IMPLEMENTED_WEIGHT: float = 0.85
+
+
+# Rolls a behavior mod onto armor items (head/chest/hands/legs/feet/back).
+# No-op for weapons, offhands, consumables. The mod resource lives in the
+# registry; we store only the id + sampled param values on the item so
+# saves stay slim. Param sampling uses the same rarity-curve roller as
+# stat affixes so quality scales with item rarity.
+func _roll_behavior_mod(item: Item, rarity: StringName, rng: RandomNumberGenerator) -> void:
+	var slot: StringName = item.kind
+	# Only armor slots own mod pools — guard against weapons/offhands.
+	if BehaviorModRegistry.mods_for_slot(slot).is_empty():
+		return
+	var chance: float = float(MOD_ROLL_CHANCE.get(rarity, 0.0))
+	if rng.randf() >= chance:
+		return
+	# Pick pool: implemented (working) most of the time, preview rarely.
+	var pool: Array[BehaviorMod] = BehaviorModRegistry.implemented_mods_for_slot(slot)
+	var use_preview := pool.is_empty() or rng.randf() > MOD_IMPLEMENTED_WEIGHT
+	if use_preview:
+		pool = BehaviorModRegistry.mods_for_slot(slot)
+	if pool.is_empty():
+		return
+	var mod: BehaviorMod = pool[rng.randi() % pool.size()]
+	item.behavior_mod_id = mod.id
+	item.mod_params = _sample_mod_params(mod, rarity, rng)
+
+
+# Sample one float per param_ranges entry using the same rarity-curve
+# roller as stat affixes. Returns a Dictionary keyed by param name
+# matching the mod's design, which the tooltip + effect dispatch read.
+func _sample_mod_params(mod: BehaviorMod, rarity: StringName, rng: RandomNumberGenerator) -> Dictionary:
+	var out: Dictionary = {}
+	for key in mod.param_ranges:
+		var range_arr: Array = mod.param_ranges[key]
+		if range_arr.size() < 2:
+			continue
+		var lo: float = float(range_arr[0])
+		var hi: float = float(range_arr[1])
+		out[key] = _rarity_rollf(lo, hi, rarity, rng)
+	return out
+
+
 func _roll_universal_bonuses(item: Item, item_level: int, rarity: StringName, rng: RandomNumberGenerator) -> void:
 	# Weapons skip universal HP / resource bonuses entirely — those are
 	# incidental "vitality" stats that belong on armor and backpacks,

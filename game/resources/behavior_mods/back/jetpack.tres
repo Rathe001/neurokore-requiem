@@ -6,7 +6,7 @@
 script = ExtResource("1_script")
 id = &"jetpack"
 display_name = "Jetpack"
-slot = &"back"
+slot = &"backpack"
 description = "Hold jump for sustained vertical thrust, draining resource per second.
 
 Trade: −2 to −4 inventory slots (the rig displaces your pack)."

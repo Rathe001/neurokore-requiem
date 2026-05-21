@@ -6,7 +6,7 @@
 script = ExtResource("1_script")
 id = &"phase_cloak"
 display_name = "Phase Cloak"
-slot = &"back"
+slot = &"backpack"
 description = "Sprinting drains resource and cloaks you against enemies beyond a distance threshold.
 
 Trade: cannot fire while cloaked."
