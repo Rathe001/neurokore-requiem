@@ -54,7 +54,13 @@ var _wade_sensor: Area3D = null
 func _ready() -> void:
 	add_to_group(&"ragdoll_corpses")
 	collision_layer = LAYER_CORPSE
-	collision_mask = MASK_WORLD | MASK_PILLAR
+	# Include LAYER_CORPSE in the mask so corpses collide with each
+	# other — a group of enemies killed in a tight space now physically
+	# piles up instead of stacking at identical positions. Live
+	# entities (player, enemies, projectiles) still don't mask 32, so
+	# they walk through individual corpses unimpeded; the wade sensor
+	# handles the "push aside" feel for the player.
+	collision_mask = MASK_WORLD | MASK_PILLAR | LAYER_CORPSE
 	# Auto-sleep keeps resting bodies cheap — explosions / player push
 	# auto-wake on apply_central_impulse.
 	can_sleep = true
