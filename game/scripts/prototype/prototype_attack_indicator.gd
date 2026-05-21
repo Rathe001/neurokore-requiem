@@ -1371,10 +1371,19 @@ static func spawn_blood_on_receivers(parent: Node, kill_pos: Vector3, blood_type
 		var receiver := receiver_var as Node3D
 		var visual_center := _receiver_visual_center(receiver)
 		# Cast from kill point at chest height to the visual center.
-		# Any wall in between = skip.
-		query.from = kill_pos + Vector3(0.0, 1.0, 0.0)
+		# Any wall in between = skip. EXCLUDE the receiver itself —
+		# decorative pillars and other receivers that opt into the
+		# WORLD physics layer (so live entities collide with them)
+		# would otherwise block their own visibility ray and never
+		# get painted.
+		# Origin near floor (0.4 m) so low ceilings in crouch tunnels
+		# don't block side-paint rays through the room. The diagnostic
+		# was showing kills near low-ceiling segments getting blocked
+		# by overhead geometry — kill spray happens at body height,
+		# below most ceiling collision.
+		query.from = kill_pos + Vector3(0.0, 0.4, 0.0)
 		query.to = visual_center
-		query.exclude = []
+		query.exclude = [receiver.get_rid()] if receiver is CollisionObject3D else []
 		var hit := space.intersect_ray(query)
 		if not hit.is_empty():
 			# Wall (or any WORLD-layer geometry) between kill and prop —
