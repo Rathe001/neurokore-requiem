@@ -52,6 +52,11 @@ var _weapon_meters: WeaponMeterStrip = null
 var _meter_divider: ColorRect = null
 var _current_item: Item = null
 var _lmb_held: bool = false
+# RMB also locks now — supports the "sniper RMB focus → LMB shoot"
+# workflow where the player wants to commit to a target during the
+# wind-up. Lock stays active as long as EITHER LMB or RMB is held;
+# both must be released to dismiss the locked tooltip.
+var _rmb_held: bool = false
 # Increments on every show_* call and on hide_tooltip. The deferred resume
 # in _resize_then_show captures the value at call time; if it doesn't match
 # when the await resumes, a fresh show or a hide came in during the layout
@@ -99,11 +104,12 @@ func _process(_dt: float) -> void:
 	# While locked, keep repositioning (enemy may move) and periodically
 	# ask the locked target to push fresh content so status-effect timers
 	# and HP update in real time.
-	if _lmb_held:
+	if _is_locked():
 		# Enemy died while locked — auto-dismiss.
 		if _locked_target != null and is_instance_valid(_locked_target) \
 				and _locked_target.has_method(&"_is_alive") and not _locked_target._is_alive():
 			_lmb_held = false
+			_rmb_held = false
 			_set_lock_border(false)
 			_dismiss()
 			_release_target()
@@ -305,8 +311,8 @@ func _apply_theme() -> void:
 	var p: UIThemeConfig = UIThemeState.palette
 	if p == null:
 		return
-	var main_border: Color = LOCK_BORDER_COLOR if _lmb_held else p.panel_border
-	var main_w: int = 2 if _lmb_held else 1
+	var main_border: Color = LOCK_BORDER_COLOR if _is_locked() else p.panel_border
+	var main_w: int = 2 if _is_locked() else 1
 	_bg_style = _make_style(p.panel_bg, main_border, main_w)
 	_bg.add_theme_stylebox_override(&"panel", _bg_style)
 	_equipped_style = _make_style(p.panel_bg, p.panel_border, 1)
@@ -371,27 +377,48 @@ func _input(event: InputEvent) -> void:
 
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
-		if mb.button_index == MOUSE_BUTTON_LEFT:
-			if mb.pressed:
-				# Only lock when clicking on an enemy. Interactables (doors,
-				# switches, crates) shouldn't lock the tooltip — clicking them
-				# triggers an action, not a sustained inspection.
-				if not _lmb_held and visible and _anchor_target != null \
-						and _anchor_target.is_in_group(&"enemies"):
+		# Only enemies lock — interactables (doors / switches / crates)
+		# trigger an action on click, not a sustained inspection.
+		var anchored_on_enemy: bool = visible and _anchor_target != null \
+				and _anchor_target.is_in_group(&"enemies")
+		match mb.button_index:
+			MOUSE_BUTTON_LEFT:
+				if mb.pressed and not _lmb_held and anchored_on_enemy:
+					var was_locked := _is_locked()
 					_lmb_held = true
-					_set_lock_border(true)
-					_lock_target()
-			else:
-				if _lmb_held:
+					if not was_locked:
+						_set_lock_border(true)
+						_lock_target()
+				elif not mb.pressed and _lmb_held:
 					_lmb_held = false
-					_set_lock_border(false)
-					_dismiss()
-					_release_target()
+					if not _is_locked():
+						_set_lock_border(false)
+						_dismiss()
+						_release_target()
+			MOUSE_BUTTON_RIGHT:
+				if mb.pressed and not _rmb_held and anchored_on_enemy:
+					var was_locked := _is_locked()
+					_rmb_held = true
+					if not was_locked:
+						_set_lock_border(true)
+						_lock_target()
+				elif not mb.pressed and _rmb_held:
+					_rmb_held = false
+					if not _is_locked():
+						_set_lock_border(false)
+						_dismiss()
+						_release_target()
 		return
 
 	# Mouse-follow only for non-anchored (UI) tooltips.
-	if visible and not _lmb_held and _anchor_target == null and event is InputEventMouseMotion:
+	if visible and not _is_locked() and _anchor_target == null and event is InputEventMouseMotion:
 		_reposition((event as InputEventMouseMotion).position)
+
+
+# True when LMB or RMB is currently holding the tooltip locked on its
+# target. Single source of truth for every lock-state branch.
+func _is_locked() -> bool:
+	return _lmb_held or _rmb_held
 
 func _lock_target() -> void:
 	_locked_target = null

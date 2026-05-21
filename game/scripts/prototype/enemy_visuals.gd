@@ -54,8 +54,19 @@ func refresh_outline() -> void:
 	# Mixamo character meshes; the screen-space version gives a clean single
 	# silhouette regardless of mesh authoring. material_overlay also no longer
 	# fights with HitFlash for the same slot.
+	#
+	# Color hierarchy (lock > rarity > regular):
+	#   locked          → red    (OUTLINE_LOCKED_COLOR)   targeting signal
+	#   boss / named / affixed → gold (OUTLINE_SPECIAL_COLOR) "this one's special"
+	#   regular hover   → white                                  default
 	var should_show := _hovered or _tooltip_locked
-	var color: Color = PrototypeEnemy.OUTLINE_LOCKED_COLOR if _tooltip_locked else Color.WHITE
+	var color: Color
+	if _tooltip_locked:
+		color = PrototypeEnemy.OUTLINE_LOCKED_COLOR
+	elif _is_special_enemy():
+		color = PrototypeEnemy.OUTLINE_SPECIAL_COLOR
+	else:
+		color = Color.WHITE
 	for mesh in _outlined_meshes:
 		if not is_instance_valid(mesh):
 			continue
@@ -63,6 +74,20 @@ func refresh_outline() -> void:
 			OutlineCompositor.attach(mesh, color)
 		else:
 			OutlineCompositor.detach(mesh)
+
+
+# True when the enemy warrants the special-rarity outline tint —
+# bosses, named encounters, or any affixed (rare-pack) monster.
+func _is_special_enemy() -> bool:
+	if _host == null:
+		return false
+	if _host.is_boss:
+		return true
+	if _host.named_monster != null:
+		return true
+	if not _host.affixes.is_empty():
+		return true
+	return false
 
 
 func on_mouse_entered() -> void:

@@ -237,6 +237,11 @@ const ANIM_DEATH := CombatConstants.ANIM_DEATH
 
 const OUTLINE_GROW := 0.06           # match HoverableInteractable for parity with chests / switches
 const OUTLINE_LOCKED_COLOR := Color(1.0, 0.15, 0.15)
+# Amber-gold for rare/named/boss enemies on hover, matching the gold the
+# tooltip uses for affix labels and the named_monster.ring_tint default.
+# Reads as "this one's special" without competing with the red locked-target
+# signal — locked still wins when both apply.
+const OUTLINE_SPECIAL_COLOR := Color(1.0, 0.85, 0.2)
 
 # Random name palette for trash mobs — flavor for the augmentation-facility setting.
 # Bosses set their own display_name (assigned by the spawner) and skip the roll.
