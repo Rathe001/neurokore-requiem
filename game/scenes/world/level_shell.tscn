@@ -90,6 +90,20 @@ sdfgi_bounces = 2
 sdfgi_normal_bias = 1.1
 sdfgi_energy = 1.0
 
+; Color grading. Mild cyberpunk-noir lean — slightly darker (deeper
+; shadows), more contrast (punchy mids → highlights), and a touch
+; more saturation (neon pop on muzzle flashes, blood, glowing UI).
+; Doesn't replace lighting work, just tones what reaches the screen.
+; Dial-down knob: pull contrast back to 1.0 first, then saturation.
+; Future upgrade: assign `adjustment_color_correction = <Texture2D>`
+; (a 256x1 gradient strip) for full color-channel remapping — covers
+; e.g. "cool shadows + warm highlights" looks that the three scalar
+; knobs can't reach.
+adjustment_enabled = true
+adjustment_brightness = 0.95
+adjustment_contrast = 1.15
+adjustment_saturation = 1.2
+
 ; agent_height matches the enemy CROUCH_HEIGHT (1.0) so the navmesh routes
 ; through low-ceiling crawlspaces. Enemies detect overhead clearance at run
 ; time and shrink their capsule when entering one — without that, a 1.7m
