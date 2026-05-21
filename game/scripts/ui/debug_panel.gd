@@ -16,6 +16,7 @@ const BOOL_FIELDS: Array[Dictionary] = [
 	{"label_key": "DEBUG_DISABLE_ENEMIES", "key": &"disable_enemies"},
 	{"label_key": "DEBUG_SHOW_TELEGRAPHS", "key": &"show_attack_telegraphs"},
 	{"label_key": "DEBUG_SHOW_OVERLAY", "key": &"show_debug_overlay"},
+	{"label_key": "Color Grading", "key": &"color_grading_enabled"},
 ]
 
 # (option label, RetroFilterOverlay.RetroMode value). Order = dropdown order.

@@ -65,22 +65,34 @@ func _ready() -> void:
 	_subviewport.snap_2d_transforms_to_pixel = false
 	_subviewport.snap_2d_vertices_to_pixel = false
 	_subviewport.positional_shadow_atlas_size = 0
-	# A minimal environment with no fog / SSR / GI so the flat highlight
-	# colors render undisturbed (the world Environment would otherwise
-	# tint or fog them).
-	var env := Environment.new()
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0, 0, 0, 0)
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_DISABLED
-	var world := World3D.new()
-	world.environment = env
-	_subviewport.world_3d = world
+	# Share the main world so our outline camera can actually see the
+	# scene's nodes — a separate World3D would be empty (no nodes from
+	# the main scene reachable). The transparent background + flat color
+	# come from the camera's environment override below, not from a
+	# private World3D environment.
+	#
+	# `set_use_own_world_3d(false)` is the explicit default but stating
+	# it makes the intent obvious: we WANT to inherit the parent
+	# viewport's world.
+	_subviewport.own_world_3d = false
 	add_child(_subviewport)
 
 	_outline_cam = Camera3D.new()
 	_outline_cam.name = &"OutlineCamera"
 	_outline_cam.current = true
+	# cull_mask = layer 20 only → ONLY the outline copies render here.
+	# Source meshes are on layer 2 and the world is on layer 1; both
+	# stay invisible to this camera.
 	_outline_cam.cull_mask = HIGHLIGHT_LAYER_MASK
+	# Per-camera environment override — transparent background, no
+	# ambient / fog / GI. Without this the camera would use the level's
+	# Environment (the color-graded one) and tint our flat highlight
+	# colors. Camera.environment overrides World3D.environment.
+	var cam_env := Environment.new()
+	cam_env.background_mode = Environment.BG_COLOR
+	cam_env.background_color = Color(0, 0, 0, 0)
+	cam_env.ambient_light_source = Environment.AMBIENT_SOURCE_DISABLED
+	_outline_cam.environment = cam_env
 	_subviewport.add_child(_outline_cam)
 
 	_overlay_layer = CanvasLayer.new()

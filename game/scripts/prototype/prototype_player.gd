@@ -1354,6 +1354,19 @@ func _process(delta: float) -> void:
 	if not _fps_mode:
 		_update_interact_cursor()
 	_tick_fps_mouse_mode()
+	_apply_color_grading_toggle()
+
+
+# Mirror the DebugConfig.color_grading_enabled flag onto the cached
+# Environment's adjustment_enabled each frame. One bool compare + an
+# occasional property write — negligible cost, and lets the debug
+# panel flip the grading on/off live for A/B comparison.
+func _apply_color_grading_toggle() -> void:
+	if _world_env == null or DebugState.config == null:
+		return
+	var want: bool = DebugState.config.color_grading_enabled
+	if _world_env.adjustment_enabled != want:
+		_world_env.adjustment_enabled = want
 
 func _tick_fps_mouse_mode() -> void:
 	if not _fps_mode or _fps_transitioning:

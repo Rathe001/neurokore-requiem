@@ -36,3 +36,7 @@ extends Resource
 ## 4=Thermal, 5=Concussed, 6=Drunk, 7=Low HP, 8=Hallucination, 9=Glitch,
 ## 10=Noir, 11=Inverted. Mirrors RetroFilterOverlay.RetroMode.
 @export var retro_filter_mode: int = 0
+## Master toggle for the WorldEnvironment color grading
+## (adjustment_brightness/contrast/saturation). A/B the graded vs
+## ungraded look from the debug panel without restarting.
+@export var color_grading_enabled: bool = true
