@@ -110,6 +110,14 @@ func _process(_delta: float) -> void:
 	var main_cam: Camera3D = get_viewport().get_camera_3d()
 	if main_cam == null:
 		return
+	# Strip the highlight layer from the main camera's cull_mask so the
+	# outline copy meshes render ONLY in our SubViewport. Without this
+	# the main camera also sees the flat-white copy and the enemy reads
+	# as a fully-filled silhouette in the world view — defeating the
+	# "outline only" intent. Bitwise idempotent so we can re-run every
+	# frame without flicker.
+	if (main_cam.cull_mask & HIGHLIGHT_LAYER_MASK) != 0:
+		main_cam.cull_mask &= ~HIGHLIGHT_LAYER_MASK
 	_outline_cam.global_transform = main_cam.global_transform
 	_outline_cam.fov = main_cam.fov
 	_outline_cam.near = main_cam.near
@@ -132,13 +140,15 @@ func _on_viewport_size_changed() -> void:
 # ── Public API ──────────────────────────────────────────────────────────────
 
 ## Spawn an outline copy sibling for `mesh` that renders on the highlight
-## layer in `color`. Idempotent — if `mesh` is already attached, the call
-## is a no-op (use set_color() to change the color).
+## layer in `color`. If `mesh` is already attached, the color is updated
+## in place — so the hover-white → tooltip-locked-red transition just
+## needs another attach() call rather than callers tracking state.
 func attach(mesh: MeshInstance3D, color: Color = Color.WHITE) -> void:
 	if mesh == null or mesh.mesh == null:
 		return
 	var key: int = mesh.get_instance_id()
 	if _copies.has(key) and is_instance_valid(_copies[key]):
+		set_color(mesh, color)
 		return
 	var parent: Node = mesh.get_parent()
 	if parent == null:
