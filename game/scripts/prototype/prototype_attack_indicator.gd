@@ -691,7 +691,7 @@ static var _blood_bootprint_left_textures: Dictionary = {}
 # 250 gives clearly-bloodier rooms before the FIFO eviction kicks in,
 # at a modest perf cost (decals are frustum-culled so offscreen ones
 # are nearly free; in-camera cost is sampling overhead per pixel).
-const BLOOD_DECAL_MAX: int = 250
+const BLOOD_DECAL_MAX: int = 400
 static var _blood_decal_ring: Array[Decal] = []
 static var _blood_decal_head: int = 0
 
@@ -986,11 +986,11 @@ static func spawn_blood_kill_scene(parent: Node, world_pos: Vector3, spray_dir: 
 	if parent == null:
 		return
 	spawn_blood_decal(parent, world_pos, blood_type)
-	# More satellites per kill (was 2-4). With the merge zone tightened
-	# elsewhere these mostly stamp as distinct decals — the BLOOD_DECAL_MAX
-	# cap is the real upper bound on density, and a horde wipe should
-	# move us toward it instead of well under it.
-	var satellite_count: int = randi_range(4, 7)
+	# Heavy satellite count — the user reads "majority of the room
+	# painted" as the goal, and at 4-7 per kill a 30-enemy wipe still
+	# left visible bare floor. 8-14 satellites + tighter merge zone +
+	# 400-decal cap together push toward genuine room saturation.
+	var satellite_count: int = randi_range(8, 14)
 	var spray_xz: Vector2 = Vector2.ZERO
 	if spray_dir.length_squared() > 0.0001:
 		spray_xz = Vector2(spray_dir.x, spray_dir.z).normalized()
@@ -1002,7 +1002,9 @@ static func spawn_blood_kill_scene(parent: Node, world_pos: Vector3, spray_dir: 
 		if spray_xz != Vector2.ZERO and randf() < 0.7:
 			var spray_angle := atan2(spray_xz.x, spray_xz.y)
 			angle = spray_angle + randf_range(-PI * 0.4, PI * 0.4)
-		var dist: float = randf_range(0.6, 2.2)
+		# Wider distribution (was 0.6-2.2) so 8-14 satellites cover more
+		# floor area instead of piling near the kill point.
+		var dist: float = randf_range(0.8, 3.5)
 		var offset := Vector3(sin(angle), 0.0, cos(angle)) * dist
 		spawn_blood_decal(parent, world_pos + offset, blood_type)
 
@@ -1015,22 +1017,24 @@ static func spawn_blood_decal(parent: Node, world_pos: Vector3, blood_type: Stri
 	# Wide size range — 0.6 m to 2.5 m — so a kill scene's main + 2-4
 	# satellite splats vary clearly in scale. Independent X/Z gives
 	# shape variation too (squashed wide, squashed long, near-square).
-	# size.y is projection depth (decals project along -Y). Bumped from
-	# 0.6 → 2.0 so props standing on the floor (chairs, tables, cell
-	# bars, decorative pillars) catch splatter on their lower torso,
-	# not just the floor underneath them.
-	var requested_size := Vector3(randf_range(0.6, 2.5), 2.0, randf_range(0.6, 2.5))
+	# size.y is projection depth (-Y projection). Kept modest (0.6)
+	# because larger values made floor decals near walls paint a
+	# horizontal rectangle of blood UP the wall — the decal's volume
+	# extended into the wall, and the texture projected downward onto
+	# it. Props higher than ~30 cm don't get painted from the floor
+	# splatter; that's traded for not painting walls accidentally.
+	# Tall-prop coverage would need a separate dedicated pipeline
+	# (per-prop physics raycast on hit + side-projection decal).
+	var requested_size := Vector3(randf_range(0.6, 2.5), 0.6, randf_range(0.6, 2.5))
 	# If this spawn lands inside an existing splat, grow the existing
 	# one instead of stacking a new stamp on top. Same texture, just
 	# a larger size — accumulating hits build a visibly bigger pool.
 	var new_avg_size: float = (requested_size.x + requested_size.z) * 0.5
-	# Tight merge threshold (0.55 → 0.20). The previous wide zone meant
-	# any kill within ~0.44 m of an existing pool got absorbed instead
-	# of stamping a fresh splat, so the BLOOD_DECAL_MAX cap of 250 never
-	# filled. With z-fight resolved via sorting_offset, overlapping
-	# stamps are visually safe — we now want a room PAINTED in blood
-	# rather than a few growing pools.
-	if _try_grow_existing_decal(world_pos, new_avg_size, 0.20):
+	# Very tight merge threshold. Anything but a near-direct overlap
+	# stamps as a fresh decal so the room actually fills. sorting_offset
+	# in _track_blood_decal handles the z-fight risk that the wider
+	# merge zone used to defend against.
+	if _try_grow_existing_decal(world_pos, new_avg_size, 0.10):
 		return
 	var decal := Decal.new()
 	var variant := _get_blood_splatter_variant(blood_type)
