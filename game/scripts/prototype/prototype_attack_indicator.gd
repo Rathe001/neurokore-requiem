@@ -1275,7 +1275,28 @@ static func spawn_blood_on_receivers(parent: Node, kill_pos: Vector3, blood_type
 	var space := node.get_world_3d().direct_space_state
 	if space == null:
 		return
-	var receivers := SpatialGrid.query_radius(kill_pos, OBJECT_BLOOD_RADIUS, OBJECT_BLOOD_RECEIVER_GROUP)
+	# Group iteration instead of SpatialGrid.query_radius — SpatialGrid
+	# only allows ONE category per node, and our receivers are already
+	# registered there under their primary identity (DestructibleProp →
+	# "enemies", HoverableInteractable → "interactables"). The
+	# `_tracked.has(node)` short-circuit in SpatialGrid.register swallowed
+	# our second registration call, so the radius query came back empty
+	# every time. Group iteration sees all receivers regardless.
+	#
+	# O(n) over total live receivers, n ~50-100 per level, distance
+	# squared filter is microseconds — well below the cost of the four
+	# raycasts the function will issue anyway.
+	var all_receivers := node.get_tree().get_nodes_in_group(OBJECT_BLOOD_RECEIVER_GROUP)
+	if all_receivers.is_empty():
+		return
+	var radius_sq: float = OBJECT_BLOOD_RADIUS * OBJECT_BLOOD_RADIUS
+	var receivers: Array = []
+	for r_var in all_receivers:
+		if not (r_var is Node3D) or not is_instance_valid(r_var):
+			continue
+		var r := r_var as Node3D
+		if r.global_position.distance_squared_to(kill_pos) <= radius_sq:
+			receivers.append(r)
 	if receivers.is_empty():
 		return
 	# Shuffle so a horde clustered next to one prop doesn't always paint
@@ -1389,9 +1410,13 @@ static func _spawn_object_blood_decal(receiver: Node3D, impact_pos: Vector3, imp
 static func register_as_blood_receiver(node: Node3D) -> void:
 	if node == null or not is_instance_valid(node):
 		return
+	# Group membership only — SpatialGrid restricts each node to a
+	# single category, and our receivers are already registered there
+	# under their primary identity (DestructibleProp → "enemies",
+	# HoverableInteractable → "interactables", etc.). spawn_blood_on_receivers
+	# iterates the group directly and filters by distance manually.
 	if not node.is_in_group(OBJECT_BLOOD_RECEIVER_GROUP):
 		node.add_to_group(OBJECT_BLOOD_RECEIVER_GROUP)
-		SpatialGrid.register(node, OBJECT_BLOOD_RECEIVER_GROUP)
 	_walk_or_in_visual_layer(node, OBJECT_BLOOD_LAYER)
 
 
@@ -1999,7 +2024,12 @@ static func _make_splatter_image(seed: int, fluid_color: Color, wall_mode: bool 
 			)
 			var effective_r := core_base_r + perturb
 			if d <= effective_r:
-				var edge_t: float = clampf((effective_r - d) / 3.5, 0.0, 1.0)
+				# Softened from /3.5 → /6.0: wider alpha gradient at the
+				# core's outer edge so adjacent pool stamps blend through
+				# their partial-alpha rims instead of meeting at hard
+				# edges. Helps the "two overlapping pools = one big pool"
+				# read without changing the central body.
+				var edge_t: float = clampf((effective_r - d) / 6.0, 0.0, 1.0)
 				alpha[y * size + x] = maxf(alpha[y * size + x], edge_t)
 	# ── Layer 2: streak arms ──────────────────────────────────────────
 	# Streak origin:
