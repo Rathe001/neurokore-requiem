@@ -696,8 +696,18 @@ static var _blood_decal_ring: Array[Decal] = []
 static var _blood_decal_head: int = 0
 
 
+# Single gate for every blood spawn path. Players who flip
+# AccessibilityState.config.disable_blood in settings get a clean
+# combat presentation — hit-flash + damage numbers + sounds still
+# fire (those carry the actual feedback information), but no decals,
+# no mist particles, no bloody footprints. Hit early so we don't pay
+# any setup cost for visuals that won't appear.
+static func _blood_disabled() -> bool:
+	return AccessibilityState.config != null and AccessibilityState.config.disable_blood
+
+
 static func spawn_blood_burst(parent: Node, world_pos: Vector3, direction: Vector3 = Vector3.UP, count_mult: float = 1.0, blood_type: StringName = BLOOD_TYPE_HUMAN) -> void:
-	if parent == null:
+	if parent == null or _blood_disabled():
 		return
 	var particles := GPUParticles3D.new()
 	# Same pattern as the working CombatVisuals.spawn_impact_burst: set
@@ -983,7 +993,7 @@ static func _spawn_mist_drop_wall(parent: Node, world_pos: Vector3, wall_normal:
 # the satellites away from the shooter so the spray pattern matches the
 # kill direction (~70% of satellites in the away-from-shooter arc).
 static func spawn_blood_kill_scene(parent: Node, world_pos: Vector3, spray_dir: Vector3 = Vector3.ZERO, blood_type: StringName = BLOOD_TYPE_HUMAN) -> void:
-	if parent == null:
+	if parent == null or _blood_disabled():
 		return
 	spawn_blood_decal(parent, world_pos, blood_type)
 	# Heavy satellite count — the user reads "majority of the room
@@ -1010,7 +1020,7 @@ static func spawn_blood_kill_scene(parent: Node, world_pos: Vector3, spray_dir: 
 
 
 static func spawn_blood_decal(parent: Node, world_pos: Vector3, blood_type: StringName = BLOOD_TYPE_HUMAN) -> void:
-	if parent == null:
+	if parent == null or _blood_disabled():
 		return
 	if _is_over_pit(parent, world_pos):
 		return
@@ -1101,7 +1111,7 @@ static func _apply_wall_clamp_deferred(decal: Decal, world_pos: Vector3, request
 # face. Slight offset along the normal keeps the decal from z-fighting
 # with the wall surface.
 static func spawn_blood_wall_splatter(parent: Node, world_pos: Vector3, wall_normal: Vector3, blood_type: StringName = BLOOD_TYPE_HUMAN) -> void:
-	if parent == null:
+	if parent == null or _blood_disabled():
 		return
 	if wall_normal.length_squared() < 0.0001:
 		return
@@ -1155,6 +1165,8 @@ static func spawn_blood_on_character(character_visual: Node3D, world_impact_pos:
 	if character_visual == null or not is_instance_valid(character_visual):
 		return
 	if not character_visual.is_inside_tree():
+		return
+	if _blood_disabled():
 		return
 	# Per-character lifecycle list. Tracks live decals so we can evict
 	# the oldest when the cap is hit and detect freed entries.
@@ -1478,7 +1490,7 @@ static func is_in_blood(world_pos: Vector3) -> bool:
 # "footprints"). `right_foot` selects between the right-foot silhouette
 # and its mirror so a trail of prints alternates L/R.
 static func spawn_blood_footprint(parent: Node, world_pos: Vector3, forward_dir: Vector3, intensity: float, right_foot: bool = true, blood_type: StringName = BLOOD_TYPE_HUMAN) -> void:
-	if parent == null:
+	if parent == null or _blood_disabled():
 		return
 	var decal := Decal.new()
 	decal.texture_albedo = _get_blood_bootprint_texture(right_foot, blood_type)

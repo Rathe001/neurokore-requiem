@@ -117,16 +117,36 @@ func _build_audio_tab() -> VBoxContainer:
 
 func _build_accessibility_tab() -> VBoxContainer:
 	var page := _make_tab_page("Accessibility")
-	# Placeholder hint while the accessibility section has no controls.
-	# Replace this with real toggles (reduce camera effects, etc.) as
-	# they land.
-	var hint := Label.new()
-	hint.text = "MENU_SETTINGS_ACCESSIBILITY_HINT"
-	hint.theme_type_variation = &"SubLabel"
-	hint.modulate = Color(1.0, 1.0, 1.0, 0.6)
-	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	page.add_child(hint)
+	page.add_child(_make_accessibility_check(
+		"MENU_SETTINGS_REDUCE_CAMERA_EFFECTS",
+		&"reduce_camera_effects",
+	))
+	page.add_child(_make_accessibility_check(
+		"MENU_SETTINGS_DISABLE_BLOOD",
+		&"disable_blood",
+	))
 	return page
+
+
+# Build a checkbox row backed by an AccessibilityConfig boolean field.
+# Toggle is reactive: flipping it updates the config and triggers a
+# save through AccessibilityState.save() so the value persists across
+# sessions.
+func _make_accessibility_check(label_key: String, field: StringName) -> CheckBox:
+	var check := CheckBox.new()
+	check.text = label_key
+	check.add_theme_font_size_override(&"font_size", UIThemeState.palette.font_size_sublabel)
+	var cfg: AccessibilityConfig = AccessibilityState.config
+	if cfg != null:
+		check.button_pressed = bool(cfg.get(field))
+	check.toggled.connect(func(pressed: bool) -> void:
+		var c: AccessibilityConfig = AccessibilityState.config
+		if c == null:
+			return
+		c.set(field, pressed)
+		AccessibilityState.save()
+	)
+	return check
 
 
 func _make_tab_page(node_name: String) -> VBoxContainer:
