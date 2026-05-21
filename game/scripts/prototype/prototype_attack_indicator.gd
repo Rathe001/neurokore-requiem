@@ -654,11 +654,15 @@ const BLOOD_DROPLET_LIFETIME: float = 0.45
 const BLOOD_BURST_SPEED_MIN: float = 2.0
 const BLOOD_BURST_SPEED_MAX: float = 4.0
 
-static func blood_color_for(blood_type: StringName) -> Color:
-	# Dictionary.get returns Variant — cast to Color so static typing
-	# downstream (texture generators, particle materials) doesn't trip.
-	var c: Variant = BLOOD_PALETTES.get(blood_type, BLOOD_PALETTES[BLOOD_TYPE_HUMAN])
-	return c as Color
+static func blood_color_for(_blood_type: StringName) -> Color:
+	# All fluids currently render as human red — the cyborg cyan and
+	# machine black variants read as "wrong palette" rather than "different
+	# faction bleeds different fluid" in the noir lighting (the cyan one
+	# in particular looked like spilled paint). Palette dict + per-enemy
+	# blood_type plumbing is kept intact; flip this back to
+	# `BLOOD_PALETTES.get(blood_type, BLOOD_PALETTES[BLOOD_TYPE_HUMAN])`
+	# to re-enable multi-fluid once the per-faction visual reads cleanly.
+	return BLOOD_PALETTES[BLOOD_TYPE_HUMAN]
 
 # Multiple splatter texture variants per blood type, baked once and
 # picked from at random per spawn so adjacent decals don't read as
