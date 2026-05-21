@@ -1737,6 +1737,72 @@ static func _make_splatter_image(seed: int, fluid_color: Color, wall_mode: bool 
 				if d <= tip_r:
 					var edge_t: float = clampf((tip_r - d) / 2.0, 0.0, 1.0)
 					alpha[py * size + px] = maxf(alpha[py * size + px], edge_t)
+	# ── Layer 3.5: whip streaks (the "tadpole" look) ──────────────────
+	# Long, very thin curved lines ending in a small bead. These read as
+	# fluid droplets that broke off the impact at high velocity and
+	# stretched into a tail before landing. Distinct from Layer 2's
+	# streak arms (thicker / radiating spikes) — whip streaks are 3-4×
+	# longer, hair-thin, and slightly curved by a perpendicular sway.
+	# Skipped on wall mode; gravity drips already cover the look there.
+	if not wall_mode:
+		var whip_count: int = rng.randi_range(3, 7)
+		var whip_origin: Vector2 = core_center
+		for i in whip_count:
+			var raw_angle: float = rng.randf() * TAU
+			var angle: float = lerp_angle(raw_angle, streak_bias_angle, streak_bias_strength)
+			var length: float = rng.randf_range(float(size) * 0.30, float(size) * 0.48)
+			var base_thick: float = rng.randf_range(0.7, 1.2)  # hair-thin
+			# Perpendicular sway — small lateral arc so the whip curves
+			# instead of running ruler-straight. Amplitude scales with
+			# length so longer whips arc proportionally further.
+			var sway_amp: float = length * rng.randf_range(0.05, 0.20)
+			var sway_sign: float = 1.0 if rng.randf() < 0.5 else -1.0
+			var dir := Vector2(cos(angle), sin(angle))
+			var perp := Vector2(-dir.y, dir.x)
+			# Sample the whip as a parametric curve; rasterize each
+			# step's small thickness disc. ~24 steps gives a smooth line
+			# without leaving gaps at the lowest base_thick values.
+			var steps: int = 24
+			var prev: Vector2 = whip_origin + dir * (core_base_r * 0.9)
+			for s in range(1, steps + 1):
+				var t: float = float(s) / float(steps)
+				# Quadratic ease so the curve bulges outward then snaps
+				# back toward the line — natural-looking whip arc.
+				var sway_t: float = sin(t * PI) * sway_amp * sway_sign
+				var pt: Vector2 = whip_origin + dir * (core_base_r * 0.9 + (length - core_base_r * 0.9) * t) + perp * sway_t
+				# Local thickness tapers from base toward 30% of base at tail.
+				var local_thick: float = base_thick * lerpf(1.0, 0.30, t)
+				# Rasterize this segment as a short fat line from prev to pt.
+				var seg_min_x: int = int(maxf(0.0, minf(prev.x, pt.x) - local_thick - 1.0))
+				var seg_max_x: int = int(minf(float(size), maxf(prev.x, pt.x) + local_thick + 1.0))
+				var seg_min_y: int = int(maxf(0.0, minf(prev.y, pt.y) - local_thick - 1.0))
+				var seg_max_y: int = int(minf(float(size), maxf(prev.y, pt.y) + local_thick + 1.0))
+				var ab: Vector2 = pt - prev
+				var ab_len_sq: float = maxf(ab.length_squared(), 0.0001)
+				for py in range(seg_min_y, seg_max_y):
+					for px in range(seg_min_x, seg_max_x):
+						var p := Vector2(float(px), float(py))
+						var u: float = clampf((p - prev).dot(ab) / ab_len_sq, 0.0, 1.0)
+						var closest := prev + ab * u
+						var d := p.distance_to(closest)
+						if d <= local_thick:
+							var edge_t: float = clampf((local_thick - d) / 1.5, 0.0, 1.0)
+							alpha[py * size + px] = maxf(alpha[py * size + px], edge_t)
+				prev = pt
+			# Terminal bead — bigger than the whip's tail thickness,
+			# centered on the final point. Sells the "droplet at the end"
+			# read.
+			var bead_r: float = rng.randf_range(1.3, 2.4)
+			var bead_min_x: int = int(maxf(0.0, prev.x - bead_r - 1.0))
+			var bead_max_x: int = int(minf(float(size), prev.x + bead_r + 1.0))
+			var bead_min_y: int = int(maxf(0.0, prev.y - bead_r - 1.0))
+			var bead_max_y: int = int(minf(float(size), prev.y + bead_r + 1.0))
+			for py in range(bead_min_y, bead_max_y):
+				for px in range(bead_min_x, bead_max_x):
+					var d := Vector2(float(px), float(py)).distance_to(prev)
+					if d <= bead_r:
+						var edge_t: float = clampf((bead_r - d) / 1.5, 0.0, 1.0)
+						alpha[py * size + px] = maxf(alpha[py * size + px], edge_t)
 	# ── Layer 3: satellite drops ──────────────────────────────────────
 	# Drops follow the same directional bias as streaks so a one-sided
 	# splash variant has all its drops on one side too.
@@ -1765,6 +1831,41 @@ static func _make_splatter_image(seed: int, fluid_color: Color, wall_mode: bool 
 				if d <= drop_r:
 					var edge_t: float = clampf((drop_r - d) / 1.5, 0.0, 1.0)
 					alpha[py * size + px] = maxf(alpha[py * size + px], edge_t)
+	# ── Layer 4: micro-spray ──────────────────────────────────────────
+	# Dense scatter of 1-2 pixel "specks" radiating from the impact —
+	# the fine spray cloud that surrounds real splatters. Without this
+	# the texture reads as "lobed blob + arms" (the flower-petal look);
+	# with it, the splat gets the dotted halo that sells "high-velocity
+	# fluid impact". Same directional bias as streaks/drops so a
+	# one-sided variant stays one-sided.
+	var spray_count: int = 80 if wall_mode else 120
+	var spray_origin: Vector2 = core_center if wall_mode else center
+	for i in spray_count:
+		var raw_angle: float = rng.randf() * TAU
+		var angle: float = lerp_angle(raw_angle, streak_bias_angle, streak_bias_strength * 0.5)
+		# Distance distribution: bias toward farther distances (cube-rooted
+		# uniform) so the spray clusters at the splat's outer edge rather
+		# than piling in the dense core. Caps short of the texture edge.
+		var dist_max: float = float(size) * 0.48
+		if wall_mode:
+			dist_max = minf(dist_max, float(size) - core_center.y - 3.0)
+		var u: float = rng.randf()
+		var dist: float = lerpf(core_base_r * 1.2, dist_max, pow(u, 0.4))
+		var sp_pos: Vector2 = spray_origin + Vector2(cos(angle), sin(angle)) * dist
+		var sx: int = int(sp_pos.x)
+		var sy: int = int(sp_pos.y)
+		if sx < 0 or sx >= size or sy < 0 or sy >= size:
+			continue
+		# 70% single pixel, 30% 2-pixel cluster — the bigger ones feel
+		# like the smallest drops, the singles read as airborne mist.
+		var speck_a: float = rng.randf_range(0.55, 1.0)
+		alpha[sy * size + sx] = maxf(alpha[sy * size + sx], speck_a)
+		if rng.randf() < 0.3:
+			# Add one adjacent pixel at slightly lower alpha for a "soft" speck.
+			var nx: int = sx + (1 if rng.randf() < 0.5 else -1)
+			var ny: int = sy + (1 if rng.randf() < 0.5 else -1)
+			if nx >= 0 and nx < size and ny >= 0 and ny < size:
+				alpha[ny * size + nx] = maxf(alpha[ny * size + nx], speck_a * 0.7)
 	for y in size:
 		for x in size:
 			var a: float = alpha[y * size + x]
