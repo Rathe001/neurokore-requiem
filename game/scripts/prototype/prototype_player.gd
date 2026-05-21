@@ -796,9 +796,17 @@ func _ready() -> void:
 	_play_anim(ANIM_IDLE)
 	_apply_class_appearance()
 	_build_light_mount()
-	var we_node := get_parent().get_node_or_null("WorldEnvironment") as WorldEnvironment
-	if we_node != null:
-		_world_env = we_node.environment
+	# Walk up the ancestor chain looking for the WorldEnvironment sibling.
+	# Pre-MP refactor the player was a direct child of LevelShell so
+	# get_parent() worked; now players sit under PlayersContainer, so the
+	# WorldEnvironment is the player's GRANDPARENT's child.
+	var ancestor: Node = get_parent()
+	while ancestor != null and _world_env == null:
+		var we_node := ancestor.get_node_or_null(^"WorldEnvironment") as WorldEnvironment
+		if we_node != null:
+			_world_env = we_node.environment
+			break
+		ancestor = ancestor.get_parent()
 	if resource_pool != null:
 		_resource_current = float(resource_pool.start_value)
 		_resource_last_int = int(_resource_current)
