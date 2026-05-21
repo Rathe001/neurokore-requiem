@@ -19,8 +19,13 @@ display_name = "Loot Crate"
 ; below is 1.5 × 0.8 × 1.2m. Uniform 0.55 scale shrinks the model so its
 ; widest axis fits the collision footprint; smaller axes have a bit of
 ; clearance which is fine.
+;
+; The .glb's local origin sits above the bottom of the visible mesh,
+; so at the LootCrate's Y=0 the visual floats above the floor. Y offset
+; of -0.31 (~ scale 0.55 × the .glb's bbox half-height) seats the
+; visible bottom flush with the floor.
 [node name="Visual" parent="." instance=ExtResource("crate_visual")]
-transform = Transform3D(0.55, 0, 0, 0, 0.55, 0, 0, 0, 0.55, 0, 0, 0)
+transform = Transform3D(0.55, 0, 0, 0, 0.55, 0, 0, 0, 0.55, 0, -0.31, 0)
 
 [node name="Collision" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)
