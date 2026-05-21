@@ -43,19 +43,20 @@ const FIRE_DB := 0.0
 const IMPACT_DB := -3.0
 const MISS_DB := -6.0
 
-# Per-play variance — gives every shot a slightly different timbre so
-# repeated fires don't read as a mechanical pulse, and enemies sound
-# audibly distinct from the player so the mix doesn't blur when both
-# are shooting.
+# Per-play variance — slight pitch/volume jitter so repeated fires
+# don't read as a mechanical pulse.
 #
-# Pitch: player stays close to 1.0 (subtle variance), enemies are
-# consistently lower so the player's "voice" carries above incoming
-# fire. Range is per-shot, so each tick / enemy / volley gets fresh
-# randomisation.
+# Enemies were previously played at a deeper pitch range and -6 dB
+# to differentiate them from the player, but it made enemy fire read
+# as "wrong" / "old" sound effects rather than the same weapon at a
+# different position. Both sides now share PLAYER_PITCH_RANGE and no
+# attenuation — distance attenuation on AudioStreamPlayer3D + the
+# screen-space camera already provide enough spatial cue to tell who
+# is firing.
 const PLAYER_PITCH_RANGE := Vector2(0.96, 1.04)
-const ENEMY_PITCH_RANGE := Vector2(0.78, 0.92)
+const ENEMY_PITCH_RANGE := PLAYER_PITCH_RANGE
 const VOLUME_JITTER_DB := 1.5  # ± this many dB on top of the category offset
-const ENEMY_ATTEN_DB := -6.0   # blanket cut so enemy fire sits behind player SFX
+const ENEMY_ATTEN_DB := 0.0    # was -6.0; now matched to player so same sample = same loudness
 
 # Mapping from enemy weapon_id → player weapon_base_id so enemies reuse the
 # same sound sets. Enemies that carry a weapon with no player equivalent

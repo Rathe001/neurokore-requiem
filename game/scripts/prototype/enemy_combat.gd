@@ -291,6 +291,13 @@ func cast_ranged_attack(player: Node3D, aim: Vector3) -> void:
 				var offset_angle := (float(i) - half) * spread_rad
 				var rotated_aim := center_aim.rotated(Vector3.UP, offset_angle)
 				_spawn_enemy_projectile(rotated_aim, ba_dmg_mult, ba_blast)
+		# One fire sound per burst tick — pellets of a shotgun / accelerator
+		# volley leave the barrel together, so stacking N sounds reads as
+		# echoey / over-loud. _spawn_enemy_projectile NO LONGER plays its
+		# own per-projectile sound; this call covers all paths.
+		var wid: StringName = _host.enemy_class.weapon_id if _host.enemy_class != null else &""
+		if wid != &"":
+			WeaponSounds.play_fire(wid, _host.global_position)
 	_host._change_state(PrototypeEnemy.State.CHASING)
 
 
@@ -321,8 +328,9 @@ func _spawn_enemy_projectile(aim: Vector3, skill_damage_mult: float = 1.0, blast
 	proj.global_position = _host.global_position + Vector3(0.0, 1.4, 0.0)
 	proj.monitoring = true
 	proj.reset()
-	var proj_wid: StringName = _host.enemy_class.weapon_id if _host.enemy_class != null else &""
-	WeaponSounds.play_fire(proj_wid, proj.global_position)
+	# Fire sound is played ONCE per volley by the caller (basic_attack or
+	# skill cast), not per projectile — shotgun / accelerator pellets all
+	# emerge in the same frame and stacking 6 sounds reads as a phaser.
 
 
 func apply_enemy_aim_spread(aim: Vector3) -> Vector3:
@@ -459,6 +467,11 @@ func _cast_skill_projectile(target: Node3D, aim: Vector3, skill: EnemySkill) -> 
 				var offset_angle := (float(i) - half) * spread_rad
 				var rotated_aim := center_aim.rotated(Vector3.UP, offset_angle)
 				_spawn_skill_projectile(rotated_aim, skill)
+		# One sound per burst tick — was previously silent because
+		# _spawn_skill_projectile doesn't play fire on its own.
+		var skill_wid: StringName = _host.enemy_class.weapon_id if _host.enemy_class != null else &""
+		if skill_wid != &"":
+			WeaponSounds.play_fire(skill_wid, _host.global_position)
 
 
 func _spawn_skill_projectile(aim: Vector3, skill: EnemySkill) -> void:

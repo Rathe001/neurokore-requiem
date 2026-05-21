@@ -437,11 +437,15 @@ func _ready() -> void:
 	_setup_hover()
 	# Normalise scene-default mesh's bones too — alien/vanguard might
 	# also use non-mixamorig_ prefixes (we know vanguard is fine, but
-	# this is safe / idempotent).
+	# this is safe / idempotent). Also backfill null surface materials
+	# on the default char so the renderer doesn't fire `material_*:
+	# Parameter "material" is null` at scene load (before _apply_class_mesh
+	# would have run the same backfill on a swapped-in mesh).
 	if visual != null:
 		var default_skel := _find_skeleton(visual)
 		if default_skel != null:
 			_normalize_skeleton_bone_prefix(visual, default_skel)
+		XBotRagdoll.ensure_surface_materials(visual)
 
 
 # Move every MeshInstance3D under `visual` off the default visual layer
