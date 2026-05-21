@@ -6,6 +6,23 @@ A Diablo 2-style ARPG built in Godot 4. Fixed-camera 3D, low-poly meshes with PB
 
 Early prototype. **Steam playtest is live** (v0.1.1, 2026-05-06). The code under `game/` is the source of truth for what currently works — `git log` and the scripts there are more accurate than any status writeup.
 
+## Cloning
+
+Character meshes (`*.fbx`) are stored in [Git LFS](https://git-lfs.github.com/). Install once per machine before cloning, otherwise FBXs will appear as ~1KB pointer files and Godot will fail to import them:
+
+```bash
+# macOS
+brew install git-lfs && git lfs install
+
+# Windows (winget)
+winget install GitHub.GitLFS && git lfs install
+
+# Linux (Debian/Ubuntu)
+sudo apt install git-lfs && git lfs install
+```
+
+Then a normal `git clone` will pull LFS-backed files transparently. On an existing clone, `git lfs pull` fetches them after-the-fact.
+
 ## Design pillars
 
 - **Class identity is paramount** — eight classes (two origins + six specializations), each plays like a different game mode.
