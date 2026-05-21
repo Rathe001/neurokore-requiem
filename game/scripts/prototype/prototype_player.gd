@@ -37,8 +37,12 @@ const _PLAYER_FEMALE_SCENE: PackedScene = preload("res://assets/characters/playe
 # sits flush with the CharacterBody3D's floor. Female FBX has the origin
 # slightly above the feet — scaled up via the .import root_scale, that
 # offset pushes her geometry into the floor. Lift the Character node by
-# this much to compensate.
-const _PLAYER_FEMALE_Y_OFFSET: float = 0.02
+# this much to compensate. Recomputed after _PLAYER_FEMALE_SCALE: the
+# female model scales from its center, so a +30% scale drops the feet
+# ~half-height × 0.30 = ~0.27 m below the floor; the offset lifts the
+# Character node by that amount to put the feet back on the ground.
+const _PLAYER_FEMALE_SCALE: float = 1.30
+const _PLAYER_FEMALE_Y_OFFSET: float = 0.27
 
 const KNOCKBACK_DURATION := CombatConstants.KNOCKBACK_DURATION
 const DEATH_HOLD := 0.9
@@ -943,6 +947,7 @@ func _apply_gender_appearance() -> void:
 	var is_female: bool = effective_gender == &"female"
 	var scene: PackedScene = _PLAYER_FEMALE_SCENE if is_female else _PLAYER_MALE_SCENE
 	var y_offset: float = _PLAYER_FEMALE_Y_OFFSET if is_female else 0.0
+	var char_scale: float = _PLAYER_FEMALE_SCALE if is_female else 1.0
 	var current_char := visual.get_node_or_null(^"Character") as Node3D
 	if current_char == null or current_char.scene_file_path != scene.resource_path:
 		if current_char != null:
@@ -956,14 +961,16 @@ func _apply_gender_appearance() -> void:
 			# expects.
 			new_char.rotation.y = PI
 			new_char.position.y = y_offset
+			new_char.scale = Vector3.ONE * char_scale
 			visual.add_child(new_char)
 			var new_ap := new_char.find_child("AnimationPlayer", true, false) as AnimationPlayer
 			if new_ap != null:
 				anim_player = new_ap
 	else:
-		# No swap needed; just re-apply the Y offset in case the default tscn
-		# instance was at 0.
+		# No swap needed; just re-apply Y offset + scale in case the default
+		# tscn instance was at 0/1 or the per-gender constants changed.
 		current_char.position.y = y_offset
+		current_char.scale = Vector3.ONE * char_scale
 	if anim_player != null:
 		XBotAnimations.install_on(anim_player)
 	# Bake uniform scale into the FBX's intermediate Armature / Skeleton
