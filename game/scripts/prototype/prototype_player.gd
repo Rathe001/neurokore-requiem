@@ -1610,8 +1610,14 @@ func _physics_process(delta: float) -> void:
 			# and the next shot restarts ANIM_FIRE from frame 0 — reads
 			# as the character spasming through aim-and-recoil over and
 			# over instead of holding the gun out.
+			#
+			# Reload gate: no shots are actually coming out during reload
+			# (the fire gate in _skill_can_fire returns false), so the
+			# firing pose would be a lie. Fall through to the idle/move
+			# branches so the character reads as "topping off the mag,
+			# not currently shooting".
 			var firing_held: bool = false
-			if _is_aim_input_held():
+			if _is_aim_input_held() and not is_reloading():
 				var held_weapon: Item = InventoryState.get_equipped(&"weapon")
 				firing_held = held_weapon != null and held_weapon.is_bullet_weapon()
 			if firing_held:
