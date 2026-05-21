@@ -17,6 +17,10 @@ func _ready() -> void:
 	add_to_group(&"interactables")
 	add_to_group(&"resettable")
 	SpatialGrid.register(self, &"interactables")
+	# Opt into the object-blood pipeline so kills near a chest / switch /
+	# door splatter onto its surface. See PrototypeAttackIndicator's
+	# "Object blood" comment block for the full pipeline.
+	PrototypeAttackIndicator.register_as_blood_receiver(self)
 	_outline_source = _get_outline_source()
 	mouse_entered.connect(_on_mouse_entered)
 	mouse_exited.connect(_on_mouse_exited)

@@ -68,6 +68,11 @@ func _register_spatial() -> void:
 	if not is_inside_tree():
 		return
 	SpatialGrid.register(self, &"enemies")
+	# Opt into the object-blood pipeline. Adds to the receiver group,
+	# registers under it for SpatialGrid radius queries, and ORs the
+	# OBJECT_BLOOD layer onto child meshes so dedicated decals can
+	# paint them. See PrototypeAttackIndicator.spawn_blood_on_receivers.
+	PrototypeAttackIndicator.register_as_blood_receiver(self)
 
 
 func take_damage(amount: int, _knockback_from: Vector3 = Vector3.ZERO, _knockback_strength: float = 0.0, multistrike: int = 1, is_crit: bool = false, _weapon_base_id: StringName = &"", _is_explosion: bool = false) -> void:

@@ -1017,6 +1017,11 @@ static func spawn_blood_kill_scene(parent: Node, world_pos: Vector3, spray_dir: 
 		var dist: float = randf_range(0.8, 3.5)
 		var offset := Vector3(sin(angle), 0.0, cos(angle)) * dist
 		spawn_blood_decal(parent, world_pos + offset, blood_type)
+	# Paint side-projected blood on any objects in the OBJECT_BLOOD
+	# receiver group within OBJECT_BLOOD_RADIUS — props, destructibles,
+	# interactables, future objects. See the "Object blood" comment
+	# block for the full pipeline.
+	spawn_blood_on_receivers(parent, world_pos, blood_type)
 
 
 static func spawn_blood_decal(parent: Node, world_pos: Vector3, blood_type: StringName = BLOOD_TYPE_HUMAN) -> void:
@@ -1242,6 +1247,161 @@ static func _fade_character_blood_decal(decal: Decal, duration: float) -> void:
 	)
 
 
+# ── Object blood (props / interactables / future objects) ────────────
+#
+# Pipeline:
+#   1. Object opt-in: register_as_blood_receiver(node) — adds to the
+#      OBJECT_BLOOD_RECEIVER_GROUP, registers with SpatialGrid under
+#      that group, and ORs OBJECT_BLOOD_LAYER into every MeshInstance3D
+#      under the node. Call once from the object's _ready.
+#   2. On enemy kill: spawn_blood_kill_scene calls
+#      spawn_blood_on_receivers(kill_pos, blood_type).
+#   3. That fn does a SpatialGrid radius query for nearby receivers,
+#      raycasts from kill_pos to each (rejecting any blocked by walls),
+#      and spawns a side-projected decal at the hit point oriented by
+#      the surface normal. Decals are PARENTED to the receiver so
+#      movable / destructible objects carry their blood with them.
+#   4. Each decal fades out over OBJECT_BLOOD_FADE_DURATION.
+#
+# New paintable objects integrate with one call to
+# register_as_blood_receiver — no per-class decal logic to author.
+
+static func spawn_blood_on_receivers(parent: Node, kill_pos: Vector3, blood_type: StringName = BLOOD_TYPE_HUMAN) -> void:
+	if parent == null or _blood_disabled():
+		return
+	var node := parent as Node3D
+	if node == null or not node.is_inside_tree():
+		return
+	var space := node.get_world_3d().direct_space_state
+	if space == null:
+		return
+	var receivers := SpatialGrid.query_radius(kill_pos, OBJECT_BLOOD_RADIUS, OBJECT_BLOOD_RECEIVER_GROUP)
+	if receivers.is_empty():
+		return
+	# Shuffle so a horde clustered next to one prop doesn't always paint
+	# the same N-closest receivers — over multiple kills the paint
+	# spreads naturally across the area.
+	receivers.shuffle()
+	var painted: int = 0
+	var origin := kill_pos + Vector3(0.0, 0.3, 0.0)  # lift slightly off floor so the ray doesn't graze it
+	var query := PhysicsRayQueryParameters3D.new()
+	query.collision_mask = _OBJECT_BLOOD_RAY_MASK
+	query.collide_with_areas = false
+	query.collide_with_bodies = true
+	for receiver_var in receivers:
+		if painted >= OBJECT_BLOOD_MAX_PER_KILL:
+			break
+		if not (receiver_var is Node3D) or not is_instance_valid(receiver_var):
+			continue
+		var receiver := receiver_var as Node3D
+		# Aim at the receiver's torso area (slightly above origin). For
+		# floor-level props (low chairs / debris) this still resolves to
+		# the prop's top surface from the raycast; for tall props (cell
+		# bars / pillars) it lands on the side wall around chest height
+		# — both read correctly.
+		var aim_pos: Vector3 = receiver.global_position + Vector3(0.0, 0.6, 0.0)
+		query.from = origin
+		query.to = aim_pos
+		query.exclude = []
+		var hit := space.intersect_ray(query)
+		if hit.is_empty():
+			continue
+		# The hit must BE on the receiver (or its physics body). Walls/
+		# floor on layer 1 also block; if the ray hits a wall first the
+		# receiver is occluded and we skip — exactly the "don't paint
+		# what the kill couldn't actually splatter" guarantee.
+		var collider: Object = hit.get("collider")
+		if collider != receiver:
+			continue
+		var impact_pos: Vector3 = hit["position"]
+		var impact_normal: Vector3 = hit["normal"]
+		_spawn_object_blood_decal(receiver, impact_pos, impact_normal, kill_pos, blood_type)
+		painted += 1
+
+
+# Spawn one side-projected decal on `receiver`. Texture uses the
+# wall_splatter variant (drip-oriented) because most prop hits are
+# vertical surfaces; floor variants would look wrong drip-side-up on
+# a chair side.
+static func _spawn_object_blood_decal(receiver: Node3D, impact_pos: Vector3, impact_normal: Vector3, kill_pos: Vector3, blood_type: StringName) -> void:
+	if not is_instance_valid(receiver):
+		return
+	var decal := Decal.new()
+	var variant := _get_blood_wall_splatter_variant(blood_type)
+	decal.texture_albedo = variant[&"albedo"]
+	decal.texture_normal = variant[&"normal"]
+	decal.texture_orm = _get_blood_orm_texture()
+	# Size falls off with distance from the kill — close hits get a big
+	# stamp, farther ones get a small one. Same per-axis range varies
+	# the silhouette so multiple stamps don't read as identical.
+	var dist: float = kill_pos.distance_to(impact_pos)
+	var size_scale: float = clampf(1.0 - dist / OBJECT_BLOOD_RADIUS, 0.35, 1.0)
+	decal.size = Vector3(
+		randf_range(0.4, 0.9) * size_scale,
+		0.5,  # projection depth — small enough to not paint past the prop
+		randf_range(0.4, 0.9) * size_scale,
+	)
+	decal.modulate = _decal_color_jitter()
+	decal.upper_fade = 0.08
+	decal.lower_fade = 0.08
+	decal.albedo_mix = 1.0
+	decal.cull_mask = OBJECT_BLOOD_LAYER
+	# Orient: decal projects along its local -Y, so build a basis whose
+	# +Y axis IS the surface normal. Texture's V axis is randomly
+	# twisted around that normal so adjacent stamps don't look
+	# identical.
+	var n := impact_normal.normalized()
+	var rot := Quaternion(Vector3.UP, n)
+	var twist := Basis(n, randf() * TAU)
+	receiver.add_child(decal)
+	decal.global_basis = twist * Basis(rot)
+	# Slight push along the normal so the decal sits clear of the
+	# surface (avoids z-fight on flat prop faces).
+	decal.global_position = impact_pos + n * 0.03
+	# Fade-and-free, same pattern as character blood.
+	var tween := decal.create_tween()
+	var hold: float = OBJECT_BLOOD_FADE_DURATION * 0.6
+	var fade: float = maxf(OBJECT_BLOOD_FADE_DURATION - hold, 0.2)
+	tween.tween_interval(hold)
+	tween.tween_property(decal, "modulate:a", 0.0, fade)
+	var decal_id: int = decal.get_instance_id()
+	tween.tween_callback(func() -> void:
+		var d := instance_from_id(decal_id) as Node
+		if d != null:
+			d.queue_free()
+	)
+
+
+# Single-call opt-in for any object that should receive blood splatter
+# when an enemy dies near it. Call from the object's _ready. Handles:
+#   - Group membership (OBJECT_BLOOD_RECEIVER_GROUP) for SpatialGrid queries
+#   - SpatialGrid registration under that group
+#   - VisualInstance3D layer opt-in (OR in OBJECT_BLOOD_LAYER on every
+#     MeshInstance3D under `node`)
+# Idempotent — a node already registered is a no-op. Future paintable
+# object classes integrate with a single line:
+#   PrototypeAttackIndicator.register_as_blood_receiver(self)
+static func register_as_blood_receiver(node: Node3D) -> void:
+	if node == null or not is_instance_valid(node):
+		return
+	if not node.is_in_group(OBJECT_BLOOD_RECEIVER_GROUP):
+		node.add_to_group(OBJECT_BLOOD_RECEIVER_GROUP)
+		SpatialGrid.register(node, OBJECT_BLOOD_RECEIVER_GROUP)
+	_walk_or_in_visual_layer(node, OBJECT_BLOOD_LAYER)
+
+
+# Walks `node` and every descendant, ORing `layer_bit` into each
+# VisualInstance3D.layers — doesn't clobber existing layer bits the
+# mesh was rendered on, so the visual still renders normally and ALSO
+# becomes a target for decals on the new layer.
+static func _walk_or_in_visual_layer(node: Node, layer_bit: int) -> void:
+	if node is VisualInstance3D:
+		var vi := node as VisualInstance3D
+		vi.layers = vi.layers | layer_bit
+	for child in node.get_children():
+		_walk_or_in_visual_layer(child, layer_bit)
+
+
 # ── Blood decal infrastructure ─────────────────────────────────────────
 
 # Duration of the fade-out tween when a decal gets evicted by the ring
@@ -1268,6 +1428,28 @@ const BLOOD_DECAL_CULL_LAYER: int = 1
 const CHARACTER_BLOOD_LAYER: int = 4
 const CHARACTER_BLOOD_MAX_PER_CHAR: int = 5
 const CHARACTER_BLOOD_FADE_DURATION: float = 12.0
+
+# Object-blood pipeline. When an enemy dies, spawn_blood_on_receivers
+# does a SpatialGrid radius query for nodes in OBJECT_BLOOD_RECEIVER_GROUP,
+# raycasts from the kill point to each (to confirm visibility AND get
+# the surface normal), then spawns a side-projected decal aimed along
+# that normal onto the receiver. Each opt-in object class joins the
+# group via register_as_blood_receiver() — single-line integration so
+# adding new paintable objects later is friction-free.
+#
+# Distinct from BLOOD_DECAL_CULL_LAYER (floor — layer 1) and
+# CHARACTER_BLOOD_LAYER (characters — layer 4) so the three pipelines
+# don't cross-contaminate.
+const OBJECT_BLOOD_LAYER: int = 8
+const OBJECT_BLOOD_RECEIVER_GROUP: StringName = &"blood_receiver"
+const OBJECT_BLOOD_RADIUS: float = 3.0
+const OBJECT_BLOOD_MAX_PER_KILL: int = 4
+const OBJECT_BLOOD_FADE_DURATION: float = 14.0
+# Physics layers the kill→receiver visibility ray queries: WORLD (1) +
+# PILLAR (128). Walls block (we don't want to paint a prop the kill
+# can't actually see); pillars/destructibles are valid targets so the
+# ray lands ON them, giving us their surface normal directly.
+const _OBJECT_BLOOD_RAY_MASK: int = 1 | 128
 
 # Z-fight jitter range for floor decals. All floor splats sit at y=0,
 # so two decals projecting onto the same floor pixel have identical

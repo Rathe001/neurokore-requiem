@@ -233,6 +233,9 @@ static func create_decorative_pillar(ctx: LevelBuildContext, pos: Vector3, size:
 
 	ctx.root.add_child(body)
 	body.add_to_group(&"structures")
+	# Opt into the object-blood pipeline so kills near a pillar splatter
+	# onto its side. See PrototypeAttackIndicator.spawn_blood_on_receivers.
+	PrototypeAttackIndicator.register_as_blood_receiver(body)
 
 
 static func build_low_ceiling(ctx: LevelBuildContext, center: Vector3, cd: CorridorDef) -> void:
