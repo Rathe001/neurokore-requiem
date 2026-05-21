@@ -33,16 +33,15 @@ const ITEM_PICKUP_SCENE: PackedScene = preload("res://scenes/prototype/prototype
 const UNARMED_SKILL: Skill = preload("res://resources/skills/unarmed_attack.tres")
 const _PLAYER_MALE_SCENE: PackedScene = preload("res://assets/characters/player_male/player_male_idle.fbx")
 const _PLAYER_FEMALE_SCENE: PackedScene = preload("res://assets/characters/player_female/player_female_idle.fbx")
-# Per-gender vertical correction. Male FBX has its origin at the feet, so it
-# sits flush with the CharacterBody3D's floor. Female FBX has the origin
-# slightly above the feet — scaled up via the .import root_scale, that
-# offset pushes her geometry into the floor. Lift the Character node by
-# this much to compensate. Recomputed after _PLAYER_FEMALE_SCALE: the
-# female model scales from its center, so a +30% scale drops the feet
-# ~half-height × 0.30 = ~0.27 m below the floor; the offset lifts the
-# Character node by that amount to put the feet back on the ground.
+# Per-gender vertical correction. Mixamo FBX origins sit at the mesh's
+# FEET (not center), so scaling the Character node grows the mesh
+# upward from the floor — no Y offset needed to keep feet on the
+# ground. The previous +0.27 m offset (assumption: center-scaling) made
+# her float ~30 cm above the floor. The 2 cm residue from the female
+# FBX's slightly-above-feet origin is left at 0 — visually
+# indistinguishable, and avoids any risk of clipping into the floor.
 const _PLAYER_FEMALE_SCALE: float = 1.30
-const _PLAYER_FEMALE_Y_OFFSET: float = 0.27
+const _PLAYER_FEMALE_Y_OFFSET: float = 0.0
 
 const KNOCKBACK_DURATION := CombatConstants.KNOCKBACK_DURATION
 const DEATH_HOLD := 0.9
