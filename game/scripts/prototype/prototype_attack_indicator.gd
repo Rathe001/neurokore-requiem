@@ -1559,6 +1559,24 @@ static func register_as_blood_receiver(node: Node3D) -> void:
 	if not node.is_in_group(OBJECT_BLOOD_RECEIVER_GROUP):
 		node.add_to_group(OBJECT_BLOOD_RECEIVER_GROUP)
 	_walk_or_in_visual_layer(node, OBJECT_BLOOD_LAYER)
+	# TEMP DIAGNOSTIC — confirm the layer-OR reached the receiver's
+	# visual meshes. If a class registers but its VisualInstance3D
+	# descendants are spawned AFTER _ready (e.g. deferred glb instancing),
+	# layers stay default = 1 and decals won't paint. Remove with the
+	# other [BLOOD-RECV] prints once object blood is verified.
+	var vi_count := 0
+	var vi_layer_summary: Array = []
+	_diag_collect_visuals(node, vi_count, vi_layer_summary)
+	print("[BLOOD-REG] %s: %d VisualInstance3D descendants, layers=%s" % [node.name, vi_count, vi_layer_summary])
+
+
+static func _diag_collect_visuals(n: Node, counter: int, summary: Array, depth: int = 0) -> void:
+	# counter is value-passed (int), so this helper can only report
+	# names + layers — final count is summary.size().
+	if n is VisualInstance3D:
+		summary.append("%s=%d" % [n.name, (n as VisualInstance3D).layers])
+	for c in n.get_children():
+		_diag_collect_visuals(c, counter, summary, depth + 1)
 
 
 # Walks `node` and every descendant, ORing `layer_bit` into each
