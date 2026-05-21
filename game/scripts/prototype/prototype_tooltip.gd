@@ -944,9 +944,12 @@ func _build_stats_text(item: Item, equipped: Item = null, force_text: bool = fal
 			# single line of bullet-separated param values, then a small
 			# dim description. The body-text "Mod: ..." line that used to
 			# live here is gone — the colored mod name carries that role.
+			# Stats label base font is 7pt — no [font_size] override means
+			# the mod text inherits that. Earlier tags at size 10–11 were
+			# accidentally enlarging the block above the surrounding body.
 			var name_line := "[color=%s][b]%s[/b][/color]" % [name_color, mod.display_name]
 			if not active and not mod.is_implemented:
-				name_line += "  [color=#7a7e80][font_size=10][preview][/font_size][/color]"
+				name_line += "  [color=#7a7e80][preview][/color]"
 			lines.append(name_line)
 			var param_parts: Array[String] = []
 			for key in mod.param_ranges:
@@ -957,12 +960,12 @@ func _build_stats_text(item: Item, equipped: Item = null, force_text: bool = fal
 				var value_str := _format_mod_param_value(String(key), raw_value)
 				param_parts.append("%s [color=#dfe6e9]%s[/color]" % [label, value_str])
 			if not param_parts.is_empty():
-				lines.append("[color=%s][font_size=11]%s[/font_size][/color]" % [body_color, "  •  ".join(param_parts)])
+				lines.append("[color=%s]%s[/color]" % [body_color, "  •  ".join(param_parts)])
 			if mod.description != "":
 				# Multi-paragraph descriptions get joined with " — " so
-				# the tooltip stays compact. Render small + dim, no italic.
+				# the tooltip stays compact. Inherits 7pt base font.
 				var desc_compact := mod.description.replace("\n\n", " — ").replace("\n", " ")
-				lines.append("[color=#8a9094][font_size=10]%s[/font_size][/color]" % desc_compact)
+				lines.append("[color=#8a9094]%s[/color]" % desc_compact)
 	# Legacy head light mod (pre-behavior-mod-system items). Skip when the
 	# new behavior_mod_id is set — the new block above covers it.
 	if item.behavior_mod_id == &"" and item.light_mod != Item.LightMod.NONE:
