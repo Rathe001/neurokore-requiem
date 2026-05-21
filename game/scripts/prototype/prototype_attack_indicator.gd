@@ -952,7 +952,7 @@ static func _spawn_mist_drop_wall(parent: Node, world_pos: Vector3, wall_normal:
 	decal.modulate = _decal_color_jitter()
 	decal.upper_fade = 0.05
 	decal.lower_fade = 0.05
-	decal.albedo_mix = 1.0
+	decal.albedo_mix = BLOOD_DECAL_ALBEDO_MIX
 	decal.cull_mask = BLOOD_DECAL_CULL_LAYER
 	parent.add_child(decal)
 	decal.global_position = world_pos + wall_normal.normalized() * 0.03
@@ -1088,7 +1088,7 @@ static func _spawn_new_pool(parent: Node, world_pos: Vector3, blood_type: String
 	pool.modulate = _decal_color_jitter()
 	pool.upper_fade = 0.15
 	pool.lower_fade = 0.15
-	pool.albedo_mix = 1.0
+	pool.albedo_mix = BLOOD_DECAL_ALBEDO_MIX
 	pool.cull_mask = BLOOD_DECAL_CULL_LAYER
 	pool.rotation.y = randf() * TAU
 	parent.add_child(pool)
@@ -1173,7 +1173,7 @@ static func spawn_blood_wall_splatter(parent: Node, world_pos: Vector3, wall_nor
 	decal.modulate = _decal_color_jitter()
 	decal.upper_fade = 0.05
 	decal.lower_fade = 0.05
-	decal.albedo_mix = 1.0
+	decal.albedo_mix = BLOOD_DECAL_ALBEDO_MIX
 	decal.cull_mask = BLOOD_DECAL_CULL_LAYER
 	parent.add_child(decal)
 	# 3cm offset along the normal keeps the decal off the wall surface
@@ -1245,7 +1245,7 @@ static func spawn_blood_on_character(character_visual: Node3D, world_impact_pos:
 	decal.modulate = _decal_color_jitter()
 	decal.upper_fade = 0.1
 	decal.lower_fade = 0.1
-	decal.albedo_mix = 1.0
+	decal.albedo_mix = BLOOD_DECAL_ALBEDO_MIX
 	decal.cull_mask = CHARACTER_BLOOD_LAYER
 	decal.rotation.y = randf() * TAU
 	# Position at local impact, lifted to torso height. Clamp the XZ
@@ -1470,7 +1470,7 @@ static func _spawn_object_blood_decal(receiver: Node3D, impact_pos: Vector3, imp
 	decal.modulate = _decal_color_jitter()
 	decal.upper_fade = 0.08
 	decal.lower_fade = 0.08
-	decal.albedo_mix = 1.0
+	decal.albedo_mix = BLOOD_DECAL_ALBEDO_MIX
 	decal.cull_mask = OBJECT_BLOOD_LAYER
 	# Orient: decal projects along its local -Y, so build a basis whose
 	# +Y axis IS the surface normal. Texture's V axis is randomly
@@ -1559,24 +1559,13 @@ static func register_as_blood_receiver(node: Node3D) -> void:
 	if not node.is_in_group(OBJECT_BLOOD_RECEIVER_GROUP):
 		node.add_to_group(OBJECT_BLOOD_RECEIVER_GROUP)
 	_walk_or_in_visual_layer(node, OBJECT_BLOOD_LAYER)
-	# TEMP DIAGNOSTIC — confirm the layer-OR reached the receiver's
-	# visual meshes. If a class registers but its VisualInstance3D
-	# descendants are spawned AFTER _ready (e.g. deferred glb instancing),
-	# layers stay default = 1 and decals won't paint. Remove with the
-	# other [BLOOD-RECV] prints once object blood is verified.
-	var vi_count := 0
-	var vi_layer_summary: Array = []
-	_diag_collect_visuals(node, vi_count, vi_layer_summary)
-	print("[BLOOD-REG] %s: %d VisualInstance3D descendants, layers=%s" % [node.name, vi_count, vi_layer_summary])
 
 
-static func _diag_collect_visuals(n: Node, counter: int, summary: Array, depth: int = 0) -> void:
-	# counter is value-passed (int), so this helper can only report
-	# names + layers — final count is summary.size().
-	if n is VisualInstance3D:
-		summary.append("%s=%d" % [n.name, (n as VisualInstance3D).layers])
-	for c in n.get_children():
-		_diag_collect_visuals(c, counter, summary, depth + 1)
+# Single source of truth for blood decal albedo-blend factor. 1.0 =
+# decal albedo fully replaces the surface; lower values let the surface
+# texture/material peek through. ~0.82 reads as "wet, fresh blood" sat
+# on top of the floor/prop rather than painted into it.
+const BLOOD_DECAL_ALBEDO_MIX: float = 0.82
 
 
 # Walks `node` and every descendant, ORing `layer_bit` into each
@@ -1887,7 +1876,7 @@ static func spawn_blood_footprint(parent: Node, world_pos: Vector3, forward_dir:
 	decal.modulate = _decal_color_jitter(lerpf(0.1, 1.0, intensity))
 	decal.upper_fade = 0.4
 	decal.lower_fade = 0.4
-	decal.albedo_mix = 1.0
+	decal.albedo_mix = BLOOD_DECAL_ALBEDO_MIX
 	decal.cull_mask = BLOOD_DECAL_CULL_LAYER
 	# Orient along movement direction. forward_dir is XZ-plane; yaw is
 	# atan2(x, z) so the prints point where the player is going.
