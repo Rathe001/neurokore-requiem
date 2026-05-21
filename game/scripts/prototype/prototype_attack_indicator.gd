@@ -1498,7 +1498,7 @@ static func _spawn_object_blood_decal(receiver: Node3D, impact_pos: Vector3, imp
 	decal.modulate = _decal_color_jitter()
 	decal.upper_fade = 0.08
 	decal.lower_fade = 0.08
-	decal.albedo_mix = BLOOD_DECAL_ALBEDO_MIX
+	decal.albedo_mix = OBJECT_BLOOD_ALBEDO_MIX
 	decal.cull_mask = OBJECT_BLOOD_LAYER
 	# Orient: decal projects along its local -Y, so build a basis whose
 	# +Y axis IS the surface normal. Texture's V axis is randomly
@@ -1649,6 +1649,14 @@ const CHARACTER_BLOOD_FADE_DURATION: float = 12.0
 # CHARACTER_BLOOD_LAYER (characters — layer 4) so the three pipelines
 # don't cross-contaminate.
 const OBJECT_BLOOD_LAYER: int = 8
+# Higher albedo_mix specifically for object decals — props are typically
+# lit much brighter than floor (no shadowing-from-ceiling, often
+# direct fluorescent overhead) so the project-wide 0.92 read as
+# barely-visible against bright prop materials. 0.99 pushes the decal
+# nearly opaque while staying below the 1.0 "flat paint" threshold the
+# memory warned about. Floor / character / wall splat decals continue
+# to use BLOOD_DECAL_ALBEDO_MIX (0.92).
+const OBJECT_BLOOD_ALBEDO_MIX: float = 0.99
 const OBJECT_BLOOD_RECEIVER_GROUP: StringName = &"blood_receiver"
 const OBJECT_BLOOD_RADIUS: float = 5.0
 const OBJECT_BLOOD_MAX_PER_KILL: int = 4

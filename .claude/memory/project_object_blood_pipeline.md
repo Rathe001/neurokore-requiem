@@ -50,11 +50,16 @@ ring-buffer cap. Diagnostic `print()` calls in the visibility-ray
 path also removed in the same pass since the layers/raycast question
 is settled.
 
-**Opacity dial:** `BLOOD_DECAL_ALBEDO_MIX` constant (currently 0.92)
-threads through all 6 decal spawn sites (floor pool, character splat,
-wall splatter, droplet, prop side-paint, footprint). Lower = more
-surface peek-through. 0.82 was too washed-out, 1.0 reads as flat
-paint, 0.92 was the landing point.
+**Opacity dials:** Two separate constants now —
+- `BLOOD_DECAL_ALBEDO_MIX = 0.92` for floor pool, character splat,
+  wall splatter, droplet, and footprint decals. 0.82 was too
+  washed-out, 1.0 reads as flat paint, 0.92 was the landing point.
+- `OBJECT_BLOOD_ALBEDO_MIX = 0.99` for the prop side + top decals.
+  Props are typically lit brighter than floor (direct fluorescent
+  overhead, no shadowing from ceiling), so the project-wide 0.92 read
+  as nearly-invisible against bright prop materials. Bumped to 0.99
+  on 2026-05-21 — close to fully opaque without crossing the "flat
+  paint" 1.0 threshold.
 
 **Why:** Blood/gore is intentionally a major aesthetic — receiver
 opt-in pattern was chosen so adding new paintable object classes
