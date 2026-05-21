@@ -2149,12 +2149,46 @@ func _tick_ragdoll_settle(delta: float) -> void:
 # explosion before the despawn timer fires, apply_explosion_impulse
 # bumps _despawn_token to invalidate the pending despawn — a fresh
 # _on_ragdoll_settled then reschedules when the body comes to rest
-# again. Death-time splatters carry the visual blood; no per-corpse
-# pool is spawned here (removed to let the death splatter shapes read
-# instead of getting covered by a smooth puddle).
+# again.
+#
+# Settle-pool: spawn a slow-growing pool of blood under the body where
+# it actually came to rest. Routed through spawn_blood_decal so it
+# attach-or-grows the kill-time pool if the corpse landed near the
+# kill site, or stamps a fresh pool if the body tumbled away.
 func _on_ragdoll_settled() -> void:
 	_despawn_token += 1
+	_spawn_settle_pool()
 	_schedule_corpse_despawn(_despawn_token)
+
+
+# Returns the centroid (XZ) of the active PhysicalBone3D children, with
+# Y dropped to the death-Y so the pool projects onto the floor instead
+# of mid-air. Falls back to global_position if no PBs are found.
+func _settled_corpse_position() -> Vector3:
+	if visual == null:
+		return global_position
+	var skel := _find_skeleton(visual)
+	if skel == null:
+		return global_position
+	var sum := Vector3.ZERO
+	var n := 0
+	for child in skel.get_children():
+		if child is PhysicalBone3D:
+			sum += (child as PhysicalBone3D).global_position
+			n += 1
+	if n == 0:
+		return global_position
+	var avg := sum / float(n)
+	return Vector3(avg.x, global_position.y, avg.z)
+
+
+func _spawn_settle_pool() -> void:
+	if not is_inside_tree():
+		return
+	var parent := get_parent()
+	if parent == null:
+		return
+	PrototypeAttackIndicator.spawn_blood_decal(parent, _settled_corpse_position(), blood_type)
 
 
 # Coroutine: wait _CORPSE_DESPAWN_DELAY, sink the corpse into the floor,
