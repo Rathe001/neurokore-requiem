@@ -10,16 +10,19 @@ extends Node
 ## PrototypeAttackIndicator.spawn_beam(...) for any visual that
 ## should be visible to all players.
 ##
-## Public API is static so callers can use CombatVisuals.spawn_*()
-## without class_name (Godot 4.6 forbids class_name on autoloads).
-## RPCs route through the autoload instance via host.get_node().
+## Public API is plain instance methods on the autoload — Godot 4 warns
+## ("function is static but was called from an instance, call it from
+## the type instead") when you call a `static func` via the autoload
+## reference, which is the only way external code reaches us. Methods
+## don't actually use `self` state, but dropping `static` silences the
+## warning. RPCs route through the autoload instance via host.get_node().
 
 const _AUTOLOAD_PATH := ^"/root/CombatVisuals"
 
 
 # ── Beam (hitscan) ──────────────────────────────────────────────
 
-static func spawn_beam(host: Node3D, aim: Vector3, length: float, source_offset: Vector3 = Vector3.ZERO, tint_override: Color = Color(0.0, 0.0, 0.0, 0.0)) -> void:
+func spawn_beam(host: Node3D, aim: Vector3, length: float, source_offset: Vector3 = Vector3.ZERO, tint_override: Color = Color(0.0, 0.0, 0.0, 0.0)) -> void:
 	PrototypeAttackIndicator.spawn_beam(host, aim, length, source_offset, tint_override)
 	if NetState.is_in_lobby():
 		var cv: Node = host.get_node(_AUTOLOAD_PATH)
@@ -34,7 +37,7 @@ func _rpc_beam(origin: Vector3, aim: Vector3, length: float, source_offset: Vect
 
 # ── Lightning arc (chain lightning) ─────────────────────────────
 
-static func spawn_lightning_arc(host: Node3D, from_pos: Vector3, to_pos: Vector3, duration: float = PrototypeAttackIndicator.LIGHTNING_ARC_DURATION, tint_override: Color = Color(0.0, 0.0, 0.0, 0.0)) -> void:
+func spawn_lightning_arc(host: Node3D, from_pos: Vector3, to_pos: Vector3, duration: float = PrototypeAttackIndicator.LIGHTNING_ARC_DURATION, tint_override: Color = Color(0.0, 0.0, 0.0, 0.0)) -> void:
 	PrototypeAttackIndicator.spawn_lightning_arc(host, from_pos, to_pos, duration, tint_override)
 	if NetState.is_in_lobby():
 		var cv: Node = host.get_node(_AUTOLOAD_PATH)
@@ -50,7 +53,7 @@ func _rpc_lightning_arc(from_pos: Vector3, to_pos: Vector3, duration: float, is_
 
 # ── Hit cone (melee shockwave) ──────────────────────────────────
 
-static func spawn_hit_cone(host: Node3D, aim: Vector3, attack_range: float, cone_deg: float) -> void:
+func spawn_hit_cone(host: Node3D, aim: Vector3, attack_range: float, cone_deg: float) -> void:
 	PrototypeAttackIndicator.spawn_hit_cone(host, aim, attack_range, cone_deg)
 	if NetState.is_in_lobby():
 		var cv: Node = host.get_node(_AUTOLOAD_PATH)
@@ -65,7 +68,7 @@ func _rpc_hit_cone(origin: Vector3, aim: Vector3, attack_range: float, cone_deg:
 
 # ── Hammer ground impact (2H hammer step-2 finisher visual) ─────
 
-static func spawn_hammer_impact(host: Node3D) -> void:
+func spawn_hammer_impact(host: Node3D) -> void:
 	PrototypeAttackIndicator.spawn_hammer_impact(host)
 	if NetState.is_in_lobby():
 		var cv: Node = host.get_node(_AUTOLOAD_PATH)
@@ -80,7 +83,7 @@ func _rpc_hammer_impact(origin: Vector3, is_player: bool) -> void:
 
 # ── Blade slash (1H knife hit visual) ───────────────────────────
 
-static func spawn_blade_slash(host: Node3D, aim: Vector3, attack_range: float, cone_deg: float) -> void:
+func spawn_blade_slash(host: Node3D, aim: Vector3, attack_range: float, cone_deg: float) -> void:
 	PrototypeAttackIndicator.spawn_blade_slash(host, aim, attack_range, cone_deg)
 	if NetState.is_in_lobby():
 		var cv: Node = host.get_node(_AUTOLOAD_PATH)
@@ -95,7 +98,7 @@ func _rpc_blade_slash(origin: Vector3, aim: Vector3, attack_range: float, cone_d
 
 # ── Hit radial (AoE shockwave) ──────────────────────────────────
 
-static func spawn_hit_radial(host: Node3D, radius: float) -> void:
+func spawn_hit_radial(host: Node3D, radius: float) -> void:
 	PrototypeAttackIndicator.spawn_hit_radial(host, radius)
 	if NetState.is_in_lobby():
 		var cv: Node = host.get_node(_AUTOLOAD_PATH)
@@ -110,7 +113,7 @@ func _rpc_hit_radial(origin: Vector3, radius: float, is_player: bool) -> void:
 
 # ── Impact burst ────────────────────────────────────────────────
 
-static func spawn_impact_burst(host: Node3D, world_pos: Vector3, color_override: Color = Color(0, 0, 0, 0)) -> void:
+func spawn_impact_burst(host: Node3D, world_pos: Vector3, color_override: Color = Color(0, 0, 0, 0)) -> void:
 	PrototypeAttackIndicator.spawn_impact_burst(host, world_pos, color_override)
 	if NetState.is_in_lobby():
 		var cv: Node = host.get_node(_AUTOLOAD_PATH)
@@ -125,7 +128,7 @@ func _rpc_impact_burst(origin: Vector3, world_pos: Vector3, color_override: Colo
 
 # ── Muzzle flash ───────────────────────────────────────────────
 
-static func spawn_muzzle_flash(host: Node3D, barrel_pos: Vector3, is_bullet: bool = true, tint: Color = Color(0, 0, 0, 0)) -> void:
+func spawn_muzzle_flash(host: Node3D, barrel_pos: Vector3, is_bullet: bool = true, tint: Color = Color(0, 0, 0, 0)) -> void:
 	PrototypeAttackIndicator.spawn_muzzle_flash(host, barrel_pos, is_bullet, tint)
 	if NetState.is_in_lobby():
 		var cv: Node = host.get_node(_AUTOLOAD_PATH)
@@ -140,7 +143,7 @@ func _rpc_muzzle_flash(barrel_pos: Vector3, is_bullet: bool, tint: Color, is_pla
 
 # ── Explosion ───────────────────────────────────────────────────
 
-static func spawn_explosion(host: Node3D, world_pos: Vector3, blast_radius: float, color_override: Color = Color(0, 0, 0, 0), damage_type: StringName = &"") -> void:
+func spawn_explosion(host: Node3D, world_pos: Vector3, blast_radius: float, color_override: Color = Color(0, 0, 0, 0), damage_type: StringName = &"") -> void:
 	PrototypeAttackIndicator.spawn_explosion(host, world_pos, blast_radius, color_override, damage_type)
 	WeaponSounds.play_generic(&"explosion", world_pos)
 	if NetState.is_in_lobby():
@@ -156,7 +159,7 @@ func _rpc_explosion(origin: Vector3, world_pos: Vector3, blast_radius: float, co
 
 # ── Telegraph: cone (enemy attack warning) ──────────────────────
 
-static func spawn_cone(host: Node3D, aim: Vector3, attack_range: float, cone_deg: float, wind_up: float = 0.0) -> void:
+func spawn_cone(host: Node3D, aim: Vector3, attack_range: float, cone_deg: float, wind_up: float = 0.0) -> void:
 	PrototypeAttackIndicator.spawn_cone(host, aim, attack_range, cone_deg, wind_up)
 	if NetState.is_in_lobby():
 		var cv: Node = host.get_node(_AUTOLOAD_PATH)
@@ -173,7 +176,7 @@ func _rpc_cone(origin: Vector3, aim: Vector3, attack_range: float, cone_deg: flo
 
 # ── Telegraph: radial (enemy AoE warning) ───────────────────────
 
-static func spawn_radial(host: Node3D, radius: float, wind_up: float = 0.0) -> void:
+func spawn_radial(host: Node3D, radius: float, wind_up: float = 0.0) -> void:
 	PrototypeAttackIndicator.spawn_radial(host, radius, wind_up)
 	if NetState.is_in_lobby():
 		var cv: Node = host.get_node(_AUTOLOAD_PATH)
@@ -201,7 +204,7 @@ func _rpc_radial(origin: Vector3, radius: float, wind_up: float, is_player: bool
 const _PROJECTILE_SCENE: PackedScene = preload("res://scenes/prototype/prototype_projectile.tscn")
 
 
-static func broadcast_projectile(spawn_pos: Vector3, direction: Vector3, speed: float, max_range: float,
+func broadcast_projectile(spawn_pos: Vector3, direction: Vector3, speed: float, max_range: float,
 		blast_radius: float, visual_scale: float, is_bullet: bool, damage_type: StringName,
 		target_group: StringName) -> void:
 	if not NetState.is_in_lobby():
@@ -274,7 +277,7 @@ func _spawn_ghost_projectile(spawn_pos: Vector3, direction: Vector3, speed: floa
 # ONE RPC carrying a PackedVector3Array of directions + the common
 # params; the receiving peer iterates and spawns N ghost projectiles.
 
-static func broadcast_shotgun_burst(origin: Vector3, dirs: PackedVector3Array,
+func broadcast_shotgun_burst(origin: Vector3, dirs: PackedVector3Array,
 		speed: float, max_range: float, visual_scale: float,
 		damage_type: StringName, target_group: StringName) -> void:
 	if not NetState.is_in_lobby():
