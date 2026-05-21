@@ -931,34 +931,11 @@ static func _is_over_pit(parent: Node, world_pos: Vector3) -> bool:
 
 
 static func _spawn_mist_drop_floor(parent: Node, world_pos: Vector3, blood_type: StringName) -> void:
-	if _is_over_pit(parent, world_pos):
-		return
-	# Independent X/Z + wide range so per-hit drops have visible shape
-	# and size variation — some round and small, some elongated, some
-	# nearly as big as a kill satellite.
-	var drop_size := Vector3(randf_range(0.20, 0.65), 0.4, randf_range(0.20, 0.65))
-	# Mist droplets feed existing pools at a moderate threshold (0.35) —
-	# slightly tighter than kill scenes so drops along the rim still
-	# stamp fresh, but center-pile drops grow the local pool.
-	var new_avg_size: float = (drop_size.x + drop_size.z) * 0.5
-	if _try_grow_existing_decal(world_pos, new_avg_size, 0.35):
-		return
-	var decal := Decal.new()
-	var variant := _get_blood_splatter_variant(blood_type)
-	decal.texture_albedo = variant[&"albedo"]
-	decal.texture_normal = variant[&"normal"]
-	decal.texture_orm = _get_blood_orm_texture()
-	decal.size = drop_size
-	decal.modulate = _decal_color_jitter()
-	decal.upper_fade = 0.05
-	decal.lower_fade = 0.05
-	decal.albedo_mix = 1.0
-	decal.cull_mask = BLOOD_DECAL_CULL_LAYER
-	decal.rotation.y = randf() * TAU
-	parent.add_child(decal)
-	# Tiny per-spawn Y jitter to avoid z-fight against other floor decals.
-	decal.global_position = Vector3(world_pos.x, randf_range(_DECAL_Y_JITTER_MIN, _DECAL_Y_JITTER_MAX), world_pos.z)
-	_track_blood_decal(decal)
+	# Mist droplets route through the same attach-or-spawn entry as
+	# kill scenes — small per-hit drops on clear floor stamp tiny
+	# stand-alone pools; drops near an existing pool grow it. No
+	# special-case logic needed.
+	spawn_blood_decal(parent, world_pos, blood_type)
 
 
 # Wall drop — same size band as floor drops, projected along the
@@ -992,105 +969,161 @@ static func _spawn_mist_drop_wall(parent: Node, world_pos: Vector3, wall_normal:
 # proper "gory mess" rather than a single neat stamp. Direction biases
 # the satellites away from the shooter so the spray pattern matches the
 # kill direction (~70% of satellites in the away-from-shooter arc).
-static func spawn_blood_kill_scene(parent: Node, world_pos: Vector3, spray_dir: Vector3 = Vector3.ZERO, blood_type: StringName = BLOOD_TYPE_HUMAN) -> void:
+# Approach A: one pool per kill, animated growth, proximity attach.
+#
+# Each kill produces ONE central pool that tweens from a small initial
+# diameter to a final diameter over POOL_GROWTH_DURATION. If the kill
+# happens close to an existing pool (within POOL_ATTACH_RADIUS of its
+# edge), the existing pool GROWS toward the new spawn instead of
+# stamping a fresh decal — models how real liquid spreads to absorb
+# nearby splatters into one continuous puddle.
+#
+# Models liquid spreading: no satellite stamps that overlap visually,
+# no bounding-circle cascade. Far-apart kills create distinct pools;
+# adjacent kills coalesce smoothly via the texture's soft alpha
+# edges. Persistence comes from a slower fade and lower stamp rate.
+
+# Pool sizing.
+const POOL_INITIAL_DIAMETER: float = 0.3        # tiny "fresh splash" at spawn
+const POOL_TARGET_MIN_DIAMETER: float = 1.2     # smallest final pool from a single kill
+const POOL_TARGET_MAX_DIAMETER: float = 1.8     # largest before merge growth
+const POOL_MAX_DIAMETER: float = 6.0            # cap on any pool's grown diameter
+const POOL_GROWTH_DURATION: float = 0.8         # initial-to-final spread time
+# Attach: if a new kill lands within this distance of an existing
+# pool's *edge*, grow that pool to encompass the new spawn instead of
+# stamping fresh. Fresh stamps still happen for kills in clear space.
+const POOL_ATTACH_RADIUS: float = 1.2
+# How much "buffer" we leave around the new spawn when growing — the
+# pool extends past the new spawn by this much so the spawn point is
+# safely inside the new bounds, not on its rim.
+const POOL_GROWTH_BUFFER: float = 0.4
+const _POOL_GROWTH_TWEEN_META: StringName = &"_pool_growth_tween"
+
+
+static func spawn_blood_kill_scene(parent: Node, world_pos: Vector3, _spray_dir: Vector3 = Vector3.ZERO, blood_type: StringName = BLOOD_TYPE_HUMAN) -> void:
 	if parent == null or _blood_disabled():
 		return
+	# Floor pool — one per kill, with attach-or-grow.
 	spawn_blood_decal(parent, world_pos, blood_type)
-	# Moderate satellite count. Higher counts (was 8-14) made a SINGLE
-	# kill instantly form a big pool because the overlap-merge absorbed
-	# all satellites into the main. 5-8 is enough variety per kill
-	# without forming a 5m+ pool on the first death — pools now grow
-	# over multiple kills as designed.
-	var satellite_count: int = randi_range(5, 8)
-	var spray_xz: Vector2 = Vector2.ZERO
-	if spray_dir.length_squared() > 0.0001:
-		spray_xz = Vector2(spray_dir.x, spray_dir.z).normalized()
-	for i in satellite_count:
-		var angle: float = randf() * TAU
-		# Bias 70% of satellites toward the spray direction (in front of
-		# the kill). The other 30% land randomly so the pattern still
-		# reads as chaotic, not a neat fan.
-		if spray_xz != Vector2.ZERO and randf() < 0.7:
-			var spray_angle := atan2(spray_xz.x, spray_xz.y)
-			angle = spray_angle + randf_range(-PI * 0.4, PI * 0.4)
-		# Tightened (was 0.8-3.5) so satellites stay closer to the kill.
-		# With overlap-merge, far satellites at 3.5 m forced the merged
-		# pool's bounding circle out to cover them — a single kill
-		# produced a ~5 m pool. 0.6-2.0 keeps the initial pool human-
-		# scale; subsequent kills extend it naturally.
-		var dist: float = randf_range(0.6, 2.0)
-		var offset := Vector3(sin(angle), 0.0, cos(angle)) * dist
-		spawn_blood_decal(parent, world_pos + offset, blood_type)
-	# Paint side-projected blood on any objects in the OBJECT_BLOOD
-	# receiver group within OBJECT_BLOOD_RADIUS — props, destructibles,
-	# interactables, future objects. See the "Object blood" comment
-	# block for the full pipeline.
+	# Side-paint nearby props / interactables / pillars.
 	spawn_blood_on_receivers(parent, world_pos, blood_type)
 
 
+# Public entry for "stamp a floor pool at world_pos OR grow the closest
+# existing pool toward it". Used by kill scenes and mist droplets.
 static func spawn_blood_decal(parent: Node, world_pos: Vector3, blood_type: StringName = BLOOD_TYPE_HUMAN) -> void:
 	if parent == null or _blood_disabled():
 		return
 	if _is_over_pit(parent, world_pos):
 		return
-	# Wide size range — 0.6 m to 2.5 m — so a kill scene's main + 2-4
-	# satellite splats vary clearly in scale. Independent X/Z gives
-	# shape variation too (squashed wide, squashed long, near-square).
-	# size.y is projection depth (-Y projection). Kept modest (0.6)
-	# because larger values made floor decals near walls paint a
-	# horizontal rectangle of blood UP the wall — the decal's volume
-	# extended into the wall, and the texture projected downward onto
-	# it. Props higher than ~30 cm don't get painted from the floor
-	# splatter; that's traded for not painting walls accidentally.
-	# Tall-prop coverage would need a separate dedicated pipeline
-	# (per-prop physics raycast on hit + side-projection decal).
-	# Tighter top end (was 0.6-2.5). Big initial stamps + overlap-merge =
-	# one kill instantly produces a 5 m pool. Smaller stamps let pools
-	# build gradually as kills accumulate.
-	var requested_size := Vector3(randf_range(0.5, 1.4), 0.6, randf_range(0.5, 1.4))
-	# If this spawn lands inside an existing splat, grow the existing
-	# one instead of stacking a new stamp on top. Same texture, just
-	# a larger size — accumulating hits build a visibly bigger pool.
-	var new_avg_size: float = (requested_size.x + requested_size.z) * 0.5
-	# Wider merge zone (0.45) than the tight-stamp pass, paired with
-	# the higher growth factor (0.60) and the larger cap (8 m) in
-	# _try_grow_existing_decal. Net behavior: cluster-kills feed into
-	# a few VISIBLY GROWING pools instead of producing a confetti of
-	# small splats. Spawns OUTSIDE existing pools still stamp fresh.
-	if _try_grow_existing_decal(world_pos, new_avg_size, 0.45):
+	var nearest := _find_pool_near(world_pos, POOL_ATTACH_RADIUS)
+	if nearest != null:
+		_grow_pool_toward(nearest, world_pos)
 		return
-	var decal := Decal.new()
+	_spawn_new_pool(parent, world_pos, blood_type)
+
+
+# Returns the live floor pool whose XZ edge is closest to `world_pos`,
+# OR null if no pool sits within `max_edge_dist` of its edge.
+static func _find_pool_near(world_pos: Vector3, max_edge_dist: float) -> Decal:
+	var best: Decal = null
+	var best_edge_dist: float = max_edge_dist
+	for d_var in _blood_decal_ring:
+		if not is_instance_valid(d_var):
+			continue
+		var d := d_var as Decal
+		if d == null:
+			continue
+		var dx: float = world_pos.x - d.global_position.x
+		var dz: float = world_pos.z - d.global_position.z
+		var centre_dist: float = sqrt(dx * dx + dz * dz)
+		var pool_r: float = (d.size.x + d.size.z) * 0.25
+		var edge_dist: float = maxf(centre_dist - pool_r, 0.0)
+		if edge_dist < best_edge_dist:
+			best = d
+			best_edge_dist = edge_dist
+	return best
+
+
+# Grow `pool` so its bounds extend toward (and slightly past) `new_pos`.
+# Tweens the size change so the growth is visibly animated. Kills any
+# previous growth tween on this pool so the latest target wins.
+static func _grow_pool_toward(pool: Decal, new_pos: Vector3) -> void:
+	if not is_instance_valid(pool):
+		return
+	var dx: float = new_pos.x - pool.global_position.x
+	var dz: float = new_pos.z - pool.global_position.z
+	var centre_dist: float = sqrt(dx * dx + dz * dz)
+	# Radius the pool would need to cover the new spawn + a buffer so
+	# the spawn isn't on the rim.
+	var needed_r: float = centre_dist + POOL_GROWTH_BUFFER
+	var current_r: float = (pool.size.x + pool.size.z) * 0.25
+	var target_r: float = clampf(maxf(current_r, needed_r), current_r, POOL_MAX_DIAMETER * 0.5)
+	if target_r <= current_r + 0.01:
+		# Already covers the new spawn — just re-sort so this pool stays
+		# on top of older nearby stamps.
+		_refresh_pool_sort_offset(pool)
+		return
+	_cancel_pool_growth_tween(pool)
+	var target_diameter: float = target_r * 2.0
+	var tween := pool.create_tween().set_parallel(true)
+	tween.tween_property(pool, "size:x", target_diameter, POOL_GROWTH_DURATION) \
+		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tween.tween_property(pool, "size:z", target_diameter, POOL_GROWTH_DURATION) \
+		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	pool.set_meta(_POOL_GROWTH_TWEEN_META, tween)
+	_refresh_pool_sort_offset(pool)
+
+
+# Spawn a fresh floor pool that animates from POOL_INITIAL_DIAMETER up
+# to a randomised target in [POOL_TARGET_MIN_DIAMETER, POOL_TARGET_MAX_DIAMETER].
+static func _spawn_new_pool(parent: Node, world_pos: Vector3, blood_type: StringName) -> void:
+	var pool := Decal.new()
 	var variant := _get_blood_splatter_variant(blood_type)
-	decal.texture_albedo = variant[&"albedo"]
-	decal.texture_normal = variant[&"normal"]
-	decal.texture_orm = _get_blood_orm_texture()
-	# Provisional size — the deferred clamp below shrinks this if walls
-	# are near.
-	decal.size = requested_size
-	# Per-decal brightness jitter — simulates fresh vs older spray so
-	# consecutive splats don't all read at identical value.
-	decal.modulate = _decal_color_jitter()
-	# Tight fades — the splatter texture carries hard edges (lobed core
-	# + thin streak arms + drops). Wider fades would soften the outline
-	# back into a smooth blob.
-	decal.upper_fade = 0.05
-	decal.lower_fade = 0.05
-	decal.albedo_mix = 1.0
-	decal.cull_mask = BLOOD_DECAL_CULL_LAYER
-	# Decals project along their -Y by default; rotate randomly around Y
-	# so adjacent splats don't look identical.
-	decal.rotation.y = randf() * TAU
-	parent.add_child(decal)
-	# Drop the decal at floor height (y ≈ 0) plus a tiny per-spawn
-	# jitter. _track_blood_decal also assigns a unique sorting_offset
-	# (the actual z-fight fix); jitter is kept because it helps the
-	# renderer keep decal batches distinct.
-	decal.global_position = Vector3(world_pos.x, randf_range(_DECAL_Y_JITTER_MIN, _DECAL_Y_JITTER_MAX), world_pos.z)
-	_track_blood_decal(decal)
-	# Defer the wall clamp — see provisional-size comment above. The
-	# decal exists at full requested size for one frame, then resizes
-	# once physics queries are safe (next process frame).
-	_apply_wall_clamp_deferred(decal, world_pos, requested_size)
+	pool.texture_albedo = variant[&"albedo"]
+	pool.texture_normal = variant[&"normal"]
+	pool.texture_orm = _get_blood_orm_texture()
+	# Start tiny; grow to the random target over POOL_GROWTH_DURATION.
+	pool.size = Vector3(POOL_INITIAL_DIAMETER, 0.6, POOL_INITIAL_DIAMETER)
+	pool.modulate = _decal_color_jitter()
+	pool.upper_fade = 0.15
+	pool.lower_fade = 0.15
+	pool.albedo_mix = 1.0
+	pool.cull_mask = BLOOD_DECAL_CULL_LAYER
+	pool.rotation.y = randf() * TAU
+	parent.add_child(pool)
+	pool.global_position = Vector3(
+		world_pos.x,
+		randf_range(_DECAL_Y_JITTER_MIN, _DECAL_Y_JITTER_MAX),
+		world_pos.z,
+	)
+	_track_blood_decal(pool)  # ring buffer + sort offset
+	var target_diameter: float = randf_range(POOL_TARGET_MIN_DIAMETER, POOL_TARGET_MAX_DIAMETER)
+	var tween := pool.create_tween().set_parallel(true)
+	tween.tween_property(pool, "size:x", target_diameter, POOL_GROWTH_DURATION) \
+		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tween.tween_property(pool, "size:z", target_diameter, POOL_GROWTH_DURATION) \
+		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	pool.set_meta(_POOL_GROWTH_TWEEN_META, tween)
+
+
+# Kill any in-flight growth tween on `pool` so a fresh one can run.
+# A second growth toward a different new_pos shouldn't blend with the
+# previous one's target — the latest spawn defines the new target.
+static func _cancel_pool_growth_tween(pool: Decal) -> void:
+	if not pool.has_meta(_POOL_GROWTH_TWEEN_META):
+		return
+	var prior: Tween = pool.get_meta(_POOL_GROWTH_TWEEN_META, null) as Tween
+	if prior != null and prior.is_valid():
+		prior.kill()
+	pool.remove_meta(_POOL_GROWTH_TWEEN_META)
+
+
+# Re-stamp a pool's sort offset to the latest counter so it stays on
+# top of older stamps it visually overlaps (newer blood over older).
+static func _refresh_pool_sort_offset(pool: Decal) -> void:
+	_blood_sort_counter += 1
+	pool.sorting_offset = float(_blood_sort_counter) * _BLOOD_SORT_STEP
 
 
 # Reads the world's physics space (now safely outside any signal flush)
@@ -1403,19 +1436,20 @@ static func _spawn_object_blood_decal(receiver: Node3D, impact_pos: Vector3, imp
 	decal.texture_normal = variant[&"normal"]
 	decal.texture_orm = _get_blood_orm_texture()
 	# Size falls off with distance from the kill — close hits get a big
-	# stamp, farther ones get a small one. Same per-axis range varies
-	# the silhouette so multiple stamps don't read as identical.
+	# stamp, farther ones get a small one. Floor at 0.6 so even max-
+	# distance splats stay clearly visible.
 	var dist: float = kill_pos.distance_to(impact_pos)
-	var size_scale: float = clampf(1.0 - dist / OBJECT_BLOOD_RADIUS, 0.35, 1.0)
+	var size_scale: float = clampf(1.0 - dist / (OBJECT_BLOOD_RADIUS * 1.5), 0.6, 1.0)
 	# size.y is the projection DEPTH along the decal's local -Y. For
 	# horizontal side-projection (decal +Y = surface normal pointing
 	# back to the kill), size.y is how far the projection extends INTO
 	# the prop. 1.8 m reaches through ~all standing prop widths. x/z
 	# are the splat's footprint on the prop's facing surface.
+	# Increased to 0.7-1.4 m so the splat reads at iso distance.
 	decal.size = Vector3(
-		randf_range(0.4, 0.9) * size_scale,
+		randf_range(0.7, 1.4) * size_scale,
 		1.8,
-		randf_range(0.4, 0.9) * size_scale,
+		randf_range(0.7, 1.4) * size_scale,
 	)
 	decal.modulate = _decal_color_jitter()
 	decal.upper_fade = 0.08
@@ -1446,6 +1480,47 @@ static func _spawn_object_blood_decal(receiver: Node3D, impact_pos: Vector3, imp
 		if d != null:
 			d.queue_free()
 	)
+
+
+# Auto-fit a collision shape to match the visible mesh's AABB. Call
+# from a body's _ready when the gameplay collision should track the
+# visible silhouette (most "props" — chests / consoles / pillars).
+# Existing classes whose collision is INTENTIONALLY smaller / taller
+# than the visible mesh (DestructibleProp's tall bullet-catch column,
+# HoverableInteractable's tight click hitbox) should NOT call this —
+# they author specific shapes for gameplay reasons.
+#
+# Behaviour:
+#   1. Walk `body`'s VisualInstance3D children, union their AABBs.
+#   2. Replace (or add) a CollisionShape3D child named &"AutoCollision"
+#      with a BoxShape3D matching the visual AABB.
+#   3. Idempotent — re-running just resizes the existing shape.
+#
+# If the body already has an authored CollisionShape3D, this leaves
+# it alone (only the auto-collision is managed).
+static func fit_collision_to_visual(body: CollisionObject3D) -> void:
+	if body == null or not is_instance_valid(body):
+		return
+	var aabbs: Array[AABB] = []
+	_collect_visual_aabbs(body, aabbs)
+	if aabbs.is_empty():
+		return
+	var combined: AABB = aabbs[0]
+	for i in range(1, aabbs.size()):
+		combined = combined.merge(aabbs[i])
+	# AABB is in WORLD space — convert back to body-local for the
+	# CollisionShape3D's position. body.global_transform is the body's
+	# world placement; its inverse maps world → local.
+	var local_center: Vector3 = body.global_transform.affine_inverse() * combined.get_center()
+	var shape: BoxShape3D = BoxShape3D.new()
+	shape.size = combined.size
+	var col := body.get_node_or_null(^"AutoCollision") as CollisionShape3D
+	if col == null:
+		col = CollisionShape3D.new()
+		col.name = &"AutoCollision"
+		body.add_child(col)
+	col.shape = shape
+	col.position = local_center
 
 
 # Single-call opt-in for any object that should receive blood splatter
@@ -2342,125 +2417,6 @@ static func _get_blood_orm_texture() -> Texture2D:
 	img.fill(Color(1.0, 0.45, 0.0))
 	_blood_orm_texture = ImageTexture.create_from_image(img)
 	return _blood_orm_texture
-
-
-# Maximum size a single decal can grow to via merge accumulation.
-# Caps the "blood pool grows as more lands" behaviour so sustained
-# fights produce visible pools without one decal eating the room.
-const _DECAL_MAX_GROWN_SIZE: float = 8.0
-
-# Physical-overlap merge. If `world_pos` would stamp a footprint that
-# overlaps an existing pool's footprint (treating both as XZ circles),
-# absorb the new spawn into that pool — grow it to contain both, then
-# cascade-absorb any OTHER pools the now-larger pool overlaps. Models
-# real-liquid behaviour: two splatters that touch are one pool.
-#
-# Returns true if a merge happened (caller skips the fresh stamp);
-# false if no overlap and the caller should stamp a new decal.
-#
-# `inner_ratio` is kept for API compatibility but no longer used for
-# the threshold test — overlap = (distance < r1 + r2), always.
-static func _try_grow_existing_decal(world_pos: Vector3, new_avg_size: float, _inner_ratio: float = 0.55) -> bool:
-	var new_r: float = new_avg_size * 0.5
-	var best: Decal = null
-	var best_dist: float = INF
-	for d_var in _blood_decal_ring:
-		if not is_instance_valid(d_var):
-			continue
-		var d: Decal = d_var as Decal
-		if d == null:
-			continue
-		var dx: float = world_pos.x - d.global_position.x
-		var dz: float = world_pos.z - d.global_position.z
-		var dist: float = sqrt(dx * dx + dz * dz)
-		var existing_r: float = (d.size.x + d.size.z) * 0.25
-		# Overlap = combined radii exceed centre distance. Pick the
-		# CLOSEST overlapping pool so the merge is always into the most
-		# locally relevant pool (not a far-away one we happen to graze).
-		if dist < new_r + existing_r and dist < best_dist:
-			best = d
-			best_dist = dist
-	if best == null:
-		return false
-	# Re-stamp the sort offset to the latest counter on EVERY merge so
-	# the growing pool stays on top of any older stamps it visually
-	# overlaps (otherwise newer outside-spawns paint over it).
-	_blood_sort_counter += 1
-	best.sorting_offset = float(_blood_sort_counter) * _BLOOD_SORT_STEP
-	# Compute the new bounding circle that contains both the existing
-	# pool and the new spawn. centre shifts toward the new spawn
-	# proportionally to its radius weight; radius grows to encompass
-	# both. Two formulas, one per case (existing already contains the
-	# new spawn vs. genuine extension).
-	var existing_r: float = (best.size.x + best.size.z) * 0.25
-	var to_new := Vector3(world_pos.x - best.global_position.x, 0.0, world_pos.z - best.global_position.z)
-	var d_centre: float = to_new.length()
-	if d_centre + new_r <= existing_r:
-		# New spawn is entirely inside the existing pool — no growth,
-		# just the sort-offset refresh above.
-		return true
-	# Bounding circle: centre is on the line between the two centres,
-	# offset from the existing centre by (d + new_r - existing_r) / 2.
-	var shift: float = (d_centre + new_r - existing_r) * 0.5
-	var new_radius: float = (d_centre + new_r + existing_r) * 0.5
-	# Cap growth so one pool can't eat the whole level.
-	new_radius = minf(new_radius, _DECAL_MAX_GROWN_SIZE * 0.5)
-	if d_centre > 0.0001:
-		best.global_position += (to_new / d_centre) * shift
-	# Size is the full diameter (Decal3D's size is a box's full extent,
-	# not a half-extent).
-	var new_diameter: float = new_radius * 2.0
-	best.size.x = new_diameter
-	best.size.z = new_diameter
-	# Cascade-absorb any other pools the grown decal now overlaps —
-	# real liquids don't stay separate just because they were placed
-	# one at a time, they coalesce on contact.
-	_absorb_overlapping_pools(best)
-	return true
-
-
-# After a pool grows, scan the ring for OTHER pools whose footprints
-# now overlap the grown pool's footprint. Absorb each (grow the host
-# to contain both, fast-fade the absorbed). Repeats until no further
-# overlaps remain — the "ink drop hits another ink drop" cascade.
-# Bounded by ring size so worst case is O(BLOOD_DECAL_MAX) per call.
-static func _absorb_overlapping_pools(host: Decal) -> void:
-	if not is_instance_valid(host):
-		return
-	var max_iterations: int = 6  # safety belt against pathological cascades
-	while max_iterations > 0:
-		max_iterations -= 1
-		var host_r: float = (host.size.x + host.size.z) * 0.25
-		var found_absorb: bool = false
-		for d_var in _blood_decal_ring:
-			if not is_instance_valid(d_var) or d_var == host:
-				continue
-			var d: Decal = d_var as Decal
-			if d == null:
-				continue
-			var dx: float = host.global_position.x - d.global_position.x
-			var dz: float = host.global_position.z - d.global_position.z
-			var dist: float = sqrt(dx * dx + dz * dz)
-			var d_r: float = (d.size.x + d.size.z) * 0.25
-			if dist >= host_r + d_r:
-				continue
-			# Overlap — extend host bounds to include d, then drop d.
-			if dist + d_r > host_r:
-				var shift: float = (dist + d_r - host_r) * 0.5
-				var new_r: float = (dist + d_r + host_r) * 0.5
-				new_r = minf(new_r, _DECAL_MAX_GROWN_SIZE * 0.5)
-				if dist > 0.0001:
-					host.global_position -= Vector3(dx, 0.0, dz) / dist * shift
-				host.size.x = new_r * 2.0
-				host.size.z = new_r * 2.0
-			# Fast-fade the absorbed pool so it doesn't pop out — it's
-			# already inside the host's footprint now, the fade just
-			# softens the disappearance over a few frames.
-			_fade_and_free(d)
-			found_absorb = true
-			break  # rescan from the top (host_r changed)
-		if not found_absorb:
-			break
 
 
 # Per-decal modulate jitter. Multiplies all three RGB channels by the
