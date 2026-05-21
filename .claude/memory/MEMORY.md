@@ -70,3 +70,7 @@
 - [X Bot ragdoll](project_xbot_ragdoll.md) — death = random Mixamo death anim + tween knockback; per-bone PhysicalBone3D ragdoll kicked lazily on explosion (Godot init quirk made physics-on-death snap to T-pose)
 - [Godot 4 runtime gotchas](project_godot4_runtime_gotchas.md) — gi_mode default=STATIC kills VFX under SDFGI; depth_draw_opaque self-refs soft-particle alpha; Jolt rejects non-uniform scale; ufbx handles cm→m natively
 - [Lambda capture freed](project_lambda_capture_freed.md) — SceneTreeTimers/node_added/etc survive scene reloads; lambdas with Node captures fired post-reload spam "Lambda capture at index 0 was freed"; capture instance_id (int) and re-resolve via instance_from_id
+- [Behavior mods system](project_behavior_mods.md) — Identity-layer gear modifiers; 24 mods × 6 slots; rollable params + implemented/preview flag + condition_id; MVP shipped 2026-05-20
+- [MP lobby member data pattern](project_mp_lobby_data_pattern.md) — Publish per-character metadata via Steam.setLobbyMemberData → read on remote peers → cache on Player node → refresh on lobby_data_update. Gender is the reference example.
+- [Looping anim hold pattern](project_looping_anim_hold.md) — Sustained-pose animations (LMB-hold fire) need loop=true + per-tick picker override + single source of truth across all call sites — partial fixes spaz at the fire-rate frequency
+- [Procgen switch softlock](project_procgen_switch_softlock.md) — Boss rooms with 3+ doors can over-allocate switch puzzles; debug "Force Unlock Doors" button is the runtime workaround

@@ -66,3 +66,17 @@ infer the type of 'name' variable because the value doesn't have a
 set type". Annotate explicitly: `var bone_name_str: String =
 pb.bone_name` — or just avoid `name` as a local variable name when
 working in `Node`-derived contexts.
+
+**5. RichTextLabel `[font_size=N]` is ABSOLUTE, not relative.** Both
+the bare `[font_size=N]` BBCode tag and `add_theme_font_size_override`
+on a RichTextLabel set the pixel size directly. If the label's base
+font is configured to `normal_font_size = 7` (e.g. the item tooltip's
+stats block), then `[font_size=10]` inside the BBCode RENDERS LARGER
+than the surrounding body, not smaller. Cost me two iterations on the
+behavior-mod tooltip — I assumed font_size 10 was "compact" because
+default Godot Labels are usually ~16pt, forgot the tooltip overrides
+the base to 7pt. Sanity check: grep the label's
+`add_theme_font_size_override` calls to confirm the base size before
+picking a BBCode override. To make text smaller than base, omit the
+tag entirely (inherit base) or use a value LOWER than the configured
+base. To match base, just don't tag it.
