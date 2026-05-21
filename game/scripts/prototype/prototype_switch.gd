@@ -138,8 +138,8 @@ func _set_interactive(on: bool) -> void:
 		remove_from_group(&"interactables")
 		remove_from_group(&"hovered_clickable")
 		remove_from_group(&"tooltip_target")
-		if _outline != null:
-			_outline.visible = false
+		if _outline_source != null:
+			OutlineCompositor.detach(_outline_source)
 		get_tree().call_group(&"interactable_tooltip", &"hide_tooltip")
 
 func _refresh_lamp() -> void:

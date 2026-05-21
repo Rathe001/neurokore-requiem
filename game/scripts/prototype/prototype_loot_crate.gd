@@ -223,8 +223,8 @@ func _open_visual() -> void:
 func _become_inert() -> void:
 	input_ray_pickable = false
 	SpatialGrid.unregister(self)
-	if _outline != null:
-		_outline.visible = false
+	if _outline_source != null:
+		OutlineCompositor.detach(_outline_source)
 	remove_from_group(&"hovered_clickable")
 	remove_from_group(&"tooltip_target")
 	get_tree().call_group(&"interactable_tooltip", &"hide_tooltip")
