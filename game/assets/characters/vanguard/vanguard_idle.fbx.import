@@ -9,6 +9,7 @@ path="res://.godot/imported/vanguard_idle.fbx-a912144281b9f8bd9c3bc99c2d34b664.s
 [deps]
 
 source_file="res://assets/characters/vanguard/vanguard_idle.fbx"
+dest_files=["res://.godot/imported/vanguard_idle.fbx-a912144281b9f8bd9c3bc99c2d34b664.scn"]
 
 [params]
 

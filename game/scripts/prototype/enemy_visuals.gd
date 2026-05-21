@@ -64,11 +64,11 @@ func refresh_outline() -> void:
 		_s_outline_mat_locked.grow = true
 		_s_outline_mat_locked.grow_amount = PrototypeEnemy.OUTLINE_GROW
 	var mat: StandardMaterial3D = _s_outline_mat_locked if _tooltip_locked else _s_outline_mat
-	var show := _hovered or _tooltip_locked
+	var should_show := _hovered or _tooltip_locked
 	for mesh in _outlined_meshes:
 		if not is_instance_valid(mesh):
 			continue
-		mesh.material_overlay = mat if show else null
+		mesh.material_overlay = mat if should_show else null
 
 
 func on_mouse_entered() -> void:

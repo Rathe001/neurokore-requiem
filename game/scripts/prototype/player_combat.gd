@@ -375,7 +375,7 @@ func _apply_melee_combo_shake(weapon: Item, step: int) -> void:
 ## double-shot, long enough that both beams / bolts are visually distinct.
 const DOUBLE_TAP_DELAY: float = 0.10
 
-func _try_double_tap(skill: Skill, aim: Vector3, eff_range: float, weapon: Item, source_offset: Vector3) -> void:
+func _try_double_tap(skill: Skill, _aim: Vector3, eff_range: float, weapon: Item, source_offset: Vector3) -> void:
 	var chance := Effects.get_aggregate(&"double_tap_chance")
 	if chance <= 0.0 or randf() >= chance:
 		return

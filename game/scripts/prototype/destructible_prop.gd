@@ -70,7 +70,7 @@ func _register_spatial() -> void:
 	SpatialGrid.register(self, &"enemies")
 
 
-func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_strength: float = 0.0, multistrike: int = 1, is_crit: bool = false, _weapon_base_id: StringName = &"", _is_explosion: bool = false) -> void:
+func take_damage(amount: int, _knockback_from: Vector3 = Vector3.ZERO, _knockback_strength: float = 0.0, multistrike: int = 1, is_crit: bool = false, _weapon_base_id: StringName = &"", _is_explosion: bool = false) -> void:
 	if not _alive:
 		return
 	# In MP only the host applies damage; clients route hits via the

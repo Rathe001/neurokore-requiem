@@ -9,6 +9,7 @@ path="res://.godot/imported/alien_idle.fbx-8dfd9e36d816b8476e735e0923b1409c.scn"
 [deps]
 
 source_file="res://assets/characters/alien/alien_idle.fbx"
+dest_files=["res://.godot/imported/alien_idle.fbx-8dfd9e36d816b8476e735e0923b1409c.scn"]
 
 [params]
 

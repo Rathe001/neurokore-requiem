@@ -625,8 +625,8 @@ func _paint_row(row: Dictionary, unlocked_tier: int) -> void:
 	# Markers between tier sections — visible when both adjacent tiers have allocations.
 	var markers: Array = row["markers"]
 	for mi in markers.size():
-		var show := mi < TIER_COUNT - 1 and tier_has_alloc[mi] and tier_has_alloc[mi + 1]
-		(markers[mi] as ColorRect).visible = show
+		var marker_visible := mi < TIER_COUNT - 1 and tier_has_alloc[mi] and tier_has_alloc[mi + 1]
+		(markers[mi] as ColorRect).visible = marker_visible
 
 	# Node rects: allocated tiers get class color, everything else gets ghost.
 	# Lock icons only on actually locked tiers (tier >= unlocked_tier).

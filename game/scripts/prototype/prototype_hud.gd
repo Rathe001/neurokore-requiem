@@ -890,9 +890,9 @@ func _build_talent_point_button() -> void:
 	btn.tooltip_text = "Unallocated talent points (N)"
 	btn.pressed.connect(_on_talent_button_pressed)
 	# Add to AvatarPanel so it anchors to the same bottom-center region.
-	var avatar_panel := root.get_node_or_null(^"AvatarPanel")
-	if avatar_panel != null:
-		avatar_panel.add_child(btn)
+	var avatar_container := root.get_node_or_null(^"AvatarPanel")
+	if avatar_container != null:
+		avatar_container.add_child(btn)
 	else:
 		root.add_child(btn)
 	_talent_btn = btn

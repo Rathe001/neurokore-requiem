@@ -102,7 +102,7 @@ const PIT_FOG_CAP_DENSITY := 8.0
 const PIT_FOG_COLUMN_HEIGHT := 4.0
 const PIT_FOG_COLUMN_DENSITY := 2.0
 
-static func _build_bottomless_fog(ctx: LevelBuildContext, center: Vector3, inner_x: float, inner_z: float, depth: float) -> void:
+static func _build_bottomless_fog(ctx: LevelBuildContext, center: Vector3, inner_x: float, inner_z: float, _depth: float) -> void:
 	# Dense cap at floor level — the visible "cloud" the player sees.
 	var cap := FogVolume.new()
 	cap.size = Vector3(inner_x, PIT_FOG_CAP_HEIGHT, inner_z)

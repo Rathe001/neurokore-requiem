@@ -175,7 +175,7 @@ func _on_submit_pressed() -> void:
 	if lobby_name.is_empty():
 		# Fall back to the placeholder if the user left the name blank.
 		lobby_name = "%s's Game" % SteamState.persona_name
-	var size: int = int(_size_option.get_item_id(_size_option.selected))
+	var lobby_size: int = int(_size_option.get_item_id(_size_option.selected))
 	var lobby_type: int = int(_privacy_option.get_item_id(_privacy_option.selected))
 	# Password only carries through when the lobby type is Private — for
 	# Public / Friends we ignore whatever's in the field so a stale
@@ -183,4 +183,4 @@ func _on_submit_pressed() -> void:
 	var password: String = ""
 	if lobby_type == NetState.LobbyType.PRIVATE:
 		password = _password_field.text
-	submit_pressed.emit(lobby_name, size, lobby_type, password)
+	submit_pressed.emit(lobby_name, lobby_size, lobby_type, password)

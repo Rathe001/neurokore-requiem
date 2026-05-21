@@ -1918,7 +1918,6 @@ func _cast_lmb_combat() -> void:
 	if aim == Vector3.ZERO:
 		_lmb_busy = false
 		return
-	var infinite_resource := DebugState.config != null and DebugState.config.infinite_resource
 
 	# Extra Amalgamation arms fire FREE — they don't gate on resource and
 	# don't consume it. Otherwise a 4-arm Forged drains the pool in one
@@ -2838,8 +2837,8 @@ func _apply_flame_transform(aim: Vector3, range_m: float) -> void:
 	var ref_up := Vector3.UP
 	var x_axis := aim_norm.cross(ref_up).normalized()
 	var z_axis := x_axis.cross(aim_norm).normalized()
-	var basis := Basis(x_axis, aim_norm, z_axis)
-	_flame_visual.global_transform = Transform3D(basis, muzzle)
+	var flame_basis := Basis(x_axis, aim_norm, z_axis)
+	_flame_visual.global_transform = Transform3D(flame_basis, muzzle)
 	var mesh_inst := _flame_visual.get_node_or_null(^"ChannelFlameMesh") as MeshInstance3D
 	if mesh_inst != null:
 		mesh_inst.scale = Vector3(range_m, range_m, 1.0)

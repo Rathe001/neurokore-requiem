@@ -1018,8 +1018,8 @@ func _build_stats_text(item: Item, equipped: Item = null, force_text: bool = fal
 			lines.append("%s%.1f%% %s" % [sign_f, amt_f, label])
 		else:
 			var amount: int = item.get_effective_modifier(stat_id)
-			var sign := "+" if amount > 0 else ""
-			lines.append("%s%d %s" % [sign, amount, label])
+			var sign_str := "+" if amount > 0 else ""
+			lines.append("%s%d %s" % [sign_str, amount, label])
 	return "\n".join(lines)
 
 

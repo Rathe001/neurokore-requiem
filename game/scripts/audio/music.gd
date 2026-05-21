@@ -170,23 +170,21 @@ func _on_loop_timer() -> void:
 	# Level playlist: advance to the next shuffled track. When the queue
 	# is exhausted, re-shuffle so the rotation never repeats the same
 	# order back-to-back.
+	var next_path: String
+	var next_fade: float = _loop_fade_in_sec
 	if not _level_queue.is_empty():
 		_level_queue_idx += 1
 		if _level_queue_idx >= _level_queue.size():
 			_build_level_queue()
-		var path := _level_queue[_level_queue_idx]
-		var fade := _loop_fade_in_sec
-		# Clear the no-op guard so play_track doesn't skip on "same stream
-		# already active" — the active player is stopped at this point but
-		# its `stream` reference still matches.
-		_loop_path = ""
-		play_track(path, fade)
-		return
-	# Non-level track: replay the same path (title screen, etc.).
-	var path := _loop_path
-	var fade := _loop_fade_in_sec
+		next_path = _level_queue[_level_queue_idx]
+	else:
+		# Non-level track: replay the same path (title screen, etc.).
+		next_path = _loop_path
+	# Clear the no-op guard so play_track doesn't skip on "same stream
+	# already active" — the active player is stopped at this point but
+	# its `stream` reference still matches.
 	_loop_path = ""
-	play_track(path, fade)
+	play_track(next_path, next_fade)
 
 
 func _cancel_loop_timer() -> void:

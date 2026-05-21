@@ -160,15 +160,15 @@ static func _create_indestructible(ctx: LevelBuildContext, pos: Vector3, def: Di
 
 	if not blocking:
 		# Non-blocking: bare mesh, no physics.
-		var mesh_inst := MeshInstance3D.new()
-		mesh_inst.name = StringName("Decor_%s" % def["name"])
-		mesh_inst.mesh = _make_mesh(def)
-		mesh_inst.material_override = _make_material(def)
-		mesh_inst.position = pos + Vector3(0, 0.005, 0)  # tiny lift off floor
-		mesh_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		ctx.root.add_child(mesh_inst)
-		mesh_inst.add_to_group(&"structures")
-		mesh_inst.add_to_group(&"clutter")
+		var decor_mesh := MeshInstance3D.new()
+		decor_mesh.name = StringName("Decor_%s" % def["name"])
+		decor_mesh.mesh = _make_mesh(def)
+		decor_mesh.material_override = _make_material(def)
+		decor_mesh.position = pos + Vector3(0, 0.005, 0)  # tiny lift off floor
+		decor_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		ctx.root.add_child(decor_mesh)
+		decor_mesh.add_to_group(&"structures")
+		decor_mesh.add_to_group(&"clutter")
 		return
 
 	# Blocking props are now DestructibleProps with high HP and

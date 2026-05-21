@@ -443,7 +443,7 @@ static func build_room_walls_kit(ctx: LevelBuildContext, center: Vector3, rd: Ro
 # (Y-up), but some exports keep height in local Z. We detect which axis
 # is taller and choose the rotation/scale accordingly. y_rot picks which
 # wall side the panel faces.
-static func _add_tiled_wall_segment(out: Array[Transform3D], custom_data_out: Array[Color], segment_center: Vector3, axis: Vector3, length: float, wall_h: float, thick: float, grid: float, y_rot: float, aabb: AABB) -> void:
+static func _add_tiled_wall_segment(out: Array[Transform3D], custom_data_out: Array[Color], segment_center: Vector3, axis: Vector3, length: float, wall_h: float, _thick: float, grid: float, y_rot: float, aabb: AABB) -> void:
 	var native_w: float = maxf(0.0001, aabb.size.x)
 	var n_panels: int = max(1, int(round(length / maxf(0.01, grid))))
 	var step: float = length / float(n_panels)

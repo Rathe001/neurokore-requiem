@@ -105,18 +105,18 @@ func _on_match_list(lobbies: Array) -> void:
 	# HC characters can only see/join HC lobbies and softcore can only see
 	# softcore — never let the two mix. The user has already picked a
 	# character before reaching this panel so PlayerState.hardcore is set.
-	var visible: Array = []
+	var filtered: Array = []
 	for info_variant in lobbies:
 		var info: Dictionary = info_variant
 		if bool(info.get(&"hardcore", false)) != PlayerState.hardcore:
 			continue
-		visible.append(info)
-	if visible.is_empty():
+		filtered.append(info)
+	if filtered.is_empty():
 		_empty_label.text = "MENU_MP_BROWSE_EMPTY"
 		_empty_label.visible = true
 		return
 	_empty_label.visible = false
-	for info_variant in visible:
+	for info_variant in filtered:
 		_add_row(info_variant)
 
 
