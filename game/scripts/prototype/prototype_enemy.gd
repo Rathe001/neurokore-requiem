@@ -235,7 +235,7 @@ const ANIM_CROUCH_RUN: Array[StringName] = [&"Crouch_Walk_Forward", &"Crouch_Wal
 const ANIM_JUMP := CombatConstants.ANIM_JUMP
 const ANIM_DEATH := CombatConstants.ANIM_DEATH
 
-const OUTLINE_GROW := 0.04
+const OUTLINE_GROW := 0.06           # match HoverableInteractable for parity with chests / switches
 const OUTLINE_LOCKED_COLOR := Color(1.0, 0.15, 0.15)
 
 # Random name palette for trash mobs — flavor for the augmentation-facility setting.
@@ -580,6 +580,13 @@ func _apply_class_mesh() -> void:
 	# material_casts_shadows / material_is_animated warnings about FBX
 	# sub-meshes that imported without a material slot.
 	XBotRagdoll.ensure_surface_materials(new_char)
+	# Re-collect the outline mesh list — the swap freed every node in
+	# `_outlined_meshes`, and EnemyVisuals.collect_meshes() is otherwise
+	# only called from _setup_hover() (one-shot, in _ready). Without this,
+	# pool-acquired enemies of a different class than they last held lose
+	# their hover-highlight because every cached mesh fails is_instance_valid.
+	if _visuals != null:
+		_visuals.collect_meshes()
 
 
 func _setup_ragdoll() -> void:

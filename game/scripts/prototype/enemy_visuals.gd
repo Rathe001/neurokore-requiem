@@ -47,19 +47,19 @@ func _walk_meshes(node: Node) -> void:
 
 func refresh_outline() -> void:
 	if _s_outline_mat == null:
+		# Opaque white + grow-and-cull-front to match HoverableInteractable's
+		# look (chests / switches / doors). The previous 0.6 alpha read as
+		# too subtle on the new humanoid character meshes.
 		_s_outline_mat = StandardMaterial3D.new()
 		_s_outline_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		_s_outline_mat.albedo_color = Color(1.0, 1.0, 1.0, 0.6)
-		_s_outline_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_s_outline_mat.albedo_color = Color.WHITE
 		_s_outline_mat.cull_mode = BaseMaterial3D.CULL_FRONT
 		_s_outline_mat.grow = true
 		_s_outline_mat.grow_amount = PrototypeEnemy.OUTLINE_GROW
 	if _s_outline_mat_locked == null:
 		_s_outline_mat_locked = StandardMaterial3D.new()
 		_s_outline_mat_locked.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		_s_outline_mat_locked.albedo_color = Color(PrototypeEnemy.OUTLINE_LOCKED_COLOR.r,
-			PrototypeEnemy.OUTLINE_LOCKED_COLOR.g, PrototypeEnemy.OUTLINE_LOCKED_COLOR.b, 0.6)
-		_s_outline_mat_locked.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_s_outline_mat_locked.albedo_color = PrototypeEnemy.OUTLINE_LOCKED_COLOR
 		_s_outline_mat_locked.cull_mode = BaseMaterial3D.CULL_FRONT
 		_s_outline_mat_locked.grow = true
 		_s_outline_mat_locked.grow_amount = PrototypeEnemy.OUTLINE_GROW
