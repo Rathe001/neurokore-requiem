@@ -1475,11 +1475,14 @@ const OBJECT_BLOOD_RECEIVER_GROUP: StringName = &"blood_receiver"
 const OBJECT_BLOOD_RADIUS: float = 3.0
 const OBJECT_BLOOD_MAX_PER_KILL: int = 4
 const OBJECT_BLOOD_FADE_DURATION: float = 14.0
-# Physics layers the kill→receiver visibility ray queries: WORLD (1) +
-# PILLAR (128). Walls block (we don't want to paint a prop the kill
-# can't actually see); pillars/destructibles are valid targets so the
-# ray lands ON them, giving us their surface normal directly.
-const _OBJECT_BLOOD_RAY_MASK: int = 1 | 128
+# Physics layers the kill→receiver visibility ray queries:
+#   1   (WORLD)        — walls / floors (block visibility)
+#   64  (INTERACTABLE) — chests / switches / doors / exits
+#   128 (PILLAR)       — destructibles / decorative pillars / cover
+# Without INTERACTABLE the ray passed straight through every loot
+# crate / switch / door (they all sit on layer 64), so they never
+# caught a hit and never painted.
+const _OBJECT_BLOOD_RAY_MASK: int = 1 | 64 | 128
 
 # Z-fight jitter range for floor decals. All floor splats sit at y=0,
 # so two decals projecting onto the same floor pixel have identical
