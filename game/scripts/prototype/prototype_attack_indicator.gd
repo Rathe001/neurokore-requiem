@@ -2096,6 +2096,17 @@ static func _try_grow_existing_decal(world_pos: Vector3, new_avg_size: float, in
 			best_dist_sq = d_sq
 	if best == null:
 		return false
+	# Re-stamp the sort offset to the latest counter on EVERY merge so
+	# the growing pool stays on top of any older stamps it visually
+	# overlaps. Without this the pool keeps its original (now-stale)
+	# offset and newer small stamps that land outside its merge zone
+	# but inside its visual footprint render on top — which reads as
+	# z-fight flicker when the camera moves (the pool "winks out"
+	# under fresh stamps as their antialiased edges shift). Refresh
+	# applies even at the size cap: a cap-sized pool that's just
+	# absorbed a fresh hit IS the most recent thing in that area.
+	_blood_sort_counter += 1
+	best.sorting_offset = float(_blood_sort_counter) * _BLOOD_SORT_STEP
 	# Existing decal already at cap — accept the merge (skip the new
 	# spawn) but don't grow further.
 	if best.size.x >= _DECAL_MAX_GROWN_SIZE and best.size.z >= _DECAL_MAX_GROWN_SIZE:
