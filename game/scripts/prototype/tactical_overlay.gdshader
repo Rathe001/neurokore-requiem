@@ -12,11 +12,16 @@ uniform float inner_radius : hint_range(0.0, 1.0) = 0.5;
 uniform float outer_radius : hint_range(0.0, 1.0) = 1.0;
 uniform vec3 inner_color : source_color = vec3(0.2, 0.85, 0.4);
 uniform vec3 outer_color : source_color = vec3(0.95, 0.6, 0.15);
-uniform float ring_thickness : hint_range(0.001, 0.05) = 0.008;
-uniform float max_alpha : hint_range(0.0, 1.0) = 0.45;
-uniform float scan_speed : hint_range(0.0, 8.0) = 2.0;
+// Toned-down defaults — previous values (thickness 0.008, max_alpha
+// 0.45, intensity 2.0, scan_speed 2.0) HDR-bloomed bright green/orange
+// over the play area and pulled focus from the gameplay. The current
+// values keep the rings legible as a quiet reference but no longer
+// dominate the frame.
+uniform float ring_thickness : hint_range(0.001, 0.05) = 0.005;
+uniform float max_alpha : hint_range(0.0, 1.0) = 0.18;
+uniform float scan_speed : hint_range(0.0, 8.0) = 0.6;
 uniform float dash_count : hint_range(4.0, 64.0) = 24.0;
-uniform float intensity : hint_range(0.0, 4.0) = 2.0;
+uniform float intensity : hint_range(0.0, 4.0) = 0.9;
 
 void fragment() {
 	vec2 uv = UV * 2.0 - 1.0;
