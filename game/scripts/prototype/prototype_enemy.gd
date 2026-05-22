@@ -2553,8 +2553,14 @@ func _spawn_ragdoll_corpse(kill_from: Vector3, kill_force: float) -> void:
 # the world-position path (not at-listener) so steps have spatial presence.
 
 func _tick_footsteps() -> void:
+	# spawn_puff stays false — N enemies in a fight would flood the screen
+	# with dust puffs. spawn_bloody_prints flips on so enemies CAN leave
+	# bloody trails after stepping in a pool: the print emission is
+	# already gated by is_in_blood() + a per-step decrementing counter,
+	# so out-of-blood enemies cost ~one is_in_blood() ring scan every
+	# 0.7 m of movement, which is cheap.
 	var result := Footsteps.tick(self, _footstep_accum, _footstep_last_pos,
-		ENEMY_FOOTSTEP_DISTANCE, ENEMY_FOOTSTEP_DB, false)
+		ENEMY_FOOTSTEP_DISTANCE, ENEMY_FOOTSTEP_DB, false, false, true)
 	_footstep_accum = result[0]
 	_footstep_last_pos = result[1]
 

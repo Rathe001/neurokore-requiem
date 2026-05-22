@@ -11,7 +11,12 @@ const BLOODY_FOOTSTEP_DISTANCE: float = 0.7
 
 ## Accumulate horizontal distance and emit a footstep when threshold crossed.
 ## Returns the updated [accum, last_pos] so callers can store them. Pass
-## spawn_puff = true for the local player (enemy puffs are too noisy at scale).
+## spawn_puff = true for the local player (enemy puffs are too noisy at
+## scale). Pass spawn_bloody_prints = true for any body that should leave
+## a bloody trail after stepping in a pool — defaults to spawn_puff to
+## preserve old behaviour, but enemies enable it independently so they
+## can track gore across the floor without flooding the screen with
+## dust particles.
 static func tick(
 	body: CharacterBody3D,
 	accum: float,
@@ -20,6 +25,7 @@ static func tick(
 	volume_db: float,
 	spawn_puff: bool,
 	at_listener: bool = false,
+	spawn_bloody_prints: bool = false,
 ) -> Array:
 	var pos := body.global_position
 	if last_pos == Vector3.ZERO:
@@ -34,7 +40,9 @@ static func tick(
 	# Bloody trail runs on its own short-stride accumulator so prints
 	# land at every footfall, not every other audio step. Cheap early-
 	# out inside _handle_bloody_footstep when not in blood.
-	if spawn_puff:
+	# Default to spawn_puff for backwards compat with any caller that
+	# hasn't opted into the new flag yet.
+	if spawn_bloody_prints or spawn_puff:
 		var bloody_accum: float = float(body.get_meta(&"bloody_accum", 0.0)) + d
 		if bloody_accum >= BLOODY_FOOTSTEP_DISTANCE:
 			bloody_accum = 0.0
