@@ -24,12 +24,32 @@ const ANIM_FIRE: Array[StringName] = [&"xbot/fire"]
 ## aimed forward. The player picks this over ANIM_FIRE whenever the
 ## fire input is held AND _want_dir is non-zero.
 const ANIM_FIRE_MOVE: Array[StringName] = [&"xbot/fire_move"]
-## No dedicated crouch idle in the X Bot library yet — fall back to
-## xbot/idle so the player stays standing visually but the log doesn't
-## spam "no match found" every frame while crouched. Source a Mixamo
-## "Crouching Idle" clip and add it to XBotAnimations to upgrade.
-const ANIM_CROUCH_IDLE: Array[StringName] = [&"Crouch_Idle", &"Crouch_Idle_Loop", &"CROUCH_IDLE", &"Crouch", &"CROUCH", &"xbot/idle"]
+## Dedicated crouch idle. Prefers the Mixamo "idle crouching" clip
+## from the Rifle Pack; falls through to legacy keys then standing
+## idle so a character without the new lib still resolves.
+const ANIM_CROUCH_IDLE: Array[StringName] = [&"xbot/crouch_idle", &"Crouch_Idle", &"Crouch_Idle_Loop", &"CROUCH_IDLE", &"Crouch", &"CROUCH", &"xbot/idle"]
+## Generic jump — single clip. Player code prefers ANIM_JUMP_START /
+## _AIR / _LAND below for the three jump phases; this stays as a
+## last-resort fallback for enemies that only have a generic jump.
 const ANIM_JUMP: Array[StringName] = [&"xbot/jump", &"Jump", &"Jump_Start", &"JUMP", &"JUMP_START"]
+## Reload — stationary motion, loops while _reload_remain > 0.
+const ANIM_RELOAD: Array[StringName] = [&"xbot/reload"]
+## Reload while moving — preferred when the player has wish_dir != 0
+## during a reload (run-and-reload feel).
+const ANIM_RELOAD_RUN: Array[StringName] = [&"xbot/reload_run"]
+## Grenade throw — one-shot pitching motion.
+const ANIM_GRENADE_THROW: Array[StringName] = [&"xbot/grenade_throw"]
+## Skill cast — 1H magic-style channel pose. Used by Shield /
+## Telekinesis / Blood Ritual / similar cast skills.
+const ANIM_CAST: Array[StringName] = [&"xbot/cast"]
+## Heavier 2H cast variant for AoE / channeled skills.
+const ANIM_CAST_2H: Array[StringName] = [&"xbot/cast_2h"]
+## Directional hit reactions. Picker chooses based on hit angle
+## relative to facing direction. Big variant for heavier impacts.
+const ANIM_HIT_LEFT: Array[StringName] = [&"xbot/hit_left"]
+const ANIM_HIT_RIGHT: Array[StringName] = [&"xbot/hit_right"]
+const ANIM_HIT_BACK: Array[StringName] = [&"xbot/hit_back"]
+const ANIM_HIT_BIG: Array[StringName] = [&"xbot/hit_big"]
 const ANIM_DEATH: Array[StringName] = [
 	&"xbot/death",
 	&"Death01", &"Death_1", &"Death_2", &"Death_A", &"Death_B", &"Death",

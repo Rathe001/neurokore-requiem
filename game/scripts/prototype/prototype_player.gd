@@ -62,7 +62,7 @@ const SKILL_INPUTS: Array[StringName] = [
 
 const ANIM_IDLE := CombatConstants.ANIM_IDLE
 const ANIM_RUN := CombatConstants.ANIM_RUN
-const ANIM_WALK_BACK: Array[StringName] = [&"Walk"]
+const ANIM_WALK_BACK: Array[StringName] = [&"xbot/walk_back", &"Walk"]
 const ANIM_CROUCH_IDLE := CombatConstants.ANIM_CROUCH_IDLE
 const ANIM_CROUCH_MOVE: Array[StringName] = [&"xbot/crouch_walk", &"Crouch_Fwd", &"Crouch_Fwd_Loop"]
 const ANIM_ATTACK := CombatConstants.ANIM_ATTACK
@@ -72,9 +72,15 @@ const ANIM_FIRE_MOVE := CombatConstants.ANIM_FIRE_MOVE
 ## landing in one animation, so all three jump states reference the
 ## same key. Legacy Quaternius names kept as fallbacks for any old
 ## rig still mounted, but the player now ships X Bot by default.
-const ANIM_JUMP_START: Array[StringName] = [&"xbot/jump", &"Jump_Start"]
-const ANIM_JUMP_AIR: Array[StringName] = [&"xbot/jump", &"Jump"]
-const ANIM_JUMP_LAND: Array[StringName] = [&"xbot/jump", &"Jump_Land"]
+const ANIM_JUMP_START: Array[StringName] = [&"xbot/jump_start", &"xbot/jump", &"Jump_Start"]
+const ANIM_JUMP_AIR: Array[StringName] = [&"xbot/jump_air", &"xbot/jump", &"Jump"]
+const ANIM_JUMP_LAND: Array[StringName] = [&"xbot/jump_land", &"xbot/jump", &"Jump_Land"]
+# Reload/grenade/cast constants pulled from CombatConstants — kept as
+# locals so the player code reads the same as the others.
+const ANIM_RELOAD := CombatConstants.ANIM_RELOAD
+const ANIM_RELOAD_RUN := CombatConstants.ANIM_RELOAD_RUN
+const ANIM_GRENADE_THROW := CombatConstants.ANIM_GRENADE_THROW
+const ANIM_CAST := CombatConstants.ANIM_CAST
 ## "Interact" is the legacy Quaternius name; the X Bot library has no
 ## dedicated interact clip, so we fall back to xbot/idle to suppress the
 ## no-match warning. The visual effect is that the player keeps playing
@@ -1689,7 +1695,18 @@ func _physics_process(delta: float) -> void:
 			if _is_aim_input_held() and not is_reloading():
 				var held_weapon: Item = InventoryState.get_equipped(&"weapon")
 				firing_held = held_weapon != null and held_weapon.is_bullet_weapon()
-			if firing_held:
+			if is_reloading():
+				# Reload pose overrides the locomotion picker. While the
+				# player is reloading, run picks reload_run (full-body
+				# move-while-reload); standing picks reload (stationary
+				# rack-and-load loop). The pose persists until
+				# _reload_remain reaches 0.
+				anim_player.speed_scale = 1.0
+				if _want_dir.length_squared() > 0.01:
+					_play_anim(ANIM_RELOAD_RUN, 1.0, 0.15)
+				else:
+					_play_anim(ANIM_RELOAD, 1.0, 0.15)
+			elif firing_held:
 				# Moving + firing → strafe (legs walk, rifle stays up).
 				# Standing still + firing → fire (rifle recoil cycle only).
 				anim_player.speed_scale = 1.0
@@ -2235,7 +2252,9 @@ func _cast_skill(skill: Skill) -> void:
 				if skill.resource_cost > 0:
 					_spend_resource(skill.resource_cost)
 				_face_direction(throw_dir)
-				_play_anim(ANIM_ATTACK, 1.4)
+				# Was ANIM_ATTACK (xbot/punch) — grenades now play the
+				# dedicated pitching motion.
+				_play_anim(ANIM_GRENADE_THROW, 1.4)
 				_grenade.activate(skill, throw_dir)
 			Skill.ActiveKind.SECOND_WIND:
 				_activate_second_wind(skill)
@@ -2458,6 +2477,10 @@ func start_reload() -> void:
 	_reload_target = &"weapon"
 	WeaponSounds.play_reload(w.weapon_base_id, global_position)
 	weapon_ammo_changed.emit()
+	# Play the dedicated reload anim. The locomotion picker prefers
+	# reload_run when wish_dir is active so the player can keep moving
+	# during the reload window.
+	_play_anim(ANIM_RELOAD, 1.0, 0.15)
 
 # ── AIM_HOLD (Tripod / Aimed Shot) ───────────────────────────────────────────────
 

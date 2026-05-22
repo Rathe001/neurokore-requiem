@@ -19,35 +19,64 @@ extends RefCounted
 ## Cached at class level — the library is built once on first call and
 ## reused for every subsequent install_on().
 
-const _IDLE_FBX: PackedScene = preload("res://assets/characters/x_bot/Idle.fbx")
-const _SLOW_RUN_FBX: PackedScene = preload("res://assets/characters/x_bot/Slow Run.fbx")
-const _FAST_RUN_FBX: PackedScene = preload("res://assets/characters/x_bot/Fast Run.fbx")
-const _PUNCH_FBX: PackedScene = preload("res://assets/characters/x_bot/Punching.fbx")
-const _FIRE_FBX: PackedScene = preload("res://assets/characters/x_bot/Firing Rifle2.fbx")
-const _HIT_FBX: PackedScene = preload("res://assets/characters/x_bot/Hit Reaction.fbx")
-const _JUMP_FBX: PackedScene = preload("res://assets/characters/x_bot/Jumping.fbx")
-const _JOG_FBX: PackedScene = preload("res://assets/characters/x_bot/Jog Forward.fbx")
-const _CROUCH_WALK_FBX: PackedScene = preload("res://assets/characters/x_bot/Crouched Walking.fbx")
-const _FIRE_MOVE_FBX: PackedScene = preload("res://assets/characters/x_bot/Strafing.fbx")
+# Core locomotion + combat anims (the original X Bot set). These are
+# the "base" library every character carries regardless of weapon
+# class. Phase 2 will add per-weapon-class overlays (pistol idle,
+# rifle idle, sword idle, etc.) that compose on top.
+const _IDLE_FBX: PackedScene = preload("res://assets/animations/core/Idle.fbx")
+const _SLOW_RUN_FBX: PackedScene = preload("res://assets/animations/core/Slow Run.fbx")
+const _FAST_RUN_FBX: PackedScene = preload("res://assets/animations/core/Fast Run.fbx")
+const _PUNCH_FBX: PackedScene = preload("res://assets/animations/core/Punching.fbx")
+const _FIRE_FBX: PackedScene = preload("res://assets/animations/core/Firing Rifle2.fbx")
+const _HIT_FBX: PackedScene = preload("res://assets/animations/core/Hit Reaction.fbx")
+const _JUMP_FBX: PackedScene = preload("res://assets/animations/core/Jumping.fbx")
+const _JOG_FBX: PackedScene = preload("res://assets/animations/core/Jog Forward.fbx")
+const _CROUCH_WALK_FBX: PackedScene = preload("res://assets/animations/core/Crouched Walking.fbx")
+const _FIRE_MOVE_FBX: PackedScene = preload("res://assets/animations/core/Strafing.fbx")
+
+# Phase 1 additions — universal slots that fill gaps in the existing
+# state machine without requiring per-weapon-class branching.
+const _CROUCH_IDLE_FBX: PackedScene = preload("res://assets/animations/ranged 2h/idle crouching.fbx")
+const _WALK_BACK_FBX: PackedScene = preload("res://assets/animations/ranged 2h/walk backward.fbx")
+const _STRAFE_LEFT_FBX: PackedScene = preload("res://assets/animations/ranged 2h/walk left.fbx")
+const _STRAFE_RIGHT_FBX: PackedScene = preload("res://assets/animations/ranged 2h/walk right.fbx")
+const _JUMP_START_FBX: PackedScene = preload("res://assets/animations/ranged 2h/jump up.fbx")
+const _JUMP_AIR_FBX: PackedScene = preload("res://assets/animations/ranged 2h/jump loop.fbx")
+const _JUMP_LAND_FBX: PackedScene = preload("res://assets/animations/ranged 2h/jump down.fbx")
+const _HIT_LEFT_FBX: PackedScene = preload("res://assets/animations/skills/Standing React Small From Left.fbx")
+const _HIT_RIGHT_FBX: PackedScene = preload("res://assets/animations/skills/Standing React Small From Right.fbx")
+const _HIT_BACK_FBX: PackedScene = preload("res://assets/animations/skills/Standing React Small From Back.fbx")
+const _HIT_BIG_FBX: PackedScene = preload("res://assets/animations/skills/Standing React Large From Front.fbx")
+const _CAST_FBX: PackedScene = preload("res://assets/animations/skills/standing 1H cast spell 01.fbx")
+const _CAST_2H_FBX: PackedScene = preload("res://assets/animations/skills/Standing 2H Cast Spell 01.fbx")
+const _RELOAD_FBX: PackedScene = preload("res://assets/animations/ranged 2h/Reloading stand.fbx")
+const _RELOAD_RUN_FBX: PackedScene = preload("res://assets/animations/ranged 2h/Reload running.fbx")
+const _GRENADE_THROW_FBX: PackedScene = preload("res://assets/animations/misc/Run And Throw Grenade.fbx")
 
 # Multiple death animations — randomly selected per kill for variety.
 # Keyed `death_0` through `death_N`; random_death_anim() picks one.
 # Add new Mixamo death FBXs to this array; they'll auto-key in order.
 const _DEATH_FBXS: Array[PackedScene] = [
-	preload("res://assets/characters/x_bot/Death From The Front.fbx"),
-	preload("res://assets/characters/x_bot/Death From Right.fbx"),
-	preload("res://assets/characters/x_bot/Death.fbx"),
-	preload("res://assets/characters/x_bot/Flying Back Death.fbx"),
-	preload("res://assets/characters/x_bot/Standing Death Backward 01.fbx"),
-	preload("res://assets/characters/x_bot/Standing Death Forward 01.fbx"),
-	preload("res://assets/characters/x_bot/Standing Death Forward 02.fbx"),
-	preload("res://assets/characters/x_bot/Standing Death Left 01.fbx"),
-	preload("res://assets/characters/x_bot/Standing Death Left 02.fbx"),
-	preload("res://assets/characters/x_bot/Standing React Death Backward.fbx"),
-	preload("res://assets/characters/x_bot/Standing React Death Forward.fbx"),
-	preload("res://assets/characters/x_bot/Standing React Death Left.fbx"),
-	preload("res://assets/characters/x_bot/Sword And Shield Death.fbx"),
-	preload("res://assets/characters/x_bot/Two Handed Sword Death.fbx"),
+	preload("res://assets/animations/deaths/Death From The Front.fbx"),
+	preload("res://assets/animations/deaths/Death From Right.fbx"),
+	preload("res://assets/animations/deaths/Death.fbx"),
+	preload("res://assets/animations/deaths/Flying Back Death.fbx"),
+	preload("res://assets/animations/deaths/Standing Death Backward 01.fbx"),
+	preload("res://assets/animations/deaths/Standing Death Forward 01.fbx"),
+	preload("res://assets/animations/deaths/Standing Death Forward 02.fbx"),
+	preload("res://assets/animations/deaths/Standing Death Left 01.fbx"),
+	preload("res://assets/animations/deaths/Standing Death Left 02.fbx"),
+	preload("res://assets/animations/deaths/Standing React Death Backward.fbx"),
+	preload("res://assets/animations/deaths/Standing React Death Forward.fbx"),
+	preload("res://assets/animations/deaths/Standing React Death Left.fbx"),
+	preload("res://assets/animations/deaths/Sword And Shield Death.fbx"),
+	preload("res://assets/animations/deaths/Two Handed Sword Death.fbx"),
+	# Phase 1 additions — 5 new death variants
+	preload("res://assets/animations/deaths/Death From Back Headshot.fbx"),
+	preload("res://assets/animations/deaths/Dying.fbx"),
+	preload("res://assets/animations/deaths/Falling Back Death.fbx"),
+	preload("res://assets/animations/deaths/Standing Death Backward 01(1).fbx"),
+	preload("res://assets/animations/deaths/Standing Death Right 01.fbx"),
 ]
 
 const LIBRARY_NAME: StringName = &"xbot"
@@ -85,6 +114,41 @@ static func get_library() -> AnimationLibrary:
 	# legs play a tactical sidestep cycle. Loops + hip-stripped so the
 	# CharacterBody3D's velocity drives travel.
 	_extract(_library, &"fire_move", _FIRE_MOVE_FBX, true, true)
+	# Phase 1 universal slots —
+	# Crouch idle: dedicated standing-crouch pose (replaces the
+	# xbot/idle fallback that left the player visually upright while
+	# crouched).
+	_extract(_library, &"crouch_idle", _CROUCH_IDLE_FBX, true, true)
+	# Backward / lateral movement — loop + hip-strip so velocity drives
+	# travel, not the baked-in clip translation.
+	_extract(_library, &"walk_back", _WALK_BACK_FBX, true, true)
+	_extract(_library, &"strafe_left", _STRAFE_LEFT_FBX, true, true)
+	_extract(_library, &"strafe_right", _STRAFE_RIGHT_FBX, true, true)
+	# Jump split into start (wind-up + push-off, one-shot) / air
+	# (falling loop) / land (touchdown, one-shot). Replaces the single
+	# xbot/jump that played for all three phases.
+	_extract(_library, &"jump_start", _JUMP_START_FBX, false, false)
+	_extract(_library, &"jump_air", _JUMP_AIR_FBX, true, false)
+	_extract(_library, &"jump_land", _JUMP_LAND_FBX, false, false)
+	# Directional hit reactions — picker branches on hit direction.
+	# All are one-shots that auto-return to the prior state.
+	_extract(_library, &"hit_left", _HIT_LEFT_FBX, false, false)
+	_extract(_library, &"hit_right", _HIT_RIGHT_FBX, false, false)
+	_extract(_library, &"hit_back", _HIT_BACK_FBX, false, false)
+	_extract(_library, &"hit_big", _HIT_BIG_FBX, false, false)
+	# Skill cast poses — 1H for Shield/Telekinesis/Blood Ritual,
+	# 2H for AoE / heavier casts. Both one-shot.
+	_extract(_library, &"cast", _CAST_FBX, false, false)
+	_extract(_library, &"cast_2h", _CAST_2H_FBX, false, false)
+	# Reload — stationary variant loops (it's a 1-2s repeating
+	# rack-and-load motion). reload_run is hip-stripped so the player
+	# keeps moving during the reload.
+	_extract(_library, &"reload", _RELOAD_FBX, true, false)
+	_extract(_library, &"reload_run", _RELOAD_RUN_FBX, true, true)
+	# Grenade throw — one-shot pitching motion. Run-and-throw lets the
+	# player keep their forward momentum, hip-stripped so velocity
+	# drives travel not the clip.
+	_extract(_library, &"grenade_throw", _GRENADE_THROW_FBX, false, true)
 	for i in _DEATH_FBXS.size():
 		_extract(_library, StringName("death_%d" % i), _DEATH_FBXS[i], false, false)
 	return _library
