@@ -234,6 +234,24 @@ const ANIM_CROUCH_IDLE := CombatConstants.ANIM_CROUCH_IDLE
 const ANIM_CROUCH_RUN: Array[StringName] = [&"Crouch_Walk_Forward", &"Crouch_Walk", &"CROUCH_WALK", &"Crouch_Idle", &"CROUCH_IDLE"]
 const ANIM_JUMP := CombatConstants.ANIM_JUMP
 const ANIM_DEATH := CombatConstants.ANIM_DEATH
+const ANIM_HIT_LEFT := CombatConstants.ANIM_HIT_LEFT
+const ANIM_HIT_RIGHT := CombatConstants.ANIM_HIT_RIGHT
+const ANIM_HIT_BACK := CombatConstants.ANIM_HIT_BACK
+const ANIM_HIT_BIG := CombatConstants.ANIM_HIT_BIG
+
+# Hit-react one-shot suppresses the locomotion picker for this many
+# seconds after a big-enough hit. Short enough that the enemy resumes
+# chase quickly; long enough that the hit anim actually reads.
+const _HIT_REACT_DURATION: float = 0.4
+# Damage threshold (fraction of max_health) below which we skip the
+# hit-react anim entirely. Tiny grazes shouldn't interrupt the chase
+# or attack cycle.
+const _HIT_REACT_MIN_DMG_PCT: float = 0.10
+# Currently-playing hit-react anim and remaining duration. Decremented
+# in _physics_process. While > 0, the locomotion picker plays the hit
+# anim instead of idle/run.
+var _hit_react_remain: float = 0.0
+var _hit_react_anim: Array[StringName] = []
 
 const OUTLINE_GROW := 0.06           # match HoverableInteractable for parity with chests / switches
 const OUTLINE_LOCKED_COLOR := Color(1.0, 0.15, 0.15)
@@ -1007,6 +1025,14 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 		exit_offset = exit_offset.normalized() * 0.30
 	var burst_pos := hit_pos + exit_offset
 	PrototypeAttackIndicator.spawn_blood_burst(get_parent(), burst_pos, blood_dir, hit_mult, blood_type)
+	# Directional hit reaction — pick hit_left/right/back/big based on
+	# where the hit came from relative to the enemy's facing. Threshold-
+	# gated so a 5% graze doesn't stutter the chase mid-stride. Skipped
+	# while in KNOCKBACK (the knockback motion IS the reaction).
+	if _state != State.KNOCKBACK and max_health > 0:
+		var dmg_pct: float = float(amount) / float(max_health)
+		if is_crit or dmg_pct >= _HIT_REACT_MIN_DMG_PCT:
+			_trigger_hit_react(knockback_from, is_crit or dmg_pct >= 0.25)
 	var head := global_position + Vector3(0.0, 1.8, 0.0)
 	DamageNumber.spawn(get_parent(), head, amount, multistrike, is_crit)
 	# Subliminal "this is landing" layer. -15 dB was inaudible against the
@@ -1355,6 +1381,14 @@ func _physics_process(delta: float) -> void:
 	# death clip / fallback pose isn't overwritten by the run/idle fallthrough.
 	if _state == State.DEAD:
 		return
+	# Hit-react owns the picker for its brief window. Decrement here so
+	# the timer counts in physics-frames; once it expires the locomotion
+	# branch takes back over without snap-popping the hit anim.
+	if _hit_react_remain > 0.0:
+		_hit_react_remain -= delta
+		if _hit_react_remain > 0.0 and not _hit_react_anim.is_empty():
+			_play_anim(_hit_react_anim)
+			return
 	var moving := _want_dir.length_squared() > 0.01
 	match _state:
 		State.CASTING, State.KNOCKBACK:
@@ -1373,6 +1407,53 @@ func _physics_process(delta: float) -> void:
 				_play_anim(ANIM_RUN if moving else ANIM_IDLE)
 			if moving:
 				_face_direction(_want_dir)
+
+
+# Pick a directional hit-react anim based on where the hit came from
+# relative to the enemy's facing. Sets up the picker-suppression
+# timer so the anim actually has time to play before the locomotion
+# branch restarts idle/run. `big` triggers the heavy-impact variant
+# regardless of direction.
+func _trigger_hit_react(hit_from: Vector3, big: bool) -> void:
+	if visual == null:
+		_hit_react_anim = ANIM_HIT_BIG if big else ANIM_HIT_BACK
+		_hit_react_remain = _HIT_REACT_DURATION
+		return
+	if big:
+		_hit_react_anim = ANIM_HIT_BIG
+		_hit_react_remain = _HIT_REACT_DURATION
+		return
+	# Hit direction in XZ. fallback to back when hit_from isn't set
+	# (DoT, environment damage) — feels right since DoT comes "from
+	# inside" / "ambient".
+	var to_hit := global_position - hit_from
+	to_hit.y = 0.0
+	if to_hit.length_squared() < 0.0001:
+		_hit_react_anim = ANIM_HIT_BACK
+		_hit_react_remain = _HIT_REACT_DURATION
+		return
+	to_hit = to_hit.normalized()
+	# Enemy faces along -visual.transform.basis.z (Godot convention:
+	# forward is -Z). Project hit direction onto facing axes.
+	var fwd: Vector3 = -visual.global_transform.basis.z
+	var right: Vector3 = visual.global_transform.basis.x
+	fwd.y = 0.0
+	right.y = 0.0
+	if fwd.length_squared() > 0.0001:
+		fwd = fwd.normalized()
+	if right.length_squared() > 0.0001:
+		right = right.normalized()
+	var dot_fwd: float = -to_hit.dot(fwd)  # negate: hit FROM front = +1
+	var dot_right: float = -to_hit.dot(right)  # hit FROM right = +1
+	# Wedge: front-back if |dot_fwd| > |dot_right|, else left-right.
+	if absf(dot_fwd) > absf(dot_right):
+		# Front hits feel like a chest-region impact — use the
+		# generic "hit_big" (front-facing impact). Back hits get
+		# the back-specific anim.
+		_hit_react_anim = ANIM_HIT_BACK if dot_fwd < 0.0 else ANIM_HIT_BIG
+	else:
+		_hit_react_anim = ANIM_HIT_RIGHT if dot_right > 0.0 else ANIM_HIT_LEFT
+	_hit_react_remain = _HIT_REACT_DURATION
 
 	# Authority writes net_* vars each tick — the MultiplayerSynchronizer
 	# broadcasts them to clients, which read them in _remote_physics_process.

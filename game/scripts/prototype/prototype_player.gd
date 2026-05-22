@@ -1725,7 +1725,31 @@ func _physics_process(delta: float) -> void:
 				if _crouching:
 					_play_anim(ANIM_CROUCH_MOVE, 1.0, 0.15)
 				else:
-					_play_anim(ANIM_RUN, 1.0, 0.15)
+					# Directional locomotion picker. Compute wish_dir
+					# relative to facing and pick walk_back / strafe_left
+					# / strafe_right / jog accordingly. Sprint bypasses
+					# the strafe picker because Mixamo's strafe loops are
+					# walk-tempo — sprinting laterally with a strafe clip
+					# looks oddly slow. Reverts to jog for sprinting +
+					# back. Lateral threshold is asymmetric: prefer the
+					# strafe clip only when the lateral component clearly
+					# dominates so diagonal-forward stays as jog.
+					var fwd: Vector3 = -visual.global_transform.basis.z
+					var right_axis: Vector3 = visual.global_transform.basis.x
+					fwd.y = 0.0
+					right_axis.y = 0.0
+					var dot_fwd: float = _want_dir.dot(fwd.normalized()) if fwd.length_squared() > 0.0001 else 1.0
+					var dot_right: float = _want_dir.dot(right_axis.normalized()) if right_axis.length_squared() > 0.0001 else 0.0
+					var lateral_dominates: bool = absf(dot_right) > absf(dot_fwd) + 0.10
+					if _backing and not _sprinting:
+						_play_anim(ANIM_WALK_BACK, 1.0, 0.15)
+					elif lateral_dominates and not _sprinting:
+						if dot_right > 0.0:
+							_play_anim([&"xbot/strafe_right"] as Array[StringName], 1.0, 0.15)
+						else:
+							_play_anim([&"xbot/strafe_left"] as Array[StringName], 1.0, 0.15)
+					else:
+						_play_anim(ANIM_RUN, 1.0, 0.15)
 			else:
 				anim_player.speed_scale = 1.0
 				_play_anim(ANIM_CROUCH_IDLE if _crouching else ANIM_IDLE, 1.0, 0.15)
@@ -2233,6 +2257,7 @@ func _cast_skill(skill: Skill) -> void:
 								break
 					_start_channel(skill, input_action)
 			Skill.ActiveKind.SHIELD_BUFF, Skill.ActiveKind.SHIELD_HOLD:
+				_play_anim(ANIM_CAST, 1.5)
 				_shield.activate_offhand_skill(skill)
 			Skill.ActiveKind.GRENADE:
 				if _grenade.is_on_cooldown():
@@ -2257,8 +2282,10 @@ func _cast_skill(skill: Skill) -> void:
 				_play_anim(ANIM_GRENADE_THROW, 1.4)
 				_grenade.activate(skill, throw_dir)
 			Skill.ActiveKind.SECOND_WIND:
+				_play_anim(ANIM_CAST, 1.5)
 				_activate_second_wind(skill)
 			Skill.ActiveKind.RECOVERY:
+				_play_anim(ANIM_CAST, 1.5)
 				_recovery.activate(skill)
 		return
 	_interacting = false
