@@ -52,8 +52,20 @@ var _mw_held: bool = false
 var _inspect_mode: bool = false
 const _INSPECT_DISTANCE_MIN: float = 1.5
 const _INSPECT_DISTANCE_MAX: float = 30.0
-const _INSPECT_WHEEL_STEP: float = 1.2          # units of distance per wheel notch
-const _BEARING_DRAG_SENSITIVITY: float = 0.006  # rad per pixel of horizontal mouse motion
+const _INSPECT_WHEEL_STEP: float = 1.2           # units of distance per wheel notch (perspective mode)
+const _BEARING_DRAG_SENSITIVITY: float = 0.006   # rad per pixel of horizontal mouse motion
+
+# Orthogonal-zoom dials. The level camera ships projection=1 (ortho)
+# so reducing _distance changes its position without changing rendered
+# object size — every object stays the same screen-size at any distance.
+# In ortho mode the lens dial is `size` (the world-space half-height of
+# the view frustum). Wheel steps scale multiplicatively so the rate
+# feels smooth at both ends of the range: at size=22 (default) a notch
+# trims ~3 world units; at size=4 (zoomed in) the same notch trims ~0.5.
+const _INSPECT_ORTHO_SIZE_MIN: float = 2.5
+const _INSPECT_ORTHO_SIZE_MAX: float = 60.0
+const _INSPECT_ORTHO_ZOOM_STEP: float = 0.85     # multiplier per notch (wheel-up zooms in)
+var _default_size: float = 22.0
 
 # F9 detection. _input on a Camera3D should fire for keyboard events,
 # but it's been unreliable in the field — Steam overlay, focus loss,
@@ -119,6 +131,7 @@ func _ready() -> void:
 	_default_pitch_rad = _pitch_rad
 	_default_bearing_rad = _bearing_rad
 	_default_distance = _distance
+	_default_size = size
 	_build_audio_listener()
 	_build_inspect_label()
 	if _target != null:
@@ -216,13 +229,22 @@ func _input(event: InputEvent) -> void:
 			_mw_held = mb.pressed
 			return
 		# Mouse-wheel zoom is gated to inspect mode so the gameplay
-		# camera stays at fixed iso distance (the project's design call;
-		# see feedback_no_camera_lerp).
+		# camera stays at fixed framing (the project's design call;
+		# see feedback_no_camera_lerp). In orthogonal projection
+		# (the level camera) zoom = adjust `size`; in perspective
+		# (anything bolted on later) zoom = adjust `_distance`.
 		if _inspect_mode and mb.pressed:
+			var is_ortho := projection == PROJECTION_ORTHOGONAL
 			if mb.button_index == MOUSE_BUTTON_WHEEL_UP:
-				_distance = clampf(_distance - _INSPECT_WHEEL_STEP, _INSPECT_DISTANCE_MIN, _INSPECT_DISTANCE_MAX)
+				if is_ortho:
+					size = clampf(size * _INSPECT_ORTHO_ZOOM_STEP, _INSPECT_ORTHO_SIZE_MIN, _INSPECT_ORTHO_SIZE_MAX)
+				else:
+					_distance = clampf(_distance - _INSPECT_WHEEL_STEP, _INSPECT_DISTANCE_MIN, _INSPECT_DISTANCE_MAX)
 			elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-				_distance = clampf(_distance + _INSPECT_WHEEL_STEP, _INSPECT_DISTANCE_MIN, _INSPECT_DISTANCE_MAX)
+				if is_ortho:
+					size = clampf(size / _INSPECT_ORTHO_ZOOM_STEP, _INSPECT_ORTHO_SIZE_MIN, _INSPECT_ORTHO_SIZE_MAX)
+				else:
+					_distance = clampf(_distance + _INSPECT_WHEEL_STEP, _INSPECT_DISTANCE_MIN, _INSPECT_DISTANCE_MAX)
 		return
 	if _mw_held and event is InputEventMouseMotion:
 		var mm := event as InputEventMouseMotion
@@ -244,6 +266,7 @@ func _set_inspect_mode(active: bool) -> void:
 		_pitch_rad = _default_pitch_rad
 		_bearing_rad = _default_bearing_rad
 		_distance = _default_distance
+		size = _default_size
 	# One-shot console line so the debug toggle is discoverable from logs.
 	print("[Camera] inspect mode: ", "ON (wheel=zoom, MMB-drag=orbit)" if active else "OFF (restored)")
 	_update_inspect_label()
@@ -291,8 +314,9 @@ func _update_inspect_label() -> void:
 		return
 	_inspect_label.visible = _inspect_mode
 	if _inspect_mode:
-		_inspect_label.text = "[INSPECT] dist=%.1f  pitch=%.0f°  bearing=%.0f°  (wheel=zoom, MMB-drag=orbit, F9=exit)" % [
-			_distance, rad_to_deg(_pitch_rad), rad_to_deg(_bearing_rad),
+		var zoom_field: String = ("size=%.1f" % size) if projection == PROJECTION_ORTHOGONAL else ("dist=%.1f" % _distance)
+		_inspect_label.text = "[INSPECT] %s  pitch=%.0f°  bearing=%.0f°  (wheel=zoom, MMB-drag=orbit, F9=exit)" % [
+			zoom_field, rad_to_deg(_pitch_rad), rad_to_deg(_bearing_rad),
 		]
 
 
