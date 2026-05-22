@@ -54,6 +54,16 @@ const _INSPECT_DISTANCE_MIN: float = 1.5
 const _INSPECT_DISTANCE_MAX: float = 30.0
 const _INSPECT_WHEEL_STEP: float = 1.2          # units of distance per wheel notch
 const _BEARING_DRAG_SENSITIVITY: float = 0.006  # rad per pixel of horizontal mouse motion
+
+# F9 detection. _input on a Camera3D should fire for keyboard events,
+# but it's been unreliable in the field — Steam overlay, focus loss,
+# IME state, anything that consumes the event before it propagates
+# through the viewport can swallow the keypress. Belt-and-braces:
+# _input handles the normal case, _process polls Input.is_physical_key_pressed
+# as a fallback, and a CanvasLayer label shows the mode visibly so
+# the user knows whether the toggle actually engaged.
+var _f9_was_pressed_last_frame: bool = false
+var _inspect_label: Label = null
 # ── Camera shake ──────────────────────────────────────────────────────────
 # Decayed manually in _process (was a Tween — but tweens captured the
 # property's *current* value at activation, so rapid-fire calls layered
@@ -110,6 +120,7 @@ func _ready() -> void:
 	_default_bearing_rad = _bearing_rad
 	_default_distance = _distance
 	_build_audio_listener()
+	_build_inspect_label()
 	if _target != null:
 		_snap_to_target()
 	else:
@@ -193,6 +204,9 @@ func _input(event: InputEvent) -> void:
 		var ke := event as InputEventKey
 		if ke.pressed and not ke.echo and ke.physical_keycode == KEY_F9:
 			_set_inspect_mode(not _inspect_mode)
+			# Latch so the same-frame _process poll doesn't double-toggle.
+			_f9_was_pressed_last_frame = true
+			print("[Camera] F9 detected via INPUT event")
 			return
 	if not enable_pitch_drag:
 		return
@@ -232,14 +246,54 @@ func _set_inspect_mode(active: bool) -> void:
 		_distance = _default_distance
 	# One-shot console line so the debug toggle is discoverable from logs.
 	print("[Camera] inspect mode: ", "ON (wheel=zoom, MMB-drag=orbit)" if active else "OFF (restored)")
+	_update_inspect_label()
 
 
 func _process(delta: float) -> void:
 	_tick_shake(delta)
 	_tick_push(delta)
+	_poll_f9_fallback()
+	_update_inspect_label()
 	if _target == null:
 		return
 	_snap_to_target()
+
+
+# Per-frame poll for F9. Fires if the key is down THIS frame but not
+# last — edge-detected like a button press. Backstop for the _input
+# path; if _input picked it up first it'll have already toggled so
+# the polled path sees the new state and rests.
+func _poll_f9_fallback() -> void:
+	var down := Input.is_physical_key_pressed(KEY_F9)
+	if down and not _f9_was_pressed_last_frame:
+		_set_inspect_mode(not _inspect_mode)
+		print("[Camera] F9 detected via POLL (fallback path)")
+	_f9_was_pressed_last_frame = down
+
+
+# Small top-left HUD label that surfaces inspect mode + the live values
+# we're tuning. Visible feedback is the only way to know whether F9
+# actually engaged without reading the console.
+func _build_inspect_label() -> void:
+	var layer := CanvasLayer.new()
+	layer.layer = 100
+	add_child(layer)
+	_inspect_label = Label.new()
+	_inspect_label.position = Vector2(8, 280)
+	_inspect_label.modulate = Color(0.6, 1.0, 0.6, 1.0)
+	_inspect_label.add_theme_font_size_override(&"font_size", 12)
+	_inspect_label.visible = false
+	layer.add_child(_inspect_label)
+
+
+func _update_inspect_label() -> void:
+	if _inspect_label == null:
+		return
+	_inspect_label.visible = _inspect_mode
+	if _inspect_mode:
+		_inspect_label.text = "[INSPECT] dist=%.1f  pitch=%.0f°  bearing=%.0f°  (wheel=zoom, MMB-drag=orbit, F9=exit)" % [
+			_distance, rad_to_deg(_pitch_rad), rad_to_deg(_bearing_rad),
+		]
 
 
 # Integrate the push spring. Position advances by velocity then springs
