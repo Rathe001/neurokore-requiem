@@ -7,7 +7,6 @@
 *.jpeg binary
 *.gif binary
 *.webp binary
-*.glb binary
 *.gltf binary
 *.blend binary
 *.ttf binary
@@ -21,3 +20,9 @@
 *.tres binary
 *.res binary
 *.fbx filter=lfs diff=lfs merge=lfs -text
+# .glb tracked in LFS — weapon / prop models run 0.5–14 MB each and are
+# iterated (re-imports, decimation tweaks), so keeping them out of the
+# main pack history matters. Pre-existing glbs committed before this
+# rule (e.g. switch_console) stay as regular blobs; only new commits
+# route through LFS.
+*.glb filter=lfs diff=lfs merge=lfs -text
