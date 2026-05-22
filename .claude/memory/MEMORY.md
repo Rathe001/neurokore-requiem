@@ -75,3 +75,4 @@
 - [MP lobby member data pattern](project_mp_lobby_data_pattern.md) — Publish per-character metadata via Steam.setLobbyMemberData → read on remote peers → cache on Player node → refresh on lobby_data_update. Gender is the reference example.
 - [Looping anim hold pattern](project_looping_anim_hold.md) — Sustained-pose animations (LMB-hold fire) need loop=true + per-tick picker override + single source of truth across all call sites — partial fixes spaz at the fire-rate frequency
 - [Procgen switch softlock](project_procgen_switch_softlock.md) — Boss rooms with 3+ doors can over-allocate switch puzzles; debug "Force Unlock Doors" button is the runtime workaround
+- [Blood decal ring](project_blood_decal_ring.md) — Global ring (cap 400) with 3-tier priority eviction (priority asc, area asc, age asc) — walls outrank floors, small evicts before big. Bigger decals cost more per-frame so small-first wins on both perf + visual.

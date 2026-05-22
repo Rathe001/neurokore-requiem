@@ -55,6 +55,8 @@ is settled.
   wall splatter, droplet, and footprint decals. 0.82 was too
   washed-out, 1.0 reads as flat paint, 0.92 was the landing point.
 - `OBJECT_BLOOD_ALBEDO_MIX = 0.96` for the prop side + top decals.
+
+**Object decals are NOT in the global blood ring buffer.** They self-free via tween after `OBJECT_BLOOD_FADE_DURATION = 14s` and are capped per-kill at `OBJECT_BLOOD_MAX_PER_KILL = 4` receivers (so worst case 8 decals/kill once side+top doubled up). The priority-eviction system documented in [[blood-decal-ring]] governs floor / wall / footprint decals only — props are separate so a busy fight doesn't push prop blood out via FIFO before its fade naturally completes.
   Props are typically lit brighter than floor (direct fluorescent
   overhead, no shadowing from ceiling), so the project-wide 0.92 read
   as nearly-invisible against bright prop materials. Bumped 0.92 →
