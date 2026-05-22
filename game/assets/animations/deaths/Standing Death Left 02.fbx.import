@@ -4,12 +4,12 @@ importer="scene"
 importer_version=1
 type="PackedScene"
 uid="uid://sfwbl6d4u76h"
-path="res://.godot/imported/Standing Death Left 02.fbx-75fec1683fd487f6e56c77a7e21c8482.scn"
+path="res://.godot/imported/Standing Death Left 02.fbx-788c6dfdffbe085908e9ea32da7489fa.scn"
 
 [deps]
 
-source_file="res://assets/characters/x_bot/Standing Death Left 02.fbx"
-dest_files=["res://.godot/imported/Standing Death Left 02.fbx-75fec1683fd487f6e56c77a7e21c8482.scn"]
+source_file="res://assets/animations/deaths/Standing Death Left 02.fbx"
+dest_files=["res://.godot/imported/Standing Death Left 02.fbx-788c6dfdffbe085908e9ea32da7489fa.scn"]
 
 [params]
 

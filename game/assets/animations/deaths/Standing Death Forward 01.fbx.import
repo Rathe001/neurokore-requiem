@@ -4,12 +4,12 @@ importer="scene"
 importer_version=1
 type="PackedScene"
 uid="uid://dbmmyjoodod3r"
-path="res://.godot/imported/Standing Death Forward 01.fbx-a78f10bb0a0400cdd0214ca984fdda75.scn"
+path="res://.godot/imported/Standing Death Forward 01.fbx-74c4c604abec96cbb72c177056e2000e.scn"
 
 [deps]
 
-source_file="res://assets/characters/x_bot/Standing Death Forward 01.fbx"
-dest_files=["res://.godot/imported/Standing Death Forward 01.fbx-a78f10bb0a0400cdd0214ca984fdda75.scn"]
+source_file="res://assets/animations/deaths/Standing Death Forward 01.fbx"
+dest_files=["res://.godot/imported/Standing Death Forward 01.fbx-74c4c604abec96cbb72c177056e2000e.scn"]
 
 [params]
 

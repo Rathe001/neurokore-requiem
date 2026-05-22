@@ -4,12 +4,12 @@ importer="scene"
 importer_version=1
 type="PackedScene"
 uid="uid://h3xogli0oxkd"
-path="res://.godot/imported/Death.fbx-2882c9683aa03b6cf13e67410be25327.scn"
+path="res://.godot/imported/Death.fbx-dff2697794fcbf1f40e381b59cf42fe6.scn"
 
 [deps]
 
-source_file="res://assets/characters/x_bot/Death.fbx"
-dest_files=["res://.godot/imported/Death.fbx-2882c9683aa03b6cf13e67410be25327.scn"]
+source_file="res://assets/animations/deaths/Death.fbx"
+dest_files=["res://.godot/imported/Death.fbx-dff2697794fcbf1f40e381b59cf42fe6.scn"]
 
 [params]
 

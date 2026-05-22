@@ -4,12 +4,12 @@ importer="scene"
 importer_version=1
 type="PackedScene"
 uid="uid://brql2pxioe7l7"
-path="res://.godot/imported/Standing React Death Backward.fbx-bb87c83a763ac7e387882130e046f7d4.scn"
+path="res://.godot/imported/Standing React Death Backward.fbx-4ee89a41545bfbad447c9f268dbe8884.scn"
 
 [deps]
 
-source_file="res://assets/characters/x_bot/Standing React Death Backward.fbx"
-dest_files=["res://.godot/imported/Standing React Death Backward.fbx-bb87c83a763ac7e387882130e046f7d4.scn"]
+source_file="res://assets/animations/deaths/Standing React Death Backward.fbx"
+dest_files=["res://.godot/imported/Standing React Death Backward.fbx-4ee89a41545bfbad447c9f268dbe8884.scn"]
 
 [params]
 

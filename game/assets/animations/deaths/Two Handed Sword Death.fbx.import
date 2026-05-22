@@ -4,12 +4,12 @@ importer="scene"
 importer_version=1
 type="PackedScene"
 uid="uid://dfemjalwyr6rw"
-path="res://.godot/imported/Two Handed Sword Death.fbx-d60637d436f5467713e82bd5176e8763.scn"
+path="res://.godot/imported/Two Handed Sword Death.fbx-6536a042bb219ac46df81a8980ae1e98.scn"
 
 [deps]
 
-source_file="res://assets/characters/x_bot/Two Handed Sword Death.fbx"
-dest_files=["res://.godot/imported/Two Handed Sword Death.fbx-d60637d436f5467713e82bd5176e8763.scn"]
+source_file="res://assets/animations/deaths/Two Handed Sword Death.fbx"
+dest_files=["res://.godot/imported/Two Handed Sword Death.fbx-6536a042bb219ac46df81a8980ae1e98.scn"]
 
 [params]
 

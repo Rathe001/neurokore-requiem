@@ -4,12 +4,12 @@ importer="scene"
 importer_version=1
 type="PackedScene"
 uid="uid://diava2cei7wup"
-path="res://.godot/imported/Strafing.fbx-7e3c27f0694f0fcd4a91ee875a8591a4.scn"
+path="res://.godot/imported/Strafing.fbx-ee23a9ea010fc53ac32a5c7c5a98e7b1.scn"
 
 [deps]
 
-source_file="res://assets/characters/x_bot/Strafing.fbx"
-dest_files=["res://.godot/imported/Strafing.fbx-7e3c27f0694f0fcd4a91ee875a8591a4.scn"]
+source_file="res://assets/animations/core/Strafing.fbx"
+dest_files=["res://.godot/imported/Strafing.fbx-ee23a9ea010fc53ac32a5c7c5a98e7b1.scn"]
 
 [params]
 

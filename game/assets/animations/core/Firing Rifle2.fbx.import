@@ -4,12 +4,12 @@ importer="scene"
 importer_version=1
 type="PackedScene"
 uid="uid://bco8uhh2xecii"
-path="res://.godot/imported/Firing Rifle2.fbx-746b27a3b0ca9fd69a43681785d4c35b.scn"
+path="res://.godot/imported/Firing Rifle2.fbx-f01e70587a0ad02dd37011cc6a904721.scn"
 
 [deps]
 
-source_file="res://assets/characters/x_bot/Firing Rifle2.fbx"
-dest_files=["res://.godot/imported/Firing Rifle2.fbx-746b27a3b0ca9fd69a43681785d4c35b.scn"]
+source_file="res://assets/animations/core/Firing Rifle2.fbx"
+dest_files=["res://.godot/imported/Firing Rifle2.fbx-f01e70587a0ad02dd37011cc6a904721.scn"]
 
 [params]
 

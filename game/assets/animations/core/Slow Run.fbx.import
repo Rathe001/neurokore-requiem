@@ -4,12 +4,12 @@ importer="scene"
 importer_version=1
 type="PackedScene"
 uid="uid://swr6ll1hsob5"
-path="res://.godot/imported/Slow Run.fbx-17496c37e38b68b6ac4a32488fa72f41.scn"
+path="res://.godot/imported/Slow Run.fbx-92a0151af1b1ce95493cca09f38d0734.scn"
 
 [deps]
 
-source_file="res://assets/characters/x_bot/Slow Run.fbx"
-dest_files=["res://.godot/imported/Slow Run.fbx-17496c37e38b68b6ac4a32488fa72f41.scn"]
+source_file="res://assets/animations/core/Slow Run.fbx"
+dest_files=["res://.godot/imported/Slow Run.fbx-92a0151af1b1ce95493cca09f38d0734.scn"]
 
 [params]
 

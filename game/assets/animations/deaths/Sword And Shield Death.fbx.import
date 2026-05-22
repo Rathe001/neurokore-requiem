@@ -4,12 +4,12 @@ importer="scene"
 importer_version=1
 type="PackedScene"
 uid="uid://dtbgw0y5yi2v2"
-path="res://.godot/imported/Sword And Shield Death.fbx-310732d7184a6ad3a4b20468c3b6f54d.scn"
+path="res://.godot/imported/Sword And Shield Death.fbx-ba4becacd1b5bc4cfa61c8979ba83006.scn"
 
 [deps]
 
-source_file="res://assets/characters/x_bot/Sword And Shield Death.fbx"
-dest_files=["res://.godot/imported/Sword And Shield Death.fbx-310732d7184a6ad3a4b20468c3b6f54d.scn"]
+source_file="res://assets/animations/deaths/Sword And Shield Death.fbx"
+dest_files=["res://.godot/imported/Sword And Shield Death.fbx-ba4becacd1b5bc4cfa61c8979ba83006.scn"]
 
 [params]
 

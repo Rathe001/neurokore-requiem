@@ -4,12 +4,12 @@ importer="scene"
 importer_version=1
 type="PackedScene"
 uid="uid://3oih0k0xvp5m"
-path="res://.godot/imported/Flying Back Death.fbx-14b4b87c54d69d76f8e512b7209e2373.scn"
+path="res://.godot/imported/Flying Back Death.fbx-3b03987941f3576df96c51849d7b39f0.scn"
 
 [deps]
 
-source_file="res://assets/characters/x_bot/Flying Back Death.fbx"
-dest_files=["res://.godot/imported/Flying Back Death.fbx-14b4b87c54d69d76f8e512b7209e2373.scn"]
+source_file="res://assets/animations/deaths/Flying Back Death.fbx"
+dest_files=["res://.godot/imported/Flying Back Death.fbx-3b03987941f3576df96c51849d7b39f0.scn"]
 
 [params]
 

@@ -4,12 +4,12 @@ importer="scene"
 importer_version=1
 type="PackedScene"
 uid="uid://dcjoend8i30uv"
-path="res://.godot/imported/Punching.fbx-2bacaefd92e48786ecd5380612c4da1a.scn"
+path="res://.godot/imported/Punching.fbx-438e979666c2247aa8e31383049bf14b.scn"
 
 [deps]
 
-source_file="res://assets/characters/x_bot/Punching.fbx"
-dest_files=["res://.godot/imported/Punching.fbx-2bacaefd92e48786ecd5380612c4da1a.scn"]
+source_file="res://assets/animations/core/Punching.fbx"
+dest_files=["res://.godot/imported/Punching.fbx-438e979666c2247aa8e31383049bf14b.scn"]
 
 [params]
 

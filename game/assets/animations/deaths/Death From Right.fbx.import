@@ -4,12 +4,12 @@ importer="scene"
 importer_version=1
 type="PackedScene"
 uid="uid://r164v04xmwko"
-path="res://.godot/imported/Death From Right.fbx-0b86b15f945ceabee8950a14611f541a.scn"
+path="res://.godot/imported/Death From Right.fbx-25bb54ed8fd50d2805c6b2854034eda8.scn"
 
 [deps]
 
-source_file="res://assets/characters/x_bot/Death From Right.fbx"
-dest_files=["res://.godot/imported/Death From Right.fbx-0b86b15f945ceabee8950a14611f541a.scn"]
+source_file="res://assets/animations/deaths/Death From Right.fbx"
+dest_files=["res://.godot/imported/Death From Right.fbx-25bb54ed8fd50d2805c6b2854034eda8.scn"]
 
 [params]
 

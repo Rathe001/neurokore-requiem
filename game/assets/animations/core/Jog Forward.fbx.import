@@ -4,12 +4,12 @@ importer="scene"
 importer_version=1
 type="PackedScene"
 uid="uid://coctn7dboq3rp"
-path="res://.godot/imported/Jog Forward.fbx-94c797b68152fad6b400b356935f3680.scn"
+path="res://.godot/imported/Jog Forward.fbx-0ad175711073f9a7d0ea3c90fed9c4d3.scn"
 
 [deps]
 
-source_file="res://assets/characters/x_bot/Jog Forward.fbx"
-dest_files=["res://.godot/imported/Jog Forward.fbx-94c797b68152fad6b400b356935f3680.scn"]
+source_file="res://assets/animations/core/Jog Forward.fbx"
+dest_files=["res://.godot/imported/Jog Forward.fbx-0ad175711073f9a7d0ea3c90fed9c4d3.scn"]
 
 [params]
 

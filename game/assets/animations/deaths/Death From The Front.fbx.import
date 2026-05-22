@@ -4,12 +4,12 @@ importer="scene"
 importer_version=1
 type="PackedScene"
 uid="uid://dk6qumjki04k3"
-path="res://.godot/imported/Death From The Front.fbx-e651059973dbdabf437620086152b962.scn"
+path="res://.godot/imported/Death From The Front.fbx-fc201a8efb65ed38ab7f3356fff351f1.scn"
 
 [deps]
 
-source_file="res://assets/characters/x_bot/Death From The Front.fbx"
-dest_files=["res://.godot/imported/Death From The Front.fbx-e651059973dbdabf437620086152b962.scn"]
+source_file="res://assets/animations/deaths/Death From The Front.fbx"
+dest_files=["res://.godot/imported/Death From The Front.fbx-fc201a8efb65ed38ab7f3356fff351f1.scn"]
 
 [params]
 

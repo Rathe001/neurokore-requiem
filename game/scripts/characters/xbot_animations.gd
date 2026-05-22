@@ -38,8 +38,13 @@ const _FIRE_MOVE_FBX: PackedScene = preload("res://assets/animations/core/Strafi
 # state machine without requiring per-weapon-class branching.
 const _CROUCH_IDLE_FBX: PackedScene = preload("res://assets/animations/ranged 2h/idle crouching.fbx")
 const _WALK_BACK_FBX: PackedScene = preload("res://assets/animations/ranged 2h/walk backward.fbx")
-const _STRAFE_LEFT_FBX: PackedScene = preload("res://assets/animations/ranged 2h/walk left.fbx")
-const _STRAFE_RIGHT_FBX: PackedScene = preload("res://assets/animations/ranged 2h/walk right.fbx")
+# Strafe sources use the rifle pack's "run left/right" (not "walk
+# left/right") because the player's locomotion speed matches the
+# jog tempo. The walk-tempo strafe clips read as a slow shuffle
+# under the player's actual move speed — feet barely lift while the
+# body glides sideways.
+const _STRAFE_LEFT_FBX: PackedScene = preload("res://assets/animations/ranged 2h/run left.fbx")
+const _STRAFE_RIGHT_FBX: PackedScene = preload("res://assets/animations/ranged 2h/run right.fbx")
 const _JUMP_START_FBX: PackedScene = preload("res://assets/animations/ranged 2h/jump up.fbx")
 const _JUMP_AIR_FBX: PackedScene = preload("res://assets/animations/ranged 2h/jump loop.fbx")
 const _JUMP_LAND_FBX: PackedScene = preload("res://assets/animations/ranged 2h/jump down.fbx")
