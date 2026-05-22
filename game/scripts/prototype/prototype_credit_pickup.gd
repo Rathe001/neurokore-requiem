@@ -40,7 +40,11 @@ func _ensure_amount_label() -> void:
 	if _amount_label == null:
 		_amount_label = Label3D.new()
 		_amount_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		_amount_label.no_depth_test = true
+		# Walls occlude the label — without depth testing the credit
+		# amount leaked through walls and showed in adjacent rooms.
+		# Matches prototype_item_pickup._build_name_label which already
+		# set this correctly.
+		_amount_label.no_depth_test = false
 		_amount_label.fixed_size = true
 		_amount_label.pixel_size = 0.0011
 		_amount_label.font_size = 20
