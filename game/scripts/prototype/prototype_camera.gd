@@ -86,6 +86,40 @@ var _default_size: float = 22.0
 # the user knows whether the toggle actually engaged.
 var _f9_was_pressed_last_frame: bool = false
 var _inspect_label: Label = null
+
+# ── Label3D fixed_size compensation ───────────────────────────────────────
+# Godot 4's Label3D.fixed_size = true uses a projection-dependent
+# compensation that lands ~5× too large under our narrow-FOV (18°)
+# perspective camera vs the legacy ortho size=22 calibration. Every
+# label setup site (item pickup names, credit drops, affliction glyphs)
+# multiplies its authored pixel_size by `label_fixed_size_scale()` so
+# labels keep the same apparent screen size whether the active camera
+# is perspective or ortho. F8 projection toggling won't retroactively
+# resize already-spawned labels — newly-spawned ones pick up the
+# correct factor and old ones look mis-sized until the pool cycles.
+const PERSPECTIVE_LABEL_FIXED_SCALE: float = 0.2
+
+
+## Returns the multiplier that should be applied to authored `pixel_size`
+## values on Label3D nodes with `fixed_size = true`, based on the active
+## camera's projection. Falls back to 1.0 when no camera is available
+## yet (e.g. setup during scene preload). Static so call sites don't
+## need a PrototypeCamera reference — they just call
+## `PrototypeCamera.label_fixed_size_scale()`.
+static func label_fixed_size_scale() -> float:
+	var tree: SceneTree = Engine.get_main_loop() as SceneTree
+	if tree == null:
+		return 1.0
+	var root_node: Window = tree.root
+	if root_node == null:
+		return 1.0
+	var vp: Viewport = root_node.get_viewport()
+	if vp == null:
+		return 1.0
+	var cam: Camera3D = vp.get_camera_3d()
+	if cam == null:
+		return 1.0
+	return PERSPECTIVE_LABEL_FIXED_SCALE if cam.projection == PROJECTION_PERSPECTIVE else 1.0
 # ── Camera shake ──────────────────────────────────────────────────────────
 # Decayed manually in _process (was a Tween — but tweens captured the
 # property's *current* value at activation, so rapid-fire calls layered

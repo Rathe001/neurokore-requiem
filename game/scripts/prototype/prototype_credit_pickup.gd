@@ -46,7 +46,9 @@ func _ensure_amount_label() -> void:
 		# set this correctly.
 		_amount_label.no_depth_test = false
 		_amount_label.fixed_size = true
-		_amount_label.pixel_size = 0.0011
+		# pixel_size scaled by the camera's projection-aware factor so the
+		# label reads the same on screen in ortho or perspective.
+		_amount_label.pixel_size = 0.0011 * PrototypeCamera.label_fixed_size_scale()
 		_amount_label.font_size = 20
 		# Thick fully-opaque outline matching item pickup labels — keeps the
 		# gold "N cr" readable on any background without a backplate.

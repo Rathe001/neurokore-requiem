@@ -74,8 +74,10 @@ func _build_name_label(p_item: Item) -> void:
 	_name_label.fixed_size = true
 	# fixed_size scales by pixel_size; small footprint so the label hovers
 	# unobtrusively above the loot. Previous values were sized for a
-	# headline, not a label.
-	_name_label.pixel_size = 0.0011
+	# headline, not a label. Multiplied by the camera's projection-aware
+	# scale so the label reads the same screen size whether the active
+	# camera is ortho or perspective — see PrototypeCamera.label_fixed_size_scale.
+	_name_label.pixel_size = 0.0011 * PrototypeCamera.label_fixed_size_scale()
 	_name_label.font_size = 20
 	# Thick fully-opaque black outline so the rarity-coloured text reads
 	# legibly against light corridors AND dark rooms without a backplate.

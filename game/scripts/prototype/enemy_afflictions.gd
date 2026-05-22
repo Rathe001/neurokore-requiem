@@ -148,7 +148,9 @@ func _show_curse_marker() -> void:
 	lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	lbl.no_depth_test = true
 	lbl.fixed_size = true
-	lbl.pixel_size = 0.0014
+	# Projection-aware fixed_size scaling — keeps the curse glyph the
+	# same on-screen size under ortho or perspective.
+	lbl.pixel_size = 0.0014 * PrototypeCamera.label_fixed_size_scale()
 	lbl.font_size = 32
 	lbl.outline_size = 8
 	lbl.modulate = Color(0.95, 0.85, 0.3, 1.0)
@@ -420,7 +422,8 @@ func show_affliction_marker(glyph: String, color: Color) -> void:
 	lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	lbl.no_depth_test = true
 	lbl.fixed_size = true
-	lbl.pixel_size = 0.0014
+	# Projection-aware fixed_size scaling (see other lbl setup above).
+	lbl.pixel_size = 0.0014 * PrototypeCamera.label_fixed_size_scale()
 	lbl.font_size = 32
 	lbl.outline_size = 8
 	lbl.modulate = color
