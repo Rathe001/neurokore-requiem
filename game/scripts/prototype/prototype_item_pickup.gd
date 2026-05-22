@@ -61,12 +61,16 @@ func _build_name_label(p_item: Item) -> void:
 	_name_label = Label3D.new()
 	_name_label.text = tr(p_item.name_key) if p_item.name_key != "" else "Item"
 	_name_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	# Walls must occlude the label — without depth testing it leaked
-	# through the room walls and the player saw "Standard VKM-3 Compact"
-	# floating in the void of adjacent unlit rooms. The label sits at
-	# Y=1.3 above a ground-level pickup, so it's clear of its own mesh
-	# and clutter when the player is in the same room.
-	_name_label.no_depth_test = false
+	# Always render on top of world geometry so the label can't be
+	# half-clipped by a wall the pickup sits near (intra-room walls,
+	# pillars, doorframes). Cross-room "label floating in unlit
+	# adjacent room" leaks are handled by the LoS culler — Label3D
+	# inherits from GeometryInstance3D, so when ExplorationState
+	# reports the pickup's room as not-visible-together with the
+	# player's room, los_culler.gd flips its transparency to 1 and
+	# the label vanishes entirely. So we can safely skip depth-test
+	# clipping here without losing the room gate.
+	_name_label.no_depth_test = true
 	_name_label.fixed_size = true
 	# fixed_size scales by pixel_size; small footprint so the label hovers
 	# unobtrusively above the loot. Previous values were sized for a
