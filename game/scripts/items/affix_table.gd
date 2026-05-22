@@ -175,10 +175,14 @@ const PREFIXES: Array[Dictionary] = [
 		"weight": 50,
 	},
 	# ── Boots-only traction prefixes ─────────────────────────────────────────
-	# Traction is the boots stat domain (see docs/design/itemization.md).
-	# Values are tuned to land at the staircased breakpoints (25/50/75/100):
-	# Surefooted alone hits T1, two stacked sources or Iron-Soled alone hit
-	# T2, and unique boots can roll Mag-Plated for guaranteed T3+.
+	# Traction is the boots stat domain. Under the new per-surface curve
+	# (k/(k+traction)), traction is open-ended — endgame boots can reach
+	# 500+ from a level-scaled base roll alone. These flat-bonus affixes
+	# stack on TOP of the base roll, gated by min_item_level so early
+	# items don't get the bigger numbers.
+	# A future affix-table expansion will add higher-tier traction
+	# affixes (e.g. +200 at ilvl 200) to keep affix bonuses proportionally
+	# meaningful at endgame.
 	{
 		"id": &"surefooted",
 		"label": "Surefooted",

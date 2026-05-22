@@ -476,22 +476,42 @@ func _roll_armor_defense(item: Item, item_level: int, rarity: StringName, rng: R
 	item.stat_modifiers[&"damage_reduction"] = mini(prior + base_dr, DR_PER_PIECE_CAP)
 
 
-## Boots always roll move speed and traction. Traction is a 0–100 stat with
-## breakpoints at 25/50/75/100; move_speed_bonus is a percentage added to
-## base movement. Both scale with ilvl, rarity curve, and budget mult.
+## Boots always roll move speed and traction. Traction is an open-ended
+## stat (no upper cap) — endgame boots can reach 500+ to mitigate
+## tough ground types like ice and acid, whose per-surface k values
+## are tuned to that range. The roll range scales by item_level so
+## low-level commons cluster near 1-6 and endgame uniques can reach
+## 750+. Rarity curve + budget multiplier compose on top, producing
+## meaningful overlap between adjacent rarities (an unlucky magic boot
+## can roll below a lucky common, but uniques nearly always win).
 func _roll_boots_stats(item: Item, item_level: int, rarity: StringName, rng: RandomNumberGenerator) -> void:
 	if item.main_type != "Boots":
 		return
 	var curve: float = float(RARITY_ROLL_CURVE.get(rarity, 2.0))
 	var budget_mult: float = float(RARITY_BUDGET_MULT.get(rarity, 1.0))
-	# Move speed: 1–8% base, scaled by rarity budget.
+	# Move speed: 1–8% base, scaled by rarity budget. Stays a bounded
+	# percentage stat — endgame characters don't have +500% move
+	# speed, so this intentionally doesn't ilvl-scale.
 	var spd := int(round(_curved_randf(1.0, 8.0, rng, curve) * budget_mult))
 	spd = clampi(spd, 1, 12)
 	item.stat_modifiers[&"move_speed_bonus"] = int(item.stat_modifiers.get(&"move_speed_bonus", 0)) + spd
-	# Traction: 5–40 base, scaled by rarity budget. Affixes push toward
-	# breakpoints (25/50/75/100); base roll gives a head start.
-	var traction := int(round(_curved_randf(5.0, 40.0, rng, curve) * budget_mult))
-	traction = clampi(traction, 5, 60)
+	# Traction: ilvl-scaled range, asymmetric so high rolls reach
+	# higher.
+	#   ilvl 1   → range ~1-6      (curved toward 1)
+	#   ilvl 25  → range ~8-38
+	#   ilvl 50  → range ~15-75
+	#   ilvl 100 → range ~30-150
+	#   ilvl 200 → range ~60-300
+	#   ilvl 500 → range ~150-750
+	# Rarity budget multiplier scales the final result on top (×1.0
+	# common → ×1.5 unique). Combined with the curve, the same
+	# nominal range produces vastly different distributions per
+	# rarity — common clusters near floor, unique sits flat across
+	# the range.
+	var traction_lo: int = maxi(1, int(round(float(item_level) * 0.3)))
+	var traction_hi: int = maxi(traction_lo + 5, int(round(float(item_level) * 1.5)))
+	var traction := int(round(_curved_randf(float(traction_lo), float(traction_hi), rng, curve) * budget_mult))
+	traction = maxi(traction, 1)
 	item.stat_modifiers[&"traction_bonus"] = int(item.stat_modifiers.get(&"traction_bonus", 0)) + traction
 
 

@@ -1,36 +1,36 @@
 extends Node
 
-# Traction — boots-only 0-100+ stat (no hard cap; endgame items can push
-# past 100). Replaces the prior universal-breakpoint design with a
-# per-surface mitigation curve so each ground type has its own
-# difficulty profile.
+# Traction — boots-only stat with NO upper cap. Endgame boots can
+# reach 500+ from the level-scaled base roll in ItemRoller (high-ilvl
+# uniques range ~225-750 before flat-bonus affixes stack on top).
+# `k` values for tougher ground types are tuned to that range — ice
+# at k=200 still leaves a noticeable 29% effect at T=500, so even
+# endgame players feel something underfoot.
 #
 # Mitigation formula: effect_factor(surface) = k / (k + traction)
-#   where `k` is the surface's "half-mit" point — the traction value at
-#   which the effect is exactly halved.
 #   - traction = 0     → effect_factor = 1.0  (full effect)
 #   - traction = k     → effect_factor = 0.5  (half mitigated)
-#   - traction = 100   → effect_factor = k / (k+100)
 #   - traction = ∞     → effect_factor → 0     (asymptotic, never zero)
 #
-# Surface identity = `k`:
-#   - blood k=5   → entry-level. Walking through it should feel like a
-#                   nuisance for new players and a non-issue past T20.
+# Surface identity = `k` (the "half-mit" point):
+#   - blood k=5   → entry-level. T=50 = 91% mit. Boots in the first
+#                   couple hours trivialize blood underfoot.
 #   - water k=8   → procgen oil/water puddles. Slightly tougher than
-#                   blood but still mostly mitigated by mid-game boots.
-#   - oil k=30    → planned. Mid-tier surface.
-#   - acid k=60   → planned. Late-game ground type with DoT.
-#   - ice k=80    → planned. Hardest mundane surface — even endgame
-#                   boots only get to ~30% effect remaining.
+#                   blood but still mostly mitigated by mid-game.
+#   - oil  k=50   → planned. T=200 = 80% mit. Mid-tier.
+#   - fire k=120  → planned (DoT-focused, no slip). T=500 = 81% mit.
+#   - acid k=150  → planned (DoT + mild slow). T=500 = 77% mit.
+#   - ice  k=200  → planned (heaviest mundane). T=500 = 71% mit.
+#     Even endgame players still feel ice — full immunity requires
+#     a `negates_ice` override flag.
 #
-# Override flag: equip a boot with `negates_<surface>` modifier > 0
-# (e.g. an "Ice Walker" perk setting `negates_ice` on the boot)
-# forces effect_factor to 0 for that surface regardless of traction.
-# Use this for binary "ignore one ground type" effects; everything
-# else stays on the curve.
+# Override flag: a boot with `negates_<surface>` modifier > 0
+# (e.g. an "Ice Walker" perk setting `negates_ice`) returns
+# effect_factor = 0 for that surface regardless of traction.
+# Use for binary "ignore one ground type entirely" effects; the
+# curve handles the gradient.
 #
-# Traction is single-source by design — only boots roll it. Stacking
-# from other slots would dilute the "feet matter" commitment.
+# Traction is single-source by design — only boots roll it.
 
 const BOOTS_SLOT: StringName = &"boots"
 

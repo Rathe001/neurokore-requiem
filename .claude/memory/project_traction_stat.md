@@ -1,6 +1,6 @@
 ---
 name: Traction stat (boots stat domain)
-description: Single boots-only stat (0-100+, no hard cap) that drives a hyperbolic per-surface mitigation curve. Each ground type has its own half-mitigation point — blood mitigates at k=5 (entry-level), ice at k=80 (endgame). Override flags negate one surface flat-rate.
+description: Single boots-only stat with NO hard upper cap — endgame boots can reach 500+. Per-surface hyperbolic mitigation `k/(k+traction)` gives each ground type its own resistance profile. Roll range scales by item level + rarity curve, producing meaningful overlap between rarities (lucky common can beat unlucky uncommon).
 type: project
 ---
 
@@ -14,19 +14,27 @@ surface its own identity and makes every traction point a real upgrade.
 - traction = k   → 0.5 (half mitigated)
 - traction = ∞   → 0.0 (asymptotic; never actually reaches zero)
 
-**Surface identity = `k` (the half-mit point):**
-| Surface | k  | Mitigated at T=25 | T=50 | T=100 | T=200 |
-|---------|----|-------------------|------|-------|-------|
-| Blood   |  5 | 83%               | 91%  | 95%   | 98%   |
-| Water   |  8 | 76%               | 86%  | 93%   | 96%   |
-| Oil     | 30 | 45%               | 62%  | 77%   | 87%   |
-| Acid    | 60 | 29%               | 45%  | 62%   | 77%   |
-| Ice     | 80 | 24%               | 38%  | 56%   | 71%   |
+**Roll range is OPEN-ENDED — no 0-100 cap.** Endgame characters can
+reach traction 500+ from boots alone (uniques scale by item_level
+× 1.5 × budget mult). `k` values are tuned for that range, not the
+old 0-100 framing.
 
-Blood is intentionally the entry-level surface (the user described it as
-"prevalent — should make players think 'oh, floor mechanics are a thing'"
-and easy to mitigate). Ice is the endgame mundane surface — even at
-traction 200, you still slide ~30%.
+**Surface identity = `k` (the half-mit point):**
+| Surface | k   | T=50  | T=200 | T=500 | T=1000 |
+|---------|-----|-------|-------|-------|--------|
+| Blood   |   5 | 91%   | 98%   | 99%   | 99.5%  |
+| Water   |   8 | 86%   | 96%   | 98%   | 99%    |
+| Oil     |  50 | 50%   | 80%   | 91%   | 95%    |
+| Fire    | 120 | 29%   | 63%   | 81%   | 89%    |
+| Acid    | 150 | 25%   | 57%   | 77%   | 87%    |
+| Ice     | 200 | 20%   | 50%   | 71%   | 83%    |
+
+Blood/water are entry-level — boots a player rolls in the first few
+hours will trivialize them. Mid-tier (oil) requires investment by
+mid-game to ignore. Late-tier (acid, ice) NEVER fully mitigate via
+curve alone — at endgame T=500 you still slip 23-29% as much as a
+no-traction character. The `negates_<surface>` override flag is the
+only way to be 100% immune, making it a meaningful endgame perk.
 
 **Override flag** — boots with a `negates_<surface>` modifier > 0
 (e.g. an "Ice Walker" perk setting `boot.stat_modifiers[&"negates_ice"] = 1`)
@@ -57,11 +65,25 @@ traction.gd): each surface stores `half_mit_k`, the T0 base values
 `stumble_duration`, and a `display_name`. Adding a new ground type
 = one entry + an enter/exit pair on the player (mirror blood / water).
 
-**Affixes & items:** Boot affixes still roll `traction_bonus`. Old
-tuning (Surefooted +25, Iron-Soled +50, Mag-Plated +75) needs revisit
-under the new curve — there's no "breakpoint to hit," every point
-matters. Existing values are fine for the migration but rebalance
-will land alongside more ground types.
+**Item rolls** (`ItemRoller._roll_boots_stats`):
+- Base traction roll range scales LINEARLY with `item_level`:
+  `lo = ilvl × 0.3`, `hi = ilvl × 1.5`. Ilvl 1 commons roll ~1-6;
+  ilvl 100 uniques roll ~45-225; ilvl 500 uniques roll ~225-750
+  before affix bonuses.
+- Rarity layer applies via `_curved_randf(lo, hi, rng, curve) × budget_mult`:
+  - `RARITY_ROLL_CURVE` biases the pick within the range — common
+    clusters near floor (curve=2.5), unique sits flat (curve=1.2).
+  - `RARITY_BUDGET_MULT` multiplies the final value (1.0 → 1.5).
+- This produces *meaningful overlap* between adjacent rarities:
+  a lucky common occasionally outrolls an unlucky uncommon. Two
+  rarities apart (common vs rare) very rarely overlap. The pattern
+  matches the user's design intent: rarity matters but isn't a
+  hard tier wall.
+- Flat-bonus affixes (Surefooted +25 at min_ilvl 1, Iron-Soled +50
+  at 25, Mag-Plated +75 at 50) stack on top of the base roll.
+  Higher-tier affixes (e.g. +200 at min_ilvl 200) will land in a
+  future affix-table pass to keep affix bonuses proportionally
+  meaningful at endgame.
 
 **Why single-source still:** Stacking from gloves/chest would dilute
 the "feet matter" commitment. Traction is the slot decision; the
