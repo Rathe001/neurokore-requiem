@@ -67,10 +67,16 @@ const _PISTOL_IDLE_FBX: PackedScene = preload("res://assets/animations/ranged 1h
 const _PISTOL_WALK_FBX: PackedScene = preload("res://assets/animations/ranged 1h/pistol walk.fbx")
 const _PISTOL_RUN_FBX: PackedScene = preload("res://assets/animations/ranged 1h/pistol run.fbx")
 # Pistol-class firing pose. No dedicated Mixamo "Firing Pistol" clip
-# is available; the 1H Magic Attack from the magic pack has a forward
-# arm-extend / snap-fire pose that reads correctly as a 1H ranged
-# shot in iso view (muzzle flash + projectile spawn sell the rest).
-const _PISTOL_FIRE_FBX: PackedScene = preload("res://assets/animations/skills/Standing 1H Magic Attack 01.fbx")
+# exists. First attempt used "Standing 1H Magic Attack 01" but that
+# clip is a one-shot wind-up → strike → follow-through, and looping
+# it visibly snapped from follow-through back to wind-up — read as
+# "anim restarts every shot." Reusing pistol idle works because the
+# idle clip is already a steady 1H aim pose (arm extended, weapon
+# ready) — looping is invisible, muzzle flash + projectile spawn
+# carry the "firing" feedback. Same source as _PISTOL_IDLE_FBX
+# preloaded under a different name so the library carries the key
+# separately and future swaps don't need to touch the picker.
+const _PISTOL_FIRE_FBX: PackedScene = preload("res://assets/animations/ranged 1h/pistol idle.fbx")
 # Rifle stance — 2H ranged grip. The "idle aiming" clip is the
 # tactical ready stance (rifle up to shoulder); the existing
 # xbot/idle is relaxed/unarmed and not appropriate when a rifle
