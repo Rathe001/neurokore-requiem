@@ -995,7 +995,7 @@ const POOL_GROWTH_DURATION: float = 4.5         # slow ooze — player shouldn't
 # Attach: if a new kill lands within this distance of an existing
 # pool's *edge*, grow that pool to encompass the new spawn instead of
 # stamping fresh. Fresh stamps still happen for kills in clear space.
-const POOL_ATTACH_RADIUS: float = 0.7
+const POOL_ATTACH_RADIUS: float = 1.2
 # How much "buffer" we leave around the new spawn when growing — the
 # pool extends past the new spawn by this much so the spawn point is
 # safely inside the new bounds, not on its rim.
@@ -1102,6 +1102,13 @@ static func _spawn_new_pool(parent: Node, world_pos: Vector3, blood_type: String
 	)
 	_track_blood_decal(pool)  # ring buffer + sort offset
 	var target_diameter: float = randf_range(POOL_TARGET_MIN_DIAMETER, POOL_TARGET_MAX_DIAMETER)
+	# Override the area meta the ring stamped at INITIAL diameter (0.3 m,
+	# 0.09 m²) with the post-grow target. The ring's tie-break-by-area
+	# evicts smallest first, and pools share priority with mist drops —
+	# without this override, pools recorded as 0.09 m² evict BEFORE
+	# the ~0.20 m² mist drops, which is backwards. The grown pool is the
+	# storytelling element; mist drops are the cheap filler.
+	pool.set_meta(&"_blood_area", target_diameter * target_diameter)
 	var tween := pool.create_tween().set_parallel(true)
 	tween.tween_property(pool, "size:x", target_diameter, POOL_GROWTH_DURATION) \
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
