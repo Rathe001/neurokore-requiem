@@ -9,7 +9,17 @@ class_name PrototypeCamera
 ## isometric, preserving distance + bearing.
 
 @export var target_path: NodePath
-@export var offset: Vector3 = Vector3(4, 14, 4)
+## Camera offset from the focal point. Magnitude becomes orbit distance,
+## direction becomes pitch + bearing.
+##
+## Default magnitude (~70m) is tuned for fake-ortho perspective:
+## with FOV=18° in the scene's Camera3D properties, distance 70m gives
+## a vertical view extent of 2 * 70 * tan(9°) ≈ 22m — the same world
+## extent as the legacy ortho size=22 setup. F8 toggles between
+## perspective and orthogonal projection at runtime; ortho ignores
+## distance entirely (parallel projection) so the same offset works
+## visually in either mode.
+@export var offset: Vector3 = Vector3(18.4, 64.4, 18.4)
 ## Holding mouse-wheel-button and dragging vertically tilts the pitch.
 ## Off = camera is fixed at the @export offset's pitch.
 @export var enable_pitch_drag: bool = true
@@ -50,9 +60,9 @@ var _mw_held: bool = false
 # than always-on so the fixed-iso gameplay feel (no zoom, fixed bearing,
 # see feedback_no_camera_lerp) stays intact for normal play.
 var _inspect_mode: bool = false
-const _INSPECT_DISTANCE_MIN: float = 1.5
-const _INSPECT_DISTANCE_MAX: float = 30.0
-const _INSPECT_WHEEL_STEP: float = 1.2           # units of distance per wheel notch (perspective mode)
+const _INSPECT_DISTANCE_MIN: float = 2.0
+const _INSPECT_DISTANCE_MAX: float = 120.0
+const _INSPECT_PERSP_ZOOM_STEP: float = 0.85     # multiplier per notch (wheel-up zooms in)
 const _BEARING_DRAG_SENSITIVITY: float = 0.006   # rad per pixel of horizontal mouse motion
 
 # Orthogonal-zoom dials. The level camera ships projection=1 (ortho)
@@ -221,6 +231,9 @@ func _input(event: InputEvent) -> void:
 			_f9_was_pressed_last_frame = true
 			print("[Camera] F9 detected via INPUT event")
 			return
+		if ke.pressed and not ke.echo and ke.physical_keycode == KEY_F8:
+			_toggle_projection()
+			return
 	if not enable_pitch_drag:
 		return
 	if event is InputEventMouseButton:
@@ -239,12 +252,12 @@ func _input(event: InputEvent) -> void:
 				if is_ortho:
 					size = clampf(size * _INSPECT_ORTHO_ZOOM_STEP, _INSPECT_ORTHO_SIZE_MIN, _INSPECT_ORTHO_SIZE_MAX)
 				else:
-					_distance = clampf(_distance - _INSPECT_WHEEL_STEP, _INSPECT_DISTANCE_MIN, _INSPECT_DISTANCE_MAX)
+					_distance = clampf(_distance * _INSPECT_PERSP_ZOOM_STEP, _INSPECT_DISTANCE_MIN, _INSPECT_DISTANCE_MAX)
 			elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 				if is_ortho:
 					size = clampf(size / _INSPECT_ORTHO_ZOOM_STEP, _INSPECT_ORTHO_SIZE_MIN, _INSPECT_ORTHO_SIZE_MAX)
 				else:
-					_distance = clampf(_distance + _INSPECT_WHEEL_STEP, _INSPECT_DISTANCE_MIN, _INSPECT_DISTANCE_MAX)
+					_distance = clampf(_distance / _INSPECT_PERSP_ZOOM_STEP, _INSPECT_DISTANCE_MIN, _INSPECT_DISTANCE_MAX)
 		return
 	if _mw_held and event is InputEventMouseMotion:
 		var mm := event as InputEventMouseMotion
@@ -260,6 +273,24 @@ func _input(event: InputEvent) -> void:
 # back to its initial @export-derived default so the iso framing is
 # restored exactly — no lerp, since the gameplay camera contract is
 # snap-only.
+# F8 flips projection mode at runtime so you can A/B perspective vs
+# ortho on the live scene. Visual framing stays roughly identical
+# because (a) the @export offset puts the camera ~70m back, which under
+# FOV=18° perspective produces the same 22m view extent as the legacy
+# size=22 ortho setup, and (b) ortho ignores distance entirely. Exits
+# inspect mode on swap so the user sees the unmodified framing of the
+# newly-active projection.
+func _toggle_projection() -> void:
+	if _inspect_mode:
+		_set_inspect_mode(false)
+	if projection == PROJECTION_PERSPECTIVE:
+		projection = PROJECTION_ORTHOGONAL
+		print("[Camera] projection: ORTHOGONAL (size=%.1f, F8 to swap back)" % size)
+	else:
+		projection = PROJECTION_PERSPECTIVE
+		print("[Camera] projection: PERSPECTIVE (fov=%.1f°, F8 to swap back)" % fov)
+
+
 func _set_inspect_mode(active: bool) -> void:
 	_inspect_mode = active
 	if not active:
@@ -314,9 +345,11 @@ func _update_inspect_label() -> void:
 		return
 	_inspect_label.visible = _inspect_mode
 	if _inspect_mode:
-		var zoom_field: String = ("size=%.1f" % size) if projection == PROJECTION_ORTHOGONAL else ("dist=%.1f" % _distance)
-		_inspect_label.text = "[INSPECT] %s  pitch=%.0f°  bearing=%.0f°  (wheel=zoom, MMB-drag=orbit, F9=exit)" % [
-			zoom_field, rad_to_deg(_pitch_rad), rad_to_deg(_bearing_rad),
+		var is_ortho := projection == PROJECTION_ORTHOGONAL
+		var mode_label: String = "ORTHO" if is_ortho else "PERSP"
+		var zoom_field: String = ("size=%.1f" % size) if is_ortho else ("dist=%.1f" % _distance)
+		_inspect_label.text = "[INSPECT %s] %s  pitch=%.0f°  bearing=%.0f°  (wheel=zoom, MMB-drag=orbit, F8=swap projection, F9=exit)" % [
+			mode_label, zoom_field, rad_to_deg(_pitch_rad), rad_to_deg(_bearing_rad),
 		]
 
 

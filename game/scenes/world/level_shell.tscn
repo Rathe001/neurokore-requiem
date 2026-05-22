@@ -171,10 +171,16 @@ script = ExtResource("script_players_container")
 [node name="Camera3D" type="Camera3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 14, 0)
 current = true
-projection = 1
+; Fake-ortho perspective: narrow FOV (~18°) from a far position
+; (~70m) makes foreshortening visually negligible while letting
+; depth-based effects (SSR, volumetric fog, LoS depth shaders)
+; cooperate. F8 at runtime toggles back to projection=1 / size=22
+; for direct A/B comparison; `size` is kept so the toggle has a
+; sane fallback value when ortho is re-engaged.
+fov = 18.0
 size = 22.0
 near = 0.1
-far = 100.0
+far = 250.0
 script = ExtResource("script_camera")
 ; target is set at runtime by PlayersContainer once the local player
 ; is spawned — the scene file no longer hardcodes a NodePath because
