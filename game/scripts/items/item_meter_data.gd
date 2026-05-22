@@ -93,35 +93,42 @@ static func has_meters(item: Item) -> bool:
 # scales with effective_multiplier. "inverse": true means lower = better.
 
 const MODIFIER_BAR_DEFS: Dictionary = {
-	# Elemental damage (weapon affixes)
-	&"fire_damage_bonus":      { "label": "Fire Dmg",   "fmt": "+%d",     "lo": 1,  "hi": 15 },
-	&"cryo_damage_bonus":      { "label": "Cryo Dmg",   "fmt": "+%d",     "lo": 1,  "hi": 15 },
-	&"electric_damage_bonus":  { "label": "Elec Dmg",   "fmt": "+%d",     "lo": 1,  "hi": 15 },
-	&"toxic_damage_bonus":     { "label": "Toxic Dmg",  "fmt": "+%d",     "lo": 1,  "hi": 15 },
-	# Core combat
-	&"base_damage_bonus":      { "label": "+Damage",    "fmt": "+%d",     "lo": 1,  "hi": 12 },
-	&"resource_on_hit":        { "label": "Res/Hit",    "fmt": "+%d",     "lo": 1,  "hi": 4 },
+	# Elemental damage (weapon affixes) — tiered ladders T1+10 → T4+400.
+	# `hi` set to endgame max × rarity mult so a perfect unique
+	# Sun-Forged / Absolute Zero / Plasma / Necrotic fills the bar.
+	&"fire_damage_bonus":      { "label": "Fire Dmg",   "fmt": "+%d",     "lo": 1,  "hi": 600 },
+	&"cryo_damage_bonus":      { "label": "Cryo Dmg",   "fmt": "+%d",     "lo": 1,  "hi": 600 },
+	&"electric_damage_bonus":  { "label": "Elec Dmg",   "fmt": "+%d",     "lo": 1,  "hi": 600 },
+	&"toxic_damage_bonus":     { "label": "Toxic Dmg",  "fmt": "+%d",     "lo": 1,  "hi": 600 },
+	# Core combat — base_damage_bonus tiered to +300 (Annihilating);
+	# resource_on_hit tiered to +15 (of Replenishment).
+	&"base_damage_bonus":      { "label": "+Damage",    "fmt": "+%d",     "lo": 1,  "hi": 450 },
+	&"resource_on_hit":        { "label": "Res/Hit",    "fmt": "+%d",     "lo": 1,  "hi": 25 },
+	# Bounded percentage / chance stats — NOT tiered, hi stays low.
 	&"crit_chance_bonus":      { "label": "+Crit",      "fmt": "+%.1f%%", "lo": 1,  "hi": 10, "pct": true },
 	&"crit_damage_bonus":      { "label": "+Crit Dmg",  "fmt": "+%d%%",   "lo": 1,  "hi": 20 },
 	&"attack_speed_bonus":     { "label": "+Speed",     "fmt": "+%d%%",   "lo": 1,  "hi": 12 },
 	&"hit_chance_bonus":       { "label": "+Accuracy",  "fmt": "+%d",     "lo": 1,  "hi": 8 },
 	&"cooldown_reduction":     { "label": "CDR",        "fmt": "+%d%%",   "lo": 1,  "hi": 15 },
 	&"lifesteal_percent":      { "label": "Lifesteal",  "fmt": "%d%%",    "lo": 1,  "hi": 5 },
-	&"armor_penetration":      { "label": "Armor Pen",  "fmt": "+%d%%",   "lo": 1,  "hi": 12 },
+	# armor_penetration: tiered to +300 (of Annulment); knockback to +400.
+	&"armor_penetration":      { "label": "Armor Pen",  "fmt": "+%d%%",   "lo": 1,  "hi": 450 },
 	&"damage_bonus_pct":       { "label": "+Dmg %",     "fmt": "+%d%%",   "lo": 1,  "hi": 20 },
 	# Sustain / utility
 	&"resource_cost_reduction":{ "label": "Cost Red",   "fmt": "+%d%%",   "lo": 1,  "hi": 15 },
-	&"knockback_bonus":        { "label": "Knockback",  "fmt": "+%d",     "lo": 1,  "hi": 15 },
-	&"range_bonus":            { "label": "+Range",     "fmt": "+%d",     "lo": 1,  "hi": 12 },
-	&"carry_capacity_bonus":   { "label": "Carry Cap",  "fmt": "+%d",     "lo": 1,  "hi": 15 },
+	&"knockback_bonus":        { "label": "Knockback",  "fmt": "+%d",     "lo": 1,  "hi": 600 },
+	# range_bonus: tiered to +50 (of the Eagle Eye).
+	&"range_bonus":            { "label": "+Range",     "fmt": "+%d",     "lo": 1,  "hi": 80 },
+	# carry_capacity: tiered to +80 (of the Beast of Burden).
+	&"carry_capacity_bonus":   { "label": "Carry Cap",  "fmt": "+%d",     "lo": 1,  "hi": 120 },
 	&"inventory_bonus":        { "label": "Inv Slots",  "fmt": "+%d",     "lo": 1,  "hi": 4 },
-	# Resistances
+	# Resistances — bounded %.
 	&"electric_resistance":    { "label": "Elec Res",   "fmt": "+%d%%",   "lo": 1,  "hi": 12 },
 	&"cryo_resistance":        { "label": "Cryo Res",   "fmt": "+%d%%",   "lo": 1,  "hi": 12 },
 	&"toxic_resistance":       { "label": "Toxic Res",  "fmt": "+%d%%",   "lo": 1,  "hi": 12 },
 	&"elemental_resistance":   { "label": "All Res",    "fmt": "+%d%%",   "lo": 1,  "hi": 8 },
-	# Gloves-specific
-	&"unarmed_damage_bonus":   { "label": "Unarmed",    "fmt": "+%d",     "lo": 1,  "hi": 12 },
+	# Gloves — unarmed_damage_bonus tiered to +300 (Knuckle-Augmented).
+	&"unarmed_damage_bonus":   { "label": "Unarmed",    "fmt": "+%d",     "lo": 1,  "hi": 450 },
 	&"unarmed_stun_chance":    { "label": "Stun %",     "fmt": "+%d%%",   "lo": 5,  "hi": 30 },
 	&"unarmed_aoe_radius":     { "label": "Unarmd AoE", "fmt": "+%d m",  "lo": 1,  "hi": 5 },
 	# Grenade bonus
@@ -239,10 +246,13 @@ static func _compute_boots(item: Item) -> Array[WeaponMeterData.MeterBar]:
 	_apply_scaling(spd_bar, float(raw_spd), mult, spd_lo, spd_hi)
 	bars.append(spd_bar)
 
-	# Traction — guaranteed base, raw value; does NOT scale (feel stat)
+	# Traction — guaranteed base, raw value. Bar normalizes against the
+	# ilvl-scaled roll range so a "perfect roll for this level" fills
+	# the bar regardless of absolute traction value. Matches
+	# ItemRoller._roll_boots_stats: lo = ilvl × 0.3, hi = ilvl × 1.5.
 	var raw_trac: int = int(item.stat_modifiers.get(&"traction_bonus", 0))
-	var trac_lo := clampf(5.0 * budget, 5.0, 60.0)
-	var trac_hi := clampf(40.0 * budget, 5.0, 60.0)
+	var trac_lo := float(maxi(1, int(round(float(item.item_level) * 0.3))))
+	var trac_hi := float(maxi(int(trac_lo + 5), int(round(float(item.item_level) * 1.5)))) * budget
 	bars.append(_make_bar(&"traction", "Traction", float(raw_trac), trac_lo, trac_hi, raw_trac > 0, "%d"))
 
 	# HP (max_health_bonus) — ilvl-derived range, rarity-curved + budget-scaled
@@ -401,11 +411,16 @@ static func _compute_offhand(item: Item) -> Array[WeaponMeterData.MeterBar]:
 		return bars
 	var budget: float = float(ItemRoller.RARITY_BUDGET_MULT.get(item.rarity, 1.0))
 
-	# Shield Pool — base + bonus, rolled 15–50
+	# Shield Pool — base + bonus. Bonus is RAW HP, ilvl-scaled in
+	# ItemRoller._apply_offhand_base: lo = ilvl × 0.5, hi = 15 + ilvl × 2.0.
+	# Bar normalizes against the same range so a top-roll-for-this-level
+	# fills the bar.
 	var raw_pool_bonus: int = int(item.stat_modifiers.get(&"shield_pool_bonus", 0))
 	var total_pool := sk.shield_pool + raw_pool_bonus
-	var pool_lo := float(sk.shield_pool + 15)
-	var pool_hi := float(sk.shield_pool) + 50.0 * budget
+	var pool_bonus_lo := float(maxi(5, int(round(float(item.item_level) * 0.5))))
+	var pool_bonus_hi := float(maxi(int(pool_bonus_lo + 10), int(round(15.0 + float(item.item_level) * 2.0))))
+	var pool_lo := float(sk.shield_pool) + pool_bonus_lo
+	var pool_hi := float(sk.shield_pool) + pool_bonus_hi * budget
 	bars.append(_make_bar(&"shield_pool", "Shield", float(total_pool), pool_lo, pool_hi, raw_pool_bonus > 0, "%d"))
 
 	# Damage Reduction — SHIELD_BUFF only; base + bonus (%), rolled 5–25
@@ -416,12 +431,15 @@ static func _compute_offhand(item: Item) -> Array[WeaponMeterData.MeterBar]:
 		var dr_hi := sk.damage_reduction * 100.0 + 25.0 * budget
 		bars.append(_make_bar(&"shield_dr", "DR", total_dr, dr_lo, dr_hi, raw_dr_bonus > 0, "%.0f%%"))
 
-	# Duration — SHIELD_BUFF only; base + bonus (s), rolled 30–120
+	# Duration — SHIELD_BUFF only; base + bonus (s). Bonus is ilvl-scaled
+	# in ItemRoller: lo = 15 + ilvl × 0.8, hi = 60 + ilvl × 2.5.
 	if sk.active_kind == Skill.ActiveKind.SHIELD_BUFF:
 		var raw_dur_bonus: int = int(item.stat_modifiers.get(&"shield_duration_bonus", 0))
 		var total_dur := sk.duration + float(raw_dur_bonus)
-		var dur_lo := sk.duration + 30.0
-		var dur_hi := sk.duration + 120.0 * budget
+		var dur_bonus_lo := float(maxi(10, int(round(15.0 + float(item.item_level) * 0.8))))
+		var dur_bonus_hi := float(maxi(int(dur_bonus_lo + 20), int(round(60.0 + float(item.item_level) * 2.5))))
+		var dur_lo := sk.duration + dur_bonus_lo
+		var dur_hi := sk.duration + dur_bonus_hi * budget
 		bars.append(_make_bar(&"shield_dur", "Duration", total_dur, dur_lo, dur_hi, raw_dur_bonus > 0, "%ds"))
 
 	# Cooldown Reduction — inverse: lower cooldown = better; rolled 5–20%

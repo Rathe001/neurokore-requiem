@@ -207,7 +207,7 @@ func roll(main_type: String, item_level: int, rarity: StringName, rng: RandomNum
 
 	_apply_weapon_base(item, main_type, rarity, rng)
 	_roll_weapon_signature(item, rarity, rng)
-	_apply_offhand_base(item, main_type, rarity, rng)
+	_apply_offhand_base(item, main_type, item_level, rarity, rng)
 	_apply_grenade_base(item, main_type, rarity, rng)
 	_apply_consumable_base(item, main_type, rarity, rng)
 	_apply_armor_model_name(item, main_type, rng)
@@ -821,7 +821,7 @@ func resolve_icon_path(item: Item) -> String:
 	return ""
 
 
-func _apply_offhand_base(item: Item, main_type: String, rarity: StringName, rng: RandomNumberGenerator) -> void:
+func _apply_offhand_base(item: Item, main_type: String, item_level: int, rarity: StringName, rng: RandomNumberGenerator) -> void:
 	if main_type != "Offhand":
 		return
 	if OFFHAND_BASE_PATHS.is_empty():
@@ -836,14 +836,22 @@ func _apply_offhand_base(item: Item, main_type: String, rarity: StringName, rng:
 	if base.glyph != "":
 		item.glyph = base.glyph
 	# Roll shield bonus stats on top of the Skill's base values.
+	# shield_pool_bonus is a RAW HP value → ilvl-scales like max_health_bonus.
+	# shield_duration_bonus is RAW seconds → ilvl-scales modestly.
+	# shield_cd_reduction + shield_dr_bonus are BOUNDED percentages — they
+	# stay on fixed ranges with rarity multiplier doing all the variance.
 	var sk: Skill = base.fire_skill
 	if sk == null:
 		return
-	item.stat_modifiers[&"shield_pool_bonus"] = _rarity_rolli(15, 50, rarity, rng)
+	var pool_lo: int = maxi(5, int(round(float(item_level) * 0.5)))
+	var pool_hi: int = maxi(pool_lo + 10, int(round(15.0 + float(item_level) * 2.0)))
+	item.stat_modifiers[&"shield_pool_bonus"] = _rarity_rolli(pool_lo, pool_hi, rarity, rng)
 	item.stat_modifiers[&"shield_cd_reduction"] = _rarity_rolli(5, 20, rarity, rng)
 	if sk.active_kind == Skill.ActiveKind.SHIELD_BUFF:
 		item.stat_modifiers[&"shield_dr_bonus"] = _rarity_rolli(5, 25, rarity, rng)
-		item.stat_modifiers[&"shield_duration_bonus"] = _rarity_rolli(30, 120, rarity, rng)
+		var dur_lo: int = maxi(10, int(round(15.0 + float(item_level) * 0.8)))
+		var dur_hi: int = maxi(dur_lo + 20, int(round(60.0 + float(item_level) * 2.5)))
+		item.stat_modifiers[&"shield_duration_bonus"] = _rarity_rolli(dur_lo, dur_hi, rarity, rng)
 
 func _apply_grenade_base(item: Item, main_type: String, rarity: StringName, rng: RandomNumberGenerator) -> void:
 	if main_type != "Grenade":

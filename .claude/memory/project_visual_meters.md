@@ -28,7 +28,36 @@ ALL item tooltips use visual meter bars instead of raw numeric stats. Bars show 
 
 **Comparison merge:** When Shift held, both hovered and equipped items show the UNION of all bar IDs from both. Missing bars show as empty placeholders. `ItemMeterData.merge_for_comparison()` handles this.
 
-**Rolling:** All rollable stats use centralized helpers (`_rarity_rollf/_rolli/_rollf_inv/_rolli_inv`) that apply power-curve bias AND rarity budget multiplier. Universal bonuses (HP, resource, sustain) scale with ilvl.
+**Rolling:** All rollable stats use centralized helpers (`_rarity_rollf/_rolli/_rollf_inv/_rolli_inv`) that apply power-curve bias AND rarity budget multiplier.
+
+**Ilvl scaling — two patterns:**
+1. **Auto-rolled base stats** (HP, resource, sustain, traction, DR,
+   shield_pool_bonus, shield_duration_bonus) — `lo` and `hi` of the
+   roll computed from `item_level` directly in `_roll_*`. Bar
+   normalization in `_compute_*` mirrors the same formula so the
+   bar shows quality-for-this-level (a perfect roll at any ilvl
+   fills the bar regardless of absolute value).
+2. **Tiered affixes** (damage bonuses, elemental damage, knockback,
+   armor_penetration, unarmed_damage_bonus, range_bonus,
+   carry_capacity_bonus, resource_on_hit, traction's Surefooted
+   ladder) — multiple affix entries with progressive
+   `min_item_level` gates and ~3× value jumps per tier. `lo`/`hi`
+   in `MODIFIER_BAR_DEFS` set to the ENDGAME max so absolute power
+   reads at a glance — a Brutal (+8) shows a tiny bar at any ilvl;
+   an Annihilating (+300) fills it. This is the right semantic for
+   affixes because the AFFIX itself is the design question (high
+   tier = rare drop regardless of player level).
+
+Bounded percentage / chance stats (crit_chance, attack_speed,
+resistances, etc.) don't scale by ilvl — power comes from how
+easy they are to roll high (rarity_mult), not larger numbers.
+
+**Tier ladder convention:** weight halves roughly per tier
+(100 → 60 → 30 → 12), min_item_level steps 1 → 25 → 50 → 100.
+Tier names are themed per stat (Searing → Blazing → Inferno →
+Sun-Forged; Brutal → Savage → Ruinous → Annihilating). When
+`max_item_level` gating lands, low tiers will be pruned out at
+high ilvls; today they coexist with reduced weight.
 
 **Bar layout:** Half-size (4px bar, 8px row, font size 5). MAX_BARS = 20. Comparison (equipped) panel has its own meter strip.
 

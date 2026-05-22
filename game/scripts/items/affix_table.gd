@@ -97,6 +97,137 @@ const PREFIXES: Array[Dictionary] = [
 		"min_item_level": 3,
 		"weight": 80,
 	},
+	# ── Weapon damage tier ladders ───────────────────────────────────────────
+	# Each raw-damage line has 4 tiers gated by min_item_level. Tier values
+	# climb ~3× per tier and weights drop sharply, so a high-ilvl drop
+	# usually rolls a strong tier but a "common" tier still appears
+	# occasionally (matches the rarity-overlap design intent). Once a
+	# proper max_item_level gating system exists, low tiers can be pruned
+	# out at high ilvls; for now they coexist.
+	{
+		"id": &"savage",
+		"label": "Savage",
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "base_damage_bonus": 30 },
+		"min_item_level": 25,
+		"weight": 60,
+	},
+	{
+		"id": &"ruinous",
+		"label": "Ruinous",
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "base_damage_bonus": 100 },
+		"min_item_level": 50,
+		"weight": 30,
+	},
+	{
+		"id": &"annihilating",
+		"label": "Annihilating",
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "base_damage_bonus": 300 },
+		"min_item_level": 100,
+		"weight": 12,
+	},
+	# Fire ladder (existing Searing +10 ilvl 1 is tier 1)
+	{
+		"id": &"blazing",
+		"label": "Blazing",
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "fire_damage_bonus": 40 },
+		"min_item_level": 25,
+		"weight": 60,
+	},
+	{
+		"id": &"inferno",
+		"label": "Inferno",
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "fire_damage_bonus": 130 },
+		"min_item_level": 50,
+		"weight": 30,
+	},
+	{
+		"id": &"sun_forged",
+		"label": "Sun-Forged",
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "fire_damage_bonus": 400 },
+		"min_item_level": 100,
+		"weight": 12,
+	},
+	# Cryo ladder (existing Cryo +10 ilvl 8 is tier 1)
+	{
+		"id": &"frostbound",
+		"label": "Frostbound",
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "cryo_damage_bonus": 40 },
+		"min_item_level": 25,
+		"weight": 60,
+	},
+	{
+		"id": &"glacial",
+		"label": "Glacial",
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "cryo_damage_bonus": 130 },
+		"min_item_level": 50,
+		"weight": 30,
+	},
+	{
+		"id": &"absolute_zero",
+		"label": "Absolute Zero",
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "cryo_damage_bonus": 400 },
+		"min_item_level": 100,
+		"weight": 12,
+	},
+	# Electric ladder (existing Voltaic +10 ilvl 8 is tier 1)
+	{
+		"id": &"arcing",
+		"label": "Arcing",
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "electric_damage_bonus": 40 },
+		"min_item_level": 25,
+		"weight": 60,
+	},
+	{
+		"id": &"storm_wracked",
+		"label": "Storm-Wracked",
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "electric_damage_bonus": 130 },
+		"min_item_level": 50,
+		"weight": 30,
+	},
+	{
+		"id": &"plasma",
+		"label": "Plasma",
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "electric_damage_bonus": 400 },
+		"min_item_level": 100,
+		"weight": 12,
+	},
+	# Toxic ladder (existing Toxic +10 ilvl 8 is tier 1)
+	{
+		"id": &"septic",
+		"label": "Septic",
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "toxic_damage_bonus": 40 },
+		"min_item_level": 25,
+		"weight": 60,
+	},
+	{
+		"id": &"corrosive",
+		"label": "Corrosive",
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "toxic_damage_bonus": 130 },
+		"min_item_level": 50,
+		"weight": 30,
+	},
+	{
+		"id": &"necrotic",
+		"label": "Necrotic",
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "toxic_damage_bonus": 400 },
+		"min_item_level": 100,
+		"weight": 12,
+	},
 	# ── Armor prefixes ───────────────────────────────────────────────────────
 	{
 		"id": &"hardened",
@@ -173,6 +304,31 @@ const PREFIXES: Array[Dictionary] = [
 		"stat_modifiers": { "unarmed_aoe_radius": 3 },
 		"min_item_level": 8,
 		"weight": 50,
+	},
+	# Unarmed damage ladder (existing Spiked +8 ilvl 1 is tier 1).
+	{
+		"id": &"razor_spiked",
+		"label": "Razor-Spiked",
+		"item_types": ["Gloves"],
+		"stat_modifiers": { "unarmed_damage_bonus": 30 },
+		"min_item_level": 25,
+		"weight": 60,
+	},
+	{
+		"id": &"brass_plated",
+		"label": "Brass-Plated",
+		"item_types": ["Gloves"],
+		"stat_modifiers": { "unarmed_damage_bonus": 100 },
+		"min_item_level": 50,
+		"weight": 30,
+	},
+	{
+		"id": &"knuckle_augmented",
+		"label": "Knuckle-Augmented",
+		"item_types": ["Gloves"],
+		"stat_modifiers": { "unarmed_damage_bonus": 300 },
+		"min_item_level": 100,
+		"weight": 12,
 	},
 	# ── Boots-only traction prefixes ─────────────────────────────────────────
 	# Traction is the boots stat domain. Under the new per-surface curve
@@ -298,6 +454,74 @@ const SUFFIXES: Array[Dictionary] = [
 		"min_item_level": 8,
 		"weight": 70,
 	},
+	# Armor penetration ladder.
+	{
+		"id": &"of_piercing",
+		"label": "of Piercing",
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "armor_penetration": 30 },
+		"min_item_level": 25,
+		"weight": 50,
+	},
+	{
+		"id": &"of_rending",
+		"label": "of Rending",
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "armor_penetration": 100 },
+		"min_item_level": 50,
+		"weight": 25,
+	},
+	{
+		"id": &"of_annulment",
+		"label": "of Annulment",
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "armor_penetration": 300 },
+		"min_item_level": 100,
+		"weight": 10,
+	},
+	# Knockback ladder (existing of_Devastation +12 ilvl 1 is tier 1).
+	{
+		"id": &"of_bludgeoning",
+		"label": "of Bludgeoning",
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "knockback_bonus": 45 },
+		"min_item_level": 25,
+		"weight": 60,
+	},
+	{
+		"id": &"of_pulverization",
+		"label": "of Pulverization",
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "knockback_bonus": 150 },
+		"min_item_level": 50,
+		"weight": 30,
+	},
+	{
+		"id": &"of_the_wrecking_ball",
+		"label": "of the Wrecking Ball",
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "knockback_bonus": 400 },
+		"min_item_level": 100,
+		"weight": 12,
+	},
+	# Range ladder (existing of_the_marksman +8 ilvl 1 is tier 1).
+	# Caps at 3 tiers — endgame +50 range is meaningful but +1000 is silly.
+	{
+		"id": &"of_the_sharpshooter",
+		"label": "of the Sharpshooter",
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "range_bonus": 20 },
+		"min_item_level": 25,
+		"weight": 60,
+	},
+	{
+		"id": &"of_the_eagle_eye",
+		"label": "of the Eagle Eye",
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "range_bonus": 50 },
+		"min_item_level": 50,
+		"weight": 30,
+	},
 	# ── Grenade suffixes ─────────────────────────────────────────────────────
 	{
 		"id": &"of_concussion",
@@ -324,6 +548,23 @@ const SUFFIXES: Array[Dictionary] = [
 		"min_item_level": 1,
 		"weight": 90,
 	},
+	# Carry-capacity ladder. Modest scaling — encumbrance is a soft system.
+	{
+		"id": &"of_the_mule",
+		"label": "of the Mule",
+		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Leg Armor", "Boots", "Backpack"],
+		"stat_modifiers": { "carry_capacity_bonus": 30 },
+		"min_item_level": 25,
+		"weight": 55,
+	},
+	{
+		"id": &"of_the_beast_of_burden",
+		"label": "of the Beast of Burden",
+		"item_types": ["Head Armor", "Chest Armor", "Gloves", "Leg Armor", "Boots", "Backpack"],
+		"stat_modifiers": { "carry_capacity_bonus": 80 },
+		"min_item_level": 50,
+		"weight": 25,
+	},
 	{
 		"id": &"of_resilience",
 		"label": "of Resilience",
@@ -347,6 +588,24 @@ const SUFFIXES: Array[Dictionary] = [
 		"stat_modifiers": { "resource_on_hit": 2 },
 		"min_item_level": 5,
 		"weight": 75,
+	},
+	# Resource-on-hit ladder. Modest scaling — resource pool itself is
+	# bounded so giant per-hit numbers would trivialize spec resources.
+	{
+		"id": &"of_restoration",
+		"label": "of Restoration",
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "resource_on_hit": 6 },
+		"min_item_level": 25,
+		"weight": 50,
+	},
+	{
+		"id": &"of_replenishment",
+		"label": "of Replenishment",
+		"item_types": ["1H Weapon", "2H Weapon"],
+		"stat_modifiers": { "resource_on_hit": 15 },
+		"min_item_level": 50,
+		"weight": 25,
 	},
 	# ── Sustain suffixes ─────────────────────────────────────────────────────
 	{
