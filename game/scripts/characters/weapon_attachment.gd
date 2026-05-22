@@ -59,23 +59,30 @@ const _DEFAULT_TARGET_LENGTH: float = 0.6
 
 # Per-weapon grip fine-tune, applied AFTER auto-scale. Hand-tune these
 # in the editor — each glb's pivot sits in a different place relative
-# to where a hand should grip it.
+# to where a hand should grip it, and each one's authored forward axis
+# varies (Blenderkit uploads don't agree on a convention).
 #   pos        — Vector3 local offset from the hand bone
-#   rot        — Vector3 euler degrees
+#   rot        — Vector3 euler degrees (applied as model.rotation_degrees)
 #   scale_mult — extra multiplier on top of the auto-scale
-# Entries default to identity; tune per weapon once visible in-game.
+#
+# First-pass rotation: -90° around Y on every weapon, because the
+# Blenderkit guns we imported are authored with barrel along their
+# local +X or +Y, but the Mixamo right-hand bone's "forward" (palm /
+# barrel direction) points along bone-local -Z. The 90° swing puts
+# barrels roughly in line with the character's facing direction. Per-
+# weapon offsets still need eyeball tuning from there.
 const _GRIP: Dictionary = {
-	&"melee_1h":       {"pos": Vector3.ZERO, "rot": Vector3.ZERO, "scale_mult": 1.0},
-	&"melee_2h":       {"pos": Vector3.ZERO, "rot": Vector3.ZERO, "scale_mult": 1.0},
-	&"ranged_1h":      {"pos": Vector3.ZERO, "rot": Vector3.ZERO, "scale_mult": 1.0},
-	&"ranged_2h":      {"pos": Vector3.ZERO, "rot": Vector3.ZERO, "scale_mult": 1.0},
-	&"smg_1h":         {"pos": Vector3.ZERO, "rot": Vector3.ZERO, "scale_mult": 1.0},
-	&"lmg_2h":         {"pos": Vector3.ZERO, "rot": Vector3.ZERO, "scale_mult": 1.0},
-	&"sniper_2h":      {"pos": Vector3.ZERO, "rot": Vector3.ZERO, "scale_mult": 1.0},
-	&"rpg_2h":         {"pos": Vector3.ZERO, "rot": Vector3.ZERO, "scale_mult": 1.0},
-	&"shotgun_2h":     {"pos": Vector3.ZERO, "rot": Vector3.ZERO, "scale_mult": 1.0},
-	&"accelerator_2h": {"pos": Vector3.ZERO, "rot": Vector3.ZERO, "scale_mult": 1.0},
-	&"taser_2h":       {"pos": Vector3.ZERO, "rot": Vector3.ZERO, "scale_mult": 1.0},
+	&"melee_1h":       {"pos": Vector3.ZERO, "rot": Vector3(0.0, -90.0, 0.0), "scale_mult": 1.0},
+	&"melee_2h":       {"pos": Vector3.ZERO, "rot": Vector3(0.0, -90.0, 0.0), "scale_mult": 1.0},
+	&"ranged_1h":      {"pos": Vector3.ZERO, "rot": Vector3(0.0, -90.0, 0.0), "scale_mult": 1.0},
+	&"ranged_2h":      {"pos": Vector3.ZERO, "rot": Vector3(0.0, -90.0, 0.0), "scale_mult": 1.0},
+	&"smg_1h":         {"pos": Vector3.ZERO, "rot": Vector3(0.0, -90.0, 0.0), "scale_mult": 1.0},
+	&"lmg_2h":         {"pos": Vector3.ZERO, "rot": Vector3(0.0, -90.0, 0.0), "scale_mult": 1.0},
+	&"sniper_2h":      {"pos": Vector3.ZERO, "rot": Vector3(0.0, -90.0, 0.0), "scale_mult": 1.0},
+	&"rpg_2h":         {"pos": Vector3.ZERO, "rot": Vector3(0.0, -90.0, 0.0), "scale_mult": 1.0},
+	&"shotgun_2h":     {"pos": Vector3.ZERO, "rot": Vector3(0.0, -90.0, 0.0), "scale_mult": 1.0},
+	&"accelerator_2h": {"pos": Vector3.ZERO, "rot": Vector3(0.0, -90.0, 0.0), "scale_mult": 1.0},
+	&"taser_2h":       {"pos": Vector3.ZERO, "rot": Vector3(0.0, -90.0, 0.0), "scale_mult": 1.0},
 }
 
 

@@ -37,8 +37,23 @@ var _target: Node3D
 var _pitch_rad: float = 0.0
 var _default_pitch_rad: float = 0.0
 var _bearing_rad: float = 0.0
+var _default_bearing_rad: float = 0.0
 var _distance: float = 1.0
+var _default_distance: float = 1.0
 var _mw_held: bool = false
+
+# ── Debug inspect mode ────────────────────────────────────────────────────
+# Toggled with F9. While active, mouse wheel scrolls zoom and middle-
+# mouse HORIZONTAL drag orbits the bearing around the player; the
+# existing middle-mouse vertical drag continues to drive pitch. Toggling
+# OFF snaps every orbit value back to its @export default. Gated rather
+# than always-on so the fixed-iso gameplay feel (no zoom, fixed bearing,
+# see feedback_no_camera_lerp) stays intact for normal play.
+var _inspect_mode: bool = false
+const _INSPECT_DISTANCE_MIN: float = 1.5
+const _INSPECT_DISTANCE_MAX: float = 30.0
+const _INSPECT_WHEEL_STEP: float = 1.2          # units of distance per wheel notch
+const _BEARING_DRAG_SENSITIVITY: float = 0.006  # rad per pixel of horizontal mouse motion
 # ── Camera shake ──────────────────────────────────────────────────────────
 # Decayed manually in _process (was a Tween — but tweens captured the
 # property's *current* value at activation, so rapid-fire calls layered
@@ -92,6 +107,8 @@ func _ready() -> void:
 		_target = _resolve_local_player()
 	_init_orbit_from_offset()
 	_default_pitch_rad = _pitch_rad
+	_default_bearing_rad = _bearing_rad
+	_default_distance = _distance
 	_build_audio_listener()
 	if _target != null:
 		_snap_to_target()
@@ -168,16 +185,53 @@ func _init_orbit_from_offset() -> void:
 
 
 func _input(event: InputEvent) -> void:
-	if not enable_pitch_drag or not current:
+	if not current:
+		return
+	# F9 toggles the debug inspect overlay regardless of any other state —
+	# placed before the enable_pitch_drag gate so it can't get locked off.
+	if event is InputEventKey:
+		var ke := event as InputEventKey
+		if ke.pressed and not ke.echo and ke.physical_keycode == KEY_F9:
+			_set_inspect_mode(not _inspect_mode)
+			return
+	if not enable_pitch_drag:
 		return
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_MIDDLE:
 			_mw_held = mb.pressed
+			return
+		# Mouse-wheel zoom is gated to inspect mode so the gameplay
+		# camera stays at fixed iso distance (the project's design call;
+		# see feedback_no_camera_lerp).
+		if _inspect_mode and mb.pressed:
+			if mb.button_index == MOUSE_BUTTON_WHEEL_UP:
+				_distance = clampf(_distance - _INSPECT_WHEEL_STEP, _INSPECT_DISTANCE_MIN, _INSPECT_DISTANCE_MAX)
+			elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+				_distance = clampf(_distance + _INSPECT_WHEEL_STEP, _INSPECT_DISTANCE_MIN, _INSPECT_DISTANCE_MAX)
 		return
 	if _mw_held and event is InputEventMouseMotion:
 		var mm := event as InputEventMouseMotion
 		_pitch_rad = clampf(_pitch_rad + mm.relative.y * pitch_drag_sensitivity, PITCH_MIN, PITCH_MAX)
+		# Horizontal middle-drag orbits the bearing — also gated to
+		# inspect mode so the fixed-bearing gameplay camera never
+		# drifts off-axis from a stray middle-mouse pan.
+		if _inspect_mode and absf(mm.relative.x) > 0.0:
+			_bearing_rad = fposmod(_bearing_rad - mm.relative.x * _BEARING_DRAG_SENSITIVITY, TAU)
+
+
+# Enter / leave debug inspect mode. Leaving snaps every orbit parameter
+# back to its initial @export-derived default so the iso framing is
+# restored exactly — no lerp, since the gameplay camera contract is
+# snap-only.
+func _set_inspect_mode(active: bool) -> void:
+	_inspect_mode = active
+	if not active:
+		_pitch_rad = _default_pitch_rad
+		_bearing_rad = _default_bearing_rad
+		_distance = _default_distance
+	# One-shot console line so the debug toggle is discoverable from logs.
+	print("[Camera] inspect mode: ", "ON (wheel=zoom, MMB-drag=orbit)" if active else "OFF (restored)")
 
 
 func _process(delta: float) -> void:
