@@ -52,33 +52,6 @@ func _ready() -> void:
 
 	InventoryState.equipment_changed.connect(_on_equipment_changed)
 	refresh()
-	set_process(true)
-
-
-# Per-frame: update the shader's room_aabb uniform with the rect of the
-# piece the player is currently standing in. Shader uses it to clip
-# rings that extend past the room walls into the outer void.
-func _process(_delta: float) -> void:
-	var player := get_parent()
-	if player == null or not (player is Node3D):
-		return
-	var room_id := ExplorationState.room_at_world((player as Node3D).global_position)
-	if room_id == &"":
-		# Unregistered position — let the rings render unclipped. Default
-		# uniform sentinel covers this since the shader's initial value
-		# is a huge "always inside" rect.
-		_material.set_shader_parameter(&"room_aabb", Vector4(-9999.0, -9999.0, 9999.0, 9999.0))
-		return
-	var rect := ExplorationState.get_piece_aabb(room_id)
-	if rect.size == Vector2.ZERO:
-		_material.set_shader_parameter(&"room_aabb", Vector4(-9999.0, -9999.0, 9999.0, 9999.0))
-		return
-	_material.set_shader_parameter(&"room_aabb", Vector4(
-		rect.position.x,
-		rect.position.y,
-		rect.position.x + rect.size.x,
-		rect.position.y + rect.size.y,
-	))
 
 
 func _on_equipment_changed(_slot: StringName) -> void:

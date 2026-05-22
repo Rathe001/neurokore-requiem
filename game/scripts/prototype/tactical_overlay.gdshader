@@ -23,31 +23,7 @@ uniform float scan_speed : hint_range(0.0, 8.0) = 0.6;
 uniform float dash_count : hint_range(4.0, 64.0) = 24.0;
 uniform float intensity : hint_range(0.0, 4.0) = 0.9;
 
-// World-space XZ rect of the room the player is currently standing in.
-// Components: (min_x, min_z, max_x, max_z). Updated every frame by
-// tactical_overlay.gd from ExplorationState.get_piece_aabb. Fragments
-// whose world XZ falls outside the rect get discarded, clipping the
-// rings to the room interior even when the PlaneMesh extends past
-// the walls. A zero-area rect (when not in any registered piece)
-// disables the clip.
-uniform vec4 room_aabb = vec4(-9999.0, -9999.0, 9999.0, 9999.0);
-
-// Local-space vertex position carried from vertex into fragment so we
-// can transform it to world coords for the AABB clip. VERTEX in a
-// fragment shader is view-space, not local, so a varying is required.
-varying vec3 v_local_pos;
-
-void vertex() {
-	v_local_pos = VERTEX;
-}
-
 void fragment() {
-	// World XZ of THIS fragment via the model matrix. PlaneMesh's UV
-	// runs along its local XZ so this matches the visible position.
-	vec4 world = MODEL_MATRIX * vec4(v_local_pos, 1.0);
-	if (world.x < room_aabb.x || world.z < room_aabb.y || world.x > room_aabb.z || world.z > room_aabb.w) {
-		discard;
-	}
 	vec2 uv = UV * 2.0 - 1.0;
 	float r = length(uv);
 	if (r > 1.0) {
