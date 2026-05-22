@@ -89,68 +89,87 @@ static func get_library() -> AnimationLibrary:
 	if _library != null:
 		return _library
 	_library = AnimationLibrary.new()
-	_extract(_library, &"idle", _IDLE_FBX, true, false)
+	# Hip-position stripping policy: ALL clips get strip_hip_position=true.
+	# _strip_hip_position only zeros the X/Z components of the Hips
+	# position track — vertical (Y) is preserved, so jumps still arc and
+	# deaths still topple to the floor. Without stripping, Mixamo's baked-
+	# in forward drift makes the visual drift across the floor relative
+	# to the CharacterBody3D: punch animations step forward, hit reactions
+	# step back, cast animations lean forward, deaths fall forward 1-2m,
+	# etc. The body stays put; the mesh wanders. With stripping, all
+	# horizontal motion comes from the CharacterBody3D's velocity (or
+	# stays still for stationary clips), and limb / rotation animation
+	# still reads normally.
+	#
+	# The flag is a no-op on clips without hip translation (idle, hits,
+	# casts that don't step), so it's safe to apply universally.
+	_extract(_library, &"idle", _IDLE_FBX, true, true)
 	_extract(_library, &"slow_run", _SLOW_RUN_FBX, true, true)
 	_extract(_library, &"fast_run", _FAST_RUN_FBX, true, true)
-	_extract(_library, &"punch", _PUNCH_FBX, false, false)
+	_extract(_library, &"punch", _PUNCH_FBX, false, true)
 	# Fire loops so LMB-hold (and enemy sustained ranged fire) reads as a
 	# steady firing pose rather than a per-shot retrigger. The Mixamo
 	# "Firing Rifle" clip is a short recoil cycle that loops cleanly —
 	# calling _play_anim with the same key during continuous fire is a
 	# no-op (no restart), so cycle drift across shots is invisible.
-	# strip_hip_position=true zeros the baked-in forward drift Mixamo's
-	# clip has on the hips track — without it the player's visual creeps
-	# forward each cycle while the CharacterBody3D stays put.
 	_extract(_library, &"fire", _FIRE_FBX, true, true)
-	_extract(_library, &"hit", _HIT_FBX, false, false)
-	_extract(_library, &"jump", _JUMP_FBX, false, false)
+	_extract(_library, &"hit", _HIT_FBX, false, true)
+	_extract(_library, &"jump", _JUMP_FBX, false, true)
 	# Locomotion: jog is the new "default run" tempo; crouch_walk drives
-	# the crouch-moving state. Both loop and strip the Mixamo hip-position
-	# track so the CharacterBody3D's velocity drives travel, not the clip.
+	# the crouch-moving state. The CharacterBody3D's velocity drives
+	# travel, not the baked-in clip motion.
 	_extract(_library, &"jog", _JOG_FBX, true, true)
 	_extract(_library, &"crouch_walk", _CROUCH_WALK_FBX, true, true)
 	# Strafing — used whenever the player is moving AND holding the fire
 	# input with a ranged weapon. Upper body keeps the rifle aimed forward,
-	# legs play a tactical sidestep cycle. Loops + hip-stripped so the
-	# CharacterBody3D's velocity drives travel.
+	# legs play a tactical sidestep cycle.
 	_extract(_library, &"fire_move", _FIRE_MOVE_FBX, true, true)
 	# Phase 1 universal slots —
 	# Crouch idle: dedicated standing-crouch pose (replaces the
 	# xbot/idle fallback that left the player visually upright while
 	# crouched).
 	_extract(_library, &"crouch_idle", _CROUCH_IDLE_FBX, true, true)
-	# Backward / lateral movement — loop + hip-strip so velocity drives
-	# travel, not the baked-in clip translation.
+	# Backward / lateral movement.
 	_extract(_library, &"walk_back", _WALK_BACK_FBX, true, true)
 	_extract(_library, &"strafe_left", _STRAFE_LEFT_FBX, true, true)
 	_extract(_library, &"strafe_right", _STRAFE_RIGHT_FBX, true, true)
 	# Jump split into start (wind-up + push-off, one-shot) / air
 	# (falling loop) / land (touchdown, one-shot). Replaces the single
-	# xbot/jump that played for all three phases.
-	_extract(_library, &"jump_start", _JUMP_START_FBX, false, false)
-	_extract(_library, &"jump_air", _JUMP_AIR_FBX, true, false)
-	_extract(_library, &"jump_land", _JUMP_LAND_FBX, false, false)
+	# xbot/jump that played for all three phases. Hip-stripping leaves
+	# the Y track intact so the jump arc / fall reads correctly.
+	_extract(_library, &"jump_start", _JUMP_START_FBX, false, true)
+	_extract(_library, &"jump_air", _JUMP_AIR_FBX, true, true)
+	_extract(_library, &"jump_land", _JUMP_LAND_FBX, false, true)
 	# Directional hit reactions — picker branches on hit direction.
-	# All are one-shots that auto-return to the prior state.
-	_extract(_library, &"hit_left", _HIT_LEFT_FBX, false, false)
-	_extract(_library, &"hit_right", _HIT_RIGHT_FBX, false, false)
-	_extract(_library, &"hit_back", _HIT_BACK_FBX, false, false)
-	_extract(_library, &"hit_big", _HIT_BIG_FBX, false, false)
+	# Mixamo's react clips include a backward stagger step; hip-strip
+	# keeps the enemy / player rooted while the upper body sells the
+	# impact.
+	_extract(_library, &"hit_left", _HIT_LEFT_FBX, false, true)
+	_extract(_library, &"hit_right", _HIT_RIGHT_FBX, false, true)
+	_extract(_library, &"hit_back", _HIT_BACK_FBX, false, true)
+	_extract(_library, &"hit_big", _HIT_BIG_FBX, false, true)
 	# Skill cast poses — 1H for Shield/Telekinesis/Blood Ritual,
-	# 2H for AoE / heavier casts. Both one-shot.
-	_extract(_library, &"cast", _CAST_FBX, false, false)
-	_extract(_library, &"cast_2h", _CAST_2H_FBX, false, false)
+	# 2H for AoE / heavier casts. Mixamo's cast spells lean / step
+	# forward; stripping keeps the caster rooted.
+	_extract(_library, &"cast", _CAST_FBX, false, true)
+	_extract(_library, &"cast_2h", _CAST_2H_FBX, false, true)
 	# Reload — stationary variant loops (it's a 1-2s repeating
-	# rack-and-load motion). reload_run is hip-stripped so the player
-	# keeps moving during the reload.
-	_extract(_library, &"reload", _RELOAD_FBX, true, false)
+	# rack-and-load motion). reload_run keeps player moving during the
+	# reload via CharacterBody3D velocity (clip is hip-stripped).
+	_extract(_library, &"reload", _RELOAD_FBX, true, true)
 	_extract(_library, &"reload_run", _RELOAD_RUN_FBX, true, true)
 	# Grenade throw — one-shot pitching motion. Run-and-throw lets the
 	# player keep their forward momentum, hip-stripped so velocity
 	# drives travel not the clip.
 	_extract(_library, &"grenade_throw", _GRENADE_THROW_FBX, false, true)
+	# Deaths — hip-stripped so the body topples in place without sliding
+	# across the floor. The vertical (Y) component is preserved so the
+	# character still falls to the ground; only X/Z drift is zeroed.
+	# Ragdoll physics takes over post-death and handles any further
+	# settling, so the death anim's role is just to play the topple in
+	# the spot the kill occurred.
 	for i in _DEATH_FBXS.size():
-		_extract(_library, StringName("death_%d" % i), _DEATH_FBXS[i], false, false)
+		_extract(_library, StringName("death_%d" % i), _DEATH_FBXS[i], false, true)
 	return _library
 
 
