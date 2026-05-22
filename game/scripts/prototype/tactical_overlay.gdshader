@@ -25,20 +25,22 @@ uniform float intensity : hint_range(0.0, 4.0) = 0.9;
 
 // Scene depth buffer. Sampled per-fragment to detect when this overlay
 // pixel is over the void (no opaque geometry behind it) and clip the
-// rings to the interior of the level. depth_texture returns values in
-// [0,1] — at-or-near 1.0 means the fragment is looking through to the
-// far plane / sky / nothing.
+// rings to the interior of the level. Godot 4 Forward+ uses REVERSE-Z,
+// so the depth buffer is cleared to 0.0 at the far plane (not 1.0 as
+// in legacy forward-Z). A reading near 0.0 = void / sky / nothing
+// opaque behind this overlay pixel.
 uniform sampler2D depth_texture : hint_depth_texture, repeat_disable, filter_nearest;
 
 void fragment() {
 	// Discard fragments where there's no opaque scene geometry behind
 	// the overlay pixel. The PlaneMesh extends beyond the room (out to
 	// outer_range × PLANE_MARGIN) so rings would otherwise paint the
-	// dark void around the level. Threshold just under 1.0 catches the
-	// far-plane reading without false-positiving on legitimately-deep
-	// floor geometry (which sits at much lower depth values).
+	// dark void around the level. Reverse-Z: far plane = 0.0, near
+	// plane = 1.0. Threshold just above 0 catches the cleared far-plane
+	// reading without false-positiving on actual far-away floor geometry
+	// (which reverse-projects to a small but nonzero positive depth).
 	float scene_depth = texture(depth_texture, SCREEN_UV).x;
-	if (scene_depth >= 0.9999) {
+	if (scene_depth <= 0.0001) {
 		discard;
 	}
 	vec2 uv = UV * 2.0 - 1.0;
