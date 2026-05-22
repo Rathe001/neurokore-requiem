@@ -24,6 +24,7 @@ signal stats_changed
 # entering/exiting a SECOND simultaneous pool — only on the actual
 # state transition.
 signal slow_pool_changed(in_pool: bool)
+signal blood_pool_changed(in_pool: bool)
 # Fires whenever the equipped main weapon's ammo state changes (shot
 # fired, reload finished, item swapped). HUD reads InventoryState +
 # is_reloading() / get_reload_progress() to repaint the ammo widget.
@@ -1429,6 +1430,8 @@ func _physics_process(delta: float) -> void:
 		return
 	if _grunt_cd > 0.0:
 		_grunt_cd -= delta
+	if _blood_stumble_remaining > 0.0:
+		_blood_stumble_remaining = maxf(0.0, _blood_stumble_remaining - delta)
 	if not Input.is_action_pressed(SKILL_INPUTS[0]):
 		_click_consumed = false
 	_update_lock_target()
@@ -1555,6 +1558,15 @@ func _physics_process(delta: float) -> void:
 			# speed by Traction.slow_factor_for(...) — full -50% at no
 			# traction, scaling to immune at TIER_SLOW (traction 50).
 			var pool_factor: float = _slow_pool_factor()
+			# Blood-pool effect: mild additional slow (-15% at T0, immune
+			# at TIER_SLOW). Multiplies with pool_factor when the player
+			# stands in both (rare — but the result composes naturally).
+			var blood_factor: float = _blood_pool_factor()
+			# Stumble: 100% speed kill for BLOOD_STUMBLE_DURATION after
+			# a failed slip-chance roll on pool entry. Composes
+			# multiplicatively so other factors stay unchanged after the
+			# stumble window ends.
+			var stumble_factor: float = 0.0 if is_stumbling() else 1.0
 			# Reloading drags movement by 15% — small enough that you can
 			# still reposition, large enough that mid-fight reloads feel
 			# costly and reward the "back off, then reload" rhythm.
@@ -1562,11 +1574,21 @@ func _physics_process(delta: float) -> void:
 			# AIM_HOLD (Tripod / Aimed Shot) pins the player in place — that's
 			# the trade for the accuracy / crit buff.
 			var aim_hold_factor: float = 0.0 if aim_hold_locks_movement() else 1.0
-			var speed := move_speed * (CROUCH_SPEED_FACTOR if _crouching else 1.0) * (0.5 if _backing else 1.0) * sprint_factor * shield_factor * gear_speed_factor * pool_factor * reload_factor * aim_hold_factor
+			var speed := move_speed * (CROUCH_SPEED_FACTOR if _crouching else 1.0) * (0.5 if _backing else 1.0) * sprint_factor * shield_factor * gear_speed_factor * pool_factor * blood_factor * stumble_factor * reload_factor * aim_hold_factor
 			_target_move_speed = speed
 			var flat := Vector2(velocity.x, velocity.z)
 			var target := Vector2(wish_dir.x, wish_dir.z) * speed
-			var step := accel * (1.0 if wish_dir.length_squared() > 0.0 else 2.5) * delta
+			# Slip on blood: when releasing wish_dir, multiply the decel step
+			# by _blood_friction_factor() (< 1.0) so the player skids past
+			# the stop instead of crisp-stopping. Accel step (wish_dir
+			# non-zero) is unaffected — feels like "wet boots can't grab
+			# the floor when stopping" rather than "starting from rest is
+			# sluggish".
+			var is_decelerating := wish_dir.length_squared() <= 0.0
+			var step_mult: float = 2.5 if is_decelerating else 1.0
+			if is_decelerating:
+				step_mult *= _blood_friction_factor()
+			var step := accel * step_mult * delta
 			flat = flat.move_toward(target, step)
 			velocity.x = flat.x
 			velocity.z = flat.y
@@ -3633,6 +3655,86 @@ func _slow_pool_factor() -> float:
 	if _slow_pool_count <= 0:
 		return 1.0
 	return Traction.slow_factor_for(Traction.get_player_traction())
+
+
+# ── Blood pool ground effect ─────────────────────────────────────────
+# Distinct from oil/water slow_pool because blood has TWO effects:
+# a mild slow AND a slip-friction model (less decel = skid). Plus a
+# stumble-chance roll on entry. All gated by Traction:
+#   T0  — full slip + stumble + mild slow
+#   T1  — stumble immunity, slip-friction stops, slow still applies
+#   T2+ — slow immune too (mirrors oil/water)
+# Counted (not bool) for the same overlapping-pools rationale as
+# _slow_pool_count. Future ground types (frozen, fire) plug in here
+# with their own _X_pool_count + _X_pool_factor() pair.
+var _blood_pool_count: int = 0
+var _blood_stumble_remaining: float = 0.0
+
+
+## Increments the blood-pool overlap count. Called by the slip-zone
+## Area3D under each pool (see PrototypeAttackIndicator
+## ._attach_blood_pool_slip_zone). Rolls the stumble chance on the
+## 0→1 transition so walking from one pool into an overlapping one
+## doesn't keep re-rolling.
+func enter_blood_pool() -> void:
+	var was_in := _blood_pool_count > 0
+	_blood_pool_count += 1
+	if not was_in:
+		blood_pool_changed.emit(true)
+		# Stumble roll — only at TIER_SLIP-below, and only on first
+		# entry into the pool stack.
+		if not Traction.has_immunity(Traction.TIER_SLIP):
+			if randf() < PrototypeAttackIndicator.BLOOD_SLIP_CHANCE:
+				_blood_stumble_remaining = PrototypeAttackIndicator.BLOOD_STUMBLE_DURATION
+
+
+## Decrements the blood-pool overlap count. Emits blood_pool_changed
+## only on the N→0 transition.
+func exit_blood_pool() -> void:
+	if _blood_pool_count <= 0:
+		return
+	_blood_pool_count -= 1
+	if _blood_pool_count == 0:
+		blood_pool_changed.emit(false)
+
+
+## True while the player is overlapping at least one blood pool.
+func is_in_blood_pool() -> bool:
+	return _blood_pool_count > 0
+
+
+## Move-speed multiplier from blood pool overlap. Mild slow (BLOOD_SLOW_FACTOR
+## = 0.85 at T0) that scales to 1.0 at TIER_SLOW. Intentionally subtler
+## than oil puddles (0.5 → 1.0) so blood reads as "wet floor" not
+## "wading through tar".
+func _blood_pool_factor() -> float:
+	if _blood_pool_count <= 0:
+		return 1.0
+	var traction := Traction.get_player_traction()
+	var t := Traction.tier_for(traction)
+	if t >= Traction.TIER_SLOW:
+		return 1.0
+	# Linear blend between BLOOD_SLOW_FACTOR (T0) and 1.0 (T_SLOW).
+	var ratio := float(t) / float(Traction.TIER_SLOW)
+	return lerpf(PrototypeAttackIndicator.BLOOD_SLOW_FACTOR, 1.0, ratio)
+
+
+## Friction multiplier applied to the decel step (move_toward step
+## when wish_dir is zero) while in a blood pool. < 1.0 means LESS
+## friction → skid. TIER_SLIP (25) restores normal friction.
+func _blood_friction_factor() -> float:
+	if _blood_pool_count <= 0:
+		return 1.0
+	if Traction.has_immunity(Traction.TIER_SLIP):
+		return 1.0
+	return PrototypeAttackIndicator.BLOOD_FRICTION_FACTOR
+
+
+## Currently stumbling from a slip-chance roll? Movement code zeroes
+## wish_dir while this is true so the player can't input new accel
+## during the brief stumble window.
+func is_stumbling() -> bool:
+	return _blood_stumble_remaining > 0.0
 
 func _update_light_visibility() -> void:
 	if _equipped_light != null:

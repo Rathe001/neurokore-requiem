@@ -1001,6 +1001,28 @@ const POOL_ATTACH_RADIUS: float = 1.2
 # safely inside the new bounds, not on its rim.
 const POOL_GROWTH_BUFFER: float = 0.4
 const _POOL_GROWTH_TWEEN_META: StringName = &"_pool_growth_tween"
+const _POOL_SLIP_SHAPE_META: StringName = &"_pool_slip_shape"
+
+# ── Blood as a "ground effect" ────────────────────────────────────────
+# Blood pools behave like a Divinity-style environmental floor type:
+# walking through one applies a mild slow + a chance to stumble on
+# entry, both mitigated by the Traction stat. Future ground types
+# (frozen, oil, fire) will follow the same Area3D + enter/exit pattern
+# under their own (heavier) constants — frozen ground in particular
+# will reuse this slip-friction model with a much lower friction
+# factor than blood.
+#
+# Player-only by design — enemies don't have a Traction stat to
+# mediate the effect against, same as the existing oil/water puddle
+# system in DecalBuilder. (If we ever want slipping enemies, the
+# Area3D mask needs to add the Enemy layer + PrototypeEnemy needs an
+# enter/exit_blood_pool pair.)
+const BLOOD_SLIP_CHANCE: float = 0.12       # ~1 in 8 entries trigger stumble
+const BLOOD_FRICTION_FACTOR: float = 0.55   # decel step multiplier when releasing wish_dir → slide
+const BLOOD_SLOW_FACTOR: float = 0.85       # mild -15% move speed
+const BLOOD_STUMBLE_DURATION: float = 0.30  # input lockout on stumble
+const _BLOOD_POOL_AREA_HEIGHT: float = 0.9
+const _BLOOD_POOL_PLAYER_MASK: int = 4      # Layer 3 = Player
 
 
 static func spawn_blood_kill_scene(parent: Node, world_pos: Vector3, _spray_dir: Vector3 = Vector3.ZERO, blood_type: StringName = BLOOD_TYPE_HUMAN) -> void:
@@ -1074,6 +1096,13 @@ static func _grow_pool_toward(pool: Decal, new_pos: Vector3) -> void:
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	tween.tween_property(pool, "size:z", target_diameter, POOL_GROWTH_DURATION) \
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	# Slip-zone follows the visual growth so the player only slips inside
+	# the visible pool footprint, not the eventual target before it's
+	# actually grown that far.
+	var slip_shape: CylinderShape3D = pool.get_meta(_POOL_SLIP_SHAPE_META, null) as CylinderShape3D
+	if slip_shape != null:
+		tween.tween_property(slip_shape, "radius", target_r, POOL_GROWTH_DURATION) \
+			.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	pool.set_meta(_POOL_GROWTH_TWEEN_META, tween)
 	_refresh_pool_sort_offset(pool)
 
@@ -1109,11 +1138,23 @@ static func _spawn_new_pool(parent: Node, world_pos: Vector3, blood_type: String
 	# the ~0.20 m² mist drops, which is backwards. The grown pool is the
 	# storytelling element; mist drops are the cheap filler.
 	pool.set_meta(&"_blood_area", target_diameter * target_diameter)
+	# Slip-zone Area3D — drives enter/exit_blood_pool on the player so
+	# blood acts as an environmental ground type (mild slow + stumble
+	# chance, mitigated by Traction). Attached before the growth tween
+	# so the radius reference exists when the tween wires its own
+	# shape.radius track below.
+	_attach_blood_pool_slip_zone(pool, POOL_INITIAL_DIAMETER)
 	var tween := pool.create_tween().set_parallel(true)
 	tween.tween_property(pool, "size:x", target_diameter, POOL_GROWTH_DURATION) \
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	tween.tween_property(pool, "size:z", target_diameter, POOL_GROWTH_DURATION) \
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	# Slip cylinder grows in lockstep with the visual so the player
+	# can't slip on a pool that hasn't actually grown that big yet.
+	var slip_shape: CylinderShape3D = pool.get_meta(_POOL_SLIP_SHAPE_META, null) as CylinderShape3D
+	if slip_shape != null:
+		tween.tween_property(slip_shape, "radius", target_diameter * 0.5, POOL_GROWTH_DURATION) \
+			.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	pool.set_meta(_POOL_GROWTH_TWEEN_META, tween)
 
 
@@ -1134,6 +1175,91 @@ static func _cancel_pool_growth_tween(pool: Decal) -> void:
 static func _refresh_pool_sort_offset(pool: Decal) -> void:
 	_blood_sort_counter += 1
 	pool.sorting_offset = float(_blood_sort_counter) * _BLOOD_SORT_STEP
+
+
+# Attach the slip-zone Area3D to a freshly-spawned blood pool. The
+# cylinder radius starts at the pool's initial diameter and is
+# tweened by the caller (_spawn_new_pool / _grow_pool_toward) in
+# lockstep with the visual. Only the player can trigger it — enemies
+# don't have a Traction stat to mediate the slip against.
+static func _attach_blood_pool_slip_zone(pool: Decal, initial_diameter: float) -> void:
+	var area := Area3D.new()
+	area.name = &"SlipZone"
+	area.collision_layer = 0
+	area.collision_mask = _BLOOD_POOL_PLAYER_MASK
+	area.monitoring = true
+	area.monitorable = false
+	# Lift the cylinder so it sits ABOVE the floor — pool decal is at
+	# y≈0 (with tiny Y-jitter); centering the slip zone at half-height
+	# keeps the bottom flush with the floor.
+	area.position = Vector3(0.0, _BLOOD_POOL_AREA_HEIGHT * 0.5, 0.0)
+	var col := CollisionShape3D.new()
+	var shape := CylinderShape3D.new()
+	shape.radius = initial_diameter * 0.5
+	shape.height = _BLOOD_POOL_AREA_HEIGHT
+	col.shape = shape
+	area.add_child(col)
+	pool.add_child(area)
+	area.body_entered.connect(_on_blood_pool_body_entered)
+	area.body_exited.connect(_on_blood_pool_body_exited)
+	pool.set_meta(_POOL_SLIP_SHAPE_META, shape)
+
+
+static func _on_blood_pool_body_entered(body: Node) -> void:
+	# Group + method check — guards against the layer mask ever picking
+	# up something that isn't a PrototypePlayer (charmed pets etc.).
+	if body.is_in_group(&"player") and body.has_method(&"enter_blood_pool"):
+		body.enter_blood_pool()
+
+
+static func _on_blood_pool_body_exited(body: Node) -> void:
+	if body.is_in_group(&"player") and body.has_method(&"exit_blood_pool"):
+		body.exit_blood_pool()
+
+
+## Returns blood-pool decals whose centers fall within `radius` of
+## `world_pos`. For skills that consume or interact with pools (e.g. the
+## planned Enculted "Blood Ritual"). Filters out wall splats and mist
+## drops via priority + recorded area so callers only get the
+## storytelling-grade pools.
+##
+## First slice of a generic ground-effect query API. As more ground
+## types land (oil, frozen, fire), each gets a parallel get_X_pools_near()
+## — when there are 3+, the shared scan logic gets extracted to a
+## GroundEffects autoload. Until then, parallel methods read cleaner
+## than a polymorphic registry would.
+static func get_blood_pools_near(world_pos: Vector3, radius: float) -> Array[Decal]:
+	var out: Array[Decal] = []
+	var r_sq: float = radius * radius
+	# Mist drops cap around 0.42 m² (0.65 m diameter squared); pools
+	# spawn at ≥ 0.81 m² (0.9 m target diameter squared). 0.6 m² lands
+	# safely between, so we can filter pools by recorded area.
+	const _MIN_POOL_AREA: float = 0.6
+	for entry in _blood_decal_ring:
+		if not is_instance_valid(entry) or not (entry is Decal):
+			continue
+		var d := entry as Decal
+		var prio: int = int(d.get_meta(&"_blood_priority", BLOOD_PRIORITY_FLOOR))
+		if prio != BLOOD_PRIORITY_FLOOR:
+			continue
+		var area_m2: float = float(d.get_meta(&"_blood_area", 0.0))
+		if area_m2 < _MIN_POOL_AREA:
+			continue
+		if d.global_position.distance_squared_to(world_pos) <= r_sq:
+			out.append(d)
+	return out
+
+
+## Fade-and-free a blood pool (call from skills that consume it). Frees
+## the slip zone first so any standing-in-pool player gets a clean
+## body_exited and decrements their _blood_pool_count to zero.
+static func consume_blood_pool(pool: Decal) -> void:
+	if not is_instance_valid(pool):
+		return
+	var area := pool.get_node_or_null(^"SlipZone") as Area3D
+	if area != null:
+		area.queue_free()
+	_fade_and_free(pool)
 
 
 # Reads the world's physics space (now safely outside any signal flush)

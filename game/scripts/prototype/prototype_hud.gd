@@ -143,6 +143,8 @@ func _ready() -> void:
 		player.shield_buff_changed.connect(_on_shield_buff_changed)
 	if player.has_signal(&"slow_pool_changed"):
 		player.slow_pool_changed.connect(_on_slow_pool_changed)
+	if player.has_signal(&"blood_pool_changed"):
+		player.blood_pool_changed.connect(_on_blood_pool_changed)
 	if player.has_signal(&"weapon_ammo_changed"):
 		player.weapon_ammo_changed.connect(_on_weapon_ammo_changed)
 	# Equipment changes drive ammo widget visibility too — swapping to a
@@ -322,9 +324,15 @@ func _update_debuffs_bar() -> void:
 		return
 	if player.is_in_slow_pool():
 		_add_slow_debuff_entry()
+	if player.is_in_blood_pool():
+		_add_blood_pool_debuff_entry()
 
 
 func _on_slow_pool_changed(_in_pool: bool) -> void:
+	_update_debuffs_bar()
+
+
+func _on_blood_pool_changed(_in_pool: bool) -> void:
 	_update_debuffs_bar()
 
 
@@ -478,6 +486,50 @@ func _add_slow_debuff_entry() -> void:
 		else:
 			body = "Standing in a liquid pool, but your traction fully mitigates the slow."
 		get_tree().call_group(&"interactable_tooltip", &"show_talent_node", title, body))
+	entry.mouse_exited.connect(func() -> void:
+		get_tree().call_group(&"interactable_tooltip", &"hide_tooltip"))
+	debuff_entries.add_child(entry)
+
+
+# Slippery debuff entry: blood pool overlap. Shows the current slip,
+# slow %, and stumble-chance gating against Traction.
+func _add_blood_pool_debuff_entry() -> void:
+	var entry := Control.new()
+	entry.custom_minimum_size = _BUFF_ENTRY_SIZE
+	entry.mouse_filter = Control.MOUSE_FILTER_STOP
+	entry.set_meta(&"buff_stat_id", &"blood_pool")
+	var label := Label.new()
+	label.text = "B"
+	label.add_theme_font_size_override(&"font_size", 12)
+	# Deep-red so it reads as "you're standing in something bloody"
+	# rather than the orange-red of the slow_pool indicator.
+	label.add_theme_color_override(&"font_color", Color(0.85, 0.25, 0.25, 1.0))
+	label.add_theme_color_override(&"font_outline_color", Color(0, 0, 0, 1))
+	label.add_theme_constant_override(&"outline_size", 1)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.anchor_right = 1.0
+	label.anchor_bottom = 1.0
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	entry.add_child(label)
+	entry.mouse_entered.connect(func() -> void:
+		var traction: int = Traction.get_player_traction()
+		var tier: int = Traction.tier_for(traction)
+		var slip_chance_pct: int = int(round(PrototypeAttackIndicator.BLOOD_SLIP_CHANCE * 100.0))
+		var slip_immune: bool = tier >= Traction.TIER_SLIP
+		var slow_immune: bool = tier >= Traction.TIER_SLOW
+		var blood_slow: float = 1.0 - PrototypeAttackIndicator.BLOOD_SLOW_FACTOR
+		var slow_pct_at_t0: int = int(round(blood_slow * 100.0))
+		var title := "Slippery"
+		var lines: Array[String] = []
+		if not slow_immune:
+			lines.append("• Move speed −%d%% from blood underfoot." % slow_pct_at_t0)
+		if not slip_immune:
+			lines.append("• %d%% stumble chance on entry, less friction when stopping." % slip_chance_pct)
+		if lines.is_empty():
+			lines.append("Standing in blood, but your traction fully mitigates the effects.")
+		lines.append("• Traction: %d (T25 negates slip, T50 negates slow)" % traction)
+		get_tree().call_group(&"interactable_tooltip", &"show_talent_node", title, "\n".join(lines)))
 	entry.mouse_exited.connect(func() -> void:
 		get_tree().call_group(&"interactable_tooltip", &"hide_tooltip"))
 	debuff_entries.add_child(entry)

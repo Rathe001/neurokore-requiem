@@ -57,6 +57,7 @@
 - [Visual meter system](project_visual_meters.md) — ALL item types have meter bars; MODIFIER_BAR_DEFS for affix stats; Shift comparison shows union of bars; quality % on both panels; global Power bar with divider
 - [Blood palette + fluid types](project_blood_palette.md) — BLOOD_PALETTES dict (human/cyborg/machine) + per-enemy @export blood_type threaded through every spawn_blood_* call
 - [Object blood pipeline](project_object_blood_pipeline.md) — receiver opt-in (group + layer 8 + side decal); known unfix: short flat props don't show side-projected blood from iso camera; BLOOD_DECAL_ALBEDO_MIX is the opacity dial
+- [Ground effects](project_ground_effects.md) — Blood pools = first concrete ground type (slip + slow + stumble, all Traction-mitigated). Per-pool Area3D + enter/exit_blood_pool. Generic get_blood_pools_near + consume_blood_pool for future Blood Ritual / Forged-consume-oil skills. Frozen/oil/fire to follow same pattern.
 - [Weapon DPS balance](project_dps_balance_model.md) — 3-tier DPS by multi-target capability (26/23/20); damage scales by RARITY_BUDGET_MULT
 - [Resonance bar world-space](project_resonance_bar.md) — accelerator ramp bar moved from HUD to 3D cast bar under player; reuses health_bar.gdshader
 - [Destructibles + cover invariants](project_destructibles_cover.md) — collision is 1.6m tall regardless of mesh size; cover blocks standing fire too; projectile sweep routes PILLAR hits to damage path
