@@ -1018,6 +1018,9 @@ func _apply_gender_appearance() -> void:
 	# CHARACTER_BLOOD_LAYER so spawn_blood_on_character can paint
 	# splatter that follows the body. Same scheme as PrototypeEnemy.
 	_walk_player_visual_layers(visual, 2 | PrototypeAttackIndicator.CHARACTER_BLOOD_LAYER)
+	# The gender swap rebuilt the skeleton, dropping any previous weapon
+	# mount. Re-attach the equipped weapon's model to the new hand bone.
+	_apply_weapon_model()
 
 
 # Same recursive walk PrototypeEnemy uses — kept local so the player
@@ -3530,6 +3533,8 @@ func _on_equipment_changed(slot: StringName) -> void:
 		_reload_total = 0.0
 		_reload_target = &""
 		weapon_ammo_changed.emit()
+		# Swap the visible weapon model on the hand bone to match.
+		_apply_weapon_model()
 	elif slot == &"offhand":
 		# No stacking: removing the offhand drops every effect it
 		# granted. Re-equipping a different shield offhand requires
@@ -3985,6 +3990,33 @@ func _equipped_weapon_class() -> StringName:
 	if w == null:
 		return &"unarmed"
 	return XBotAnimations.weapon_class_for_id(w.weapon_base_id)
+
+
+# Mounts the visible weapon model on the player's right-hand bone so it
+# matches the equipped weapon. Called after every gender swap (which
+# rebuilds the skeleton, dropping the old mount) and on weapon equip
+# changes. Bare hands → model cleared.
+#
+# MP note: for remote avatars this reads the local InventoryState, the
+# same known limitation _equipped_weapon_class() already has — remote
+# peers' equipped weapons aren't replicated, so a remote avatar shows
+# whatever the local player holds. Consistent with the existing stance-
+# animation behaviour; full fix waits on weapon-loadout replication.
+func _apply_weapon_model() -> void:
+	var skel := _find_player_skeleton()
+	if skel == null:
+		return
+	var w: Item = InventoryState.get_equipped(&"weapon")
+	var base_id: StringName = w.weapon_base_id if w != null else &""
+	WeaponAttachment.set_weapon(skel, base_id)
+	# A freshly-mounted model defaults to render layer 1 (the floor-blood
+	# decal cull layer) and would self-shadow under equipped lights. Walk
+	# it onto the same layers as the player body — layer 2 + blood layer,
+	# then OR in the player visual layer for shadow exclusion.
+	var mount := WeaponAttachment.get_mount(skel)
+	if mount != null:
+		_walk_player_visual_layers(mount, 2 | PrototypeAttackIndicator.CHARACTER_BLOOD_LAYER)
+		_apply_player_visual_layer_recursive(mount)
 
 
 func _play_anim(candidates: Array[StringName], speed: float = 1.0, blend: float = 0.0) -> bool:

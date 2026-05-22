@@ -649,6 +649,24 @@ func _find_skeleton(root: Node) -> Skeleton3D:
 	return null
 
 
+# Mounts the EnemyClass's weapon model on the enemy's right-hand bone.
+# Enemies share the X Bot skeleton with the player, so the same grip
+# offsets apply. Runs on host and client — enemy_class (hence weapon_id)
+# is replicated, so client avatars show the weapon too. Bare-handed
+# classes (empty weapon_id) clear the model.
+func _apply_enemy_weapon_model() -> void:
+	var skel := _find_skeleton(visual)
+	if skel == null:
+		return
+	var weapon_id: StringName = enemy_class.weapon_id if enemy_class != null else &""
+	WeaponAttachment.set_weapon_for_enemy(skel, weapon_id)
+	# Keep the weapon model off render layer 1 (floor blood decals) and
+	# on the enemy's blood layer, same as the body mesh.
+	var mount := WeaponAttachment.get_mount(skel)
+	if mount != null:
+		_walk_set_visual_layers(mount, 2 | PrototypeAttackIndicator.CHARACTER_BLOOD_LAYER)
+
+
 func _init_enemy() -> void:
 	_generation += 1
 	add_to_group(&"enemies")
@@ -672,6 +690,11 @@ func _init_enemy() -> void:
 	# is in effect first — the named monster's class drives the mesh, not
 	# the spawner-set base class.
 	_apply_class_mesh()
+	# Mount the class's weapon model on the (possibly rebuilt) skeleton.
+	# Done here rather than inside _apply_class_mesh so a pooled enemy
+	# that kept its mesh but was re-acquired as a different class still
+	# gets the correct weapon swapped in.
+	_apply_enemy_weapon_model()
 	# _apply_level_stats handles boss / named visual scale; capture
 	# whatever it landed on as the rest pose so the hit-squash tween
 	# returns here instead of stomping back to Vector3.ONE.
