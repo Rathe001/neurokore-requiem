@@ -101,6 +101,24 @@ func effect_factor(surface_id: StringName, traction: int) -> float:
 	return k / (k + t)
 
 
+## Same hyperbolic curve, but reads traction + negation directly from
+## `boot_item` instead of the currently-equipped boots. For tooltip
+## previews — players can hover a dropped boot and see what its
+## traction would mitigate WITHOUT equipping it first. Returns 1.0 if
+## boot_item is null or has no traction.
+func effect_factor_for_boot(boot_item, surface_id: StringName) -> float:
+	if boot_item == null:
+		return 1.0
+	# Override flag rolled onto THIS boot wins regardless of traction.
+	if int(boot_item.get_modifier(StringName("negates_" + surface_id))) > 0:
+		return 0.0
+	var traction: int = int(boot_item.get_modifier(&"traction_bonus"))
+	var profile: Dictionary = GROUND_EFFECT_PROFILES.get(surface_id, {})
+	var k: float = float(profile.get(&"half_mit_k", 30.0))
+	var t: float = float(maxi(traction, 0))
+	return k / (k + t)
+
+
 ## Live move-speed multiplier on `surface_id` at the player's current
 ## traction. 1.0 = no slow; lower = slower.
 func slow_factor_for_surface(surface_id: StringName) -> float:

@@ -1047,7 +1047,41 @@ func _build_stats_text(item: Item, equipped: Item = null, force_text: bool = fal
 			var amount: int = item.get_effective_modifier(stat_id)
 			var sign_str := "+" if amount > 0 else ""
 			lines.append("%s%d %s" % [sign_str, amount, label])
+	# Boots-only: per-surface mitigation readout so players can compare
+	# drops by what they actually buy against each ground type. Reads
+	# the candidate boots' own traction + override flags (not the
+	# currently-equipped state) so hovered drops preview honestly.
+	if item.main_type == "Boots":
+		var trac_line := _build_boots_mitigation_line(item)
+		if trac_line != "":
+			lines.append(trac_line)
 	return "\n".join(lines)
+
+
+# Per-surface mitigation summary for a boot item. Iterates the
+# Traction.GROUND_EFFECT_PROFILES dict and reports each surface's
+# remaining-effect % under this boot's traction + negation flags.
+# Returns "" when the boot has no traction at all (no useful info).
+func _build_boots_mitigation_line(item: Item) -> String:
+	var traction: int = int(item.stat_modifiers.get(&"traction_bonus", 0))
+	if traction <= 0:
+		return ""
+	var parts: PackedStringArray = []
+	for surface_id_var in Traction.GROUND_EFFECT_PROFILES:
+		var surface_id: StringName = surface_id_var
+		var name: String = Traction.display_name_for_surface(surface_id)
+		# negated surface (override flag on the boot) reads as "−"
+		# rather than a percentage so the player sees that it's a flat
+		# negation, not a "very high mitigation" curve roll.
+		if int(item.get_modifier(StringName("negates_" + surface_id))) > 0:
+			parts.append("%s ∞" % name)
+			continue
+		var ef := Traction.effect_factor_for_boot(item, surface_id)
+		var mit: int = int(round((1.0 - ef) * 100.0))
+		parts.append("%s %d%%" % [name, mit])
+	if parts.is_empty():
+		return ""
+	return "[color=#7fb3d9]Mitigates: %s[/color]" % " · ".join(parts)
 
 
 ## Returns a BBCode-colored arrow: green ▲ for better, red ▼ for worse,

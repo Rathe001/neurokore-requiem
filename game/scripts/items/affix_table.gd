@@ -363,6 +363,22 @@ const PREFIXES: Array[Dictionary] = [
 		"min_item_level": 50,
 		"weight": 25,
 	},
+	{
+		"id": &"anti_grav_soled",
+		"label": "Anti-Grav-Soled",
+		"item_types": ["Boots"],
+		"stat_modifiers": { "traction_bonus": 200 },
+		"min_item_level": 100,
+		"weight": 10,
+	},
+	{
+		"id": &"stride_anchored",
+		"label": "Stride-Anchored",
+		"item_types": ["Boots"],
+		"stat_modifiers": { "traction_bonus": 500 },
+		"min_item_level": 200,
+		"weight": 4,
+	},
 	# ── Grenade prefixes ────────────────────────────────────────────────────
 	{
 		"id": &"volatile",
