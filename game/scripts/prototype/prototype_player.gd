@@ -2206,9 +2206,13 @@ func _cast_lmb_combat() -> void:
 			# Melee swing — picks the variant for the current combo
 			# step (0/1/2). peek_next_melee_combo_step previews what
 			# advance_melee_combo will set inside PlayerCombat a few
-			# ms later, so the visual matches the gameplay step.
+			# ms later, so the visual matches the gameplay step. 1.8×
+			# speed so the swing's strong motion reads before LMB
+			# retrigger / locomotion picker can truncate it; previously
+			# 1.4× left ~40% of each swing playing, which read as a
+			# truncated jab rather than a full swing.
 			var combo_step := peek_next_melee_combo_step(main_item)
-			_play_anim(XBotAnimations.combo_attack_anim_for_class(_equipped_weapon_class(), combo_step), 1.4)
+			_play_anim(XBotAnimations.combo_attack_anim_for_class(_equipped_weapon_class(), combo_step), 1.8)
 		_ied.toss_trap(_cursor_offset())
 	# Hold the player still for the main weapon's wind-up only. Extra arms
 	# don't contribute to the stop — Forged stays mobile while extras fire.
@@ -2358,8 +2362,10 @@ func _cast_skill(skill: Skill) -> void:
 		_play_anim(_ranged_fire_anim(), 1.0)
 	else:
 		# Combo-aware melee swing — see peek_next_melee_combo_step.
+		# 1.8× speed (was 1.4) so the swing reads big before any
+		# retrigger truncates it.
 		var combo_step := peek_next_melee_combo_step(weapon)
-		_play_anim(XBotAnimations.combo_attack_anim_for_class(_equipped_weapon_class(), combo_step), 1.4)
+		_play_anim(XBotAnimations.combo_attack_anim_for_class(_equipped_weapon_class(), combo_step), 1.8)
 	PrototypeAttackIndicator.spawn(self, skill, aim, _combat.effective_range(skill, weapon))
 	# Fire SFX plays at LMB press, NOT at projectile spawn. For wind-up
 	# weapons like the RPG the .wav has a baked-in "charging" pre-roll;

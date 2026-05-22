@@ -89,9 +89,16 @@ const _RIFLE_RUN_FBX: PackedScene = preload("res://assets/animations/ranged 2h/r
 const _SWORD_IDLE_FBX: PackedScene = preload("res://assets/animations/melee 1h/sword and shield idle.fbx")
 const _SWORD_WALK_FBX: PackedScene = preload("res://assets/animations/melee 1h/sword and shield walk.fbx")
 const _SWORD_RUN_FBX: PackedScene = preload("res://assets/animations/melee 1h/sword and shield run.fbx")
-const _SWORD_SLASH_FBX: PackedScene = preload("res://assets/animations/melee 1h/sword and shield slash.fbx")
-const _SWORD_SLASH_2_FBX: PackedScene = preload("res://assets/animations/melee 1h/sword and shield slash (2).fbx")
-const _SWORD_SLASH_3_FBX: PackedScene = preload("res://assets/animations/melee 1h/sword and shield slash (3).fbx")
+# 1H melee swing sources. Initially used the "sword and shield slash"
+# variants but those clips start with a windup (small arm-forward
+# motion) before the actual sweep — rapid LMB clicks cut the anim
+# after only the windup played, which read as "pushing a button"
+# instead of a swing. The "sword and shield attack" variants begin
+# with the strong sweep motion right away, so even truncated playback
+# shows a clear attack.
+const _SWORD_SLASH_FBX: PackedScene = preload("res://assets/animations/melee 1h/sword and shield attack.fbx")
+const _SWORD_SLASH_2_FBX: PackedScene = preload("res://assets/animations/melee 1h/sword and shield attack (2).fbx")
+const _SWORD_SLASH_3_FBX: PackedScene = preload("res://assets/animations/melee 1h/sword and shield attack (3).fbx")
 # 2H melee (axe pack). Hammer / sledgehammer / warhammer / axe all
 # share this stance.
 const _AXE_IDLE_FBX: PackedScene = preload("res://assets/animations/melee 2h/standing idle.fbx")
