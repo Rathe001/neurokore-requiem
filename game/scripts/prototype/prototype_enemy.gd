@@ -1398,6 +1398,14 @@ func _physics_process(delta: float) -> void:
 			_play_anim(_hit_react_anim, _hit_react_speed)
 			return
 	var moving := _want_dir.length_squared() > 0.01
+	# Class-aware stance — ranged enemies stand / move with the rifle
+	# stance, melee enemies stay with the default unarmed (punch)
+	# stance. Idle picker doesn't differentiate sword vs axe vs
+	# unarmed for enemies today because the X Bot mesh has no visible
+	# weapon model — the stance reads as "armed and ready" either way.
+	# Future: per-EnemyClass stance override (e.g. brute enemies use
+	# axe_idle for the heavier silhouette).
+	var weapon_class: StringName = &"rifle" if _combat != null and _combat.is_ranged() else &"unarmed"
 	match _state:
 		State.CASTING, State.KNOCKBACK:
 			pass
@@ -1407,12 +1415,14 @@ func _physics_process(delta: float) -> void:
 			# Idle clip while frozen / lifted — no rigs have a dedicated
 			# stun or grab pose. Freezing on the current frame would lock
 			# unnatural mid-motion poses (mid-stride, mid-attack windup).
-			_play_anim(ANIM_IDLE)
+			_play_anim(XBotAnimations.idle_anim_for_class(weapon_class))
 		_:
 			if _crouching:
 				_play_anim(ANIM_CROUCH_RUN if moving else ANIM_CROUCH_IDLE)
+			elif moving:
+				_play_anim(XBotAnimations.run_anim_for_class(weapon_class))
 			else:
-				_play_anim(ANIM_RUN if moving else ANIM_IDLE)
+				_play_anim(XBotAnimations.idle_anim_for_class(weapon_class))
 			if moving:
 				_face_direction(_want_dir)
 
@@ -1512,20 +1522,26 @@ func _remote_physics_process() -> void:
 	max_health = net_max_health
 	_visuals.update_health_bar()
 	# Animation from synced state — simplified, no crouch/jump on client yet.
+	# Class-aware idle/run mirrors the authority picker so remotes see
+	# the right stance.
+	var weapon_class_remote: StringName = &"rifle" if _combat != null and _combat.is_ranged() else &"unarmed"
 	match _state:
 		State.CASTING, State.KNOCKBACK:
 			pass
 		State.JUMPING:
 			_play_anim(ANIM_JUMP)
 		State.STUNNED, State.GRABBED:
-			_play_anim(ANIM_IDLE)
+			_play_anim(XBotAnimations.idle_anim_for_class(weapon_class_remote))
 		_:
 			# Infer movement from position delta — the synchronizer writes
 			# global_position directly; velocity isn't meaningful on clients.
 			var delta_pos := global_position - _net_prev_pos
 			delta_pos.y = 0.0
 			var moving := delta_pos.length_squared() > 0.0001
-			_play_anim(ANIM_RUN if moving else ANIM_IDLE)
+			if moving:
+				_play_anim(XBotAnimations.run_anim_for_class(weapon_class_remote))
+			else:
+				_play_anim(XBotAnimations.idle_anim_for_class(weapon_class_remote))
 	_net_prev_pos = global_position
 
 

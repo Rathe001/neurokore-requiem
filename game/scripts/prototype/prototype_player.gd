@@ -894,10 +894,11 @@ func _is_remote_player() -> bool:
 func _update_remote_anim() -> void:
 	if anim_player == null:
 		return
+	var wc := _equipped_weapon_class()
 	if net_moving:
-		_play_anim(ANIM_RUN, 1.0, 0.15)
+		_play_anim(XBotAnimations.run_anim_for_class(wc), 1.0, 0.15)
 	else:
-		_play_anim(ANIM_IDLE, 1.0, 0.15)
+		_play_anim(XBotAnimations.idle_anim_for_class(wc), 1.0, 0.15)
 	# Per-frame flame orientation update for remote channels — the start
 	# RPC only latches the damage_type + range; the visual transform
 	# tracks the remote player's facing direction every tick.
@@ -1741,6 +1742,11 @@ func _physics_process(delta: float) -> void:
 					var dot_fwd: float = _want_dir.dot(fwd.normalized()) if fwd.length_squared() > 0.0001 else 1.0
 					var dot_right: float = _want_dir.dot(right_axis.normalized()) if right_axis.length_squared() > 0.0001 else 0.0
 					var lateral_dominates: bool = absf(dot_right) > absf(dot_fwd) + 0.10
+					# Strafe / walk_back stay universal (rifle-stance clips
+					# from the Rifle Pack). A swordsman strafing with
+					# rifle-arm pose looks slightly off but the legs read
+					# correctly; dedicated per-class strafe is a future
+					# polish pass.
 					if _backing and not _sprinting:
 						_play_anim(ANIM_WALK_BACK, 1.0, 0.15)
 					elif lateral_dominates and not _sprinting:
@@ -1749,10 +1755,19 @@ func _physics_process(delta: float) -> void:
 						else:
 							_play_anim([&"xbot/strafe_left"] as Array[StringName], 1.0, 0.15)
 					else:
-						_play_anim(ANIM_RUN, 1.0, 0.15)
+						# Forward jog — pick the per-class run stance
+						# (pistol_run / rifle_run / sword_run / axe_run /
+						# unarmed jog). Falls back to xbot/jog if the
+						# class clip isn't loaded.
+						_play_anim(XBotAnimations.run_anim_for_class(_equipped_weapon_class()), 1.0, 0.15)
 			else:
 				anim_player.speed_scale = 1.0
-				_play_anim(ANIM_CROUCH_IDLE if _crouching else ANIM_IDLE, 1.0, 0.15)
+				if _crouching:
+					_play_anim(ANIM_CROUCH_IDLE, 1.0, 0.15)
+				else:
+					# Class-specific idle stance — rifle ready / sword
+					# guard / axe shoulder-rest / fists up / relaxed.
+					_play_anim(XBotAnimations.idle_anim_for_class(_equipped_weapon_class()), 1.0, 0.15)
 
 	_handle_skill_input()
 	# Replicated to remote peers via the player's MultiplayerSynchronizer.
@@ -2172,7 +2187,10 @@ func _cast_lmb_combat() -> void:
 		if main_item != null and main_item.is_bullet_weapon():
 			_play_anim(_ranged_fire_anim(), 1.0)
 		else:
-			_play_anim(ANIM_ATTACK, 1.4)
+			# Melee swing — picks sword_slash / axe_swing / punch
+			# based on equipped weapon class. Falls back to xbot/punch
+			# for unknown classes or empty slot.
+			_play_anim(XBotAnimations.attack_anim_for_class(_equipped_weapon_class()), 1.4)
 		_ied.toss_trap(_cursor_offset())
 	# Hold the player still for the main weapon's wind-up only. Extra arms
 	# don't contribute to the stop — Forged stays mobile while extras fire.
@@ -2199,7 +2217,9 @@ func _fire_unarmed(aim: Vector3) -> void:
 	if _combat.is_on_cooldown(UNARMED_SKILL):
 		return
 	_face_direction(aim)
-	_play_anim(ANIM_ATTACK, 1.4)
+	# Random punch variant per swing — Cross / Hook / Uppercut /
+	# Punching cycle so rapid strikes don't all look identical.
+	_play_anim(XBotAnimations.random_unarmed_punch(), 1.4)
 	WeaponSounds.play_generic(&"unarmed_swing", global_position)
 	_combat.start_cooldown(UNARMED_SKILL, 1.0)
 	var wind_up := UNARMED_SKILL.wind_up
@@ -2319,7 +2339,8 @@ func _cast_skill(skill: Skill) -> void:
 	if weapon != null and weapon.is_bullet_weapon():
 		_play_anim(_ranged_fire_anim(), 1.0)
 	else:
-		_play_anim(ANIM_ATTACK, 1.4)
+		# Class-specific melee swing — sword_slash / axe_swing / punch.
+		_play_anim(XBotAnimations.attack_anim_for_class(_equipped_weapon_class()), 1.4)
 	PrototypeAttackIndicator.spawn(self, skill, aim, _combat.effective_range(skill, weapon))
 	# Fire SFX plays at LMB press, NOT at projectile spawn. For wind-up
 	# weapons like the RPG the .wav has a baked-in "charging" pre-roll;
@@ -3920,6 +3941,19 @@ func _ranged_fire_anim() -> Array[StringName]:
 	if _want_dir.length_squared() > 0.01:
 		return ANIM_FIRE_MOVE
 	return ANIM_FIRE
+
+
+# Returns the stance class of the currently-equipped main weapon
+# (&"pistol" / &"rifle" / &"melee_1h" / &"melee_2h" / &"unarmed"). The
+# locomotion picker (idle/walk/run) and the attack dispatch both
+# branch on this so swapping weapons swaps the visible stance. Cheap
+# enough to call every physics tick — single InventoryState lookup
+# + dict get inside XBotAnimations.weapon_class_for_id.
+func _equipped_weapon_class() -> StringName:
+	var w: Item = InventoryState.get_equipped(&"weapon")
+	if w == null:
+		return &"unarmed"
+	return XBotAnimations.weapon_class_for_id(w.weapon_base_id)
 
 
 func _play_anim(candidates: Array[StringName], speed: float = 1.0, blend: float = 0.0) -> bool:

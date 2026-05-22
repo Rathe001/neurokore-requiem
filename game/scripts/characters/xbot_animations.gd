@@ -58,6 +58,39 @@ const _RELOAD_FBX: PackedScene = preload("res://assets/animations/ranged 2h/Relo
 const _RELOAD_RUN_FBX: PackedScene = preload("res://assets/animations/ranged 2h/Reload running.fbx")
 const _GRENADE_THROW_FBX: PackedScene = preload("res://assets/animations/misc/Run And Throw Grenade.fbx")
 
+# ── Phase 2: per-weapon-class stance overlays ────────────────────────
+# Each weapon class (pistol / rifle / sword / axe / unarmed) has its
+# own idle/walk/run + class-specific attack. The picker (player +
+# enemy) branches on weapon_base_id via weapon_class_for_id below.
+# Pistol stance — 1H ranged grip.
+const _PISTOL_IDLE_FBX: PackedScene = preload("res://assets/animations/ranged 1h/pistol idle.fbx")
+const _PISTOL_WALK_FBX: PackedScene = preload("res://assets/animations/ranged 1h/pistol walk.fbx")
+const _PISTOL_RUN_FBX: PackedScene = preload("res://assets/animations/ranged 1h/pistol run.fbx")
+# Rifle stance — 2H ranged grip. The "idle aiming" clip is the
+# tactical ready stance (rifle up to shoulder); the existing
+# xbot/idle is relaxed/unarmed and not appropriate when a rifle
+# is equipped.
+const _RIFLE_IDLE_FBX: PackedScene = preload("res://assets/animations/ranged 2h/idle aiming.fbx")
+const _RIFLE_WALK_FBX: PackedScene = preload("res://assets/animations/ranged 2h/walk forward.fbx")
+const _RIFLE_RUN_FBX: PackedScene = preload("res://assets/animations/ranged 2h/run forward.fbx")
+# 1H melee (sword + shield pack). Knife / karambit / sword bases all
+# share this stance.
+const _SWORD_IDLE_FBX: PackedScene = preload("res://assets/animations/melee 1h/sword and shield idle.fbx")
+const _SWORD_WALK_FBX: PackedScene = preload("res://assets/animations/melee 1h/sword and shield walk.fbx")
+const _SWORD_RUN_FBX: PackedScene = preload("res://assets/animations/melee 1h/sword and shield run.fbx")
+const _SWORD_SLASH_FBX: PackedScene = preload("res://assets/animations/melee 1h/sword and shield slash.fbx")
+# 2H melee (axe pack). Hammer / sledgehammer / warhammer / axe all
+# share this stance.
+const _AXE_IDLE_FBX: PackedScene = preload("res://assets/animations/melee 2h/standing idle.fbx")
+const _AXE_WALK_FBX: PackedScene = preload("res://assets/animations/melee 2h/standing walk forward.fbx")
+const _AXE_RUN_FBX: PackedScene = preload("res://assets/animations/melee 2h/standing run forward.fbx")
+const _AXE_SWING_FBX: PackedScene = preload("res://assets/animations/melee 2h/standing melee attack horizontal.fbx")
+# Unarmed combo variants — picker randomly chooses per swing.
+# The existing _PUNCH_FBX (Punching.fbx) is variant 0.
+const _PUNCH_CROSS_FBX: PackedScene = preload("res://assets/animations/unarmed/Cross Punch.fbx")
+const _PUNCH_HOOK_FBX: PackedScene = preload("res://assets/animations/unarmed/Hook Punch.fbx")
+const _PUNCH_UPPERCUT_FBX: PackedScene = preload("res://assets/animations/unarmed/Uppercut.fbx")
+
 # Multiple death animations — randomly selected per kill for variety.
 # Keyed `death_0` through `death_N`; random_death_anim() picks one.
 # Add new Mixamo death FBXs to this array; they'll auto-key in order.
@@ -167,6 +200,27 @@ static func get_library() -> AnimationLibrary:
 	# player keep their forward momentum, hip-stripped so velocity
 	# drives travel not the clip.
 	_extract(_library, &"grenade_throw", _GRENADE_THROW_FBX, false, true)
+	# Phase 2 per-weapon-class overlays — idle/walk/run + class
+	# attack. Loops on locomotion + idle (stance hold for sustained
+	# pose); attack clips are one-shots. All hip-stripped to keep the
+	# character rooted; CharacterBody3D velocity drives travel.
+	_extract(_library, &"pistol_idle", _PISTOL_IDLE_FBX, true, true)
+	_extract(_library, &"pistol_walk", _PISTOL_WALK_FBX, true, true)
+	_extract(_library, &"pistol_run", _PISTOL_RUN_FBX, true, true)
+	_extract(_library, &"rifle_idle", _RIFLE_IDLE_FBX, true, true)
+	_extract(_library, &"rifle_walk", _RIFLE_WALK_FBX, true, true)
+	_extract(_library, &"rifle_run", _RIFLE_RUN_FBX, true, true)
+	_extract(_library, &"sword_idle", _SWORD_IDLE_FBX, true, true)
+	_extract(_library, &"sword_walk", _SWORD_WALK_FBX, true, true)
+	_extract(_library, &"sword_run", _SWORD_RUN_FBX, true, true)
+	_extract(_library, &"sword_slash", _SWORD_SLASH_FBX, false, true)
+	_extract(_library, &"axe_idle", _AXE_IDLE_FBX, true, true)
+	_extract(_library, &"axe_walk", _AXE_WALK_FBX, true, true)
+	_extract(_library, &"axe_run", _AXE_RUN_FBX, true, true)
+	_extract(_library, &"axe_swing", _AXE_SWING_FBX, false, true)
+	_extract(_library, &"punch_cross", _PUNCH_CROSS_FBX, false, true)
+	_extract(_library, &"punch_hook", _PUNCH_HOOK_FBX, false, true)
+	_extract(_library, &"punch_uppercut", _PUNCH_UPPERCUT_FBX, false, true)
 	# Deaths — hip-stripped so the body topples in place without sliding
 	# across the floor. The vertical (Y) component is preserved so the
 	# character still falls to the ground; only X/Z drift is zeroed.
@@ -176,6 +230,96 @@ static func get_library() -> AnimationLibrary:
 	for i in _DEATH_FBXS.size():
 		_extract(_library, StringName("death_%d" % i), _DEATH_FBXS[i], false, true)
 	return _library
+
+
+# ── Weapon class mapping + per-class anim helpers ─────────────────────
+# weapon_base_id → class key. Lets pickers branch on stance without
+# every caller knowing the full base-id taxonomy.
+const _WEAPON_CLASS_BY_BASE_ID: Dictionary = {
+	&"ranged_1h":      &"pistol",
+	&"smg_1h":         &"pistol",
+	&"ranged_2h":      &"rifle",
+	&"lmg_2h":         &"rifle",
+	&"sniper_2h":      &"rifle",
+	&"shotgun_2h":     &"rifle",
+	&"rpg_2h":         &"rifle",
+	&"accelerator_2h": &"rifle",
+	&"taser_2h":       &"rifle",
+	&"melee_1h":       &"melee_1h",
+	&"melee_2h":       &"melee_2h",
+}
+
+
+## Returns the stance class for a weapon base_id (or &"unarmed" when
+## the slot is empty or the id is unknown). Picker code branches on
+## this to pick idle / walk / run / attack anims appropriate to the
+## equipped weapon.
+static func weapon_class_for_id(base_id: StringName) -> StringName:
+	if base_id == &"":
+		return &"unarmed"
+	return _WEAPON_CLASS_BY_BASE_ID.get(base_id, &"unarmed")
+
+
+## Returns the idle anim candidates for a weapon class. Always falls
+## back through &"xbot/idle" so an enemy without the per-class clip
+## still resolves.
+static func idle_anim_for_class(class_id: StringName) -> Array[StringName]:
+	match class_id:
+		&"pistol":   return [&"xbot/pistol_idle", &"xbot/idle"]
+		&"rifle":    return [&"xbot/rifle_idle", &"xbot/idle"]
+		&"melee_1h": return [&"xbot/sword_idle", &"xbot/idle"]
+		&"melee_2h": return [&"xbot/axe_idle", &"xbot/idle"]
+		_:           return [&"xbot/idle"]
+
+
+## Walk-tempo locomotion (currently unused on player path — kept for
+## future "walk" state separate from jog). Falls back to xbot/jog.
+static func walk_anim_for_class(class_id: StringName) -> Array[StringName]:
+	match class_id:
+		&"pistol":   return [&"xbot/pistol_walk", &"xbot/jog"]
+		&"rifle":    return [&"xbot/rifle_walk", &"xbot/jog"]
+		&"melee_1h": return [&"xbot/sword_walk", &"xbot/jog"]
+		&"melee_2h": return [&"xbot/axe_walk", &"xbot/jog"]
+		_:           return [&"xbot/jog"]
+
+
+## Run-tempo locomotion — what the player plays at default move speed.
+## Falls back to xbot/jog (the universal run).
+static func run_anim_for_class(class_id: StringName) -> Array[StringName]:
+	match class_id:
+		&"pistol":   return [&"xbot/pistol_run", &"xbot/jog"]
+		&"rifle":    return [&"xbot/rifle_run", &"xbot/jog"]
+		&"melee_1h": return [&"xbot/sword_run", &"xbot/jog"]
+		&"melee_2h": return [&"xbot/axe_run", &"xbot/jog"]
+		_:           return [&"xbot/jog"]
+
+
+## Attack anim for the class. Ranged classes return the existing
+## fire pose (rifle / pistol firing is the same xbot/fire clip today;
+## a dedicated pistol fire is the one remaining "missing" anim flagged
+## in the audit). Melee returns the class-specific swing. Unarmed
+## picks a random punch variant — caller should treat the array as
+## "pick one randomly" rather than a candidate fallback chain.
+static func attack_anim_for_class(class_id: StringName) -> Array[StringName]:
+	match class_id:
+		&"pistol":   return [&"xbot/fire"]
+		&"rifle":    return [&"xbot/fire"]
+		&"melee_1h": return [&"xbot/sword_slash", &"xbot/punch"]
+		&"melee_2h": return [&"xbot/axe_swing", &"xbot/punch"]
+		_:           return [&"xbot/punch"]
+
+
+## Unarmed combo picker — returns one of the four punch variants
+## randomly. Use for the bare-fists case to give the swing some
+## visual variety across rapid strikes.
+static func random_unarmed_punch() -> Array[StringName]:
+	const PUNCHES: Array[StringName] = [
+		&"xbot/punch",
+		&"xbot/punch_cross",
+		&"xbot/punch_hook",
+		&"xbot/punch_uppercut",
+	]
+	return [PUNCHES[randi() % PUNCHES.size()]]
 
 
 ## Returns a random qualified animation key ("xbot/death_N") for the
