@@ -130,9 +130,75 @@ drives all horizontal motion. ALL clips get hip-stripped by default
 - `game/scenes/prototype/prototype_enemy.tscn` + `prototype_ranged_enemy.tscn` —
   `char_model` ext_resource points at `X Bot.fbx`.
 
-**Still missing (deferred from animation audit).**
-- Dedicated pistol firing pose (current `xbot/fire` is rifle-shaped).
-- Per-class strafe / walk_back / jump / cast / hit react. Single
-  universal source is fine for now; class-specific versions would
-  remove the rifle-arm-pose-on-melee-character mismatch.
-- Climb / vault / cover / dodge for future feature work.
+**Recent fixes (post-Phase 2 polish pass — 2026-05-22):**
+- Death anim: non-explosion kills play a random Mixamo death clip
+  (was unconditional ragdoll). Crit / explosion kills keep the
+  ragdoll for dismember-flair. `_die()` reads `_last_hit_was_crit` /
+  `_last_hit_was_explosion` to branch.
+- Hip-strip applied to ALL clips. `_strip_hip_position` only zeros
+  X/Z so jump arcs / death drops still read correctly. No-op for
+  clips without hip motion. See xbot_animations.gd `get_library`.
+- Hit-react: split into small / big profiles (speed 2.2 + 0.45 s
+  window / speed 1.6 + 0.65 s window). Mixamo small-react clips
+  are ~1.0 s authored — at 1.0× they cut off before completing.
+- Cast anim gated on activation success — Shield / Recovery /
+  Second Wind now return bool from their activate methods, and
+  the dispatcher only plays ANIM_CAST when it's true. Same pattern
+  as the grenade path's pre-existing `is_on_cooldown` check.
+- Strafe source swapped to "run left/right.fbx" from the rifle
+  pack (was "walk left/right.fbx" — walk tempo looked sluggish at
+  the player's actual move speed).
+- Melee swings: source clips swapped from "sword and shield slash"
+  to "sword and shield attack" variants (the attack variants begin
+  with the strong sweep instead of a windup, so even truncated
+  playback reads as a swing not a button press). Playback speed
+  bumped 1.4× → 1.8× for the same reason.
+- Enemy melee: `enemy_combat.gd` was calling `ANIM_ATTACK` for all
+  melee, which fell through to `xbot/punch`. Now routes through
+  `XBotAnimations.random_enemy_melee_swing()` — random pick from
+  the 3 axe combo variants per swing. Distinguishes enemy melee
+  from the player's lighter sword/punch attacks AND gives mob
+  combat visual variety.
+- Ranged enemy idle: when stationary, ranged enemies hold
+  `xbot/fire` (rifle aiming pose) instead of `xbot/rifle_idle` —
+  keeps the weapon visibly drawn between shots rather than
+  dropping the rifle to a relaxed pose.
+- Pistol fire pose: no dedicated Mixamo "Firing Pistol" exists;
+  `xbot/pistol_fire` reuses the pistol idle clip (static 1H aim
+  with arm extended). Looping is invisible (start pose == end
+  pose). Muzzle flash + projectile spawn convey "firing." First
+  attempt used the magic pack's 1H Magic Attack but that's a
+  throwing motion — looped, it visibly snapped from
+  follow-through back to wind-up, and the throwing motion was
+  confused with grenade_throw.
+- Projectile origin offset: `BARREL_FORWARD_OFFSET = 0.7 m` along
+  aim + `BARREL_RIGHT_OFFSET = 0.25 m` lateral, applied to both
+  player projectile spawn paths (`_spawn_projectile`,
+  `_spawn_projectile_exact`) and both enemy projectile spawn paths
+  (`_spawn_enemy_projectile`, `_spawn_skill_projectile`). Stacks
+  cleanly with extra-arm Amalgamation `source_offset`.
+
+**Still deferred (do these next session).**
+- **Per-class strafe / walk_back / jump / cast / hit react.**
+  Single universal source today (rifle-pack clips). Class-specific
+  versions would fix the "swordsman strafing with rifle arms"
+  visual mismatch. Lowest-priority polish — none of these are
+  combat-breaking.
+- **Per-EnemyClass stance override.** Random axe-combo for ALL
+  melee enemies today; could make grunts use unarmed punches,
+  brutes use axe, named bosses get unique combos. Wire by adding
+  a `melee_stance` field to `EnemyClass.gd` and reading it in
+  `random_enemy_melee_swing()`. Memory-only design today; no code
+  scaffolding yet.
+- **Dedicated pistol firing pose.** Static aim works but has no
+  per-shot recoil tells. Could either (a) source a Mixamo
+  "Firing Pistol" clip — none in the current haul, would need a
+  manual Mixamo grab — or (b) build a per-shot retrigger system
+  that plays a short snap-fire motion at the weapon's fire rate.
+- **Climb / vault / cover / dodge** for future feature work. No
+  feature exists for these today; revisit when the gameplay does.
+- **Weapon model visibility.** X Bot has no visible weapon —
+  the stance/swing animations imply a weapon but the hand is
+  empty. Attaching a weapon mesh to the right-hand bone per
+  equipped item would close the loop. Significant scope; needs
+  weapon mesh assets per archetype.
