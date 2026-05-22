@@ -67,6 +67,26 @@ set type". Annotate explicitly: `var bone_name_str: String =
 pb.bone_name` — or just avoid `name` as a local variable name when
 working in `Node`-derived contexts.
 
+**6. Typed `var x: Node = dict[key]` fails on freed instance.**
+Pulling a possibly-freed Object reference from a Dictionary into a
+strictly-typed variable raises `Trying to assign invalid previously
+freed instance` because the type-cast happens BEFORE you can guard
+with `is_instance_valid`. Variant typing dodges this entirely:
+```gdscript
+# BAD — crashes if dict holds a freed Node reference:
+var copy: Node = _copies[key]
+if is_instance_valid(copy): copy.queue_free()
+
+# GOOD — Variant accepts the freed handle, guard then cast:
+var copy_var: Variant = _copies[key]
+if is_instance_valid(copy_var) and copy_var is Node:
+    (copy_var as Node).queue_free()
+```
+Bit `outline_compositor._drop_key` in level-reload (the dict held
+freed entries from the prior level). Pattern applies anywhere a
+Dictionary or Array can outlive its Object values — particularly
+across EntityPool recycle and scene reload.
+
 **5. RichTextLabel `[font_size=N]` is ABSOLUTE, not relative.** Both
 the bare `[font_size=N]` BBCode tag and `add_theme_font_size_override`
 on a RichTextLabel set the pixel size directly. If the label's base

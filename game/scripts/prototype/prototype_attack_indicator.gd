@@ -1315,6 +1315,14 @@ static func spawn_blood_on_receivers(parent: Node, kill_pos: Vector3, blood_type
 	var node := parent as Node3D
 	if node == null or not node.is_inside_tree():
 		return
+	# Wait for the NEXT physics_frame — direct_space_state below is locked
+	# when this function is called from a body_entered chain (projectile
+	# → take_damage → _die → spawn_blood_on_receivers), which is the most
+	# common path. Same pattern as _paint_mist_droplets / wall-blood
+	# raycast. Caller does NOT await — fire-and-forget.
+	await node.get_tree().physics_frame
+	if not is_instance_valid(node) or not node.is_inside_tree():
+		return
 	var space := node.get_world_3d().direct_space_state
 	if space == null:
 		return
@@ -1330,9 +1338,6 @@ static func spawn_blood_on_receivers(parent: Node, kill_pos: Vector3, blood_type
 	# squared filter is microseconds — well below the cost of the four
 	# raycasts the function will issue anyway.
 	var all_receivers := node.get_tree().get_nodes_in_group(OBJECT_BLOOD_RECEIVER_GROUP)
-	# TEMP DIAGNOSTIC — surface whether the receiver pipeline is even
-	# finding anything. Remove once object blood is verified working.
-	print("[BLOOD-RECV] total receivers in group: %d, kill at %s" % [all_receivers.size(), kill_pos])
 	if all_receivers.is_empty():
 		return
 	var radius_sq: float = OBJECT_BLOOD_RADIUS * OBJECT_BLOOD_RADIUS

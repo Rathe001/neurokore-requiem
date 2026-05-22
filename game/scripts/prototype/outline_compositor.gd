@@ -225,10 +225,15 @@ func set_color(mesh: MeshInstance3D, color: Color) -> void:
 func _drop_key(key: int) -> void:
 	if not _copies.has(key):
 		return
-	var copy: Node = _copies[key]
+	# Pull through Variant — a strict-typed `var copy: Node = _copies[key]`
+	# fails with "Trying to assign invalid previously freed instance" when
+	# the dict entry holds a freed Node reference (level reload, EntityPool
+	# recycle, etc.). Variant accepts the freed handle and lets
+	# is_instance_valid filter it before the queue_free call.
+	var copy_var: Variant = _copies[key]
 	_copies.erase(key)
-	if is_instance_valid(copy):
-		copy.queue_free()
+	if is_instance_valid(copy_var) and copy_var is Node:
+		(copy_var as Node).queue_free()
 
 
 # Per-frame cleanup — sources can vanish without an explicit detach()
