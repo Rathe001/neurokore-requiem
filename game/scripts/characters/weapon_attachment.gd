@@ -71,18 +71,23 @@ const _DEFAULT_TARGET_LENGTH: float = 0.6
 # barrel direction) points along bone-local -Z. The 90° swing puts
 # barrels roughly in line with the character's facing direction. Per-
 # weapon offsets still need eyeball tuning from there.
-const _GRIP: Dictionary = {
-	&"melee_1h":       {"pos": Vector3.ZERO, "rot": Vector3(0.0, -90.0, 0.0), "scale_mult": 1.0},
-	&"melee_2h":       {"pos": Vector3.ZERO, "rot": Vector3(0.0, -90.0, 0.0), "scale_mult": 1.0},
-	&"ranged_1h":      {"pos": Vector3.ZERO, "rot": Vector3(0.0, -90.0, 0.0), "scale_mult": 1.0},
-	&"ranged_2h":      {"pos": Vector3.ZERO, "rot": Vector3(0.0, -90.0, 0.0), "scale_mult": 1.0},
-	&"smg_1h":         {"pos": Vector3.ZERO, "rot": Vector3(0.0, -90.0, 0.0), "scale_mult": 1.0},
-	&"lmg_2h":         {"pos": Vector3.ZERO, "rot": Vector3(0.0, -90.0, 0.0), "scale_mult": 1.0},
-	&"sniper_2h":      {"pos": Vector3.ZERO, "rot": Vector3(0.0, -90.0, 0.0), "scale_mult": 1.0},
-	&"rpg_2h":         {"pos": Vector3.ZERO, "rot": Vector3(0.0, -90.0, 0.0), "scale_mult": 1.0},
-	&"shotgun_2h":     {"pos": Vector3.ZERO, "rot": Vector3(0.0, -90.0, 0.0), "scale_mult": 1.0},
-	&"accelerator_2h": {"pos": Vector3.ZERO, "rot": Vector3(0.0, -90.0, 0.0), "scale_mult": 1.0},
-	&"taser_2h":       {"pos": Vector3.ZERO, "rot": Vector3(0.0, -90.0, 0.0), "scale_mult": 1.0},
+# Mutable at runtime so the live grip tuner (PrototypeCamera + GripTuner
+# in inspect-mode) can bump rotation/position/scale by key, then dump
+# the result to the console for permanent pasting back here. Each entry
+# starts at identity / zero — the keys still ride the auto-scale, so
+# they read as "neutral grip" until tuned.
+static var _GRIP: Dictionary = {
+	&"melee_1h":       {"pos": Vector3.ZERO, "rot": Vector3.ZERO, "scale_mult": 1.0},
+	&"melee_2h":       {"pos": Vector3.ZERO, "rot": Vector3.ZERO, "scale_mult": 1.0},
+	&"ranged_1h":      {"pos": Vector3.ZERO, "rot": Vector3.ZERO, "scale_mult": 1.0},
+	&"ranged_2h":      {"pos": Vector3.ZERO, "rot": Vector3.ZERO, "scale_mult": 1.0},
+	&"smg_1h":         {"pos": Vector3.ZERO, "rot": Vector3.ZERO, "scale_mult": 1.0},
+	&"lmg_2h":         {"pos": Vector3.ZERO, "rot": Vector3.ZERO, "scale_mult": 1.0},
+	&"sniper_2h":      {"pos": Vector3.ZERO, "rot": Vector3.ZERO, "scale_mult": 1.0},
+	&"rpg_2h":         {"pos": Vector3.ZERO, "rot": Vector3.ZERO, "scale_mult": 1.0},
+	&"shotgun_2h":     {"pos": Vector3.ZERO, "rot": Vector3.ZERO, "scale_mult": 1.0},
+	&"accelerator_2h": {"pos": Vector3.ZERO, "rot": Vector3.ZERO, "scale_mult": 1.0},
+	&"taser_2h":       {"pos": Vector3.ZERO, "rot": Vector3.ZERO, "scale_mult": 1.0},
 }
 
 
@@ -142,6 +147,103 @@ const _ENEMY_WEAPON_ID_ALIAS: Dictionary = {
 static func set_weapon_for_enemy(skeleton: Skeleton3D, enemy_weapon_id: StringName) -> void:
 	var base_id: StringName = _ENEMY_WEAPON_ID_ALIAS.get(enemy_weapon_id, &"")
 	set_weapon(skeleton, base_id)
+
+
+## ─── Live grip tuner ────────────────────────────────────────────────────
+##
+## The following statics let an in-game keyboard tuner adjust the mounted
+## weapon's pos / rot / scale_mult on the fly and reapply without rebuilding
+## the model. The flow is:
+##   1. PrototypeCamera (in inspect mode) reads keypresses and calls
+##      bump_grip(base_id, ...) — this mutates the _GRIP entry.
+##   2. After mutation, it calls reapply_grip(skeleton, base_id) which
+##      re-runs _apply_grip on the live WeaponModel child of the mount.
+##   3. When the user is happy, dump_grip_to_console(base_id) prints the
+##      final values in a ready-to-paste format so they can be baked back
+##      into _GRIP as the new default.
+
+## Returns the current grip dict for `weapon_base_id` (creates a default
+## entry if missing). Safe to mutate the returned dict in place.
+static func get_grip(weapon_base_id: StringName) -> Dictionary:
+	if not _GRIP.has(weapon_base_id):
+		_GRIP[weapon_base_id] = {"pos": Vector3.ZERO, "rot": Vector3.ZERO, "scale_mult": 1.0}
+	return _GRIP[weapon_base_id]
+
+
+## Adds `delta_deg` degrees to the rotation around `axis` ("x", "y", or
+## "z") on this weapon's grip entry. No-op for unknown axis or empty id.
+static func bump_rotation(weapon_base_id: StringName, axis: StringName, delta_deg: float) -> void:
+	if weapon_base_id == &"":
+		return
+	var grip := get_grip(weapon_base_id)
+	var r: Vector3 = grip.get("rot", Vector3.ZERO)
+	match axis:
+		&"x": r.x = wrapf(r.x + delta_deg, -180.0, 180.0)
+		&"y": r.y = wrapf(r.y + delta_deg, -180.0, 180.0)
+		&"z": r.z = wrapf(r.z + delta_deg, -180.0, 180.0)
+		_: return
+	grip["rot"] = r
+
+
+## Adds `delta` (world units) to the position offset along `axis` on this
+## weapon's grip entry.
+static func bump_position(weapon_base_id: StringName, axis: StringName, delta: float) -> void:
+	if weapon_base_id == &"":
+		return
+	var grip := get_grip(weapon_base_id)
+	var p: Vector3 = grip.get("pos", Vector3.ZERO)
+	match axis:
+		&"x": p.x += delta
+		&"y": p.y += delta
+		&"z": p.z += delta
+		_: return
+	grip["pos"] = p
+
+
+## Multiplies the scale_mult on this weapon's grip entry by `factor`.
+## Clamped to [0.1, 10.0] so a sticky keypress can't blow it up.
+static func bump_scale(weapon_base_id: StringName, factor: float) -> void:
+	if weapon_base_id == &"":
+		return
+	var grip := get_grip(weapon_base_id)
+	var s: float = float(grip.get("scale_mult", 1.0)) * factor
+	grip["scale_mult"] = clampf(s, 0.1, 10.0)
+
+
+## Resets this weapon's grip entry to neutral (zero rotation, zero
+## position, scale_mult 1.0).
+static func reset_grip(weapon_base_id: StringName) -> void:
+	if weapon_base_id == &"":
+		return
+	_GRIP[weapon_base_id] = {"pos": Vector3.ZERO, "rot": Vector3.ZERO, "scale_mult": 1.0}
+
+
+## Re-applies the current grip values to the weapon model already mounted
+## on `skeleton`. Used by the live tuner so each keypress immediately
+## shows on screen without rebuilding the model.
+static func reapply_grip(skeleton: Skeleton3D, weapon_base_id: StringName) -> void:
+	if skeleton == null or weapon_base_id == &"":
+		return
+	var mount := get_mount(skeleton)
+	if mount == null:
+		return
+	var model := mount.get_node_or_null(NodePath(_MODEL_NODE_NAME)) as Node3D
+	if model == null:
+		return
+	_apply_grip(model, weapon_base_id)
+
+
+## Prints the current grip entry to the console in a ready-to-paste
+## format, so once tuning lands on values that read well in-game, the
+## user can copy the line back into _GRIP as the new default.
+static func dump_grip_to_console(weapon_base_id: StringName) -> void:
+	var grip := get_grip(weapon_base_id)
+	var p: Vector3 = grip.get("pos", Vector3.ZERO)
+	var r: Vector3 = grip.get("rot", Vector3.ZERO)
+	var s: float = float(grip.get("scale_mult", 1.0))
+	print('\t&"%s": {"pos": Vector3(%.3f, %.3f, %.3f), "rot": Vector3(%.1f, %.1f, %.1f), "scale_mult": %.3f},' % [
+		String(weapon_base_id), p.x, p.y, p.z, r.x, r.y, r.z, s,
+	])
 
 
 ## Returns the existing weapon mount on `skeleton`, or null if none has

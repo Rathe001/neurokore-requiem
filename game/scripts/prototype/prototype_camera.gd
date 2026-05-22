@@ -87,6 +87,18 @@ var _default_size: float = 22.0
 var _f9_was_pressed_last_frame: bool = false
 var _inspect_label: Label = null
 
+# ── Grip tuner (T inside inspect mode) ────────────────────────────────────
+# Keyboard live-tune for the equipped weapon's WeaponAttachment grip
+# offsets. Each bump mutates WeaponAttachment._GRIP and re-applies to
+# the live model so the result shows immediately. P dumps the current
+# entry to the console as a ready-to-paste dict line, Backspace resets.
+# Gated on inspect mode + tune mode so normal gameplay isn't affected.
+var _tune_mode: bool = false
+const _TUNE_ROT_STEP: float = 15.0    # degrees per keypress
+const _TUNE_POS_STEP: float = 0.05    # world units per keypress
+const _TUNE_SCALE_UP: float = 1.1
+const _TUNE_SCALE_DOWN: float = 0.9
+
 # ── Label3D fixed_size compensation ───────────────────────────────────────
 # Godot 4's Label3D.fixed_size = true uses a projection-dependent
 # compensation that lands ~5× too large under our narrow-FOV (18°)
@@ -268,6 +280,16 @@ func _input(event: InputEvent) -> void:
 		if ke.pressed and not ke.echo and ke.physical_keycode == KEY_F8:
 			_toggle_projection()
 			return
+		# Grip-tuner key handling — only active inside inspect + tune
+		# mode. Returns at the end so tune presses don't fall through
+		# to the gameplay input layer.
+		if _inspect_mode and ke.pressed and not ke.echo:
+			if ke.physical_keycode == KEY_T:
+				_tune_mode = not _tune_mode
+				print("[Camera] grip tune mode: ", "ON" if _tune_mode else "OFF")
+				return
+			if _tune_mode and _handle_tune_key(ke.physical_keycode):
+				return
 	if not enable_pitch_drag:
 		return
 	if event is InputEventMouseButton:
@@ -307,6 +329,60 @@ func _input(event: InputEvent) -> void:
 # back to its initial @export-derived default so the iso framing is
 # restored exactly — no lerp, since the gameplay camera contract is
 # snap-only.
+# Looks up the local player's right-hand skeleton + the currently
+# equipped weapon's base_id. Returns [null, &""] when the player isn't
+# spawned yet or no weapon is equipped — the tuner bails on either.
+func _resolve_tune_target() -> Array:
+	var player := get_tree().get_first_node_in_group(&"player") as Node3D
+	if player == null:
+		return [null, &""]
+	var visual := player.get_node_or_null(^"Visual") as Node3D
+	if visual == null:
+		return [null, &""]
+	var skel := PrototypePlayer._find_skeleton_recursive(visual)
+	if skel == null:
+		return [null, &""]
+	var weapon: Item = InventoryState.get_equipped(&"weapon")
+	if weapon == null:
+		return [skel, &""]
+	return [skel, weapon.weapon_base_id]
+
+
+# Handles a single tune-mode keypress. Returns true if the key was a
+# recognised tune control (so _input can stop dispatching it), false if
+# the key was unrelated and should keep propagating.
+func _handle_tune_key(keycode: int) -> bool:
+	var target := _resolve_tune_target()
+	var skel: Skeleton3D = target[0]
+	var base_id: StringName = target[1]
+	if skel == null or base_id == &"":
+		return false
+	match keycode:
+		KEY_J: WeaponAttachment.bump_rotation(base_id, &"x", -_TUNE_ROT_STEP)
+		KEY_L: WeaponAttachment.bump_rotation(base_id, &"x",  _TUNE_ROT_STEP)
+		KEY_U: WeaponAttachment.bump_rotation(base_id, &"y", -_TUNE_ROT_STEP)
+		KEY_O: WeaponAttachment.bump_rotation(base_id, &"y",  _TUNE_ROT_STEP)
+		KEY_H: WeaponAttachment.bump_rotation(base_id, &"z", -_TUNE_ROT_STEP)
+		KEY_K: WeaponAttachment.bump_rotation(base_id, &"z",  _TUNE_ROT_STEP)
+		KEY_LEFT:    WeaponAttachment.bump_position(base_id, &"x", -_TUNE_POS_STEP)
+		KEY_RIGHT:   WeaponAttachment.bump_position(base_id, &"x",  _TUNE_POS_STEP)
+		KEY_DOWN:    WeaponAttachment.bump_position(base_id, &"y", -_TUNE_POS_STEP)
+		KEY_UP:      WeaponAttachment.bump_position(base_id, &"y",  _TUNE_POS_STEP)
+		KEY_PAGEDOWN: WeaponAttachment.bump_position(base_id, &"z", -_TUNE_POS_STEP)
+		KEY_PAGEUP:   WeaponAttachment.bump_position(base_id, &"z",  _TUNE_POS_STEP)
+		KEY_MINUS, KEY_KP_SUBTRACT: WeaponAttachment.bump_scale(base_id, _TUNE_SCALE_DOWN)
+		KEY_EQUAL, KEY_KP_ADD:      WeaponAttachment.bump_scale(base_id, _TUNE_SCALE_UP)
+		KEY_P:
+			WeaponAttachment.dump_grip_to_console(base_id)
+			return true
+		KEY_BACKSPACE: WeaponAttachment.reset_grip(base_id)
+		_: return false
+	# Recognised bump — re-apply to the live model so the change shows
+	# without re-equipping.
+	WeaponAttachment.reapply_grip(skel, base_id)
+	return true
+
+
 # F8 flips projection mode at runtime so you can A/B perspective vs
 # ortho on the live scene. Visual framing stays roughly identical
 # because (a) the @export offset puts the camera ~70m back, which under
@@ -382,9 +458,24 @@ func _update_inspect_label() -> void:
 		var is_ortho := projection == PROJECTION_ORTHOGONAL
 		var mode_label: String = "ORTHO" if is_ortho else "PERSP"
 		var zoom_field: String = ("size=%.1f" % size) if is_ortho else ("dist=%.1f" % _distance)
-		_inspect_label.text = "[INSPECT %s] %s  pitch=%.0f°  bearing=%.0f°  (wheel=zoom, MMB-drag=orbit, F8=swap projection, F9=exit)" % [
+		var header := "[INSPECT %s] %s  pitch=%.0f°  bearing=%.0f°  (wheel=zoom, MMB-drag=orbit, F8=swap, F9=exit, T=tune)" % [
 			mode_label, zoom_field, rad_to_deg(_pitch_rad), rad_to_deg(_bearing_rad),
 		]
+		if _tune_mode:
+			var t := _resolve_tune_target()
+			var base_id: StringName = t[1]
+			if base_id != &"":
+				var grip := WeaponAttachment.get_grip(base_id)
+				var p: Vector3 = grip.get("pos", Vector3.ZERO)
+				var r: Vector3 = grip.get("rot", Vector3.ZERO)
+				var s: float = float(grip.get("scale_mult", 1.0))
+				header += "\n[TUNE %s]  pos=(%.2f, %.2f, %.2f)  rot=(%.0f, %.0f, %.0f)  scale=%.2f" % [
+					String(base_id), p.x, p.y, p.z, r.x, r.y, r.z, s,
+				]
+				header += "\n  rot: J/L=±X  U/O=±Y  H/K=±Z   pos: ←→=±X  ↑↓=±Y  PgUp/Dn=±Z   scale: -/=   P=dump  Backspace=reset"
+			else:
+				header += "\n[TUNE] no weapon equipped"
+		_inspect_label.text = header
 
 
 # Integrate the push spring. Position advances by velocity then springs
