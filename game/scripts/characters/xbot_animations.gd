@@ -388,6 +388,21 @@ static func random_unarmed_punch() -> Array[StringName]:
 	return [PUNCHES[randi() % PUNCHES.size()]]
 
 
+## Random pick from the 3-hit axe combo for melee enemies. Gives
+## enemy attacks the heavy-swing feel of 2H combat (distinct from
+## the player's lighter sword/punch motions) and adds per-swing
+## variety so a mob of melee enemies doesn't all read as identical.
+## Enemies don't track a combo step today — random is the simplest
+## way to mix the three variants.
+static func random_enemy_melee_swing() -> Array[StringName]:
+	const SWINGS: Array[StringName] = [
+		&"xbot/axe_combo_1",
+		&"xbot/axe_combo_2",
+		&"xbot/axe_combo_3",
+	]
+	return [SWINGS[randi() % SWINGS.size()], &"xbot/punch"]
+
+
 ## Returns a random qualified animation key ("xbot/death_N") for the
 ## enemy death handler to play. N is uniformly distributed over the loaded
 ## death clips.

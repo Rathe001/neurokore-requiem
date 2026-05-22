@@ -201,7 +201,7 @@ func cast_melee_attack(player: Node3D, aim: Vector3) -> void:
 	_host.velocity.x = 0.0
 	_host.velocity.z = 0.0
 	_host._face_direction(aim)
-	_host._play_anim(PrototypeEnemy.ANIM_ATTACK, 1.2)
+	_host._play_anim(XBotAnimations.random_enemy_melee_swing(), 1.6)
 	var range_now := attack_range()
 	var cone_now := melee_cone_deg()
 	var windup_now := attack_windup()
@@ -367,7 +367,7 @@ func _cast_skill_cone(target: Node3D, aim: Vector3, skill: EnemySkill) -> void:
 	_host.velocity.x = 0.0
 	_host.velocity.z = 0.0
 	_host._face_direction(aim)
-	_host._play_anim(PrototypeEnemy.ANIM_ATTACK, 1.2)
+	_host._play_anim(XBotAnimations.random_enemy_melee_swing(), 1.6)
 	CombatVisuals.spawn_cone(_host, aim, skill.skill_range, skill.cone_deg, skill.wind_up)
 	var gen := _host._generation
 	await _host.get_tree().create_timer(skill.wind_up).timeout
@@ -406,7 +406,7 @@ func _cast_skill_radial(target: Node3D, skill: EnemySkill) -> void:
 	_host._attack_cd = attack_cooldown()
 	_host.velocity.x = 0.0
 	_host.velocity.z = 0.0
-	_host._play_anim(PrototypeEnemy.ANIM_ATTACK, 1.0)
+	_host._play_anim(XBotAnimations.random_enemy_melee_swing(), 1.4)
 	CombatVisuals.spawn_radial(_host, skill.aoe_radius, skill.wind_up)
 	var gen := _host._generation
 	await _host.get_tree().create_timer(skill.wind_up).timeout
@@ -515,7 +515,7 @@ func _cast_skill_self_buff(skill: EnemySkill) -> void:
 	_host._change_state(PrototypeEnemy.State.CASTING)
 	_host.velocity.x = 0.0
 	_host.velocity.z = 0.0
-	_host._play_anim(PrototypeEnemy.ANIM_ATTACK, 1.0)
+	_host._play_anim(XBotAnimations.random_enemy_melee_swing(), 1.4)
 	var gen := _host._generation
 	await _host.get_tree().create_timer(skill.wind_up).timeout
 	if not _host.is_inside_tree() or _host._generation != gen or _host._state != PrototypeEnemy.State.CASTING:
