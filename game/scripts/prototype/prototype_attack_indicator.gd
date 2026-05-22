@@ -651,8 +651,8 @@ const BLOOD_DROPLET_LIFETIME: float = 0.45
 # particle material and the landing-decal ballistic sampler key off
 # these constants, so changing one site won't desync visible-vs-painted
 # travel distances.
-const BLOOD_BURST_SPEED_MIN: float = 2.0
-const BLOOD_BURST_SPEED_MAX: float = 4.0
+const BLOOD_BURST_SPEED_MIN: float = 1.2
+const BLOOD_BURST_SPEED_MAX: float = 2.4
 
 static func blood_color_for(_blood_type: StringName) -> Color:
 	# All fluids currently render as human red — the cyborg cyan and
@@ -988,14 +988,14 @@ static func _spawn_mist_drop_wall(parent: Node, world_pos: Vector3, wall_normal:
 
 # Pool sizing.
 const POOL_INITIAL_DIAMETER: float = 0.3        # tiny "fresh splash" at spawn
-const POOL_TARGET_MIN_DIAMETER: float = 1.2     # smallest final pool from a single kill
-const POOL_TARGET_MAX_DIAMETER: float = 1.8     # largest before merge growth
-const POOL_MAX_DIAMETER: float = 6.0            # cap on any pool's grown diameter
+const POOL_TARGET_MIN_DIAMETER: float = 0.9     # smallest final pool from a single kill
+const POOL_TARGET_MAX_DIAMETER: float = 1.4     # largest before merge growth
+const POOL_MAX_DIAMETER: float = 3.0            # cap on any pool's grown diameter
 const POOL_GROWTH_DURATION: float = 4.5         # slow ooze — player shouldn't see the growth tween in motion
 # Attach: if a new kill lands within this distance of an existing
 # pool's *edge*, grow that pool to encompass the new spawn instead of
 # stamping fresh. Fresh stamps still happen for kills in clear space.
-const POOL_ATTACH_RADIUS: float = 1.2
+const POOL_ATTACH_RADIUS: float = 0.7
 # How much "buffer" we leave around the new spawn when growing — the
 # pool extends past the new spawn by this much so the spawn point is
 # safely inside the new bounds, not on its rim.
@@ -1666,7 +1666,7 @@ const OBJECT_BLOOD_LAYER: int = 8
 # to use BLOOD_DECAL_ALBEDO_MIX (0.92).
 const OBJECT_BLOOD_ALBEDO_MIX: float = 0.96
 const OBJECT_BLOOD_RECEIVER_GROUP: StringName = &"blood_receiver"
-const OBJECT_BLOOD_RADIUS: float = 5.0
+const OBJECT_BLOOD_RADIUS: float = 2.5
 const OBJECT_BLOOD_MAX_PER_KILL: int = 4
 const OBJECT_BLOOD_FADE_DURATION: float = 14.0
 # Physics layers the kill→receiver visibility ray queries:
