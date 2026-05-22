@@ -107,19 +107,22 @@ func tick(delta: float) -> void:
 
 # ── Activation ────────────────────────────────────────────────────────────────
 
-func activate_offhand_skill(skill: Skill) -> void:
+## Returns true if the shield actually entered active state — false
+## when already up or still on cooldown. Callers gate cast anim / SFX
+## on the return so a cooldown-blocked press doesn't play visuals.
+func activate_offhand_skill(skill: Skill) -> bool:
 	match skill.active_kind:
 		Skill.ActiveKind.SHIELD_BUFF, Skill.ActiveKind.SHIELD_HOLD:
-			_activate(skill)
+			return _activate(skill)
 		_:
-			pass
+			return false
 
 
-func _activate(skill: Skill) -> void:
+func _activate(skill: Skill) -> bool:
 	if _active:
-		return
+		return false
 	if _cooldown_remain > 0.0:
-		return
+		return false
 	var bonus_pool: int = 0
 	var offhand: Item = InventoryState.get_equipped(&"offhand")
 	if offhand != null:
@@ -142,6 +145,7 @@ func _activate(skill: Skill) -> void:
 	_active = true
 	WeaponSounds.play_generic(&"shield_raise", _host.global_position)
 	_emit_changed()
+	return true
 
 
 # ── State transitions ─────────────────────────────────────────────────────────

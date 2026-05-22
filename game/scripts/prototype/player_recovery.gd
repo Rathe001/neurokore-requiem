@@ -130,19 +130,22 @@ func tick(delta: float) -> void:
 
 # ── Activation ────────────────────────────────────────────────────────────────
 
-func activate(_skill: Skill) -> void:
+## Activate the consumable. Returns true if activation succeeded
+## (charge consumed, heal applied/started) so callers can gate cast
+## animations / SFX on actual activation rather than the attempt.
+func activate(_skill: Skill) -> bool:
 	if _charges <= 0 or _use_cooldown > 0.0:
-		return
+		return false
 	var consumable: Item = InventoryState.get_equipped(&"consumable")
 	if consumable == null:
-		return
+		return false
 	# heal_duration is rolled as float (0.0-5.0); get_modifier returns int
 	# and would truncate a 2.5s duration to 2 (or 0.4s to 0). Read raw via
 	# the dict so the HoT lasts exactly as long as the tooltip advertises.
 	var heal_pct: float = float(consumable.stat_modifiers.get(&"heal_pct", 0))
 	var heal_duration: float = float(consumable.stat_modifiers.get(&"heal_duration", 0.0))
 	if heal_pct <= 0.0:
-		return
+		return false
 	# Compute actual heal from percentage of max health.
 	var heal_total: float = heal_pct * _host.max_health / 100.0
 	if heal_duration < HOT_INTERVAL:
@@ -163,6 +166,7 @@ func activate(_skill: Skill) -> void:
 	_use_cooldown = USE_COOLDOWN
 	if _charges < _max_charges and _recharge_timer <= 0.0:
 		_recharge_timer = _recharge_time
+	return true
 
 
 # ── Cleanup ───────────────────────────────────────────────────────────────────

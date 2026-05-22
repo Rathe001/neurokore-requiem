@@ -2257,8 +2257,10 @@ func _cast_skill(skill: Skill) -> void:
 								break
 					_start_channel(skill, input_action)
 			Skill.ActiveKind.SHIELD_BUFF, Skill.ActiveKind.SHIELD_HOLD:
-				_play_anim(ANIM_CAST, 1.5)
-				_shield.activate_offhand_skill(skill)
+				# Cast anim gated on actual activation — a press while
+				# on cooldown shouldn't play the visual.
+				if _shield.activate_offhand_skill(skill):
+					_play_anim(ANIM_CAST, 1.5)
 			Skill.ActiveKind.GRENADE:
 				if _grenade.is_on_cooldown():
 					return
@@ -2282,11 +2284,11 @@ func _cast_skill(skill: Skill) -> void:
 				_play_anim(ANIM_GRENADE_THROW, 1.4)
 				_grenade.activate(skill, throw_dir)
 			Skill.ActiveKind.SECOND_WIND:
-				_play_anim(ANIM_CAST, 1.5)
-				_activate_second_wind(skill)
+				if _activate_second_wind(skill):
+					_play_anim(ANIM_CAST, 1.5)
 			Skill.ActiveKind.RECOVERY:
-				_play_anim(ANIM_CAST, 1.5)
-				_recovery.activate(skill)
+				if _recovery.activate(skill):
+					_play_anim(ANIM_CAST, 1.5)
 		return
 	_interacting = false
 	if _combat.is_on_cooldown(skill):
@@ -2438,16 +2440,19 @@ func get_drone_count() -> int:
 	return _drone_swarm.get_drone_count()
 
 
-func _activate_second_wind(skill: Skill) -> void:
+## Returns true if the resource pool was actually refilled. False when
+## the skill is on cooldown so the caller can skip the cast anim.
+func _activate_second_wind(skill: Skill) -> bool:
 	if _combat.is_on_cooldown(skill):
-		return
+		return false
 	if resource_pool == null:
-		return
+		return false
 	_resource_current = float(resource_pool.max_value)
 	_sprint_regen_penalty = 0.0
 	_emit_resource_if_changed()
 	resource_changed.emit(int(_resource_current), resource_pool.max_value)
 	_combat.start_cooldown(skill, 1.0)
+	return true
 
 
 func _spend_resource(amount: int) -> void:

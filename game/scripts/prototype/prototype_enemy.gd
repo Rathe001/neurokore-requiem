@@ -240,18 +240,24 @@ const ANIM_HIT_BACK := CombatConstants.ANIM_HIT_BACK
 const ANIM_HIT_BIG := CombatConstants.ANIM_HIT_BIG
 
 # Hit-react one-shot suppresses the locomotion picker for this many
-# seconds after a big-enough hit. Short enough that the enemy resumes
-# chase quickly; long enough that the hit anim actually reads.
-const _HIT_REACT_DURATION: float = 0.4
+# seconds after a big-enough hit. Mixamo small-react clips are
+# ~0.9-1.1s authored; played at _HIT_REACT_SMALL_SPEED they fit
+# inside the small window. The big-variant gets a longer, slightly
+# slower playback so it reads as weightier without dragging.
+const _HIT_REACT_SMALL_DURATION: float = 0.45
+const _HIT_REACT_BIG_DURATION: float = 0.65
+const _HIT_REACT_SMALL_SPEED: float = 2.2  # ~1.0s clip → ~0.45s playback
+const _HIT_REACT_BIG_SPEED: float = 1.6    # heavier feel, longer window
 # Damage threshold (fraction of max_health) below which we skip the
 # hit-react anim entirely. Tiny grazes shouldn't interrupt the chase
 # or attack cycle.
 const _HIT_REACT_MIN_DMG_PCT: float = 0.10
-# Currently-playing hit-react anim and remaining duration. Decremented
-# in _physics_process. While > 0, the locomotion picker plays the hit
-# anim instead of idle/run.
+# Currently-playing hit-react anim, remaining duration, and playback
+# speed. While remain > 0, the locomotion picker plays the hit anim
+# at the configured speed instead of idle/run.
 var _hit_react_remain: float = 0.0
 var _hit_react_anim: Array[StringName] = []
+var _hit_react_speed: float = 1.0
 
 const OUTLINE_GROW := 0.06           # match HoverableInteractable for parity with chests / switches
 const OUTLINE_LOCKED_COLOR := Color(1.0, 0.15, 0.15)
@@ -1383,11 +1389,13 @@ func _physics_process(delta: float) -> void:
 		return
 	# Hit-react owns the picker for its brief window. Decrement here so
 	# the timer counts in physics-frames; once it expires the locomotion
-	# branch takes back over without snap-popping the hit anim.
+	# branch takes back over without snap-popping the hit anim. Speed
+	# is passed through so a one-second Mixamo clip finishes inside the
+	# 0.45s window (small) / 0.65s window (big).
 	if _hit_react_remain > 0.0:
 		_hit_react_remain -= delta
 		if _hit_react_remain > 0.0 and not _hit_react_anim.is_empty():
-			_play_anim(_hit_react_anim)
+			_play_anim(_hit_react_anim, _hit_react_speed)
 			return
 	var moving := _want_dir.length_squared() > 0.01
 	match _state:
@@ -1416,12 +1424,10 @@ func _physics_process(delta: float) -> void:
 # regardless of direction.
 func _trigger_hit_react(hit_from: Vector3, big: bool) -> void:
 	if visual == null:
-		_hit_react_anim = ANIM_HIT_BIG if big else ANIM_HIT_BACK
-		_hit_react_remain = _HIT_REACT_DURATION
+		_set_hit_react(ANIM_HIT_BIG if big else ANIM_HIT_BACK, big)
 		return
 	if big:
-		_hit_react_anim = ANIM_HIT_BIG
-		_hit_react_remain = _HIT_REACT_DURATION
+		_set_hit_react(ANIM_HIT_BIG, true)
 		return
 	# Hit direction in XZ. fallback to back when hit_from isn't set
 	# (DoT, environment damage) — feels right since DoT comes "from
@@ -1429,8 +1435,7 @@ func _trigger_hit_react(hit_from: Vector3, big: bool) -> void:
 	var to_hit := global_position - hit_from
 	to_hit.y = 0.0
 	if to_hit.length_squared() < 0.0001:
-		_hit_react_anim = ANIM_HIT_BACK
-		_hit_react_remain = _HIT_REACT_DURATION
+		_set_hit_react(ANIM_HIT_BACK, false)
 		return
 	to_hit = to_hit.normalized()
 	# Enemy faces along -visual.transform.basis.z (Godot convention:
@@ -1450,10 +1455,21 @@ func _trigger_hit_react(hit_from: Vector3, big: bool) -> void:
 		# Front hits feel like a chest-region impact — use the
 		# generic "hit_big" (front-facing impact). Back hits get
 		# the back-specific anim.
-		_hit_react_anim = ANIM_HIT_BACK if dot_fwd < 0.0 else ANIM_HIT_BIG
+		_set_hit_react(ANIM_HIT_BACK if dot_fwd < 0.0 else ANIM_HIT_BIG, false)
 	else:
-		_hit_react_anim = ANIM_HIT_RIGHT if dot_right > 0.0 else ANIM_HIT_LEFT
-	_hit_react_remain = _HIT_REACT_DURATION
+		_set_hit_react(ANIM_HIT_RIGHT if dot_right > 0.0 else ANIM_HIT_LEFT, false)
+
+
+# Sets the hit-react state vars in one place so the duration / speed
+# constants stay in sync. `big` picks the heavier playback profile.
+func _set_hit_react(anim_set: Array[StringName], big: bool) -> void:
+	_hit_react_anim = anim_set
+	if big:
+		_hit_react_remain = _HIT_REACT_BIG_DURATION
+		_hit_react_speed = _HIT_REACT_BIG_SPEED
+	else:
+		_hit_react_remain = _HIT_REACT_SMALL_DURATION
+		_hit_react_speed = _HIT_REACT_SMALL_SPEED
 
 	# Authority writes net_* vars each tick — the MultiplayerSynchronizer
 	# broadcasts them to clients, which read them in _remote_physics_process.
