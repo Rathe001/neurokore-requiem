@@ -322,10 +322,18 @@ func _update_debuffs_bar() -> void:
 	var player := get_tree().get_first_node_in_group(&"player") as PrototypePlayer
 	if player == null or not is_instance_valid(player):
 		return
-	if player.is_in_slow_pool():
-		_add_slow_debuff_entry()
-	if player.is_in_blood_pool():
-		_add_blood_pool_debuff_entry()
+	# Per-EFFECT debuff entries (not per surface). One "Slippery" icon
+	# fires whether the player is on blood, oil, or ice; one "Poor
+	# Traction" icon fires whether they're in water or blood. Future
+	# surface-specific dedicated debuffs (Burning from fire, Corroding
+	# from acid, Frozen from ice) will plug in here by branching on
+	# additional effect ids returned from get_active_ground_effects.
+	var effects: Dictionary = {}
+	if player.has_method(&"get_active_ground_effects"):
+		effects = player.get_active_ground_effects()
+	for effect_id in effects:
+		var sources: Array = effects[effect_id]
+		_add_effect_debuff_entry(effect_id as StringName, sources)
 
 
 func _on_slow_pool_changed(_in_pool: bool) -> void:
@@ -455,33 +463,43 @@ func _process_ammo_fill() -> void:
 
 
 
-# Slowed debuff entry: red "S" glyph with a Traction-aware tooltip.
-# Surface is "water" — current procgen oil/water puddles.
-func _add_slow_debuff_entry() -> void:
-	_add_ground_debuff_entry(&"slow_pool", &"water", "S", Color(1.0, 0.5, 0.45, 1.0), "Slowed")
+# Per-effect debuff registry. Glyph + color distinguish visually;
+# the tooltip is composed per-effect from the active sources.
+#
+# Adding a new effect (e.g. "burning" from fire surfaces):
+#   1. Add a EFFECT_DEFS entry with title/glyph/color/lines builder
+#   2. Have PrototypePlayer.get_active_ground_effects return the
+#      effect id when its source surfaces overlap.
+const _EFFECT_DEFS: Dictionary = {
+	&"poor_traction": {
+		&"title": "Poor Traction",
+		&"glyph": "T",
+		&"color": Color(1.0, 0.55, 0.4, 1.0),  # orange-red
+	},
+	&"slippery": {
+		&"title": "Slippery",
+		&"glyph": "~",
+		&"color": Color(0.85, 0.30, 0.30, 1.0),  # deep red
+	},
+}
 
 
-# Slippery debuff entry: blood pool overlap. Same tooltip skeleton as
-# Slowed but with surface "blood".
-func _add_blood_pool_debuff_entry() -> void:
-	_add_ground_debuff_entry(&"blood_pool", &"blood", "B", Color(0.85, 0.25, 0.25, 1.0), "Slippery")
-
-
-# Shared builder for ground-effect debuff entries. Glyph + color
-# distinguish them visually; tooltip body is a 3-line max layout:
-#   • active effect summary (slow %, stumble %, or both)
-#   • traction context ("Traction N — M% mitigated")
-# Lines that wouldn't add information are skipped, so a fully-negated
-# override shows a one-line "ignored entirely" message.
-func _add_ground_debuff_entry(stat_id: StringName, surface_id: StringName, glyph: String, color: Color, title: String) -> void:
+# Build one debuff entry for an active effect. `sources` is the list
+# of surface_ids contributing to this effect — used both to compose
+# the tooltip ("From: Blood, Water") and to compute the combined
+# numerical impact when multiple surfaces stack.
+func _add_effect_debuff_entry(effect_id: StringName, sources: Array) -> void:
+	var def: Dictionary = _EFFECT_DEFS.get(effect_id, {})
+	if def.is_empty():
+		return
 	var entry := Control.new()
 	entry.custom_minimum_size = _BUFF_ENTRY_SIZE
 	entry.mouse_filter = Control.MOUSE_FILTER_STOP
-	entry.set_meta(&"buff_stat_id", stat_id)
+	entry.set_meta(&"buff_stat_id", effect_id)
 	var label := Label.new()
-	label.text = glyph
+	label.text = def[&"glyph"]
 	label.add_theme_font_size_override(&"font_size", 12)
-	label.add_theme_color_override(&"font_color", color)
+	label.add_theme_color_override(&"font_color", def[&"color"])
 	label.add_theme_color_override(&"font_outline_color", Color(0, 0, 0, 1))
 	label.add_theme_constant_override(&"outline_size", 1)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -490,41 +508,62 @@ func _add_ground_debuff_entry(stat_id: StringName, surface_id: StringName, glyph
 	label.anchor_bottom = 1.0
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	entry.add_child(label)
-	var full_title := "%s (%s)" % [title, Traction.display_name_for_surface(surface_id)]
+	var title: String = def[&"title"]
 	entry.mouse_entered.connect(func() -> void:
-		var body := _format_ground_effect_tooltip(surface_id)
-		get_tree().call_group(&"interactable_tooltip", &"show_talent_node", full_title, body))
+		var body := _format_effect_tooltip(effect_id, sources)
+		get_tree().call_group(&"interactable_tooltip", &"show_talent_node", title, body))
 	entry.mouse_exited.connect(func() -> void:
 		get_tree().call_group(&"interactable_tooltip", &"hide_tooltip"))
 	debuff_entries.add_child(entry)
 
 
-# Compose the body of a ground-effect tooltip. Terse by design — see
-# the project_ground_effects memory for the UX rationale (user
-# explicitly called out "not overly verbose"). Returns a 1-3 line
-# string suitable for show_talent_node.
-func _format_ground_effect_tooltip(surface_id: StringName) -> String:
-	if Traction.is_surface_negated(surface_id):
-		return "Your boots negate this surface entirely."
+# Compose the body of a per-effect tooltip. Terse by design (user
+# called out "not overly verbose"). Lists contributing surface names
+# + the current numeric impact + traction value.
+func _format_effect_tooltip(effect_id: StringName, sources: Array) -> String:
+	if sources.is_empty():
+		return ""
+	# Sort sources by display name for stable tooltip order.
+	var names: Array[String] = []
+	for s_var in sources:
+		names.append(Traction.display_name_for_surface(s_var as StringName))
+	names.sort()
+	var source_line := "From: " + ", ".join(names)
 	var traction: int = Traction.get_player_traction()
-	var slow_pct: int = int(round((1.0 - Traction.slow_factor_for_surface(surface_id)) * 100.0))
-	var stumble_pct: float = Traction.stumble_chance_for_surface(surface_id) * 100.0
-	var ef_pct: int = int(round(Traction.effect_factor(surface_id, traction) * 100.0))
-	var mit_pct: int = 100 - ef_pct
-	var parts: Array[String] = []
-	if slow_pct > 0:
-		parts.append("−%d%% move" % slow_pct)
-	if stumble_pct >= 0.5:
-		parts.append("%.0f%% stumble" % stumble_pct)
-	# Friction loss is a behavioural feel rather than a number worth
-	# percent-quoting — note it only when it's still noticeable
-	# (effect_factor > 25%).
-	if ef_pct > 25 and Traction.friction_factor_for_surface(surface_id) < 0.9:
-		parts.append("less grip")
-	if parts.is_empty():
-		return "Standing on it, but your traction shrugs it off."
-	var lines: Array[String] = [", ".join(parts)]
-	lines.append("Traction %d — %d%% mitigated" % [traction, mit_pct])
+	var lines: Array[String] = []
+	match effect_id:
+		&"poor_traction":
+			# Combined slow factor across all contributing surfaces
+			# (multiplicative — slows compose).
+			var combined_factor := 1.0
+			for s_var in sources:
+				combined_factor *= Traction.slow_factor_for_surface(s_var as StringName)
+			var slow_pct := int(round((1.0 - combined_factor) * 100.0))
+			if slow_pct > 0:
+				lines.append("−%d%% move speed" % slow_pct)
+			else:
+				lines.append("Slowed, but mostly mitigated")
+		&"slippery":
+			# Combined stumble chance (1 - product of (1 - chance_i))
+			# so independent rolls compose probabilistically.
+			var safe_p := 1.0
+			var any_friction_loss := false
+			for s_var in sources:
+				safe_p *= (1.0 - Traction.stumble_chance_for_surface(s_var as StringName))
+				if Traction.friction_factor_for_surface(s_var as StringName) < 0.99:
+					any_friction_loss = true
+			var stumble_pct := (1.0 - safe_p) * 100.0
+			var parts: Array[String] = []
+			if any_friction_loss:
+				parts.append("less grip when stopping")
+			if stumble_pct >= 0.5:
+				parts.append("%.0f%% stumble on entry" % stumble_pct)
+			if parts.is_empty():
+				lines.append("Slippery, but mostly mitigated")
+			else:
+				lines.append(", ".join(parts))
+	lines.append(source_line)
+	lines.append("Traction %d" % traction)
 	return "\n".join(lines)
 
 

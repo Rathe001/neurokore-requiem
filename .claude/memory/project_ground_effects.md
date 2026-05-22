@@ -21,10 +21,35 @@ data.
 - A counted state + factor methods on PrototypePlayer that call
   through to the per-surface Traction API (`slow_factor_for_surface`,
   `friction_factor_for_surface`, `stumble_chance_for_surface`).
-- An HUD debuff entry built via the shared
-  `_add_ground_debuff_entry(stat_id, surface_id, glyph, color, title)`
-  helper — passes the surface_id and the tooltip auto-formats from
-  the profile.
+- The surface contributes to one or more EFFECTS surfaced in
+  `PrototypePlayer.get_active_ground_effects()` — a Dictionary of
+  `{effect_id: [contributing surface_ids]}` derived live from the
+  per-surface counters. Adding a new surface = add a line to
+  `_active_ground_surfaces()` (e.g. `if _ice_pool_count > 0:
+  out.append(&"ice")`); effect inclusion is automatic based on
+  whether the surface profile has slow/friction/stumble > 0.
+
+**Per-EFFECT debuff icons (not per-surface).** Decouples the HUD
+debuff from its cause so the player learns "Slippery" once and
+recognizes it across blood, oil, ice, etc. Two movement effects
+defined today, future surfaces will introduce dedicated DoT/stun
+debuff types alongside:
+
+- `&"slippery"` (~ glyph, deep red) — any surface with friction
+  loss OR stumble chance. Tooltip lists contributing surfaces +
+  "less grip when stopping" / combined stumble probability.
+- `&"poor_traction"` (T glyph, orange-red) — any surface with
+  slow_factor < 1.0. Tooltip lists sources + combined slow %
+  (multiplicative composition across multiple sources).
+- Future: `&"burning"` (fire DoT), `&"corroding"` (acid DoT),
+  `&"frozen"` (cold extreme slow + stat penalty), `&"shocked"`
+  (electric stun chance). Each gets its own glyph/color/title in
+  `PrototypeHud._EFFECT_DEFS` and is appended to the active-effects
+  dict when its source surface is overlapped.
+
+The HUD `_add_effect_debuff_entry(effect_id, sources)` builder is
+shared across all effect types — registry-driven, no per-effect
+code path needed.
 
 **Blood pool specifics:**
 - Area3D ("SlipZone") child of each pool Decal. Cylinder radius

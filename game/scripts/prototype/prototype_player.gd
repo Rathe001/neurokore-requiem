@@ -3724,6 +3724,52 @@ func _blood_friction_factor() -> float:
 func is_stumbling() -> bool:
 	return _blood_stumble_remaining > 0.0
 
+
+## Returns the EFFECTS the player is currently subject to from
+## overlapping ground surfaces, keyed by effect id. Each value is the
+## list of contributing surface_ids. Used by the HUD to render one
+## debuff entry per effect (not per surface) so the player learns
+## "Slippery" / "Poor Traction" once and recognizes them across
+## causes. Future surface-specific effects (Burning from fire,
+## Corroding from acid, Frozen from ice) plug in the same way —
+## append to the appropriate effect's source list when their
+## surface is overlapped.
+##
+## Effect ids:
+##   &"slippery"      — any surface with friction loss OR stumble chance
+##   &"poor_traction" — any surface with move-speed slow
+##
+## Below-threshold effects are excluded so a surface that's been
+## fully mitigated by traction doesn't trigger a debuff icon.
+func get_active_ground_effects() -> Dictionary:
+	var effects: Dictionary = {}
+	for surface_id in _active_ground_surfaces():
+		if Traction.slow_factor_for_surface(surface_id) < 0.99:
+			if not effects.has(&"poor_traction"):
+				effects[&"poor_traction"] = []
+			(effects[&"poor_traction"] as Array).append(surface_id)
+		var has_slip := Traction.friction_factor_for_surface(surface_id) < 0.99
+		var has_stumble := Traction.stumble_chance_for_surface(surface_id) > 0.0
+		if has_slip or has_stumble:
+			if not effects.has(&"slippery"):
+				effects[&"slippery"] = []
+			(effects[&"slippery"] as Array).append(surface_id)
+	return effects
+
+
+# Currently-overlapped ground surfaces, by surface_id. Per-pool
+# counters (_slow_pool_count, _blood_pool_count) stay as the
+# source-of-truth for "am I overlapping X"; this just translates
+# them into the surface_id namespace used by Traction. Future ground
+# types add their counter + a line here.
+func _active_ground_surfaces() -> Array[StringName]:
+	var out: Array[StringName] = []
+	if _slow_pool_count > 0:
+		out.append(&"water")
+	if _blood_pool_count > 0:
+		out.append(&"blood")
+	return out
+
 func _update_light_visibility() -> void:
 	if _equipped_light != null:
 		_equipped_light.visible = _light_on
