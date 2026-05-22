@@ -1,67 +1,83 @@
 ---
 name: Ground effects (blood as the first instance)
-description: Environmental floor types (blood today; oil/frozen/fire planned) gate player movement via Area3D enter/exit + Traction-mitigated slip/slow/stumble. Foundation for Divinity-style combat layers and consumption skills.
+description: Environmental floor types as a Divinity-style combat layer. Blood + procgen water/oil puddles ship today; oil/acid/ice/fire planned. Per-surface mitigation curve via Traction autoload.
 type: project
 ---
 
-Blood pools are the first concrete instance of a planned Divinity 2-style
-ground-effect system: walking through one is a gameplay event, not just
-a visual.
+Blood pools and the procgen oil/water puddles are the first two
+concrete ground effects under the new per-surface model. Future
+types (oil, acid, ice, fire, electricity) follow the same pattern:
+one Area3D + enter/exit pair per overlap event, the rest is profile
+data.
 
-**Effects on the player (blood, current values):**
-- `BLOOD_SLOW_FACTOR = 0.85` — mild −15% move speed, scales to 1.0 at
-  `Traction.TIER_SLOW`.
-- `BLOOD_FRICTION_FACTOR = 0.55` — decel step multiplier when releasing
-  wish_dir (accel step is unaffected — feels like "wet boots can't
-  grab when stopping" not "starting from rest is sluggish"). Restored
-  to 1.0 at `Traction.TIER_SLIP`.
-- `BLOOD_SLIP_CHANCE = 0.12` — on entry, roll a stumble (full input
-  lockout for `BLOOD_STUMBLE_DURATION = 0.3 s`). Suppressed entirely
-  at `Traction.TIER_SLIP`.
+**How a ground type composes:**
+- A profile entry in `Traction.GROUND_EFFECT_PROFILES` keyed by
+  surface_id (e.g. &"blood"). Stores half_mit_k (the surface's
+  resistance against traction) plus T0 base values for slow,
+  friction, slip chance, stumble duration, and a display name.
+- An Area3D under the visual (decal, mesh, particle origin) with a
+  cylinder shape mask that fires `enter_<surface>_pool` /
+  `exit_<surface>_pool` on the player.
+- A counted state + factor methods on PrototypePlayer that call
+  through to the per-surface Traction API (`slow_factor_for_surface`,
+  `friction_factor_for_surface`, `stumble_chance_for_surface`).
+- An HUD debuff entry built via the shared
+  `_add_ground_debuff_entry(stat_id, surface_id, glyph, color, title)`
+  helper — passes the surface_id and the tooltip auto-formats from
+  the profile.
 
-**Architecture (mirrors the existing oil/water `slow_pool` pattern):**
-- Each pool decal carries a child `Area3D` named `SlipZone` with a
-  `CylinderShape3D` whose radius is tweened in lockstep with the
-  visual pool growth (so the player only slips inside the visible
-  footprint, not the eventual target diameter).
-- `body_entered` / `body_exited` call `player.enter_blood_pool()` /
-  `exit_blood_pool()` — counted (not bool) for overlapping pools.
-- `PrototypePlayer._blood_pool_factor()` and `_blood_friction_factor()`
-  compose multiplicatively with the existing speed-factor chain.
-- HUD: `_add_blood_pool_debuff_entry()` shows a red "B" with a
-  Traction-aware tooltip mirroring the existing "Slowed" entry.
+**Blood pool specifics:**
+- Area3D ("SlipZone") child of each pool Decal. Cylinder radius
+  tweens in lockstep with the visual pool size so the player only
+  slips inside the actually-visible footprint.
+- T0 values (mitigated by traction k=5 — entry-level):
+  −15% move, 0.55 decel friction, 12% stumble chance, 0.3 s stumble.
+- Generic skill-facing query API:
+  - `PrototypeAttackIndicator.get_blood_pools_near(pos, radius)` →
+    Array[Decal]. Filtered by priority FLOOR + recorded area
+    ≥ 0.6 m² so mist drops and wall splats are excluded.
+  - `PrototypeAttackIndicator.consume_blood_pool(pool)` — frees the
+    SlipZone first (clean body_exited for any standing player),
+    then routes through `_fade_and_free`.
+  - Future Enculted "Blood Ritual" calls these. Forged "consume
+    oil for HP" gets a parallel `get_oil_pools_near` /
+    `consume_oil_pool` pair when oil ground type lands.
 
-**Generic-API entry points (planned skill surface):**
-- `PrototypeAttackIndicator.get_blood_pools_near(world_pos, radius)`
-  → `Array[Decal]`. Filters by priority FLOOR + recorded `_blood_area`
-  ≥ 0.6 m² so mist drops and wall splats are excluded — callers get
-  only storytelling-grade pools.
-- `PrototypeAttackIndicator.consume_blood_pool(pool)` — frees the
-  SlipZone first so any standing player gets clean `body_exited`,
-  then routes through `_fade_and_free`.
+**Water puddle migration:** procgen oil/water puddles
+(`DecalBuilder`) keep their existing enter_slow_pool /
+exit_slow_pool API on the player; the only change is that
+`_slow_pool_factor()` now reads through
+`Traction.slow_factor_for_surface(&"water")` instead of the old
+universal `slow_factor_for(traction)`. Profile k=8 preserves the
+"easy to mitigate" feel at slightly tougher than blood.
 
-**Player-only by design.** Enemies don't have a Traction stat to
-mediate against, same as the existing slow_pool system. Layer mask
-is Player-only. Adding enemy slip later: add Enemy layer to
-`_BLOOD_POOL_PLAYER_MASK`, give PrototypeEnemy an enter/exit pair,
-and decide on the simpler enemy-side mitigation (probably a flat
-factor on EnemyClass).
+**Override flags for "always negate":** Per-surface negation lives
+on boots as a `negates_<surface>` modifier (any non-zero value).
+Future "Ice Walker" perk: boot rolls `negates_ice = 1` and the
+player flat-ignores ice regardless of traction. Asymptotic curve
+covers the gradient; override handles the binary case.
 
-**Future ground types** (`frozen`, `oil`, `fire`, `electricity`):
-- Frozen will reuse the slip-friction model with a MUCH lower
-  `FRICTION_FACTOR` (~0.20 vs blood's 0.55). User explicitly called
-  this out — frozen should feel significantly more punishing than
-  blood underfoot.
-- Each new type lands as parallel constants + parallel
-  `get_X_pools_near()` until there are 3+, at which point the shared
-  scan logic gets extracted to a `GroundEffects` autoload with a
-  type registry.
-- A planned **Enculted "Blood Ritual"** consumes pools for skill
-  effect (the consume API exists for this). A planned **Forged**
-  skill consumes oil pools for healing — same pattern.
+**Player-only by design.** Enemies have no Traction stat so they
+don't slip. Area3D mask is Layer 3 (Player) only. If we ever want
+slipping enemies: add the Enemy layer to `_BLOOD_POOL_PLAYER_MASK`,
+give PrototypeEnemy enter/exit pairs, and decide on enemy-side
+mitigation (probably a flat EnemyClass field, not a stat curve).
 
-**MP note:** blood pools are client-local (each peer has its own
-ring buffer based on locally-witnessed kills). Slip effects therefore
-fire on whichever pools the local client can see. Aligns with how
-the existing slow_pool puddles work (procgen deterministic, but the
-Area3D is local to each client's tree).
+**MP note:** Pool decals + Area3Ds are client-local (each peer has
+its own blood ring buffer driven by locally-witnessed kills). Slip
+effects fire on whichever pools the local client can see. Procgen
+puddles ARE deterministic across peers but the Area3D still lives
+in each client's local tree. Aligns with the rest of the
+client-local VFX architecture.
+
+**Future ground types** (planned k values for design intent):
+- water k=8 (shipped), blood k=5 (shipped)
+- oil k=30 (mid-tier slip + slow)
+- acid k=60 (DoT focus, modest slow)
+- ice k=80 (heavy slip + slow, hardest mundane surface)
+- fire k=70 (DoT focus, no slip)
+
+When a third type lands, extract the shared scan logic into a
+`GroundEffects` autoload with a type-registered API. Until then,
+parallel `get_X_pools_near` / `consume_X_pool` methods on
+PrototypeAttackIndicator read cleaner than a polymorphic registry.

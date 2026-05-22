@@ -1005,22 +1005,20 @@ const _POOL_SLIP_SHAPE_META: StringName = &"_pool_slip_shape"
 
 # ── Blood as a "ground effect" ────────────────────────────────────────
 # Blood pools behave like a Divinity-style environmental floor type:
-# walking through one applies a mild slow + a chance to stumble on
-# entry, both mitigated by the Traction stat. Future ground types
-# (frozen, oil, fire) will follow the same Area3D + enter/exit pattern
-# under their own (heavier) constants — frozen ground in particular
-# will reuse this slip-friction model with a much lower friction
-# factor than blood.
+# walking through one applies a mild slow + friction loss + stumble
+# chance, all mitigated by the per-surface Traction curve (see
+# traction.gd's GROUND_EFFECT_PROFILES for the blood profile values
+# and the half-mit `k` that drives the asymptotic decay).
+#
+# Future ground types (frozen, oil, fire) follow the same Area3D +
+# enter/exit pattern with their own profile entry — frozen will reuse
+# this slip-friction model with a much heavier `k` so endgame players
+# still feel ice underfoot.
 #
 # Player-only by design — enemies don't have a Traction stat to
-# mediate the effect against, same as the existing oil/water puddle
-# system in DecalBuilder. (If we ever want slipping enemies, the
-# Area3D mask needs to add the Enemy layer + PrototypeEnemy needs an
-# enter/exit_blood_pool pair.)
-const BLOOD_SLIP_CHANCE: float = 0.12       # ~1 in 8 entries trigger stumble
-const BLOOD_FRICTION_FACTOR: float = 0.55   # decel step multiplier when releasing wish_dir → slide
-const BLOOD_SLOW_FACTOR: float = 0.85       # mild -15% move speed
-const BLOOD_STUMBLE_DURATION: float = 0.30  # input lockout on stumble
+# mediate against. If we ever want slipping enemies, add the Enemy
+# layer to _BLOOD_POOL_PLAYER_MASK + give PrototypeEnemy an
+# enter/exit_blood_pool pair.
 const _BLOOD_POOL_AREA_HEIGHT: float = 0.9
 const _BLOOD_POOL_PLAYER_MASK: int = 4      # Layer 3 = Player
 

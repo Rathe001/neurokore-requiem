@@ -3647,14 +3647,14 @@ func exit_slow_pool() -> void:
 func is_in_slow_pool() -> bool:
 	return _slow_pool_count > 0
 
-## Move-speed multiplier from slow-pool overlap, modulated by Traction.
-## Returns 1.0 when not in any pool (no effect). When in a pool, returns
-## Traction.slow_factor_for(player_traction) — 0.5 at no traction, scaling
-## to 1.0 at TIER_SLOW (traction 50).
+## Move-speed multiplier from slow-pool overlap (procgen oil/water
+## puddles). Routes through the per-surface curve with surface_id
+## "water" — base −50% slow at T0, asymptotic mitigation by traction
+## with k=8.
 func _slow_pool_factor() -> float:
 	if _slow_pool_count <= 0:
 		return 1.0
-	return Traction.slow_factor_for(Traction.get_player_traction())
+	return Traction.slow_factor_for_surface(&"water")
 
 
 # ── Blood pool ground effect ─────────────────────────────────────────
@@ -3674,18 +3674,16 @@ var _blood_stumble_remaining: float = 0.0
 ## Increments the blood-pool overlap count. Called by the slip-zone
 ## Area3D under each pool (see PrototypeAttackIndicator
 ## ._attach_blood_pool_slip_zone). Rolls the stumble chance on the
-## 0→1 transition so walking from one pool into an overlapping one
-## doesn't keep re-rolling.
+## 0→1 transition only, so walking from one pool into an overlapping
+## one doesn't keep re-rolling.
 func enter_blood_pool() -> void:
 	var was_in := _blood_pool_count > 0
 	_blood_pool_count += 1
 	if not was_in:
 		blood_pool_changed.emit(true)
-		# Stumble roll — only at TIER_SLIP-below, and only on first
-		# entry into the pool stack.
-		if not Traction.has_immunity(Traction.TIER_SLIP):
-			if randf() < PrototypeAttackIndicator.BLOOD_SLIP_CHANCE:
-				_blood_stumble_remaining = PrototypeAttackIndicator.BLOOD_STUMBLE_DURATION
+		var chance: float = Traction.stumble_chance_for_surface(&"blood")
+		if chance > 0.0 and randf() < chance:
+			_blood_stumble_remaining = Traction.stumble_duration_for_surface(&"blood")
 
 
 ## Decrements the blood-pool overlap count. Emits blood_pool_changed
@@ -3703,31 +3701,21 @@ func is_in_blood_pool() -> bool:
 	return _blood_pool_count > 0
 
 
-## Move-speed multiplier from blood pool overlap. Mild slow (BLOOD_SLOW_FACTOR
-## = 0.85 at T0) that scales to 1.0 at TIER_SLOW. Intentionally subtler
-## than oil puddles (0.5 → 1.0) so blood reads as "wet floor" not
-## "wading through tar".
+## Move-speed multiplier from blood pool overlap. Routes through the
+## per-surface curve — base −15% slow at T0, asymptotic mitigation
+## by traction with k=5 (so even mid-tier boots shrug it off).
 func _blood_pool_factor() -> float:
 	if _blood_pool_count <= 0:
 		return 1.0
-	var traction := Traction.get_player_traction()
-	var t := Traction.tier_for(traction)
-	if t >= Traction.TIER_SLOW:
-		return 1.0
-	# Linear blend between BLOOD_SLOW_FACTOR (T0) and 1.0 (T_SLOW).
-	var ratio := float(t) / float(Traction.TIER_SLOW)
-	return lerpf(PrototypeAttackIndicator.BLOOD_SLOW_FACTOR, 1.0, ratio)
+	return Traction.slow_factor_for_surface(&"blood")
 
 
-## Friction multiplier applied to the decel step (move_toward step
-## when wish_dir is zero) while in a blood pool. < 1.0 means LESS
-## friction → skid. TIER_SLIP (25) restores normal friction.
+## Decel-friction multiplier on blood. < 1.0 means LESS friction →
+## skid past stop. Asymptotically restored to ~1.0 by traction.
 func _blood_friction_factor() -> float:
 	if _blood_pool_count <= 0:
 		return 1.0
-	if Traction.has_immunity(Traction.TIER_SLIP):
-		return 1.0
-	return PrototypeAttackIndicator.BLOOD_FRICTION_FACTOR
+	return Traction.friction_factor_for_surface(&"blood")
 
 
 ## Currently stumbling from a slip-chance roll? Movement code zeroes

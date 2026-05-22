@@ -29,7 +29,7 @@
 - [Aura wall clipping](project_aura_wall_clipping.md) — player-aura visuals contained by walls need shadow-casting OmniLight3D to do the actual clipping; mesh alone fails depth test on iso camera
 - [Resource loader gotcha](project_resource_loader_gotcha.md) — DirAccess directory enumeration over res:// fails silently in exported Godot 4 builds. Use ResourceLoader.exists() with explicit file lists. Bit us 4 times before getting fixed.
 - [Item ilvl effectiveness curve](project_item_ilvl_scaling.md) — items carry an item_level; combat power stats scale by Item.effective_multiplier (asymptotic decay below player level, linear boost above). Storage/feel stats stay raw.
-- [Traction stat](project_traction_stat.md) — boots-only 0–100 stat, breakpoints at 25/50/75/100 unlock movement immunities AND DoT damage reduction in lockstep. Single-source by design (no cross-slot stacking).
+- [Traction stat](project_traction_stat.md) — boots-only 0–100+ stat. Per-surface hyperbolic mitigation curve `k/(k+traction)`; each surface has its own k (blood=5 entry-level, ice=80 endgame). Override flag `negates_<surface>` for binary skips. Replaced the old universal breakpoint system.
 - [Point-blank ranged penalty](project_point_blank_penalty.md) — ranged attacks within 2.5m of fire origin halve accuracy. Count "Point Blank" talent waives via ignore_point_blank_penalty aggregate. Encourages sprint-disengage.
 - [Multiplayer plan](project_multiplayer_plan.md) — Steam P2P, host-authoritative coop PvE, 4-player cap, drop-in, instanced loot with manual-drop sharing. Full plan in docs/multiplayer.md.
 - [No usernames in committed scripts](feedback_no_secrets_in_committed_scripts.md) — placeholders in deploy/build scripts must use env-var-respecting defaults; never substitute personal values into the committed file
@@ -57,7 +57,7 @@
 - [Visual meter system](project_visual_meters.md) — ALL item types have meter bars; MODIFIER_BAR_DEFS for affix stats; Shift comparison shows union of bars; quality % on both panels; global Power bar with divider
 - [Blood palette + fluid types](project_blood_palette.md) — BLOOD_PALETTES dict (human/cyborg/machine) + per-enemy @export blood_type threaded through every spawn_blood_* call
 - [Object blood pipeline](project_object_blood_pipeline.md) — receiver opt-in (group + layer 8 + side decal); known unfix: short flat props don't show side-projected blood from iso camera; BLOOD_DECAL_ALBEDO_MIX is the opacity dial
-- [Ground effects](project_ground_effects.md) — Blood pools = first concrete ground type (slip + slow + stumble, all Traction-mitigated). Per-pool Area3D + enter/exit_blood_pool. Generic get_blood_pools_near + consume_blood_pool for future Blood Ritual / Forged-consume-oil skills. Frozen/oil/fire to follow same pattern.
+- [Ground effects](project_ground_effects.md) — Blood + procgen water/oil puddles share the per-surface mitigation profile via Traction autoload. Add a new ground type = profile entry + Area3D + enter/exit pair. Generic get_blood_pools_near + consume_blood_pool pattern for future skill consumption.
 - [Weapon DPS balance](project_dps_balance_model.md) — 3-tier DPS by multi-target capability (26/23/20); damage scales by RARITY_BUDGET_MULT
 - [Resonance bar world-space](project_resonance_bar.md) — accelerator ramp bar moved from HUD to 3D cast bar under player; reuses health_bar.gdshader
 - [Destructibles + cover invariants](project_destructibles_cover.md) — collision is 1.6m tall regardless of mesh size; cover blocks standing fire too; projectile sweep routes PILLAR hits to damage path

@@ -455,55 +455,33 @@ func _process_ammo_fill() -> void:
 
 
 
-# Slowed debuff entry: red "S" glyph with a Traction-aware tooltip body
-# so the player can see how much speed they're losing right now (which
-# scales with their boots' traction stat).
+# Slowed debuff entry: red "S" glyph with a Traction-aware tooltip.
+# Surface is "water" — current procgen oil/water puddles.
 func _add_slow_debuff_entry() -> void:
-	var entry := Control.new()
-	entry.custom_minimum_size = _BUFF_ENTRY_SIZE
-	entry.mouse_filter = Control.MOUSE_FILTER_STOP
-	entry.set_meta(&"buff_stat_id", &"slow_pool")
-	var label := Label.new()
-	label.text = "S"
-	label.add_theme_font_size_override(&"font_size", 12)
-	label.add_theme_color_override(&"font_color", Color(1.0, 0.5, 0.45, 1.0))
-	label.add_theme_color_override(&"font_outline_color", Color(0, 0, 0, 1))
-	label.add_theme_constant_override(&"outline_size", 1)
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	label.anchor_right = 1.0
-	label.anchor_bottom = 1.0
-	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	entry.add_child(label)
-	entry.mouse_entered.connect(func() -> void:
-		var traction: int = Traction.get_player_traction()
-		var factor: float = Traction.slow_factor_for(traction)
-		var slow_pct: int = int(round((1.0 - factor) * 100.0))
-		var title := "Slowed"
-		var body: String
-		if slow_pct > 0:
-			body = "Move speed −%d%% from a liquid pool.\n• Traction: %d (more reduces this)" % [slow_pct, traction]
-		else:
-			body = "Standing in a liquid pool, but your traction fully mitigates the slow."
-		get_tree().call_group(&"interactable_tooltip", &"show_talent_node", title, body))
-	entry.mouse_exited.connect(func() -> void:
-		get_tree().call_group(&"interactable_tooltip", &"hide_tooltip"))
-	debuff_entries.add_child(entry)
+	_add_ground_debuff_entry(&"slow_pool", &"water", "S", Color(1.0, 0.5, 0.45, 1.0), "Slowed")
 
 
-# Slippery debuff entry: blood pool overlap. Shows the current slip,
-# slow %, and stumble-chance gating against Traction.
+# Slippery debuff entry: blood pool overlap. Same tooltip skeleton as
+# Slowed but with surface "blood".
 func _add_blood_pool_debuff_entry() -> void:
+	_add_ground_debuff_entry(&"blood_pool", &"blood", "B", Color(0.85, 0.25, 0.25, 1.0), "Slippery")
+
+
+# Shared builder for ground-effect debuff entries. Glyph + color
+# distinguish them visually; tooltip body is a 3-line max layout:
+#   • active effect summary (slow %, stumble %, or both)
+#   • traction context ("Traction N — M% mitigated")
+# Lines that wouldn't add information are skipped, so a fully-negated
+# override shows a one-line "ignored entirely" message.
+func _add_ground_debuff_entry(stat_id: StringName, surface_id: StringName, glyph: String, color: Color, title: String) -> void:
 	var entry := Control.new()
 	entry.custom_minimum_size = _BUFF_ENTRY_SIZE
 	entry.mouse_filter = Control.MOUSE_FILTER_STOP
-	entry.set_meta(&"buff_stat_id", &"blood_pool")
+	entry.set_meta(&"buff_stat_id", stat_id)
 	var label := Label.new()
-	label.text = "B"
+	label.text = glyph
 	label.add_theme_font_size_override(&"font_size", 12)
-	# Deep-red so it reads as "you're standing in something bloody"
-	# rather than the orange-red of the slow_pool indicator.
-	label.add_theme_color_override(&"font_color", Color(0.85, 0.25, 0.25, 1.0))
+	label.add_theme_color_override(&"font_color", color)
 	label.add_theme_color_override(&"font_outline_color", Color(0, 0, 0, 1))
 	label.add_theme_constant_override(&"outline_size", 1)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -512,27 +490,42 @@ func _add_blood_pool_debuff_entry() -> void:
 	label.anchor_bottom = 1.0
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	entry.add_child(label)
+	var full_title := "%s (%s)" % [title, Traction.display_name_for_surface(surface_id)]
 	entry.mouse_entered.connect(func() -> void:
-		var traction: int = Traction.get_player_traction()
-		var tier: int = Traction.tier_for(traction)
-		var slip_chance_pct: int = int(round(PrototypeAttackIndicator.BLOOD_SLIP_CHANCE * 100.0))
-		var slip_immune: bool = tier >= Traction.TIER_SLIP
-		var slow_immune: bool = tier >= Traction.TIER_SLOW
-		var blood_slow: float = 1.0 - PrototypeAttackIndicator.BLOOD_SLOW_FACTOR
-		var slow_pct_at_t0: int = int(round(blood_slow * 100.0))
-		var title := "Slippery"
-		var lines: Array[String] = []
-		if not slow_immune:
-			lines.append("• Move speed −%d%% from blood underfoot." % slow_pct_at_t0)
-		if not slip_immune:
-			lines.append("• %d%% stumble chance on entry, less friction when stopping." % slip_chance_pct)
-		if lines.is_empty():
-			lines.append("Standing in blood, but your traction fully mitigates the effects.")
-		lines.append("• Traction: %d (T25 negates slip, T50 negates slow)" % traction)
-		get_tree().call_group(&"interactable_tooltip", &"show_talent_node", title, "\n".join(lines)))
+		var body := _format_ground_effect_tooltip(surface_id)
+		get_tree().call_group(&"interactable_tooltip", &"show_talent_node", full_title, body))
 	entry.mouse_exited.connect(func() -> void:
 		get_tree().call_group(&"interactable_tooltip", &"hide_tooltip"))
 	debuff_entries.add_child(entry)
+
+
+# Compose the body of a ground-effect tooltip. Terse by design — see
+# the project_ground_effects memory for the UX rationale (user
+# explicitly called out "not overly verbose"). Returns a 1-3 line
+# string suitable for show_talent_node.
+func _format_ground_effect_tooltip(surface_id: StringName) -> String:
+	if Traction.is_surface_negated(surface_id):
+		return "Your boots negate this surface entirely."
+	var traction: int = Traction.get_player_traction()
+	var slow_pct: int = int(round((1.0 - Traction.slow_factor_for_surface(surface_id)) * 100.0))
+	var stumble_pct: float = Traction.stumble_chance_for_surface(surface_id) * 100.0
+	var ef_pct: int = int(round(Traction.effect_factor(surface_id, traction) * 100.0))
+	var mit_pct: int = 100 - ef_pct
+	var parts: Array[String] = []
+	if slow_pct > 0:
+		parts.append("−%d%% move" % slow_pct)
+	if stumble_pct >= 0.5:
+		parts.append("%.0f%% stumble" % stumble_pct)
+	# Friction loss is a behavioural feel rather than a number worth
+	# percent-quoting — note it only when it's still noticeable
+	# (effect_factor > 25%).
+	if ef_pct > 25 and Traction.friction_factor_for_surface(surface_id) < 0.9:
+		parts.append("less grip")
+	if parts.is_empty():
+		return "Standing on it, but your traction shrugs it off."
+	var lines: Array[String] = [", ".join(parts)]
+	lines.append("Traction %d — %d%% mitigated" % [traction, mit_pct])
+	return "\n".join(lines)
 
 
 func _add_buff_entry(stat_id: StringName, tier: int, perk: Perk) -> void:
