@@ -2081,29 +2081,26 @@ func _die(kill_from: Vector3 = Vector3.ZERO, kill_force: float = 0.0) -> void:
 	# hit a wall, paint it. Crits get extra perpendicular shots so the
 	# wall mess looks more chaotic (1 main + 2 spread).
 	_try_spawn_wall_blood(death_pos, death_dir, _last_hit_was_crit)
-	# Death = immediate limp ragdoll. Two variants depending on which
-	# character mesh is in use:
+	# Death visuals — two branches:
 	#
-	#   X Bot (has a Skeleton3D with the PhysicalBone3D rig that
-	#     XBotRagdoll.setup builds): stop the animation player, build the
-	#     physical bones, activate physics with the kill impulse. Body
-	#     goes limp and falls under gravity; impact direction launches it
-	#     via apply_central_impulse on the hip/spine bones.
+	#   Explosion / crit kills: ragdoll for the physics flair (limbs
+	#     fly, body tumbles from the blast). A Mixamo death anim would
+	#     look static next to a flying body, so we skip it.
 	#
-	#     Known visual: Godot 4.6.2's PhysicalBoneSimulator initialises
-	#     each rigid body from the bone REST pose (T-pose for Mixamo)
-	#     regardless of pre-start state. There's a brief frame of T-pose
-	#     at the moment of activation before gravity + impulse take over
-	#     — usually hidden by the body's immediate motion. See
-	#     `project_xbot_ragdoll` memory for the diagnostic history.
+	#   Normal kills (the common path): play one of the Mixamo death
+	#     anims through to its lying-down pose, then schedule the
+	#     corpse despawn. No ragdoll — the anim is the visual.
 	#
-	#   Legacy UAL1 / Quaternius (no Skeleton3D): fall through to the
-	#     PrototypeRagdollCorpse spawn — duplicates the visual onto a
-	#     RigidBody3D capsule that tumbles, hides the original.
+	# For meshes without a Skeleton3D (legacy UAL1 / Quaternius), both
+	# branches fall through to _spawn_ragdoll_corpse — those rigs
+	# never had a death anim hooked up, so the legacy ragdoll capsule
+	# stays.
+	var use_ragdoll := _last_hit_was_explosion or _last_hit_was_crit
 	var did_skeletal_ragdoll := false
+	var did_death_anim := false
 	if visual != null:
 		var skel := _find_skeleton(visual)
-		if skel != null:
+		if skel != null and use_ragdoll:
 			# Stop the animation player so it can't fight physics — bones
 			# now belong to the physics simulator. stop(true) keeps the
 			# cached pose so the player's last state doesn't snap to t=0.
@@ -2154,7 +2151,37 @@ func _die(kill_from: Vector3 = Vector3.ZERO, kill_force: float = 0.0) -> void:
 						apply_explosion_impulse(kill_from, kill_force * 0.05)
 					if not dismembered.is_empty():
 						_apply_dismember_kick(kill_from, dismembered)
-	if not did_skeletal_ragdoll:
+		elif skel != null:
+			# Anim path — play a random Mixamo death clip and let it
+			# settle into its lying-down pose. _on_ragdoll_settled
+			# schedules the corpse despawn (sink tween + free) once the
+			# anim finishes. Add to the ragdoll_corpses group so AoE
+			# pushes (e.g. a late explosion landing nearby) can still
+			# kick the body via apply_explosion_impulse.
+			var death_anim: StringName = XBotAnimations.random_death_anim()
+			var played := _play_anim([death_anim] as Array[StringName], 1.0)
+			if not played:
+				played = _play_anim(ANIM_DEATH, 1.0)
+			if played:
+				did_death_anim = true
+				add_to_group(&"ragdoll_corpses")
+				# Schedule the despawn pipeline when the anim finishes.
+				# Lambda captures self.instance_id so a freed enemy
+				# (level reset mid-death) doesn't fire the callback on
+				# stale state.
+				if anim_player != null:
+					var enemy_id := get_instance_id()
+					anim_player.animation_finished.connect(
+						func(_anim_name: StringName) -> void:
+							var e := instance_from_id(enemy_id) as PrototypeEnemy
+							if e != null and is_instance_valid(e) and e.is_inside_tree():
+								e._on_ragdoll_settled(),
+						CONNECT_ONE_SHOT
+					)
+	# Fall through to the legacy ragdoll spawn for meshes without a
+	# Skeleton3D, OR for X Bot meshes when neither branch succeeded
+	# (e.g. anim couldn't resolve and ragdoll path was disabled).
+	if not did_skeletal_ragdoll and not did_death_anim:
 		_spawn_ragdoll_corpse(kill_from, kill_force)
 		if visual != null:
 			visual.visible = false
