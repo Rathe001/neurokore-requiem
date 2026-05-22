@@ -178,6 +178,25 @@ func room_at_world(world: Vector3) -> StringName:
 	return _cell_to_room.get(cell, &"")
 
 
+## World-space XZ rect of the given piece, or Rect2() (size = 0) when the
+## id isn't registered. Useful for any system that needs to clip visuals
+## to a room footprint (e.g. tactical_overlay's ring clip). Linear scan
+## over piece_records — n is small (~40 pieces per level) so the cost
+## is trivial compared to per-frame physics or shader work.
+func get_piece_aabb(room_id: StringName) -> Rect2:
+	for rec in _piece_records:
+		if rec["id"] == room_id:
+			var hx: float = float(rec["hx"])
+			var hz: float = float(rec["hz"])
+			return Rect2(
+				float(rec["cx"]) - hx,
+				float(rec["cz"]) - hz,
+				hx * 2.0,
+				hz * 2.0,
+			)
+	return Rect2()
+
+
 func is_explored(room_id: StringName) -> bool:
 	return _explored.has(room_id)
 
