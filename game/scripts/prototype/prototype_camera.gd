@@ -368,8 +368,8 @@ func _handle_tune_key(keycode: int) -> bool:
 		KEY_RIGHT:   WeaponAttachment.bump_position(base_id, &"x",  _TUNE_POS_STEP)
 		KEY_DOWN:    WeaponAttachment.bump_position(base_id, &"y", -_TUNE_POS_STEP)
 		KEY_UP:      WeaponAttachment.bump_position(base_id, &"y",  _TUNE_POS_STEP)
-		KEY_PAGEDOWN: WeaponAttachment.bump_position(base_id, &"z", -_TUNE_POS_STEP)
-		KEY_PAGEUP:   WeaponAttachment.bump_position(base_id, &"z",  _TUNE_POS_STEP)
+		KEY_COMMA:  WeaponAttachment.bump_position(base_id, &"z", -_TUNE_POS_STEP)
+		KEY_PERIOD: WeaponAttachment.bump_position(base_id, &"z",  _TUNE_POS_STEP)
 		KEY_MINUS, KEY_KP_SUBTRACT: WeaponAttachment.bump_scale(base_id, _TUNE_SCALE_DOWN)
 		KEY_EQUAL, KEY_KP_ADD:      WeaponAttachment.bump_scale(base_id, _TUNE_SCALE_UP)
 		KEY_P:
@@ -472,7 +472,7 @@ func _update_inspect_label() -> void:
 				header += "\n[TUNE %s]  pos=(%.2f, %.2f, %.2f)  rot=(%.0f, %.0f, %.0f)  scale=%.2f" % [
 					String(base_id), p.x, p.y, p.z, r.x, r.y, r.z, s,
 				]
-				header += "\n  rot: J/L=±X  U/O=±Y  H/K=±Z   pos: ←→=±X  ↑↓=±Y  PgUp/Dn=±Z   scale: -/=   P=dump  Backspace=reset"
+				header += "\n  rot: J/L=±X  U/O=±Y  H/K=±Z   pos: ←→=±X  ↑↓=±Y  ,/.=±Z   scale: -/=   P=dump  Backspace=reset"
 			else:
 				header += "\n[TUNE] no weapon equipped"
 		_inspect_label.text = header
