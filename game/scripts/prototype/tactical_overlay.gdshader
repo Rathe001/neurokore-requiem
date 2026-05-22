@@ -23,26 +23,16 @@ uniform float scan_speed : hint_range(0.0, 8.0) = 0.6;
 uniform float dash_count : hint_range(4.0, 64.0) = 24.0;
 uniform float intensity : hint_range(0.0, 4.0) = 0.9;
 
-// Scene depth buffer. Used to clip overlay fragments that look past
-// the overlay plane into the outer "void ground" mesh (y = -20,
-// 20 m below the playable floor) instead of onto room floor (y = 0).
-uniform sampler2D depth_texture : hint_depth_texture, repeat_disable, filter_nearest;
+// Scene depth buffer. Simplified hint — extra qualifiers (repeat_disable,
+// filter_nearest) silently broke binding in earlier attempts.
+uniform sampler2D depth_texture : hint_depth_texture;
 
-// Max depth divergence (in clip-space units) between the overlay
-// fragment and the scene behind it before we treat this pixel as
-// "over the void." Co-planar overlay + floor gives depth_diff ≈ 0;
-// pit floors a few meters below give a small positive diff; the
-// 20 m drop to the void ground gives a noticeably larger diff.
-const float TACTICAL_VOID_DIFF_THRESHOLD = 0.008;
+// Threshold dropped aggressive to verify the sample is even reading
+// something. If even 0.001 doesn't clip the void, the depth_texture
+// isn't binding correctly and we'll need to refactor to Decal3D.
+const float TACTICAL_VOID_DIFF_THRESHOLD = 0.001;
 
 void fragment() {
-	// Compare scene depth at this screen pixel to the overlay's own
-	// clip-space depth (FRAGCOORD.z is in [0,1], same convention as
-	// the depth buffer). Co-planar floor → diff is essentially zero.
-	// Void ground 20 m below → diff is large enough to discard.
-	// abs() makes this convention-agnostic between reverse-Z (Vulkan/
-	// Forward+) and forward-Z (legacy) — either direction of "scene
-	// is farther than overlay" trips the discard.
 	float scene_depth = texture(depth_texture, SCREEN_UV).x;
 	if (abs(scene_depth - FRAGCOORD.z) > TACTICAL_VOID_DIFF_THRESHOLD) {
 		discard;
