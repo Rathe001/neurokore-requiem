@@ -279,6 +279,22 @@ func advance_melee_combo(weapon: Item) -> int:
 	return _melee_combo_step
 
 
+## Returns what advance_melee_combo WOULD set on the next call,
+## without mutating state. The anim picker reads this so the swing
+## that's about to play matches the combo step PlayerCombat will
+## resolve a moment later (combat advances the step inside
+## resolve_skill_hit, AFTER the anim already started). Without the
+## peek, the visual would lag combat by one swing.
+func peek_next_melee_combo_step(weapon: Item) -> int:
+	if weapon == null or not (weapon.weapon_base_id in MELEE_BASE_IDS):
+		return 0
+	var now: float = Time.get_ticks_msec() / 1000.0
+	var elapsed: float = now - _melee_combo_last_t
+	if elapsed <= MELEE_COMBO_RESET_TIME and weapon.weapon_base_id == _melee_combo_last_weapon_id:
+		return (_melee_combo_step + 1) % 3
+	return 0
+
+
 ## Read-only accessor for the current combo step. Multistrike repeats
 ## within a single cast all read this value so the visual + status
 ## stay consistent across the multistrike loop.
@@ -2187,10 +2203,12 @@ func _cast_lmb_combat() -> void:
 		if main_item != null and main_item.is_bullet_weapon():
 			_play_anim(_ranged_fire_anim(), 1.0)
 		else:
-			# Melee swing — picks sword_slash / axe_swing / punch
-			# based on equipped weapon class. Falls back to xbot/punch
-			# for unknown classes or empty slot.
-			_play_anim(XBotAnimations.attack_anim_for_class(_equipped_weapon_class()), 1.4)
+			# Melee swing — picks the variant for the current combo
+			# step (0/1/2). peek_next_melee_combo_step previews what
+			# advance_melee_combo will set inside PlayerCombat a few
+			# ms later, so the visual matches the gameplay step.
+			var combo_step := peek_next_melee_combo_step(main_item)
+			_play_anim(XBotAnimations.combo_attack_anim_for_class(_equipped_weapon_class(), combo_step), 1.4)
 		_ied.toss_trap(_cursor_offset())
 	# Hold the player still for the main weapon's wind-up only. Extra arms
 	# don't contribute to the stop — Forged stays mobile while extras fire.
@@ -2339,8 +2357,9 @@ func _cast_skill(skill: Skill) -> void:
 	if weapon != null and weapon.is_bullet_weapon():
 		_play_anim(_ranged_fire_anim(), 1.0)
 	else:
-		# Class-specific melee swing — sword_slash / axe_swing / punch.
-		_play_anim(XBotAnimations.attack_anim_for_class(_equipped_weapon_class()), 1.4)
+		# Combo-aware melee swing — see peek_next_melee_combo_step.
+		var combo_step := peek_next_melee_combo_step(weapon)
+		_play_anim(XBotAnimations.combo_attack_anim_for_class(_equipped_weapon_class(), combo_step), 1.4)
 	PrototypeAttackIndicator.spawn(self, skill, aim, _combat.effective_range(skill, weapon))
 	# Fire SFX plays at LMB press, NOT at projectile spawn. For wind-up
 	# weapons like the RPG the .wav has a baked-in "charging" pre-roll;
@@ -3939,8 +3958,14 @@ func _is_aim_input_held() -> bool:
 # every shot.
 func _ranged_fire_anim() -> Array[StringName]:
 	if _want_dir.length_squared() > 0.01:
+		# Strafe-fire stays universal — Mixamo Strafing.fbx works for
+		# both pistol and rifle (legs strafe, upper body holds the
+		# weapon). A dedicated pistol-strafe-fire would be polish.
 		return ANIM_FIRE_MOVE
-	return ANIM_FIRE
+	# Stationary fire — pistol-class plays the 1H snap-fire pose;
+	# rifle stays on the wide-stance xbot/fire. Class lookup makes
+	# SMG read as 1H instead of inheriting the rifle pose.
+	return XBotAnimations.fire_anim_for_class(_equipped_weapon_class())
 
 
 # Returns the stance class of the currently-equipped main weapon

@@ -18,6 +18,14 @@ const PROTO_BASE_CRIT_MULT: float = 1.5
 # are unaffected.
 const MELEE_RANGE_THRESHOLD: float = 2.5
 const MELEE_RANGE_ACCURACY_MULT: float = 0.75
+# Projectile "barrel" offset — projectiles emerge from approximately
+# where a held weapon's muzzle would be, not the character's chest
+# center. FORWARD pushes the spawn out along aim (so the projectile
+# clears the body); RIGHT shifts it to the typical right-handed grip
+# position. Picked to read as "shot from a weapon" without the spawn
+# pos clipping into walls when the player is close to one.
+const BARREL_FORWARD_OFFSET: float = 0.7
+const BARREL_RIGHT_OFFSET: float = 0.25
 
 # Maximum angular spread (radians) at 0% accuracy. At 100% accuracy the
 # shot is perfectly straight. Linear interpolation:
@@ -618,7 +626,14 @@ func _spawn_projectile(skill: Skill, aim: Vector3, eff_range: float, weapon: Ite
 	# the main hand, re-aim from the offset spawn position toward the
 	# main-hand's target point (player + aim * range). Adds slight random
 	# spread so the volley looks organic, not robotic.
-	var spawn_pos := _host.global_position + Vector3(0.0, 1.0, 0.0) + source_offset
+	# Barrel offset: push the spawn forward + right of the body so the
+	# projectile reads as emerging from a held weapon rather than the
+	# character's chest center. The right-hand offset assumes a typical
+	# right-handed grip; melee/ground-spawn projectiles in
+	# _spawn_projectile_exact below get the same offset.
+	var aim_right := Vector3.UP.cross(aim_norm).normalized()
+	var barrel_offset := aim_norm * BARREL_FORWARD_OFFSET + aim_right * BARREL_RIGHT_OFFSET
+	var spawn_pos := _host.global_position + Vector3(0.0, 1.0, 0.0) + barrel_offset + source_offset
 	if source_offset != Vector3.ZERO:
 		var target_point := _host.global_position + Vector3(0.0, 1.0, 0.0) + aim_norm * eff_range
 		aim_norm = (target_point - spawn_pos).normalized()
@@ -863,7 +878,11 @@ func _spawn_projectile_exact(skill: Skill, aim_norm: Vector3, eff_range: float, 
 	var proj: PrototypeProjectile = EntityPool.acquire(PROJECTILE_SCENE)
 	if proj == null:
 		return
-	var spawn_pos := _host.global_position + Vector3(0.0, 1.0, 0.0) + source_offset
+	# Same barrel offset as _spawn_projectile so projectiles fired via
+	# either path emerge from the same "muzzle" position.
+	var aim_right := Vector3.UP.cross(aim_norm).normalized()
+	var barrel_offset := aim_norm * BARREL_FORWARD_OFFSET + aim_right * BARREL_RIGHT_OFFSET
+	var spawn_pos := _host.global_position + Vector3(0.0, 1.0, 0.0) + barrel_offset + source_offset
 	proj.direction = aim_norm
 	proj.speed = skill.projectile_speed
 	proj.max_range = eff_range

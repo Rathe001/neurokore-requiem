@@ -66,6 +66,11 @@ const _GRENADE_THROW_FBX: PackedScene = preload("res://assets/animations/misc/Ru
 const _PISTOL_IDLE_FBX: PackedScene = preload("res://assets/animations/ranged 1h/pistol idle.fbx")
 const _PISTOL_WALK_FBX: PackedScene = preload("res://assets/animations/ranged 1h/pistol walk.fbx")
 const _PISTOL_RUN_FBX: PackedScene = preload("res://assets/animations/ranged 1h/pistol run.fbx")
+# Pistol-class firing pose. No dedicated Mixamo "Firing Pistol" clip
+# is available; the 1H Magic Attack from the magic pack has a forward
+# arm-extend / snap-fire pose that reads correctly as a 1H ranged
+# shot in iso view (muzzle flash + projectile spawn sell the rest).
+const _PISTOL_FIRE_FBX: PackedScene = preload("res://assets/animations/skills/Standing 1H Magic Attack 01.fbx")
 # Rifle stance — 2H ranged grip. The "idle aiming" clip is the
 # tactical ready stance (rifle up to shoulder); the existing
 # xbot/idle is relaxed/unarmed and not appropriate when a rifle
@@ -79,12 +84,18 @@ const _SWORD_IDLE_FBX: PackedScene = preload("res://assets/animations/melee 1h/s
 const _SWORD_WALK_FBX: PackedScene = preload("res://assets/animations/melee 1h/sword and shield walk.fbx")
 const _SWORD_RUN_FBX: PackedScene = preload("res://assets/animations/melee 1h/sword and shield run.fbx")
 const _SWORD_SLASH_FBX: PackedScene = preload("res://assets/animations/melee 1h/sword and shield slash.fbx")
+const _SWORD_SLASH_2_FBX: PackedScene = preload("res://assets/animations/melee 1h/sword and shield slash (2).fbx")
+const _SWORD_SLASH_3_FBX: PackedScene = preload("res://assets/animations/melee 1h/sword and shield slash (3).fbx")
 # 2H melee (axe pack). Hammer / sledgehammer / warhammer / axe all
 # share this stance.
 const _AXE_IDLE_FBX: PackedScene = preload("res://assets/animations/melee 2h/standing idle.fbx")
 const _AXE_WALK_FBX: PackedScene = preload("res://assets/animations/melee 2h/standing walk forward.fbx")
 const _AXE_RUN_FBX: PackedScene = preload("res://assets/animations/melee 2h/standing run forward.fbx")
 const _AXE_SWING_FBX: PackedScene = preload("res://assets/animations/melee 2h/standing melee attack horizontal.fbx")
+# Axe combo — the pack ships an explicit 3-hit combo (ver 1/2/3).
+const _AXE_COMBO_1_FBX: PackedScene = preload("res://assets/animations/melee 2h/standing melee combo attack ver. 1.fbx")
+const _AXE_COMBO_2_FBX: PackedScene = preload("res://assets/animations/melee 2h/standing melee combo attack ver. 2.fbx")
+const _AXE_COMBO_3_FBX: PackedScene = preload("res://assets/animations/melee 2h/standing melee combo attack ver. 3.fbx")
 # Unarmed combo variants — picker randomly chooses per swing.
 # The existing _PUNCH_FBX (Punching.fbx) is variant 0.
 const _PUNCH_CROSS_FBX: PackedScene = preload("res://assets/animations/unarmed/Cross Punch.fbx")
@@ -207,6 +218,10 @@ static func get_library() -> AnimationLibrary:
 	_extract(_library, &"pistol_idle", _PISTOL_IDLE_FBX, true, true)
 	_extract(_library, &"pistol_walk", _PISTOL_WALK_FBX, true, true)
 	_extract(_library, &"pistol_run", _PISTOL_RUN_FBX, true, true)
+	# Pistol fire — loops at sustained-fire rate so LMB-hold reads as
+	# steady cracks, same pattern as xbot/fire. The clip is short enough
+	# that cycle drift across shots is invisible.
+	_extract(_library, &"pistol_fire", _PISTOL_FIRE_FBX, true, true)
 	_extract(_library, &"rifle_idle", _RIFLE_IDLE_FBX, true, true)
 	_extract(_library, &"rifle_walk", _RIFLE_WALK_FBX, true, true)
 	_extract(_library, &"rifle_run", _RIFLE_RUN_FBX, true, true)
@@ -214,10 +229,15 @@ static func get_library() -> AnimationLibrary:
 	_extract(_library, &"sword_walk", _SWORD_WALK_FBX, true, true)
 	_extract(_library, &"sword_run", _SWORD_RUN_FBX, true, true)
 	_extract(_library, &"sword_slash", _SWORD_SLASH_FBX, false, true)
+	_extract(_library, &"sword_slash_2", _SWORD_SLASH_2_FBX, false, true)
+	_extract(_library, &"sword_slash_3", _SWORD_SLASH_3_FBX, false, true)
 	_extract(_library, &"axe_idle", _AXE_IDLE_FBX, true, true)
 	_extract(_library, &"axe_walk", _AXE_WALK_FBX, true, true)
 	_extract(_library, &"axe_run", _AXE_RUN_FBX, true, true)
 	_extract(_library, &"axe_swing", _AXE_SWING_FBX, false, true)
+	_extract(_library, &"axe_combo_1", _AXE_COMBO_1_FBX, false, true)
+	_extract(_library, &"axe_combo_2", _AXE_COMBO_2_FBX, false, true)
+	_extract(_library, &"axe_combo_3", _AXE_COMBO_3_FBX, false, true)
 	_extract(_library, &"punch_cross", _PUNCH_CROSS_FBX, false, true)
 	_extract(_library, &"punch_hook", _PUNCH_HOOK_FBX, false, true)
 	_extract(_library, &"punch_uppercut", _PUNCH_UPPERCUT_FBX, false, true)
@@ -302,11 +322,44 @@ static func run_anim_for_class(class_id: StringName) -> Array[StringName]:
 ## "pick one randomly" rather than a candidate fallback chain.
 static func attack_anim_for_class(class_id: StringName) -> Array[StringName]:
 	match class_id:
-		&"pistol":   return [&"xbot/fire"]
+		&"pistol":   return [&"xbot/pistol_fire", &"xbot/fire"]
 		&"rifle":    return [&"xbot/fire"]
 		&"melee_1h": return [&"xbot/sword_slash", &"xbot/punch"]
 		&"melee_2h": return [&"xbot/axe_swing", &"xbot/punch"]
 		_:           return [&"xbot/punch"]
+
+
+## Ranged fire pose for the equipped class. Mirrors attack_anim_for_class
+## for the ranged subset — keeps a single source of truth for "what
+## does THIS gun's firing look like". Used by the player's
+## _ranged_fire_anim to override the generic xbot/fire fallback.
+static func fire_anim_for_class(class_id: StringName) -> Array[StringName]:
+	match class_id:
+		&"pistol": return [&"xbot/pistol_fire", &"xbot/fire"]
+		_:         return [&"xbot/fire"]
+
+
+## Combo-aware melee attack. `step` is 0/1/2 from PrototypePlayer's
+## melee combo state machine — each step plays a distinct swing so
+## a sustained 3-hit chain shows visual variety. Falls back to the
+## base attack anim if the variant key isn't loaded.
+static func combo_attack_anim_for_class(class_id: StringName, step: int) -> Array[StringName]:
+	var s: int = clampi(step, 0, 2)
+	match class_id:
+		&"melee_1h":
+			match s:
+				0: return [&"xbot/sword_slash", &"xbot/punch"]
+				1: return [&"xbot/sword_slash_2", &"xbot/sword_slash", &"xbot/punch"]
+				_: return [&"xbot/sword_slash_3", &"xbot/sword_slash", &"xbot/punch"]
+		&"melee_2h":
+			# Axe pack ships explicit combo ver 1/2/3 — purpose-built
+			# for a 3-hit chain (each one chains visually into the next).
+			match s:
+				0: return [&"xbot/axe_combo_1", &"xbot/axe_swing", &"xbot/punch"]
+				1: return [&"xbot/axe_combo_2", &"xbot/axe_swing", &"xbot/punch"]
+				_: return [&"xbot/axe_combo_3", &"xbot/axe_swing", &"xbot/punch"]
+		_:
+			return attack_anim_for_class(class_id)
 
 
 ## Unarmed combo picker — returns one of the four punch variants

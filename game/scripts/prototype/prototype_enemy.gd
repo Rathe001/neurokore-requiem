@@ -1399,13 +1399,11 @@ func _physics_process(delta: float) -> void:
 			return
 	var moving := _want_dir.length_squared() > 0.01
 	# Class-aware stance — ranged enemies stand / move with the rifle
-	# stance, melee enemies stay with the default unarmed (punch)
-	# stance. Idle picker doesn't differentiate sword vs axe vs
-	# unarmed for enemies today because the X Bot mesh has no visible
-	# weapon model — the stance reads as "armed and ready" either way.
-	# Future: per-EnemyClass stance override (e.g. brute enemies use
-	# axe_idle for the heavier silhouette).
-	var weapon_class: StringName = &"rifle" if _combat != null and _combat.is_ranged() else &"unarmed"
+	# stance, melee enemies stay with the default unarmed stance.
+	# Future: per-EnemyClass override (e.g. brute → axe_idle for
+	# heavier silhouette).
+	var is_ranged_enemy: bool = _combat != null and _combat.is_ranged()
+	var weapon_class: StringName = &"rifle" if is_ranged_enemy else &"unarmed"
 	match _state:
 		State.CASTING, State.KNOCKBACK:
 			pass
@@ -1421,6 +1419,12 @@ func _physics_process(delta: float) -> void:
 				_play_anim(ANIM_CROUCH_RUN if moving else ANIM_CROUCH_IDLE)
 			elif moving:
 				_play_anim(XBotAnimations.run_anim_for_class(weapon_class))
+			elif is_ranged_enemy:
+				# Ranged enemies hold the firing pose at all times so
+				# their weapon stays visibly drawn. Without this they
+				# look like they shoot, then drop the rifle and stand
+				# around relaxed between shots.
+				_play_anim(ANIM_FIRE)
 			else:
 				_play_anim(XBotAnimations.idle_anim_for_class(weapon_class))
 			if moving:
@@ -1524,7 +1528,8 @@ func _remote_physics_process() -> void:
 	# Animation from synced state — simplified, no crouch/jump on client yet.
 	# Class-aware idle/run mirrors the authority picker so remotes see
 	# the right stance.
-	var weapon_class_remote: StringName = &"rifle" if _combat != null and _combat.is_ranged() else &"unarmed"
+	var is_ranged_remote: bool = _combat != null and _combat.is_ranged()
+	var weapon_class_remote: StringName = &"rifle" if is_ranged_remote else &"unarmed"
 	match _state:
 		State.CASTING, State.KNOCKBACK:
 			pass
@@ -1540,6 +1545,8 @@ func _remote_physics_process() -> void:
 			var moving := delta_pos.length_squared() > 0.0001
 			if moving:
 				_play_anim(XBotAnimations.run_anim_for_class(weapon_class_remote))
+			elif is_ranged_remote:
+				_play_anim(ANIM_FIRE)
 			else:
 				_play_anim(XBotAnimations.idle_anim_for_class(weapon_class_remote))
 	_net_prev_pos = global_position

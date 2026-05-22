@@ -325,7 +325,14 @@ func _spawn_enemy_projectile(aim: Vector3, skill_damage_mult: float = 1.0, blast
 	proj.accuracy = 1.0
 	proj.crit_chance = 0.0
 	_host.get_parent().add_child(proj)
-	proj.global_position = _host.global_position + Vector3(0.0, 1.4, 0.0)
+	# Barrel offset — push the spawn forward + right of the body so
+	# projectiles emerge from a "muzzle" position rather than the
+	# chest center. Matches PlayerCombat's BARREL_FORWARD_OFFSET /
+	# BARREL_RIGHT_OFFSET conventions.
+	var aim_norm := proj.direction.normalized()
+	var aim_right := Vector3.UP.cross(aim_norm).normalized()
+	var barrel := aim_norm * 0.7 + aim_right * 0.25
+	proj.global_position = _host.global_position + Vector3(0.0, 1.4, 0.0) + barrel
 	proj.monitoring = true
 	proj.reset()
 	# Fire sound is played ONCE per volley by the caller (basic_attack or
@@ -495,7 +502,11 @@ func _spawn_skill_projectile(aim: Vector3, skill: EnemySkill) -> void:
 	proj.accuracy = 1.0
 	proj.crit_chance = 0.0
 	_host.get_parent().add_child(proj)
-	proj.global_position = _host.global_position + Vector3(0.0, 1.4, 0.0)
+	# Barrel offset — same as _spawn_enemy_projectile.
+	var aim_norm := proj.direction.normalized()
+	var aim_right := Vector3.UP.cross(aim_norm).normalized()
+	var barrel := aim_norm * 0.7 + aim_right * 0.25
+	proj.global_position = _host.global_position + Vector3(0.0, 1.4, 0.0) + barrel
 	proj.monitoring = true
 	proj.reset()
 
