@@ -1349,7 +1349,6 @@ static func spawn_blood_on_receivers(parent: Node, kill_pos: Vector3, blood_type
 		var d_sq := r.global_position.distance_squared_to(kill_pos)
 		if d_sq <= radius_sq:
 			receivers.append(r)
-	print("[BLOOD-RECV] in-radius: %d" % receivers.size())
 	if receivers.is_empty():
 		return
 	# Shuffle so a horde clustered next to one prop doesn't always paint
@@ -1666,7 +1665,7 @@ const OBJECT_BLOOD_LAYER: int = 8
 # to use BLOOD_DECAL_ALBEDO_MIX (0.92).
 const OBJECT_BLOOD_ALBEDO_MIX: float = 0.96
 const OBJECT_BLOOD_RECEIVER_GROUP: StringName = &"blood_receiver"
-const OBJECT_BLOOD_RADIUS: float = 2.5
+const OBJECT_BLOOD_RADIUS: float = 3.5
 const OBJECT_BLOOD_MAX_PER_KILL: int = 4
 const OBJECT_BLOOD_FADE_DURATION: float = 14.0
 # Physics layers the kill→receiver visibility ray queries:
