@@ -32,7 +32,12 @@ extends Node
 #
 # Traction is single-source by design — only boots roll it.
 
-const BOOTS_SLOT: StringName = &"boots"
+# InventoryState slot key for the boots slot. The user-facing main_type
+# is "Boots" but SlotRegistry maps it to the body-part key &"feet" (same
+# convention as gloves → &"hands"). Using &"boots" here silently
+# returned null and made traction stuck at 0 — boots could roll +500
+# traction and the player wouldn't slip any less. Fixed 2026-05-22.
+const BOOTS_SLOT: StringName = &"feet"
 
 # Per-surface ground-effect profile. `half_mit_k` is the surface's
 # resistance against traction. Effect-base fields are the values at
