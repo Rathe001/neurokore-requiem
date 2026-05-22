@@ -88,6 +88,31 @@ var _slot_cooldowns: Dictionary = {}
 func setup(host: PrototypePlayer) -> void:
 	_host = host
 
+
+# World-space spawn point for projectiles / hitscan rays / muzzle flashes.
+# Resolves to the actual barrel tip of the equipped weapon's visible
+# glb when one is mounted on the X Bot right-hand bone, so shots emerge
+# from the gun rather than the chest centre. Falls back to the legacy
+# "chest + BARREL_FORWARD/RIGHT_OFFSET" approximation when bare-handed
+# or when an extra arm (Forged Amalgamation) is firing — extra arms
+# don't carry a visible weapon model, so they stay on the legacy path.
+func _muzzle_world_position(aim: Vector3, source_offset: Vector3 = Vector3.ZERO) -> Vector3:
+	var aim_norm := aim.normalized() if aim.length_squared() > 0.0001 else Vector3.FORWARD
+	if source_offset != Vector3.ZERO:
+		var aim_right_ex := Vector3.UP.cross(aim_norm).normalized()
+		var barrel_ex := aim_norm * BARREL_FORWARD_OFFSET + aim_right_ex * BARREL_RIGHT_OFFSET
+		return _host.global_position + Vector3(0.0, 1.0, 0.0) + barrel_ex + source_offset
+	if _host != null and _host.visual != null:
+		var skel := PrototypePlayer._find_skeleton_recursive(_host.visual)
+		if skel != null:
+			var muzzle := WeaponAttachment.get_muzzle_position(skel, aim_norm)
+			if muzzle != Vector3.ZERO:
+				return muzzle
+	# Fallback: bare hands or weapon model not yet mounted.
+	var aim_right_fb := Vector3.UP.cross(aim_norm).normalized()
+	var barrel_fb := aim_norm * BARREL_FORWARD_OFFSET + aim_right_fb * BARREL_RIGHT_OFFSET
+	return _host.global_position + Vector3(0.0, 1.0, 0.0) + barrel_fb
+
 func tick_cooldowns(delta: float) -> void:
 	for skill in _cooldowns.keys():
 		_cooldowns[skill] = maxf(0.0, _cooldowns[skill] - delta)
@@ -626,14 +651,11 @@ func _spawn_projectile(skill: Skill, aim: Vector3, eff_range: float, weapon: Ite
 	# the main hand, re-aim from the offset spawn position toward the
 	# main-hand's target point (player + aim * range). Adds slight random
 	# spread so the volley looks organic, not robotic.
-	# Barrel offset: push the spawn forward + right of the body so the
-	# projectile reads as emerging from a held weapon rather than the
-	# character's chest center. The right-hand offset assumes a typical
-	# right-handed grip; melee/ground-spawn projectiles in
-	# _spawn_projectile_exact below get the same offset.
-	var aim_right := Vector3.UP.cross(aim_norm).normalized()
-	var barrel_offset := aim_norm * BARREL_FORWARD_OFFSET + aim_right * BARREL_RIGHT_OFFSET
-	var spawn_pos := _host.global_position + Vector3(0.0, 1.0, 0.0) + barrel_offset + source_offset
+	# Spawn from the actual muzzle tip of the equipped weapon's mounted
+	# model (falls back to the legacy chest + BARREL_FORWARD/RIGHT offset
+	# when bare-handed or for an extra-arm volley) so projectiles read
+	# as emerging from the barrel instead of the chest centre.
+	var spawn_pos := _muzzle_world_position(aim_norm, source_offset)
 	if source_offset != Vector3.ZERO:
 		var target_point := _host.global_position + Vector3(0.0, 1.0, 0.0) + aim_norm * eff_range
 		aim_norm = (target_point - spawn_pos).normalized()
@@ -803,8 +825,8 @@ func _spawn_airstrike(skill: Skill, eff_range: float, weapon: Item) -> void:
 
 
 func _resolve_hitscan(skill: Skill, aim: Vector3, eff_range: float, weapon: Item, source_offset: Vector3 = Vector3.ZERO) -> void:
-	var origin := _host.global_position + Vector3(0.0, 1.0, 0.0) + source_offset
 	var aim_norm := aim.normalized()
+	var origin := _muzzle_world_position(aim_norm, source_offset)
 	# Re-aim from the offset origin toward the main-hand target point so
 	# extra arms converge on the same spot instead of firing parallel.
 	if source_offset != Vector3.ZERO:
@@ -878,11 +900,9 @@ func _spawn_projectile_exact(skill: Skill, aim_norm: Vector3, eff_range: float, 
 	var proj: PrototypeProjectile = EntityPool.acquire(PROJECTILE_SCENE)
 	if proj == null:
 		return
-	# Same barrel offset as _spawn_projectile so projectiles fired via
-	# either path emerge from the same "muzzle" position.
-	var aim_right := Vector3.UP.cross(aim_norm).normalized()
-	var barrel_offset := aim_norm * BARREL_FORWARD_OFFSET + aim_right * BARREL_RIGHT_OFFSET
-	var spawn_pos := _host.global_position + Vector3(0.0, 1.0, 0.0) + barrel_offset + source_offset
+	# Same muzzle resolution as _spawn_projectile so projectiles fired
+	# via either path emerge from the same barrel tip.
+	var spawn_pos := _muzzle_world_position(aim_norm, source_offset)
 	proj.direction = aim_norm
 	proj.speed = skill.projectile_speed
 	proj.max_range = eff_range
@@ -926,8 +946,8 @@ func _spawn_projectile_exact(skill: Skill, aim_norm: Vector3, eff_range: float, 
 ## damage / crit / exile-curse / mindlink / ISR via the projectile's own
 ## `_hit_single` path, identical to a single-pellet hitscan.
 func _resolve_shotgun(skill: Skill, aim: Vector3, eff_range: float, weapon: Item, source_offset: Vector3 = Vector3.ZERO) -> void:
-	var origin := _host.global_position + Vector3(0.0, 1.0, 0.0) + source_offset
 	var aim_norm := aim.normalized()
+	var origin := _muzzle_world_position(aim_norm, source_offset)
 	if source_offset != Vector3.ZERO:
 		var target_point := _host.global_position + Vector3(0.0, 1.0, 0.0) + aim_norm * eff_range
 		aim_norm = (target_point - origin).normalized()
@@ -1032,8 +1052,8 @@ func _resolve_chain_lightning(skill: Skill, aim: Vector3, eff_range: float, weap
 	# pattern as _resolve_hitscan.
 	if not Engine.is_in_physics_frame():
 		await _host.get_tree().physics_frame
-	var origin := _host.global_position + Vector3(0.0, 1.0, 0.0) + source_offset
 	var aim_norm := aim.normalized()
+	var origin := _muzzle_world_position(aim_norm, source_offset)
 	# Acquire the primary target — closest enemy within range along aim,
 	# inside a generous targeting cone (chain weapons aren't precision
 	# tools). Falls back to the nearest enemy in skill_range if the cone
@@ -1285,7 +1305,7 @@ func _apply_overcharge_status(target: Node, skill: Skill, weapon: Item) -> void:
 
 
 func _resolve_hitscan_exact(skill: Skill, aim_norm: Vector3, eff_range: float, weapon: Item, source_offset: Vector3) -> void:
-	var origin := _host.global_position + Vector3(0.0, 1.0, 0.0) + source_offset
+	var origin := _muzzle_world_position(aim_norm, source_offset)
 	var extended_range := eff_range * FALLOFF_RANGE_MULT
 	var wall_dist := extended_range
 	var hit_target: Node3D = null
@@ -1435,7 +1455,13 @@ func fire_exile_shot(target: Node3D) -> void:
 		return
 	if is_player_friendly(target):
 		return
-	var origin := _host.global_position + Vector3(0.0, 1.0, 0.0)
+	# Two-pass muzzle resolution — muzzle position depends on aim
+	# direction, but aim is computed from origin to target. Estimate aim
+	# from chest first, derive the muzzle from that, then re-aim from
+	# the muzzle to the target. Difference is sub-metre but the beam
+	# now emerges from the weapon barrel like the regular shots.
+	var aim_seed := (target.global_position + Vector3(0.0, 1.0, 0.0)) - (_host.global_position + Vector3(0.0, 1.0, 0.0))
+	var origin := _muzzle_world_position(aim_seed)
 	var aim := target.global_position + Vector3(0.0, 1.0, 0.0) - origin
 	var dist := aim.length()
 	if dist < 0.001:

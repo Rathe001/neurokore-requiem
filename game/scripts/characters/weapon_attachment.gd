@@ -246,6 +246,43 @@ static func dump_grip_to_console(weapon_base_id: StringName) -> void:
 	])
 
 
+## World-space position of the mounted weapon's muzzle, computed as the
+## corner of the model's combined AABB that's farthest along the supplied
+## aim direction. After per-weapon grip tuning the model's barrel points
+## along the character's aim, so this resolves to the actual barrel tip
+## for both bullet projectiles and hitscan ray origins. Returns
+## Vector3.ZERO when no weapon model is mounted — callers should fall
+## back to their legacy "chest + forward" approximation in that case.
+static func get_muzzle_position(skeleton: Skeleton3D, aim_world: Vector3) -> Vector3:
+	if skeleton == null:
+		return Vector3.ZERO
+	var mount := get_mount(skeleton)
+	if mount == null:
+		return Vector3.ZERO
+	var model := mount.get_node_or_null(NodePath(_MODEL_NODE_NAME)) as Node3D
+	if model == null:
+		return Vector3.ZERO
+	var aabb := _model_aabb(model)
+	var aim := aim_world.normalized()
+	# Test the 8 corners of the model AABB in world space; the one with
+	# the largest dot product with aim is the most-forward point along
+	# the firing line — i.e., the muzzle tip after grip rotation.
+	var best := mount.global_position
+	var best_score := -INF
+	for i in 8:
+		var corner_local := aabb.position + Vector3(
+			aabb.size.x if (i & 1) != 0 else 0.0,
+			aabb.size.y if (i & 2) != 0 else 0.0,
+			aabb.size.z if (i & 4) != 0 else 0.0,
+		)
+		var corner_world := model.to_global(corner_local)
+		var s: float = corner_world.dot(aim)
+		if s > best_score:
+			best_score = s
+			best = corner_world
+	return best
+
+
 ## Returns the existing weapon mount on `skeleton`, or null if none has
 ## been created yet (set_weapon was never called). Lets callers re-apply
 ## render layers / shadow flags to the mounted model after a swap.
