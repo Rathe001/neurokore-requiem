@@ -98,6 +98,11 @@ const _TUNE_ROT_STEP: float = 15.0    # degrees per keypress
 const _TUNE_POS_STEP: float = 0.05    # world units per keypress
 const _TUNE_SCALE_UP: float = 1.1
 const _TUNE_SCALE_DOWN: float = 0.9
+# Y-offset applied to the focal point while inspect mode is active so
+# zoomed-in framing centres on the chest (where the hands hold the
+# weapon) rather than the player origin at the feet. ~1.2m is mid-
+# chest height on the X Bot rig.
+const _INSPECT_FOCAL_CHEST_OFFSET: float = 1.2
 
 # ── Label3D fixed_size compensation ───────────────────────────────────────
 # Godot 4's Label3D.fixed_size = true uses a projection-dependent
@@ -548,6 +553,12 @@ func _snap_to_target() -> void:
 	# toward the aim direction as the camera kicks back from it.
 	ofs += _push_offset
 	var focal := _target.global_position
+	# Inspect mode lifts the focal point to the chest so close-up
+	# weapon-attachment tuning frames the hands instead of the feet.
+	# Normal gameplay focal stays at the player origin — that's what the
+	# fixed-iso framing is calibrated against.
+	if _inspect_mode:
+		focal.y += _INSPECT_FOCAL_CHEST_OFFSET
 	global_position = focal + ofs
 	# Up hint = horizontal direction *away* from the camera. Same look_at
 	# orientation as Vector3.UP at non-zero pitch (both vectors lie in the
