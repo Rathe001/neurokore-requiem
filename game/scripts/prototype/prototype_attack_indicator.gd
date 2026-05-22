@@ -1048,6 +1048,16 @@ static func spawn_blood_decal(parent: Node, world_pos: Vector3, blood_type: Stri
 
 # Returns the live floor pool whose XZ edge is closest to `world_pos`,
 # OR null if no pool sits within `max_edge_dist` of its edge.
+#
+# The global blood-decal ring holds POOLS, WALL SPLATS, and FOOTPRINTS
+# under different priorities. Only true pools have a slip-zone meta
+# attached (set in _spawn_new_pool). We filter on that meta as the
+# "this is a growable pool" marker — without the filter, footprints
+# get treated as pools, get ballooned by subsequent mist drops, and
+# fire missing-meta warnings inside _grow_pool_toward. That's how
+# the "blood all disappeared after a big fight" bug happened: pools
+# evicted by ballooned footprints, footprints stretched into
+# unrecognizable blobs.
 static func _find_pool_near(world_pos: Vector3, max_edge_dist: float) -> Decal:
 	var best: Decal = null
 	var best_edge_dist: float = max_edge_dist
@@ -1057,6 +1067,8 @@ static func _find_pool_near(world_pos: Vector3, max_edge_dist: float) -> Decal:
 		var d := d_var as Decal
 		if d == null:
 			continue
+		if not d.has_meta(_POOL_SLIP_SHAPE_META):
+			continue  # not a pool (footprint, wall splat, etc.)
 		var dx: float = world_pos.x - d.global_position.x
 		var dz: float = world_pos.z - d.global_position.z
 		var centre_dist: float = sqrt(dx * dx + dz * dz)
@@ -1096,11 +1108,16 @@ static func _grow_pool_toward(pool: Decal, new_pos: Vector3) -> void:
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	# Slip-zone follows the visual growth so the player only slips inside
 	# the visible pool footprint, not the eventual target before it's
-	# actually grown that far.
-	var slip_shape: CylinderShape3D = pool.get_meta(_POOL_SLIP_SHAPE_META, null) as CylinderShape3D
-	if slip_shape != null:
-		tween.tween_property(slip_shape, "radius", target_r, POOL_GROWTH_DURATION) \
-			.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	# actually grown that far. has_meta first so non-pool decals (if
+	# they ever slip through _find_pool_near's filter) don't fire a
+	# missing-meta warning; is_instance_valid in case the shape was
+	# freed (e.g. consume_blood_pool detached the SlipZone but the
+	# pool itself is still mid-fade and got picked up here).
+	if pool.has_meta(_POOL_SLIP_SHAPE_META):
+		var slip_shape: CylinderShape3D = pool.get_meta(_POOL_SLIP_SHAPE_META) as CylinderShape3D
+		if slip_shape != null and is_instance_valid(slip_shape):
+			tween.tween_property(slip_shape, "radius", target_r, POOL_GROWTH_DURATION) \
+				.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	pool.set_meta(_POOL_GROWTH_TWEEN_META, tween)
 	_refresh_pool_sort_offset(pool)
 
