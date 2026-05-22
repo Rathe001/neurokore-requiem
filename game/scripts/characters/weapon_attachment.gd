@@ -79,7 +79,7 @@ const _DEFAULT_TARGET_LENGTH: float = 0.6
 static var _GRIP: Dictionary = {
 	&"melee_1h":       {"pos": Vector3.ZERO, "rot": Vector3.ZERO, "scale_mult": 1.0},
 	&"melee_2h":       {"pos": Vector3.ZERO, "rot": Vector3.ZERO, "scale_mult": 1.0},
-	&"ranged_1h":      {"pos": Vector3.ZERO, "rot": Vector3.ZERO, "scale_mult": 1.0},
+	&"ranged_1h":      {"pos": Vector3(0.050, 0.100, 0.050), "rot": Vector3(-75.0, 0.0, 0.0), "scale_mult": 1.0},
 	&"ranged_2h":      {"pos": Vector3(0.050, 0.350, -0.050), "rot": Vector3(-90.0, -180.0, 0.0), "scale_mult": 1.0},
 	&"smg_1h":         {"pos": Vector3.ZERO, "rot": Vector3.ZERO, "scale_mult": 1.0},
 	&"lmg_2h":         {"pos": Vector3.ZERO, "rot": Vector3.ZERO, "scale_mult": 1.0},
