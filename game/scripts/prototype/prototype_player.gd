@@ -2319,6 +2319,16 @@ func _arm_offset_for_slot(slot: StringName, aim_right: Vector3) -> Vector3:
 func _cast_skill(skill: Skill) -> void:
 	if skill == null or _skill_busy:
 		return
+	# Face the cursor at press time, same as LMB. Applied here at the
+	# top so every active-kind path picks it up — AIM_HOLD, CHANNEL_BEAM,
+	# SHIELD_BUFF, SECOND_WIND, RECOVERY, plus the standard fire pipeline
+	# below. Cheap; even self-targeted skills (Second Wind, Recovery)
+	# read better when the character commits to a facing direction on
+	# activation. Aim-zero is a defensive guard for a cursor that hasn't
+	# resolved yet (rare).
+	var cast_aim := _aim_direction()
+	if cast_aim != Vector3.ZERO:
+		_face_direction(cast_aim)
 	# Active offhands (shield, grenade, generator) bypass the standard
 	# fire pipeline — they own state machines that don't fit the
 	# one-shot cone/aoe/projectile/hitscan model.
