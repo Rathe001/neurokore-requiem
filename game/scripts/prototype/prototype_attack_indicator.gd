@@ -3451,7 +3451,11 @@ static func _get_hammer_impact_material_template() -> ShaderMaterial:
 	return _hammer_impact_material_template
 
 
-static func spawn_hammer_impact(host: Node3D) -> void:
+## Shockwave ring around the host. `radius` overrides the cached default
+## (HAMMER_IMPACT_RADIUS) — pass the skill's eff_range so the ring's
+## visible reach matches the actual damage radius. Default keeps the
+## prior 4m behaviour for any caller that doesn't have a range handy.
+static func spawn_hammer_impact(host: Node3D, radius: float = HAMMER_IMPACT_RADIUS) -> void:
 	if host == null:
 		return
 	var parent: Node = host.get_parent()
@@ -3463,6 +3467,11 @@ static func spawn_hammer_impact(host: Node3D) -> void:
 	inst.mesh = _get_hammer_impact_mesh()
 	inst.material_override = mat
 	inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# The cached PlaneMesh is sized for HAMMER_IMPACT_RADIUS — scale the
+	# instance transform to reach `radius` instead of changing the shared
+	# mesh resource (would invalidate the cache for other callers).
+	var scale_factor: float = max(radius, 0.1) / HAMMER_IMPACT_RADIUS
+	inst.scale = Vector3.ONE * scale_factor
 	parent.add_child(inst)
 	# Position at the host's feet, just above the floor surface.
 	inst.global_position = host.global_position + Vector3(0.0, HAMMER_IMPACT_FLOOR_LIFT, 0.0)

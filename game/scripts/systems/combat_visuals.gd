@@ -71,16 +71,16 @@ func _rpc_hit_cone(origin: Vector3, aim: Vector3, attack_range: float, cone_deg:
 
 # ── Hammer ground impact (2H hammer step-2 finisher visual) ─────
 
-func spawn_hammer_impact(host: Node3D) -> void:
-	PrototypeAttackIndicator.spawn_hammer_impact(host)
+func spawn_hammer_impact(host: Node3D, radius: float = PrototypeAttackIndicator.HAMMER_IMPACT_RADIUS) -> void:
+	PrototypeAttackIndicator.spawn_hammer_impact(host, radius)
 	if NetState.is_in_lobby():
 		var cv: Node = host.get_node(_AUTOLOAD_PATH)
-		cv._rpc_hammer_impact.rpc(host.global_position, host.is_in_group(&"player"))
+		cv._rpc_hammer_impact.rpc(host.global_position, host.is_in_group(&"player"), radius)
 
 @rpc("any_peer", "call_remote", "unreliable")
-func _rpc_hammer_impact(origin: Vector3, is_player: bool) -> void:
+func _rpc_hammer_impact(origin: Vector3, is_player: bool, radius: float = PrototypeAttackIndicator.HAMMER_IMPACT_RADIUS) -> void:
 	var anchor := _acquire_anchor(origin, is_player)
-	PrototypeAttackIndicator.spawn_hammer_impact(anchor)
+	PrototypeAttackIndicator.spawn_hammer_impact(anchor, radius)
 	_release_anchor(anchor)
 
 

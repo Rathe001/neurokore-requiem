@@ -215,7 +215,9 @@ func cast_melee_attack(player: Node3D, aim: Vector3) -> void:
 		CombatVisuals.spawn_blade_slash(_host, aim, range_now, cone_now)
 	elif wid == &"sledgehammer":
 		CombatVisuals.spawn_hit_cone(_host, aim, range_now, cone_now)
-		CombatVisuals.spawn_hammer_impact(_host)
+		# Shockwave-ring radius tracks the actual hit range so the
+		# visual ring lands at the same reach as the damage cone.
+		CombatVisuals.spawn_hammer_impact(_host, range_now)
 	else:
 		CombatVisuals.spawn_hit_cone(_host, aim, range_now, cone_now)
 	WeaponSounds.play_fire(wid, _host.global_position)
@@ -378,7 +380,7 @@ func _cast_skill_cone(target: Node3D, aim: Vector3, skill: EnemySkill) -> void:
 		CombatVisuals.spawn_blade_slash(_host, aim, skill.skill_range, skill.cone_deg)
 	elif wid == &"sledgehammer":
 		CombatVisuals.spawn_hit_cone(_host, aim, skill.skill_range, skill.cone_deg)
-		CombatVisuals.spawn_hammer_impact(_host)
+		CombatVisuals.spawn_hammer_impact(_host, skill.skill_range)
 	else:
 		CombatVisuals.spawn_hit_cone(_host, aim, skill.skill_range, skill.cone_deg)
 	WeaponSounds.play_fire(wid, _host.global_position)
