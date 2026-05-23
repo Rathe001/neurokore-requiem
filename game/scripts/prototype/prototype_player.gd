@@ -206,6 +206,19 @@ var _alive: bool = true
 var _death_cause: StringName = &""
 var _knockback_vel: Vector3 = Vector3.ZERO
 var _knockback_remain: float = 0.0
+
+# Melee lunge — for blades only. Player slides toward the closest
+# enemy near the cursor on attack press, syncing arrival with the
+# swing's impact frame. Same velocity-injection pattern as knockback,
+# so move_and_slide handles walls; quadratic ease-out coasts to a
+# stop instead of snapping.
+var _lunge_vel: Vector3 = Vector3.ZERO
+var _lunge_remain: float = 0.0
+var _lunge_duration: float = 0.0
+const BLADE_LUNGE_SEARCH_RADIUS: float = 3.5    # how close enemy must be to cursor
+const BLADE_LUNGE_MAX_DISTANCE: float = 2.6     # cap on how far the player slides
+const BLADE_LUNGE_STOP_GAP: float = 1.6         # gap left to the target enemy
+const BLADE_LUNGE_MIN_DISTANCE: float = 0.35    # below this, skip the lunge
 # Independent busy flags for the two firing paths so LMB-hold and RMB-hold
 # can interleave. Movement halt and facing gate on EITHER being true (any
 # active commit window stops the player), but each input path only blocks
@@ -1530,6 +1543,20 @@ func _physics_process(delta: float) -> void:
 		velocity.z = _knockback_vel.z * falloff
 		_knockback_remain -= delta
 		_want_dir = Vector3.ZERO
+		# Incoming knockback cancels any in-flight melee lunge — being
+		# hit interrupts the offensive commit.
+		_lunge_remain = 0.0
+		_lunge_vel = Vector3.ZERO
+	elif _lunge_remain > 0.0 and _lunge_duration > 0.0:
+		# Melee lunge — same quadratic ease-out as knockback so the
+		# player coasts in. Goes through move_and_slide so walls stop
+		# the slide instead of clipping.
+		var lt: float = _lunge_remain / _lunge_duration
+		var lfalloff: float = lt * lt
+		velocity.x = _lunge_vel.x * lfalloff
+		velocity.z = _lunge_vel.z * lfalloff
+		_lunge_remain -= delta
+		_want_dir = Vector3.ZERO
 	elif _is_attack_committed() and not _is_airborne:
 		velocity.x = 0.0
 		velocity.z = 0.0
@@ -2252,6 +2279,12 @@ func _cast_lmb_combat() -> void:
 			# stagger above; reuse it here as the animation duration.
 			var combo_step := peek_next_melee_combo_step(main_item)
 			_play_anim_stretched(XBotAnimations.combo_attack_anim_for_class(_equipped_weapon_class(), combo_step), main_interval)
+			# Blade-only auto-lunge toward the closest enemy under the
+			# cursor — closes the gap so the player doesn't have to
+			# manually walk into range on every swing. main_atk_spd
+			# was computed above for the multi-arm stagger formula.
+			var lunge_atk_spd: float = main_item.effective_attack_speed() if main_item != null and main_item.attack_speed > 0.0 else 1.0
+			_try_blade_lunge(main_item, lunge_atk_spd)
 		_ied.toss_trap(_cursor_offset())
 	# Hold the player still for the main weapon's wind-up only. Extra arms
 	# don't contribute to the stop — Forged stays mobile while extras fire.
@@ -4010,6 +4043,63 @@ func _aim_flashlight_at_cursor() -> void:
 	var fl_pos := _equipped_light.global_position
 	var target := fl_pos + horiz_dir * d + Vector3(0.0, -clamped_vertical, 0.0)
 	_equipped_light.look_at(target, Vector3.UP)
+
+# Slight lunge toward the nearest enemy to the cursor when attacking
+# with a blade (melee_1h). Search radius is centered on the cursor —
+# not on the player — so the player aims by mouse direction and the
+# lunge tracks whatever the cursor was over. Duration is set to half
+# the effective attack interval so the slide ARRIVES at the target
+# right when the swing's impact frame lands, syncing the geometry
+# with the visual hit.
+func _try_blade_lunge(weapon: Item, atk_spd: float) -> void:
+	if weapon == null or weapon.weapon_base_id != &"melee_1h":
+		return
+	if weapon.fire_skill == null or weapon.fire_skill.cooldown <= 0.0:
+		return
+	var cursor_pos := cursor_world_position()
+	if cursor_pos.distance_squared_to(global_position) < 0.01:
+		return
+	# Closest enemy within search radius of the cursor.
+	var enemies: Array = SpatialGrid.query_radius(cursor_pos, BLADE_LUNGE_SEARCH_RADIUS, &"enemies")
+	if enemies.is_empty():
+		return
+	var target: Node3D = null
+	var best_dist: float = INF
+	for e in enemies:
+		if not is_instance_valid(e):
+			continue
+		var d: float = cursor_pos.distance_to((e as Node3D).global_position)
+		if d < best_dist:
+			best_dist = d
+			target = e as Node3D
+	if target == null:
+		return
+	# Lunge vector — flat (XZ only), capped at MAX_DISTANCE, stops
+	# short by STOP_GAP so we don't bury ourselves in the target's
+	# collision capsule.
+	var to_target: Vector3 = target.global_position - global_position
+	to_target.y = 0.0
+	var dist: float = to_target.length()
+	if dist <= BLADE_LUNGE_STOP_GAP:
+		return
+	var lunge_distance: float = minf(dist - BLADE_LUNGE_STOP_GAP, BLADE_LUNGE_MAX_DISTANCE)
+	if lunge_distance < BLADE_LUNGE_MIN_DISTANCE:
+		return
+	var direction: Vector3 = to_target.normalized()
+	# Sync arrival with the swing's mid-anim impact frame. effective
+	# cooldown × 0.5 mirrors the damage delay computed in the LMB
+	# fire path.
+	var effective_atk_spd: float = atk_spd if atk_spd > 0.0 else 1.0
+	var duration: float = (weapon.fire_skill.cooldown / effective_atk_spd) * 0.5
+	if duration <= 0.0:
+		duration = 0.2
+	# Quadratic ease-out integral = max_vel × duration / 3, so to cover
+	# `lunge_distance` over `duration` we need this peak velocity.
+	var max_vel: float = 3.0 * lunge_distance / duration
+	_lunge_vel = direction * max_vel
+	_lunge_remain = duration
+	_lunge_duration = duration
+
 
 func _face_direction(dir: Vector3) -> void:
 	if visual == null or dir.length_squared() < 0.0001:
