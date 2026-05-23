@@ -26,12 +26,15 @@ func spawn_beam(host: Node3D, aim: Vector3, length: float, origin: Vector3 = Vec
 	PrototypeAttackIndicator.spawn_beam(host, aim, length, origin, tint_override)
 	if NetState.is_in_lobby():
 		var cv: Node = host.get_node(_AUTOLOAD_PATH)
-		cv._rpc_beam.rpc(host.global_position, aim, length, source_offset, host.is_in_group(&"player"), tint_override)
+		# Pass the host's world position separately from origin so the
+		# remote anchor can re-acquire on the right peer position even
+		# when origin = Vector3.ZERO sentinel.
+		cv._rpc_beam.rpc(host.global_position, aim, length, origin, host.is_in_group(&"player"), tint_override)
 
 @rpc("any_peer", "call_remote", "unreliable")
-func _rpc_beam(origin: Vector3, aim: Vector3, length: float, source_offset: Vector3, is_player: bool, tint_override: Color = Color(0.0, 0.0, 0.0, 0.0)) -> void:
-	var anchor := _acquire_anchor(origin, is_player)
-	PrototypeAttackIndicator.spawn_beam(anchor, aim, length, source_offset, tint_override)
+func _rpc_beam(host_pos: Vector3, aim: Vector3, length: float, origin: Vector3, is_player: bool, tint_override: Color = Color(0.0, 0.0, 0.0, 0.0)) -> void:
+	var anchor := _acquire_anchor(host_pos, is_player)
+	PrototypeAttackIndicator.spawn_beam(anchor, aim, length, origin, tint_override)
 	_release_anchor(anchor)
 
 
