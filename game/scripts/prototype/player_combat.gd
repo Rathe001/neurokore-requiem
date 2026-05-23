@@ -90,16 +90,16 @@ func setup(host: PrototypePlayer) -> void:
 
 
 # Schedule a shell casing ejection from the equipped weapon's mounted
-# model 0.5s after the shot lands. Resolves the player's skeleton and
-# delegates to WeaponAttachment, which no-ops for weapons that don't
-# eject (energy guns, melee, RPG).
+# model. WeaponAttachment applies the per-weapon delay (shotgun=0.5s
+# for pump action, rifles / SMG = instant). No-op for weapons that
+# don't eject (energy guns, melee, RPG).
 func _eject_casing(weapon: Item) -> void:
 	if weapon == null or _host == null or _host.visual == null:
 		return
 	var skel := PrototypePlayer._find_skeleton_recursive(_host.visual)
 	if skel == null:
 		return
-	WeaponAttachment.eject_casing_delayed(skel, weapon.weapon_base_id, 0.5)
+	WeaponAttachment.eject_casing(skel, weapon.weapon_base_id)
 
 
 # World-space spawn point for projectiles / hitscan rays / muzzle flashes.

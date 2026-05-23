@@ -120,6 +120,18 @@ const _EJECT_VARIANTS: Dictionary = {
 	&"smg_1h":     &"smg",
 }
 
+# Per-weapon ejection delay. Shotgun pumps before chambering the next
+# shell — the 0.5s delay sells the pump action visually. The others
+# (rifles / SMG) eject immediately on fire from a continuously-running
+# action, so they should pop out the moment the shot leaves. Weapons
+# absent from this dict default to 0.0 (instant).
+const _EJECT_DELAYS: Dictionary = {
+	&"shotgun_2h": 0.5,
+	&"sniper_2h":  0.0,
+	&"lmg_2h":     0.0,
+	&"smg_1h":     0.0,
+}
+
 
 ## Mounts (or swaps, or clears) the weapon model on `skeleton`'s right
 ## hand. Pass &"" to clear (bare hands). Idempotent — re-calling with
@@ -219,16 +231,22 @@ static func _build_cylinder_mesh(radius: float, height: float) -> CylinderMesh:
 	return m
 
 
-## Schedule a shell casing ejection from the weapon mounted on `skeleton`
-## `delay` seconds from now. No-op if the weapon isn't in _EJECT_VARIANTS
-## or the skeleton becomes invalid before the timer fires (player
-## respawn, scene change). Each fire call should create one of these —
-## the delay is per-call, not pooled.
-static func eject_casing_delayed(skeleton: Skeleton3D, weapon_base_id: StringName, delay: float = 0.5) -> void:
+## Eject a shell casing from the weapon mounted on `skeleton`. The per-
+## weapon delay from _EJECT_DELAYS is applied automatically — shotgun
+## waits 0.5s (pump action), other shell-ejecting weapons fire instantly.
+## No-op if the weapon isn't in _EJECT_VARIANTS or the skeleton becomes
+## invalid before a delayed timer fires (player respawn, scene change).
+static func eject_casing(skeleton: Skeleton3D, weapon_base_id: StringName) -> void:
 	if skeleton == null or weapon_base_id == &"":
 		return
 	var mesh := _get_casing_mesh(weapon_base_id)
 	if mesh == null:
+		return
+	var delay: float = float(_EJECT_DELAYS.get(weapon_base_id, 0.0))
+	if delay <= 0.0:
+		# Instant path — no timer, no lambda capture concern. Most
+		# weapons hit this branch.
+		_spawn_casing(skeleton, mesh)
 		return
 	var tree := skeleton.get_tree()
 	if tree == null:
