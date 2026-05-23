@@ -129,6 +129,13 @@ func _rpc_impact_burst(origin: Vector3, world_pos: Vector3, color_override: Colo
 # ── Muzzle flash ───────────────────────────────────────────────
 
 func spawn_muzzle_flash(host: Node3D, barrel_pos: Vector3, is_bullet: bool = true, tint: Color = Color(0, 0, 0, 0)) -> void:
+	# Energy weapons (plasma rifle, laser pistol, anything passing
+	# is_bullet=false) get the visible energy pulse instead of the
+	# invisible OmniLight pop — same convention the taser already uses
+	# explicitly. Bullet weapons keep the warm-orange light flash.
+	if not is_bullet:
+		spawn_energy_pulse(host, barrel_pos, tint)
+		return
 	PrototypeAttackIndicator.spawn_muzzle_flash(host, barrel_pos, is_bullet, tint)
 	if NetState.is_in_lobby():
 		var cv: Node = host.get_node(_AUTOLOAD_PATH)
