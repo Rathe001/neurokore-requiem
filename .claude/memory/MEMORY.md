@@ -83,3 +83,5 @@
 - [Animation stretch pattern](project_anim_stretch_pattern.md) — `_play_anim_stretched(candidates, duration)` makes action duration drive animation speed. Melee impact-frame sync (anim 100% / damage 50% / SFX 50%); one-shot gate blocks the locomotion picker from truncating swings
 - [Neon outline + proximity](project_neon_outline.md) — Outline compositor renders neon tube core + glow halo (HDR > 1 + level bloom). Interactables get always-on cyan in range, white on hover
 - [VFX shader warmup](project_vfx_warmup.md) — VfxWarmup pre-compiles combat shaders during loading-screen window; fixes first-LMB/RMB lag from Godot 4's lazy shader compile
+- [Crater VFX pipeline](project_crater_vfx.md) — Hammer/explosion crater = PBR mesh + screen_texture refraction + center darken + NORMAL_MAP_DEPTH; combo finisher spawns AoE crater + dust + debris chain
+- [Melee impact ratio](project_melee_impact_ratio.md) — Per-weapon dial for fraction-through-swing where damage/SFX fire; sledge=0.4, blade=0.5
