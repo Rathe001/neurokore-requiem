@@ -83,12 +83,11 @@ func _ready() -> void:
 	# Clients only — the host doesn't get this signal (NetState only
 	# subscribes on the client side).
 	NetState.host_disconnected.connect(_on_host_disconnected)
-	# Dismiss any cross-scene loading cover (set by startup / lobby paths
-	# before change_scene_to_file). One process_frame so the freshly-built
-	# world is on screen before the cover fades. call_group is a no-op when
-	# there's no LoadingScreen in the tree, so this is also safe for level
-	# scenes loaded via other paths (e.g. editor "Play scene").
-	await get_tree().process_frame
+	# Pre-compile combat VFX shaders while the loading cover is still up,
+	# so the first LMB/RMB doesn't stall a frame on lazy shader compile.
+	# Awaits two process frames internally; that doubles as the
+	# "freshly-built world is on screen before the cover fades" wait.
+	await VfxWarmup.warmup(self)
 	get_tree().call_group(&"loading_screen", &"hide_loading")
 
 
