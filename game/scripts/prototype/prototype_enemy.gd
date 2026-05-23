@@ -1427,6 +1427,17 @@ func _physics_process(delta: float) -> void:
 	# heavier silhouette).
 	var is_ranged_enemy: bool = _combat != null and _combat.is_ranged()
 	var weapon_class: StringName = &"rifle" if is_ranged_enemy else &"unarmed"
+	# One-shot anim gate (axe_combo / punch swing, hit_react variants,
+	# death). Without this, the moment cast_melee_attack flips state from
+	# CASTING → CHASING after the windup, the very next picker tick
+	# stomps the swing with the run/idle anim — visually the enemy reads
+	# as "tried to swing, suddenly relaxed" and the user sees the slash
+	# VFX with no follow-through. Mirrors the player-side _is_oneshot
+	# gate added for melee combos.
+	if _is_oneshot_anim_playing():
+		if moving:
+			_face_direction(_want_dir)
+		return
 	match _state:
 		State.CASTING, State.KNOCKBACK:
 			pass
@@ -2778,6 +2789,27 @@ func _play_anim(candidates: Array[StringName], speed: float = 1.0) -> bool:
 		anim_player.play(name_str)
 		return true
 	return false
+
+# True while a LOOP_NONE one-shot anim (swing, hit-react, death, jump)
+# is mid-playback. Used by the locomotion picker in _process_visual_state
+# to suppress run/idle overrides until the one-shot finishes — without
+# this, the moment the state machine ticks out of CASTING the swing gets
+# stomped on the next frame. The 0.05s end buffer prevents the gate
+# from latching on the last sample (off-by-one with floating-point
+# position vs length).
+func _is_oneshot_anim_playing() -> bool:
+	if anim_player == null or not anim_player.is_playing():
+		return false
+	var current: StringName = anim_player.current_animation
+	if current == &"":
+		return false
+	var anim: Animation = anim_player.get_animation(current)
+	if anim == null:
+		return false
+	if anim.loop_mode != Animation.LOOP_NONE:
+		return false
+	return anim_player.current_animation_position < anim_player.current_animation_length - 0.05
+
 
 func _ensure_loop(candidates: Array[StringName]) -> void:
 	if anim_player == null:

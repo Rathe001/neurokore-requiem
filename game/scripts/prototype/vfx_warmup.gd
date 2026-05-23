@@ -67,22 +67,34 @@ static func warmup(parent: Node) -> void:
 	anchor.name = "_VfxWarmup"
 	anchor.position = Vector3(0.0, _WARMUP_Y_OFFSET, 0.0)
 	parent.add_child(anchor)
-	var quad := QuadMesh.new()
-	quad.size = Vector2(_WARMUP_QUAD_SIZE, _WARMUP_QUAD_SIZE)
 	for path in _COMBAT_SHADERS:
 		if not ResourceLoader.exists(path):
 			continue
 		var sh := load(path) as Shader
 		if sh == null:
 			continue
+		# Per-instance QuadMesh — each gets its own ShaderMaterial set
+		# on the mesh's `material` property (PrimitiveMesh.material).
+		# Sharing the QuadMesh and routing through `material_override`
+		# left surface_get_material(0) null on the shared resource, which
+		# was triggering RenderingServer queries on a null Material RID
+		# during shadow / dependency / animated-uniform passes:
+		#   material_casts_shadows: Parameter "material" is null.
+		#   material_is_animated: Parameter "material" is null.
+		#   material_get_instance_shader_parameters: Parameter "material" is null.
+		#   material_update_dependency: Parameter "material" is null.
+		# Setting the material on the PrimitiveMesh directly gives the
+		# surface a concrete Material so those queries land cleanly.
+		var quad := QuadMesh.new()
+		quad.size = Vector2(_WARMUP_QUAD_SIZE, _WARMUP_QUAD_SIZE)
+		var mat := ShaderMaterial.new()
+		mat.shader = sh
+		quad.material = mat
 		var mi := MeshInstance3D.new()
 		mi.mesh = quad
 		# cast_shadow off — no point burning shadow-atlas slots on a 1cm
 		# quad below the map.
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		var mat := ShaderMaterial.new()
-		mat.shader = sh
-		mi.material_override = mat
 		anchor.add_child(mi)
 	# Two process frames: one for the render server to see the new
 	# MeshInstance3Ds and queue their shaders for compile, one for the
