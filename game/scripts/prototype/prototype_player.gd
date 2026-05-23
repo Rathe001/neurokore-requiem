@@ -2161,20 +2161,38 @@ func _cast_lmb_combat() -> void:
 			# Pay either resource (energy) or ammo (bullet); helper also
 			# fires the auto-reload trigger on the empty-magazine shot.
 			_skill_pay_cost(item, skill, true)
-		# Each fire's projectile spawn is delayed by:
+		# Each fire's projectile spawn / damage event is delayed by:
 		#   (i * stagger)              — multi-arm visual stagger
-		# + (skill.wind_up / atk_spd)  — per-skill wind-up
-		# So a 1s-wind-up weapon (RPG) launches its projectile a full
-		# second after LMB press, matching the baked-in pre-roll of
-		# its fire SFX. Stagger applies on top so extras still cascade.
-		var wind_up_delay: float = (skill.wind_up / atk_spd) if skill.wind_up > 0.0 else 0.0
+		# + per-weapon-class wind-up   — see below
+		#
+		# For ranged weapons we use the skill's authored wind_up so
+		# weapons with audio pre-roll (RPG: 1s charging then launch
+		# transient) keep their existing rhythm. For MELEE weapons we
+		# override wind_up to half the effective attack interval —
+		# that lands the damage event mid-swing instead of at the
+		# wind-up start, syncing it with the animation's visual hit
+		# moment (~50% of the stretched clip). The SFX gets the same
+		# treatment below so the strike sound lands on the impact frame
+		# rather than at LMB press.
+		var is_melee: bool = item != null and item.weapon_base_id in MELEE_BASE_IDS
+		var wind_up_delay: float
+		if is_melee:
+			var melee_interval: float = (skill.cooldown / atk_spd) if skill.cooldown > 0.0 else 0.5
+			wind_up_delay = melee_interval * 0.5
+		else:
+			wind_up_delay = (skill.wind_up / atk_spd) if skill.wind_up > 0.0 else 0.0
 		var fire_delay: float = float(i) * stagger + wind_up_delay
 		max_fire_delay = maxf(max_fire_delay, fire_delay)
-		# Fire SFX plays synchronously at LMB-press (now), NOT inside the
-		# timer callback — so wind-up weapons' audio pre-roll starts now
-		# and the launch transient lands when the projectile spawns
-		# `wind_up_delay` later. Channel weapons skip (own SFX path).
-		if item != null and not WeaponSounds.is_channel_weapon(item.weapon_base_id):
+		# Fire SFX timing:
+		#   Ranged → synchronous at LMB-press, so audio pre-roll runs
+		#     concurrent with the wind-up and the launch transient lands
+		#     when the projectile spawns.
+		#   Melee  → deferred into the fire timer below so the strike
+		#     sound lands on the impact frame, not at LMB press. The
+		#     melee swing isn't a wind-up audio cue — it's the hit
+		#     itself, and playing it 0.5s early reads as desync.
+		#   Channel weapons skip both — own SFX path.
+		if item != null and not WeaponSounds.is_channel_weapon(item.weapon_base_id) and not is_melee:
 			WeaponSounds.play_fire(item.weapon_base_id, global_position)
 		var captured_skill := skill
 		var captured_item := item
@@ -2187,6 +2205,7 @@ func _cast_lmb_combat() -> void:
 		# without `p`. Skill/Item are Resources (RefCounted) so their
 		# captures keep them alive on their own — no ID dance needed.
 		var player_id: int = get_instance_id()
+		var captured_is_melee: bool = is_melee
 		get_tree().create_timer(fire_delay).timeout.connect(func() -> void:
 			var p := instance_from_id(player_id) as PrototypePlayer
 			if p == null or not p._alive:
@@ -2196,6 +2215,11 @@ func _cast_lmb_combat() -> void:
 				var refreshed := p._aim_direction()
 				if refreshed != Vector3.ZERO:
 					fire_aim = refreshed
+			# Melee strike SFX fires now (on impact), not at LMB press
+			# — see the SFX comment above. Item is Resource so the
+			# captured ref is safe across the timer.
+			if captured_is_melee and captured_item != null and not WeaponSounds.is_channel_weapon(captured_item.weapon_base_id):
+				WeaponSounds.play_fire(captured_item.weapon_base_id, p.global_position)
 			p._combat.resolve_skill_hit(captured_skill, fire_aim, captured_item, captured_offset)
 		, CONNECT_ONE_SHOT)
 
