@@ -24,7 +24,10 @@ uniform float glow_radius : hint_range(2.0, 14.0) = 6.0;
 uniform float core_boost : hint_range(1.0, 12.0) = 5.5;
 uniform float glow_boost : hint_range(0.3, 4.0) = 1.4;
 
-const float TAU = 6.28318530718;
+// (Godot's shading language reserves `TAU` as a builtin in some
+// passes — redeclaring it caused the canvas_item shader to fail to
+// compile and the engine fell back to the default. Inline the constant
+// instead.)
 
 void fragment() {
 	vec4 here = texture(TEXTURE, UV);
@@ -45,7 +48,7 @@ void fragment() {
 	vec3 glow_color = vec3(0.0);
 
 	for (int i = 0; i < 8; i++) {
-		float angle = float(i) * TAU / 8.0;
+		float angle = float(i) * 6.28318530718 / 8.0;
 		vec2 dir = vec2(cos(angle), sin(angle));
 
 		vec4 c = texture(TEXTURE, UV + dir * px * core_thickness);
