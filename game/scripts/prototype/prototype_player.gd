@@ -990,6 +990,10 @@ func _apply_gender_appearance() -> void:
 		if current_char != null:
 			visual.remove_child(current_char)
 			current_char.queue_free()
+			# Invalidate the cached skeleton — the old one is on its
+			# way out and the next _find_player_skeleton call will
+			# re-resolve on the new Character subtree.
+			_cached_skeleton = null
 		var new_char := scene.instantiate() as Node3D
 		if new_char != null:
 			new_char.name = "Character"
@@ -1047,13 +1051,25 @@ func _walk_player_visual_layers(node: Node, mask: int) -> void:
 		_walk_player_visual_layers(child, mask)
 
 
+# Cache for _find_player_skeleton — the lookup is a recursive walk
+# down the Visual subtree and gets called every physics tick by hot
+# paths (accelerator flame muzzle reads, sniper aim-laser updates).
+# is_instance_valid covers the gender-swap case where the previous
+# skeleton is queue_freed.
+var _cached_skeleton: Skeleton3D = null
+
+
 # Walks the visual subtree looking for any Skeleton3D. FBX skeleton node
 # name varies by importer version; find_child name-only search would miss
 # renamed cases.
 func _find_player_skeleton() -> Skeleton3D:
+	if _cached_skeleton != null and is_instance_valid(_cached_skeleton):
+		return _cached_skeleton
 	if visual == null:
+		_cached_skeleton = null
 		return null
-	return _find_skeleton_recursive(visual)
+	_cached_skeleton = _find_skeleton_recursive(visual)
+	return _cached_skeleton
 
 
 static func _find_skeleton_recursive(root: Node) -> Skeleton3D:
