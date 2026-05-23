@@ -3222,7 +3222,6 @@ const HAMMER_CRATER_SCENE: PackedScene = preload("res://assets/models/vfx/crater
 const HAMMER_CRATER_LIFETIME: float = 8.0
 const HAMMER_CRATER_FADE_START: float = 5.0     # delay before alpha starts ramping down
 const HAMMER_CRATER_LIFT: float = 0.04          # above floor; avoids z-fight
-const HAMMER_CRATER_SOURCE_SIZE: float = 40.96  # mesh AABB longest axis (metres)
 
 
 static func spawn_hammer_crater(host: Node3D, world_pos: Vector3, radius: float) -> void:
@@ -3234,9 +3233,29 @@ static func spawn_hammer_crater(host: Node3D, world_pos: Vector3, radius: float)
 	var inst := HAMMER_CRATER_SCENE.instantiate() as Node3D
 	if inst == null:
 		return
-	# Auto-scale: imported glb's longest axis is ~40m; we want the
-	# spawn to be `radius * 2` world metres wide.
-	var s: float = (radius * 2.0) / HAMMER_CRATER_SOURCE_SIZE
+	# Auto-scale to `radius * 2` metres on the longest footprint axis.
+	# Measured from the actual mesh AABB at runtime AND folded through
+	# every Node3D transform between the MeshInstance3D and inst so the
+	# correct footprint comes out even when the glb has inner scale nodes
+	# (which is what was making the crater render at 30m+ instead of the
+	# intended 5-7m — `get_aabb()` is mesh-local and ignores wrapper
+	# transforms).
+	var footprint: float = 0.0
+	for vi in _all_visual_instances_of(inst):
+		if not (vi is MeshInstance3D):
+			continue
+		var mi := vi as MeshInstance3D
+		var ab := mi.get_aabb()  # AABB in mi's local space
+		var xform := Transform3D.IDENTITY
+		var n: Node = mi
+		while n != null and n != inst and n is Node3D:
+			xform = (n as Node3D).transform * xform
+			n = n.get_parent()
+		var ab_in_inst := xform * ab
+		footprint = max(footprint, max(ab_in_inst.size.x, ab_in_inst.size.z))
+	if footprint < 0.001:
+		footprint = 1.0
+	var s: float = (radius * 2.0) / footprint
 	inst.scale = Vector3.ONE * s
 	# Top-level so the crater stays fixed in world space rather than
 	# following the parent's transform (the player walks away from it).
