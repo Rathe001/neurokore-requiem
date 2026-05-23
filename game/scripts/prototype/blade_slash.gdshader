@@ -73,6 +73,10 @@ void fragment() {
 	float fringe = core * taper * intensity * 0.18;
 	vec3 col = sampled + fringe_color * fringe;
 
+	// Opacity cap — keep the distortion barely visible so it reads as
+	// a hint of air-cut rather than a glowing arc. 0.06 = ~6% alpha
+	// at the densest part of the swing; the world behind still shows
+	// through at near-full brightness.
 	ALBEDO = col;
-	ALPHA = clamp(arc_mask * intensity * 0.85 + fringe * 0.4, 0.0, 1.0);
+	ALPHA = clamp(arc_mask * intensity * 0.85 + fringe * 0.4, 0.0, 0.06);
 }
