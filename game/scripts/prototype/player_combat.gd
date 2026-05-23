@@ -247,12 +247,16 @@ func resolve_skill_hit(skill: Skill, aim: Vector3, weapon: Item, source_offset: 
 			if not skip_cone_visual:
 				if is_knife:
 					CombatVisuals.spawn_blade_slash(_host, aim, eff_range, visual_cone_deg)
+				elif is_hammer:
+					# 2H hammer LMB — replaces the generic shockwave dome
+					# with realistic ground debris fanned along the swing
+					# direction. Reads as material impact rather than
+					# energy effect.
+					PrototypeAttackIndicator.spawn_hammer_dust_cone(_host, aim, eff_range, visual_cone_deg)
+					if is_hammer_finisher:
+						CombatVisuals.spawn_hammer_impact(_host)
 				else:
 					CombatVisuals.spawn_hit_cone(_host, aim, eff_range, visual_cone_deg)
-					if is_hammer_finisher:
-						# Dedicated ground-impact ring (replaces the
-						# placeholder hit_radial layering used initially).
-						CombatVisuals.spawn_hammer_impact(_host)
 			# Per-archetype melee combo shake — escalates with each step
 			# of the 3-hit chain. 2H hits harder than 1H at every step,
 			# step 2 is a finisher punch (1H bleed flick / 2H ground
@@ -276,12 +280,21 @@ func resolve_skill_hit(skill: Skill, aim: Vector3, weapon: Item, source_offset: 
 					if not skip_cone_visual:
 						if is_knife:
 							CombatVisuals.spawn_blade_slash(c._host, aim, eff_range, visual_cone_deg)
+						elif is_hammer:
+							PrototypeAttackIndicator.spawn_hammer_dust_cone(c._host, aim, eff_range, visual_cone_deg)
 						else:
 							CombatVisuals.spawn_hit_cone(c._host, aim, eff_range, visual_cone_deg)
 					c._resolve_cone(skill, aim, eff_range, weapon)
 				, CONNECT_ONE_SHOT)
 		Skill.TargetingMode.AOE_RADIAL:
-			CombatVisuals.spawn_hit_radial(_host, eff_range)
+			# 2H hammer RMB (AoE Burst) — donut of dust expanding outward
+			# from the player's feet, replacing the generic radial shockwave.
+			# Other weapons (energy, ranged AoE skills) keep the shockwave.
+			var aoe_is_hammer: bool = weapon != null and weapon.weapon_base_id == &"melee_2h"
+			if aoe_is_hammer:
+				PrototypeAttackIndicator.spawn_hammer_dust_ring(_host, eff_range)
+			else:
+				CombatVisuals.spawn_hit_radial(_host, eff_range)
 			_resolve_aoe(skill, eff_range, weapon)
 			var self_id := get_instance_id()
 			for extra in hits - 1:
@@ -290,7 +303,10 @@ func resolve_skill_hit(skill: Skill, aim: Vector3, weapon: Item, source_offset: 
 					var c := instance_from_id(self_id) as PlayerCombat
 					if c == null or c._host == null or not c._host._alive:
 						return
-					CombatVisuals.spawn_hit_radial(c._host, eff_range)
+					if aoe_is_hammer:
+						PrototypeAttackIndicator.spawn_hammer_dust_ring(c._host, eff_range)
+					else:
+						CombatVisuals.spawn_hit_radial(c._host, eff_range)
 					c._resolve_aoe(skill, eff_range, weapon)
 				, CONNECT_ONE_SHOT)
 		Skill.TargetingMode.PROJECTILE:
