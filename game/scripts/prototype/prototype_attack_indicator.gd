@@ -2786,6 +2786,20 @@ static func spawn_explosion(host: Node3D, world_pos: Vector3, blast_radius: floa
 	elif not host.is_in_group(&"player"):
 		is_enemy = true
 	_spawn_fireball_explosion(parent, world_pos, blast_radius, damage_type, is_enemy)
+	# Impact crater on the ground below the explosion. world_pos can be
+	# airborne (projectile hits a wall or chest-height enemy), so we
+	# project the crater's footprint down to Y=0 — the prototype's floor
+	# plane. Radius matches blast_radius so the visible scar tracks the
+	# damage zone. Skipping tiny blasts (<1m) — proximity fizzles where
+	# a crater would read as noise. spawn_hammer_crater uses host's
+	# parent for parenting; this path uses the same host the explosion
+	# FX runs under, so the crater is a sibling of the fireball.
+	# MP coverage is free here — CombatVisuals.spawn_explosion's RPC
+	# fires spawn_explosion on every peer, so every peer crater-spawns
+	# locally without any extra sync code.
+	if blast_radius >= 1.0:
+		var ground_pos := Vector3(world_pos.x, 0.0, world_pos.z)
+		spawn_hammer_crater(host, ground_pos, blast_radius)
 
 
 ## Flipbook-driven explosion using the BigExplosionScene's pre-baked
