@@ -2786,20 +2786,38 @@ static func spawn_explosion(host: Node3D, world_pos: Vector3, blast_radius: floa
 	elif not host.is_in_group(&"player"):
 		is_enemy = true
 	_spawn_fireball_explosion(parent, world_pos, blast_radius, damage_type, is_enemy)
-	# Impact crater on the ground below the explosion. world_pos can be
-	# airborne (projectile hits a wall or chest-height enemy), so we
-	# project the crater's footprint down to Y=0 — the prototype's floor
-	# plane. Radius matches blast_radius so the visible scar tracks the
-	# damage zone. Skipping tiny blasts (<1m) — proximity fizzles where
-	# a crater would read as noise. spawn_hammer_crater uses host's
-	# parent for parenting; this path uses the same host the explosion
-	# FX runs under, so the crater is a sibling of the fireball.
-	# MP coverage is free here — CombatVisuals.spawn_explosion's RPC
-	# fires spawn_explosion on every peer, so every peer crater-spawns
-	# locally without any extra sync code.
+	# Impact crater + dust cloud + physical debris on the ground below
+	# the explosion. world_pos can be airborne (projectile hits a wall
+	# or chest-height enemy), so the ground anchor projects to Y=0 —
+	# the prototype's floor plane. Radius matches blast_radius so the
+	# visible scar tracks the damage zone. Skipping tiny blasts (<1m)
+	# where these would read as noise.
+	#
+	# All three share the same `host`, so they spawn as siblings of the
+	# fireball under the same parent and survive host queue_free after
+	# spawn_explosion returns.
+	#
+	# MP coverage is free — CombatVisuals.spawn_explosion's RPC fires
+	# spawn_explosion on every peer, so each peer's full impact set
+	# spawns locally without any extra sync code.
 	if blast_radius >= 1.0:
 		var ground_pos := Vector3(world_pos.x, 0.0, world_pos.z)
 		spawn_hammer_crater(host, ground_pos, blast_radius)
+		# Use a temp Node3D anchor at ground_pos for the dust ring —
+		# spawn_hammer_dust_ring reads host.global_position internally,
+		# so the host has to actually be at the impact spot for the
+		# ring to land in the right place (we can't pass an explicit
+		# centre to it).
+		var dust_anchor := Node3D.new()
+		(host.get_parent() if host.get_parent() != null else host).add_child(dust_anchor)
+		dust_anchor.global_position = ground_pos
+		spawn_hammer_dust_ring(dust_anchor, blast_radius)
+		# Anchor was only needed for the spawn — free on the next frame
+		# after the particles have captured its position. spawn_hammer_dust_ring
+		# uses local_coords = false so the particles don't follow the
+		# anchor after spawn.
+		dust_anchor.queue_free()
+		spawn_explosion_debris(host, ground_pos, blast_radius)
 
 
 ## Flipbook-driven explosion using the BigExplosionScene's pre-baked
@@ -3414,6 +3432,70 @@ static func spawn_hammer_dust_ring(host: Node3D, radius: float) -> void:
 	var t := p.create_tween()
 	t.tween_interval(HAMMER_DUST_LIFETIME + 0.2)
 	t.tween_callback(_free_later(p))
+
+
+## Scatter physical debris chunks outward from an explosion impact.
+## `radius` controls both the spread and the per-chunk size so larger
+## blasts make heavier-looking debris. Uses the same DebrisShard helper
+## that DestructibleProp uses on break — hand-rolled tumble + gravity,
+## no RigidBody3D cost. Each shard is a tinted dark grey box; varied
+## sizes + spins read as concrete/floor chunks rather than uniform
+## particle confetti. Mixed with the dust cloud below the call site,
+## the impact reads as a real ground-shattering event.
+const _EXPLOSION_DEBRIS_COUNT: int = 8
+const _EXPLOSION_DEBRIS_LIFETIME: float = 1.6
+const _EXPLOSION_DEBRIS_GRAVITY: float = 12.0
+static func spawn_explosion_debris(host: Node3D, world_pos: Vector3, radius: float) -> void:
+	if host == null:
+		return
+	var parent: Node = host.get_parent()
+	if parent == null:
+		parent = host
+	# Per-chunk size scales with blast radius — small blasts kick up
+	# pebbles, big ones throw chunks. Half-metre clamp on the top end
+	# so we don't get absurd debris boulders.
+	var chunk_scale: float = clampf(radius * 0.06, 0.05, 0.16)
+	for i in _EXPLOSION_DEBRIS_COUNT:
+		var sx: float = randf_range(0.6, 1.2) * chunk_scale
+		var sy: float = randf_range(0.5, 1.0) * chunk_scale
+		var sz: float = randf_range(0.6, 1.2) * chunk_scale
+		var mesh := BoxMesh.new()
+		mesh.size = Vector3(sx, sy, sz)
+		var mat := StandardMaterial3D.new()
+		# Dark concrete grey with mild per-chunk variation so the
+		# debris doesn't look stamped from a single material. Slight
+		# warmth picks up the scorched-impact palette.
+		var v := randf_range(0.20, 0.38)
+		mat.albedo_color = Color(v * 1.05, v, v * 0.9, 1.0)
+		mat.roughness = 0.85
+		mat.metallic = 0.05
+		mesh.material = mat
+		var shard := DebrisShard.new()
+		shard.mesh_resource = mesh
+		shard.mat = mat
+		shard.lifetime = _EXPLOSION_DEBRIS_LIFETIME
+		shard.gravity = _EXPLOSION_DEBRIS_GRAVITY
+		shard.floor_y = world_pos.y  # land where the explosion fired
+		# 360° outward kick with strong vertical bias so chunks arc
+		# visibly before landing. Out-speed scales with radius so big
+		# blasts throw debris further. Spin axes randomised for chaos.
+		var angle: float = randf() * TAU
+		var out_speed: float = randf_range(1.5, 3.5) * clampf(radius * 0.5, 0.6, 2.0)
+		var up_speed: float = randf_range(3.5, 6.5)
+		shard.velocity = Vector3(cos(angle) * out_speed, up_speed, sin(angle) * out_speed)
+		shard.angular_velocity = Vector3(
+			randf_range(-9.0, 9.0),
+			randf_range(-6.0, 6.0),
+			randf_range(-9.0, 9.0))
+		parent.add_child(shard)
+		# Spawn tightly clustered at the impact point — they'll spread
+		# out via the outward velocity over their lifetime.
+		var jitter: float = chunk_scale * 0.6
+		shard.global_position = world_pos + Vector3(
+			randf_range(-jitter, jitter),
+			randf_range(0.0, jitter * 0.5),
+			randf_range(-jitter, jitter))
+
 
 static func spawn_hit_radial(host: Node3D, radius: float) -> void:
 	var pos := host.global_position + Vector3(0.0, SHOCKWAVE_BUBBLE_LIFT, 0.0)

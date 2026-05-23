@@ -42,13 +42,23 @@ uniform float vignette_start : hint_range(0.0, 1.0) = 0.45;
 uniform float vignette_end : hint_range(0.0, 1.0) = 0.85;
 // Roughness boost — matte against polished floor.
 uniform float roughness_boost : hint_range(0.0, 1.0) = 0.45;
-// Normal-map exaggeration. Default 1.0 = use the source asset's
-// normal at native intensity. We push this above 1.0 so the
-// crater's sculpted bump (rim, depression, debris) generates
-// stronger highlights and shadows under world lighting — that's
-// where the readability of the impact comes from. No emissive rim
-// (the orange-ring iteration read as a separate VFX).
+// Normal-map exaggeration. > 1 amplifies the crater's sculpted bump
+// for stronger highlights/shadows under world lighting.
 uniform float normal_strength : hint_range(0.5, 5.0) = 3.0;
+// Screen-space refraction — distorts the floor texture sample by
+// the crater's surface normal. Sells real depth by making the floor
+// tiles visibly bend through the rim/depression slopes (the eye
+// reads slope refraction as 3D far more strongly than lighting
+// shading alone). Strength is in SCREEN_UV space, so very small
+// values are fine — 0.05 reads as "looking through a real
+// indentation in glass" without losing recognisability of the
+// floor pattern.
+uniform float distort_strength : hint_range(0.0, 0.30) = 0.08;
+// Center darkening — multiplies ALBEDO down inside the crater
+// interior, with the strongest darken at the bottom of the
+// depression. Falls off to 1.0 by the rim so the surrounding
+// floor isn't dimmed.
+uniform float center_darken : hint_range(0.0, 1.0) = 0.55;
 
 // Model-local vertex position carried into fragment — needed because
 // the built-in VERTEX in fragment() is in VIEW space, not model space.
@@ -60,27 +70,39 @@ void vertex() {
 }
 
 void fragment() {
-	vec3 floor_color = textureLod(screen_texture, SCREEN_UV, 0.0).rgb;
-	vec3 nrm = texture(normal_tex, UV).xyz;
+	vec3 nrm_raw = texture(normal_tex, UV).xyz;
 	float rough = texture(roughness_tex, UV).r;
 
-	// Local-space radial fade. Mesh origin = centre (Blender export
-	// convention), so r = 0 at centre, r = 1 at fade_radius units out
-	// in the XZ plane of the mesh's own coordinate frame.
+	// Screen-space refraction — offset the floor-color sample by the
+	// crater's surface slope, so the floor visibly bends through the
+	// rim/depression. nrm_raw is in [0,1] tangent space; decoding to
+	// [-1,1] gives a signed XY direction we can shove SCREEN_UV by.
+	// Reading screen_texture at the offset position pulls the floor
+	// pixel that "should" be visible at that slope, which the eye
+	// parses as a real indentation. Outside the alpha-fade edge the
+	// distortion fades to zero so the surrounding floor stays
+	// undisturbed.
+	vec2 nrm_decoded = nrm_raw.xy * 2.0 - 1.0;
 	float r = length(v_local_pos.xz) / max(fade_radius, 0.001);
 	float mask = 1.0 - smoothstep(vignette_start, vignette_end, r);
+	vec2 distort_uv = nrm_decoded * distort_strength * mask;
+	vec3 floor_color = textureLod(screen_texture, SCREEN_UV + distort_uv, 0.0).rgb;
 
-	// Mix the sampled floor toward the scorch tint. Output reads as
-	// the floor's own palette warmed and dimmed by the impact, with
-	// no separate VFX color layered on top.
-	ALBEDO = mix(floor_color, floor_color * tint, tint_mix);
-	NORMAL_MAP = nrm;
+	// Mix the (refracted) floor toward the scorch tint, then apply a
+	// radial darkening that's strongest at the centre and fades to no
+	// effect by the rim. The center dimming gives the depression a
+	// pit-shadow look that the eye reads as depth — independent of
+	// the normal-map shading.
+	vec3 albedo = mix(floor_color, floor_color * tint, tint_mix);
+	float centre_factor = 1.0 - smoothstep(0.0, vignette_start, r);
+	albedo *= mix(1.0, 1.0 - center_darken, centre_factor);
+
+	ALBEDO = albedo;
+	NORMAL_MAP = nrm_raw;
 	// NORMAL_MAP_DEPTH > 1 exaggerates the crater's sculpted bump —
 	// the rim and depression cast stronger shadows and catch more
-	// light, so the impact silhouette is visible from the iso camera
-	// even on dark floor. This replaces the emissive-rim approach,
-	// which read as a separate orange ring rather than as the crater
-	// itself.
+	// light. Combined with the refraction above, the crater reads as
+	// a real 3D depression instead of a flat decal.
 	NORMAL_MAP_DEPTH = normal_strength;
 	ROUGHNESS = clamp(rough + roughness_boost, 0.0, 1.0);
 	METALLIC = 0.0;
