@@ -1,8 +1,10 @@
 ---
 name: godot4-shader-gotchas
-description: Five Godot 4 shader/material gotchas that all manifested as "garbled output, no error" and burned hours
-metadata:
+description: "Five Godot 4 shader/material gotchas that all manifested as \"garbled output, no error\" and burned hours"
+metadata: 
+  node_type: memory
   type: project
+  originSessionId: 8cb2236a-ff5a-4a76-8cc4-a33a9a8014b8
 ---
 
 Five things Godot 4 fails on silently — each looks like "shader broken, falls back to default white" with no obvious error. All hit during the procedural-wall + kit-panel work. Future shader work should remember these.
@@ -30,3 +32,11 @@ Five things Godot 4 fails on silently — each looks like "shader broken, falls 
 **How to apply:** When extending an existing shader fragment, scan for variable names you're about to declare; reuse the existing one instead. If walls/floors render as flat pale grey with no panel features visible at all, suspect a redeclaration.
 
 Common thread: Godot 4's shader pipeline fails silently. Trust nothing; verify by inspecting the bound parameters via a runtime probe (`tools/inspect_kit_mesh.gd` is the pattern — load the imported .scn and walk the surfaces printing what's actually bound on the ShaderMaterial).
+
+**6. `depth_draw_disabled` is not a valid render_mode keyword.** The valid set is `depth_draw_opaque` / `depth_draw_always` / `depth_draw_never` / `depth_prepass_alpha`. Using `depth_draw_disabled` makes the whole shader silently fail to compile → engine falls back to the default white spatial material. Symptom seen on the blade-slash distortion rewrite: solid white quads instead of the expected refraction effect.
+
+**7. Canvas_item fragment shaders disallow `return`.** `if (cond) { COLOR = vec4(0.0); return; }` produces "Using 'return' in the 'fragment' processor function is incorrect" and the shader silently falls back. Restructure as `if (cond) { ... } else { ... }` so all paths land at the same closing brace. Bit me on the neon-outline rewrite.
+
+**8. `TAU` is a reserved builtin in canvas_item shaders.** Redeclaring it as `const float TAU = ...` produces a Redefinition error and the shader silently fails. Inline the literal (`6.28318530718`) or use a different name. Bit me on the neon-outline rewrite alongside the `return` issue.
+
+**9. Reverse-Z depth math.** Godot 4 perspective uses `[0, 1]` NDC z (reverse-Z: 1 = near, 0 = far). The old GL convention `[-1, 1]` (and the `depth * 2.0 - 1.0` remap to reach it) gives wrong values under perspective and silently collapses depth-based screen-space effects (soft particles, depth-clip outlines). Pass `depth_texture.x` and `FRAGCOORD.z` straight through `INV_PROJECTION_MATRIX` without remapping. Fixed: explosion flipbook (was invisible under perspective) and tactical-overlay LoS clip (works now, finally).
