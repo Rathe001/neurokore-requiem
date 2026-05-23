@@ -2985,7 +2985,16 @@ func _apply_flame_transform(aim: Vector3, range_m: float) -> void:
 	if aim_flat.length_squared() < 0.0001:
 		return
 	var aim_norm := aim_flat.normalized()
+	# Try the visible weapon model's muzzle first — keeps the accelerator
+	# beam consistent with the per-weapon muzzle override the tuner sets.
+	# Falls back to the legacy chest-height approximation for bare hands
+	# or any path where the skeleton / weapon model isn't ready.
 	var muzzle := global_position + Vector3(0.0, FLAME_MUZZLE_HEIGHT, 0.0)
+	var skel := _find_player_skeleton()
+	if skel != null:
+		var weapon_muzzle := WeaponAttachment.get_muzzle_position(skel, aim_norm)
+		if weapon_muzzle != Vector3.ZERO:
+			muzzle = weapon_muzzle
 	# Wall clip: raycast to find the wall distance, then pass a clip
 	# ratio to the shader instead of shrinking the mesh. This keeps the
 	# fan's angular spread constant — only the length gets capped.
