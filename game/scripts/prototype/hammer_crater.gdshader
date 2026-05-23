@@ -33,6 +33,19 @@ uniform float fade_radius : hint_range(0.5, 100.0) = 20.0;
 uniform float vignette_start : hint_range(0.0, 1.0) = 0.45;
 uniform float vignette_end : hint_range(0.0, 1.0) = 0.85;
 
+// Pass model-local vertex position from vertex → fragment. In Godot 4
+// spatial shaders, the built-in VERTEX in the fragment() function is in
+// VIEW space, not model space — so reading VERTEX.xz there gives a
+// camera-relative coord that has nothing to do with the mesh layout.
+// Capturing it in vertex() (where VERTEX is still model-local) and
+// passing it through as a varying gets us the mesh-local position we
+// need for the radial mask.
+varying vec3 v_local_pos;
+
+void vertex() {
+	v_local_pos = VERTEX;
+}
+
 void fragment() {
 	vec4 col = texture(albedo_tex, UV);
 	vec3 nrm = texture(normal_tex, UV).xyz;
@@ -40,8 +53,8 @@ void fragment() {
 
 	// Local-space radial fade. Mesh origin = centre (Blender export
 	// convention), so r = 0 at centre, r = 1 at fade_radius units out
-	// in the XZ plane.
-	float r = length(VERTEX.xz) / max(fade_radius, 0.001);
+	// in the XZ plane of the mesh's own coordinate frame.
+	float r = length(v_local_pos.xz) / max(fade_radius, 0.001);
 	float mask = 1.0 - smoothstep(vignette_start, vignette_end, r);
 
 	ALBEDO = col.rgb * albedo_tint;
