@@ -2278,17 +2278,25 @@ func _fire_unarmed(aim: Vector3) -> void:
 	if _combat.is_on_cooldown(UNARMED_SKILL):
 		return
 	_face_direction(aim)
-	# Random punch variant per swing — Cross / Hook / Uppercut /
-	# Punching cycle so rapid strikes don't all look identical.
-	_play_anim(XBotAnimations.random_unarmed_punch(), 1.4)
-	WeaponSounds.play_generic(&"unarmed_swing", global_position)
 	_combat.start_cooldown(UNARMED_SKILL, 1.0)
-	var wind_up := UNARMED_SKILL.wind_up
-	if wind_up > 0.0:
-		await get_tree().create_timer(wind_up).timeout
-		if not _alive:
+	# Sync the punch animation, sound, and damage on the impact frame
+	# — same principle as melee weapons. The anim stretches to fill
+	# the cooldown, damage + impact SFX fire at the midpoint (~50%
+	# through the anim, which is where the visible punch lands).
+	var duration: float = UNARMED_SKILL.cooldown if UNARMED_SKILL.cooldown > 0.0 else 0.3
+	_play_anim_stretched(XBotAnimations.random_unarmed_punch(), duration)
+	var impact_delay: float = duration * 0.5
+	# Capture player by instance_id so the lambda survives a death /
+	# scene reload that fires between press and impact — same pattern
+	# as the melee fire timer.
+	var player_id: int = get_instance_id()
+	get_tree().create_timer(impact_delay).timeout.connect(func() -> void:
+		var p := instance_from_id(player_id) as PrototypePlayer
+		if p == null or not p._alive:
 			return
-	_combat.resolve_skill_hit(UNARMED_SKILL, aim, null)
+		WeaponSounds.play_generic(&"unarmed_swing", p.global_position)
+		p._combat.resolve_skill_hit(UNARMED_SKILL, aim, null)
+	, CONNECT_ONE_SHOT)
 
 
 # Per-arm world-space offset for the projectile / hitscan source position.
