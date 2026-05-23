@@ -86,7 +86,7 @@ static var _GRIP: Dictionary = {
 	&"sniper_2h":      {"pos": Vector3(0.000, 0.350, 0.050), "rot": Vector3(-15.0, 75.0, -90.0), "scale_mult": 1.331},
 	&"rpg_2h":         {"pos": Vector3(0.100, 0.350, 0.000), "rot": Vector3(-90.0, 165.0, 0.0), "scale_mult": 1.089},
 	&"shotgun_2h":     {"pos": Vector3(-0.150, 0.350, -0.000), "rot": Vector3(-105.0, 90.0, 165.0), "scale_mult": 1.067},
-	&"accelerator_2h": {"pos": Vector3(-0.150, 0.350, -0.000), "rot": Vector3(-105.0, 90.0, 165.0), "scale_mult": 1.000},
+	&"accelerator_2h": {"pos": Vector3(-0.150, 0.350, 0.000), "rot": Vector3(-105.0, 90.0, 165.0), "scale_mult": 0.990, "muzzle": Vector3(0.000, 0.250, 0.600)},
 	&"taser_2h":       {"pos": Vector3(0.000, 0.250, 0.150), "rot": Vector3(-90.0, 0.0, -15.0), "scale_mult": 0.729, "muzzle": Vector3(-0.100, 0.100, 0.200)},
 }
 
