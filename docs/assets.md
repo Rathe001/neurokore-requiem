@@ -74,6 +74,7 @@ _None added from third-party sources yet. Player + enemy + drone use Quaternius
 | Brutal War Hammer | [Blenderkit](https://www.blenderkit.com/get-blenderkit/1dcbb828-80d5-46b6-9667-fa7d166216e8/) | Blenderkit — listed Free | `game/assets/models/weapons/hammer/hammer.glb` | ⚠️ | Imported via tools/import_blenderkit.py — license TBD until verified |
 | Sci Fi Grenade | [Blenderkit](https://www.blenderkit.com/get-blenderkit/f690851c-e9dc-4c60-9059-a415e8a2cf90/) | Blenderkit — listed Free | `game/assets/models/weapons/grenade/grenade.glb` | ⚠️ | Imported via tools/import_blenderkit.py — license TBD until verified |
 | Assault rifle | [Blenderkit](https://www.blenderkit.com/get-blenderkit/b0d9ee91-54b1-4aec-b548-cac621f70b76/) | Blenderkit — listed Free | `game/assets/models/weapons/energy_accelerator/energy_accelerator.glb` | ⚠️ | Imported via tools/import_blenderkit.py — license TBD until verified |
+| Crater Dry Hills | [Blenderkit](https://www.blenderkit.com/get-blenderkit/d96c2965-a1d8-4069-aeaa-56497bb838b6/) | Blenderkit — listed Free | `game/assets/models/vfx/crater/crater.glb` | ⚠️ | Imported via tools/import_blenderkit.py — license TBD until verified |
 
 
 ## Audio — SFX (YouTube extracts)

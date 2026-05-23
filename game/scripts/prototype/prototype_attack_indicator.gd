@@ -3208,17 +3208,21 @@ static func spawn_hammer_dust_cone(host: Node3D, aim: Vector3, attack_range: flo
 	t.tween_callback(_free_later(p))
 
 
-# ── Hammer-strike crater (replaces the dust clouds) ─────────────────────────
-# Subdivided PlaneMesh + procedural displacement in hammer_crater.gdshader.
-# Mesh sits just above the floor so the displaced rim is visible and the
-# flat interior can z-fight-free read as a scorched depression via dark
-# albedo. Spawns one-shot, lingers ~6s with a slow alpha fade after the
-# rim's heat glow has cooled.
+# ── Hammer-strike crater (PBR model from Blenderkit) ─────────────────────────
+# Replaces the earlier procedural PlaneMesh + displacement shader with
+# the imported "Crater Dry Hills" asset — real geometry, real PBR
+# textures (albedo / normal / roughness). Spawn:
+#   1. Instantiate the glb once and cache it.
+#   2. Auto-scale: source mesh is ~40m across, scale to per-strike
+#      radius (passed in world meters).
+#   3. Tween albedo alpha 1 → 0 over the lifetime to fade out cleanly;
+#      free the instance at the end.
 
-const HAMMER_CRATER_SHADER: Shader = preload("res://scripts/prototype/hammer_crater.gdshader")
-const HAMMER_CRATER_LIFETIME: float = 6.0
-const HAMMER_CRATER_LIFT: float = 0.04          # height above floor (avoids z-fight)
-const HAMMER_CRATER_SUBDIV: int = 28            # PlaneMesh subdivisions per axis
+const HAMMER_CRATER_SCENE: PackedScene = preload("res://assets/models/vfx/crater/crater.glb")
+const HAMMER_CRATER_LIFETIME: float = 8.0
+const HAMMER_CRATER_FADE_START: float = 5.0     # delay before alpha starts ramping down
+const HAMMER_CRATER_LIFT: float = 0.04          # above floor; avoids z-fight
+const HAMMER_CRATER_SOURCE_SIZE: float = 40.96  # mesh AABB longest axis (metres)
 
 
 static func spawn_hammer_crater(host: Node3D, world_pos: Vector3, radius: float) -> void:
@@ -3227,29 +3231,64 @@ static func spawn_hammer_crater(host: Node3D, world_pos: Vector3, radius: float)
 	var parent: Node = host.get_parent()
 	if parent == null:
 		parent = host
-	var mesh := PlaneMesh.new()
-	mesh.size = Vector2(radius * 2.0, radius * 2.0)
-	mesh.subdivide_width = HAMMER_CRATER_SUBDIV
-	mesh.subdivide_depth = HAMMER_CRATER_SUBDIV
-	var inst := MeshInstance3D.new()
-	inst.mesh = mesh
-	inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var mat := ShaderMaterial.new()
-	mat.shader = HAMMER_CRATER_SHADER
-	mat.set_shader_parameter(&"radius", radius)
-	mat.set_shader_parameter(&"age", 0.0)
-	inst.material_override = mat
-	# Top-level so the crater stays fixed in world space — doesn't drift
-	# when the player walks away from the impact site.
+	var inst := HAMMER_CRATER_SCENE.instantiate() as Node3D
+	if inst == null:
+		return
+	# Auto-scale: imported glb's longest axis is ~40m; we want the
+	# spawn to be `radius * 2` world metres wide.
+	var s: float = (radius * 2.0) / HAMMER_CRATER_SOURCE_SIZE
+	inst.scale = Vector3.ONE * s
+	# Top-level so the crater stays fixed in world space rather than
+	# following the parent's transform (the player walks away from it).
 	inst.top_level = true
 	inst.position = world_pos + Vector3(0.0, HAMMER_CRATER_LIFT, 0.0)
+	# Random Y rotation so successive craters don't look identical.
+	inst.rotation.y = randf() * TAU
 	parent.add_child(inst)
-	# Tween age 0 → 1 across the lifetime. The shader handles the
-	# heat-cool curve and alpha fade keyed off age.
+	# Disable shadow casting on every sub-mesh — fast-moving decal-style
+	# props don't need to drag the shadow atlas through their lifetime.
+	# Also duplicate the material so we can fade its alpha without
+	# affecting other crater instances or the source asset.
+	var fade_mat: StandardMaterial3D = null
+	var fade_mesh: MeshInstance3D = null
+	for vi in _all_visual_instances_of(inst):
+		if not (vi is MeshInstance3D):
+			continue
+		var mi := vi as MeshInstance3D
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		if mi.mesh == null or mi.mesh.get_surface_count() == 0:
+			continue
+		if fade_mat != null:
+			continue
+		var src_mat: Material = mi.mesh.surface_get_material(0)
+		if src_mat is StandardMaterial3D:
+			fade_mat = (src_mat as StandardMaterial3D).duplicate() as StandardMaterial3D
+			fade_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			mi.set_surface_override_material(0, fade_mat)
+			fade_mesh = mi
+	# Hold full opacity for the first stretch of the lifetime, then ramp
+	# alpha 1 → 0 over the remaining window. Tween_callback at the end
+	# frees the instance.
 	var tween := inst.create_tween()
-	tween.tween_property(mat, "shader_parameter/age", 1.0, HAMMER_CRATER_LIFETIME) \
-		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tween.tween_interval(HAMMER_CRATER_FADE_START)
+	if fade_mat != null:
+		tween.tween_property(fade_mat, "albedo_color:a", 0.0, HAMMER_CRATER_LIFETIME - HAMMER_CRATER_FADE_START) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	else:
+		tween.tween_interval(HAMMER_CRATER_LIFETIME - HAMMER_CRATER_FADE_START)
 	tween.tween_callback(_free_later(inst))
+
+
+# Recursive walk for any VisualInstance3D under `root`. Local helper so
+# the crater spawn doesn't depend on WeaponAttachment's identical
+# private routine.
+static func _all_visual_instances_of(root: Node) -> Array[VisualInstance3D]:
+	var out: Array[VisualInstance3D] = []
+	if root is VisualInstance3D:
+		out.append(root as VisualInstance3D)
+	for child in root.get_children():
+		out.append_array(_all_visual_instances_of(child))
+	return out
 
 
 ## RMB 2H melee (AoE Burst) — expanding donut of dust radiating outward
