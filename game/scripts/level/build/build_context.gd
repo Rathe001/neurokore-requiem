@@ -194,16 +194,21 @@ static func _make_themed_wall_material(t: LevelTheme) -> ShaderMaterial:
 	return m
 
 
-# Floors: 2m panels (chunkier, fewer seams in the player's view), more
-# prominent bevel borders + larger rivets, slightly less reflective and
-# more worn since the player walks on them all match. Iso camera catches
-# floor reflections particularly well, so the metallic value still reads
-# strong even at higher roughness.
+# Floors: 0.5m panels — half the wall tile size so the floor reads as
+# small, dense floor tiles rather than chunky 2m slabs. Seam/border/rivet
+# dimensions are in UV space (normalized per panel) so they scale
+# automatically with panel_size — the same UV values that were a few cm
+# wide on 2m panels become millimetre-scale details on 0.5m panels,
+# which is what gives the smaller-tile look its proportional finish.
+# More prominent bevel borders + larger rivets (UV-relative), slightly
+# less reflective and more worn since the player walks on them. Iso
+# camera catches floor reflections well, so metallic stays high even
+# at higher roughness.
 static func _make_themed_floor_material(t: LevelTheme) -> ShaderMaterial:
 	var m := ShaderMaterial.new()
 	m.shader = _PROCEDURAL_WALL_SHADER
-	m.set_shader_parameter(&"panel_size_x", 2.0)
-	m.set_shader_parameter(&"panel_size_y", 2.0)
+	m.set_shader_parameter(&"panel_size_x", 0.5)
+	m.set_shader_parameter(&"panel_size_y", 0.5)
 	m.set_shader_parameter(&"seam_width", 0.025)
 	m.set_shader_parameter(&"seam_bevel", 0.06)
 	m.set_shader_parameter(&"seam_depth", 0.18)

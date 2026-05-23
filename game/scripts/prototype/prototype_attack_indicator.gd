@@ -3290,18 +3290,20 @@ static func spawn_hammer_crater(host: Node3D, world_pos: Vector3, radius: float)
 		var mesh_fade_radius: float = max(mesh_aabb.size.x, mesh_aabb.size.z) * 0.5
 		if mesh_fade_radius < 0.01:
 			mesh_fade_radius = 1.0
+		# Shader uses SCREEN_TEXTURE for albedo (so the floor colour comes
+		# through the crater), but it still needs the normal + roughness
+		# maps from the glb's StandardMaterial3D. Albedo on the source
+		# is intentionally NOT carried over — that's the orange "sticker"
+		# look we're trying to replace.
 		var src_mat: Material = mi.mesh.surface_get_material(0)
-		var albedo_tex: Texture2D = null
 		var normal_tex: Texture2D = null
 		var rough_tex: Texture2D = null
 		if src_mat is StandardMaterial3D:
 			var sm := src_mat as StandardMaterial3D
-			albedo_tex = sm.albedo_texture
 			normal_tex = sm.normal_texture
 			rough_tex = sm.roughness_texture
 		var sh_mat := ShaderMaterial.new()
 		sh_mat.shader = HAMMER_CRATER_SHADER
-		sh_mat.set_shader_parameter(&"albedo_tex", albedo_tex)
 		sh_mat.set_shader_parameter(&"normal_tex", normal_tex)
 		sh_mat.set_shader_parameter(&"roughness_tex", rough_tex)
 		sh_mat.set_shader_parameter(&"fade", 1.0)
