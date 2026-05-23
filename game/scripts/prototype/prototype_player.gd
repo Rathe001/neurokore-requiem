@@ -4118,9 +4118,20 @@ func _try_blade_lunge(weapon: Item, atk_spd: float) -> void:
 
 
 func _face_direction(dir: Vector3) -> void:
-	if visual == null or dir.length_squared() < 0.0001:
+	if visual == null:
 		return
-	visual.look_at(visual.global_position + dir, Vector3.UP)
+	# Flatten to the XZ plane before look_at. The character only ever
+	# yaws — we never want X/Z tilt on the visual. Crucially, this
+	# also guards against the look_at "aligned" failure mode: when the
+	# player is mid-jump and the cursor world-pos is below them, the
+	# raw aim vector points near-vertical. Passing that to look_at
+	# with Vector3.UP as the up hint left the basis degenerate, which
+	# rendered as the character lying on its side (seen rarely after
+	# jumps + the per-tick face calls added for RMB aim-hold).
+	var flat := Vector3(dir.x, 0.0, dir.z)
+	if flat.length_squared() < 0.0001:
+		return
+	visual.look_at(visual.global_position + flat, Vector3.UP)
 
 func _smooth_face(dir: Vector3, turn_rate: float, delta: float) -> void:
 	# Rotate the visual yaw toward `dir` at most `turn_rate` rad/sec, taking

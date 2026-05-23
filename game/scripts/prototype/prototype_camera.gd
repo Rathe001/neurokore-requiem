@@ -127,7 +127,11 @@ const _FOCAL_CHEST_OFFSET: float = 1.2
 # is perspective or ortho. F8 projection toggling won't retroactively
 # resize already-spawned labels — newly-spawned ones pick up the
 # correct factor and old ones look mis-sized until the pool cycles.
-const PERSPECTIVE_LABEL_FIXED_SCALE: float = 0.2
+# Re-calibrated when FOV dropped from 18° → 12°. Godot's fixed_size
+# compensation overshoots in proportion to how narrow the FOV gets,
+# roughly scaling with tan(FOV/2): tan(6°) / tan(9°) ≈ 0.66, so the
+# old 0.20 factor became 0.13 at the new FOV.
+const PERSPECTIVE_LABEL_FIXED_SCALE: float = 0.13
 
 
 ## Returns the multiplier that should be applied to authored `pixel_size`
