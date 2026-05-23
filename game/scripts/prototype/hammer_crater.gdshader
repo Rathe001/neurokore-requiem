@@ -32,29 +32,28 @@ render_mode blend_mix, depth_draw_never, cull_back;
 uniform sampler2D screen_texture : hint_screen_texture, repeat_disable, filter_linear_mipmap;
 uniform sampler2D normal_tex : hint_normal, filter_linear_mipmap;
 uniform sampler2D roughness_tex : hint_roughness_r, filter_linear_mipmap;
-// Scorch tint multiplied into the sampled floor color. Pushed to a
-// near-black so the crater reads as a clearly burned patch — the
-// earlier warm-grey tint blended in too well and the impact was
-// invisible against the dark floor texture.
-uniform vec3 tint : source_color = vec3(0.18, 0.13, 0.10);
-uniform float tint_mix : hint_range(0.0, 1.0) = 0.65;
+// Scorch tint multiplied into the sampled floor color. Warm
+// burnt-sienna — picks up contrast against the cyberpunk floor's
+// cool blue-grey palette. Going darker than the floor (the previous
+// near-black attempt) made the crater disappear; the floor is
+// already dark, so dark scorch = invisible. Warm tones cut through.
+uniform vec3 tint : source_color = vec3(0.85, 0.55, 0.32);
+uniform float tint_mix : hint_range(0.0, 1.0) = 0.6;
 uniform float fade : hint_range(0.0, 1.0) = 1.0;
 uniform float fade_radius : hint_range(0.5, 100.0) = 20.0;
 uniform float vignette_start : hint_range(0.0, 1.0) = 0.45;
 uniform float vignette_end : hint_range(0.0, 1.0) = 0.85;
-// Strong roughness boost so the scorched zone reads as matte/charred
-// against the polished, reflective surrounding floor — the contrast in
-// specular response by itself draws the eye.
-uniform float roughness_boost : hint_range(0.0, 1.0) = 0.55;
-// Hot rim — emissive band just inside the alpha-fade edge that reads
-// as "recently struck." Multiplied by `fade` so the heat cools off as
-// the crater ages, then ramps to nothing right when the crater
-// vanishes. Width is the radial UV-distance over which the band
-// peaks; intensity goes above 1.0 so the level's bloom env amp picks
-// it up and the rim glows.
-uniform vec3 rim_color : source_color = vec3(1.0, 0.45, 0.15);
-uniform float rim_intensity : hint_range(0.0, 6.0) = 2.5;
-uniform float rim_width : hint_range(0.02, 0.30) = 0.12;
+// Roughness boost — matte against polished floor; the specular
+// contrast at the edge also helps the silhouette read.
+uniform float roughness_boost : hint_range(0.0, 1.0) = 0.45;
+// Soft warm edge highlight. Kept low so it reads as a subtle hot
+// outline on the scorch (not the bright orange RING that the
+// previous tune accidentally created — which looked identical to
+// the spawn_hammer_impact shockwave and read as "no crater here,
+// just the old VFX"). rim_width controls the falloff radius.
+uniform vec3 rim_color : source_color = vec3(1.0, 0.55, 0.20);
+uniform float rim_intensity : hint_range(0.0, 6.0) = 0.7;
+uniform float rim_width : hint_range(0.02, 0.40) = 0.22;
 
 // Model-local vertex position carried into fragment — needed because
 // the built-in VERTEX in fragment() is in VIEW space, not model space.
