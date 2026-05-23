@@ -11,14 +11,17 @@
 script = ExtResource("1_skill_script")
 display_name = "Unarmed Strike"
 glyph = "P"
-; Modestly faster than the original (0.5s → 0.4s) — 0.3s was too
-; frantic per the user. DPS preserved at 10 by scaling damage 5 → 4.
-; wind_up zeroed because _fire_unarmed schedules its own impact-frame
-; delay (cooldown × 0.5) so the punch sound + damage land mid-anim
-; rather than at press time.
-damage = 4
+; Cooldown set just under the blade's 0.7s base so unarmed reads as
+; 'a little faster than blades' — the user's stated target. Per-hit
+; damage stays low since unarmed is a fallback, not a real weapon
+; class. DPS lands at ~7.7 (5 / 0.65) which is well below blade's
+; ~30 DPS, in line with 'never completely helpless but no substitute
+; for a weapon.' wind_up zeroed because _fire_unarmed schedules its
+; own impact-frame delay (cooldown × 0.5) so the punch sound + damage
+; land mid-anim rather than at press time.
+damage = 5
 skill_range = 2.0
-cooldown = 0.4
+cooldown = 0.65
 wind_up = 0.0
 resource_cost = 0
 targeting_mode = 0
