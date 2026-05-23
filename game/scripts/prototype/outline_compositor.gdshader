@@ -31,54 +31,56 @@ uniform float glow_boost : hint_range(0.3, 4.0) = 1.4;
 
 void fragment() {
 	vec4 here = texture(TEXTURE, UV);
+	// Inside the silhouette → leave transparent so the world shows
+	// through. Godot 4 canvas_item shaders disallow `return` in
+	// fragment(), so the early-out is restructured as an else-branch
+	// rather than `if (cond) { COLOR = ...; return; }`.
 	if (here.a > 0.5) {
-		// Inside the silhouette — let the world view show through.
 		COLOR = vec4(0.0);
-		return;
+	} else {
+		vec2 px = TEXTURE_PIXEL_SIZE;
+
+		// Two-tap, 8-direction sampling: one ring at core_thickness for
+		// the bright tube band, one at glow_radius for the soft halo.
+		// 16 samples per pixel — cheap enough at 1080p.
+		float core_mask = 0.0;
+		vec3 core_color = vec3(0.0);
+		float glow_mask = 0.0;
+		vec3 glow_color = vec3(0.0);
+
+		for (int i = 0; i < 8; i++) {
+			float angle = float(i) * 6.28318530718 / 8.0;
+			vec2 dir = vec2(cos(angle), sin(angle));
+
+			vec4 c = texture(TEXTURE, UV + dir * px * core_thickness);
+			core_mask += c.a;
+			core_color += c.rgb * c.a;
+
+			vec4 g = texture(TEXTURE, UV + dir * px * glow_radius);
+			glow_mask += g.a;
+			glow_color += g.rgb * g.a;
+		}
+
+		// Normalise — both masks now in [0, 1], colors weighted by mask.
+		core_mask /= 8.0;
+		glow_mask /= 8.0;
+		if (core_mask > 0.001) {
+			core_color /= core_mask * 8.0;
+		}
+		if (glow_mask > 0.001) {
+			glow_color /= glow_mask * 8.0;
+		}
+
+		// Compose. Core color wins where the tube band is bright; the
+		// outer halo uses the glow_color blend so each pixel reads as
+		// the right hue. RGB intensity can exceed 1.0 so bloom picks
+		// it up; alpha is clamped so we don't accidentally fade the
+		// underlying world view at the halo's tail.
+		vec3 col = mix(glow_color, core_color, core_mask);
+		float core_intensity = core_mask * core_boost;
+		float glow_intensity = glow_mask * glow_boost;
+		float total = core_intensity + glow_intensity * 0.5;
+
+		COLOR = vec4(col * total, clamp(total, 0.0, 1.0));
 	}
-
-	vec2 px = TEXTURE_PIXEL_SIZE;
-
-	// Two-tap, 8-direction sampling: one ring at core_thickness for
-	// the bright tube band, one at glow_radius for the soft halo.
-	// 16 samples per pixel — cheap enough at 1080p.
-	float core_mask = 0.0;
-	vec3 core_color = vec3(0.0);
-	float glow_mask = 0.0;
-	vec3 glow_color = vec3(0.0);
-
-	for (int i = 0; i < 8; i++) {
-		float angle = float(i) * 6.28318530718 / 8.0;
-		vec2 dir = vec2(cos(angle), sin(angle));
-
-		vec4 c = texture(TEXTURE, UV + dir * px * core_thickness);
-		core_mask += c.a;
-		core_color += c.rgb * c.a;
-
-		vec4 g = texture(TEXTURE, UV + dir * px * glow_radius);
-		glow_mask += g.a;
-		glow_color += g.rgb * g.a;
-	}
-
-	// Normalise — both masks now in [0, 1], colors weighted by mask.
-	core_mask /= 8.0;
-	glow_mask /= 8.0;
-	if (core_mask > 0.001) {
-		core_color /= core_mask * 8.0;
-	}
-	if (glow_mask > 0.001) {
-		glow_color /= glow_mask * 8.0;
-	}
-
-	// Compose. Core color wins where the tube band is bright; the
-	// outer halo uses the glow_color blend so each pixel reads as the
-	// right hue. RGB intensity can exceed 1.0 so bloom picks it up;
-	// alpha is clamped so we don't accidentally fade the underlying
-	// world view at the halo's tail.
-	vec3 col = mix(glow_color, core_color, core_mask);
-	float core_intensity = core_mask * core_boost;
-	float glow_intensity = glow_mask * glow_boost;
-	float total = core_intensity + glow_intensity * 0.5;
-
-	COLOR = vec4(col * total, clamp(total, 0.0, 1.0));
 }
