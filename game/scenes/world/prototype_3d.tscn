@@ -120,9 +120,9 @@ test_weapon_base_paths = Array[String](["res://resources/items/weapon_bases/rang
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 14, 4)
 current = true
 ; Fake-ortho perspective — see level_shell.tscn for the rationale.
-fov = 18.0
+fov = 12.0
 size = 22.0
 near = 0.1
-far = 250.0
+far = 350.0
 script = ExtResource("script_camera")
 target_path = NodePath("../Player")

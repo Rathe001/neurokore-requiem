@@ -12,14 +12,20 @@ class_name PrototypeCamera
 ## Camera offset from the focal point. Magnitude becomes orbit distance,
 ## direction becomes pitch + bearing.
 ##
-## Default magnitude (~70m) is tuned for fake-ortho perspective:
-## with FOV=18° in the scene's Camera3D properties, distance 70m gives
-## a vertical view extent of 2 * 70 * tan(9°) ≈ 22m — the same world
-## extent as the legacy ortho size=22 setup. F8 toggles between
-## perspective and orthogonal projection at runtime; ortho ignores
-## distance entirely (parallel projection) so the same offset works
-## visually in either mode.
-@export var offset: Vector3 = Vector3(18.4, 64.4, 18.4)
+## Default magnitude (~105m) is tuned for fake-ortho perspective:
+## with FOV=12° in the scene's Camera3D properties, distance 105m
+## gives a vertical view extent of 2 * 105 * tan(6°) ≈ 22m — the
+## same world extent as the legacy ortho size=22 setup. F8 toggles
+## between perspective and orthogonal projection at runtime; ortho
+## ignores distance entirely (parallel projection) so the same offset
+## works visually in either mode.
+##
+## To make perspective convergence even less perceptible (closer to
+## true ortho), halve FOV and double `offset` magnitude proportionally
+## — view extent stays the same, foreshortening shrinks. Watch the
+## `far` clip and any SDFGI / shadow distance settings if you push
+## past ~150m.
+@export var offset: Vector3 = Vector3(27.8, 97.3, 27.8)
 ## Holding mouse-wheel-button and dragging vertically tilts the pitch.
 ## Off = camera is fixed at the @export offset's pitch.
 @export var enable_pitch_drag: bool = true
