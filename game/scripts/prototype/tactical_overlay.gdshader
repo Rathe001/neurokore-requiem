@@ -8,6 +8,8 @@ shader_type spatial;
 
 render_mode unshaded, depth_draw_never, cull_disabled, blend_mix;
 
+uniform sampler2D depth_texture : source_color, hint_depth_texture;
+
 uniform float inner_radius : hint_range(0.0, 1.0) = 0.5;
 uniform float outer_radius : hint_range(0.0, 1.0) = 1.0;
 uniform vec3 inner_color : source_color = vec3(0.2, 0.85, 0.4);
@@ -28,6 +30,26 @@ void fragment() {
 	vec2 uv = UV * 2.0 - 1.0;
 	float r = length(uv);
 	if (r > 1.0) {
+		discard;
+	}
+
+	// LoS clip — discard fragments that aren't backed by visible
+	// level geometry. Now that the camera is perspective + reverse-Z,
+	// the standard depth-buffer math works: scene_depth ~= 0 means the
+	// fragment is over the void (nothing behind it but the far plane
+	// / clear colour), and scene_depth strictly closer than FRAGCOORD.z
+	// means a wall has occluded the ring's line of sight. Either case
+	// discards.
+	//
+	// Why this works now and didn't before: under ortho the depth
+	// buffer values don't map cleanly to a near/far comparison, and
+	// the "void" case showed mid-range depth instead of the far-plane
+	// constant. Perspective + reverse-Z gives us 0 = far reliably.
+	float scene_depth = texture(depth_texture, SCREEN_UV).x;
+	if (scene_depth < 0.0005) {
+		discard;
+	}
+	if (scene_depth > FRAGCOORD.z + 0.0005) {
 		discard;
 	}
 

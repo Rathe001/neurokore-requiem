@@ -3095,6 +3095,179 @@ static func spawn_hit_cone(host: Node3D, aim: Vector3, attack_range: float, cone
 	var pos := host.global_position + Vector3(0.0, SHOCKWAVE_BUBBLE_LIFT, 0.0)
 	_spawn_shockwave(host, pos, _cone_dome_mesh(attack_range, cone_deg), forward, SHOCKWAVE_DURATION_CONE)
 
+
+# ── Hammer dust / debris VFX ────────────────────────────────────────────────
+# Realistic-feeling ground debris kicked up by the 2H hammer swing. Two
+# variants:
+#   spawn_hammer_dust_cone — LMB: fan of debris in the swing's cone
+#   spawn_hammer_dust_ring — RMB: expanding donut of dust outward from
+#     the player's feet
+# Both reuse the soft-disc footstep texture and a brown dust palette so
+# they read as ground material rather than energy / shockwave.
+
+const HAMMER_DUST_COLOR := Color(0.62, 0.52, 0.40, 0.55)
+const HAMMER_DUST_LIFETIME: float = 0.65
+const HAMMER_DUST_CONE_AMOUNT: int = 22
+const HAMMER_DUST_RING_AMOUNT: int = 28
+const HAMMER_DUST_LIFT: float = 0.06       # spawn height above floor
+
+static var _hammer_dust_material: StandardMaterial3D = null
+static var _hammer_dust_color_ramp: Gradient = null
+
+
+static func _get_hammer_dust_material() -> StandardMaterial3D:
+	if _hammer_dust_material == null:
+		var mat := StandardMaterial3D.new()
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+		mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+		mat.billboard_keep_scale = true
+		mat.albedo_color = HAMMER_DUST_COLOR
+		# Reuse the footstep soft-disc texture so individual particles
+		# read as feathered puffs instead of hard quads.
+		mat.albedo_texture = _get_footstep_texture()
+		_hammer_dust_material = mat
+	return _hammer_dust_material
+
+
+static func _get_hammer_dust_color_ramp() -> Gradient:
+	if _hammer_dust_color_ramp == null:
+		var g := Gradient.new()
+		# Brief opacity peak, then long alpha-only decay so the cloud
+		# lingers as it dissipates rather than popping out.
+		g.set_color(0, Color(1, 1, 1, 0.85))
+		g.set_color(1, Color(1, 1, 1, 0))
+		g.set_offset(0, 0.0)
+		g.set_offset(1, 1.0)
+		_hammer_dust_color_ramp = g
+	return _hammer_dust_color_ramp
+
+
+## LMB 2H melee — fan-shaped dust burst ahead of the player along the
+## swing direction. Particles kick up at the cone's footprint and arc
+## outward + up, settling back over ~0.65s.
+static func spawn_hammer_dust_cone(host: Node3D, aim: Vector3, attack_range: float, cone_deg: float) -> void:
+	if host == null:
+		return
+	var parent: Node = host.get_parent()
+	if parent == null:
+		parent = host
+	# Forward direction flattened to the ground plane.
+	var forward := Vector3(aim.x, 0.0, aim.z)
+	if forward.length_squared() > 0.0001:
+		forward = forward.normalized()
+	else:
+		forward = -host.global_transform.basis.z
+	var p := CPUParticles3D.new()
+	p.amount = HAMMER_DUST_CONE_AMOUNT
+	p.lifetime = HAMMER_DUST_LIFETIME
+	p.one_shot = true
+	p.explosiveness = 1.0
+	p.local_coords = false
+	p.mesh = _get_footstep_quad_mesh()
+	p.material_override = _get_hammer_dust_material()
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# Box-shaped emission strip extending out in front of the player.
+	# Width covers the cone's mouth; depth puts particles along the
+	# whole swing reach so the fan reads as the impact arc, not a
+	# point-source puff.
+	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	var half_width: float = attack_range * tan(deg_to_rad(cone_deg * 0.5)) * 0.5
+	var depth_half: float = attack_range * 0.4
+	p.emission_box_extents = Vector3(half_width, 0.05, depth_half)
+	# Direction biases up + slightly forward; spread fans particles
+	# across the cone. Gravity pulls them back to the floor so the
+	# silhouette settles cleanly.
+	p.direction = (Vector3.UP * 1.2 + forward * 0.6).normalized()
+	p.spread = cone_deg * 0.45
+	p.flatness = 0.0
+	p.initial_velocity_min = 1.2
+	p.initial_velocity_max = 2.4
+	p.gravity = Vector3(0, -3.2, 0)
+	p.damping_min = 1.2
+	p.damping_max = 2.5
+	p.scale_amount_min = 0.18
+	p.scale_amount_max = 0.40
+	p.color_ramp = _get_hammer_dust_color_ramp()
+	# Position emitter at the centre of the strip — mid-cone, floor
+	# level (plus a small lift to avoid z-fighting with the ground).
+	p.top_level = true
+	# Set position BEFORE add_child — see footstep comment.
+	var centre := host.global_position + forward * attack_range * 0.4 + Vector3(0.0, HAMMER_DUST_LIFT, 0.0)
+	p.position = centre
+	# Rotate the emission box so its long axis aligns with the swing
+	# direction. Otherwise the strip is world-axis-aligned and looks
+	# wrong when the player faces diagonally.
+	var basis := Basis.looking_at(forward, Vector3.UP)
+	p.transform.basis = basis
+	parent.add_child(p)
+	p.emitting = true
+	var t := p.create_tween()
+	t.tween_interval(HAMMER_DUST_LIFETIME + 0.2)
+	t.tween_callback(_free_later(p))
+
+
+## RMB 2H melee (AoE Burst) — expanding donut of dust radiating outward
+## from the player's feet. Uses DIRECTED_POINTS so each particle's
+## direction can be pre-baked outward from the centre rather than
+## sharing a single direction vector.
+static func spawn_hammer_dust_ring(host: Node3D, radius: float) -> void:
+	if host == null:
+		return
+	var parent: Node = host.get_parent()
+	if parent == null:
+		parent = host
+	var p := CPUParticles3D.new()
+	p.amount = HAMMER_DUST_RING_AMOUNT
+	p.lifetime = HAMMER_DUST_LIFETIME
+	p.one_shot = true
+	p.explosiveness = 1.0
+	p.local_coords = false
+	p.mesh = _get_footstep_quad_mesh()
+	p.material_override = _get_hammer_dust_material()
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# Pre-bake N emission points around a ring with their per-point
+	# velocity pointing outward + up. Inner radius is small (debris
+	# kicks up near the impact); particles travel toward the outer
+	# edge over their lifetime.
+	var inner_radius: float = radius * 0.25
+	var points := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var colors := PackedColorArray()
+	for i in HAMMER_DUST_RING_AMOUNT:
+		var angle: float = TAU * float(i) / float(HAMMER_DUST_RING_AMOUNT)
+		# Add a small angle jitter so the ring doesn't look mechanical.
+		angle += randf_range(-0.08, 0.08)
+		var dir_h := Vector3(cos(angle), 0.0, sin(angle))
+		# Emit just inside the inner radius to give the cloud room to
+		# expand. The "normal" vector for DIRECTED_POINTS is the per-
+		# point velocity direction — bias outward + slightly up.
+		points.append(dir_h * inner_radius)
+		normals.append((dir_h * 1.5 + Vector3.UP * 0.4).normalized())
+		colors.append(Color.WHITE)
+	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_DIRECTED_POINTS
+	p.emission_points = points
+	p.emission_normals = normals
+	p.emission_colors = colors
+	p.spread = 12.0
+	p.flatness = 0.0
+	p.initial_velocity_min = 2.2
+	p.initial_velocity_max = 3.6
+	p.gravity = Vector3(0, -2.8, 0)
+	p.damping_min = 1.5
+	p.damping_max = 2.8
+	p.scale_amount_min = 0.20
+	p.scale_amount_max = 0.45
+	p.color_ramp = _get_hammer_dust_color_ramp()
+	p.top_level = true
+	p.position = host.global_position + Vector3(0.0, HAMMER_DUST_LIFT, 0.0)
+	parent.add_child(p)
+	p.emitting = true
+	var t := p.create_tween()
+	t.tween_interval(HAMMER_DUST_LIFETIME + 0.2)
+	t.tween_callback(_free_later(p))
+
 static func spawn_hit_radial(host: Node3D, radius: float) -> void:
 	var pos := host.global_position + Vector3(0.0, SHOCKWAVE_BUBBLE_LIFT, 0.0)
 	_spawn_shockwave(host, pos, _bubble_mesh(radius), Vector3.ZERO, SHOCKWAVE_DURATION_RADIAL)
