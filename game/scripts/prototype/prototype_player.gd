@@ -275,6 +275,22 @@ var _attack_weapon: Item = null
 # stun for 2H). Hits 0/1/2 represent swing 1/2/3 of the chain.
 const MELEE_COMBO_RESET_TIME: float = 1.5
 const MELEE_BASE_IDS: Array[StringName] = [&"melee_1h", &"melee_2h"]
+
+# Fraction-through-the-swing where each melee clip's visible impact
+# frame actually lands. Damage + SFX fire at `melee_interval * this`,
+# so dialling per-weapon syncs the visible hit moment with the
+# resolved damage. Default 0.5 = mid-swing; weapons whose Mixamo
+# source clip front-loads the windup land their hit earlier.
+#  - melee_1h: sword_slash clips chain quickly, impact ~50% — keep default
+#  - melee_2h: axe_swing has a heavy windup before strike, impact ~40%
+const _MELEE_IMPACT_RATIO: Dictionary = {
+	&"melee_1h": 0.5,
+	&"melee_2h": 0.4,
+}
+
+
+func _melee_impact_ratio(base_id: StringName) -> float:
+	return _MELEE_IMPACT_RATIO.get(base_id, 0.5)
 var _melee_combo_step: int = 0
 var _melee_combo_last_t: float = -1000.0
 var _melee_combo_last_weapon_id: StringName = &""
@@ -2242,7 +2258,17 @@ func _cast_lmb_combat() -> void:
 		var wind_up_delay: float
 		if is_melee:
 			var melee_interval: float = (skill.cooldown / atk_spd) if skill.cooldown > 0.0 else 0.5
-			wind_up_delay = melee_interval * 0.5
+			# Damage / SFX fires at this fraction through the stretched
+			# swing clip. The "right" value is where the clip's visible
+			# impact frame actually lands — Mixamo's stock melee swings
+			# aren't authored with impact at exactly 50%, so the default
+			# 0.5 leaves damage feeling slightly desynced from the visual
+			# hit on weapons whose clip front-loads the windup.
+			# `axe_swing` (sledgehammer) leans into a heavy windup before
+			# the strike — the visible impact lands ~40% in, not 50%.
+			# Per-class table lets each weapon dial its own ratio without
+			# tuning the others.
+			wind_up_delay = melee_interval * _melee_impact_ratio(item.weapon_base_id)
 		else:
 			wind_up_delay = (skill.wind_up / atk_spd) if skill.wind_up > 0.0 else 0.0
 		var fire_delay: float = float(i) * stagger + wind_up_delay
