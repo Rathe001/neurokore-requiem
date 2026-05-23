@@ -8,7 +8,7 @@ class_name ShellCasing extends Node3D
 
 const LIFETIME: float = 3.5            # total time alive before queue_free
 const FADE_START: float = 2.5          # alpha decays from this point to LIFETIME
-const HEAT_FLASH_DURATION: float = 0.25 # extra emission while casing is "hot" from firing
+const HEAT_FLASH_DURATION: float = 0.08 # extra emission while casing is "hot" from firing
 const GRAVITY: float = 9.8             # m/s²
 const BOUNCE_DAMP: float = 0.25        # vertical velocity retained on bounce
 const HORIZONTAL_DAMP: float = 0.4     # x/z velocity retained on bounce
@@ -58,12 +58,14 @@ func _physics_process(delta: float) -> void:
 	if _age >= LIFETIME:
 		queue_free()
 		return
-	# Decay the heat-pop emission for the first quarter-second so the
-	# casing reads as "fresh / hot" right at the muzzle and dims to its
-	# settled metallic look by the time it hits the floor.
+	# Brief heat-pop emission at ejection that drops to zero by 80ms.
+	# After that the casing is pure metallic — visible via specular,
+	# not emission — so it doesn't glow in flight or after settling.
 	if _mat != null and _age < HEAT_FLASH_DURATION:
 		var heat_t: float = 1.0 - _age / HEAT_FLASH_DURATION
-		_mat.emission_energy_multiplier = 0.6 + 1.9 * heat_t
+		_mat.emission_energy_multiplier = 2.5 * heat_t
+	elif _mat != null and _mat.emission_energy_multiplier != 0.0:
+		_mat.emission_energy_multiplier = 0.0
 	if not _settled:
 		_vel.y -= GRAVITY * delta
 		position += _vel * delta
