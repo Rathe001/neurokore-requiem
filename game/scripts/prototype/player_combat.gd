@@ -89,6 +89,19 @@ func setup(host: PrototypePlayer) -> void:
 	_host = host
 
 
+# Schedule a shell casing ejection from the equipped weapon's mounted
+# model 0.5s after the shot lands. Resolves the player's skeleton and
+# delegates to WeaponAttachment, which no-ops for weapons that don't
+# eject (energy guns, melee, RPG).
+func _eject_casing(weapon: Item) -> void:
+	if weapon == null or _host == null or _host.visual == null:
+		return
+	var skel := PrototypePlayer._find_skeleton_recursive(_host.visual)
+	if skel == null:
+		return
+	WeaponAttachment.eject_casing_delayed(skel, weapon.weapon_base_id, 0.5)
+
+
 # World-space spawn point for projectiles / hitscan rays / muzzle flashes.
 # Resolves to the actual barrel tip of the equipped weapon's visible
 # glb when one is mounted on the X Bot right-hand bone, so shots emerge
@@ -708,6 +721,7 @@ func _spawn_projectile(skill: Skill, aim: Vector3, eff_range: float, weapon: Ite
 	var _is_bullet := weapon != null and weapon.is_bullet_weapon()
 	var _tint := _weapon_tint(weapon)
 	CombatVisuals.spawn_muzzle_flash(_host, spawn_pos, _is_bullet, _tint)
+	_eject_casing(weapon)
 	# MP: replicate the projectile spawn so other peers see it travel.
 	# Damage stays host-authoritative; remote echoes are ghost projectiles.
 	CombatVisuals.broadcast_projectile(spawn_pos, aim_norm, proj.speed, proj.max_range,
@@ -879,6 +893,7 @@ func _resolve_hitscan(skill: Skill, aim: Vector3, eff_range: float, weapon: Item
 	var hitscan_tint := _weapon_tint(weapon)
 	var _is_bullet := weapon != null and weapon.is_bullet_weapon()
 	CombatVisuals.spawn_muzzle_flash(_host, origin, _is_bullet, hitscan_tint)
+	_eject_casing(weapon)
 	CombatVisuals.spawn_beam(_host, aim_norm, beam_end, source_offset, hitscan_tint)
 	if hit_target != null:
 		CombatVisuals.spawn_impact_burst(_host, hit_target.global_position + Vector3(0.0, 0.9, 0.0), hitscan_tint)
@@ -926,6 +941,7 @@ func _spawn_projectile_exact(skill: Skill, aim_norm: Vector3, eff_range: float, 
 	proj.monitoring = true
 	proj.reset()
 	CombatVisuals.spawn_muzzle_flash(_host, spawn_pos, proj.is_bullet, _weapon_tint(weapon))
+	_eject_casing(weapon)
 	# MP: replicate the Double Tap follow-up shot.
 	CombatVisuals.broadcast_projectile(spawn_pos, aim_norm, proj.speed, proj.max_range,
 		proj.blast_radius, proj.visual_scale, proj.is_bullet, proj.damage_type, proj.target_group)
@@ -962,6 +978,7 @@ func _resolve_shotgun(skill: Skill, aim: Vector3, eff_range: float, weapon: Item
 				break
 	# One muzzle flash for the whole burst — all pellets leave the barrel together.
 	CombatVisuals.spawn_muzzle_flash(_host, origin, true, _weapon_tint(weapon))
+	_eject_casing(weapon)
 	var pellets: int = maxi(1, skill.pellet_count)
 	if weapon != null:
 		pellets += weapon.get_modifier(&"pellet_count")
@@ -1337,6 +1354,7 @@ func _resolve_hitscan_exact(skill: Skill, aim_norm: Vector3, eff_range: float, w
 	var hitscan_exact_tint := _weapon_tint(weapon)
 	var _is_bullet_exact := weapon != null and weapon.is_bullet_weapon()
 	CombatVisuals.spawn_muzzle_flash(_host, origin, _is_bullet_exact, hitscan_exact_tint)
+	_eject_casing(weapon)
 	CombatVisuals.spawn_beam(_host, aim_norm, beam_end, source_offset, hitscan_exact_tint)
 	if hit_target != null:
 		CombatVisuals.spawn_impact_burst(_host, hit_target.global_position + Vector3(0.0, 0.9, 0.0), hitscan_exact_tint)

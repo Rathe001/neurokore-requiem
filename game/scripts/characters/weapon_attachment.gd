@@ -91,6 +91,36 @@ static var _GRIP: Dictionary = {
 }
 
 
+# Per-weapon list of MeshInstance3D names to hide on attach. Some glbs
+# ship with embedded shell-casing or magazine geometry that we don't
+# want visible on the mounted weapon — we capture those meshes for the
+# casing ejection system and hide the visible copy.
+const _HIDDEN_MESHES: Dictionary = {
+	&"shotgun_2h": [&"bullet"],
+}
+
+# Captured shotgun casing mesh — populated on first shotgun attach so
+# the ejection system can spawn the real shell rather than a stand-in.
+# Static so successive attaches (weapon swap, gender swap) keep using
+# the same Mesh resource instead of recapturing.
+static var _shotgun_casing_mesh: Mesh = null
+
+# Lazily-built generic casing meshes for non-shotgun weapons. Sized to
+# roughly match the user's request — sniper biggest, smg smallest.
+static var _sniper_casing_mesh: Mesh = null
+static var _lmg_casing_mesh: Mesh = null
+static var _smg_casing_mesh: Mesh = null
+
+# Maps a weapon base_id to its casing variant. Weapons not in this dict
+# (energy guns, RPG, melee) don't eject anything.
+const _EJECT_VARIANTS: Dictionary = {
+	&"shotgun_2h": &"shotgun",
+	&"sniper_2h":  &"sniper",
+	&"lmg_2h":     &"lmg",
+	&"smg_1h":     &"smg",
+}
+
+
 ## Mounts (or swaps, or clears) the weapon model on `skeleton`'s right
 ## hand. Pass &"" to clear (bare hands). Idempotent — re-calling with
 ## the same id rebuilds cleanly. Safe to call on a skeleton that has
@@ -118,7 +148,130 @@ static func set_weapon(skeleton: Skeleton3D, weapon_base_id: StringName) -> void
 		return
 	model.name = _MODEL_NODE_NAME
 	mount.add_child(model)
+	# Capture-and-hide BEFORE grip is applied so the hidden meshes
+	# don't influence the model's AABB during auto-scale.
+	_hide_and_capture(model, weapon_base_id)
 	_apply_grip(model, weapon_base_id)
+
+
+# Walks the freshly-mounted model and hides every MeshInstance3D whose
+# name matches the _HIDDEN_MESHES list for this weapon. For the
+# shotgun, the matched mesh is also stashed in _shotgun_casing_mesh
+# so the ejection system can reuse it.
+static func _hide_and_capture(model: Node3D, weapon_base_id: StringName) -> void:
+	var hide_list: Array = _HIDDEN_MESHES.get(weapon_base_id, [])
+	if hide_list.is_empty():
+		return
+	for vi in _all_visual_instances(model):
+		if not (vi is MeshInstance3D):
+			continue
+		var mi := vi as MeshInstance3D
+		var matched := false
+		for target_name in hide_list:
+			if mi.name == String(target_name):
+				matched = true
+				break
+		if not matched:
+			continue
+		# One-time capture of the shotgun casing for reuse on ejection.
+		if weapon_base_id == &"shotgun_2h" and _shotgun_casing_mesh == null and mi.mesh != null:
+			_shotgun_casing_mesh = mi.mesh
+		mi.visible = false
+
+
+# Returns the casing Mesh appropriate for `weapon_base_id`, building it
+# lazily on first request. Returns null when the weapon shouldn't eject
+# (energy weapons, melee, anything not in _EJECT_VARIANTS).
+static func _get_casing_mesh(weapon_base_id: StringName) -> Mesh:
+	var variant: StringName = _EJECT_VARIANTS.get(weapon_base_id, &"")
+	match variant:
+		&"shotgun":
+			return _shotgun_casing_mesh
+		&"sniper":
+			if _sniper_casing_mesh == null:
+				_sniper_casing_mesh = _build_cylinder_mesh(0.012, 0.07)
+			return _sniper_casing_mesh
+		&"lmg":
+			if _lmg_casing_mesh == null:
+				_lmg_casing_mesh = _build_cylinder_mesh(0.010, 0.065)
+			return _lmg_casing_mesh
+		&"smg":
+			if _smg_casing_mesh == null:
+				_smg_casing_mesh = _build_cylinder_mesh(0.005, 0.025)
+			return _smg_casing_mesh
+	return null
+
+
+static func _build_cylinder_mesh(radius: float, height: float) -> CylinderMesh:
+	var m := CylinderMesh.new()
+	m.top_radius = radius
+	m.bottom_radius = radius
+	m.height = height
+	m.radial_segments = 10
+	m.rings = 1
+	return m
+
+
+## Schedule a shell casing ejection from the weapon mounted on `skeleton`
+## `delay` seconds from now. No-op if the weapon isn't in _EJECT_VARIANTS
+## or the skeleton becomes invalid before the timer fires (player
+## respawn, scene change). Each fire call should create one of these —
+## the delay is per-call, not pooled.
+static func eject_casing_delayed(skeleton: Skeleton3D, weapon_base_id: StringName, delay: float = 0.5) -> void:
+	if skeleton == null or weapon_base_id == &"":
+		return
+	var mesh := _get_casing_mesh(weapon_base_id)
+	if mesh == null:
+		return
+	var tree := skeleton.get_tree()
+	if tree == null:
+		return
+	# Capture instance_id (int) not the skeleton ref itself — if the
+	# player is despawned during the delay window the lambda can't hold
+	# a freed Skeleton3D pointer. Re-resolve via instance_from_id when
+	# the timer actually fires. Same pattern documented in
+	# project_lambda_capture_freed memory.
+	var skel_id := skeleton.get_instance_id()
+	tree.create_timer(delay).timeout.connect(func() -> void:
+		var s: Skeleton3D = instance_from_id(skel_id) as Skeleton3D
+		if s == null or not is_instance_valid(s):
+			return
+		_spawn_casing(s, mesh)
+	)
+
+
+# Actually spawns and configures the casing — called by the delayed
+# timer in eject_casing_delayed.
+static func _spawn_casing(skeleton: Skeleton3D, mesh: Mesh) -> void:
+	var mount := get_mount(skeleton)
+	if mount == null:
+		return
+	var scene_root := skeleton.get_tree().current_scene
+	if scene_root == null:
+		return
+	var casing := ShellCasing.new()
+	scene_root.add_child(casing)
+	# Spawn just above + outboard of the wrist so the casing clears
+	# the hand and weapon body before falling.
+	var bone_basis := mount.global_transform.basis
+	var bone_right := bone_basis.x.normalized()
+	var spawn_pos: Vector3 = mount.global_position + Vector3.UP * 0.15 + bone_right * 0.05
+	# Ground is approximately 1.5m below the wrist (X Bot rig). Casings
+	# bounce/settle at that plane; per-room floor variation is small
+	# enough that this looks fine without a raycast.
+	var ground_y: float = spawn_pos.y - 1.5
+	# Initial velocity: outward off the right side of the gun + upward,
+	# with a sprinkling of random scatter so successive casings spread.
+	var rand_yaw: float = randf_range(-0.25, 0.25)
+	var vel: Vector3 = (bone_right * 1.4 + Vector3.UP * 1.8).rotated(Vector3.UP, rand_yaw)
+	vel += Vector3(randf_range(-0.3, 0.3), randf_range(0.0, 0.3), randf_range(-0.3, 0.3))
+	var ang_vel: Vector3 = Vector3(
+		randf_range(-18.0, 18.0),
+		randf_range(-18.0, 18.0),
+		randf_range(-18.0, 18.0),
+	)
+	casing.global_position = spawn_pos
+	casing.setup(mesh, vel, ang_vel, ground_y)
 
 
 # EnemyClass.weapon_id uses a looser model-name namespace than the
