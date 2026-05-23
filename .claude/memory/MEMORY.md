@@ -82,3 +82,4 @@
 - [Camera projection (perspective)](project_camera_projection_perspective.md) — Switched from ortho size=22 to fake-ortho perspective (FOV 18° at ~70m). F8 toggles. Fixed LoS clip + explosion alpha + inspect zoom; introduced Label3D fixed_size compensation and accelerator flame muzzle reconnect
 - [Animation stretch pattern](project_anim_stretch_pattern.md) — `_play_anim_stretched(candidates, duration)` makes action duration drive animation speed. Melee impact-frame sync (anim 100% / damage 50% / SFX 50%); one-shot gate blocks the locomotion picker from truncating swings
 - [Neon outline + proximity](project_neon_outline.md) — Outline compositor renders neon tube core + glow halo (HDR > 1 + level bloom). Interactables get always-on cyan in range, white on hover
+- [VFX shader warmup](project_vfx_warmup.md) — VfxWarmup pre-compiles combat shaders during loading-screen window; fixes first-LMB/RMB lag from Godot 4's lazy shader compile
