@@ -365,12 +365,19 @@ static func combo_attack_anim_for_class(class_id: StringName, step: int) -> Arra
 				1: return [&"xbot/sword_slash_2", &"xbot/sword_slash", &"xbot/punch"]
 				_: return [&"xbot/sword_slash_3", &"xbot/sword_slash", &"xbot/punch"]
 		&"melee_2h":
-			# Axe pack ships explicit combo ver 1/2/3 — purpose-built
-			# for a 3-hit chain (each one chains visually into the next).
-			match s:
-				0: return [&"xbot/axe_combo_1", &"xbot/axe_swing", &"xbot/punch"]
-				1: return [&"xbot/axe_combo_2", &"xbot/axe_swing", &"xbot/punch"]
-				_: return [&"xbot/axe_combo_3", &"xbot/axe_swing", &"xbot/punch"]
+			# Single-clip pass. Mixamo's axe_combo ver 1/2/3 are authored
+			# to chain — each one's end pose flows into the next's start —
+			# but they need ~1.5s each at native speed to actually transit.
+			# At the cooldown + 1.8× playback the player runs at, no two
+			# clips get enough screen time to read as a chained combo;
+			# rapid swings cut between disconnected half-strokes. The
+			# standalone "standing melee attack horizontal" is a single
+			# cohesive swing that reads cleanly at the same playback
+			# rate. Step argument ignored — every swing uses the same
+			# clip, matching how 1H ranged weapons collapse to one fire
+			# pose. Re-author per-step if a chained-combo system lands
+			# later (would need playback-rate + cooldown coordination).
+			return [&"xbot/axe_swing", &"xbot/punch"]
 		_:
 			return attack_anim_for_class(class_id)
 
