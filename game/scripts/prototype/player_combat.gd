@@ -894,7 +894,7 @@ func _resolve_hitscan(skill: Skill, aim: Vector3, eff_range: float, weapon: Item
 	var _is_bullet := weapon != null and weapon.is_bullet_weapon()
 	CombatVisuals.spawn_muzzle_flash(_host, origin, _is_bullet, hitscan_tint)
 	_eject_casing(weapon)
-	CombatVisuals.spawn_beam(_host, aim_norm, beam_end, source_offset, hitscan_tint)
+	CombatVisuals.spawn_beam(_host, aim_norm, beam_end, origin, hitscan_tint)
 	if hit_target != null:
 		CombatVisuals.spawn_impact_burst(_host, hit_target.global_position + Vector3(0.0, 0.9, 0.0), hitscan_tint)
 		var is_crit := _roll_crit(weapon)
@@ -1361,7 +1361,7 @@ func _resolve_hitscan_exact(skill: Skill, aim_norm: Vector3, eff_range: float, w
 	var _is_bullet_exact := weapon != null and weapon.is_bullet_weapon()
 	CombatVisuals.spawn_muzzle_flash(_host, origin, _is_bullet_exact, hitscan_exact_tint)
 	_eject_casing(weapon)
-	CombatVisuals.spawn_beam(_host, aim_norm, beam_end, source_offset, hitscan_exact_tint)
+	CombatVisuals.spawn_beam(_host, aim_norm, beam_end, origin, hitscan_exact_tint)
 	if hit_target != null:
 		CombatVisuals.spawn_impact_burst(_host, hit_target.global_position + Vector3(0.0, 0.9, 0.0), hitscan_exact_tint)
 		var is_crit := _roll_crit(weapon)
@@ -1491,7 +1491,7 @@ func fire_exile_shot(target: Node3D) -> void:
 	if dist < 0.001:
 		return
 	var aim_norm := aim / dist
-	CombatVisuals.spawn_beam(_host, aim_norm, dist)
+	CombatVisuals.spawn_beam(_host, aim_norm, dist, origin)
 	CombatVisuals.spawn_impact_burst(_host, target.global_position + Vector3(0.0, 0.9, 0.0))
 	var mult := 1.0
 	var dmg := int(round(float(EXILE_AUTO_SHOT_BASE_DAMAGE) * mult))

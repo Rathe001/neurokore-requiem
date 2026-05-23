@@ -402,7 +402,7 @@ static func spawn_lightning_arc(host: Node3D, from_pos: Vector3, to_pos: Vector3
 	tween.tween_callback(_free_later(inst))
 
 
-static func spawn_beam(host: Node3D, aim: Vector3, length: float, source_offset: Vector3 = Vector3.ZERO, tint_override: Color = Color(0.0, 0.0, 0.0, 0.0)) -> void:
+static func spawn_beam(host: Node3D, aim: Vector3, length: float, origin: Vector3 = Vector3.ZERO, tint_override: Color = Color(0.0, 0.0, 0.0, 0.0)) -> void:
 	var parent: Node = host.get_parent()
 	if parent == null:
 		parent = host
@@ -428,10 +428,11 @@ static func spawn_beam(host: Node3D, aim: Vector3, length: float, source_offset:
 	# to align with local -Z (the look_at forward), then offset by half length.
 	var node := Node3D.new()
 	parent.add_child(node)
-	# source_offset shifts the beam origin (right / left / above) for Forged
-	# Amalgamation extras so the visual emerges from the same point as the
-	# damage origin in PlayerCombat._resolve_hitscan.
-	node.global_position = host.global_position + Vector3(0.0, 1.0, 0.0) + source_offset
+	# Beam emerges from the explicit `origin` (the weapon's actual muzzle
+	# tip when available). Falls back to chest-height on the host when
+	# the caller didn't compute one (Vector3.ZERO sentinel).
+	var beam_start: Vector3 = origin if origin != Vector3.ZERO else host.global_position + Vector3(0.0, 1.0, 0.0)
+	node.global_position = beam_start
 	if aim.length_squared() > 0.0001:
 		node.look_at(node.global_position + aim, Vector3.UP)
 

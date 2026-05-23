@@ -22,8 +22,8 @@ const _AUTOLOAD_PATH := ^"/root/CombatVisuals"
 
 # ── Beam (hitscan) ──────────────────────────────────────────────
 
-func spawn_beam(host: Node3D, aim: Vector3, length: float, source_offset: Vector3 = Vector3.ZERO, tint_override: Color = Color(0.0, 0.0, 0.0, 0.0)) -> void:
-	PrototypeAttackIndicator.spawn_beam(host, aim, length, source_offset, tint_override)
+func spawn_beam(host: Node3D, aim: Vector3, length: float, origin: Vector3 = Vector3.ZERO, tint_override: Color = Color(0.0, 0.0, 0.0, 0.0)) -> void:
+	PrototypeAttackIndicator.spawn_beam(host, aim, length, origin, tint_override)
 	if NetState.is_in_lobby():
 		var cv: Node = host.get_node(_AUTOLOAD_PATH)
 		cv._rpc_beam.rpc(host.global_position, aim, length, source_offset, host.is_in_group(&"player"), tint_override)
