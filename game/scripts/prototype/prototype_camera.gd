@@ -86,6 +86,12 @@ var _default_size: float = 22.0
 # the user knows whether the toggle actually engaged.
 var _f9_was_pressed_last_frame: bool = false
 var _inspect_label: Label = null
+# Bright sphere rendered at the current muzzle position while inspect +
+# tune mode are both on. Confirms visually that the muzzle override is
+# actually flowing through to the world — if the marker moves when you
+# press 5/6/7/8/9/0, the wiring works; if it doesn't, the override
+# isn't reaching wherever you're trying to use it.
+var _muzzle_marker: MeshInstance3D = null
 
 # ── Grip tuner (T inside inspect mode) ────────────────────────────────────
 # Keyboard live-tune for the equipped weapon's WeaponAttachment grip
@@ -195,6 +201,7 @@ func _ready() -> void:
 	_default_size = size
 	_build_audio_listener()
 	_build_inspect_label()
+	_build_muzzle_marker()
 	if _target != null:
 		_snap_to_target()
 	else:
@@ -433,6 +440,7 @@ func _process(delta: float) -> void:
 	_tick_push(delta)
 	_poll_f9_fallback()
 	_update_inspect_label()
+	_update_muzzle_marker()
 	if _target == null:
 		return
 	_snap_to_target()
@@ -463,6 +471,56 @@ func _build_inspect_label() -> void:
 	_inspect_label.add_theme_font_size_override(&"font_size", 12)
 	_inspect_label.visible = false
 	layer.add_child(_inspect_label)
+
+
+# Magenta unshaded sphere parented under the camera node so it can't get
+# orphaned on level reload. Visible only when inspect + tune mode are
+# both active, positioned per-frame to match the live muzzle.
+func _build_muzzle_marker() -> void:
+	var inst := MeshInstance3D.new()
+	var sph := SphereMesh.new()
+	sph.radius = 0.04
+	sph.height = 0.08
+	sph.radial_segments = 12
+	sph.rings = 6
+	inst.mesh = sph
+	inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	inst.top_level = true
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = Color(1.0, 0.2, 1.0, 1.0)
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
+	mat.no_depth_test = true                              # always on top
+	inst.material_override = mat
+	inst.visible = false
+	add_child(inst)
+	_muzzle_marker = inst
+
+
+func _update_muzzle_marker() -> void:
+	if _muzzle_marker == null:
+		return
+	var show: bool = _inspect_mode and _tune_mode
+	_muzzle_marker.visible = show
+	if not show:
+		return
+	var t := _resolve_tune_target()
+	var skel: Skeleton3D = t[0]
+	var base_id: StringName = t[1]
+	if skel == null or base_id == &"":
+		_muzzle_marker.visible = false
+		return
+	# Use the player's facing direction as the aim seed — the AABB-
+	# heuristic branch of get_muzzle_position needs an aim direction.
+	# The override branch ignores aim, so this only matters for weapons
+	# without a tuned muzzle field.
+	var player := get_tree().get_first_node_in_group(&"player") as Node3D
+	var aim := -player.global_transform.basis.z if player != null else -global_transform.basis.z
+	var muzzle := WeaponAttachment.get_muzzle_position(skel, aim)
+	if muzzle == Vector3.ZERO:
+		_muzzle_marker.visible = false
+		return
+	_muzzle_marker.global_position = muzzle
 
 
 func _update_inspect_label() -> void:
