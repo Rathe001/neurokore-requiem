@@ -353,6 +353,23 @@ static func bump_position(weapon_base_id: StringName, axis: StringName, delta: f
 	grip["pos"] = p
 
 
+## Adds `delta` (world units) to the muzzle offset along `axis` on this
+## weapon's grip entry. Used by the tuner when the AABB heuristic picks
+## the wrong corner (laser pistol's dangling cables, smg's many small
+## sub-meshes) and the muzzle needs to be placed by hand.
+static func bump_muzzle(weapon_base_id: StringName, axis: StringName, delta: float) -> void:
+	if weapon_base_id == &"":
+		return
+	var grip := get_grip(weapon_base_id)
+	var m: Vector3 = grip.get("muzzle", Vector3.ZERO)
+	match axis:
+		&"x": m.x += delta
+		&"y": m.y += delta
+		&"z": m.z += delta
+		_: return
+	grip["muzzle"] = m
+
+
 ## Multiplies the scale_mult on this weapon's grip entry by `factor`.
 ## Clamped to [0.1, 10.0] so a sticky keypress can't blow it up.
 static func bump_scale(weapon_base_id: StringName, factor: float) -> void:
@@ -364,11 +381,11 @@ static func bump_scale(weapon_base_id: StringName, factor: float) -> void:
 
 
 ## Resets this weapon's grip entry to neutral (zero rotation, zero
-## position, scale_mult 1.0).
+## position, scale_mult 1.0, zero muzzle override).
 static func reset_grip(weapon_base_id: StringName) -> void:
 	if weapon_base_id == &"":
 		return
-	_GRIP[weapon_base_id] = {"pos": Vector3.ZERO, "rot": Vector3.ZERO, "scale_mult": 1.0}
+	_GRIP[weapon_base_id] = {"pos": Vector3.ZERO, "rot": Vector3.ZERO, "scale_mult": 1.0, "muzzle": Vector3.ZERO}
 
 
 ## Re-applies the current grip values to the weapon model already mounted
@@ -394,17 +411,33 @@ static func dump_grip_to_console(weapon_base_id: StringName) -> void:
 	var p: Vector3 = grip.get("pos", Vector3.ZERO)
 	var r: Vector3 = grip.get("rot", Vector3.ZERO)
 	var s: float = float(grip.get("scale_mult", 1.0))
-	print('\t&"%s": {"pos": Vector3(%.3f, %.3f, %.3f), "rot": Vector3(%.1f, %.1f, %.1f), "scale_mult": %.3f},' % [
-		String(weapon_base_id), p.x, p.y, p.z, r.x, r.y, r.z, s,
-	])
+	var m: Vector3 = grip.get("muzzle", Vector3.ZERO)
+	# Skip the muzzle field in output when it's still default (zero) so
+	# weapons that work fine with the AABB heuristic stay readable in
+	# _GRIP. Print it only when an override has actually been tuned.
+	if m == Vector3.ZERO:
+		print('\t&"%s": {"pos": Vector3(%.3f, %.3f, %.3f), "rot": Vector3(%.1f, %.1f, %.1f), "scale_mult": %.3f},' % [
+			String(weapon_base_id), p.x, p.y, p.z, r.x, r.y, r.z, s,
+		])
+	else:
+		print('\t&"%s": {"pos": Vector3(%.3f, %.3f, %.3f), "rot": Vector3(%.1f, %.1f, %.1f), "scale_mult": %.3f, "muzzle": Vector3(%.3f, %.3f, %.3f)},' % [
+			String(weapon_base_id), p.x, p.y, p.z, r.x, r.y, r.z, s, m.x, m.y, m.z,
+		])
 
 
-## World-space position of the mounted weapon's muzzle, computed as the
-## corner of the model's combined AABB that's farthest along the supplied
-## aim direction. After per-weapon grip tuning the model's barrel points
-## along the character's aim, so this resolves to the actual barrel tip
-## for both bullet projectiles and hitscan ray origins. Returns
-## Vector3.ZERO when no weapon model is mounted — callers should fall
+## World-space position of the mounted weapon's muzzle.
+##
+## Resolution priority:
+##   1. If the weapon's _GRIP entry has a non-zero `muzzle` offset
+##      (Vector3 in MODEL-LOCAL space, pre-grip-transform), that point
+##      is transformed through the model into world space and returned.
+##      This is the explicit per-weapon override — set via the live
+##      tuner when the AABB heuristic guesses wrong.
+##   2. Otherwise, the corner of the model's combined AABB that's
+##      farthest along `aim_world` is returned. Works for weapons where
+##      the AABB is dominated by the gun body and the barrel reaches a
+##      bounding-box corner.
+## Returns Vector3.ZERO when no weapon model is mounted — callers fall
 ## back to their legacy "chest + forward" approximation in that case.
 static func get_muzzle_position(skeleton: Skeleton3D, aim_world: Vector3) -> Vector3:
 	if skeleton == null:
@@ -415,11 +448,20 @@ static func get_muzzle_position(skeleton: Skeleton3D, aim_world: Vector3) -> Vec
 	var model := mount.get_node_or_null(NodePath(_MODEL_NODE_NAME)) as Node3D
 	if model == null:
 		return Vector3.ZERO
+	# Per-weapon explicit muzzle override takes priority. Stored in
+	# world-distance units along the model's rotated local axes — the
+	# orthonormalized basis strips scale so a step of 0.05 means 5cm
+	# regardless of the per-weapon auto-scale factor. Follows the
+	# model's rotation (grip + bone animation) automatically.
+	var weapon_base_id := _weapon_base_id_from_model(mount)
+	if weapon_base_id != &"":
+		var grip: Dictionary = _GRIP.get(weapon_base_id, {})
+		var muzzle_offset: Vector3 = grip.get("muzzle", Vector3.ZERO)
+		if muzzle_offset != Vector3.ZERO:
+			return model.global_position + (model.global_transform.basis.orthonormalized() * muzzle_offset)
+	# AABB-corner heuristic fallback.
 	var aabb := _model_aabb(model)
 	var aim := aim_world.normalized()
-	# Test the 8 corners of the model AABB in world space; the one with
-	# the largest dot product with aim is the most-forward point along
-	# the firing line — i.e., the muzzle tip after grip rotation.
 	var best := mount.global_position
 	var best_score := -INF
 	for i in 8:
@@ -434,6 +476,25 @@ static func get_muzzle_position(skeleton: Skeleton3D, aim_world: Vector3) -> Vec
 			best_score = s
 			best = corner_world
 	return best
+
+
+# Reverse-lookup the weapon_base_id of the model mounted on `mount` by
+# matching its scene_file_path against the _WEAPON_MODELS dict. Lets
+# get_muzzle_position pull the right _GRIP entry without callers
+# having to thread the base_id through every call.
+static func _weapon_base_id_from_model(mount: BoneAttachment3D) -> StringName:
+	if mount == null:
+		return &""
+	var model := mount.get_node_or_null(NodePath(_MODEL_NODE_NAME)) as Node3D
+	if model == null:
+		return &""
+	var sfp: String = model.scene_file_path
+	if sfp == "":
+		return &""
+	for key in _WEAPON_MODELS:
+		if String(_WEAPON_MODELS[key]) == sfp:
+			return key
+	return &""
 
 
 ## Returns the existing weapon mount on `skeleton`, or null if none has

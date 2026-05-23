@@ -377,6 +377,16 @@ func _handle_tune_key(keycode: int) -> bool:
 		KEY_PERIOD: WeaponAttachment.bump_position(base_id, &"z",  _TUNE_POS_STEP)
 		KEY_MINUS, KEY_KP_SUBTRACT: WeaponAttachment.bump_scale(base_id, _TUNE_SCALE_DOWN)
 		KEY_EQUAL, KEY_KP_ADD:      WeaponAttachment.bump_scale(base_id, _TUNE_SCALE_UP)
+		# Per-weapon muzzle override. Top-row 5/6/7/8/9/0 — sit just
+		# right of the skill hotbar keys so they're easy to reach
+		# without remapping. Useful when the AABB-corner heuristic
+		# picks the wrong spot (laser pistol, smg, taser).
+		KEY_5: WeaponAttachment.bump_muzzle(base_id, &"x", -_TUNE_POS_STEP)
+		KEY_6: WeaponAttachment.bump_muzzle(base_id, &"x",  _TUNE_POS_STEP)
+		KEY_7: WeaponAttachment.bump_muzzle(base_id, &"y", -_TUNE_POS_STEP)
+		KEY_8: WeaponAttachment.bump_muzzle(base_id, &"y",  _TUNE_POS_STEP)
+		KEY_9: WeaponAttachment.bump_muzzle(base_id, &"z", -_TUNE_POS_STEP)
+		KEY_0: WeaponAttachment.bump_muzzle(base_id, &"z",  _TUNE_POS_STEP)
 		KEY_P:
 			WeaponAttachment.dump_grip_to_console(base_id)
 			return true
@@ -474,10 +484,11 @@ func _update_inspect_label() -> void:
 				var p: Vector3 = grip.get("pos", Vector3.ZERO)
 				var r: Vector3 = grip.get("rot", Vector3.ZERO)
 				var s: float = float(grip.get("scale_mult", 1.0))
-				header += "\n[TUNE %s]  pos=(%.2f, %.2f, %.2f)  rot=(%.0f, %.0f, %.0f)  scale=%.2f" % [
-					String(base_id), p.x, p.y, p.z, r.x, r.y, r.z, s,
+				var mz: Vector3 = grip.get("muzzle", Vector3.ZERO)
+				header += "\n[TUNE %s]  pos=(%.2f, %.2f, %.2f)  rot=(%.0f, %.0f, %.0f)  scale=%.2f  muzzle=(%.2f, %.2f, %.2f)" % [
+					String(base_id), p.x, p.y, p.z, r.x, r.y, r.z, s, mz.x, mz.y, mz.z,
 				]
-				header += "\n  rot: J/L=±X  U/O=±Y  H/K=±Z   pos: ←→=±X  ↑↓=±Y  ,/.=±Z   scale: -/=   P=dump  Backspace=reset"
+				header += "\n  rot: J/L=±X  U/O=±Y  H/K=±Z   pos: ←→=±X  ↑↓=±Y  ,/.=±Z   scale: -/=   muzzle: 5/6=±X  7/8=±Y  9/0=±Z   P=dump  Backspace=reset"
 			else:
 				header += "\n[TUNE] no weapon equipped"
 		_inspect_label.text = header
