@@ -227,7 +227,11 @@ func _build_state_frame() -> void:
 	_frame_mat = StandardMaterial3D.new()
 	_frame_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	_frame_mat.emission_enabled = true
-	_frame_mat.emission_energy_multiplier = 2.0
+	# Pushed 2.0 → 5.5 so the door frame matches the neon-outline
+	# brightness on other interactables. HDR > 1 triggers the level
+	# Environment's glow_enabled bloom, which is what gives the frame
+	# its "neon tube" feel rather than the previous flat-emission look.
+	_frame_mat.emission_energy_multiplier = 5.5
 	var half_thick := DOOR_THICKNESS * 0.5 + FRAME_OUT * 0.5
 	var inner_h := DOOR_HEIGHT - FRAME_BAR * 2.0
 	for s: int in [1, -1]:
