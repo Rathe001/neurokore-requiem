@@ -175,7 +175,8 @@ const FPS_FILL_COLOR := Color(0.5, 0.55, 0.62)
 const FPS_FILL_ENERGY := 1.2
 const FPS_FILL_RANGE := 6.0
 const FPS_FILL_ATTENUATION := 2.0
-const INTERACT_ANIM_SPEED := 3.0
+const INTERACT_ANIM_SPEED := 3.0     # legacy — kept for any unconverted call sites
+const INTERACT_ANIM_DURATION := 0.6  # interact action timing — clip stretches to this
 const FPS_HOVER_INTERVAL := 0.05
 const FLASHLIGHT_MAX_PITCH_DEG := 82.0
 const FLASHLIGHT_MAX_UP_DEG := 10.0
@@ -1863,7 +1864,7 @@ func _try_interact() -> void:
 	if nearest != null and nearest.has_method(&"interact"):
 		if not nearest.is_in_group(&"pickups") and not _is_airborne:
 			_interacting = true
-			_play_anim(ANIM_INTERACT, INTERACT_ANIM_SPEED, 0.1)
+			_play_anim_stretched(ANIM_INTERACT, INTERACT_ANIM_DURATION, 0.1)
 		nearest.interact(self)
 
 func _handle_skill_input() -> void:
@@ -2010,7 +2011,7 @@ func _interact_with_hovered(node: Node) -> void:
 		return
 	if not node.is_in_group(&"pickups") and not _is_airborne:
 		_interacting = true
-		_play_anim(ANIM_INTERACT, INTERACT_ANIM_SPEED, 0.1)
+		_play_anim_stretched(ANIM_INTERACT, INTERACT_ANIM_DURATION, 0.1)
 	node.interact(self)
 
 func _is_any_modal_open() -> bool:
@@ -2218,13 +2219,15 @@ func _cast_lmb_combat() -> void:
 			# Melee swing — picks the variant for the current combo
 			# step (0/1/2). peek_next_melee_combo_step previews what
 			# advance_melee_combo will set inside PlayerCombat a few
-			# ms later, so the visual matches the gameplay step. 1.8×
-			# speed so the swing's strong motion reads before LMB
-			# retrigger / locomotion picker can truncate it; previously
-			# 1.4× left ~40% of each swing playing, which read as a
-			# truncated jab rather than a full swing.
+			# ms later, so the visual matches the gameplay step. Plays
+			# the full clip stretched to fit the effective attack
+			# interval (cooldown / attack_speed), so increasing attack
+			# speed scales the animation rate accordingly and the
+			# weapon's physical attack rhythm matches the visible
+			# motion. main_interval is already computed for multi-arm
+			# stagger above; reuse it here as the animation duration.
 			var combo_step := peek_next_melee_combo_step(main_item)
-			_play_anim(XBotAnimations.combo_attack_anim_for_class(_equipped_weapon_class(), combo_step), 1.8)
+			_play_anim_stretched(XBotAnimations.combo_attack_anim_for_class(_equipped_weapon_class(), combo_step), main_interval)
 		_ied.toss_trap(_cursor_offset())
 	# Hold the player still for the main weapon's wind-up only. Extra arms
 	# don't contribute to the stop — Forged stays mobile while extras fire.
@@ -2312,9 +2315,11 @@ func _cast_skill(skill: Skill) -> void:
 					_start_channel(skill, input_action)
 			Skill.ActiveKind.SHIELD_BUFF, Skill.ActiveKind.SHIELD_HOLD:
 				# Cast anim gated on actual activation — a press while
-				# on cooldown shouldn't play the visual.
+				# on cooldown shouldn't play the visual. Duration is the
+				# wind-up (the cast gesture); the shield then stays active
+				# longer but the gesture itself is the wind-up.
 				if _shield.activate_offhand_skill(skill):
-					_play_anim(ANIM_CAST, 1.5)
+					_play_anim_stretched(ANIM_CAST, maxf(skill.wind_up, 0.5))
 			Skill.ActiveKind.GRENADE:
 				if _grenade.is_on_cooldown():
 					return
@@ -2334,15 +2339,17 @@ func _cast_skill(skill: Skill) -> void:
 					_spend_resource(skill.resource_cost)
 				_face_direction(throw_dir)
 				# Was ANIM_ATTACK (xbot/punch) — grenades now play the
-				# dedicated pitching motion.
-				_play_anim(ANIM_GRENADE_THROW, 1.4)
+				# dedicated pitching motion stretched to the throw's
+				# wind-up duration (0.5s fallback if the skill author
+				# left wind_up unset).
+				_play_anim_stretched(ANIM_GRENADE_THROW, maxf(skill.wind_up, 0.5))
 				_grenade.activate(skill, throw_dir)
 			Skill.ActiveKind.SECOND_WIND:
 				if _activate_second_wind(skill):
-					_play_anim(ANIM_CAST, 1.5)
+					_play_anim_stretched(ANIM_CAST, maxf(skill.wind_up, 0.5))
 			Skill.ActiveKind.RECOVERY:
 				if _recovery.activate(skill):
-					_play_anim(ANIM_CAST, 1.5)
+					_play_anim_stretched(ANIM_CAST, maxf(skill.wind_up, 0.5))
 		return
 	_interacting = false
 	if _combat.is_on_cooldown(skill):
@@ -2374,10 +2381,12 @@ func _cast_skill(skill: Skill) -> void:
 		_play_anim(_ranged_fire_anim(), 1.0)
 	else:
 		# Combo-aware melee swing — see peek_next_melee_combo_step.
-		# 1.8× speed (was 1.4) so the swing reads big before any
-		# retrigger truncates it.
+		# Plays the full clip stretched to fit the skill's effective
+		# cooldown (so attack speed scales the animation rate too).
 		var combo_step := peek_next_melee_combo_step(weapon)
-		_play_anim(XBotAnimations.combo_attack_anim_for_class(_equipped_weapon_class(), combo_step), 1.8)
+		var skill_atk_spd: float = atk_spd if atk_spd > 0.0 else 1.0
+		var skill_dur: float = skill.cooldown / skill_atk_spd if skill.cooldown > 0.0 else 0.7
+		_play_anim_stretched(XBotAnimations.combo_attack_anim_for_class(_equipped_weapon_class(), combo_step), skill_dur)
 	PrototypeAttackIndicator.spawn(self, skill, aim, _combat.effective_range(skill, weapon))
 	# Fire SFX plays at LMB press, NOT at projectile spawn. For wind-up
 	# weapons like the RPG the .wav has a baked-in "charging" pre-roll;
@@ -4010,6 +4019,51 @@ func _ranged_fire_anim() -> Array[StringName]:
 # (idle, jog, fire) can always be overridden; one-shots (swings, casts,
 # throws) need to play through. The -0.05s margin tolerates the picker
 # firing inside the final frame of an anim that's about to finish.
+# Plays a one-shot animation stretched to complete in exactly `duration`
+# seconds. Picks the first available key from `candidates` (same fallback
+# chain pattern as _play_anim), reads its native length, and computes a
+# speed_scale that makes the full clip play within the duration window.
+#
+# Universal principle: the length of any action — attack, cast, throw,
+# interact — should drive the length of its animation. Attack speed
+# increases → animation speeds up to match (since duration shrinks);
+# slower interactions → animation slows down. No more hardcoded 1.8× /
+# 1.5× / 1.4× multipliers that clip the tail of every motion.
+#
+# Falls back to native-speed (1.0×) playback when:
+#   - duration is non-positive (caller bug)
+#   - no candidate animation resolves
+#   - the animation's length is non-positive
+#
+# Speed floor of 0.5× — a much longer action than animation length
+# would otherwise produce slow-motion playback, which reads as
+# "broken" more than "intentional weighty motion." Above the floor
+# the clip plays slower than native but stays legible.
+func _play_anim_stretched(candidates: Array[StringName], duration: float, blend: float = 0.0) -> void:
+	if anim_player == null:
+		return
+	if duration <= 0.0:
+		_play_anim(candidates, 1.0, blend)
+		return
+	# Find the first candidate the player actually has loaded.
+	var chosen: StringName = &""
+	for key in candidates:
+		if anim_player.has_animation(key):
+			chosen = key
+			break
+	if chosen == &"":
+		return
+	var anim: Animation = anim_player.get_animation(chosen)
+	if anim == null or anim.length <= 0.0:
+		_play_anim(candidates, 1.0, blend)
+		return
+	var speed: float = anim.length / duration
+	# Floor to keep slow-motion playback out of accidental long cooldowns
+	# while still allowing intentionally weighty 0.8–1.0× swings.
+	speed = maxf(speed, 0.5)
+	_play_anim([chosen], speed, blend)
+
+
 func _is_oneshot_anim_playing() -> bool:
 	if anim_player == null or not anim_player.is_playing():
 		return false
@@ -4157,7 +4211,7 @@ func _try_interact_with(node: Node3D) -> void:
 		return
 	if not node.is_in_group(&"pickups") and not _is_airborne:
 		_interacting = true
-		_play_anim(ANIM_INTERACT, INTERACT_ANIM_SPEED, 0.1)
+		_play_anim_stretched(ANIM_INTERACT, INTERACT_ANIM_DURATION, 0.1)
 	if node.has_method(&"interact"):
 		node.interact(self)
 
