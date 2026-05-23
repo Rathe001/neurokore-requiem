@@ -227,6 +227,16 @@ const BLADE_LUNGE_MIN_DISTANCE: float = 0.35    # below this, skip the lunge
 var _lmb_busy: bool = false
 var _skill_busy: bool = false
 
+# Fire-cancellation counter. Every new LMB / RMB / skill press bumps
+# this once. Each scheduled-fire (LMB multi-arm timer, RMB await,
+# melee impact-frame timer) captures the generation at press time
+# and checks it before firing damage / SFX / resolve. If a newer
+# press has bumped the counter, the older fire silently returns —
+# cancels in-flight LMB damage when RMB takes over, and vice versa.
+# Multi-arm LMB shots from the SAME press share the same generation,
+# so they all fire correctly together.
+var _fire_generation: int = 0
+
 
 # True while any attack is in its commit window. Used by movement and
 # facing logic so the player stops / locks orientation during ANY swing,
@@ -2117,6 +2127,11 @@ func _cast_lmb_combat() -> void:
 		_start_channel(main_weapon.fire_skill, &"fire")
 	_lmb_busy = true
 	_interacting = false
+	# Bump the fire-cancellation counter so any in-flight RMB await
+	# or pending LMB-from-the-previous-press timer self-cancels when
+	# their captured generation no longer matches.
+	_fire_generation += 1
+	var fire_gen: int = _fire_generation
 	var aim := _aim_direction()
 	if aim == Vector3.ZERO:
 		_lmb_busy = false
@@ -2253,6 +2268,12 @@ func _cast_lmb_combat() -> void:
 			var p := instance_from_id(player_id) as PrototypePlayer
 			if p == null or not p._alive:
 				return
+			# Cancel this fire if a newer LMB / RMB press has bumped
+			# the generation — the user pressed RMB (or another LMB)
+			# before our wind-up window closed; the newer attack owns
+			# the damage / SFX / animation now.
+			if p._fire_generation != fire_gen:
+				return
 			var fire_aim := aim
 			if p._lock_target != null:
 				var refreshed := p._aim_direction()
@@ -2368,6 +2389,12 @@ func _arm_offset_for_slot(slot: StringName, aim_right: Vector3) -> Vector3:
 func _cast_skill(skill: Skill) -> void:
 	if skill == null or _skill_busy:
 		return
+	# Bump the fire-cancellation counter so any in-flight LMB timer
+	# from the previous press self-cancels — pressing RMB after LMB
+	# should hand the rhythm over to the skill, not have the old swing
+	# fire its damage / SFX mid-cast.
+	_fire_generation += 1
+	var fire_gen: int = _fire_generation
 	# Face the cursor at press time, same as LMB. Applied here at the
 	# top so every active-kind path picks it up — AIM_HOLD, CHANNEL_BEAM,
 	# SHIELD_BUFF, SECOND_WIND, RECOVERY, plus the standard fire pipeline
@@ -2479,24 +2506,42 @@ func _cast_skill(skill: Skill) -> void:
 		var skill_dur: float = skill.cooldown / skill_atk_spd if skill.cooldown > 0.0 else 0.7
 		_play_anim_stretched(XBotAnimations.combo_attack_anim_for_class(_equipped_weapon_class(), combo_step), skill_dur)
 	PrototypeAttackIndicator.spawn(self, skill, aim, _combat.effective_range(skill, weapon))
-	# Fire SFX plays at LMB press, NOT at projectile spawn. For wind-up
-	# weapons like the RPG the .wav has a baked-in "charging" pre-roll;
-	# starting the audio here means that pre-roll lines up with the
-	# wind-up wait, and the launch transient of the .wav lands at the
-	# moment resolve_skill_hit spawns the projectile. Channel weapons
-	# (taser/accelerator hold) have their own SFX path and skip this.
-	if weapon != null and not WeaponSounds.is_channel_weapon(weapon.weapon_base_id):
+	# Per-weapon SFX timing:
+	#   Ranged → synchronous at press so audio pre-roll (RPG charge,
+	#     etc.) aligns with the wind-up wait.
+	#   Melee  → deferred until the impact-frame await below — the
+	#     strike sound IS the hit, not a wind-up cue.
+	#   Channel → own SFX path, skipped.
+	var skill_is_melee: bool = weapon != null and weapon.weapon_base_id in MELEE_BASE_IDS
+	if weapon != null and not WeaponSounds.is_channel_weapon(weapon.weapon_base_id) and not skill_is_melee:
 		WeaponSounds.play_fire(weapon.weapon_base_id, global_position)
-	if skill.wind_up > 0.0:
-		await get_tree().create_timer(skill.wind_up / atk_spd).timeout
+	# Damage-event delay. Mirrors the LMB sync: for melee, ignore
+	# skill.wind_up and use effective_cooldown * 0.5 so the damage
+	# lands on the swing's mid-anim impact frame. Ranged keeps the
+	# authored wind_up so pre-roll audio stays aligned.
+	var resolve_delay: float
+	if skill_is_melee and skill.cooldown > 0.0:
+		resolve_delay = (skill.cooldown / atk_spd) * 0.5
+	elif skill.wind_up > 0.0:
+		resolve_delay = skill.wind_up / atk_spd
+	else:
+		resolve_delay = 0.0
+	if resolve_delay > 0.0:
+		await get_tree().create_timer(resolve_delay).timeout
 	_skill_busy = false
 	if not _alive:
+		return
+	# Cancel if a newer LMB / skill press has taken over.
+	if _fire_generation != fire_gen:
 		return
 	var fire_aim := _attack_aim
 	if _lock_target != null:
 		var refreshed := _aim_direction()
 		if refreshed != Vector3.ZERO:
 			fire_aim = refreshed
+	# Deferred melee strike SFX — fires on the impact frame.
+	if skill_is_melee and weapon != null and not WeaponSounds.is_channel_weapon(weapon.weapon_base_id):
+		WeaponSounds.play_fire(weapon.weapon_base_id, global_position)
 	_combat.resolve_skill_hit(skill, fire_aim, _attack_weapon)
 
 func _tick_resource_regen(delta: float) -> void:

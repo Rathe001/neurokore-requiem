@@ -480,4 +480,24 @@ static func compute_single_dps(item: Item) -> float:
 		pellet_count += sig_pellets
 
 	var avg_dmg := float(item.effective_damage_min() + item.effective_damage_max()) * 0.5
-	return avg_dmg * float(pellet_count) * dmg_mult * fire_rate * crit_factor * multistrike_factor
+	var base_dps := avg_dmg * float(pellet_count) * dmg_mult * fire_rate * crit_factor * multistrike_factor
+
+	# Sustained-DPS factor: account for reload downtime so weapons
+	# with small magazines + long reloads don't look as strong as
+	# their raw shot-rate suggests. Models a 30-second snapshot —
+	# the weapon spends `time_per_mag` shooting and `reload_time`
+	# reloading, so the fraction of time actually firing is the
+	# scale factor. Energy / melee / no-mag weapons (ammo_max == 0)
+	# skip this — they never reload, so base_dps is their sustained
+	# rate.
+	#
+	# E.g. sniper @ 0.5 shots/sec × 8-round mag with a 4s reload:
+	#   time_per_mag   = 8 / 0.5 = 16s
+	#   time_per_cycle = 16 + 4  = 20s
+	#   factor         = 16 / 20 = 0.80 — 20% DPS loss to reload.
+	if item.ammo_max > 0 and item.reload_time > 0.0 and fire_rate > 0.0:
+		var time_per_mag: float = float(item.ammo_max) / fire_rate
+		var time_per_cycle: float = time_per_mag + item.reload_time
+		if time_per_cycle > 0.0:
+			base_dps *= time_per_mag / time_per_cycle
+	return base_dps
