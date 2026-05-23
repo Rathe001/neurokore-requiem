@@ -14,7 +14,7 @@ shader_type spatial;
 // duration; both distortion amount and the thin fringe scale with it
 // so the effect grows in and out smoothly.
 
-render_mode unshaded, depth_draw_disabled, depth_test_disabled, cull_disabled, blend_mix;
+render_mode unshaded, depth_draw_never, depth_test_disabled, cull_disabled, blend_mix;
 
 uniform sampler2D screen_texture : hint_screen_texture, repeat_disable, filter_linear_mipmap;
 uniform vec3 fringe_color : source_color = vec3(1.0, 0.95, 0.85);

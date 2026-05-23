@@ -11,16 +11,14 @@
 script = ExtResource("1_skill_script")
 display_name = "Unarmed Strike"
 glyph = "P"
-; Sped up to read as a rapid jab combo instead of slow telegraphed
-; swings. Per-hit damage scaled down proportionally so DPS stays put.
-; Previously: damage = 5 / cooldown = 0.5 / wind_up = 0.1 (10 DPS).
-; Now:        damage = 3 / cooldown = 0.3 / wind_up = 0.0 (10 DPS).
+; Modestly faster than the original (0.5s → 0.4s) — 0.3s was too
+; frantic per the user. DPS preserved at 10 by scaling damage 5 → 4.
 ; wind_up zeroed because _fire_unarmed schedules its own impact-frame
 ; delay (cooldown × 0.5) so the punch sound + damage land mid-anim
 ; rather than at press time.
-damage = 3
+damage = 4
 skill_range = 2.0
-cooldown = 0.3
+cooldown = 0.4
 wind_up = 0.0
 resource_cost = 0
 targeting_mode = 0
