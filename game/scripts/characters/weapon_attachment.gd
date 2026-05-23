@@ -147,6 +147,13 @@ static func set_weapon(skeleton: Skeleton3D, weapon_base_id: StringName) -> void
 	if model == null:
 		return
 	model.name = _MODEL_NODE_NAME
+	# Stash the weapon's canonical base_id as metadata on the model so
+	# get_muzzle_position can recover it later without trying to reverse-
+	# match a (possibly empty) scene_file_path on a glb-instantiated
+	# PackedScene. Godot's glb import pipeline doesn't always preserve
+	# scene_file_path on the root, which silently broke the muzzle
+	# override lookup before this change.
+	model.set_meta(&"weapon_base_id", weapon_base_id)
 	mount.add_child(model)
 	# Capture-and-hide BEFORE grip is applied so the hidden meshes
 	# don't influence the model's AABB during auto-scale.
@@ -478,23 +485,18 @@ static func get_muzzle_position(skeleton: Skeleton3D, aim_world: Vector3) -> Vec
 	return best
 
 
-# Reverse-lookup the weapon_base_id of the model mounted on `mount` by
-# matching its scene_file_path against the _WEAPON_MODELS dict. Lets
-# get_muzzle_position pull the right _GRIP entry without callers
-# having to thread the base_id through every call.
+# Reads the weapon_base_id metadata that set_weapon stashed on the
+# model. Lets get_muzzle_position pull the right _GRIP entry without
+# callers having to thread the base_id through every call.
 static func _weapon_base_id_from_model(mount: BoneAttachment3D) -> StringName:
 	if mount == null:
 		return &""
 	var model := mount.get_node_or_null(NodePath(_MODEL_NODE_NAME)) as Node3D
 	if model == null:
 		return &""
-	var sfp: String = model.scene_file_path
-	if sfp == "":
+	if not model.has_meta(&"weapon_base_id"):
 		return &""
-	for key in _WEAPON_MODELS:
-		if String(_WEAPON_MODELS[key]) == sfp:
-			return key
-	return &""
+	return model.get_meta(&"weapon_base_id") as StringName
 
 
 ## Returns the existing weapon mount on `skeleton`, or null if none has
