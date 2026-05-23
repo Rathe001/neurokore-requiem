@@ -123,11 +123,19 @@ void fragment() {
 		
 		//float depth = texture(depth_texture, SCREEN_UV, 0.0).r;
 		float depth = texture(depth_texture, SCREEN_UV).x;
-		
-		vec4 upos = INV_PROJECTION_MATRIX * vec4(SCREEN_UV * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0);
+
+		// Godot 4 stores depth in [0, 1] NDC space (reverse-Z under
+		// perspective; linear under ortho) — pass it through to
+		// INV_PROJECTION_MATRIX directly. The previous \"depth * 2.0
+		// - 1.0\" assumed the old [-1, 1] NDC convention, which
+		// happened to give usable-ish values under ortho but in
+		// perspective + reverse-Z collapses the soft-particle blend
+		// factor toward zero. Result: the explosion flipbook still
+		// rendered but at zero alpha, looking like 'animation lost'.
+		vec4 upos = INV_PROJECTION_MATRIX * vec4(SCREEN_UV * 2.0 - 1.0, depth, 1.0);
 		float pixel_position = upos.z / upos.w;
-		
-		vec4 zpos = INV_PROJECTION_MATRIX * vec4(SCREEN_UV * 2.0 - 1.0, FRAGCOORD.z * 2.0 - 1.0, 1.0);
+
+		vec4 zpos = INV_PROJECTION_MATRIX * vec4(SCREEN_UV * 2.0 - 1.0, FRAGCOORD.z, 1.0);
 		float cur_pos = zpos.z/zpos.w;
 		n_out22p0 = n_out22p0+(1.0-n_out24p0.x)*n_out23p0;
 		float help = clamp(abs(cur_pos-pixel_position)*(1.0/n_out22p0),0.0,1.0);

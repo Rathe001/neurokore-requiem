@@ -9,9 +9,15 @@ id = &"melee_1h"
 display_name = "Blade"
 glyph = "†"
 two_handed = false
-damage_min_range = Vector2(4, 6)
-damage_max_range = Vector2(10, 15)
-attack_speed_range = Vector2(1.4, 1.8)
+; End-game heavy-blade tuning: ~halved attack_speed, ~2.4× damage
+; per swing. Net DPS is roughly +50% over the prior fast-jab pass —
+; each strike commits the player to a clear motion (matches the
+; "feels amazing to use" feedback) and the damage rewards the commit.
+; Previously: damage_min_range (4, 6) / damage_max_range (10, 15) /
+; attack_speed_range (1.4, 1.8).
+damage_min_range = Vector2(10, 15)
+damage_max_range = Vector2(24, 36)
+attack_speed_range = Vector2(0.8, 1.1)
 crit_chance_range = Vector2(0.0, 0.0)
 accuracy_range = Vector2(0.92, 0.98)
 weapon_range_range = Vector2(2.5, 3.5)
