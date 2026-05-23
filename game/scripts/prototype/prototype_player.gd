@@ -2127,11 +2127,6 @@ func _cast_lmb_combat() -> void:
 		_start_channel(main_weapon.fire_skill, &"fire")
 	_lmb_busy = true
 	_interacting = false
-	# Bump the fire-cancellation counter so any in-flight RMB await
-	# or pending LMB-from-the-previous-press timer self-cancels when
-	# their captured generation no longer matches.
-	_fire_generation += 1
-	var fire_gen: int = _fire_generation
 	var aim := _aim_direction()
 	if aim == Vector3.ZERO:
 		_lmb_busy = false
@@ -2179,6 +2174,17 @@ func _cast_lmb_combat() -> void:
 			_fire_unarmed(aim)
 		_lmb_busy = false
 		return
+
+	# Bump the fire-cancellation counter NOW that we know a real fire is
+	# going to schedule. If we bumped above the cooldown check, LMB-hold
+	# would call _cast_lmb_combat every frame, find every slot on cooldown,
+	# return early — but the generation bump would have already invalidated
+	# the in-flight damage timer from the previous press (gen mismatch in
+	# the lambda below). Net result: holding LMB on a slow weapon (any
+	# melee, any windup ranged) NEVER resolved damage / SFX / animation
+	# because each frame cancelled the pending fire.
+	_fire_generation += 1
+	var fire_gen: int = _fire_generation
 
 	# Stagger across the MAIN weapon's effective attack interval so a
 	# 1s-interval Forged with 3 extras fires at 0 / 0.25 / 0.5 / 0.75

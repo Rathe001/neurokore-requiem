@@ -3219,6 +3219,7 @@ static func spawn_hammer_dust_cone(host: Node3D, aim: Vector3, attack_range: flo
 #      free the instance at the end.
 
 const HAMMER_CRATER_SCENE: PackedScene = preload("res://assets/models/vfx/crater/crater.glb")
+const HAMMER_CRATER_SHADER: Shader = preload("res://scripts/prototype/hammer_crater.gdshader")
 const HAMMER_CRATER_LIFETIME: float = 8.0
 const HAMMER_CRATER_FADE_START: float = 5.0     # delay before alpha starts ramping down
 const HAMMER_CRATER_LIFT: float = 0.04          # above floor; avoids z-fight
@@ -3264,12 +3265,15 @@ static func spawn_hammer_crater(host: Node3D, world_pos: Vector3, radius: float)
 	# Random Y rotation so successive craters don't look identical.
 	inst.rotation.y = randf() * TAU
 	parent.add_child(inst)
-	# Disable shadow casting on every sub-mesh — fast-moving decal-style
-	# props don't need to drag the shadow atlas through their lifetime.
-	# Also duplicate the material so we can fade its alpha without
-	# affecting other crater instances or the source asset.
-	var fade_mat: StandardMaterial3D = null
-	var fade_mesh: MeshInstance3D = null
+	# Replace each sub-mesh's material with a ShaderMaterial that wraps
+	# the original PBR maps (albedo / normal / roughness) in a radial
+	# alpha vignette. Without the vignette the rectangular mesh edge
+	# reads as a hard sticker on the floor — the vignette fades the
+	# perimeter into the surrounding surface so the crater "becomes
+	# part of" the ground texture rather than sitting on top of it.
+	# Also disables shadow casting; decal-style VFX shouldn't bloat
+	# the shadow atlas.
+	var fade_mat: ShaderMaterial = null
 	for vi in _all_visual_instances_of(inst):
 		if not (vi is MeshInstance3D):
 			continue
@@ -3277,21 +3281,46 @@ static func spawn_hammer_crater(host: Node3D, world_pos: Vector3, radius: float)
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		if mi.mesh == null or mi.mesh.get_surface_count() == 0:
 			continue
-		if fade_mat != null:
-			continue
+		# fade_radius is in MESH-local space (VERTEX.xz space in the
+		# shader), so it comes from the mesh's own AABB, not the
+		# transformed inst-local footprint. Otherwise an inner glb
+		# wrapper-scale would mismatch the shader-side coordinate frame
+		# and the vignette would land at the wrong radius.
+		var mesh_aabb := mi.mesh.get_aabb()
+		var mesh_fade_radius: float = max(mesh_aabb.size.x, mesh_aabb.size.z) * 0.5
+		if mesh_fade_radius < 0.01:
+			mesh_fade_radius = 1.0
 		var src_mat: Material = mi.mesh.surface_get_material(0)
+		var albedo_tex: Texture2D = null
+		var normal_tex: Texture2D = null
+		var rough_tex: Texture2D = null
 		if src_mat is StandardMaterial3D:
-			fade_mat = (src_mat as StandardMaterial3D).duplicate() as StandardMaterial3D
-			fade_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-			mi.set_surface_override_material(0, fade_mat)
-			fade_mesh = mi
+			var sm := src_mat as StandardMaterial3D
+			albedo_tex = sm.albedo_texture
+			normal_tex = sm.normal_texture
+			rough_tex = sm.roughness_texture
+		var sh_mat := ShaderMaterial.new()
+		sh_mat.shader = HAMMER_CRATER_SHADER
+		sh_mat.set_shader_parameter(&"albedo_tex", albedo_tex)
+		sh_mat.set_shader_parameter(&"normal_tex", normal_tex)
+		sh_mat.set_shader_parameter(&"roughness_tex", rough_tex)
+		sh_mat.set_shader_parameter(&"fade", 1.0)
+		sh_mat.set_shader_parameter(&"fade_radius", mesh_fade_radius)
+		mi.set_surface_override_material(0, sh_mat)
+		# All sub-meshes share a single material reference so the lifetime
+		# tween fades all of them in lock-step. (The crater glb usually
+		# is a single mesh anyway, but be safe.)
+		if fade_mat == null:
+			fade_mat = sh_mat
 	# Hold full opacity for the first stretch of the lifetime, then ramp
-	# alpha 1 → 0 over the remaining window. Tween_callback at the end
-	# frees the instance.
+	# the `fade` shader parameter 1 → 0 over the remaining window. Tween
+	# callback at the end frees the instance.
 	var tween := inst.create_tween()
 	tween.tween_interval(HAMMER_CRATER_FADE_START)
 	if fade_mat != null:
-		tween.tween_property(fade_mat, "albedo_color:a", 0.0, HAMMER_CRATER_LIFETIME - HAMMER_CRATER_FADE_START) \
+		tween.tween_method(func(v: float) -> void:
+			fade_mat.set_shader_parameter(&"fade", v),
+			1.0, 0.0, HAMMER_CRATER_LIFETIME - HAMMER_CRATER_FADE_START) \
 			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	else:
 		tween.tween_interval(HAMMER_CRATER_LIFETIME - HAMMER_CRATER_FADE_START)
