@@ -209,14 +209,26 @@ static func _make_themed_floor_material(t: LevelTheme) -> ShaderMaterial:
 	m.shader = _PROCEDURAL_WALL_SHADER
 	m.set_shader_parameter(&"panel_size_x", 0.5)
 	m.set_shader_parameter(&"panel_size_y", 0.5)
-	m.set_shader_parameter(&"seam_width", 0.025)
-	m.set_shader_parameter(&"seam_bevel", 0.06)
-	m.set_shader_parameter(&"seam_depth", 0.18)
-	m.set_shader_parameter(&"border_width", 0.07)
-	m.set_shader_parameter(&"border_height", 0.04)
+	# Seam / border / rivet values are tuned for the small 0.5m tile.
+	# Previous numbers came from the 2m slab era and read as chunky
+	# grout once the panel shrank — proportionally they were eating
+	# 20%+ of each tile. The shader's parameters are in UV space
+	# (normalized per panel), so dropping the seam from 0.025 → 0.006
+	# yields a hairline grout (~0.3% of panel) which is the
+	# "subtle/detailed" tile look. Border is the bevelled tile edge —
+	# kept narrow + low. Rivets feel out of place at this tile density
+	# (1m² floor = 4 tiles = potentially 16 rivets, reads as noise),
+	# so height=0 disables them entirely. The "rivet_radius=0" line
+	# is belt-and-suspenders in case the shader still evaluates a
+	# distance test against UV when height is 0.
+	m.set_shader_parameter(&"seam_width", 0.006)
+	m.set_shader_parameter(&"seam_bevel", 0.012)
+	m.set_shader_parameter(&"seam_depth", 0.08)
+	m.set_shader_parameter(&"border_width", 0.018)
+	m.set_shader_parameter(&"border_height", 0.010)
 	m.set_shader_parameter(&"rivet_inset", 0.16)
-	m.set_shader_parameter(&"rivet_radius", 0.045)
-	m.set_shader_parameter(&"rivet_height", 0.025)
+	m.set_shader_parameter(&"rivet_radius", 0.0)
+	m.set_shader_parameter(&"rivet_height", 0.0)
 	m.set_shader_parameter(&"metallic_value", 0.7)
 	m.set_shader_parameter(&"roughness_value", 0.42)
 	m.set_shader_parameter(&"roughness_wear", 0.28)
