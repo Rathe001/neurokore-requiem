@@ -3665,6 +3665,72 @@ static func spawn_muzzle_flash(host: Node3D, barrel_pos: Vector3, is_bullet: boo
 	tween.tween_callback(_release_light_later(light))
 
 
+# ── Energy pulse — visible glowing sphere at the muzzle ──────────────────
+# Companion to spawn_muzzle_flash, which is invisible (just an OmniLight
+# pop). Energy pulse spawns a brief unshaded emissive sphere so the
+# player actually SEES the muzzle event — used by the taser to sell the
+# arc emerging from a discharge instead of materialising mid-air. Lives
+# ~0.18s, expands while fading. No pool — these are short-lived enough
+# that allocation cost is negligible compared to chain-lightning's own
+# spawn overhead.
+const ENERGY_PULSE_DURATION: float = 0.18
+const ENERGY_PULSE_START_RADIUS: float = 0.08
+const ENERGY_PULSE_END_SCALE: float = 2.4
+const ENERGY_PULSE_DEFAULT_COLOR := Color(0.55, 0.8, 1.0)
+
+
+static func spawn_energy_pulse(host: Node3D, barrel_pos: Vector3, tint: Color = Color(0, 0, 0, 0)) -> void:
+	if host == null:
+		return
+	var parent: Node = host.get_parent()
+	if parent == null:
+		parent = host
+	var mesh_inst := MeshInstance3D.new()
+	var sphere := SphereMesh.new()
+	sphere.radius = ENERGY_PULSE_START_RADIUS
+	sphere.height = ENERGY_PULSE_START_RADIUS * 2.0
+	sphere.radial_segments = 16
+	sphere.rings = 8
+	mesh_inst.mesh = sphere
+	mesh_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var col: Color = tint if tint.a > 0.0 else ENERGY_PULSE_DEFAULT_COLOR
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	mat.albedo_color = Color(col.r, col.g, col.b, 0.9)
+	mat.emission_enabled = true
+	mat.emission = col
+	mat.emission_energy_multiplier = 4.0
+	mat.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mesh_inst.material_override = mat
+	# Also kick a quick OmniLight3D so the surrounding floor briefly
+	# catches the arc light — sells the energy without needing a
+	# separate spawn_muzzle_flash call alongside.
+	var light := _acquire_light()
+	light.light_color = col
+	light.light_energy = MUZZLE_FLASH_ENERGY
+	light.omni_range = MUZZLE_FLASH_RANGE
+	light.omni_attenuation = 2.0
+	light.shadow_enabled = false
+	light.light_volumetric_fog_energy = 0.0
+	parent.add_child(light)
+	light.global_position = barrel_pos
+	parent.add_child(mesh_inst)
+	mesh_inst.global_position = barrel_pos
+	mesh_inst.scale = Vector3.ONE
+	var tween := mesh_inst.create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(mesh_inst, "scale", Vector3.ONE * ENERGY_PULSE_END_SCALE, ENERGY_PULSE_DURATION).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.tween_property(mat, "albedo_color:a", 0.0, ENERGY_PULSE_DURATION).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tween.tween_property(mat, "emission_energy_multiplier", 0.0, ENERGY_PULSE_DURATION).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tween.tween_property(light, "light_energy", 0.0, ENERGY_PULSE_DURATION * 0.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tween.set_parallel(false)
+	tween.tween_callback(_release_light_later(light))
+	tween.tween_callback(mesh_inst.queue_free)
+
+
 # ── Telegraph material ───────────────────────────────────────────────────────
 
 static func _build_material(color: Color) -> StandardMaterial3D:

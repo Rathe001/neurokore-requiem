@@ -1072,10 +1072,10 @@ func _resolve_chain_lightning(skill: Skill, aim: Vector3, eff_range: float, weap
 	var aim_norm := aim.normalized()
 	var origin := _muzzle_world_position(aim_norm, source_offset)
 	# Electric muzzle pulse — taser had no muzzle visual before this,
-	# leaving the arc disconnected from the gun. Reuses spawn_muzzle_flash
-	# tinted to match the weapon's electric arc colour so the energy
-	# pulse reads as belonging to the taser.
-	CombatVisuals.spawn_muzzle_flash(_host, origin, false, _weapon_tint(weapon))
+	# leaving the arc disconnected from the gun. spawn_energy_pulse
+	# spawns a visible emissive sphere (not just an invisible light
+	# pop like spawn_muzzle_flash) so the discharge actually reads.
+	CombatVisuals.spawn_energy_pulse(_host, origin, _weapon_tint(weapon))
 	_eject_casing(weapon)
 	# Acquire the primary target — closest enemy within range along aim,
 	# inside a generous targeting cone (chain weapons aren't precision

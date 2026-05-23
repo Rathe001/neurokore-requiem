@@ -141,6 +141,24 @@ func _rpc_muzzle_flash(barrel_pos: Vector3, is_bullet: bool, tint: Color, is_pla
 	_release_anchor(anchor)
 
 
+# ── Energy pulse — visible glowing sphere at the muzzle ─────────
+# Used in place of spawn_muzzle_flash for weapons that want a SEEN
+# muzzle event (taser arc, energy discharges) — the regular flash is
+# only a light pop.
+func spawn_energy_pulse(host: Node3D, barrel_pos: Vector3, tint: Color = Color(0, 0, 0, 0)) -> void:
+	PrototypeAttackIndicator.spawn_energy_pulse(host, barrel_pos, tint)
+	if NetState.is_in_lobby():
+		var cv: Node = host.get_node(_AUTOLOAD_PATH)
+		cv._rpc_energy_pulse.rpc(barrel_pos, tint, host.is_in_group(&"player"))
+
+
+@rpc("any_peer", "call_remote", "unreliable")
+func _rpc_energy_pulse(barrel_pos: Vector3, tint: Color, is_player: bool) -> void:
+	var anchor := _acquire_anchor(barrel_pos, is_player)
+	PrototypeAttackIndicator.spawn_energy_pulse(anchor, barrel_pos, tint)
+	_release_anchor(anchor)
+
+
 # ── Explosion ───────────────────────────────────────────────────
 
 func spawn_explosion(host: Node3D, world_pos: Vector3, blast_radius: float, color_override: Color = Color(0, 0, 0, 0), damage_type: StringName = &"") -> void:
