@@ -2714,6 +2714,14 @@ func _tick_aim_hold(delta: float) -> void:
 		if _resource_current <= 0.0:
 			_stop_aim_hold()
 			return
+	# Track the cursor every tick while aim-holding — the gun (and the
+	# red-dot laser that emerges from its muzzle) should stay aligned
+	# with the cursor as the player drags it around, not just snap
+	# once at press time. _face_direction is an instant set_look_at,
+	# matches the rest of the game's no-lerp camera contract.
+	var hold_aim := _aim_direction()
+	if hold_aim != Vector3.ZERO:
+		_face_direction(hold_aim)
 	_update_aim_laser()
 
 
