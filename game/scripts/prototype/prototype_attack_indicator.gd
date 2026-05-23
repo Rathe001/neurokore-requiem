@@ -3208,6 +3208,50 @@ static func spawn_hammer_dust_cone(host: Node3D, aim: Vector3, attack_range: flo
 	t.tween_callback(_free_later(p))
 
 
+# ── Hammer-strike crater (replaces the dust clouds) ─────────────────────────
+# Subdivided PlaneMesh + procedural displacement in hammer_crater.gdshader.
+# Mesh sits just above the floor so the displaced rim is visible and the
+# flat interior can z-fight-free read as a scorched depression via dark
+# albedo. Spawns one-shot, lingers ~6s with a slow alpha fade after the
+# rim's heat glow has cooled.
+
+const HAMMER_CRATER_SHADER: Shader = preload("res://scripts/prototype/hammer_crater.gdshader")
+const HAMMER_CRATER_LIFETIME: float = 6.0
+const HAMMER_CRATER_LIFT: float = 0.04          # height above floor (avoids z-fight)
+const HAMMER_CRATER_SUBDIV: int = 28            # PlaneMesh subdivisions per axis
+
+
+static func spawn_hammer_crater(host: Node3D, world_pos: Vector3, radius: float) -> void:
+	if host == null:
+		return
+	var parent: Node = host.get_parent()
+	if parent == null:
+		parent = host
+	var mesh := PlaneMesh.new()
+	mesh.size = Vector2(radius * 2.0, radius * 2.0)
+	mesh.subdivide_width = HAMMER_CRATER_SUBDIV
+	mesh.subdivide_depth = HAMMER_CRATER_SUBDIV
+	var inst := MeshInstance3D.new()
+	inst.mesh = mesh
+	inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var mat := ShaderMaterial.new()
+	mat.shader = HAMMER_CRATER_SHADER
+	mat.set_shader_parameter(&"radius", radius)
+	mat.set_shader_parameter(&"age", 0.0)
+	inst.material_override = mat
+	# Top-level so the crater stays fixed in world space — doesn't drift
+	# when the player walks away from the impact site.
+	inst.top_level = true
+	inst.position = world_pos + Vector3(0.0, HAMMER_CRATER_LIFT, 0.0)
+	parent.add_child(inst)
+	# Tween age 0 → 1 across the lifetime. The shader handles the
+	# heat-cool curve and alpha fade keyed off age.
+	var tween := inst.create_tween()
+	tween.tween_property(mat, "shader_parameter/age", 1.0, HAMMER_CRATER_LIFETIME) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tween.tween_callback(_free_later(inst))
+
+
 ## RMB 2H melee (AoE Burst) — expanding donut of dust radiating outward
 ## from the player's feet. Uses DIRECTED_POINTS so each particle's
 ## direction can be pre-baked outward from the centre rather than

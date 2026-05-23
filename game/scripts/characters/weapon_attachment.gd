@@ -170,7 +170,47 @@ static func set_weapon(skeleton: Skeleton3D, weapon_base_id: StringName) -> void
 	# Capture-and-hide BEFORE grip is applied so the hidden meshes
 	# don't influence the model's AABB during auto-scale.
 	_hide_and_capture(model, weapon_base_id)
+	_backfill_missing_materials(model)
 	_apply_grip(model, weapon_base_id)
+
+
+# Some weapon glbs ship without authored materials (the sniper's source
+# was geometry-only — its file is ~200KB vs ~6 MB for the textured guns).
+# Without a material override Godot renders the surface in a flat grey
+# default that reads as "missing texture." This walks the model's
+# MeshInstance3D children and assigns a procedural dark-metal fallback
+# to any surface that has no material at the mesh OR override level,
+# so the weapon at least reads as a real-world object until the
+# textured asset is wired in.
+static var _fallback_metal_material: StandardMaterial3D = null
+static func _backfill_missing_materials(model: Node3D) -> void:
+	if _fallback_metal_material == null:
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = Color(0.18, 0.19, 0.22, 1.0)
+		mat.metallic = 0.85
+		mat.roughness = 0.35
+		_fallback_metal_material = mat
+	for vi in _all_visual_instances(model):
+		if not (vi is MeshInstance3D):
+			continue
+		var mi := vi as MeshInstance3D
+		if mi.mesh == null:
+			continue
+		if mi.material_override != null:
+			continue
+		var surfaces := mi.mesh.get_surface_count()
+		var needs_fallback := false
+		for s in surfaces:
+			# Check both the per-instance override slot AND the mesh's
+			# baked material — either being set means we leave it alone.
+			if mi.get_surface_override_material(s) != null:
+				continue
+			if mi.mesh.surface_get_material(s) != null:
+				continue
+			needs_fallback = true
+			break
+		if needs_fallback:
+			mi.material_override = _fallback_metal_material
 
 
 # Walks the freshly-mounted model and hides every MeshInstance3D whose

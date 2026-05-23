@@ -2746,7 +2746,15 @@ func _update_aim_laser() -> void:
 	var eff_range: float = _combat.effective_range(_aim_hold_skill, weapon) if _aim_hold_skill != null else 10.0
 	if eff_range <= 0.0:
 		eff_range = 10.0
+	# Origin defaults to chest centre, but if a weapon model is mounted
+	# (sniper, etc.) read its tuned muzzle so the laser sight emerges
+	# from the actual barrel tip instead of floating off the chest.
 	var p_pos: Vector3 = global_position + AIM_LASER_PLAYER_OFFSET
+	var skel := _find_player_skeleton()
+	if skel != null:
+		var muzzle := WeaponAttachment.get_muzzle_position(skel, aim)
+		if muzzle != Vector3.ZERO:
+			p_pos = muzzle
 	var target: Vector3 = p_pos + aim * eff_range
 	var diff := target - p_pos
 	var dist := diff.length()

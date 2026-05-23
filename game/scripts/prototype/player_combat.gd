@@ -248,11 +248,19 @@ func resolve_skill_hit(skill: Skill, aim: Vector3, weapon: Item, source_offset: 
 				if is_knife:
 					CombatVisuals.spawn_blade_slash(_host, aim, eff_range, visual_cone_deg)
 				elif is_hammer:
-					# 2H hammer LMB — replaces the generic shockwave dome
-					# with realistic ground debris fanned along the swing
-					# direction. Reads as material impact rather than
-					# energy effect.
-					PrototypeAttackIndicator.spawn_hammer_dust_cone(_host, aim, eff_range, visual_cone_deg)
+					# 2H hammer LMB — leaves a 3D crater at the impact
+					# point ahead of the player. Subdivided-mesh
+					# displacement creates a raised rim, dark interior
+					# reads as scorched ground. The dust cloud iteration
+					# read as flat / unconvincing; the crater commits
+					# to physical material damage instead.
+					var aim_flat := Vector3(aim.x, 0.0, aim.z)
+					if aim_flat.length_squared() > 0.0001:
+						aim_flat = aim_flat.normalized()
+					else:
+						aim_flat = -_host.global_transform.basis.z
+					var impact_pos: Vector3 = _host.global_position + aim_flat * eff_range * 0.65
+					PrototypeAttackIndicator.spawn_hammer_crater(_host, impact_pos, 1.2)
 					if is_hammer_finisher:
 						CombatVisuals.spawn_hammer_impact(_host)
 				else:
@@ -287,12 +295,13 @@ func resolve_skill_hit(skill: Skill, aim: Vector3, weapon: Item, source_offset: 
 					c._resolve_cone(skill, aim, eff_range, weapon)
 				, CONNECT_ONE_SHOT)
 		Skill.TargetingMode.AOE_RADIAL:
-			# 2H hammer RMB (AoE Burst) — donut of dust expanding outward
-			# from the player's feet, replacing the generic radial shockwave.
-			# Other weapons (energy, ranged AoE skills) keep the shockwave.
+			# 2H hammer RMB (AoE Burst) — large crater at the player's
+			# feet, radius matched to the skill's eff_range. Other
+			# weapons that fire AoE skills (currently rare; mostly
+			# energy effects via channel paths) keep the shockwave.
 			var aoe_is_hammer: bool = weapon != null and weapon.weapon_base_id == &"melee_2h"
 			if aoe_is_hammer:
-				PrototypeAttackIndicator.spawn_hammer_dust_ring(_host, eff_range)
+				PrototypeAttackIndicator.spawn_hammer_crater(_host, _host.global_position, eff_range * 0.85)
 			else:
 				CombatVisuals.spawn_hit_radial(_host, eff_range)
 			_resolve_aoe(skill, eff_range, weapon)
@@ -304,7 +313,7 @@ func resolve_skill_hit(skill: Skill, aim: Vector3, weapon: Item, source_offset: 
 					if c == null or c._host == null or not c._host._alive:
 						return
 					if aoe_is_hammer:
-						PrototypeAttackIndicator.spawn_hammer_dust_ring(c._host, eff_range)
+						PrototypeAttackIndicator.spawn_hammer_crater(c._host, c._host.global_position, eff_range * 0.85)
 					else:
 						CombatVisuals.spawn_hit_radial(c._host, eff_range)
 					c._resolve_aoe(skill, eff_range, weapon)
