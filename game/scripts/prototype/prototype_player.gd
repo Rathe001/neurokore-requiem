@@ -1697,6 +1697,15 @@ func _physics_process(delta: float) -> void:
 				_play_anim(ANIM_JUMP_START, 1.2, 0.1)
 			else:
 				_play_anim(ANIM_JUMP_AIR, 1.0, 0.15)
+		elif not _interacting and _is_oneshot_anim_playing():
+			# A one-shot attack / cast / grenade / hit-react animation is
+			# still running. Skip the locomotion picker entirely so its
+			# per-tick _play_anim(idle/run/...) calls can't truncate the
+			# swing before the player actually sees it. The fire/strafe
+			# loop, reload pose, and idle return resume the moment the
+			# clip finishes. Movement / facing are unaffected — the
+			# CharacterBody3D drives travel regardless of which anim plays.
+			pass
 		elif not _interacting:
 			# Ranged-fire override: while the player holds LMB/RMB with a
 			# bullet weapon equipped, keep the looping firing-rifle pose
@@ -3994,6 +4003,27 @@ func _ranged_fire_anim() -> Array[StringName]:
 # branch on this so swapping weapons swaps the visible stance. Cheap
 # enough to call every physics tick — single InventoryState lookup
 # + dict get inside XBotAnimations.weapon_class_for_id.
+# True when a non-looping animation is currently playing and hasn't yet
+# reached its end. Used by the locomotion picker to avoid stomping on
+# in-flight attack / cast / grenade / hit-reaction clips with the next
+# tick's idle/run anim. Loop-mode is the discriminator — looping clips
+# (idle, jog, fire) can always be overridden; one-shots (swings, casts,
+# throws) need to play through. The -0.05s margin tolerates the picker
+# firing inside the final frame of an anim that's about to finish.
+func _is_oneshot_anim_playing() -> bool:
+	if anim_player == null or not anim_player.is_playing():
+		return false
+	var current: StringName = anim_player.current_animation
+	if current == &"":
+		return false
+	var anim: Animation = anim_player.get_animation(current)
+	if anim == null:
+		return false
+	if anim.loop_mode != Animation.LOOP_NONE:
+		return false
+	return anim_player.current_animation_position < anim_player.current_animation_length - 0.05
+
+
 func _equipped_weapon_class() -> StringName:
 	var w: Item = InventoryState.get_equipped(&"weapon")
 	if w == null:
