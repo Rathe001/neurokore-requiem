@@ -6,8 +6,9 @@ class_name ShellCasing extends Node3D
 ## the player never notices. Simple ballistic + bounce + fade pipeline,
 ## auto-frees at LIFETIME so nothing accumulates over a session.
 
-const LIFETIME: float = 2.5            # total time alive before queue_free
-const FADE_START: float = 1.5          # alpha decays from this point to LIFETIME
+const LIFETIME: float = 3.5            # total time alive before queue_free
+const FADE_START: float = 2.5          # alpha decays from this point to LIFETIME
+const HEAT_FLASH_DURATION: float = 0.25 # extra emission while casing is "hot" from firing
 const GRAVITY: float = 9.8             # m/s²
 const BOUNCE_DAMP: float = 0.25        # vertical velocity retained on bounce
 const HORIZONTAL_DAMP: float = 0.4     # x/z velocity retained on bounce
@@ -33,11 +34,17 @@ func setup(mesh: Mesh, init_velocity: Vector3, init_angular_velocity: Vector3, g
 	_mesh_inst.mesh = mesh
 	_mesh_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	# Brass / copper tone with metallic finish — reads as spent ammo
-	# without needing a per-variant material asset.
+	# without needing a per-variant material asset. Emission peaks at
+	# spawn ("hot from firing") then decays to a low settled glow over
+	# HEAT_FLASH_DURATION so the casing remains catchable against dark
+	# floors after the heat-pop fades.
 	_mat = StandardMaterial3D.new()
-	_mat.albedo_color = Color(0.86, 0.62, 0.28, 1.0)
-	_mat.metallic = 0.85
-	_mat.roughness = 0.35
+	_mat.albedo_color = Color(0.95, 0.68, 0.28, 1.0)
+	_mat.metallic = 0.9
+	_mat.roughness = 0.28
+	_mat.emission_enabled = true
+	_mat.emission = Color(1.0, 0.55, 0.18)
+	_mat.emission_energy_multiplier = 2.5
 	_mesh_inst.material_override = _mat
 	add_child(_mesh_inst)
 	# Random starting orientation so successive casings don't all spawn
@@ -51,6 +58,12 @@ func _physics_process(delta: float) -> void:
 	if _age >= LIFETIME:
 		queue_free()
 		return
+	# Decay the heat-pop emission for the first quarter-second so the
+	# casing reads as "fresh / hot" right at the muzzle and dims to its
+	# settled metallic look by the time it hits the floor.
+	if _mat != null and _age < HEAT_FLASH_DURATION:
+		var heat_t: float = 1.0 - _age / HEAT_FLASH_DURATION
+		_mat.emission_energy_multiplier = 0.6 + 1.9 * heat_t
 	if not _settled:
 		_vel.y -= GRAVITY * delta
 		position += _vel * delta

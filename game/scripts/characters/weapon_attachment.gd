@@ -208,15 +208,15 @@ static func _get_casing_mesh(weapon_base_id: StringName) -> Mesh:
 			return _shotgun_casing_mesh
 		&"sniper":
 			if _sniper_casing_mesh == null:
-				_sniper_casing_mesh = _build_cylinder_mesh(0.012, 0.07)
+				_sniper_casing_mesh = _build_cylinder_mesh(0.018, 0.105)
 			return _sniper_casing_mesh
 		&"lmg":
 			if _lmg_casing_mesh == null:
-				_lmg_casing_mesh = _build_cylinder_mesh(0.010, 0.065)
+				_lmg_casing_mesh = _build_cylinder_mesh(0.015, 0.095)
 			return _lmg_casing_mesh
 		&"smg":
 			if _smg_casing_mesh == null:
-				_smg_casing_mesh = _build_cylinder_mesh(0.005, 0.025)
+				_smg_casing_mesh = _build_cylinder_mesh(0.009, 0.045)
 			return _smg_casing_mesh
 	return null
 
