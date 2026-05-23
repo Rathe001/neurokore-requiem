@@ -102,20 +102,29 @@ var _released: bool = false
 # (charged plasma, anything with blast_radius > 0) keep the original
 # SphereMesh from the .tscn so the heavier hit reads as a glowing orb.
 # The discriminator is `blast_radius > 0` set by the spawner before reset().
-const LASER_BOX_SIZE: Vector3 = Vector3(0.03, 0.03, 0.55)
+# Sizes halved from the original cartoonish-bullet pass: head is a
+# small dot and the trail tapers to a short streak instead of a
+# meter-long rod. Bullets still register at a glance against dark
+# corridors thanks to the wake-refraction shader on the trail and
+# the muzzle flash at fire — but they no longer dominate the frame.
+# Previous values, kept for reference:
+#   LASER_BOX_SIZE   = Vector3(0.03, 0.03, 0.55)
+#   BULLET_HEAD_SIZE = Vector3(0.05, 0.05, 0.16)
+#   BULLET_TRAIL_SIZE= Vector3(0.07, 0.07, 1.4)
+const LASER_BOX_SIZE: Vector3 = Vector3(0.018, 0.018, 0.38)
 # Bullet visual is split into two pieces:
 #   • Visual (existing MeshInstance3D, used as the "head"): a small flat
 #     rectangle leading the projectile so the player sees a discrete
 #     round, not a glowing rod.
-#   • Trail (created at runtime, child of the projectile): a long thin
+#   • Trail (created at runtime, child of the projectile): a short thin
 #     box BEHIND the head running the shockwave shader, so the round
 #     leaves a wake of refracted screen pixels rather than a
 #     symmetrical bubble around itself. Bubble→trail collapses the
 #     screen footprint per bullet, which fixes the texture-flicker /
 #     vibration when many SMG rounds are in flight overlapping the
 #     world.
-const BULLET_HEAD_SIZE: Vector3 = Vector3(0.05, 0.05, 0.16)
-const BULLET_TRAIL_SIZE: Vector3 = Vector3(0.07, 0.07, 1.4)
+const BULLET_HEAD_SIZE: Vector3 = Vector3(0.022, 0.022, 0.09)
+const BULLET_TRAIL_SIZE: Vector3 = Vector3(0.035, 0.035, 0.7)
 # Distortion / chroma values tuned smaller than the melee shockwave —
 # a per-bullet wake has to read at a glance from a single moving
 # round, so we trade intensity for clarity.
@@ -498,8 +507,12 @@ func reset() -> void:
 			glow.light_energy = 0.0
 		else:
 			glow.visible = true
-			glow.omni_range = 5.0 * visual_scale
-			glow.light_energy = 3.0 * visual_scale
+			# Glow halo tightened to match the smaller energy-bolt mesh
+			# — was 5.0 range / 3.0 energy which created a brighter
+			# halo than the bolt itself and made every plasma round
+			# look like a slow basketball-sized orb.
+			glow.omni_range = 3.5 * visual_scale
+			glow.light_energy = 2.0 * visual_scale
 			glow.light_specular = 0.0
 			# Drives _projectile_color() too — impact bursts and explosion
 			# VFX pick up the side color automatically.

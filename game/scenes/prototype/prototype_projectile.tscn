@@ -6,8 +6,11 @@
 radius = 0.3
 
 [sub_resource type="SphereMesh" id="SphereMesh_1"]
-radius = 0.09
-height = 0.22
+; Halved from 0.09 / 0.22 — the AoE energy bolt (charged plasma)
+; was reading as a slow basketball orb. Still highly visible because
+; emission_energy_multiplier 14.0 below glows the small sphere brightly.
+radius = 0.045
+height = 0.11
 radial_segments = 8
 rings = 4
 
@@ -38,8 +41,9 @@ material_override = SubResource("StandardMaterial3D_1")
 ; and self-shadowing on the projectile mesh looks wrong.
 [node name="Glow" type="OmniLight3D" parent="."]
 light_color = Color(0.4, 0.85, 1.0, 1.0)
-light_energy = 4.5
-omni_range = 6.0
+; Halo tightened to match the smaller bolt — was 4.5 / 6.0.
+light_energy = 2.8
+omni_range = 4.0
 omni_attenuation = 2.0
 light_specular = 0.0
 shadow_enabled = false
