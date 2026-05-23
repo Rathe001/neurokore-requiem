@@ -36,7 +36,14 @@ extends Node
 const HIGHLIGHT_LAYER_BIT: int = 1 << 19  # layer 20 (0-indexed bit position)
 const HIGHLIGHT_LAYER_MASK: int = HIGHLIGHT_LAYER_BIT
 
-const OUTLINE_THICKNESS: float = 1.5
+const OUTLINE_THICKNESS: float = 1.5  # legacy — kept for older save data, not consumed
+# Neon-tube shader tunables. Core is the bright ~1px tube band at the
+# silhouette edge; glow is the wider HDR halo. The boost values feed
+# into the level Environment's glow pass — values > 1 bloom out.
+const NEON_CORE_THICKNESS: float = 1.2
+const NEON_GLOW_RADIUS: float = 6.0
+const NEON_CORE_BOOST: float = 5.5
+const NEON_GLOW_BOOST: float = 1.4
 # Tune this to skip building the compositor on platforms / scenarios where
 # the extra render pass isn't worth it — currently always on. The outline
 # is one full-screen pass + one extra render of (typically) 1-3 small
@@ -110,7 +117,10 @@ func _ready() -> void:
 	_overlay_rect.stretch_mode = TextureRect.STRETCH_SCALE
 	var mat := ShaderMaterial.new()
 	mat.shader = preload("res://scripts/prototype/outline_compositor.gdshader")
-	mat.set_shader_parameter(&"outline_thickness", OUTLINE_THICKNESS)
+	mat.set_shader_parameter(&"core_thickness", NEON_CORE_THICKNESS)
+	mat.set_shader_parameter(&"glow_radius", NEON_GLOW_RADIUS)
+	mat.set_shader_parameter(&"core_boost", NEON_CORE_BOOST)
+	mat.set_shader_parameter(&"glow_boost", NEON_GLOW_BOOST)
 	_overlay_rect.material = mat
 	_overlay_layer.add_child(_overlay_rect)
 
