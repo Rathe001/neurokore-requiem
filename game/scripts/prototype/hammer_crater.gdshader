@@ -33,27 +33,22 @@ uniform sampler2D screen_texture : hint_screen_texture, repeat_disable, filter_l
 uniform sampler2D normal_tex : hint_normal, filter_linear_mipmap;
 uniform sampler2D roughness_tex : hint_roughness_r, filter_linear_mipmap;
 // Scorch tint multiplied into the sampled floor color. Warm
-// burnt-sienna — picks up contrast against the cyberpunk floor's
-// cool blue-grey palette. Going darker than the floor (the previous
-// near-black attempt) made the crater disappear; the floor is
-// already dark, so dark scorch = invisible. Warm tones cut through.
-uniform vec3 tint : source_color = vec3(0.85, 0.55, 0.32);
-uniform float tint_mix : hint_range(0.0, 1.0) = 0.6;
+// burnt-sienna picks up contrast against the floor's cool palette.
+uniform vec3 tint : source_color = vec3(0.75, 0.45, 0.25);
+uniform float tint_mix : hint_range(0.0, 1.0) = 0.55;
 uniform float fade : hint_range(0.0, 1.0) = 1.0;
 uniform float fade_radius : hint_range(0.5, 100.0) = 20.0;
 uniform float vignette_start : hint_range(0.0, 1.0) = 0.45;
 uniform float vignette_end : hint_range(0.0, 1.0) = 0.85;
-// Roughness boost — matte against polished floor; the specular
-// contrast at the edge also helps the silhouette read.
+// Roughness boost — matte against polished floor.
 uniform float roughness_boost : hint_range(0.0, 1.0) = 0.45;
-// Soft warm edge highlight. Kept low so it reads as a subtle hot
-// outline on the scorch (not the bright orange RING that the
-// previous tune accidentally created — which looked identical to
-// the spawn_hammer_impact shockwave and read as "no crater here,
-// just the old VFX"). rim_width controls the falloff radius.
-uniform vec3 rim_color : source_color = vec3(1.0, 0.55, 0.20);
-uniform float rim_intensity : hint_range(0.0, 6.0) = 0.7;
-uniform float rim_width : hint_range(0.02, 0.40) = 0.22;
+// Normal-map exaggeration. Default 1.0 = use the source asset's
+// normal at native intensity. We push this above 1.0 so the
+// crater's sculpted bump (rim, depression, debris) generates
+// stronger highlights and shadows under world lighting — that's
+// where the readability of the impact comes from. No emissive rim
+// (the orange-ring iteration read as a separate VFX).
+uniform float normal_strength : hint_range(0.5, 5.0) = 3.0;
 
 // Model-local vertex position carried into fragment — needed because
 // the built-in VERTEX in fragment() is in VIEW space, not model space.
@@ -75,21 +70,19 @@ void fragment() {
 	float r = length(v_local_pos.xz) / max(fade_radius, 0.001);
 	float mask = 1.0 - smoothstep(vignette_start, vignette_end, r);
 
-	// Mix the sampled floor toward the scorch tint. Output is darker /
-	// warmer than surrounding floor but unmistakably still the floor's
-	// own texture and palette.
+	// Mix the sampled floor toward the scorch tint. Output reads as
+	// the floor's own palette warmed and dimmed by the impact, with
+	// no separate VFX color layered on top.
 	ALBEDO = mix(floor_color, floor_color * tint, tint_mix);
 	NORMAL_MAP = nrm;
+	// NORMAL_MAP_DEPTH > 1 exaggerates the crater's sculpted bump —
+	// the rim and depression cast stronger shadows and catch more
+	// light, so the impact silhouette is visible from the iso camera
+	// even on dark floor. This replaces the emissive-rim approach,
+	// which read as a separate orange ring rather than as the crater
+	// itself.
+	NORMAL_MAP_DEPTH = normal_strength;
 	ROUGHNESS = clamp(rough + roughness_boost, 0.0, 1.0);
 	METALLIC = 0.0;
 	ALPHA = mask * fade;
-
-	// Hot rim band: peaks just inside the alpha-fade edge, falls off
-	// on both sides. Picked up by the env's bloom (intensity > 1.0)
-	// for a glow halo. Couples to `fade` so the heat dies down as
-	// the crater ages.
-	float rim_centre = (vignette_start + vignette_end) * 0.5;
-	float rim_band = smoothstep(rim_centre - rim_width, rim_centre, r) *
-	                 (1.0 - smoothstep(rim_centre, rim_centre + rim_width * 0.5, r));
-	EMISSION = rim_color * rim_band * rim_intensity * fade;
 }

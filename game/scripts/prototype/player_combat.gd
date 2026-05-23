@@ -260,11 +260,12 @@ func resolve_skill_hit(skill: Skill, aim: Vector3, weapon: Item, source_offset: 
 					# crater centred on the player, sized to the full
 					# eff_range. Reads as a ground slam landing under
 					# the swinger, mirroring the RMB AoE pattern. The
-					# shockwave-ring impact also fires on top sized to
-					# the same eff_range so the two visuals agree.
+					# shockwave-ring impact is intentionally NOT
+					# spawned here — it overlaid the crater with a
+					# second orange ring that read as a duplicate VFX.
+					# The crater's own sculpted bump is the visual.
 					if is_hammer_finisher:
 						PrototypeAttackIndicator.spawn_hammer_crater(_host, _host.global_position, eff_range)
-						CombatVisuals.spawn_hammer_impact(_host, eff_range)
 					else:
 						var aim_flat := Vector3(aim.x, 0.0, aim.z)
 						if aim_flat.length_squared() > 0.0001:
