@@ -672,7 +672,15 @@ static func blood_color_for(_blood_type: StringName) -> Color:
 # ORM texture (Occlusion/Roughness/Metallic, packed RGB) is shared
 # across all blood decals regardless of fluid color and drives the
 # wet sheen via low roughness.
-const _SPLATTER_VARIANT_COUNT: int = 4
+## Bumped 4 → 12. Each variant is one procedurally-generated splat
+## shape (different lobe count / streak directions / drop pattern).
+## At 4, clustered kills repeatedly stamped the same 4 templates and
+## the eye picked up on the repetition — pools read as "fake stamps."
+## 12 variants × random Y rotation × per-spawn aspect-ratio jitter
+## gives enough combinations that no two pools side-by-side look the
+## same. Memory cost: ~512KB extra (8 extra variants × 128² RGBA8 ×
+## 2 maps each).
+const _SPLATTER_VARIANT_COUNT: int = 12
 static var _blood_splatter_variants: Dictionary = {}   # StringName -> Array[Texture2D]
 static var _blood_splatter_normals: Dictionary = {}    # StringName -> Array[Texture2D]
 # Wall splatters need their own variant set — every streak forced
@@ -989,8 +997,11 @@ static func _spawn_mist_drop_wall(parent: Node, world_pos: Vector3, wall_normal:
 
 # Pool sizing.
 const POOL_INITIAL_DIAMETER: float = 0.3        # tiny "fresh splash" at spawn
-const POOL_TARGET_MIN_DIAMETER: float = 0.9     # smallest final pool from a single kill
-const POOL_TARGET_MAX_DIAMETER: float = 1.4     # largest before merge growth
+const POOL_TARGET_MIN_DIAMETER: float = 0.55    # widened from 0.9 — small kills should
+const POOL_TARGET_MAX_DIAMETER: float = 1.9     # widened from 1.4 — 3.5× range vs 1.5×
+                                                # gives the eye more obvious size variance
+                                                # so clustered pools don't all read at the
+                                                # same scale
 const POOL_MAX_DIAMETER: float = 3.0            # cap on any pool's grown diameter
 const POOL_GROWTH_DURATION: float = 4.5         # slow ooze — player shouldn't see the growth tween in motion
 # Attach: if a new kill lands within this distance of an existing
@@ -1160,16 +1171,27 @@ static func _spawn_new_pool(parent: Node, world_pos: Vector3, blood_type: String
 	# so the radius reference exists when the tween wires its own
 	# shape.radius track below.
 	_attach_blood_pool_slip_zone(pool, POOL_INITIAL_DIAMETER)
+	# Per-spawn aspect-ratio jitter — X and Z final sizes diverge so
+	# pools end oblong/teardrop rather than perfect circles. Squared
+	# pools next to each other immediately read as "same stamp"; oblong
+	# pools with random rotation look like organic splatters even when
+	# the underlying texture variant repeats. Slip zone uses the
+	# AVERAGE radius so gameplay stays predictable. ±20% spread.
+	var aspect_x: float = randf_range(0.85, 1.20)
+	var aspect_z: float = randf_range(0.85, 1.20)
+	var target_x: float = target_diameter * aspect_x
+	var target_z: float = target_diameter * aspect_z
 	var tween := pool.create_tween().set_parallel(true)
-	tween.tween_property(pool, "size:x", target_diameter, POOL_GROWTH_DURATION) \
+	tween.tween_property(pool, "size:x", target_x, POOL_GROWTH_DURATION) \
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	tween.tween_property(pool, "size:z", target_diameter, POOL_GROWTH_DURATION) \
+	tween.tween_property(pool, "size:z", target_z, POOL_GROWTH_DURATION) \
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	# Slip cylinder grows in lockstep with the visual so the player
-	# can't slip on a pool that hasn't actually grown that big yet.
+	# Slip cylinder grows in lockstep with the visual; uses average of
+	# the oblong X/Z so the cylinder approximates the pool's actual
+	# footprint area.
 	var slip_shape: CylinderShape3D = pool.get_meta(_POOL_SLIP_SHAPE_META, null) as CylinderShape3D
 	if slip_shape != null:
-		tween.tween_property(slip_shape, "radius", target_diameter * 0.5, POOL_GROWTH_DURATION) \
+		tween.tween_property(slip_shape, "radius", (target_x + target_z) * 0.25, POOL_GROWTH_DURATION) \
 			.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	pool.set_meta(_POOL_GROWTH_TWEEN_META, tween)
 
@@ -2692,12 +2714,18 @@ static func _get_blood_orm_texture() -> Texture2D:
 # decals still read as the same fluid. `alpha` is passed through so
 # callers that already encode an intensity (footprints) preserve theirs.
 static func _decal_color_jitter(alpha: float = 1.0) -> Color:
-	# Narrow range (was 0.70-1.15) — the wide spread read as different
-	# palettes ("dried brown" vs "fresh bright red") side by side, not
-	# as subtle freshness variance. ±8% keeps a hint of variation
-	# without breaking the unified red read.
-	var v: float = randf_range(0.92, 1.08)
-	return Color(v, v, v, alpha)
+	# Per-pool tint jitter. Brightness ±12% gives modest light/dark
+	# variance. The per-channel skew (red kept full, green and blue
+	# slightly biased independently) walks the tint between "fresher
+	# bright red" and "darker drying brown" without crossing into
+	# obviously-wrong territory (no purple, no orange). Wider spread
+	# than the previous ±8% all-channel value to break up the
+	# "every pool is the same red" stamping read.
+	var v: float = randf_range(0.88, 1.12)
+	var r: float = v
+	var g: float = v * randf_range(0.85, 1.0)  # less green = more red
+	var b: float = v * randf_range(0.78, 0.95) # less blue = warmer
+	return Color(r, g, b, alpha)
 
 
 # AoE explosion burst — flipbook fireball + flash + sparks, palette-keyed
