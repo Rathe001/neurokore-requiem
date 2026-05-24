@@ -40,3 +40,17 @@ extends Resource
 ## (adjustment_brightness/contrast/saturation). A/B the graded vs
 ## ungraded look from the debug panel without restarting.
 @export var color_grading_enabled: bool = true
+
+## MP host-migration toggle (off by default — experimental).
+## When false (default), a host disconnect drops surviving clients to the
+## main menu via HostDisconnectedScreen (the documented Phase 8 flow).
+## When true, surviving clients run the host-migration handshake:
+##   - Elect a new host (lowest steam id wins)
+##   - Re-bind transport (close old peer; new host opens host peer;
+##     others open client peers)
+##   - Re-authority every entity to the new host's peer 1
+##   - Game resumes for everyone or falls back to disconnect on timeout
+## Flagged off because the flow is multi-week stability work and has not
+## been verified across real Steam accounts yet. See
+## [[project_host_migration_plan]] memory for the iteration roadmap.
+@export var host_migration_enabled: bool = false

@@ -92,6 +92,13 @@ func _ready() -> void:
 	# Clients only — the host doesn't get this signal (NetState only
 	# subscribes on the client side).
 	NetState.host_disconnected.connect(_on_host_disconnected)
+	# Host migration (experimental, opt-in via DebugConfig.host_migration_enabled).
+	# When the flag is on, HostMigration intercepts host_disconnected first
+	# and attempts a transport rebind + re-authority handshake. We listen
+	# to its completion signal — if migration succeeds, no overlay; if it
+	# fails we fall back to the standard disconnect screen.
+	HostMigration.migration_starting.connect(_on_host_migration_starting)
+	HostMigration.migration_completed.connect(_on_host_migration_completed)
 	# Pre-compile combat VFX shaders while the loading cover is still up,
 	# so the first LMB/RMB doesn't stall a frame on lazy shader compile.
 	# Awaits two process frames internally; that doubles as the
@@ -101,6 +108,18 @@ func _ready() -> void:
 
 
 func _on_host_disconnected() -> void:
+	# When migration is enabled and active, HostMigration will fire
+	# migration_starting before us (same signal, both connected). It
+	# resets state.IDLE → ELECTING and emits. We check state here so the
+	# disconnect overlay doesn't race the migration overlay on the same
+	# frame. If migration is disabled or already failed, fall through
+	# to the standard overlay.
+	if HostMigration.state != HostMigration.State.IDLE:
+		return
+	_show_host_disconnected_overlay()
+
+
+func _show_host_disconnected_overlay() -> void:
 	# Idempotent — multiple disconnects in flight (rare, but possible if
 	# the peer fires duplicate events) shouldn't stack overlays.
 	if _host_disconnected_screen != null and is_instance_valid(_host_disconnected_screen):
@@ -108,6 +127,27 @@ func _on_host_disconnected() -> void:
 	_host_disconnected_screen = HostDisconnectedScreen.new()
 	add_child(_host_disconnected_screen)
 	_host_disconnected_screen.show_disconnected()
+
+
+# ─── Host migration listeners (experimental) ──────────────────────────────
+
+func _on_host_migration_starting() -> void:
+	# Migration is in flight. UI feedback is intentionally minimal in
+	# Session 1 — a tiny corner overlay would be ideal; for now we just
+	# print so playtest logs capture timing. If migration completes the
+	# game just resumes; if it fails the disconnect overlay fires from
+	# _on_host_migration_completed below.
+	print("[PrototypeRoot] Host migration starting; gameplay paused.")
+
+
+func _on_host_migration_completed(succeeded: bool) -> void:
+	if succeeded:
+		print("[PrototypeRoot] Host migration succeeded; gameplay resuming.")
+		return
+	# Migration failed — fall back to the standard disconnect overlay so
+	# the player can return to the menu rather than sit in limbo.
+	print("[PrototypeRoot] Host migration failed; showing disconnect overlay.")
+	_show_host_disconnected_overlay()
 
 
 # If the level placed a PrototypePlayerSpawn marker (via a player_spawn slot
