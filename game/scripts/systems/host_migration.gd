@@ -126,6 +126,13 @@ func _on_host_disconnected() -> void:
 		# Flag off: fall through to the existing HostDisconnectedScreen
 		# path that PrototypeRoot already handles. We emit nothing.
 		return
+	# SP guard — host_disconnected should never fire in SP (NetState only
+	# subscribes to multiplayer.peer_disconnected on clients), but if it
+	# somehow does, refuse to start migration because there's no lobby
+	# to migrate within.
+	if not NetState.is_in_lobby():
+		print("[HostMigration] host_disconnected fired but not in a lobby; ignoring.")
+		return
 	if state != State.IDLE:
 		# Already migrating from a prior drop; ignore re-entry.
 		push_warning("[HostMigration] host_disconnected during active migration; ignoring.")
@@ -134,13 +141,21 @@ func _on_host_disconnected() -> void:
 
 
 # Allow direct invocation for testing (e.g. a debug button) without going
-# through a real disconnect. No-op when migration is disabled.
+# through a real disconnect. Lets the user exercise election + re-authority
+# in single-account testing where a real cross-peer drop isn't possible.
+# No-op when migration is disabled, when not in a lobby, or when already
+# migrating.
 func force_start_migration_for_testing() -> void:
 	if not _is_migration_enabled():
 		push_warning("[HostMigration] force_start_migration_for_testing: flag is off")
 		return
-	if state != State.IDLE:
+	if not NetState.is_in_lobby():
+		print("[HostMigration] force_start_migration_for_testing: not in a lobby; no-op")
 		return
+	if state != State.IDLE:
+		print("[HostMigration] force_start_migration_for_testing: already migrating (state=%d)" % state)
+		return
+	print("[HostMigration] force_start_migration_for_testing: simulating host drop")
 	_start_migration()
 
 
@@ -168,6 +183,7 @@ func _elect_new_host() -> void:
 		var member_id: int = int(member_id_v)
 		if member_id != dead_host_id and member_id != 0:
 			candidates.append(member_id)
+	print("[HostMigration] Election: dead_host=%d, %d candidates: %s" % [dead_host_id, candidates.size(), candidates])
 	if candidates.is_empty():
 		push_warning("[HostMigration] No surviving lobby members to elect; aborting.")
 		_fail_migration("no surviving members")
@@ -175,7 +191,15 @@ func _elect_new_host() -> void:
 	candidates.sort()
 	elected_host_steam_id = candidates[0]
 	elected_self = elected_host_steam_id == SteamState.steam_id
-	print("[HostMigration] Elected new host: %d (self=%s)" % [elected_host_steam_id, elected_self])
+	# Solo-survivor case — I'm the only one left. We still want to run the
+	# rebind so the player ends up as a host of an effectively-solo session
+	# (lobby is preserved; others can still join via drop-in). Without this
+	# the player would stay in client mode with no actual host, which would
+	# break enemy spawning, damage, and pickups.
+	if candidates.size() == 1 and elected_self:
+		print("[HostMigration] Solo-survivor election: promoting self to host of 1-player session.")
+	else:
+		print("[HostMigration] Elected new host: %d (self=%s)" % [elected_host_steam_id, elected_self])
 
 
 # ─── Transport rebind ──────────────────────────────────────────────────────

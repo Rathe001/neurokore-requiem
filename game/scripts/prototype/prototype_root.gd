@@ -26,6 +26,7 @@ var _corpses: Array[Node3D] = []
 var _corpse_head: int = 0
 var _spec_overlay: SpecSelectOverlay
 var _host_disconnected_screen: HostDisconnectedScreen = null
+var _host_migrating_screen: HostMigratingScreen = null
 var _loading_screen: LoadingScreen = null
 @onready var _enemies_container: Node3D = get_node_or_null("EnemiesContainer") as Node3D
 @onready var _pickups_container: PickupsContainer = get_node_or_null("PickupsContainer") as PickupsContainer
@@ -132,15 +133,24 @@ func _show_host_disconnected_overlay() -> void:
 # ─── Host migration listeners (experimental) ──────────────────────────────
 
 func _on_host_migration_starting() -> void:
-	# Migration is in flight. UI feedback is intentionally minimal in
-	# Session 1 — a tiny corner overlay would be ideal; for now we just
-	# print so playtest logs capture timing. If migration completes the
-	# game just resumes; if it fails the disconnect overlay fires from
-	# _on_host_migration_completed below.
+	# Migration is in flight. Show a corner-overlay so the player (and
+	# any test session screenshot) can see which phase is active. The
+	# overlay polls HostMigration.state each tick and frees itself on
+	# completion via hide_and_free().
 	print("[PrototypeRoot] Host migration starting; gameplay paused.")
+	if _host_migrating_screen != null and is_instance_valid(_host_migrating_screen):
+		return
+	_host_migrating_screen = HostMigratingScreen.new()
+	add_child(_host_migrating_screen)
+	_host_migrating_screen.show_migrating()
 
 
 func _on_host_migration_completed(succeeded: bool) -> void:
+	# Always hide the migrating overlay — its job is done whether we
+	# resume or fall back to the disconnect screen.
+	if _host_migrating_screen != null and is_instance_valid(_host_migrating_screen):
+		_host_migrating_screen.hide_and_free()
+		_host_migrating_screen = null
 	if succeeded:
 		print("[PrototypeRoot] Host migration succeeded; gameplay resuming.")
 		return

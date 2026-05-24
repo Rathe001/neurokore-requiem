@@ -74,13 +74,24 @@ This is multi-session work. Each session here is roughly a focused 4-hour block.
 
 ## Testing notes (for the playtester)
 
-To exercise migration:
+### Cross-account test (real disconnect)
 
 1. Two Steam accounts in a lobby
-2. Set `DebugConfig.host_migration_enabled = true` in the debug overlay (or hardcode for the build)
+2. Debug panel → toggle **Host Migration** on (both peers)
 3. Both peers enter game
 4. Host (peer 1) closes Steam process (Task Manager → end Steam.exe) or kills the game process
-5. Watch logs on the surviving client; should see `[HostMigration] Host disconnected; starting migration handshake.` followed by `[HostMigration] Elected new host: ...` and `[HostMigration] Migration complete`
+5. Watch logs + UI on the surviving client; should see `[HostMigration] Host disconnected; starting migration handshake.` followed by `[HostMigration] Election: dead_host=X, N candidates: [...]`, `[HostMigration] Elected new host: ...`, and `[HostMigration] Migration complete`. The migration overlay shows which phase is in flight.
+
+### Single-account "happy path" check
+
+For async testing without a second account, the debug panel has a **Trigger Host Migration** button that calls `HostMigration.force_start_migration_for_testing()`. This runs the deterministic parts (election math, re-authority walk) against the current lobby/entity state. Won't actually rebind transport correctly without a real peer drop, but catches logic bugs in the election + re-authority pass.
+
+To use:
+1. Host any lobby (even by yourself with no joiners)
+2. Start the game
+3. Debug panel → toggle **Host Migration** on
+4. Debug panel → click **Trigger Host Migration**
+5. Read the log — election will likely report "no surviving members" and fail (expected: you're the only member). The interesting output is whether the election walks the lobby_members dict cleanly, whether the migration overlay appears, and whether the disconnect overlay fallback fires correctly.
 
 Failure modes to report:
 - "Migration overlay shown but game frozen forever" — likely a rebind issue

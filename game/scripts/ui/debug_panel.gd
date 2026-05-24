@@ -17,6 +17,10 @@ const BOOL_FIELDS: Array[Dictionary] = [
 	{"label_key": "DEBUG_SHOW_TELEGRAPHS", "key": &"show_attack_telegraphs"},
 	{"label_key": "DEBUG_SHOW_OVERLAY", "key": &"show_debug_overlay"},
 	{"label_key": "Color Grading", "key": &"color_grading_enabled"},
+	# Experimental MP host-migration. Off by default; turning it on routes
+	# host disconnects through HostMigration instead of the standard
+	# disconnect overlay. See docs/host-migration.md.
+	{"label_key": "Host Migration", "key": &"host_migration_enabled"},
 ]
 
 # (option label, RetroFilterOverlay.RetroMode value). Order = dropdown order.
@@ -87,6 +91,11 @@ func _build_layout() -> void:
 	_add_retro_filter_row(vbox)
 	vbox.add_child(HSeparator.new())
 	_add_action_button(vbox, "Force Unlock Doors", _force_unlock_all_doors)
+	# MP host-migration test trigger. Simulates a host drop without
+	# actually killing a process — useful in async testing when you can't
+	# get a second Steam account online. The button is always present but
+	# only does anything when the flag is on AND in an active lobby.
+	_add_action_button(vbox, "Trigger Host Migration", _trigger_host_migration)
 	vbox.add_child(HSeparator.new())
 
 	var cfg: DebugConfig = DebugState.config
@@ -205,6 +214,16 @@ func _add_action_button(parent: VBoxContainer, label_text: String, on_press: Cal
 # room's connection count demanded). Doesn't touch MissionState; the
 # counter may remain "(3/7)" but the door is physically open so the
 # player can proceed to the next level.
+# Debug-panel trigger for MP host migration. Validates that election +
+# rebind + re-authority all run without crashing, even when there's no
+# real disconnect. SP/single-account testing exercises the deterministic
+# parts of the code path (election logic, re-authority walk); real cross-
+# peer behavior still needs two-account testing per
+# docs/host-migration.md.
+func _trigger_host_migration() -> void:
+	HostMigration.force_start_migration_for_testing()
+
+
 func _force_unlock_all_doors() -> void:
 	var tree := get_tree()
 	if tree == null:
