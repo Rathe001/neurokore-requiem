@@ -108,6 +108,17 @@ const _NAV_REPATH_DIST_SQ: float = 0.25
 # stops firing and they tick at full rate.
 const _IDLE_SKIP_DISTANCE_SQ: float = 25.0 * 25.0
 const _IDLE_TICK_DIVISOR: int = 6  # process 1 in 6 → effective 10Hz
+# Distant chasers also throttle — less aggressively than idle since
+# they're actively engaging, but a 25m+ chaser doesn't need 60Hz nav
+# updates. Without this, firing a single shot cascades aggro through
+# the pack (PrototypeEnemy.aggro()), pulling 50+ distant idles out of
+# the IDLE throttle into full-rate CHASING in the same frame — visible
+# as a Phys spike to 50+ ms when you open fire in a crowded level.
+# Divisor 3 = 20Hz effective tick rate for distant chasers; they keep
+# their previous velocity vector across the skipped frames so movement
+# stays smooth.
+const _CHASE_SKIP_DISTANCE_SQ: float = 25.0 * 25.0
+const _CHASE_TICK_DIVISOR: int = 3  # process 1 in 3 → effective 20Hz
 # Front-row stagger: when multiple ranged enemies cluster around the same
 # target, the ones closest to the player push in by up to this many metres.
 # This naturally creates front/back rows so rear enemies have clear LoS
@@ -1387,15 +1398,26 @@ func _physics_process(delta: float) -> void:
 		return
 	if _state == State.DEAD:
 		return
-	# Distance-throttle IDLE non-special enemies. See _IDLE_SKIP_DISTANCE_SQ
-	# / _IDLE_TICK_DIVISOR header for the rationale. Player-ref resolution
-	# below in _chase_tick handles the first-tick null case — until then the
-	# distance check returns false and the enemy ticks normally.
-	if _state == State.IDLE and not _is_special_enemy() and _is_far_from_player():
-		_idle_skip_counter += 1
-		if _idle_skip_counter < _IDLE_TICK_DIVISOR:
-			return
-		_idle_skip_counter = 0
+	# Distance-throttle. Non-special enemies far from the player get a
+	# reduced tick rate based on their state:
+	#   - IDLE far  → 1 in _IDLE_TICK_DIVISOR (~10Hz)
+	#   - CHASING far → 1 in _CHASE_TICK_DIVISOR (~20Hz, less aggressive)
+	# CHASING-far throttle was added after firing was found to cascade
+	# aggro across a pack, pulling 50+ distant idles into full-rate
+	# CHASING in one frame (visible as Phys spiking to 50+ms when you
+	# opened fire). Near enemies + special enemies always tick at full
+	# 60Hz so attacks stay responsive.
+	if not _is_special_enemy() and _is_far_from_player():
+		var divisor: int = 0
+		if _state == State.IDLE:
+			divisor = _IDLE_TICK_DIVISOR
+		elif _state == State.CHASING:
+			divisor = _CHASE_TICK_DIVISOR
+		if divisor > 1:
+			_idle_skip_counter += 1
+			if _idle_skip_counter < divisor:
+				return
+			_idle_skip_counter = 0
 	_attack_cd = maxf(0.0, _attack_cd - delta)
 	_threat_retarget_t = maxf(0.0, _threat_retarget_t - delta)
 
