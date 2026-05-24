@@ -42,13 +42,6 @@ const DEFAULT_EMISSION_BOOST: float = 1.5
 # place without re-allocating the material.
 var _overlays: Dictionary = {}
 
-## Debug: console-logs the first N attach attempts so "no outlines"
-## bugs can be split into (a) attach not being called at all vs
-## (b) attach called but the overlay doesn't render. Decrements per
-## call; reach 0 = silent.
-static var _debug_attach_log_remaining: int = 8
-
-
 func _ready() -> void:
 	# Run AFTER scene cameras' _process; nothing critical here but
 	# keeping the same priority as the previous compositor so callers
@@ -64,13 +57,7 @@ func _ready() -> void:
 ## rather than callers tracking state.
 func attach(mesh: MeshInstance3D, color: Color = Color.WHITE) -> void:
 	if mesh == null or mesh.mesh == null:
-		if _debug_attach_log_remaining > 0:
-			_debug_attach_log_remaining -= 1
-			print("[OutlineCompositor] attach skipped — mesh=%s mesh.mesh=%s" % [mesh, mesh.mesh if mesh else null])
 		return
-	if _debug_attach_log_remaining > 0:
-		_debug_attach_log_remaining -= 1
-		print("[OutlineCompositor] attach %s color=%s" % [mesh.name, color])
 	var key: int = mesh.get_instance_id()
 	# Already outlined → just update the color and bail.
 	if _overlays.has(key):

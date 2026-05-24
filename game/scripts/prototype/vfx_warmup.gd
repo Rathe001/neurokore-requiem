@@ -47,6 +47,10 @@ const _COMBAT_SHADERS: Array[String] = [
 	"res://scripts/prototype/health_bar.gdshader",
 	"res://scripts/prototype/tactical_overlay.gdshader",
 	"res://scripts/prototype/puddle.gdshader",
+	# Inverted-hull silhouette outline. Applied as material_overlay
+	# whenever the player hovers an enemy or stands near an interactable
+	# — every hover after the first is hitch-free thanks to this.
+	"res://scripts/prototype/outline_hull.gdshader",
 ]
 
 # Anchor 500m below the playable map so the warmup quads can't possibly
