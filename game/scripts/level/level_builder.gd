@@ -14,12 +14,14 @@ signal built
 # Streamed-build pacing. The pre-streaming build hammered all pieces in
 # one frame and produced a 5.8-second freeze at level entry (perf log
 # confirmed — 241 enemies + geometry across ~30-40 rooms). Yielding every
-# PIECES_PER_FRAME pieces lets the loading screen render between batches
-# and caps any single frame's build work at ~150-200ms. Tuned by trial:
-# 2 produced visible loading-screen progress without making total build
-# time excessive; 1 makes the load too long; 4+ still produces visible
-# pauses. Bump if asset cost per piece grows; drop if hitches return.
-const PIECES_PER_FRAME: int = 2
+# PIECES_PER_FRAME pieces lets the loading screen render between batches.
+# Tuned by perf log:
+#   2 pieces/yield → 3.1s total build with 333ms frames (still chunky)
+#   1 piece/yield  → ~5.5s total build with ~150ms frames (smooth-ish)
+# 1 is the right choice — total wall time matters less than per-frame
+# smoothness for the loading-screen UX. Each frame is ~10x more
+# responsive than the unstreamed baseline.
+const PIECES_PER_FRAME: int = 1
 
 ## Debug visualization toggle. When `true`:
 ##   - Kit-bash models (theme.wall_model / floor_model) are ignored

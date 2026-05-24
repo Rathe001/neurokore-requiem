@@ -87,3 +87,5 @@
 - [Melee impact ratio](project_melee_impact_ratio.md) — Per-weapon dial for fraction-through-swing where damage/SFX fire; sledge=0.4, blade=0.5
 - [Ragdoll frame-budget queue](project_ragdoll_queue.md) — RagdollQueue autoload caps XBotRagdoll setup+activate at N/frame so multi-kill explosions don't stack 100-200ms spikes; budget-saturated path degrades to legacy capsule corpse
 - [Streamed level build](project_streamed_level_build.md) — LevelBuilder._build_level yields every N pieces so the loading screen stays responsive; prototype_root awaits new `built` signal before hide_loading. Was a 5.8s freeze.
+- [LoS reveal proc spikes](project_los_reveal_spikes.md) — 100-240ms proc spikes when player enters a new room (draws + objects surge in one frame from LoS un-hiding); now dominant after ragdoll spikes fixed
+- [Level-up spike at higher levels](project_levelup_higher_lvl_spike.md) — Lvl 5+ level-ups cost ~100ms proc despite VfxWarmup; Lvl 2 fine; suspect UI re-layout or per-level VFX
