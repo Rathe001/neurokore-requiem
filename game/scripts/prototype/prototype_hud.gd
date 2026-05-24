@@ -764,9 +764,21 @@ func _process(delta: float) -> void:
 			visible_particles += 1
 	var draw_calls := int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
 	var tris := int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME))
+	var objects := int(Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME))
+	# Per-phase CPU times. TIME_PROCESS / TIME_PHYSICS_PROCESS are
+	# reported in seconds; ×1000 for ms. The split lets us tell at a
+	# glance whether a slowdown is CPU (one phase spiking) or GPU
+	# (frame_ms high but neither phase eats much). Common readings:
+	#   - process ms >> physics ms → script / animation / VFX heavy
+	#   - physics ms >> process ms → too many active CharacterBodies,
+	#     spatial queries, or narrow-phase collision pairs
+	#   - both low but frame_ms high → GPU-bound (check tris/draw/lights)
+	var process_ms := Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0
+	var physics_ms := Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0
 	debug_label.text = tr("HUD_DEBUG_OVERLAY_FORMAT") % [
 		fps,
 		frame_ms,
+		process_ms, physics_ms,
 		SpatialGrid.count(&"enemies"),
 		tree.get_nodes_in_group(&"corpses").size(),
 		tree.get_nodes_in_group(&"pickups").size(),
@@ -774,7 +786,7 @@ func _process(delta: float) -> void:
 		tree.get_node_count(),
 		visible_lights, total_lights, shadow_lights,
 		visible_mmi, visible_particles, total_particles,
-		draw_calls, tris,
+		draw_calls, tris, objects,
 	]
 
 func _bind_skill_slots(player: Node) -> void:
