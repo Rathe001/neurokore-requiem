@@ -140,14 +140,16 @@ func _process(_delta: float) -> void:
 	# frame without flicker.
 	if (main_cam.cull_mask & HIGHLIGHT_LAYER_MASK) != 0:
 		main_cam.cull_mask &= ~HIGHLIGHT_LAYER_MASK
-	# Mirror EVERY projection-relevant field. Order: projection mode
-	# first (so set_perspective/set_orthogonal pick up the right fov/
-	# size on the same frame), then the mode-specific intrinsics, then
-	# transform last. Skipping any of these out-of-sync would land the
-	# silhouettes at projected positions that don't match the main
-	# camera — the "outlines way off-screen" failure mode appears when
-	# fov drifts (default 75° vs the level's 12°: a mesh that projects
-	# to mid-screen under 12° projects far outside the frame at 75°).
+	# Mirror projection-relevant fields. Order matters: projection mode
+	# first so the per-mode intrinsic (fov vs size) lands in the right
+	# slot. Transform last so any prior frame's transform doesn't bleed
+	# into the new projection.
+	#
+	# NOTE: keep_aspect / h_offset / v_offset mirroring was tried and
+	# removed — caused outlines to vanish entirely on some scene loads
+	# (suspected Camera3D setter side effects). Both cameras default to
+	# KEEP_HEIGHT / 0 / 0, and we never override on the main cam, so
+	# omitting the mirror is safe.
 	_outline_cam.projection = main_cam.projection
 	if main_cam.projection == Camera3D.PROJECTION_PERSPECTIVE:
 		_outline_cam.fov = main_cam.fov
@@ -155,15 +157,6 @@ func _process(_delta: float) -> void:
 		_outline_cam.size = main_cam.size
 	_outline_cam.near = main_cam.near
 	_outline_cam.far = main_cam.far
-	# keep_aspect affects which axis the FOV/size dimension binds to —
-	# default is KEEP_HEIGHT, but if the main camera ever overrides it
-	# the outline cam needs to match or projections drift on resize.
-	_outline_cam.keep_aspect = main_cam.keep_aspect
-	# h_offset / v_offset are post-projection 2D shifts (split-screen
-	# eye separation, cinematic lateral pans, etc.). Mirror so any
-	# future use on the main camera doesn't leave the outline behind.
-	_outline_cam.h_offset = main_cam.h_offset
-	_outline_cam.v_offset = main_cam.v_offset
 	_outline_cam.global_transform = main_cam.global_transform
 	# Prune copies whose source was freed (enemy died and pooled out, etc.).
 	_prune_stale()
@@ -183,9 +176,21 @@ func _on_viewport_size_changed() -> void:
 ## layer in `color`. If `mesh` is already attached, the color is updated
 ## in place — so the hover-white → tooltip-locked-red transition just
 ## needs another attach() call rather than callers tracking state.
+## Debug: console-logs the first N attach attempts so a "no outlines"
+## bug can be split into (a) attach not being called at all, vs
+## (b) attach called but the copy doesn't render. Decrements per call;
+## reach 0 = silent. Bump back up via the debugger if you need more.
+static var _debug_attach_log_remaining: int = 8
+
 func attach(mesh: MeshInstance3D, color: Color = Color.WHITE) -> void:
 	if mesh == null or mesh.mesh == null:
+		if _debug_attach_log_remaining > 0:
+			_debug_attach_log_remaining -= 1
+			print("[OutlineCompositor] attach skipped — mesh=%s mesh.mesh=%s" % [mesh, mesh.mesh if mesh else null])
 		return
+	if _debug_attach_log_remaining > 0:
+		_debug_attach_log_remaining -= 1
+		print("[OutlineCompositor] attach %s color=%s (parent=%s, in_tree=%s)" % [mesh.name, color, mesh.get_parent(), mesh.is_inside_tree()])
 	var key: int = mesh.get_instance_id()
 	if _copies.has(key) and is_instance_valid(_copies[key]):
 		set_color(mesh, color)
