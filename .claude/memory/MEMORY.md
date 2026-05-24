@@ -85,3 +85,5 @@
 - [VFX shader warmup](project_vfx_warmup.md) — VfxWarmup pre-compiles combat shaders during loading-screen window; fixes first-LMB/RMB lag from Godot 4's lazy shader compile
 - [Crater VFX pipeline](project_crater_vfx.md) — Hammer/explosion crater = PBR mesh + screen_texture refraction + center darken + NORMAL_MAP_DEPTH; combo finisher spawns AoE crater + dust + debris chain
 - [Melee impact ratio](project_melee_impact_ratio.md) — Per-weapon dial for fraction-through-swing where damage/SFX fire; sledge=0.4, blade=0.5
+- [Ragdoll frame-budget queue](project_ragdoll_queue.md) — RagdollQueue autoload caps XBotRagdoll setup+activate at N/frame so multi-kill explosions don't stack 100-200ms spikes; budget-saturated path degrades to legacy capsule corpse
+- [Streamed level build](project_streamed_level_build.md) — LevelBuilder._build_level yields every N pieces so the loading screen stays responsive; prototype_root awaits new `built` signal before hide_loading. Was a 5.8s freeze.

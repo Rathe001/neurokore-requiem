@@ -2259,6 +2259,34 @@ func _die(kill_from: Vector3 = Vector3.ZERO, kill_force: float = 0.0) -> void:
 			# cached pose so the player's last state doesn't snap to t=0.
 			if anim_player != null:
 				anim_player.stop(true)
+			# Ratelimit ragdoll setup+activate via the global queue. Each
+			# setup() builds 20 PhysicalBone3D + Jolt joints (~30-50ms);
+			# a 5-kill explosion would otherwise stack all five in one
+			# frame and produce a 100-200ms hitch (perf logs confirmed
+			# the correlation). await_slot returns true once a slot is
+			# granted (max ~8-frame wait) or false if the budget
+			# saturated — in which case we fall back to the legacy capsule
+			# corpse rather than block further. Re-validate is_inside_tree
+			# after the await; the enemy could be freed during a level
+			# reload mid-death.
+			var slot_gen := _generation
+			var got_slot := await RagdollQueue.await_slot()
+			if not is_inside_tree() or _generation != slot_gen:
+				return
+			if not got_slot:
+				# Budget denied — degrade to legacy capsule corpse (cheap,
+				# no per-bone rigid bodies). Set did_skeletal_ragdoll so
+				# the fallback path below doesn't double-spawn.
+				_spawn_ragdoll_corpse(kill_from, kill_force)
+				if visual != null:
+					visual.visible = false
+				did_skeletal_ragdoll = true
+				var gen3 := _generation
+				await get_tree().create_timer(DEATH_HOLD).timeout
+				if not is_inside_tree() or _generation != gen3:
+					return
+				_become_corpse()
+				return
 			XBotRagdoll.setup(skel)
 			# Crit kills dismember 1-2 random tip bones (hands/feet/forearms).
 			# Must happen between setup() and activate() — the dismember
