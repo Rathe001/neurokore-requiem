@@ -90,6 +90,24 @@ const RETURN_STUCK_PROGRESS_SQ := 2.0  # must close 1.4m in 3s or stuck
 # the player is watching and a frozen enemy reads as broken.
 const CHASE_STUCK_TIMEOUT := 2.0
 const CHASE_STUCK_PROGRESS_SQ := 1.0  # must close ~1m in 2s or stuck
+# Nav-throttle: only re-push target_position to NavigationAgent3D when
+# the target has moved >sqrt(_NAV_REPATH_DIST_SQ) since the last set.
+# Setting target_position is what triggers the agent to recompute its
+# path internally — for 200 enemies all chasing the player, doing it
+# every tick spends real CPU even when the player is standing still.
+# 0.5m threshold (squared = 0.25) is small enough that a moving player
+# still gets responsive chase, big enough that idle / standing-still
+# fights drop nav work to near zero.
+const _NAV_REPATH_DIST_SQ: float = 0.25
+# Idle-tick throttle: IDLE enemies more than this distance from the
+# player only process 1 tick out of every _IDLE_TICK_DIVISOR. They're
+# not chasing, casting, or moving — their state machine has nothing to
+# advance per-tick, so 60Hz is overkill. Boss / named / affixed enemies
+# are exempt (their auras and behaviour shouldn't skip frames). The
+# moment the player closes the distance or the enemy aggros, the gate
+# stops firing and they tick at full rate.
+const _IDLE_SKIP_DISTANCE_SQ: float = 25.0 * 25.0
+const _IDLE_TICK_DIVISOR: int = 6  # process 1 in 6 → effective 10Hz
 # Front-row stagger: when multiple ranged enemies cluster around the same
 # target, the ones closest to the player push in by up to this many metres.
 # This naturally creates front/back rows so rear enemies have clear LoS
@@ -371,6 +389,17 @@ var _want_dir: Vector3 = Vector3.ZERO
 # stutter at attack range / kite distance.
 var _holding_position: bool = false
 var _player_ref: Node3D
+# Last position passed to NavigationAgent3D.target_position. Compared
+# against the current target each tick; we only re-set the property
+# (which triggers internal path-recompute work) when the target has
+# moved >sqrt(_NAV_REPATH_DIST_SQ) since the last update. Cuts nav
+# work from per-tick × per-enemy to ~stationary-fight = zero.
+# INF sentinel = "never set" so the first tick always pushes a target.
+var _nav_last_target: Vector3 = Vector3.INF
+# Tick-skip counter for distant idle enemies. See _physics_process
+# header — IDLE enemies >_IDLE_SKIP_DISTANCE from the player process
+# 1 tick out of every _IDLE_TICK_DIVISOR.
+var _idle_skip_counter: int = 0
 var _hover_hooked: bool = false
 var _hit_tween: Tween
 var _hit_flash_tween: Tween
@@ -706,6 +735,10 @@ func _init_enemy() -> void:
 	_attack_cd = 0.0
 	_want_dir = Vector3.ZERO
 	_player_ref = null
+	# Reset perf-throttle state so a recycled pool entry doesn't carry
+	# the previous enemy's nav-target cache or its mid-skip counter.
+	_nav_last_target = Vector3.INF
+	_idle_skip_counter = 0
 	set_physics_process(true)
 	collision_layer = EnemyAfflictions._LAYER_ENEMY
 	collision_mask = EnemyAfflictions._DEFAULT_ENEMY_MASK
@@ -1146,6 +1179,26 @@ func _is_remote_enemy() -> bool:
 	return not is_multiplayer_authority()
 
 
+# Boss / named / affixed enemies are exempt from the IDLE tick-skip
+# throttle. Bosses and named encounters are scripted set pieces;
+# affixed (rare-pack) monsters often have aura effects (Vampiric heals
+# allies, Threat radius pulses, etc.) that need per-tick processing.
+func _is_special_enemy() -> bool:
+	return is_boss or named_monster != null or not affixes.is_empty()
+
+
+# Cheap squared-distance check against the cached player ref. Returns
+# false when _player_ref hasn't resolved yet — that path is correct
+# (the first non-skipped tick will resolve it via _chase_tick) and
+# safer than returning true (a wrong "too far" classification could
+# leave a fresh enemy permanently skipped if they spawned >25m away
+# and never got a chance to tick).
+func _is_far_from_player() -> bool:
+	if _player_ref == null or not is_instance_valid(_player_ref):
+		return false
+	return global_position.distance_squared_to(_player_ref.global_position) > _IDLE_SKIP_DISTANCE_SQ
+
+
 
 
 ## Restore HP up to max_health. Called by allied support enemies' ticks;
@@ -1334,6 +1387,15 @@ func _physics_process(delta: float) -> void:
 		return
 	if _state == State.DEAD:
 		return
+	# Distance-throttle IDLE non-special enemies. See _IDLE_SKIP_DISTANCE_SQ
+	# / _IDLE_TICK_DIVISOR header for the rationale. Player-ref resolution
+	# below in _chase_tick handles the first-tick null case — until then the
+	# distance check returns false and the enemy ticks normally.
+	if _state == State.IDLE and not _is_special_enemy() and _is_far_from_player():
+		_idle_skip_counter += 1
+		if _idle_skip_counter < _IDLE_TICK_DIVISOR:
+			return
+		_idle_skip_counter = 0
 	_attack_cd = maxf(0.0, _attack_cd - delta)
 	_threat_retarget_t = maxf(0.0, _threat_retarget_t - delta)
 
@@ -1823,6 +1885,10 @@ func _chase_tick() -> void:
 			_chase_stuck_timer = 0.0
 			if _nav_agent != null and _nav_agent.get_navigation_map().is_valid():
 				_nav_agent.target_position = target.global_position
+				# Keep _nav_last_target in sync with the explicit re-target
+				# so the throttle below doesn't immediately push the same
+				# position again next tick.
+				_nav_last_target = target.global_position
 				if not _nav_agent.is_navigation_finished():
 					var warp_pos := _nav_agent.get_next_path_position()
 					warp_pos.y = global_position.y
@@ -1837,7 +1903,15 @@ func _chase_tick() -> void:
 	# target.
 	var dir := to_target / dist
 	if _nav_agent != null and _nav_agent.get_navigation_map().is_valid():
-		_nav_agent.target_position = target.global_position
+		# Only push a new target to the NavigationAgent3D when the target
+		# has actually moved enough to justify a path recompute. With 100+
+		# enemies chasing the player, doing this every tick spends real
+		# CPU even when the player is standing still. See _NAV_REPATH_DIST_SQ
+		# header for the threshold rationale.
+		var tgt_pos: Vector3 = target.global_position
+		if _nav_last_target.distance_squared_to(tgt_pos) >= _NAV_REPATH_DIST_SQ:
+			_nav_agent.target_position = tgt_pos
+			_nav_last_target = tgt_pos
 		if not _nav_agent.is_navigation_finished():
 			var next_pos := _nav_agent.get_next_path_position()
 			var nav_dir := next_pos - global_position
