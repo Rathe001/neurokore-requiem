@@ -23,6 +23,11 @@ extends Node
 
 const SAMPLE_INTERVAL: float = 1.0
 const LOG_PATH: String = "user://perf_log.csv"
+# Spike detection: when proc OR phys exceed this threshold on the
+# 1Hz periodic sample, ALSO write a "spike_detected" tagged event
+# row so the CSV reader can find the moment easily. Threshold is
+# generous (50ms) so we only flag actual visible hitches.
+const SPIKE_THRESHOLD_MS: float = 50.0
 
 var _file: FileAccess
 var _accum: float = 0.0
@@ -59,6 +64,20 @@ func _exit_tree() -> void:
 
 func _process(delta: float) -> void:
 	_accum += delta
+	# Check every frame for spike threshold, not just at 1Hz cadence.
+	# A 300ms freeze between 1Hz samples would otherwise show up in
+	# the AFTER sample, smoothed over. Sampling per-frame lets us
+	# catch the exact spike frame. To avoid flooding the CSV with
+	# 60 rows/sec of normal data, we only WRITE when either a spike
+	# fires or 1s has elapsed since the last sample.
+	var proc_ms: float = Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0
+	var phys_ms: float = Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0
+	var spike := proc_ms > SPIKE_THRESHOLD_MS or phys_ms > SPIKE_THRESHOLD_MS
+	if spike:
+		_accum = 0.0
+		var which: StringName = &"spike_proc" if proc_ms > phys_ms else &"spike_phys"
+		_write_row(which)
+		return
 	if _accum < SAMPLE_INTERVAL:
 		return
 	_accum = 0.0
