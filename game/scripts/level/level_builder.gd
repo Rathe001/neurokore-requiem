@@ -145,6 +145,15 @@ func _build_level() -> void:
 	# placements that query room_at_world resolve correctly.
 	_register_exploration()
 
+	# Commit batched MMI visuals (corridor walls + decorative pillars).
+	# All per-instance MeshInstance3Ds for these categories were queued
+	# into BuildContext.corridor_wall_visuals / decorative_pillar_visuals
+	# during the geometry pass; this collapses them into one MMI per
+	# (category × material) instead of N MeshInstance3Ds each contributing
+	# their own draw call. Major draw-call reduction on corridor-dense
+	# levels — 50+ corridor walls → 1 MMI draw.
+	WallBuilder.commit_batched_mmi(_ctx)
+
 	# Puzzles run last — they reference doors and interactable slots, which
 	# only exist after the geometry pass.
 	PuzzleBuilder.apply_all(_ctx, layout)

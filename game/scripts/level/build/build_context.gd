@@ -64,6 +64,27 @@ var connection_doors: Dictionary = {}
 ## Only room pieces are indexed — corridors are not.
 var pieces_by_id: Dictionary = {}
 var wall_keys: Array = []
+## MMI accumulators — per-build-pass scratch space. As corridor walls /
+## decorative pillars are spawned, their visual data is appended here
+## instead of being created as individual MeshInstance3Ds. After the
+## level is fully built, commit_batched_mmi() walks these dicts and
+## creates one MultiMeshInstance3D per material → big reduction in
+## draw calls. Collision bodies + group memberships still spawn per
+## structure (LoS / interaction / footsteps still work).
+##
+## Keyed by Material → Array[Transform3D]. Each transform encodes
+## position + per-instance scale; mesh is a single shared unit BoxMesh
+## (1×1×1) so any wall/pillar dimensions can be expressed as scale.
+## Works because the procedural shader tiles by WORLD position, not
+## by UV — instances at any position/scale share the same world-space
+## tiling pattern.
+var corridor_wall_visuals: Dictionary = {}
+var decorative_pillar_visuals: Dictionary = {}
+## Lazily-cached unit BoxMesh (1×1×1) shared by every batched wall /
+## pillar. The procedural shader scales tiling by world position, so a
+## unit mesh + per-instance scale produces the same look as a
+## sized BoxMesh would.
+var batched_unit_mesh: BoxMesh
 
 
 static func create(root_: Node3D, layout_: LevelLayout, graph_: LevelGraph = null) -> LevelBuildContext:

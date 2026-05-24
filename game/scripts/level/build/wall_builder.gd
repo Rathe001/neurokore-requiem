@@ -150,6 +150,98 @@ static func create_trim_box(ctx: LevelBuildContext, pos: Vector3, sx: float, sy:
 	body.add_to_group(&"structures")
 
 
+# Returns the shared 1×1×1 BoxMesh used by all batched MMI structures
+# (corridor walls, decorative pillars). The procedural surface shader
+# tiles by world position rather than UV, so per-instance scaling works
+# transparently — a 5m corridor wall is just a 1m unit cube scaled
+# (5, wall_height, thick) at its world position.
+static func _get_batched_unit_mesh(ctx: LevelBuildContext) -> BoxMesh:
+	if ctx.batched_unit_mesh != null:
+		return ctx.batched_unit_mesh
+	var m := BoxMesh.new()
+	m.size = Vector3(1.0, 1.0, 1.0)
+	ctx.batched_unit_mesh = m
+	return m
+
+
+# Collision-only wall: collision body + group memberships (so it's
+# pickable / hit by raycasts / counted in &"structures") but no
+# per-instance MeshInstance3D. Visual is committed later as part of
+# the per-material MMI in commit_batched_mmi(). Used by the corridor
+# wall path where 50+ walls of the same material would otherwise be
+# 50+ separate draw calls.
+static func _add_collision_only_wall(ctx: LevelBuildContext, pos: Vector3, size_x: float, size_z: float) -> StaticBody3D:
+	var body := StaticBody3D.new()
+	body.transform.origin = pos + Vector3(0, ctx.theme.wall_height * 0.5, 0)
+	body.input_ray_pickable = false
+	var col := CollisionShape3D.new()
+	col.name = &"Collision"
+	col.shape = get_wall_shape(ctx, size_x, size_z)
+	body.add_child(col)
+	ctx.root.add_child(body)
+	body.add_to_group(&"structures")
+	return body
+
+
+# Append a wall's visual transform to the MMI accumulator for its
+# material. The transform encodes position + (size_x, wall_height,
+# size_z) scale; the shared unit BoxMesh + procedural shader's
+# world-space tiling do the rest.
+static func _queue_batched_wall_visual(ctx: LevelBuildContext, pos: Vector3, size_x: float, size_z: float, mat: Material) -> void:
+	if mat == null:
+		return
+	var basis := Basis().scaled(Vector3(size_x, ctx.theme.wall_height, size_z))
+	var origin := pos + Vector3(0, ctx.theme.wall_height * 0.5, 0)
+	var xform := Transform3D(basis, origin)
+	if not ctx.corridor_wall_visuals.has(mat):
+		ctx.corridor_wall_visuals[mat] = [] as Array[Transform3D]
+	(ctx.corridor_wall_visuals[mat] as Array[Transform3D]).append(xform)
+
+
+# Same as _queue_batched_wall_visual but for decorative pillars. Kept
+# in a separate dict so future tuning (different shadow settings,
+# different cull mask, etc.) can apply to one and not the other.
+static func _queue_batched_pillar_visual(ctx: LevelBuildContext, pos: Vector3, size_x: float, size_z: float, mat: Material) -> void:
+	if mat == null:
+		return
+	var basis := Basis().scaled(Vector3(size_x, ctx.theme.wall_height, size_z))
+	var origin := pos + Vector3(0, ctx.theme.wall_height * 0.5, 0)
+	var xform := Transform3D(basis, origin)
+	if not ctx.decorative_pillar_visuals.has(mat):
+		ctx.decorative_pillar_visuals[mat] = [] as Array[Transform3D]
+	(ctx.decorative_pillar_visuals[mat] as Array[Transform3D]).append(xform)
+
+
+# Commit accumulated MMI visuals after all corridors / rooms are built.
+# One MultiMeshInstance3D per (category × material). Cleans the dicts
+# so a rebuild doesn't double-spawn. Call once from LevelBuilder after
+# the corridor + pillar passes complete.
+static func commit_batched_mmi(ctx: LevelBuildContext) -> void:
+	_commit_batched_dict(ctx, ctx.corridor_wall_visuals, &"CorridorWallsMMI")
+	_commit_batched_dict(ctx, ctx.decorative_pillar_visuals, &"DecorativePillarsMMI")
+
+
+static func _commit_batched_dict(ctx: LevelBuildContext, by_mat: Dictionary, mmi_name: StringName) -> void:
+	var unit_mesh := _get_batched_unit_mesh(ctx)
+	for mat in by_mat.keys():
+		var xforms: Array = by_mat[mat]
+		if xforms.is_empty():
+			continue
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.mesh = unit_mesh
+		mm.instance_count = xforms.size()
+		for i in range(xforms.size()):
+			mm.set_instance_transform(i, xforms[i])
+		var mmi := MultiMeshInstance3D.new()
+		mmi.name = mmi_name
+		mmi.multimesh = mm
+		mmi.material_override = mat
+		ctx.root.add_child(mmi)
+		mmi.add_to_group(&"structures")
+	by_mat.clear()
+
+
 static func build_corridor_walls(ctx: LevelBuildContext, center: Vector3, cd: CorridorDef) -> void:
 	var thick := ctx.theme.wall_thickness
 	# Wall center is offset OUTWARD by half-thickness from `cd.width / 2` so
@@ -173,12 +265,29 @@ static func build_corridor_walls(ctx: LevelBuildContext, center: Vector3, cd: Co
 	# visibly. Clean butt-join (zero overlap) gives a single shared edge at
 	# the outer-face plane, which renders consistently.
 	var ext := -thick
+	# Batched path: collision body per wall (preserves group memberships,
+	# pickability, footstep-audio surfaces) but the visual mesh goes into
+	# the accumulator → committed as a single MMI per material in
+	# commit_batched_mmi() at the end of level build. Cuts corridor wall
+	# draws from 2N (one per wall) down to 1 (one MMI for all walls of
+	# this material).
+	var mat: Material = ctx.wall_material_alt
 	if cd.axis == CorridorDef.Axis.Z:
-		create_wall(ctx, center + Vector3(hw, wall_y, 0), thick, cd.length + ext, ctx.wall_material_alt)
-		create_wall(ctx, center + Vector3(-hw, wall_y, 0), thick, cd.length + ext, ctx.wall_material_alt)
+		var len_z := cd.length + ext
+		var pos_e := center + Vector3(hw, wall_y, 0)
+		var pos_w := center + Vector3(-hw, wall_y, 0)
+		_add_collision_only_wall(ctx, pos_e, thick, len_z)
+		_add_collision_only_wall(ctx, pos_w, thick, len_z)
+		_queue_batched_wall_visual(ctx, pos_e, thick, len_z, mat)
+		_queue_batched_wall_visual(ctx, pos_w, thick, len_z, mat)
 	else:
-		create_wall(ctx, center + Vector3(0, wall_y, hw), cd.length + ext, thick, ctx.wall_material_alt)
-		create_wall(ctx, center + Vector3(0, wall_y, -hw), cd.length + ext, thick, ctx.wall_material_alt)
+		var len_x := cd.length + ext
+		var pos_n := center + Vector3(0, wall_y, -hw)
+		var pos_s := center + Vector3(0, wall_y, hw)
+		_add_collision_only_wall(ctx, pos_n, len_x, thick)
+		_add_collision_only_wall(ctx, pos_s, len_x, thick)
+		_queue_batched_wall_visual(ctx, pos_n, len_x, thick, mat)
+		_queue_batched_wall_visual(ctx, pos_s, len_x, thick, mat)
 
 
 # Full-height static column from floor to ceiling — architectural blocker
@@ -214,28 +323,36 @@ static func create_decorative_pillar(ctx: LevelBuildContext, pos: Vector3, size:
 	(col.shape as BoxShape3D).size = Vector3(size.x, height, size.y)
 	body.add_child(col)
 
-	var mesh_inst := MeshInstance3D.new()
-	mesh_inst.mesh = BoxMesh.new()
-	(mesh_inst.mesh as BoxMesh).size = Vector3(size.x, height, size.y)
-	if ctx.wall_material_alt != null:
-		mesh_inst.material_override = ctx.wall_material_alt
-	else:
-		# Fallback when no wall_material_alt is set (e.g. kit-bash themes).
-		# Plain dark grey BoxMesh so pillars don't render as default white
-		# spikes. If we ever want kit-styled pillars, replace this with a
-		# kit_pillar_model field on LevelTheme.
-		var mat := StandardMaterial3D.new()
-		mat.albedo_color = Color(0.12, 0.12, 0.14)
-		mat.metallic = 0.3
-		mat.roughness = 0.7
-		mesh_inst.material_override = mat
-	body.add_child(mesh_inst)
-
 	ctx.root.add_child(body)
 	body.add_to_group(&"structures")
 	# Opt into the object-blood pipeline so kills near a pillar splatter
 	# onto its side. See PrototypeAttackIndicator.spawn_blood_on_receivers.
 	PrototypeAttackIndicator.register_as_blood_receiver(body)
+
+	# Visual: append to MMI accumulator instead of attaching a per-pillar
+	# MeshInstance3D. One MMI per material is created in commit_batched_mmi().
+	# Fallback material path uses a single shared StandardMaterial3D when
+	# wall_material_alt is null (kit-bash themes) so all such pillars still
+	# batch into one draw instead of producing N unique materials.
+	var pillar_mat: Material = ctx.wall_material_alt
+	if pillar_mat == null:
+		pillar_mat = _get_fallback_pillar_material(ctx)
+	_queue_batched_pillar_visual(ctx, Vector3(pos.x, 0.0, pos.z), size.x, size.y, pillar_mat)
+
+
+# Shared fallback material for pillars when the theme leaves
+# wall_material_alt null. Cached on ctx so every pillar in the level
+# references the same Material instance, preserving batchability.
+static var _fallback_pillar_material_cache: StandardMaterial3D = null
+static func _get_fallback_pillar_material(_ctx: LevelBuildContext) -> StandardMaterial3D:
+	if _fallback_pillar_material_cache != null:
+		return _fallback_pillar_material_cache
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.12, 0.12, 0.14)
+	mat.metallic = 0.3
+	mat.roughness = 0.7
+	_fallback_pillar_material_cache = mat
+	return mat
 
 
 static func build_low_ceiling(ctx: LevelBuildContext, center: Vector3, cd: CorridorDef) -> void:
