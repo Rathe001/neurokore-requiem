@@ -5,6 +5,22 @@ class_name LevelBuilder
 ## BuildContext so post-build operations (door lookup, respawn) can reuse the
 ## same caches and registries.
 
+## Emitted when the asynchronous build pass (geometry + enemy spawns) finishes.
+## Used by prototype_root.gd to gate hide_loading() so the loading screen
+## stays up until enemies are placed. `is_built` is the polled flag for callers
+## that don't want to wire a signal.
+signal built
+
+# Streamed-build pacing. The pre-streaming build hammered all pieces in
+# one frame and produced a 5.8-second freeze at level entry (perf log
+# confirmed — 241 enemies + geometry across ~30-40 rooms). Yielding every
+# PIECES_PER_FRAME pieces lets the loading screen render between batches
+# and caps any single frame's build work at ~150-200ms. Tuned by trial:
+# 2 produced visible loading-screen progress without making total build
+# time excessive; 1 makes the load too long; 4+ still produces visible
+# pauses. Bump if asset cost per piece grows; drop if hitches return.
+const PIECES_PER_FRAME: int = 2
+
 ## Debug visualization toggle. When `true`:
 ##   - Kit-bash models (theme.wall_model / floor_model) are ignored
 ##   - Procedural SurfaceTool walls + PlaneMesh floors are built with the
@@ -25,6 +41,10 @@ var _ctx: LevelBuildContext
 # at build time; otherwise it's a direct reference to layout.pieces. Cached
 # so post-build operations (respawn) iterate the same set the builder used.
 var _pieces: Array[LevelPiece] = []
+## True once the most recent build pass has placed every piece (geometry
+## + enemy spawns). Reset to false at the top of every build. Callers that
+## need to gate on build completion can await `built` or poll this flag.
+var is_built: bool = false
 
 
 func _ready() -> void:
@@ -32,9 +52,26 @@ func _ready() -> void:
 		push_warning("[LevelBuilder] No layout assigned.")
 		return
 	_apply_mp_seed()
-	_build_level()
+	# _build_level is async (yields between piece batches so the loading
+	# screen renders). Awaiting here would block _ready, which Godot
+	# tolerates — sibling nodes' _ready callbacks still fire on the
+	# subsequent process frames. Callers downstream (prototype_root)
+	# gate on the `built` signal / is_built flag instead of relying on
+	# _ready having returned.
+	await _build_level()
 	_bake_navigation()
 	_store_mp_seed()
+	is_built = true
+	built.emit()
+
+
+## Awaits the next `built` signal, or returns immediately if a build pass
+## has already completed. Used by prototype_root to keep the loading
+## screen up until the asynchronous build finishes.
+func await_built() -> void:
+	if is_built:
+		return
+	await built
 
 
 # In MP, ensure both host and late joiners use the same seed. Host
@@ -83,15 +120,30 @@ func rebuild(new_seed: int = 0) -> void:
 	await get_tree().process_frame
 	if new_seed != 0 and layout.generator != null:
 		layout.generator.rng_seed = new_seed
-	_build_level()
+	is_built = false
+	await _build_level()
 	_bake_navigation()
+	is_built = true
+	built.emit()
 
 
 # Single source of truth for the build sequence — invoked by _ready
 # (initial load) and rebuild (NG+ regeneration). Creates a fresh
 # BuildContext each call so material caches and slot/door registries
 # don't carry across rebuilds.
+##
+## Async: yields a process frame after every PIECES_PER_FRAME pieces so
+## the loading screen stays responsive instead of freezing for the entire
+## build duration. Callers downstream gate on the `built` signal /
+## is_built flag rather than the function's return — this is fire-and-
+## forget from _ready, awaited from rebuild.
 func _build_level() -> void:
+	# Perf marker — pairs with `build_end` so the user's CSV log can show
+	# the streamed build's wall-clock duration. Each `await process_frame`
+	# during the build also writes a periodic-sample row, so the section
+	# between the two markers is exactly the build window.
+	if PerfLogger != null:
+		PerfLogger.tag_event(&"build_start")
 	# Resolve graph + pieces together so we can pass the active graph to
 	# BuildContext. For generator-mode the graph is transient (not stored on
 	# layout); BuildContext + PuzzleBuilder both need it for door indexing
@@ -111,6 +163,7 @@ func _build_level() -> void:
 	CeilingBuilder.build_void_cover(_ctx)
 	LightingBuilder.configure_fps_fog(_ctx)
 
+	var _pieces_since_yield: int = 0
 	for piece: LevelPiece in _pieces:
 		# Apply per-piece theme override (rooms only) for the duration of
 		# the build, then restore the layout default. Resolution order:
@@ -140,6 +193,15 @@ func _build_level() -> void:
 		if override != null:
 			_ctx.apply_theme(layout.theme)
 
+		# Stream-build pacing — yield every PIECES_PER_FRAME pieces so the
+		# loading screen renders between batches. Without this, a 30-room
+		# level with ~241 enemies stalled the main thread for 5.8 seconds
+		# (perf log), masking the loading-screen draw entirely.
+		_pieces_since_yield += 1
+		if _pieces_since_yield >= PIECES_PER_FRAME:
+			_pieces_since_yield = 0
+			await get_tree().process_frame
+
 	# Stamp every piece's footprint into ExplorationState now that final
 	# positions are known. Done before PuzzleBuilder so any door / switch
 	# placements that query room_at_world resolve correctly.
@@ -157,6 +219,8 @@ func _build_level() -> void:
 	# Puzzles run last — they reference doors and interactable slots, which
 	# only exist after the geometry pass.
 	PuzzleBuilder.apply_all(_ctx, layout)
+	if PerfLogger != null:
+		PerfLogger.tag_event(&"build_end")
 
 
 # Builds the per-instance room_id → piece lookup that puzzles use for
