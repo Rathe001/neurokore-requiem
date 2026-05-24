@@ -4372,6 +4372,13 @@ func _play_anim(candidates: Array[StringName], speed: float = 1.0, blend: float 
 		if not anim_player.has_animation(anim_name):
 			continue
 		var name_str := String(anim_name)
+		# Same-anim, same-direction → early-out, BUT sync speed_scale
+		# first so a previously-elevated speed (e.g. melee swing at
+		# 1.6×) doesn't persist into a subsequent idle loop request.
+		# Without this, anim_player.play(name, blend, speed, reverse)
+		# only takes effect when we DON'T early-out; same-anim calls
+		# inherit the old speed and the loop visibly wobbles.
+		anim_player.speed_scale = absf(speed)
 		if anim_player.current_animation == name_str and anim_player.is_playing() and _anim_reverse == reverse:
 			return true
 		_anim_reverse = reverse

@@ -2857,9 +2857,16 @@ func _play_anim(candidates: Array[StringName], speed: float = 1.0) -> bool:
 		if not anim_player.has_animation(anim_name):
 			continue
 		var name_str := String(anim_name)
+		# Always sync speed_scale to the requested speed, even on the
+		# early-out path below. Otherwise an idle anim that's already
+		# playing keeps whatever speed_scale was set by the last
+		# non-1.0 call (most commonly a melee swing at 1.4-1.6×) —
+		# manifests as the enemy's idle loop visibly wobbling at fast
+		# playback after attacking. Reset before the early-out so
+		# subsequent same-anim calls correct themselves.
+		anim_player.speed_scale = speed
 		if anim_player.current_animation == name_str and anim_player.is_playing():
 			return true
-		anim_player.speed_scale = speed
 		anim_player.play(name_str)
 		return true
 	return false
