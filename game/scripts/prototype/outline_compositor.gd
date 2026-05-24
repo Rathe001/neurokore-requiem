@@ -1,187 +1,67 @@
 extends Node
 
-## Autoload that draws a clean screen-space silhouette outline around any
-## MeshInstance3D registered via attach(). Replaces the grow-and-cull-front
-## trick used previously (which showed every internal hard-normal seam on
-## Mixamo character meshes as a wireframe-y mess).
+## Autoload that paints a highlight outline around any MeshInstance3D
+## registered via attach(). Uses the inverted-hull material_overlay
+## technique — per-mesh ShaderMaterial extrudes vertices along their
+## normals and renders only the back-faces (cull_front), producing a
+## visible silhouette ring at the mesh boundary.
 ##
-## How it works:
-##  1. A SubViewport hosts a Camera3D whose transform mirrors the main
-##     viewport's 3D camera each frame.
-##  2. Highlighted meshes get a runtime-spawned `OutlineCopy` sibling that
-##     shares the source mesh + skin + skeleton path but renders only on
-##     layer 20 (`HIGHLIGHT_LAYER_MASK`) with a flat unshaded material in
-##     the highlight color. The main camera ignores layer 20; the
-##     compositor camera renders ONLY layer 20.
-##  3. The SubViewport's color texture (highlight colors against
-##     transparent black) feeds a fullscreen TextureRect with a Sobel-ish
-##     edge-detect shader. Edge pixels paint over the main viewport;
-##     interior pixels stay transparent so the original mesh shows
-##     through.
+## Replaces a prior SubViewport-based compositor (broke for skinned
+## meshes whose parent was a Skeleton3D — duplicated MeshInstance3D's
+## skin/skeleton routing didn't survive being re-parented under the
+## skeleton, and the copies rendered invisibly).
 ##
-## Public API:
+## Public API (unchanged from prior implementation):
 ##   OutlineCompositor.attach(mesh, color = Color.WHITE)
 ##   OutlineCompositor.detach(mesh)
 ##   OutlineCompositor.set_color(mesh, color)
 ##
-## The outline always renders on top of the world, even when the source
-## mesh is behind a wall — the SubViewport doesn't render world
-## geometry, so there's nothing to occlude with. This is the
-## "stylized x-ray hover" behavior most ARPGs use (you can find a
-## hovered target even when briefly obscured by cover). If we ever want
-## strict z-occluded outlines, the SubViewport's camera cull_mask can
-## widen to include WORLD_LAYER and the world meshes can render in
-## "background" color via a per-camera material override.
+## Trade-offs vs the SubViewport approach:
+##   + Works for skinned meshes under Skeleton3D (the failure mode that
+##     broke the previous version)
+##   + Far simpler — no camera mirroring, no World3D inheritance, no
+##     screen-space shader pass
+##   + Per-mesh material override; cost scales with N hovered/proximity
+##     meshes, not full-screen
+##   - No screen-space soft glow halo; the outline is the hull ring
+##     itself. Bloom env can still pick up the emission boost for a
+##     glow effect.
+##   - Outline obeys depth — meshes behind walls are hidden (the prior
+##     version did stylized x-ray hover). If we want x-ray-style
+##     "outline through walls", flip the shader's depth_test off.
 
-const HIGHLIGHT_LAYER_BIT: int = 1 << 19  # layer 20 (0-indexed bit position)
-const HIGHLIGHT_LAYER_MASK: int = HIGHLIGHT_LAYER_BIT
+const OUTLINE_HULL_SHADER: Shader = preload("res://scripts/prototype/outline_hull.gdshader")
 
-const OUTLINE_THICKNESS: float = 1.5  # legacy — kept for older save data, not consumed
-# Neon-tube shader tunables. Core is the bright ~1px tube band at the
-# silhouette edge; glow is the wider HDR halo. The boost values feed
-# into the level Environment's glow pass — values > 1 bloom out.
-const NEON_CORE_THICKNESS: float = 1.2
-const NEON_GLOW_RADIUS: float = 6.0
-const NEON_CORE_BOOST: float = 5.5
-const NEON_GLOW_BOOST: float = 1.4
-# Tune this to skip building the compositor on platforms / scenarios where
-# the extra render pass isn't worth it — currently always on. The outline
-# is one full-screen pass + one extra render of (typically) 1-3 small
-# meshes, so cost stays well under 1ms at 1080p on average hardware.
+# Defaults for new outline materials. set_shader_parameter values
+# overridden per-attach can still tweak these per-mesh.
+const DEFAULT_OUTLINE_WIDTH: float = 0.025
+const DEFAULT_EMISSION_BOOST: float = 1.5
 
-var _subviewport: SubViewport
-var _outline_cam: Camera3D
-var _overlay_layer: CanvasLayer
-var _overlay_rect: TextureRect
+# Source MeshInstance3D.get_instance_id() → ShaderMaterial overlay we
+# installed. Used to remove cleanly on detach and to update color in
+# place without re-allocating the material.
+var _overlays: Dictionary = {}
 
-# source MeshInstance3D.get_instance_id() → MeshInstance3D outline copy
-var _copies: Dictionary = {}
+## Debug: console-logs the first N attach attempts so "no outlines"
+## bugs can be split into (a) attach not being called at all vs
+## (b) attach called but the overlay doesn't render. Decrements per
+## call; reach 0 = silent.
+static var _debug_attach_log_remaining: int = 8
 
 
 func _ready() -> void:
-	# Run AFTER scene cameras' _process so we mirror the latest transform.
+	# Run AFTER scene cameras' _process; nothing critical here but
+	# keeping the same priority as the previous compositor so callers
+	# that ran after us continue to do so.
 	process_priority = 100
-
-	_subviewport = SubViewport.new()
-	_subviewport.name = &"OutlineViewport"
-	_subviewport.transparent_bg = true
-	_subviewport.handle_input_locally = false
-	_subviewport.size = Vector2i(64, 64)  # bootstrap; resized to window in _on_viewport_size_changed
-	_subviewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-	# Disable everything the highlight pass doesn't need — saves a few %.
-	_subviewport.snap_2d_transforms_to_pixel = false
-	_subviewport.snap_2d_vertices_to_pixel = false
-	_subviewport.positional_shadow_atlas_size = 0
-	# Share the main world so our outline camera can actually see the
-	# scene's nodes — a separate World3D would be empty (no nodes from
-	# the main scene reachable). The transparent background + flat color
-	# come from the camera's environment override below, not from a
-	# private World3D environment.
-	#
-	# `set_use_own_world_3d(false)` is the explicit default but stating
-	# it makes the intent obvious: we WANT to inherit the parent
-	# viewport's world.
-	_subviewport.own_world_3d = false
-	add_child(_subviewport)
-
-	_outline_cam = Camera3D.new()
-	_outline_cam.name = &"OutlineCamera"
-	_outline_cam.current = true
-	# cull_mask = layer 20 only → ONLY the outline copies render here.
-	# Source meshes are on layer 2 and the world is on layer 1; both
-	# stay invisible to this camera.
-	_outline_cam.cull_mask = HIGHLIGHT_LAYER_MASK
-	# Per-camera environment override — transparent background, no
-	# ambient / fog / GI. Without this the camera would use the level's
-	# Environment (the color-graded one) and tint our flat highlight
-	# colors. Camera.environment overrides World3D.environment.
-	var cam_env := Environment.new()
-	cam_env.background_mode = Environment.BG_COLOR
-	cam_env.background_color = Color(0, 0, 0, 0)
-	cam_env.ambient_light_source = Environment.AMBIENT_SOURCE_DISABLED
-	_outline_cam.environment = cam_env
-	_subviewport.add_child(_outline_cam)
-
-	_overlay_layer = CanvasLayer.new()
-	_overlay_layer.name = &"OutlineOverlay"
-	# Below modal UI (which sits at higher layers) but above the 3D
-	# viewport's compositing.
-	_overlay_layer.layer = 50
-	add_child(_overlay_layer)
-
-	_overlay_rect = TextureRect.new()
-	_overlay_rect.name = &"OutlineRect"
-	_overlay_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_overlay_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_overlay_rect.texture = _subviewport.get_texture()
-	_overlay_rect.stretch_mode = TextureRect.STRETCH_SCALE
-	var mat := ShaderMaterial.new()
-	mat.shader = preload("res://scripts/prototype/outline_compositor.gdshader")
-	mat.set_shader_parameter(&"core_thickness", NEON_CORE_THICKNESS)
-	mat.set_shader_parameter(&"glow_radius", NEON_GLOW_RADIUS)
-	mat.set_shader_parameter(&"core_boost", NEON_CORE_BOOST)
-	mat.set_shader_parameter(&"glow_boost", NEON_GLOW_BOOST)
-	_overlay_rect.material = mat
-	_overlay_layer.add_child(_overlay_rect)
-
-	get_tree().root.size_changed.connect(_on_viewport_size_changed)
-	_on_viewport_size_changed()
-
-
-func _process(_delta: float) -> void:
-	var main_cam: Camera3D = get_viewport().get_camera_3d()
-	if main_cam == null:
-		return
-	# Strip the highlight layer from the main camera's cull_mask so the
-	# outline copy meshes render ONLY in our SubViewport. Without this
-	# the main camera also sees the flat-white copy and the enemy reads
-	# as a fully-filled silhouette in the world view — defeating the
-	# "outline only" intent. Bitwise idempotent so we can re-run every
-	# frame without flicker.
-	if (main_cam.cull_mask & HIGHLIGHT_LAYER_MASK) != 0:
-		main_cam.cull_mask &= ~HIGHLIGHT_LAYER_MASK
-	# Mirror projection-relevant fields. Order matters: projection mode
-	# first so the per-mode intrinsic (fov vs size) lands in the right
-	# slot. Transform last so any prior frame's transform doesn't bleed
-	# into the new projection.
-	#
-	# NOTE: keep_aspect / h_offset / v_offset mirroring was tried and
-	# removed — caused outlines to vanish entirely on some scene loads
-	# (suspected Camera3D setter side effects). Both cameras default to
-	# KEEP_HEIGHT / 0 / 0, and we never override on the main cam, so
-	# omitting the mirror is safe.
-	_outline_cam.projection = main_cam.projection
-	if main_cam.projection == Camera3D.PROJECTION_PERSPECTIVE:
-		_outline_cam.fov = main_cam.fov
-	elif main_cam.projection == Camera3D.PROJECTION_ORTHOGONAL:
-		_outline_cam.size = main_cam.size
-	_outline_cam.near = main_cam.near
-	_outline_cam.far = main_cam.far
-	_outline_cam.global_transform = main_cam.global_transform
-	# Prune copies whose source was freed (enemy died and pooled out, etc.).
-	_prune_stale()
-
-
-func _on_viewport_size_changed() -> void:
-	if _subviewport == null:
-		return
-	var s: Vector2i = get_tree().root.size
-	# Floor at 1 to avoid zero-size viewport on minimized windows.
-	_subviewport.size = Vector2i(maxi(1, s.x), maxi(1, s.y))
 
 
 # ── Public API ──────────────────────────────────────────────────────────────
 
-## Spawn an outline copy sibling for `mesh` that renders on the highlight
-## layer in `color`. If `mesh` is already attached, the color is updated
-## in place — so the hover-white → tooltip-locked-red transition just
-## needs another attach() call rather than callers tracking state.
-## Debug: console-logs the first N attach attempts so a "no outlines"
-## bug can be split into (a) attach not being called at all, vs
-## (b) attach called but the copy doesn't render. Decrements per call;
-## reach 0 = silent. Bump back up via the debugger if you need more.
-static var _debug_attach_log_remaining: int = 8
-
+## Apply an outline overlay to `mesh` in `color`. If `mesh` is already
+## outlined, the color is updated in place — so the hover-white →
+## tooltip-locked-red transition just needs another attach() call
+## rather than callers tracking state.
 func attach(mesh: MeshInstance3D, color: Color = Color.WHITE) -> void:
 	if mesh == null or mesh.mesh == null:
 		if _debug_attach_log_remaining > 0:
@@ -190,95 +70,49 @@ func attach(mesh: MeshInstance3D, color: Color = Color.WHITE) -> void:
 		return
 	if _debug_attach_log_remaining > 0:
 		_debug_attach_log_remaining -= 1
-		print("[OutlineCompositor] attach %s color=%s (parent=%s, in_tree=%s)" % [mesh.name, color, mesh.get_parent(), mesh.is_inside_tree()])
+		print("[OutlineCompositor] attach %s color=%s" % [mesh.name, color])
 	var key: int = mesh.get_instance_id()
-	if _copies.has(key) and is_instance_valid(_copies[key]):
-		set_color(mesh, color)
-		return
-	var parent: Node = mesh.get_parent()
-	if parent == null:
-		return
-	var copy := MeshInstance3D.new()
-	copy.name = &"OutlineCopy"
-	copy.mesh = mesh.mesh
-	# Skinned-mesh fidelity: share the same Skin resource and the same
-	# `skeleton` NodePath so the copy deforms identically to the source
-	# each frame. The NodePath is relative to the MeshInstance3D's own
-	# position in the tree, so being a sibling of `mesh` keeps it valid.
-	copy.skin = mesh.skin
-	copy.skeleton = mesh.skeleton
-	copy.transform = mesh.transform
-	copy.layers = HIGHLIGHT_LAYER_MASK
-	copy.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var flat := StandardMaterial3D.new()
-	flat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	flat.albedo_color = color
-	flat.cull_mode = BaseMaterial3D.CULL_DISABLED  # see both sides; outline reads the full silhouette
-	# material_override > per-surface set_surface_override_material here —
-	# the latter doubles `material_*: Parameter "material" is null` renderer
-	# warnings because the SHADOW-pass query still touches the underlying
-	# Mesh's surface materials (which can be null on FBX imports).
-	# material_override short-circuits that path entirely.
-	copy.material_override = flat
-	parent.add_child(copy)
-	_copies[key] = copy
+	# Already outlined → just update the color and bail.
+	if _overlays.has(key):
+		var existing := _overlays[key] as ShaderMaterial
+		if existing != null and is_instance_valid(existing):
+			existing.set_shader_parameter(&"outline_color", color)
+			return
+		# Stale entry — fall through to rebuild.
+		_overlays.erase(key)
+	var mat := ShaderMaterial.new()
+	mat.shader = OUTLINE_HULL_SHADER
+	mat.set_shader_parameter(&"outline_color", color)
+	mat.set_shader_parameter(&"outline_width", DEFAULT_OUTLINE_WIDTH)
+	mat.set_shader_parameter(&"emission_boost", DEFAULT_EMISSION_BOOST)
+	mesh.material_overlay = mat
+	_overlays[key] = mat
 
 
-## Remove the outline copy for `mesh`. Safe to call when `mesh` is null,
+## Remove `mesh`'s outline overlay. Safe to call when `mesh` is null,
 ## freed, or never attached.
 func detach(mesh: MeshInstance3D) -> void:
 	if mesh == null:
 		return
 	var key: int = mesh.get_instance_id()
-	_drop_key(key)
+	if not _overlays.has(key):
+		return
+	_overlays.erase(key)
+	if is_instance_valid(mesh):
+		mesh.material_overlay = null
 
 
-## Update the highlight color (e.g. white → red when a tooltip is
-## locked). No-op if `mesh` isn't currently attached.
+## Update the outline color (e.g. white → red when a tooltip is
+## locked) without rebuilding the overlay. No-op if `mesh` isn't
+## currently attached.
 func set_color(mesh: MeshInstance3D, color: Color) -> void:
 	if mesh == null:
 		return
 	var key: int = mesh.get_instance_id()
-	if not _copies.has(key):
+	if not _overlays.has(key):
 		return
-	var copy: Node = _copies[key]
-	if not is_instance_valid(copy):
-		_copies.erase(key)
+	var mat := _overlays[key] as ShaderMaterial
+	if mat == null or not is_instance_valid(mat):
+		_overlays.erase(key)
 		return
-	var mi := copy as MeshInstance3D
-	if mi == null:
-		return
-	var m := mi.material_override
-	if m is StandardMaterial3D:
-		(m as StandardMaterial3D).albedo_color = color
-
-
-# ── Internals ───────────────────────────────────────────────────────────────
-
-func _drop_key(key: int) -> void:
-	if not _copies.has(key):
-		return
-	# Pull through Variant — a strict-typed `var copy: Node = _copies[key]`
-	# fails with "Trying to assign invalid previously freed instance" when
-	# the dict entry holds a freed Node reference (level reload, EntityPool
-	# recycle, etc.). Variant accepts the freed handle and lets
-	# is_instance_valid filter it before the queue_free call.
-	var copy_var: Variant = _copies[key]
-	_copies.erase(key)
-	if is_instance_valid(copy_var) and copy_var is Node:
-		(copy_var as Node).queue_free()
-
-
-# Per-frame cleanup — sources can vanish without an explicit detach()
-# (enemy dies and EntityPool reclaims the body, level reload, etc.). Walk
-# the copies dict and prune any whose source `instance_id` no longer
-# resolves to a live Object.
-func _prune_stale() -> void:
-	if _copies.is_empty():
-		return
-	var dead_keys: Array[int] = []
-	for key: int in _copies.keys():
-		if instance_from_id(key) == null:
-			dead_keys.append(key)
-	for key in dead_keys:
-		_drop_key(key)
+	mat.set_shader_parameter(&"outline_color", color)
