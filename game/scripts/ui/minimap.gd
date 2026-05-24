@@ -134,6 +134,14 @@ func _ready() -> void:
 
 	# Wait one frame so level geometry and entities are in the tree.
 	await get_tree().process_frame
+	# LevelBuilder._build_level is async (yields between piece batches so the
+	# loading screen stays responsive). Baking before it finishes captures
+	# only the first 2-4 pieces and produces a sparse, wrong-looking
+	# minimap. Await the builder's `built` signal before the first bake.
+	# Idempotent — returns immediately if the build already finished.
+	var builder := _find_level_builder()
+	if builder != null:
+		await builder.await_built()
 	_player = _find_local_player()
 	if _player != null:
 		_radar.set_player(_player)
@@ -148,6 +156,26 @@ func _ready() -> void:
 
 	_bake_map()
 	_apply_layout()
+
+
+# Walks the scene tree to find the active LevelBuilder. Used to gate the
+# initial bake on async build completion. Returns null when no builder
+# exists (legacy / test scenes without a level) — callers no-op cleanly.
+func _find_level_builder() -> LevelBuilder:
+	var scene := get_tree().current_scene
+	if scene == null:
+		return null
+	return _find_level_builder_in(scene)
+
+
+func _find_level_builder_in(node: Node) -> LevelBuilder:
+	if node is LevelBuilder:
+		return node
+	for child in node.get_children():
+		var r := _find_level_builder_in(child)
+		if r != null:
+			return r
+	return null
 
 # ── Bake ──────────────────────────────────────────────────────────────────────
 
