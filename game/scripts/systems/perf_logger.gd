@@ -33,10 +33,17 @@ func _ready() -> void:
 	# Disable in non-debug builds — Performance counters return 0 in
 	# release. Also keeps the disk write out of shipping builds.
 	if not OS.is_debug_build():
+		print("[PerfLogger] disabled (non-debug build).")
 		set_process(false)
 		return
 	_session_start_msec = Time.get_ticks_msec()
 	_open_log()
+	# Echo the resolved absolute path so the user can find the file
+	# without having to guess where Godot's user:// resolves on their
+	# OS. ProjectSettings.globalize_path("user://") returns the actual
+	# filesystem path.
+	var abs_path: String = ProjectSettings.globalize_path(LOG_PATH)
+	print("[PerfLogger] writing to: %s" % abs_path)
 	# Hook the level-up signal so we get an event marker exactly when
 	# the spike happens. PlayerState is an autoload so its signal is
 	# always reachable.
