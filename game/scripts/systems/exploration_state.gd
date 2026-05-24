@@ -231,6 +231,18 @@ func rooms_visible_together(player_room: StringName, target_room: StringName) ->
 	return true
 
 
+## True when a registered room has at least one entry in the adjacency
+## table. Real level pieces always do — every room has at least one
+## corridor and corridors are bidirectional in _adjacent. LosCuller uses
+## this to detect "orphan" room IDs that would erroneously hide every
+## other room when used as the player's current room.
+func has_room_adjacency(room_id: StringName) -> bool:
+	if room_id == &"":
+		return false
+	var neighbours: Array = _adjacent.get(room_id, [] as Array)
+	return not neighbours.is_empty()
+
+
 ## Geometry-permissive variant. Returns true for same-piece or adjacent pieces
 ## regardless of door state. Used by LosCuller's room_geometry pass so the
 ## boundary of a closed-door neighbour stays drawn (otherwise the door reads

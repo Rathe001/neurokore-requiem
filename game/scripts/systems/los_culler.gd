@@ -42,7 +42,7 @@ const STAGGER_GROUPS := 2
 # Higher rate = snappier fade. ~12 gives a ~0.08s time constant, short enough
 # to feel responsive when running through a doorway, long enough to mask the
 # binary LoS flip and the staggered raycast cadence.
-const FADE_RATE := 12.0
+const FADE_RATE := 18.0  ## ~55ms half-life — bumped from 12 (80ms) for snappier feel; was floaty on quick LoS flips
 # Once transparency exceeds this, switch visible=false to stop rendering. We
 # leave a tiny margin below 1.0 because lerp asymptotes — without the margin
 # we'd render imperceptibly transparent geometry forever.
@@ -74,9 +74,36 @@ var _transitioning: Dictionary = {}  # Node3D -> true
 # because they were already settled (not in _transitioning).
 const STALE_SWEEP_INTERVAL := 120
 var _sweep_counter: int = 0
+# Periodic forced re-evaluation. Pickups/corpses/glows/interactables only
+# re-raycast on cell change — so an entity that ended up hidden because
+# of a transient ray block (player mid-jump, enemy walking through line)
+# could stay hidden until the player walked to a new cell. Forcing a
+# full re-check every ~1s catches stuck-hidden bugs without paying for
+# 60Hz raycasts.
+const FORCE_RECHECK_INTERVAL := 60
+var _recheck_counter: int = 0
 # Cached player reference — refreshed on cell change to avoid per-frame
 # get_nodes_in_group(&"player") allocation.
 var _player_cache: Node3D = null
+# Cached player CollisionObject3D RID — excluded from the LoS ray queries
+# so a ray from chest height can't self-occlude when the player is
+# wedged against geometry (a real-world failure that caused "everything
+# goes dark when I stand close to objects"). RID() == invalid sentinel
+# until a CollisionObject3D player resolves; queries handle the empty
+# case gracefully.
+var _player_rid: RID
+# Pre-built exclude list — [_player_rid] when valid, else empty. Assigned
+# to _query.exclude before every ray cast so player's own capsule doesn't
+# self-occlude. Interactables (door / loot crate) need their own RID
+# in the exclude too — they concat onto this base.
+var _base_exclude: Array[RID] = []
+# Last-known-good player room ID. When room_at_world() returns &""
+# (player on a wall boundary) or resolves to a registered piece with no
+# adjacencies (orphan, shouldn't happen but defensively handled), we
+# reuse this value instead of the bogus current resolution. Without the
+# fallback, the room-geometry pass at line ~330 would hide every other
+# room and the visual world goes dark for a frame.
+var _last_good_player_room: StringName = &""
 # Cached group arrays for categories not tracked by SpatialGrid. Refreshed on
 # cell change — acceptable lag for static/quasi-static entities.
 var _corpses_cache: Array = []
@@ -124,18 +151,24 @@ func _physics_process(_delta: float) -> void:
 	)
 	var cell_changed := player_cell != _last_player_cell
 	_last_player_cell = player_cell
+	# Periodic forced re-evaluation. Pickups/corpses/glows/interactables
+	# only re-raycast on cell change; without a forced recheck, an entity
+	# hidden by a transient ray block stays hidden until the next cell
+	# crossing. Bumping cell_changed every FORCE_RECHECK_INTERVAL ticks
+	# (~1s) catches the stuck-hidden case without paying for 60Hz casts.
+	_recheck_counter += 1
+	if _recheck_counter >= FORCE_RECHECK_INTERVAL:
+		_recheck_counter = 0
+		cell_changed = true
 	# First frame uses _UNSET_CELL so cell_changed is always true on frame 0,
 	# which populates the corpse/static_glow caches immediately.
 
-	# Room-aware visibility gate. Entities outside the player's current
-	# room are forced invisible without raycasting — fixes the "I can see
-	# enemies and loot through dark adjacent rooms" leak that pure LoS
-	# raycasting can't catch when a doorway gives a clear line through
-	# the wall plane. `player_room == &""` (player standing outside any
-	# registered piece, e.g. legacy hand-authored levels with no
-	# ExplorationState population) falls back to plain LoS behaviour so
-	# we don't accidentally hide everything.
-	var player_room: StringName = ExplorationState.room_at_world(player_pos)
+	# Room-aware visibility gate. Resolved via _resolve_player_room so
+	# player on a wall boundary (room_at_world == &"") OR in an orphan
+	# room (no adjacencies, would hide every other room) falls back to
+	# the last-known-good room — prevents the "everything goes dark when
+	# I stand close to objects" failure mode.
+	var player_room: StringName = _resolve_player_room(player_pos)
 	if player_room != &"":
 		ExplorationState.reveal_room(player_room)
 
@@ -143,7 +176,23 @@ func _physics_process(_delta: float) -> void:
 		# Re-validate player ref on cell change in case of scene transitions.
 		var local := _find_local_player()
 		if local != null:
+			# Detect scene transition (player node identity changed): drop
+			# the last-good-room cache so a stale room ID from the previous
+			# level can't leak into the new one's resolution.
+			if local != _player_cache:
+				_last_good_player_room = &""
 			_player_cache = local
+			# Refresh cached player collider RID so the LoS rays can
+			# exclude it. Without this exclusion, chest-height rays cast
+			# from inside the player's own capsule self-occlude when the
+			# player is wedged against geometry — every visual_los test
+			# returns false and the room fades to invisible.
+			if _player_cache is CollisionObject3D:
+				_player_rid = (_player_cache as CollisionObject3D).get_rid()
+				_base_exclude = [_player_rid]
+			else:
+				_player_rid = RID()
+				_base_exclude = []
 		# Refresh cached group arrays for categories not in SpatialGrid.
 		_corpses_cache = get_tree().get_nodes_in_group(&"corpses")
 		_static_glows_cache = get_tree().get_nodes_in_group(&"static_glows")
@@ -201,7 +250,7 @@ func _physics_process(_delta: float) -> void:
 			else:
 				# Visual ray — walls only.
 				_query.collision_mask = WORLD_LAYER_MASK
-				_query.exclude = []
+				_query.exclude = _base_exclude
 				_query.from = from
 				_query.to = Vector3(enemy.global_position.x, from.y, enemy.global_position.z)
 				visual_los = space.intersect_ray(_query).is_empty()
@@ -256,7 +305,7 @@ func _physics_process(_delta: float) -> void:
 		if corpse.global_position.distance_squared_to(player_pos) > MAX_DIST_SQ:
 			corpse_los = false
 		else:
-			_query.exclude = []
+			_query.exclude = _base_exclude
 			_query.from = pickup_from
 			_query.to = Vector3(corpse.global_position.x, pickup_from.y, corpse.global_position.z)
 			corpse_los = space.intersect_ray(_query).is_empty()
@@ -286,7 +335,7 @@ func _physics_process(_delta: float) -> void:
 		if glow.global_position.distance_squared_to(player_pos) > MAX_DIST_SQ:
 			glow_los = false
 		else:
-			_query.exclude = []
+			_query.exclude = _base_exclude
 			_query.from = pickup_from
 			_query.to = Vector3(glow.global_position.x, pickup_from.y, glow.global_position.z)
 			glow_los = space.intersect_ray(_query).is_empty()
@@ -355,7 +404,7 @@ func _physics_process(_delta: float) -> void:
 		if body.global_position.distance_squared_to(player_pos) > MAX_DIST_SQ:
 			body_los = false
 		else:
-			_query.exclude = [body.get_rid()]
+			_query.exclude = _base_exclude + [body.get_rid()]
 			_query.from = from
 			if body is PrototypeDoor:
 				# Doors sit flush in the wall plane with jambs flanking them
@@ -559,5 +608,52 @@ func has_los_to_player(node: Node) -> bool:
 func _room_blocks(entity: Node3D, player_room: StringName) -> bool:
 	if player_room == &"":
 		return false
-	var entity_room: StringName = ExplorationState.room_at_world(entity.global_position)
+	var entity_room: StringName = _resolve_entity_room(entity.global_position)
 	return not ExplorationState.rooms_visible_together(player_room, entity_room)
+
+
+# Entity-side room resolution with neighbour-cell snap. When
+# room_at_world returns &"" (entity standing on a wall boundary or
+# slightly outside any registered piece), scan the 4 cardinal
+# neighbour cells (1m / 2m offsets) for a registered room and use the
+# closest match. Without this snap, pickups + clutter on the edge of
+# a room would "leak" — the permissive empty-string path treated them
+# as visible across the entire level. Cardinal-only is enough because
+# CELL_SIZE is 4m: any entity within 2m of a registered cell is caught.
+const _ROOM_SNAP_OFFSETS: Array[Vector3] = [
+	Vector3(1.0, 0.0, 0.0), Vector3(-1.0, 0.0, 0.0),
+	Vector3(0.0, 0.0, 1.0), Vector3(0.0, 0.0, -1.0),
+	Vector3(2.0, 0.0, 0.0), Vector3(-2.0, 0.0, 0.0),
+	Vector3(0.0, 0.0, 2.0), Vector3(0.0, 0.0, -2.0),
+]
+func _resolve_entity_room(world_pos: Vector3) -> StringName:
+	var room: StringName = ExplorationState.room_at_world(world_pos)
+	if room != &"":
+		return room
+	for offset in _ROOM_SNAP_OFFSETS:
+		room = ExplorationState.room_at_world(world_pos + offset)
+		if room != &"":
+			return room
+	return &""
+
+
+# Player-side room resolution with last-known-good fallback. When the
+# raw room_at_world resolution would put the player in an orphan room
+# (no adjacencies = the room-geometry pass would hide every other
+# room → "everything goes dark"), keep the last-good value. Also
+# updates _last_good_player_room for next frame's fallback. Pass the
+# previously-cached value so a fresh-spawn player doesn't bootstrap
+# with &"".
+func _resolve_player_room(player_pos: Vector3) -> StringName:
+	var room: StringName = ExplorationState.room_at_world(player_pos)
+	if room == &"":
+		# Player on a wall boundary / between pieces. Reuse last good
+		# value so the room-geometry pass keeps drawing the world.
+		return _last_good_player_room
+	# Defensive: if this room has no adjacency entries, treat as orphan
+	# and fall back. Real pieces always have at least one neighbour
+	# (the corridor or door that connects them).
+	if not ExplorationState.has_room_adjacency(room) and _last_good_player_room != &"":
+		return _last_good_player_room
+	_last_good_player_room = room
+	return room
