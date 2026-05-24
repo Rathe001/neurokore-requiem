@@ -661,6 +661,30 @@ var _reload_remain: float = 0.0
 var _reload_total: float = 0.0
 var _reload_target: StringName = &""
 
+# ── Behavior mod runtime state ──────────────────────────────────────────────
+# Mods that ramp / time / arm need a small bit of player-side state. Keep
+# the fields adjacent so all behavior-mod state lives in one block; the
+# effects themselves dispatch through BehaviorModRegistry from the hooks
+# that read these (take_damage / start_reload / move_speed compute /
+# landing / _deal_damage).
+# Pain Compiler (chest): set on take_damage to the rolled duration_sec.
+# Decrements each physics tick; while > 0, outgoing damage gets the rolled
+# multiplier and healing is suppressed.
+var _pain_compiler_remain: float = 0.0
+var _pain_compiler_mult: float = 1.0
+# Shock Discharge (chest): armed when HP is above 30%, fires the pulse the
+# frame HP crosses below the threshold; re-arms when the player heals back
+# above. Prevents the pulse from firing repeatedly on every hit at low HP.
+var _shock_discharge_armed: bool = true
+# Recoil Soles (feet): peak height during the current airborne phase. Set
+# at jump start, updated each physics frame while airborne, consumed +
+# cleared at landing to compute fall distance for the shockwave.
+var _airborne_peak_y: float = 0.0
+# Recoil Soles trade: 1-second landed slow after every jump. Decrements
+# each physics tick. Composes with the move-speed multipliers like the
+# other slow factors.
+var _recoil_landed_slow_remain: float = 0.0
+
 # AIM_HOLD state — Tripod (LMG) and Aimed Shot (sniper) RMB-hold buffs.
 # While active, the configured Skill drains resource per tick and applies
 # its accuracy/crit bonuses to every shot fired. Releasing RMB or running
@@ -1194,8 +1218,25 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 		var absorbed := mini(amount, _barrier)
 		_barrier -= absorbed
 		amount -= absorbed
+	var hp_before := _health
 	_health = max(_health - amount, 0)
 	health_changed.emit(_health, max_health)
+	# Pain Compiler (chest mod): taking damage triggers a brief outgoing-
+	# damage buff. Refreshed on each hit so sustained combat keeps the
+	# buff active. The healing-suppression trade lives in heal().
+	var pain_dur := BehaviorModRegistry.get_active_param(&"chest", &"pain_compiler", &"duration_sec", 0.0)
+	if pain_dur > 0.0:
+		_pain_compiler_remain = pain_dur
+		_pain_compiler_mult = BehaviorModRegistry.get_active_param(&"chest", &"pain_compiler", &"damage_multiplier", 1.0)
+	# Shock Discharge (chest mod): one-shot AoE knockback pulse the frame
+	# HP crosses below 30%. Armed/disarmed flag prevents per-hit re-firing
+	# while the player lingers at low HP; only re-arms after healing above.
+	var shock_radius := BehaviorModRegistry.get_active_param(&"chest", &"shock_discharge", &"pulse_radius_m", 0.0)
+	if shock_radius > 0.0 and _shock_discharge_armed:
+		var threshold := int(round(float(max_health) * 0.30))
+		if hp_before > threshold and _health <= threshold and _health > 0:
+			_shock_discharge_armed = false
+			_fire_shock_discharge_pulse(shock_radius)
 	# Reset out-of-combat regen — any take_damage() call delays HP recovery
 	# by the full configured window. Environmental DoTs / pit damage / boss
 	# AoE all flow through this path, so regen pauses uniformly regardless
@@ -1239,10 +1280,20 @@ func get_recovery_heal_remaining() -> int:
 func heal(amount: int) -> void:
 	if not _alive:
 		return
+	# Pain Compiler trade: healing is suppressed for the duration of the
+	# damage buff. Skipped silently — the player feels it when expected
+	# heal pickups have no effect during the buff window.
+	if _pain_compiler_remain > 0.0:
+		return
 	var old := _health
 	_health = mini(_health + amount, max_health)
 	if _health != old:
 		health_changed.emit(_health, max_health)
+	# Shock Discharge re-arm: once HP climbs back above the 30% threshold,
+	# the pulse is available to fire again on the next downward crossing.
+	var threshold := int(round(float(max_health) * 0.30))
+	if not _shock_discharge_armed and _health > threshold:
+		_shock_discharge_armed = true
 
 
 func on_enemy_killed() -> void:
@@ -1514,6 +1565,14 @@ func _physics_process(delta: float) -> void:
 		_grunt_cd -= delta
 	if _blood_stumble_remaining > 0.0:
 		_blood_stumble_remaining = maxf(0.0, _blood_stumble_remaining - delta)
+	# Behavior-mod timers — decremented uniformly each physics tick. Effects
+	# downstream read `_pain_compiler_remain > 0.0` etc., so just ticking
+	# them down is enough to keep buffs honest. No-op when the mod isn't
+	# equipped because nothing ever sets them.
+	if _pain_compiler_remain > 0.0:
+		_pain_compiler_remain = maxf(0.0, _pain_compiler_remain - delta)
+	if _recoil_landed_slow_remain > 0.0:
+		_recoil_landed_slow_remain = maxf(0.0, _recoil_landed_slow_remain - delta)
 	if not Input.is_action_pressed(SKILL_INPUTS[0]):
 		_click_consumed = false
 	_update_lock_target()
@@ -1552,7 +1611,10 @@ func _physics_process(delta: float) -> void:
 
 	if on_floor and not _crouching and not GameplayChatState.typing and Input.is_action_just_pressed(&"jump"):
 		_interacting = false
-		velocity.y = JUMP_VELOCITY
+		# Glide Pads (legs mod): trade vertical impulse for horizontal carry.
+		# Reads the rolled % (e.g. 15%) → 0.85× JUMP_VELOCITY.
+		var glide_pen := BehaviorModRegistry.get_active_param(&"legs", &"glide_pads", &"jump_height_penalty_pct", 0.0)
+		velocity.y = JUMP_VELOCITY * (1.0 - glide_pen * 0.01)
 		# Inject the live input direction as horizontal momentum, otherwise
 		# a standing-still + move+jump on the same frame would skip it
 		# because _want_dir is set later in _physics_process.
@@ -1561,6 +1623,9 @@ func _physics_process(delta: float) -> void:
 			velocity.x = jump_wish.x * move_speed
 			velocity.z = jump_wish.z * move_speed
 		_is_airborne = true
+		# Recoil Soles (feet mod): seed peak-height tracking for the landing
+		# shockwave. Updated each frame while airborne; consumed at landing.
+		_airborne_peak_y = global_position.y
 		# Drop PILLAR from the collision mask for the duration of the jump
 		# so destructible clutter (barrels, crates — PILLAR-only) becomes
 		# phase-through and the injected horizontal velocity isn't zeroed
@@ -1570,11 +1635,19 @@ func _physics_process(delta: float) -> void:
 		_apply_airborne_collision_mask()
 		_play_anim(ANIM_JUMP_START, 1.2)
 
+	# Recoil Soles peak-height tracking — sample each frame while airborne
+	# so the landing shockwave can scale damage with fall distance. Cheap
+	# (one float compare per tick).
+	if _is_airborne and global_position.y > _airborne_peak_y:
+		_airborne_peak_y = global_position.y
+
 	if _is_airborne and on_floor and velocity.y <= 0.0:
 		_is_airborne = false
 		# Restore ground-state mask so destructibles are solid again once
 		# the player lands — otherwise they'd remain phase-through forever.
 		_restore_ground_collision_mask()
+		# Recoil Soles (feet mod): land-from-height shockwave + landed slow.
+		_recoil_soles_on_land()
 
 	if _knockback_remain > 0.0:
 		# Quadratic ease-out: matches PrototypeEnemy so the player coasts to a
@@ -1627,7 +1700,10 @@ func _physics_process(delta: float) -> void:
 			# Can't sprint while crouching, backing, airborne, or out of resource.
 			var wants_sprint := Input.is_action_pressed(&"sprint") and wish_dir.length_squared() > 0.01
 			var infinite_res := DebugState.config != null and DebugState.config.infinite_resource
-			_sprinting = wants_sprint and not _crouching and not _backing and (infinite_res or _resource_current > 0.0)
+			# Crouch Tactician (legs mod): sprinting is disabled entirely as
+			# the trade for the crouch-speed / accuracy buff.
+			var crouch_tactician := BehaviorModRegistry.is_mod_equipped_and_active(&"legs", &"crouch_tactician")
+			_sprinting = wants_sprint and not _crouching and not _backing and not crouch_tactician and (infinite_res or _resource_current > 0.0)
 			if _chromatic != null:
 				_chromatic.set_active(_sprinting)
 			if _sprinting and not infinite_res:
@@ -1670,7 +1746,22 @@ func _physics_process(delta: float) -> void:
 			# AIM_HOLD (Tripod / Aimed Shot) pins the player in place — that's
 			# the trade for the accuracy / crit buff.
 			var aim_hold_factor: float = 0.0 if aim_hold_locks_movement() else 1.0
-			var speed := move_speed * (CROUCH_SPEED_FACTOR if _crouching else 1.0) * (0.5 if _backing else 1.0) * sprint_factor * shield_factor * gear_speed_factor * pool_factor * blood_factor * stumble_factor * reload_factor * aim_hold_factor
+			# Behavior-mod movement factors. Each defaults to 1.0 (no effect)
+			# so unequipped mods leave the speed math untouched.
+			# Crouch Tactician: crouch speed equals walk speed (factor 1.0
+			# instead of CROUCH_SPEED_FACTOR). When NOT active, normal crouch
+			# factor applies.
+			var ct_active := BehaviorModRegistry.is_mod_equipped_and_active(&"legs", &"crouch_tactician")
+			var crouch_factor: float = 1.0 if ct_active else CROUCH_SPEED_FACTOR
+			# Servo Stride trade: walk speed penalty for getting free sprint.
+			# Reads the rolled percent (e.g. 10%) → 0.9 multiplier.
+			var servo_penalty_pct := BehaviorModRegistry.get_active_param(&"legs", &"servo_stride", &"walk_speed_penalty_pct", 0.0)
+			var servo_factor: float = 1.0 - servo_penalty_pct * 0.01
+			# Recoil Soles trade: 1-second landed-slow after each jump. -40%
+			# during the slow window — heavy enough to feel, short enough
+			# that it doesn't punish casual movement.
+			var recoil_slow_factor: float = 0.6 if _recoil_landed_slow_remain > 0.0 else 1.0
+			var speed := move_speed * (crouch_factor if _crouching else 1.0) * (0.5 if _backing else 1.0) * sprint_factor * shield_factor * gear_speed_factor * pool_factor * blood_factor * stumble_factor * reload_factor * aim_hold_factor * servo_factor * recoil_slow_factor
 			_target_move_speed = speed
 			var flat := Vector2(velocity.x, velocity.z)
 			var target := Vector2(wish_dir.x, wish_dir.z) * speed
@@ -2739,7 +2830,16 @@ func start_reload() -> void:
 		return
 	if is_reloading():
 		return
-	_reload_total = maxf(w.reload_time, 0.05)
+	var reload_time := w.reload_time
+	# Reflex Loader (hands mod): reload time scales down with current
+	# resource. Reduction % = reload_reduction_per_100_res * (resource_current
+	# / 100). Capped at 80% so even a full pool doesn't trivialize reloads.
+	# The trade (empty-damage penalty) lives in PlayerCombat._deal_damage.
+	var reflex_per_100 := BehaviorModRegistry.get_active_param(&"hands", &"reflex_loader", &"reload_reduction_per_100_res", 0.0)
+	if reflex_per_100 > 0.0:
+		var reduction_pct := minf(80.0, reflex_per_100 * (_resource_current * 0.01))
+		reload_time *= maxf(0.2, 1.0 - reduction_pct * 0.01)
+	_reload_total = maxf(reload_time, 0.05)
 	_reload_remain = _reload_total
 	_reload_target = &"weapon"
 	WeaponSounds.play_reload(w.weapon_base_id, global_position)
@@ -4549,6 +4649,77 @@ func _apply_airborne_collision_mask() -> void:
 
 func _restore_ground_collision_mask() -> void:
 	collision_mask |= _LAYER_PILLAR_BIT
+
+
+# ── Behavior mod helpers ────────────────────────────────────────────────────
+
+# Shock Discharge AoE: knockback every enemy in radius, no damage. The
+# point of the pulse is creating breathing room when you're crit-HP, not
+# adding to your damage output. Visual: reuse the explosion VFX at the
+# player's feet so the pulse reads instantly.
+func _fire_shock_discharge_pulse(radius: float) -> void:
+	var kb_strength := 14.0
+	for enode: Node3D in SpatialGrid.query_radius(global_position, radius, &"enemies"):
+		if not is_instance_valid(enode) or not enode.has_method(&"take_damage"):
+			continue
+		# Zero-damage knockback. PrototypeEnemy.take_damage with amount=0
+		# still applies the knockback impulse via the same path the AoE
+		# explosions use; the death/hit-flash branches skip because the
+		# absorbed amount is 0.
+		PrototypeEnemy.deal_damage(enode, 0, global_position, kb_strength, 1, false, &"")
+	# VFX + sound — same explosion as RMB AoE so the pulse reads as a
+	# clear "shockwave from me." Pass a small radius and a custom color
+	# tint so it's visually distinct from a weapon explosion.
+	PrototypeAttackIndicator.spawn_explosion(self, global_position + Vector3(0, 0.5, 0), radius, Color(0.4, 0.8, 1.0))
+
+
+# Recoil Soles landing: fire a damage shockwave scaled by fall distance,
+# armed by the airborne-peak tracking in _physics_process. Always sets
+# the landed-slow timer (the trade fires even on short hops so the cost
+# is felt, not just when the shockwave triggers).
+const _RECOIL_FALL_THRESHOLD_M: float = 2.0  # min fall to fire shockwave
+const _RECOIL_LANDED_SLOW_SEC: float = 1.0   # trade timer (matches tres comment)
+func _recoil_soles_on_land() -> void:
+	var radius := BehaviorModRegistry.get_active_param(&"feet", &"recoil_soles", &"shockwave_radius_m", 0.0)
+	if radius <= 0.0:
+		return
+	_recoil_landed_slow_remain = _RECOIL_LANDED_SLOW_SEC
+	var fall_dist := maxf(0.0, _airborne_peak_y - global_position.y)
+	_airborne_peak_y = global_position.y
+	if fall_dist < _RECOIL_FALL_THRESHOLD_M:
+		return
+	# damage_pct_of_fall_distance is "% of fall_distance becomes damage"
+	# (e.g. 50% at 4m fall = 2 damage points × scaling factor). Multiply
+	# by 10 so a 4m fall at 50% lands ~20 damage — readable as "noticeable
+	# bonus on a real drop, trivial on a hop."
+	var dmg_pct := BehaviorModRegistry.get_active_param(&"feet", &"recoil_soles", &"damage_pct_of_fall_distance", 0.0)
+	var dmg := int(round(fall_dist * dmg_pct * 0.1))
+	if dmg <= 0:
+		return
+	var kb_strength := 8.0 + fall_dist * 2.0
+	for enode: Node3D in SpatialGrid.query_radius(global_position, radius, &"enemies"):
+		if not is_instance_valid(enode) or not enode.has_method(&"take_damage"):
+			continue
+		PrototypeEnemy.deal_damage(enode, dmg, global_position, kb_strength, 1, false, &"")
+	PrototypeAttackIndicator.spawn_explosion(self, global_position + Vector3(0, 0.2, 0), radius, Color(0.9, 0.6, 0.2))
+
+
+# Outgoing damage multiplier from active behavior mods. Single aggregate
+# read by PlayerCombat._deal_damage so adding new offensive-buff mods
+# means appending to this function, not patching every call site.
+# Composes multiplicatively across mods (only Pain Compiler currently
+# contributes).
+func behavior_mod_damage_mult() -> float:
+	var m: float = 1.0
+	if _pain_compiler_remain > 0.0 and _pain_compiler_mult > 1.0:
+		m *= _pain_compiler_mult
+	# Reflex Loader trade: -X% damage when resource is empty. Penalty only
+	# applies at strictly zero resource; partial pool = full damage.
+	if _resource_current <= 0.0:
+		var penalty := BehaviorModRegistry.get_active_param(&"hands", &"reflex_loader", &"empty_damage_penalty_pct", 0.0)
+		if penalty > 0.0:
+			m *= maxf(0.1, 1.0 - penalty * 0.01)
+	return m
 
 
 # Camera-relative world-space input direction for the current frame.

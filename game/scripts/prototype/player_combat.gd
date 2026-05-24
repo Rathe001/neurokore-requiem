@@ -491,7 +491,16 @@ func _knockback_for(skill: Skill, weapon: Item) -> float:
 ## Convenience wrapper — delegates to the static PrototypeEnemy.deal_damage
 ## so PlayerCombat call sites stay short. See PrototypeEnemy.deal_damage for
 ## the SP / MP routing logic.
+##
+## Behavior-mod damage multipliers (Pain Compiler buff, Reflex Loader empty
+## penalty) are applied here so every player attack path inherits them
+## without per-call-site patching. amount must be > 0 to scale; zero-damage
+## knockback pulses (Shock Discharge, etc.) are passed through untouched.
 func _deal_damage(target: Node3D, amount: int, knockback_from: Vector3, knockback_strength: float, multistrike: int, is_crit: bool, weapon_base_id: StringName = &"") -> void:
+	if amount > 0 and _host != null:
+		var mod_mult := _host.behavior_mod_damage_mult()
+		if mod_mult != 1.0:
+			amount = maxi(1, int(round(float(amount) * mod_mult)))
 	PrototypeEnemy.deal_damage(target, amount, knockback_from, knockback_strength, multistrike, is_crit, weapon_base_id)
 
 

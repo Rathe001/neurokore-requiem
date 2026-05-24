@@ -519,19 +519,29 @@ func _roll_boots_stats(item: Item, item_level: int, rarity: StringName, rng: Ran
 ## The amount scales with item level; chance scales with rarity.
 # Per-rarity chance an armor item rolls a behavior mod at all. Common
 # drops never get a mod (mod = identity-layer flavor, white items stay
-# bland); higher rarity guarantees one. Numbers can be retuned in #67's
-# soak pass.
+# bland); higher rarity guarantees one.
+#
+# Tuned 2026-05-24 (chunk #67 soak pass): magic bumped from 0.5 → 0.6
+# so magic items more reliably carry an identity hook — at 50% half of
+# magic drops were "+stats, no flavor" and felt like junk. Common/rare/
+# unique unchanged. Re-tune again once a real soak session shows whether
+# mod density feels right.
 const MOD_ROLL_CHANCE: Dictionary = {
 	&"common": 0.0,
-	&"magic":  0.5,
+	&"magic":  0.6,
 	&"rare":   1.0,
 	&"unique": 1.0,
 }
 # When a mod IS rolled, what fraction of the time it's drawn from the
 # implemented pool vs. the preview (unimplemented) pool. Bias toward
 # already-working mods so most drops feel "real," with the remainder
-# being a fun "this is coming" preview. See docs/systems.md "Behavior
-# mods" + the UX design discussion.
+# being a fun "this is coming" preview.
+#
+# With 9-of-24 mods implemented as of chunk #68, 0.85 still works: a
+# weighted roll lands implemented ~90% of the time (0.85 + 0.15 × 9/24).
+# Revisit when the implemented fraction passes ~80% — at that point
+# the preview pool is small enough that even 50/50 would still feel
+# mostly real and free up more preview-mod visibility.
 const MOD_IMPLEMENTED_WEIGHT: float = 0.85
 
 

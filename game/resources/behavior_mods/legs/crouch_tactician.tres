@@ -13,6 +13,6 @@ Trade: cannot sprint at all."
 param_ranges = {
 "crouch_accuracy_bonus_pct": [5.0, 15.0]
 }
-is_implemented = false
+is_implemented = true
 condition_id = &""
 class_restriction = &""
