@@ -18,6 +18,25 @@ const CORRIDOR_WALL_Y_BIAS := -0.001
 # BoxMesh bottom sitting at CORRIDOR_WALL_Y_BIAS below the floor.
 const ROOM_WALL_FLOOR_SINK := 0.02
 
+# Shared stub material for shadow-only meshes (corner cubes, wall shadow
+# casters). SHADOWS_ONLY meshes aren't rendered visibly, but RenderingServer
+# still queries the surface material for shadow-pass setup
+# (material_casts_shadows, material_is_animated, material_update_dependency,
+# material_get_instance_shader_parameters). When the surface material is
+# null those queries spam the editor errors panel — one row per query per
+# caster per level build (~155 errors on a 40-room level). Assigning a
+# trivial unshaded material once and sharing it across every caster keeps
+# the queries clean without adding meaningful GPU cost (the mesh still
+# isn't drawn — only its silhouette contributes to shadow maps).
+static var _shadow_stub_material: StandardMaterial3D = null
+
+static func _get_shadow_stub_material() -> StandardMaterial3D:
+	if _shadow_stub_material == null:
+		_shadow_stub_material = StandardMaterial3D.new()
+		_shadow_stub_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_shadow_stub_material.albedo_color = Color(0, 0, 0, 1)
+	return _shadow_stub_material
+
 
 static func get_wall_mesh(ctx: LevelBuildContext, size_x: float, size_z: float) -> BoxMesh:
 	var key := "%s_%s" % [size_x, size_z]
@@ -94,6 +113,8 @@ static func _add_shadow_caster(parent: Node3D, sx: float, sy: float, sz: float) 
 	caster.name = &"ShadowCaster"
 	var box := BoxMesh.new()
 	box.size = Vector3(sx, sy, sz)
+	# Stub material so the shadow-pass surface queries don't log null.
+	box.material = _get_shadow_stub_material()
 	caster.mesh = box
 	caster.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
 	parent.add_child(caster)
@@ -111,6 +132,8 @@ static func create_corner_cube_shadow(ctx: LevelBuildContext, world_xz: Vector3)
 	caster.name = &"CornerCubeShadow"
 	var box := BoxMesh.new()
 	box.size = Vector3(thick, h, thick)
+	# Stub material so the shadow-pass surface queries don't log null.
+	box.material = _get_shadow_stub_material()
 	caster.mesh = box
 	caster.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
 	caster.position = Vector3(world_xz.x, h * 0.5, world_xz.z)
