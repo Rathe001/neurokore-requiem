@@ -100,6 +100,51 @@ static func warmup(parent: Node) -> void:
 		# quad below the map.
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		anchor.add_child(mi)
+
+	# Pre-compile the StandardMaterial3D variants the game spawns from
+	# code at runtime. Each unique combination of shading_mode +
+	# transparency + emission_enabled is its own shader variant; first
+	# use compiles on the renderer thread and stalls a frame. Listing
+	# the ones the level-up VFX, ring overlays, and energy pulses use
+	# so those first-time spawns are hitch-free.
+	# Format: each dict spawns a StandardMaterial3D with the flags +
+	# attaches it to a tiny QuadMesh under the anchor.
+	var standard_variants: Array[Dictionary] = [
+		# Level-up VFX ring (prototype_player._play_levelup_vfx): unshaded
+		# + alpha transparency + emission. The biggest single cause of
+		# the "lag spike when I level up" report — first level-up of
+		# each session compiled this variant.
+		{&"unshaded": true, &"transparent": true, &"emission": true},
+		# Energy pulse (PrototypeAttackIndicator.spawn_energy_pulse) —
+		# same flag set plus blend_mode=ADD. Listed separately so we
+		# compile both transparency-blend modes.
+		{&"unshaded": true, &"transparent": true, &"emission": true, &"blend_add": true},
+		# Beam glow / muzzle flare overlay variants — unshaded +
+		# transparent without emission. Cheap to add; covers any UI/VFX
+		# that doesn't need emission.
+		{&"unshaded": true, &"transparent": true, &"emission": false},
+	]
+	for spec in standard_variants:
+		var sm := StandardMaterial3D.new()
+		if spec.get(&"unshaded", false):
+			sm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		if spec.get(&"transparent", false):
+			sm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		if spec.get(&"emission", false):
+			sm.emission_enabled = true
+			sm.emission = Color(1, 0.85, 0.4)
+			sm.emission_energy_multiplier = 1.0
+		if spec.get(&"blend_add", false):
+			sm.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		sm.albedo_color = Color(1, 1, 1, 0.5)
+		var quad2 := QuadMesh.new()
+		quad2.size = Vector2(_WARMUP_QUAD_SIZE, _WARMUP_QUAD_SIZE)
+		quad2.material = sm
+		var mi2 := MeshInstance3D.new()
+		mi2.mesh = quad2
+		mi2.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		anchor.add_child(mi2)
+
 	# Two process frames: one for the render server to see the new
 	# MeshInstance3Ds and queue their shaders for compile, one for the
 	# compile to actually flush. Empirically this catches everything;
