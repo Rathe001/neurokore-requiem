@@ -1558,6 +1558,34 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Testing notes (for the playtester)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cross-account-test-real-disconnect" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cross-account test (real disconnect)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#single-account-happy-path-check" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Single-account "happy path" check
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
     </ul>
@@ -1660,14 +1688,22 @@
 <li>Once playtest evidence shows &gt;95% success rate over multiple sessions, flip <code>DebugConfig.host_migration_enabled = true</code> as the default and update <code>docs/multiplayer.md</code> to remove the "out of scope" disclaimer</li>
 </ul>
 <h2 id="testing-notes-for-the-playtester">Testing notes (for the playtester)<a class="headerlink" href="#testing-notes-for-the-playtester" title="Permanent link">&para;</a></h2>
-<p>To exercise migration:</p>
+<h3 id="cross-account-test-real-disconnect">Cross-account test (real disconnect)<a class="headerlink" href="#cross-account-test-real-disconnect" title="Permanent link">&para;</a></h3>
 <ol>
 <li>Two Steam accounts in a lobby</li>
-<li>Set <code>DebugConfig.host_migration_enabled = true</code> in the debug overlay (or hardcode for the build)</li>
+<li>Debug panel → toggle <strong>Host Migration</strong> on (both peers)</li>
 <li>Both peers enter game</li>
 <li>Host (peer 1) closes Steam process (Task Manager → end Steam.exe) or kills the game process</li>
-<li>Watch logs on the surviving client; should see <code>[HostMigration] Host disconnected; starting migration handshake.</code> followed by <code>[HostMigration] Elected new host: ...</code> and <code>[HostMigration] Migration complete</code></li>
+<li>Watch logs + UI on the surviving client; should see <code>[HostMigration] Host disconnected; starting migration handshake.</code> followed by <code>[HostMigration] Election: dead_host=X, N candidates: [...]</code>, <code>[HostMigration] Elected new host: ...</code>, and <code>[HostMigration] Migration complete</code>. The migration overlay shows which phase is in flight.</li>
 </ol>
+<h3 id="single-account-happy-path-check">Single-account "happy path" check<a class="headerlink" href="#single-account-happy-path-check" title="Permanent link">&para;</a></h3>
+<p>For async testing without a second account, the debug panel has a <strong>Trigger Host Migration</strong> button that calls <code>HostMigration.force_start_migration_for_testing()</code>. This runs the deterministic parts (election math, re-authority walk) against the current lobby/entity state. Won't actually rebind transport correctly without a real peer drop, but catches logic bugs in the election + re-authority pass.</p>
+<p>To use:
+1. Host any lobby (even by yourself with no joiners)
+2. Start the game
+3. Debug panel → toggle <strong>Host Migration</strong> on
+4. Debug panel → click <strong>Trigger Host Migration</strong>
+5. Read the log — election will likely report "no surviving members" and fail (expected: you're the only member). The interesting output is whether the election walks the lobby_members dict cleanly, whether the migration overlay appears, and whether the disconnect overlay fallback fires correctly.</p>
 <p>Failure modes to report:
 - "Migration overlay shown but game frozen forever" — likely a rebind issue
 - "All enemies disappear after migration" — re-authority didn't catch them or Spawner removed them
