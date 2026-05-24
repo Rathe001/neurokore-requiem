@@ -140,13 +140,31 @@ func _process(_delta: float) -> void:
 	# frame without flicker.
 	if (main_cam.cull_mask & HIGHLIGHT_LAYER_MASK) != 0:
 		main_cam.cull_mask &= ~HIGHLIGHT_LAYER_MASK
-	_outline_cam.global_transform = main_cam.global_transform
-	_outline_cam.fov = main_cam.fov
+	# Mirror EVERY projection-relevant field. Order: projection mode
+	# first (so set_perspective/set_orthogonal pick up the right fov/
+	# size on the same frame), then the mode-specific intrinsics, then
+	# transform last. Skipping any of these out-of-sync would land the
+	# silhouettes at projected positions that don't match the main
+	# camera — the "outlines way off-screen" failure mode appears when
+	# fov drifts (default 75° vs the level's 12°: a mesh that projects
+	# to mid-screen under 12° projects far outside the frame at 75°).
+	_outline_cam.projection = main_cam.projection
+	if main_cam.projection == Camera3D.PROJECTION_PERSPECTIVE:
+		_outline_cam.fov = main_cam.fov
+	elif main_cam.projection == Camera3D.PROJECTION_ORTHOGONAL:
+		_outline_cam.size = main_cam.size
 	_outline_cam.near = main_cam.near
 	_outline_cam.far = main_cam.far
-	_outline_cam.projection = main_cam.projection
-	if main_cam.projection == Camera3D.PROJECTION_ORTHOGONAL:
-		_outline_cam.size = main_cam.size
+	# keep_aspect affects which axis the FOV/size dimension binds to —
+	# default is KEEP_HEIGHT, but if the main camera ever overrides it
+	# the outline cam needs to match or projections drift on resize.
+	_outline_cam.keep_aspect = main_cam.keep_aspect
+	# h_offset / v_offset are post-projection 2D shifts (split-screen
+	# eye separation, cinematic lateral pans, etc.). Mirror so any
+	# future use on the main camera doesn't leave the outline behind.
+	_outline_cam.h_offset = main_cam.h_offset
+	_outline_cam.v_offset = main_cam.v_offset
+	_outline_cam.global_transform = main_cam.global_transform
 	# Prune copies whose source was freed (enemy died and pooled out, etc.).
 	_prune_stale()
 
