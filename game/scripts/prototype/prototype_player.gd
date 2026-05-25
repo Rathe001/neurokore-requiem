@@ -238,11 +238,38 @@ var _skill_busy: bool = false
 var _fire_generation: int = 0
 
 
-# True while any attack is in its commit window. Used by movement and
-# facing logic so the player stops / locks orientation during ANY swing,
-# regardless of which input started it.
+# True while any attack is in its commit window. Used by FACING logic
+# (skip the auto-face-forward branch so the cast's explicit aim wins)
+# regardless of which input started it. NOT used as a movement freeze
+# directly — see _attack_locks_movement() for that.
 func _is_attack_committed() -> bool:
 	return _lmb_busy or _skill_busy
+
+
+# True only when the current attack should FREEZE the player in place.
+# Melee swings + skill casts lock movement so the strike anchors at a
+# committed position; ranged LMB fire does NOT lock — the player runs
+# and guns. Without this carve-out, laser_shot (wind_up 0.1s) and
+# plasma_bolt (wind_up 0.15s) stuttered the player every shot because
+# the wind-up timer kept _lmb_busy=true and the movement gate at
+# _physics_process zeroed velocity for that whole window. SMG/LMG/
+# sniper/shotgun avoided the bug only because they have wind_up=0,
+# so _lmb_busy clears within one physics frame.
+func _attack_locks_movement() -> bool:
+	# Skill casts (RMB / hotkey skills) lock as before — they're animation-
+	# driven gestures (grenade throw, melee finisher, shield raise) where
+	# the player committing in place reads correctly.
+	if _skill_busy:
+		return true
+	# LMB-busy: only lock for melee weapons + bare hands. Energy ranged
+	# (laser/plasma) and kinetic ranged (smg/lmg/sniper/shotgun) all
+	# leave the player free to move.
+	if _lmb_busy:
+		var weapon: Item = InventoryState.get_equipped(&"weapon")
+		if weapon == null:
+			return true  # bare hands → unarmed strike, anchor in place
+		return weapon.weapon_base_id in MELEE_BASE_IDS
+	return false
 var _attack_aim: Vector3 = Vector3.ZERO
 var _click_consumed: bool = false
 # Auto-aim target while LMB is held over an enemy. Cleared on release, on
@@ -1679,7 +1706,11 @@ func _physics_process(delta: float) -> void:
 		velocity.z = _lunge_vel.z * lfalloff
 		_lunge_remain -= delta
 		_want_dir = Vector3.ZERO
-	elif _is_attack_committed() and not _is_airborne:
+	elif _attack_locks_movement() and not _is_airborne:
+		# Was _is_attack_committed() — but that returned true for ranged
+		# LMB fire too, freezing the player every shot for the weapon's
+		# wind_up window (0.1s laser, 0.15s plasma). _attack_locks_movement
+		# carves out ranged so run-and-gun works on those archetypes.
 		velocity.x = 0.0
 		velocity.z = 0.0
 	else:

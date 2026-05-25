@@ -990,12 +990,16 @@ func _resolve_hitscan(skill: Skill, aim: Vector3, eff_range: float, weapon: Item
 	if not Engine.is_in_physics_frame():
 		await _host.get_tree().physics_frame
 	var space := _world_space()
+	var wall_hit_pos: Vector3 = Vector3.ZERO
+	var wall_hit_normal: Vector3 = Vector3.ZERO
 	if space != null:
 		var ray_end := origin + aim_norm * extended_range
 		var query := PhysicsRayQueryParameters3D.create(origin, ray_end, 1)
 		var result := space.intersect_ray(query)
 		if not result.is_empty():
 			wall_dist = origin.distance_to(result["position"])
+			wall_hit_pos = result["position"]
+			wall_hit_normal = result.get("normal", -aim_norm)
 	var half_cos := cos(deg_to_rad(HITSCAN_CONE_HALF_DEG))
 	var closest_dist := INF
 	for enode: Node3D in SpatialGrid.query_cone(origin, aim_norm, wall_dist, half_cos, &"enemies"):
@@ -1019,6 +1023,19 @@ func _resolve_hitscan(skill: Skill, aim: Vector3, eff_range: float, weapon: Item
 	CombatVisuals.spawn_muzzle_flash(_host, visual_muzzle, _is_bullet, hitscan_tint)
 	_eject_casing(weapon)
 	CombatVisuals.spawn_beam(_host, aim_norm, beam_end, visual_muzzle, hitscan_tint)
+	# Wall decal for hitscan that terminates on geometry (no enemy in
+	# the cone before the wall). Same molten-scorch / bullet-hole split
+	# the projectile path uses — laser/plasma get glowing patches via
+	# is_bullet=false; future kinetic hitscan (if any) would punch holes.
+	# Skipped when the beam hits an enemy first (the impact_burst on the
+	# enemy already conveys the hit) or when it ran to extended_range
+	# without hitting anything.
+	if hit_target == null and wall_hit_normal != Vector3.ZERO and wall_dist < extended_range:
+		var hitscan_parent := _host.get_parent()
+		if hitscan_parent != null:
+			PrototypeAttackIndicator.spawn_wall_projectile_impact(
+				hitscan_parent, wall_hit_pos, wall_hit_normal, _is_bullet, hitscan_tint
+			)
 	if hit_target != null:
 		CombatVisuals.spawn_impact_burst(_host, hit_target.global_position + Vector3(0.0, 0.9, 0.0), hitscan_tint)
 		var is_crit := _roll_crit(weapon)
@@ -1472,8 +1489,12 @@ func _resolve_hitscan_exact(skill: Skill, aim_norm: Vector3, eff_range: float, w
 	var result: Dictionary = {}
 	if space != null:
 		result = space.intersect_ray(query)
+	var wall_hit_pos_exact: Vector3 = Vector3.ZERO
+	var wall_hit_normal_exact: Vector3 = Vector3.ZERO
 	if not result.is_empty():
 		wall_dist = origin.distance_to(result["position"])
+		wall_hit_pos_exact = result["position"]
+		wall_hit_normal_exact = result.get("normal", -aim_norm)
 	var half_cos := cos(deg_to_rad(HITSCAN_CONE_HALF_DEG))
 	var closest_dist := INF
 	for enode: Node3D in SpatialGrid.query_cone(origin, aim_norm, wall_dist, half_cos, &"enemies"):
@@ -1493,6 +1514,14 @@ func _resolve_hitscan_exact(skill: Skill, aim_norm: Vector3, eff_range: float, w
 	CombatVisuals.spawn_muzzle_flash(_host, visual_muzzle, _is_bullet_exact, hitscan_exact_tint)
 	_eject_casing(weapon)
 	CombatVisuals.spawn_beam(_host, aim_norm, beam_end, visual_muzzle, hitscan_exact_tint)
+	# Wall decal when the Double Tap follow-up terminates on geometry —
+	# matches the primary hitscan path so laser repeats also leave marks.
+	if hit_target == null and wall_hit_normal_exact != Vector3.ZERO and wall_dist < extended_range:
+		var hitscan_parent_exact := _host.get_parent()
+		if hitscan_parent_exact != null:
+			PrototypeAttackIndicator.spawn_wall_projectile_impact(
+				hitscan_parent_exact, wall_hit_pos_exact, wall_hit_normal_exact, _is_bullet_exact, hitscan_exact_tint
+			)
 	if hit_target != null:
 		CombatVisuals.spawn_impact_burst(_host, hit_target.global_position + Vector3(0.0, 0.9, 0.0), hitscan_exact_tint)
 		var is_crit := _roll_crit(weapon)
