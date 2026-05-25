@@ -227,6 +227,11 @@ func _ready() -> void:
 func _build_audio_listener() -> void:
 	_audio_listener = AudioListener3D.new()
 	_audio_listener.top_level = true
+	# SFX autoload looks up the active listener via this group so it can
+	# anchor "play at listener" sources to its position each frame —
+	# without the follow, source and listener drift one frame apart and
+	# player sounds pan opposite to player movement.
+	_audio_listener.add_to_group(&"audio_listener")
 	add_child(_audio_listener)
 	# Listener forward = camera's horizontal forward (from camera toward
 	# target, flattened). dir_horiz_to_camera = sin(b), 0, cos(b) — so

@@ -191,9 +191,14 @@ func play_channel_loop(weapon_key: StringName, parent_node: Node3D) -> AudioStre
 
 
 ## Reposition a channel-loop player to follow its source. Called each
-## frame by _tick_channel so the 3D sound tracks the wielder.
+## frame by _tick_channel so the 3D sound tracks the wielder. Players
+## flagged as listener-anchored skip the reposition — SFX._process
+## already locks them to the listener every frame, and writing here
+## would briefly displace the source before that re-anchor lands.
 func update_channel_position(player: AudioStreamPlayer3D, pos: Vector3) -> void:
 	if player != null and is_instance_valid(player):
+		if player.has_meta(&"sfx_anchored_to_listener"):
+			return
 		player.global_position = pos
 
 
