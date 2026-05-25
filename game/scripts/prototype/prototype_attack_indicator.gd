@@ -322,10 +322,14 @@ const BEAM_FADE := 0.18
 ## This keeps the bolt visible from any camera angle, even when the
 ## chain link runs nearly parallel to the camera's view direction.
 ## Fades out over `duration` via the shader's `intensity` uniform.
-static func spawn_lightning_arc(host: Node3D, from_pos: Vector3, to_pos: Vector3, duration: float = LIGHTNING_ARC_DURATION, tint_override: Color = Color(0.0, 0.0, 0.0, 0.0)) -> void:
+## `attach_to_host` parents the arc plane to `host` so the arc midpoint
+## tracks with the firing entity (used for taser CHAIN_LIGHTNING channel
+## arcs that fire many in succession while the player moves; without
+## this the arcs visibly snap to lagged positions every tick).
+static func spawn_lightning_arc(host: Node3D, from_pos: Vector3, to_pos: Vector3, duration: float = LIGHTNING_ARC_DURATION, tint_override: Color = Color(0.0, 0.0, 0.0, 0.0), attach_to_host: bool = false) -> void:
 	if host == null:
 		return
-	var parent: Node = host.get_parent()
+	var parent: Node = host if attach_to_host else host.get_parent()
 	if parent == null:
 		parent = host
 	var link := to_pos - from_pos
@@ -402,8 +406,15 @@ static func spawn_lightning_arc(host: Node3D, from_pos: Vector3, to_pos: Vector3
 	tween.tween_callback(_free_later(inst))
 
 
-static func spawn_beam(host: Node3D, aim: Vector3, length: float, origin: Vector3 = Vector3.ZERO, tint_override: Color = Color(0.0, 0.0, 0.0, 0.0)) -> void:
-	var parent: Node = host.get_parent()
+## `attach_to_host` parents the beam container to `host` so the start
+## tracks the firing entity as it moves during the beam's BEAM_FADE
+## window. Trade-off: impact + mid lights ride along with the container
+## too, so they shift slightly off the original hit point during the
+## fade — at 0.18s + sprint speed that's at most ~1.4m of drift, which
+## reads as a snappy laser-style sweep rather than the previous "frozen
+## tracer left behind" look. Default false for enemy compat.
+static func spawn_beam(host: Node3D, aim: Vector3, length: float, origin: Vector3 = Vector3.ZERO, tint_override: Color = Color(0.0, 0.0, 0.0, 0.0), attach_to_host: bool = false) -> void:
+	var parent: Node = host if attach_to_host else host.get_parent()
 	if parent == null:
 		parent = host
 	# tint_override with non-zero alpha overrides the host's class
@@ -4287,10 +4298,15 @@ const MUZZLE_FLASH_BULLET_COLOR := Color(1.0, 0.8, 0.45)
 const MUZZLE_FLASH_ENERGY_COLOR := Color(0.6, 0.85, 1.0)
 
 
-static func spawn_muzzle_flash(host: Node3D, barrel_pos: Vector3, is_bullet: bool = true, tint: Color = Color(0, 0, 0, 0)) -> void:
+## `attach_to_host` parents the flash to `host` instead of host.get_parent(),
+## so when the firing entity moves during the flash's lifetime the light
+## tracks along with it. Default is false to preserve the world-parented
+## behavior for enemy callers (their hosts can be pool-recycled mid-fade,
+## which would clip the visual). Player call sites opt in.
+static func spawn_muzzle_flash(host: Node3D, barrel_pos: Vector3, is_bullet: bool = true, tint: Color = Color(0, 0, 0, 0), attach_to_host: bool = false) -> void:
 	if host == null:
 		return
-	var parent: Node = host.get_parent()
+	var parent: Node = host if attach_to_host else host.get_parent()
 	if parent == null:
 		parent = host
 	var light := _acquire_light()
@@ -4326,10 +4342,14 @@ const ENERGY_PULSE_END_SCALE: float = 2.4
 const ENERGY_PULSE_DEFAULT_COLOR := Color(0.55, 0.8, 1.0)
 
 
-static func spawn_energy_pulse(host: Node3D, barrel_pos: Vector3, tint: Color = Color(0, 0, 0, 0)) -> void:
+## `attach_to_host` parents the pulse + light to `host` so they track the
+## firing entity through their lifetime. Used by player energy-weapon
+## shots (laser pistol, plasma rifle) so the muzzle pulse stays glued
+## to the gun barrel even while the player runs.
+static func spawn_energy_pulse(host: Node3D, barrel_pos: Vector3, tint: Color = Color(0, 0, 0, 0), attach_to_host: bool = false) -> void:
 	if host == null:
 		return
-	var parent: Node = host.get_parent()
+	var parent: Node = host if attach_to_host else host.get_parent()
 	if parent == null:
 		parent = host
 	var mesh_inst := MeshInstance3D.new()

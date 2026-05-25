@@ -23,7 +23,12 @@ const _AUTOLOAD_PATH := ^"/root/CombatVisuals"
 # ── Beam (hitscan) ──────────────────────────────────────────────
 
 func spawn_beam(host: Node3D, aim: Vector3, length: float, origin: Vector3 = Vector3.ZERO, tint_override: Color = Color(0.0, 0.0, 0.0, 0.0)) -> void:
-	PrototypeAttackIndicator.spawn_beam(host, aim, length, origin, tint_override)
+	# Auto-track for player hosts so the beam start follows the gun as
+	# the player moves during the beam's BEAM_FADE window. Enemy hosts
+	# stay world-parented because they can pool/recycle mid-fade and
+	# parented children would get freed with them.
+	var track := host.is_in_group(&"player")
+	PrototypeAttackIndicator.spawn_beam(host, aim, length, origin, tint_override, track)
 	if NetState.is_in_lobby():
 		var cv: Node = host.get_node(_AUTOLOAD_PATH)
 		# Pass the host's world position separately from origin so the
@@ -41,7 +46,12 @@ func _rpc_beam(host_pos: Vector3, aim: Vector3, length: float, origin: Vector3, 
 # ── Lightning arc (chain lightning) ─────────────────────────────
 
 func spawn_lightning_arc(host: Node3D, from_pos: Vector3, to_pos: Vector3, duration: float = PrototypeAttackIndicator.LIGHTNING_ARC_DURATION, tint_override: Color = Color(0.0, 0.0, 0.0, 0.0)) -> void:
-	PrototypeAttackIndicator.spawn_lightning_arc(host, from_pos, to_pos, duration, tint_override)
+	# Auto-track for player hosts — taser arcs fire many times per channel
+	# tick while the player can be running; world-parented arcs visibly
+	# snap to lagged positions each tick. Host-parented keeps the arc
+	# string anchored to the gun barrel.
+	var track := host.is_in_group(&"player")
+	PrototypeAttackIndicator.spawn_lightning_arc(host, from_pos, to_pos, duration, tint_override, track)
 	if NetState.is_in_lobby():
 		var cv: Node = host.get_node(_AUTOLOAD_PATH)
 		cv._rpc_lightning_arc.rpc(from_pos, to_pos, duration, host.is_in_group(&"player"), tint_override)
@@ -132,6 +142,11 @@ func _rpc_impact_burst(origin: Vector3, world_pos: Vector3, color_override: Colo
 # ── Muzzle flash ───────────────────────────────────────────────
 
 func spawn_muzzle_flash(host: Node3D, barrel_pos: Vector3, is_bullet: bool = true, tint: Color = Color(0, 0, 0, 0)) -> void:
+	# Auto-track for player hosts so the flash follows the gun as the
+	# player moves during the flash's lifetime. Energy weapons that route
+	# through spawn_energy_pulse already attach their light to the host
+	# in the same pattern; see the pulse path for the matching behavior.
+	var track := host.is_in_group(&"player")
 	# Energy weapons (plasma rifle, laser pistol, anything passing
 	# is_bullet=false) get the visible energy pulse instead of the
 	# invisible OmniLight pop — same convention the taser already uses
@@ -139,7 +154,7 @@ func spawn_muzzle_flash(host: Node3D, barrel_pos: Vector3, is_bullet: bool = tru
 	if not is_bullet:
 		spawn_energy_pulse(host, barrel_pos, tint)
 		return
-	PrototypeAttackIndicator.spawn_muzzle_flash(host, barrel_pos, is_bullet, tint)
+	PrototypeAttackIndicator.spawn_muzzle_flash(host, barrel_pos, is_bullet, tint, track)
 	if NetState.is_in_lobby():
 		var cv: Node = host.get_node(_AUTOLOAD_PATH)
 		cv._rpc_muzzle_flash.rpc(barrel_pos, is_bullet, tint, host.is_in_group(&"player"))
@@ -156,7 +171,11 @@ func _rpc_muzzle_flash(barrel_pos: Vector3, is_bullet: bool, tint: Color, is_pla
 # muzzle event (taser arc, energy discharges) — the regular flash is
 # only a light pop.
 func spawn_energy_pulse(host: Node3D, barrel_pos: Vector3, tint: Color = Color(0, 0, 0, 0)) -> void:
-	PrototypeAttackIndicator.spawn_energy_pulse(host, barrel_pos, tint)
+	# Auto-track for player hosts (laser pistol, plasma rifle, taser
+	# energy discharges) so the muzzle pulse rides with the gun barrel
+	# while the player moves between shots / through a held channel.
+	var track := host.is_in_group(&"player")
+	PrototypeAttackIndicator.spawn_energy_pulse(host, barrel_pos, tint, track)
 	if NetState.is_in_lobby():
 		var cv: Node = host.get_node(_AUTOLOAD_PATH)
 		cv._rpc_energy_pulse.rpc(barrel_pos, tint, host.is_in_group(&"player"))
