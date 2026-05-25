@@ -2742,6 +2742,16 @@ func _try_spawn_wall_blood(start_pos: Vector3, spray_dir: Vector3, is_crit: bool
 
 
 const _EXPLOSION_FORCE_MULT: float = 8.0  # impulse scale; tune for carnage
+# Per-bone vertical velocity cap after impulse. With _EXPLOSION_FORCE_MULT=8
+# a close-blast impulse imparts Δv=12 m/s per bone, which lets compound
+# explosions (two RPGs on the same corpse before it settles) tunnel
+# PhysicalBone3Ds through the 0.6m ceiling collision box at wall_height=3m.
+# Discrete CCD catches a single hit fine but stacks losing time.
+# Cap at 8 m/s vertical → ballistic max-height = v²/2g ≈ 3.2m, just barely
+# enough to graze the ceiling underside. Bodies still "launch" visibly,
+# just don't escape the room. Horizontal velocity is intentionally NOT
+# capped — sideways "carnage" still reads as intended.
+const _RAGDOLL_MAX_UP_VELOCITY: float = 8.0
 func apply_explosion_impulse(force_origin: Vector3, force_strength: float) -> void:
 	if visual == null:
 		return
@@ -2776,6 +2786,12 @@ func apply_explosion_impulse(force_origin: Vector3, force_strength: float) -> vo
 			continue
 		var pb := child as PhysicalBone3D
 		pb.apply_central_impulse(dir * force_strength * pb.mass * falloff * _EXPLOSION_FORCE_MULT)
+		# Clamp post-impulse vertical velocity so compound explosions can't
+		# stack Δv past the ceiling-tunneling threshold. See constant comment.
+		if pb.linear_velocity.y > _RAGDOLL_MAX_UP_VELOCITY:
+			var v := pb.linear_velocity
+			v.y = _RAGDOLL_MAX_UP_VELOCITY
+			pb.linear_velocity = v
 	# Bodies are moving again — reset the settle timer so the new motion
 	# isn't immediately re-frozen by an already-counting-up timer.
 	_ragdoll_settle_timer = 0.0

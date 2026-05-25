@@ -2512,12 +2512,6 @@ func _arm_offset_for_slot(slot: StringName, aim_right: Vector3) -> Vector3:
 func _cast_skill(skill: Skill) -> void:
 	if skill == null or _skill_busy:
 		return
-	# Bump the fire-cancellation counter so any in-flight LMB timer
-	# from the previous press self-cancels — pressing RMB after LMB
-	# should hand the rhythm over to the skill, not have the old swing
-	# fire its damage / SFX mid-cast.
-	_fire_generation += 1
-	var fire_gen: int = _fire_generation
 	# Face the cursor at press time, same as LMB. Applied here at the
 	# top so every active-kind path picks it up — AIM_HOLD, CHANNEL_BEAM,
 	# SHIELD_BUFF, SECOND_WIND, RECOVERY, plus the standard fire pipeline
@@ -2605,6 +2599,21 @@ func _cast_skill(skill: Skill) -> void:
 	# resource-cost path. Reload also blocks alt-fires.
 	if not _skill_can_fire(weapon, skill, true):
 		return
+	# Bump the fire-cancellation counter so any in-flight LMB timer from
+	# the previous press self-cancels — pressing an RMB attack after LMB
+	# should hand the rhythm over to the skill, not have the old swing
+	# fire its damage / SFX mid-cast.
+	#
+	# Only bumped on the standard-attack branch (skill.active_kind == NONE).
+	# The earlier `match` block handles AIM_HOLD / SHIELD / GRENADE /
+	# SECOND_WIND / RECOVERY / CHANNEL_BEAM — those don't replace the LMB
+	# rhythm (they're concurrent buffs / state machines), so bumping at
+	# the top of _cast_skill would cancel every LMB shot while the player
+	# is holding RMB. That broke Aimed Shot / Tripod: the AIM_HOLD re-enters
+	# _cast_skill every frame RMB is held, and each entry was nuking the
+	# fire_gen captured by the still-windup-ing LMB damage timer.
+	_fire_generation += 1
+	var fire_gen: int = _fire_generation
 	var atk_spd := weapon.effective_attack_speed() if weapon != null else 1.0
 	if atk_spd <= 0.0:
 		atk_spd = 1.0
