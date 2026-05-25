@@ -1,69 +1,72 @@
 ---
 name: project_laser_pistol_perf_investigation
-description: In-progress diagnosis (paused 2026-05-25) — phys spikes correlate 100% with ranged_1h equipped, but enemies/projectiles/casings aren't the cost. Working hypothesis is rigid-body corpses; next CSV will have a corpses column to confirm.
+description: Resolved-to-hypothesis (2026-05-25) — phys spikes are per-shot node-spawn cost in the laser pistol fire path (~6 nodes + 3 tweens + materials per shot, ~10-20ms in the physics frame). Not corpses, not active enemies. Fix candidates: pool decals/meshes, defer VFX spawn out of physics frame, or simplify visual.
 metadata:
   type: project
 ---
 
-User reported lag specifically tied to laser pistol firing. The
-[[project_perf_logger]] CSV proved the correlation but not the cause.
-This memory captures where the investigation left off so we can resume
-without re-deriving the data.
+User reports lag tied to laser pistol firing. Three CSV runs traced
+the cost to **per-shot node-spawn overhead inside the physics frame**.
+Earlier hypotheses about corpses and enemy count were ruled out by the
+expanded perf logger.
 
-**Established facts from the CSV (2605 rows, fresh launch):**
-- 147 / 147 phys spikes had `weapon_id = ranged_1h` (perfect correlation)
-- 82 / 147 had `firing = 1` during the spike; 65 had `firing = 0` but
-  ranged_1h still equipped (residual cost outlives the trigger pull)
-- Worst spike 244ms phys with `enemies_active=6, projectiles=2,
-  casings=0`. 6 enemies × 0.5ms = 3ms expected, so enemies aren't the
-  source.
-- Spikes happen even at `enemies=196, enemies_active=0, projectiles=0,
-  casings=0`. Whatever costs phys isn't anything the existing columns
-  count.
-- Sustained ~60-180ms phys across many seconds — accumulating cost,
-  not transient.
+**Final diagnosis from CSV evidence:**
 
-**Ruled out:**
-- The laser fire path itself: `spawn_muzzle_flash` (OmniLight + tween),
-  `spawn_beam` (2 meshes + 2 OmniLights + tween), `spawn_wall_projectile_impact`
-  (Decal). All render-side, no physics objects.
-- Shell casings (`ranged_1h` is NOT in `_EJECT_VARIANTS`, so casings=0).
-- Wall decals (cap 80, but Decal nodes have no physics).
-- Projectiles (laser is hitscan, count stays at 0 or 1-2 from enemy fire).
-- Skeletal ragdolls from THIS weapon: laser pistol has
-  `crit_chance_range = (0.0, 0.0)` and isn't an explosion weapon, so
-  `_last_hit_was_crit` and `_last_hit_was_explosion` both stay false →
-  the death path takes the cheap death-anim branch, NOT the
-  XBotRagdoll PhysicalBone3D branch.
+1. **NOT corpses** — `corpses` column added in 479779d; max 5 during
+   spikes, avg 1.5. Corpses are negligible.
+2. **NOT enemies** — 24 phys spikes recorded with
+   `enemies_active=0 AND corpses=0 AND projectiles=0`, avg 60ms phys.
+   Nothing else in the physics simulation when the spike fires.
+3. **NOT existing decals** — periodic samples with 280-420 decals
+   showed phys 3.7-7.2ms (normal). The cost is in the SPAWN, not the
+   ongoing presence.
+4. **NOT all weapons equally** — melee_2h fires showed phys 10-42ms,
+   ranged_1h (laser) first fire after switch was 3.94ms, second fire
+   spiked to 65.19ms. Clear per-shot transient cost specific to
+   ranged hitscan visuals.
 
-**Working hypothesis: rigid-body corpse accumulation.**
-Three death paths in `prototype_enemy.gd`:
-1. `XBotRagdoll` (PhysicalBone3D) — gated by crit/explosion + RagdollQueue
-2. Death anim path — no rigid body, plays Mixamo clip then sinks
-3. Legacy `_spawn_ragdoll_corpse` — `PrototypeRagdollCorpse` RigidBody3D
-   with `continuous_cd=true` and `LAYER_CORPSE` in its own collision_mask
-   (corpse-corpse collision). LIFETIME=20s.
+**Root cause: per-shot VFX spawn inside the physics frame.**
 
-If somehow path 3 (or path 1 via dismember/explosion fallback) is firing
-for some kills, rapid laser pistol clearing of a room could pile up
-15-30 rigid corpses, and Jolt's broad-phase with CCD enabled would
-plausibly produce the observed 100-200ms phys.
+`PlayerCombat._resolve_hitscan` awaits a physics frame for `intersect_ray`,
+then synchronously spawns the entire fire VFX stack while still inside
+that physics frame. Per shot:
 
-**Next step (paused for user break, 2026-05-25):**
-Latest commit `479779d` added a `corpses` column to the perf logger
-(count of `&"ragdoll_corpses"` group). On the next session resumption:
-1. Have user generate a fresh CSV with laser pistol combat
-2. Check whether `corpses` climbs into double-digits during phys spikes
-3. If yes — the obvious fixes are: drop `LAYER_CORPSE` from corpse
-   collision_mask (kill corpse-corpse collision), disable
-   `continuous_cd`, lower LIFETIME from 20s to ~10s, or cap concurrent
-   corpses with FIFO eviction
-4. If no — keep digging; possibly look at `XBotRagdoll` PhysicalBone3D
-   count via a tree walk, or other physics-side accumulators
+- `spawn_muzzle_flash` — 1 OmniLight3D (pooled) + 1 tween
+- `spawn_beam` — 1 Node3D + 2 MeshInstance3D + 2 OmniLight3D (pooled)
+  + 1 tween
+- `spawn_wall_projectile_impact` (if no enemy hit) — 1 Decal + 2 tweens
+- `spawn_impact_burst` (if enemy hit) — 1 MeshInstance3D + 1 OmniLight3D
+  (pooled) + 1 GPUParticles3D + new ParticleProcessMaterial + new Curve
+  + new CurveTexture + new SphereMesh + 2 new StandardMaterial3D + 1 tween
 
-User explicitly OK with rebuilding the laser pistol visual effect for
-performance IF the visual is the cause. Current analysis says it
-probably isn't — corpses (or some other accumulator) more likely.
+Per shot: 6-10 node allocations + 3-4 tween allocations + 3-5 material/
+resource allocations. Each `add_child` is ~0.5-1ms (init + _ready +
+signal connections + group/tree bookkeeping). Total per shot: 10-20ms,
+all attributed to phys_ms because it ran inside the awaited physics
+frame.
 
-Related: [[project_ragdoll_queue]], [[project_xbot_ragdoll]],
-[[project_perf_logger]], [[project_enemy_physics_pause]]
+**Fix candidates (none shipped yet — paused for user direction):**
+
+A. **Defer VFX spawn out of the physics frame** (lowest visual risk).
+   The hitscan needs the physics frame for intersect_ray; the VFX
+   doesn't. Call `_spawn_hitscan_visuals.call_deferred(...)` after the
+   raycast resolves. Spawn cost shifts to idle frame; phys_ms drops
+   to just the raycast cost (~0.2ms).
+
+B. **Pool the Decal nodes** for wall impacts (same pattern as the
+   OmniLight3D pool already in `_acquire_light` / `_release_light`).
+   Caps allocation churn even if spawn stays in physics frame.
+
+C. **Simplify the visual** — drop the mid-beam light, drop the wall
+   decal entirely on misses (or use a tiny brief flash instead), pool
+   the impact_burst's resources. The most code-change but cheapest
+   per-shot.
+
+D. **All three** for the largest cumulative win.
+
+**User explicitly OK with rebuilding the visual for performance**, with
+the constraint that it should look similar. Option A preserves the
+visual exactly. Option C trades visual fidelity for the biggest win.
+
+Related: [[project_perf_logger]], [[project_vfx_warmup]],
+[[project_enemy_physics_pause]]

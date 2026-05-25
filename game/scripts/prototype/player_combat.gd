@@ -1016,28 +1016,14 @@ func _resolve_hitscan(skill: Skill, aim: Vector3, eff_range: float, weapon: Item
 		beam_end = minf(beam_end, origin.distance_to(hit_target.global_position))
 	var hitscan_tint := _weapon_tint(weapon)
 	var _is_bullet := weapon != null and weapon.is_bullet_weapon()
-	# Flash anchors at the visual muzzle (gun barrel tip) so it pops at
-	# the weapon even when `origin` got clamped back to chest. The beam
-	# below starts from the visual muzzle too so the tracer reads as
-	# leaving the gun, not the player's torso.
-	CombatVisuals.spawn_muzzle_flash(_host, visual_muzzle, _is_bullet, hitscan_tint)
-	_eject_casing(weapon)
-	CombatVisuals.spawn_beam(_host, aim_norm, beam_end, visual_muzzle, hitscan_tint)
-	# Wall decal for hitscan that terminates on geometry (no enemy in
-	# the cone before the wall). Same molten-scorch / bullet-hole split
-	# the projectile path uses — laser/plasma get glowing patches via
-	# is_bullet=false; future kinetic hitscan (if any) would punch holes.
-	# Skipped when the beam hits an enemy first (the impact_burst on the
-	# enemy already conveys the hit) or when it ran to extended_range
-	# without hitting anything.
-	if hit_target == null and wall_hit_normal != Vector3.ZERO and wall_dist < extended_range:
-		var hitscan_parent := _host.get_parent()
-		if hitscan_parent != null:
-			PrototypeAttackIndicator.spawn_wall_projectile_impact(
-				hitscan_parent, wall_hit_pos, wall_hit_normal, _is_bullet, hitscan_tint
-			)
+	# Damage stays in the physics frame — take_damage can trigger an
+	# enemy death whose ragdoll/dismember path needs physics state.
+	# Impact-burst position needs to be captured NOW; hit_target may die
+	# from the damage we're about to apply, and the deferred VFX path
+	# below would otherwise read its freed reference.
+	var impact_burst_pos: Vector3 = Vector3.ZERO
 	if hit_target != null:
-		CombatVisuals.spawn_impact_burst(_host, hit_target.global_position + Vector3(0.0, 0.9, 0.0), hitscan_tint)
+		impact_burst_pos = hit_target.global_position + Vector3(0.0, 0.9, 0.0)
 		var is_crit := _roll_crit(weapon)
 		var dmg := _crit_damage(_roll_skill_damage(skill, weapon), is_crit)
 		dmg = maxi(1, int(round(float(dmg) * range_falloff(beam_end, eff_range))))
@@ -1046,6 +1032,58 @@ func _resolve_hitscan(skill: Skill, aim: Vector3, eff_range: float, weapon: Item
 		_apply_exile_curse_if_active(hit_target)
 		_apply_mindlink(hit_target, dmg, is_crit)
 		_try_spawn_isr_drone(hit_target)
+	# Defer VFX out of the physics frame. Each shot spawns ~6-10 nodes
+	# (muzzle flash light + beam node+meshes+lights + maybe decal +
+	# impact burst mesh+light+particles), and each add_child costs
+	# ~0.5-1ms of node init / _ready / signal / bookkeeping. Running
+	# inside the awaited physics frame attributed all of that to
+	# phys_ms (~10-20ms per shot at horde density), which the CSV
+	# tracked as a ranged_1h-correlated spike. Moving it to call_deferred
+	# (next idle tick) keeps the visual indistinguishable but the spawn
+	# cost no longer counts against physics frame budget. Pass a dict
+	# instead of N args because call_deferred caps at a handful — and
+	# capture impact_burst_pos as a Vector3, NOT hit_target ref, since
+	# the enemy may have just died from _deal_damage above.
+	var vfx_data := {
+		&"visual_muzzle": visual_muzzle,
+		&"aim_norm": aim_norm,
+		&"beam_end": beam_end,
+		&"tint": hitscan_tint,
+		&"is_bullet": _is_bullet,
+		&"weapon": weapon,
+		&"wall_hit_pos": wall_hit_pos,
+		&"wall_hit_normal": wall_hit_normal,
+		&"wall_dist": wall_dist,
+		&"extended_range": extended_range,
+		&"impact_burst_pos": impact_burst_pos,
+		&"had_enemy_hit": hit_target != null,
+	}
+	_spawn_hitscan_vfx_deferred.call_deferred(vfx_data)
+
+
+# Deferred VFX spawn for _resolve_hitscan / _resolve_hitscan_exact. Runs
+# on the next idle tick so the spawn cost (add_child + tween + material
+# allocations × 6-10 nodes per shot) doesn't attribute to phys_ms. The
+# call site captures every value as a primitive in the dict — no enemy
+# Node3D refs survive across the deferral, so the enemy can die from
+# our damage application without leaving us a freed pointer here.
+func _spawn_hitscan_vfx_deferred(d: Dictionary) -> void:
+	if _host == null or not is_instance_valid(_host) or not _host.is_inside_tree():
+		return
+	var tint: Color = d[&"tint"]
+	var is_bullet: bool = d[&"is_bullet"]
+	var visual_muzzle: Vector3 = d[&"visual_muzzle"]
+	CombatVisuals.spawn_muzzle_flash(_host, visual_muzzle, is_bullet, tint)
+	_eject_casing(d[&"weapon"])
+	CombatVisuals.spawn_beam(_host, d[&"aim_norm"], d[&"beam_end"], visual_muzzle, tint)
+	if not d[&"had_enemy_hit"] and (d[&"wall_hit_normal"] as Vector3) != Vector3.ZERO and (d[&"wall_dist"] as float) < (d[&"extended_range"] as float):
+		var hitscan_parent := _host.get_parent()
+		if hitscan_parent != null:
+			PrototypeAttackIndicator.spawn_wall_projectile_impact(
+				hitscan_parent, d[&"wall_hit_pos"], d[&"wall_hit_normal"], is_bullet, tint
+			)
+	if d[&"had_enemy_hit"]:
+		CombatVisuals.spawn_impact_burst(_host, d[&"impact_burst_pos"], tint)
 
 # ---------------------------------------------------------------------------
 # Double Tap follow-up variants — fire along a pre-resolved aim direction
@@ -1511,19 +1549,13 @@ func _resolve_hitscan_exact(skill: Skill, aim_norm: Vector3, eff_range: float, w
 		beam_end = minf(beam_end, origin.distance_to(hit_target.global_position))
 	var hitscan_exact_tint := _weapon_tint(weapon)
 	var _is_bullet_exact := weapon != null and weapon.is_bullet_weapon()
-	CombatVisuals.spawn_muzzle_flash(_host, visual_muzzle, _is_bullet_exact, hitscan_exact_tint)
-	_eject_casing(weapon)
-	CombatVisuals.spawn_beam(_host, aim_norm, beam_end, visual_muzzle, hitscan_exact_tint)
-	# Wall decal when the Double Tap follow-up terminates on geometry —
-	# matches the primary hitscan path so laser repeats also leave marks.
-	if hit_target == null and wall_hit_normal_exact != Vector3.ZERO and wall_dist < extended_range:
-		var hitscan_parent_exact := _host.get_parent()
-		if hitscan_parent_exact != null:
-			PrototypeAttackIndicator.spawn_wall_projectile_impact(
-				hitscan_parent_exact, wall_hit_pos_exact, wall_hit_normal_exact, _is_bullet_exact, hitscan_exact_tint
-			)
+	# Same defer-VFX pattern as _resolve_hitscan above — capture all
+	# values now, apply damage in the physics frame, then call_deferred
+	# the visual spawn. impact_burst position captured pre-damage so
+	# enemy death from _deal_damage doesn't leave a freed reference.
+	var impact_burst_pos: Vector3 = Vector3.ZERO
 	if hit_target != null:
-		CombatVisuals.spawn_impact_burst(_host, hit_target.global_position + Vector3(0.0, 0.9, 0.0), hitscan_exact_tint)
+		impact_burst_pos = hit_target.global_position + Vector3(0.0, 0.9, 0.0)
 		var is_crit := _roll_crit(weapon)
 		var dmg := _crit_damage(_roll_skill_damage(skill, weapon), is_crit)
 		dmg = maxi(1, int(round(float(dmg) * range_falloff(beam_end, eff_range))))
@@ -1532,6 +1564,21 @@ func _resolve_hitscan_exact(skill: Skill, aim_norm: Vector3, eff_range: float, w
 		_apply_exile_curse_if_active(hit_target)
 		_apply_mindlink(hit_target, dmg, is_crit)
 		_try_spawn_isr_drone(hit_target)
+	var vfx_data := {
+		&"visual_muzzle": visual_muzzle,
+		&"aim_norm": aim_norm,
+		&"beam_end": beam_end,
+		&"tint": hitscan_exact_tint,
+		&"is_bullet": _is_bullet_exact,
+		&"weapon": weapon,
+		&"wall_hit_pos": wall_hit_pos_exact,
+		&"wall_hit_normal": wall_hit_normal_exact,
+		&"wall_dist": wall_dist,
+		&"extended_range": extended_range,
+		&"impact_burst_pos": impact_burst_pos,
+		&"had_enemy_hit": hit_target != null,
+	}
+	_spawn_hitscan_vfx_deferred.call_deferred(vfx_data)
 
 
 # ---------------------------------------------------------------------------
