@@ -28,9 +28,17 @@ const LOG_PATH: String = "user://perf_log.csv"
 # row so the CSV reader can find the moment easily. Threshold is
 # generous (50ms) so we only flag actual visible hitches.
 const SPIKE_THRESHOLD_MS: float = 50.0
+# Minimum interval between spike rows. WITHOUT this, sustained slowdowns
+# fire a spike row every frame, and each row's tree-walk cost (~20-30ms)
+# adds back to TIME_PROCESS on the next frame — a positive feedback loop
+# that keeps the system in spike mode forever. Throttling to 5/sec means
+# the logger contributes at most ~150ms/sec of its own overhead during
+# sustained spikes instead of 60×30=1800ms/sec.
+const SPIKE_MIN_INTERVAL_SEC: float = 0.2
 
 var _file: FileAccess
 var _accum: float = 0.0
+var _spike_accum: float = 0.0
 var _session_start_msec: int = 0
 
 
@@ -64,24 +72,31 @@ func _exit_tree() -> void:
 
 func _process(delta: float) -> void:
 	_accum += delta
+	_spike_accum += delta
 	# Check every frame for spike threshold, not just at 1Hz cadence.
 	# A 300ms freeze between 1Hz samples would otherwise show up in
 	# the AFTER sample, smoothed over. Sampling per-frame lets us
 	# catch the exact spike frame. To avoid flooding the CSV with
 	# 60 rows/sec of normal data, we only WRITE when either a spike
-	# fires or 1s has elapsed since the last sample.
+	# fires or 1s has elapsed since the last sample. Spike writes are
+	# additionally throttled to SPIKE_MIN_INTERVAL_SEC so the logger
+	# can't feedback-loop itself into permanent spike mode.
 	var proc_ms: float = Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0
 	var phys_ms: float = Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0
 	var spike := proc_ms > SPIKE_THRESHOLD_MS or phys_ms > SPIKE_THRESHOLD_MS
-	if spike:
+	if spike and _spike_accum >= SPIKE_MIN_INTERVAL_SEC:
 		_accum = 0.0
+		_spike_accum = 0.0
 		var which: StringName = &"spike_proc" if proc_ms > phys_ms else &"spike_phys"
-		_write_row(which)
+		# Spike rows skip the expensive tree walks (they were adding
+		# 20-30ms of feedback overhead per frame). Periodic 1Hz rows
+		# still pay the full cost so the long-run trend data is there.
+		_write_row(which, true)
 		return
 	if _accum < SAMPLE_INTERVAL:
 		return
 	_accum = 0.0
-	_write_row(&"")
+	_write_row(&"", false)
 
 
 # ── Public API ──────────────────────────────────────────────────────────────
@@ -89,10 +104,12 @@ func _process(delta: float) -> void:
 ## Tag a one-shot event row with the current perf snapshot. Use for
 ## anything you want to correlate against the spike chart later —
 ## level-up, level-load, big explosion, manual marker on a key press.
+## Event rows DO pay the full tree-walk cost so post-event analysis can
+## see what the world looked like at that moment.
 func tag_event(event_name: StringName) -> void:
 	if _file == null:
 		return
-	_write_row(event_name)
+	_write_row(event_name, false)
 
 
 # ── Internals ───────────────────────────────────────────────────────────────
@@ -107,7 +124,14 @@ func _open_log() -> void:
 	_file.store_line("time_s,fps,frame_ms,proc_ms,phys_ms,enemies,draws,tris,objects,lights_visible,lights_total,mmi_visible,particles_visible,total_nodes,event")
 
 
-func _write_row(event_name: StringName) -> void:
+## `skip_tree_walks` — when true, the per-write tree enumeration
+## (find_children for Light3D / MultiMeshInstance3D / GPUParticles3D)
+## is skipped and those columns log 0. Spike rows pass true because
+## those tree walks at 6654 nodes cost 20-30ms each and would feedback
+## into the next frame's TIME_PROCESS measurement, locking the logger
+## into permanent spike mode. Periodic 1Hz samples and event tags pass
+## false so the long-run trend captures real enumeration data.
+func _write_row(event_name: StringName, skip_tree_walks: bool = false) -> void:
 	if _file == null:
 		return
 	var t_s: float = float(Time.get_ticks_msec() - _session_start_msec) / 1000.0
@@ -118,7 +142,7 @@ func _write_row(event_name: StringName) -> void:
 	var draws: int = int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
 	var tris: int = int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME))
 	var objects: int = int(Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME))
-	# Counts that need a tree walk — cheap at 1Hz, free at sub-Hz.
+	# Cheap to gather: SpatialGrid count is O(1), get_node_count is O(1).
 	var tree := get_tree()
 	var enemies: int = SpatialGrid.count(&"enemies") if SpatialGrid != null else 0
 	var total_nodes: int = tree.get_node_count() if tree != null else 0
@@ -126,7 +150,10 @@ func _write_row(event_name: StringName) -> void:
 	var lights_total: int = 0
 	var mmi_visible: int = 0
 	var particles_visible: int = 0
-	if tree != null:
+	# Expensive: full-tree find_children walks. Skipped on spike rows
+	# to break the perf-logger feedback loop (writes adding to the
+	# next frame's measured proc time, perpetuating the spike).
+	if tree != null and not skip_tree_walks:
 		for n in tree.get_root().find_children("*", "Light3D", true, false):
 			var light := n as Light3D
 			if light == null:

@@ -91,3 +91,5 @@
 - [Streamed level build](project_streamed_level_build.md) — LevelBuilder._build_level yields every N pieces so the loading screen stays responsive; prototype_root awaits new `built` signal before hide_loading. Was a 5.8s freeze.
 - [LoS reveal proc spikes](project_los_reveal_spikes.md) — 100-240ms proc spikes when player enters a new room (draws + objects surge in one frame from LoS un-hiding); now dominant after ragdoll spikes fixed
 - [Level-up spike at higher levels](project_levelup_higher_lvl_spike.md) — Lvl 5+ level-ups cost ~100ms proc despite VfxWarmup; Lvl 2 fine; suspect UI re-layout or per-level VFX
+- [PerfLogger feedback loop](project_perf_logger_feedback.md) — Spike rows used to fire every frame with 25ms of tree walks, self-perpetuating. Throttled to 200ms and tree walks skipped on spike rows.
+- [Enemy AnimationPlayer pause](project_enemy_anim_pause.md) — 200+ enemy AnimationPlayers ticking ~40ms/frame at level start; now pause when invisible+IDLE (active states keep ticking)

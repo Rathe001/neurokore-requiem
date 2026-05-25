@@ -492,6 +492,14 @@ func _ready() -> void:
 	# adds an unused namespace.
 	XBotAnimations.install_on(anim_player)
 	_isolate_visual_from_decals()
+	# Pause AnimationPlayer when the LoS culler hides this enemy AND the
+	# enemy is in IDLE (i.e. not mid-attack / mid-cast where the AI state
+	# machine might depend on animation_finished firing). With 200+ enemies
+	# at level start, all of them ticking their AnimationPlayer every frame
+	# was ~40ms/frame of pure cost even for off-screen idles. Pausing
+	# invisible-idle enemies recovers that cost without breaking any
+	# state-driven anim transitions. visibility_changed survives pool reuse.
+	visibility_changed.connect(_update_anim_player_active)
 	# Pre-build the per-bone ragdoll skeleton so _die() can flip it into
 	# physics simulation instantly. Deferred — the FBX's Skeleton3D may not
 	# Physics-bone ragdoll disabled — death pose comes from the Mixamo
@@ -1390,6 +1398,22 @@ func _change_state(new_state: State) -> void:
 	if new_state == State.CHASING:
 		_chase_stuck_timer = 0.0
 		_chase_last_dist_sq = 0.0
+	# Active states need the anim ticking even off-screen (animation_finished
+	# drives windup → fire / dismember triggers). IDLE-while-invisible is the
+	# common case that pauses for perf — recompute on every state flip.
+	_update_anim_player_active()
+
+
+# Single source of truth for "should AnimationPlayer be active right now?"
+# Reads two inputs — current visibility (set by LoS culler) and current
+# state — and applies the policy: pause iff invisible AND idle. Called
+# from visibility_changed and _change_state, so any input flip re-evaluates.
+# Cheap (one bool read + at most one property write).
+func _update_anim_player_active() -> void:
+	if anim_player == null:
+		return
+	var should_pause: bool = not visible and _state == State.IDLE
+	anim_player.active = not should_pause
 
 
 func _physics_process(delta: float) -> void:
