@@ -19,6 +19,7 @@ shader_type canvas_item;
 //   9  GLITCH         — horizontal slice displacement + channel drops
 //   10 NOIR           — desaturate, crush contrast, vignette, grain
 //   11 INVERTED       — flat color invert
+//   12 CEL_SHADED     — color posterize + Sobel edge outline (toon look)
 //
 // Godot's GDShader does NOT allow `return` inside fragment(); the whole
 // shader is a straight-line if/else-if cascade that ends at one COLOR write.
@@ -183,6 +184,34 @@ void fragment() {
 	} else if (mode == 11) {
 		// INVERTED — flat color invert.
 		col = 1.0 - texture(screen_texture, uv).rgb;
+	} else if (mode == 12) {
+		// CEL_SHADED — per-channel posterize (4 bands) + Sobel luminance
+		// edge outline. Pure screen-space approximation; lacks the smooth
+		// lambertian banding a real toon ramp produces, but lands the
+		// comic-book look without touching every material in the project.
+		// Bloom + cel fight each other (bloom bleeds across the crisp
+		// ink line) — turn bloom off in Display settings for the full
+		// effect. Sample distance scales with SCREEN_PIXEL_SIZE so the
+		// outline reads the same width at any resolution.
+		vec2 px = SCREEN_PIXEL_SIZE * 1.5;
+		vec3 c = texture(screen_texture, uv).rgb;
+		float l_tl = luminance(texture(screen_texture, uv + vec2(-px.x, -px.y)).rgb);
+		float l_t  = luminance(texture(screen_texture, uv + vec2( 0.0,  -px.y)).rgb);
+		float l_tr = luminance(texture(screen_texture, uv + vec2( px.x, -px.y)).rgb);
+		float l_l  = luminance(texture(screen_texture, uv + vec2(-px.x,  0.0)).rgb);
+		float l_r  = luminance(texture(screen_texture, uv + vec2( px.x,  0.0)).rgb);
+		float l_bl = luminance(texture(screen_texture, uv + vec2(-px.x,  px.y)).rgb);
+		float l_b  = luminance(texture(screen_texture, uv + vec2( 0.0,   px.y)).rgb);
+		float l_br = luminance(texture(screen_texture, uv + vec2( px.x,  px.y)).rgb);
+		float gx = (l_tr + 2.0 * l_r + l_br) - (l_tl + 2.0 * l_l + l_bl);
+		float gy = (l_bl + 2.0 * l_b + l_br) - (l_tl + 2.0 * l_t + l_tr);
+		float edge = sqrt(gx * gx + gy * gy);
+		float ink = smoothstep(0.30, 0.55, edge);
+		// Per-channel quantize beats luminance banding here — a red crate
+		// and a green wall stay visibly different mid-band instead of
+		// collapsing into the same gray plate.
+		vec3 quant = floor(c * 4.0 + 0.5) / 4.0;
+		col = mix(quant, vec3(0.0), ink);
 	}
 
 	COLOR = vec4(col, 1.0);

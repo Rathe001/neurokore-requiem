@@ -37,6 +37,7 @@ const RETRO_FILTER_OPTIONS: Array[Array] = [
 	["DEBUG_FILTER_GLITCH", 9],
 	["DEBUG_FILTER_NOIR", 10],
 	["DEBUG_FILTER_INVERTED", 11],
+	["DEBUG_FILTER_CEL", 12],
 ]
 
 func _ready() -> void:

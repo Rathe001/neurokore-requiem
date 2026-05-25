@@ -28,6 +28,7 @@ enum RetroMode {
 	GLITCH = 9,
 	NOIR = 10,
 	INVERTED = 11,
+	CEL_SHADED = 12,
 }
 
 const SHADER: Shader = preload("res://scripts/prototype/retro_filter.gdshader")

@@ -192,6 +192,7 @@ DEBUG_FILTER_HALLUCINATION,Hallucination
 DEBUG_FILTER_GLITCH,Glitch
 DEBUG_FILTER_NOIR,Noir
 DEBUG_FILTER_INVERTED,Inverted
+DEBUG_FILTER_CEL,Cel-Shaded
 HUD_HOTKEY_HINTS,WASD Move · LMB Fire · RMB Skill · Space Jump · Ctrl Crouch · I Inventory · N Talents · Tab Map · Esc Menu
 EXIT_TOOLTIP_LOCKED,Elevator (Locked — defeat the boss)
 EXIT_TOOLTIP_UNLOCKED,Elevator (Descend to next level)
