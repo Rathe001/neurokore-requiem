@@ -364,6 +364,10 @@ static func eject_casing(skeleton: Skeleton3D, weapon_base_id: StringName) -> vo
 		# Instant path — no timer, no lambda capture concern. Most
 		# weapons hit this branch.
 		_spawn_casing(skeleton, mesh)
+		# Pump SFX (currently shotgun-only). Plays at the casing-eject
+		# moment so the chk-chunk syncs to the shell rolling out of the
+		# breech. play_pump no-ops when no `pump` category is registered.
+		_play_pump_sfx(skeleton, weapon_base_id)
 		return
 	var tree := skeleton.get_tree()
 	if tree == null:
@@ -374,12 +378,27 @@ static func eject_casing(skeleton: Skeleton3D, weapon_base_id: StringName) -> vo
 	# the timer actually fires. Same pattern documented in
 	# project_lambda_capture_freed memory.
 	var skel_id := skeleton.get_instance_id()
+	var captured_base_id := weapon_base_id
 	tree.create_timer(delay).timeout.connect(func() -> void:
 		var s: Skeleton3D = instance_from_id(skel_id) as Skeleton3D
 		if s == null or not is_instance_valid(s):
 			return
 		_spawn_casing(s, mesh)
+		_play_pump_sfx(s, captured_base_id)
 	)
+
+
+# Play the pump/mechanism SFX at the skeleton's world position. Used by
+# eject_casing so the pump-action sound lands on the same frame as the
+# shell appears (which for the shotgun is delayed 0.5s after fire — sells
+# the pump cycle visually + audibly). Lives next to eject_casing because
+# they're conceptually the same event; routing it through the audio
+# autoload keeps the actual playback policy (random pick, jittered pitch
+# / volume) consistent with the other weapon-fire SFX.
+static func _play_pump_sfx(skeleton: Skeleton3D, weapon_base_id: StringName) -> void:
+	if skeleton == null or weapon_base_id == &"":
+		return
+	WeaponSounds.play_pump(weapon_base_id, skeleton.global_position)
 
 
 # Actually spawns and configures the casing — called by the delayed

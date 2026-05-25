@@ -117,7 +117,7 @@ known licenses or replace before commercial release.
 | Footsteps metal (10 samples) | unknown | TBD | `sfx/player/step_metal_01..10.wav` | ⚠️ |
 | Footsteps grate (4 samples) | unknown | TBD | `sfx/player/step_grate_01..04.wav` | ⚠️ |
 | RPG fire (4) + impact (1) | unknown | TBD | `sfx/weapons/rpg_fire_01..04.wav`, `rpg-impact.wav` | ⚠️ |
-| Shotgun fire (8 samples) | unknown | TBD | `sfx/weapons/shotgun_fire_01..08.wav` | ⚠️ |
+| Shotgun fire (3) + pump (3) | [YouTube U9AzNhtAnHQ](https://www.youtube.com/watch?v=U9AzNhtAnHQ) | TBD | `sfx/weapons/shotgun_fire_01..03.wav`, `shotgun_pump_01..03.wav` | ⚠️ | Extracted via tools/audio/extract_yt_sfx.py 2026-05-25 |
 | SMG fire (6 samples) | unknown | TBD | `sfx/weapons/smg_fire_01..06.wav` | ⚠️ |
 | LMG fire (6 samples) | unknown | TBD | `sfx/weapons/lmg_fire_01..06.wav` | ⚠️ |
 | Laser pistol fire (5 samples) | unknown | TBD | `sfx/weapons/laser_pistol_fire_01..05.wav` | ⚠️ |

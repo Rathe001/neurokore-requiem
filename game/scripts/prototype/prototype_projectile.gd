@@ -819,7 +819,12 @@ func _explode(impact_pos: Vector3) -> void:
 	# Impact SFX — fires for any projectile that has an impact sound
 	# registered. WeaponSounds.play_impact no-ops gracefully if nothing
 	# is wired for this archetype, so the call is safe to make always.
-	if weapon_base_id != &"":
+	# Shotgun is suppressed because each shot spawns 8 pellets — even
+	# in the bullet (no _explode) branch, callers may route here for
+	# rare pellet+blast configs. Letting 8 nearly-simultaneous impact
+	# SFX play causes audible phasing; the single fire boom + pump
+	# cycle already sells the shot.
+	if weapon_base_id != &"" and weapon_base_id != &"shotgun_2h":
 		WeaponSounds.play_impact(weapon_base_id, impact_pos)
 	var targets: Array[Node3D] = SpatialGrid.query_radius(
 		global_position, blast_radius, target_group)

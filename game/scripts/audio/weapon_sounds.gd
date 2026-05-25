@@ -122,6 +122,18 @@ func play_alt_fire(weapon_key: StringName, pos: Vector3) -> void:
 	_play_random(_resolve_key(weapon_key), &"alt_fire", pos, FIRE_DB, _is_enemy_key(weapon_key))
 
 
+## Play a pump-action / mechanism sound. Used by WeaponAttachment.eject_casing
+## to drop the chk-chunk on the casing-eject frame (the spent shell rolls
+## out of the breech as the pump cycles forward → back). Currently only the
+## shotgun has a pump registered; other weapons silently no-op via the
+## empty-pool guard in _play_random. Played slightly quieter than the
+## fire boom so it reads as a sub-event of the same shot, not a separate
+## hit.
+const PUMP_DB := -2.0
+func play_pump(weapon_key: StringName, pos: Vector3) -> void:
+	_play_random(_resolve_key(weapon_key), &"pump", pos, PUMP_DB, _is_enemy_key(weapon_key))
+
+
 # True when `weapon_key` is an enemy weapon_id (key of _ENEMY_TO_BASE)
 # rather than a player weapon_base_id. Drives the lower pitch range.
 func _is_enemy_key(weapon_key: StringName) -> bool:
@@ -337,11 +349,17 @@ func _ensure_loaded() -> void:
 			"res://resources/audio/sfx/weapons/shotgun_fire_01.wav",
 			"res://resources/audio/sfx/weapons/shotgun_fire_02.wav",
 			"res://resources/audio/sfx/weapons/shotgun_fire_03.wav",
-			"res://resources/audio/sfx/weapons/shotgun_fire_04.wav",
-			"res://resources/audio/sfx/weapons/shotgun_fire_05.wav",
-			"res://resources/audio/sfx/weapons/shotgun_fire_06.wav",
-			"res://resources/audio/sfx/weapons/shotgun_fire_07.wav",
-			"res://resources/audio/sfx/weapons/shotgun_fire_08.wav",
+		]),
+		# Pump-action mechanism — the chk-chunk that plays when the spent
+		# shell ejects (~0.5s after fire per _EJECT_DELAYS in
+		# WeaponAttachment). Played by WeaponAttachment.eject_casing via
+		# play_pump (see below). Separate category from fire so a fast
+		# follow-up shot's fire boom doesn't share an SFX pool with the
+		# ejecting-shell pump from the previous shot.
+		pump = _streams([
+			"res://resources/audio/sfx/weapons/shotgun_pump_01.wav",
+			"res://resources/audio/sfx/weapons/shotgun_pump_02.wav",
+			"res://resources/audio/sfx/weapons/shotgun_pump_03.wav",
 		]),
 		reload = _reloads,
 	})
