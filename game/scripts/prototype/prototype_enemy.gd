@@ -1476,6 +1476,15 @@ func _update_physics_process_active() -> void:
 	# list. Suppressing redundant writes drops the level-start spike
 	# from ~440ms to whatever the genuine flips cost.
 	if is_physics_processing() != desired:
+		if desired:
+			# Re-randomize the skip counter on every wake. The _init_enemy
+			# randomization only stuck for the FIRST run from a pool —
+			# after pause, the counter froze (usually at 0). When the LoS
+			# culler reveals a batch of enemies together, they'd all wake
+			# with counter=0 and phase-lock, producing the 100-230ms phys
+			# spikes seen at room-reveal moments. Re-rolling here means
+			# every batch wake-up is phase-distributed across the divisor.
+			_idle_skip_counter = randi() % _IDLE_TICK_DIVISOR
 		set_physics_process(desired)
 
 
