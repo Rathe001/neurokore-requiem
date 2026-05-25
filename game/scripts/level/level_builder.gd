@@ -160,7 +160,15 @@ func _build_level() -> void:
 	if USE_DEBUG_LEVEL_VIZ and _ctx.theme != null:
 		_ctx.theme.wall_thickness = DEBUG_WALL_THICKNESS
 	_index_room_pieces()
+	# Yield between heavy pre-loop steps. Without these, _resolve_graph
+	# (procgen solve) + GroundBuilder + CeilingBuilder all stacked into
+	# one giant frame — perf log showed a 3.7s freeze before any piece
+	# rendering. Yielding here doesn't change total build time, just
+	# spreads the cost across enough frames for the loading screen to
+	# stay smooth.
+	await get_tree().process_frame
 	GroundBuilder.build(_ctx)
+	await get_tree().process_frame
 	CeilingBuilder.build(_ctx)
 	CeilingBuilder.build_void_cover(_ctx)
 	LightingBuilder.configure_fps_fog(_ctx)

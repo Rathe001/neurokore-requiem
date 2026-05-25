@@ -108,6 +108,16 @@ const _NAV_REPATH_DIST_SQ: float = 0.25
 # stops firing and they tick at full rate.
 const _IDLE_SKIP_DISTANCE_SQ: float = 25.0 * 25.0
 const _IDLE_TICK_DIVISOR: int = 6  # process 1 in 6 → effective 10Hz
+# Near IDLE throttle: even enemies within _IDLE_SKIP_DISTANCE_SQ get a
+# moderate tick reduction while they're sitting in IDLE. Without this,
+# a starting room with 15-20 visible IDLE enemies cost ~25ms/frame
+# from full-rate ticking on entities that weren't doing anything yet
+# (perf log 2026-05-24 showed 40ms steady-state idle proc until the
+# player moved to a less crowded view). Divisor 3 = 20Hz; player input
+# (aggro on hit / approach) still flips state to CHASING within 50ms,
+# well below perceptual threshold. CHASING / CASTING / etc. stay at
+# 60Hz so combat reactions remain crisp.
+const _NEAR_IDLE_TICK_DIVISOR: int = 3  # process 1 in 3 → effective 20Hz
 # Distant chasers also throttle — less aggressively than idle since
 # they're actively engaging, but a 25m+ chaser doesn't need 60Hz nav
 # updates. Without this, firing a single shot cascades aggro through
@@ -1431,12 +1441,17 @@ func _physics_process(delta: float) -> void:
 	# CHASING in one frame (visible as Phys spiking to 50+ms when you
 	# opened fire). Near enemies + special enemies always tick at full
 	# 60Hz so attacks stay responsive.
-	if not _is_special_enemy() and _is_far_from_player():
+	if not _is_special_enemy():
 		var divisor: int = 0
+		var far: bool = _is_far_from_player()
 		if _state == State.IDLE:
-			divisor = _IDLE_TICK_DIVISOR
-		elif _state == State.CHASING:
+			# Far IDLE: 10Hz. Near IDLE: 20Hz (won't react slow enough for
+			# the player to notice — aggro fires within one ticked frame).
+			divisor = _IDLE_TICK_DIVISOR if far else _NEAR_IDLE_TICK_DIVISOR
+		elif _state == State.CHASING and far:
 			divisor = _CHASE_TICK_DIVISOR
+		# CHASING-near, CASTING, ATTACKING etc. stay at 60Hz for crisp
+		# combat reactions (divisor stays 0 → no skip).
 		if divisor > 1:
 			_idle_skip_counter += 1
 			if _idle_skip_counter < divisor:
