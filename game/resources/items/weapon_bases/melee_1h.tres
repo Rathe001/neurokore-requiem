@@ -9,15 +9,17 @@ id = &"melee_1h"
 display_name = "Blade"
 glyph = "†"
 two_handed = false
-; End-game heavy-blade tuning: ~halved attack_speed, ~2.4× damage
-; per swing. Net DPS is roughly +50% over the prior fast-jab pass —
-; each strike commits the player to a clear motion (matches the
-; "feels amazing to use" feedback) and the damage rewards the commit.
-; Previously: damage_min_range (4, 6) / damage_max_range (10, 15) /
-; attack_speed_range (1.4, 1.8).
+; Heavy-blade tuning, second slowdown pass. The (0.8, 1.1) range still
+; chained too quickly to read as committed strikes — at cooldown 0.7s
+; the fastest blade landed every 0.64s, which felt like a fast knife
+; rather than a heavy blade. Halved again to ~1.3-1.8s per swing so
+; each strike clearly commits to a single motion. Damage stays high
+; so each commit still rewards the player; if DPS feels too low at
+; this rate, bump damage_max_range rather than restoring attack_speed.
+; Previously: attack_speed_range (0.8, 1.1).
 damage_min_range = Vector2(10, 15)
 damage_max_range = Vector2(24, 36)
-attack_speed_range = Vector2(0.8, 1.1)
+attack_speed_range = Vector2(0.4, 0.55)
 crit_chance_range = Vector2(0.0, 0.0)
 accuracy_range = Vector2(0.92, 0.98)
 weapon_range_range = Vector2(2.5, 3.5)
