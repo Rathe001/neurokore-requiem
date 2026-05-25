@@ -26,9 +26,13 @@ const RAY_HEIGHT := 1.0      # chest-height sample so the ray clears floor/ceili
 const RAY_HEIGHT_CROUCH := 0.5  # crouched ray — low enough for medium props to block
 const PICKUP_RAY_HEIGHT := 0.5  # pickups settle low; sample closer to ground
 # Squared distance beyond which targets are forced invisible without a raycast.
-# The fixed isometric camera frustum tops out around 30m on the diagonal — past
-# 40m a target is offscreen anyway, so skip the physics query at horde density.
-const MAX_DIST_SQ := 40.0 * 40.0
+# The fixed isometric camera frustum tops out around 30m on the diagonal —
+# past that a target is offscreen anyway. Tightened 40m → 30m so distant
+# enemies in big procgen rooms get culled (and their anim/physics paused
+# downstream) ~10m earlier; the camera can't see them at that range so the
+# tightening is invisible. Drops the per-tick raycast count in dense
+# combat scenes.
+const MAX_DIST_SQ := 30.0 * 30.0
 # 4m cells — large enough that the player crosses a boundary infrequently
 # (every few seconds at walking speed) but small enough that the visibility
 # state stays accurate as they move.
@@ -36,9 +40,13 @@ const CELL_SIZE := 4.0
 const _INV_CELL_SIZE := 1.0 / CELL_SIZE
 # Sentinel cell forces a full re-test on first physics frame.
 const _UNSET_CELL := Vector2i(2147483647, 2147483647)
-# Spread dynamic raycasts across this many physics frames. At 2, half the
-# population is tested each tick — visibility lag is at most one physics step.
-const STAGGER_GROUPS := 2
+# Spread dynamic raycasts across this many physics frames. At 3, ~1/3 of
+# the population is tested each tick — visibility lag is at most two
+# physics steps (~33ms), still imperceptible against the fade-in lerp.
+# Bumped from 2 → 3 as part of the combat-density perf pass; with 344
+# enemies in dense NG+ levels the per-tick raycast cost was a visible
+# slice of phys_ms.
+const STAGGER_GROUPS := 3
 # Higher rate = snappier fade. ~12 gives a ~0.08s time constant, short enough
 # to feel responsive when running through a doorway, long enough to mask the
 # binary LoS flip and the staggered raycast cadence.
