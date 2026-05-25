@@ -107,9 +107,9 @@ static var _GRIP_FEMALE: Dictionary = {
 	&"shotgun_2h":     {"pos": Vector3(-0.100, 0.200, -0.000), "rot": Vector3(-120.0, 90.0, 165.0), "scale_mult": 0.762, "muzzle": Vector3(0.000, 0.150, 0.450)},
 	&"accelerator_2h": {"pos": Vector3(-0.150, 0.200, -0.000), "rot": Vector3(-105.0, 90.0, 165.0), "scale_mult": 0.714, "muzzle": Vector3(0.000, 0.300, 0.500)},
 	&"taser_2h":       {"pos": Vector3(-0.000, 0.200, 0.150), "rot": Vector3(-90.0, 0.0, -15.0), "scale_mult": 0.650, "muzzle": Vector3(-0.000, 0.100, 0.350)},
-	# lmg_2h + sniper_2h fall through to male for now — female overrides
-	# can be appended here when they get tuned. Fallback path picks the
-	# male entry when the female table doesn't have the key.
+	&"lmg_2h":         {"pos": Vector3(-0.150, 0.150, 0.050), "rot": Vector3(-105.0, 90.0, -180.0), "scale_mult": 1.186, "muzzle": Vector3(0.000, 0.250, 0.850)},
+	# sniper_2h falls through to male for now — append it here when tuned.
+	# Fallback path picks the male entry when the female table is missing the key.
 }
 
 # Returns the per-gender table. Unknown / empty gender falls back to male
