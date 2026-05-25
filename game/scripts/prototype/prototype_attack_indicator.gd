@@ -1989,11 +1989,13 @@ static func register_as_blood_receiver(node: Node3D) -> void:
 
 # Single source of truth for blood decal albedo-blend factor. 1.0 =
 # decal albedo fully replaces the surface; lower values let the surface
-# texture/material peek through. 0.92 leaves ~8% of the underlying
-# floor/prop texture visible under each splat — enough to read as
-# "fluid sat on top" rather than "paint masking the surface", without
-# washing out the red.
-const BLOOD_DECAL_ALBEDO_MIX: float = 0.92
+# texture/material peek through. 0.92 used to leave ~8% of the floor
+# bleeding through, which on the cool-grey facility tiles desaturated
+# the red into a washed-out pink that didn't read as blood. Full
+# opaque (1.0) keeps the red saturated and unambiguous — the decal
+# texture's own per-pixel alpha + edge fades still feather the splat
+# shape, so it doesn't read as a flat sticker.
+const BLOOD_DECAL_ALBEDO_MIX: float = 1.0
 
 
 # Walks `node` and every descendant, ORing `layer_bit` into each
