@@ -4438,10 +4438,12 @@ func _ranged_fire_anim() -> Array[StringName]:
 #   - no candidate animation resolves
 #   - the animation's length is non-positive
 #
-# Speed floor of 0.5× — a much longer action than animation length
-# would otherwise produce slow-motion playback, which reads as
-# "broken" more than "intentional weighty motion." Above the floor
-# the clip plays slower than native but stays legible.
+# Speed floor of 0.3× — slow weighty swings on heavy melee (cooldown
+# 1.5s × atk_spd 0.4 = 3.75s/swing vs clip 1.5s native) need to play
+# at ~0.4× to stretch fully into the action window. The previous 0.5×
+# floor clamped them halfway and broke sync between the visible strike
+# frame and the damage timer (which uses the un-clamped duration).
+# 0.3× still reads as legible motion rather than broken slow-mo.
 func _play_anim_stretched(candidates: Array[StringName], duration: float, blend: float = 0.0) -> void:
 	if anim_player == null:
 		return
@@ -4461,9 +4463,9 @@ func _play_anim_stretched(candidates: Array[StringName], duration: float, blend:
 		_play_anim(candidates, 1.0, blend)
 		return
 	var speed: float = anim.length / duration
-	# Floor to keep slow-motion playback out of accidental long cooldowns
-	# while still allowing intentionally weighty 0.8–1.0× swings.
-	speed = maxf(speed, 0.5)
+	# Floor lets weighty 1.5s-cooldown melee swings stretch fully into
+	# their action window. See header comment for the 0.3× rationale.
+	speed = maxf(speed, 0.3)
 	_play_anim([chosen], speed, blend)
 
 
