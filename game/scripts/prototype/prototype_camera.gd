@@ -380,40 +380,57 @@ func _handle_tune_key(keycode: int) -> bool:
 	var base_id: StringName = target[1]
 	if skel == null or base_id == &"":
 		return false
+	# Threaded through every bump so the tuner writes to _GRIP_FEMALE when
+	# tuning on a female avatar, _GRIP_MALE otherwise. WeaponAttachment
+	# could resolve this from the skeleton itself, but the tuner already
+	# knows which player it's operating on — cheaper + clearer to pass it.
+	var gender := _local_player_gender()
 	match keycode:
-		KEY_J: WeaponAttachment.bump_rotation(base_id, &"x", -_TUNE_ROT_STEP)
-		KEY_L: WeaponAttachment.bump_rotation(base_id, &"x",  _TUNE_ROT_STEP)
-		KEY_U: WeaponAttachment.bump_rotation(base_id, &"y", -_TUNE_ROT_STEP)
-		KEY_O: WeaponAttachment.bump_rotation(base_id, &"y",  _TUNE_ROT_STEP)
-		KEY_H: WeaponAttachment.bump_rotation(base_id, &"z", -_TUNE_ROT_STEP)
-		KEY_K: WeaponAttachment.bump_rotation(base_id, &"z",  _TUNE_ROT_STEP)
-		KEY_LEFT:    WeaponAttachment.bump_position(base_id, &"x", -_TUNE_POS_STEP)
-		KEY_RIGHT:   WeaponAttachment.bump_position(base_id, &"x",  _TUNE_POS_STEP)
-		KEY_DOWN:    WeaponAttachment.bump_position(base_id, &"y", -_TUNE_POS_STEP)
-		KEY_UP:      WeaponAttachment.bump_position(base_id, &"y",  _TUNE_POS_STEP)
-		KEY_COMMA:  WeaponAttachment.bump_position(base_id, &"z", -_TUNE_POS_STEP)
-		KEY_PERIOD: WeaponAttachment.bump_position(base_id, &"z",  _TUNE_POS_STEP)
-		KEY_MINUS, KEY_KP_SUBTRACT: WeaponAttachment.bump_scale(base_id, _TUNE_SCALE_DOWN)
-		KEY_EQUAL, KEY_KP_ADD:      WeaponAttachment.bump_scale(base_id, _TUNE_SCALE_UP)
+		KEY_J: WeaponAttachment.bump_rotation(base_id, &"x", -_TUNE_ROT_STEP, gender)
+		KEY_L: WeaponAttachment.bump_rotation(base_id, &"x",  _TUNE_ROT_STEP, gender)
+		KEY_U: WeaponAttachment.bump_rotation(base_id, &"y", -_TUNE_ROT_STEP, gender)
+		KEY_O: WeaponAttachment.bump_rotation(base_id, &"y",  _TUNE_ROT_STEP, gender)
+		KEY_H: WeaponAttachment.bump_rotation(base_id, &"z", -_TUNE_ROT_STEP, gender)
+		KEY_K: WeaponAttachment.bump_rotation(base_id, &"z",  _TUNE_ROT_STEP, gender)
+		KEY_LEFT:    WeaponAttachment.bump_position(base_id, &"x", -_TUNE_POS_STEP, gender)
+		KEY_RIGHT:   WeaponAttachment.bump_position(base_id, &"x",  _TUNE_POS_STEP, gender)
+		KEY_DOWN:    WeaponAttachment.bump_position(base_id, &"y", -_TUNE_POS_STEP, gender)
+		KEY_UP:      WeaponAttachment.bump_position(base_id, &"y",  _TUNE_POS_STEP, gender)
+		KEY_COMMA:  WeaponAttachment.bump_position(base_id, &"z", -_TUNE_POS_STEP, gender)
+		KEY_PERIOD: WeaponAttachment.bump_position(base_id, &"z",  _TUNE_POS_STEP, gender)
+		KEY_MINUS, KEY_KP_SUBTRACT: WeaponAttachment.bump_scale(base_id, _TUNE_SCALE_DOWN, gender)
+		KEY_EQUAL, KEY_KP_ADD:      WeaponAttachment.bump_scale(base_id, _TUNE_SCALE_UP, gender)
 		# Per-weapon muzzle override. Top-row 5/6/7/8/9/0 — sit just
 		# right of the skill hotbar keys so they're easy to reach
 		# without remapping. Useful when the AABB-corner heuristic
 		# picks the wrong spot (laser pistol, smg, taser).
-		KEY_5: WeaponAttachment.bump_muzzle(base_id, &"x", -_TUNE_POS_STEP)
-		KEY_6: WeaponAttachment.bump_muzzle(base_id, &"x",  _TUNE_POS_STEP)
-		KEY_7: WeaponAttachment.bump_muzzle(base_id, &"y", -_TUNE_POS_STEP)
-		KEY_8: WeaponAttachment.bump_muzzle(base_id, &"y",  _TUNE_POS_STEP)
-		KEY_9: WeaponAttachment.bump_muzzle(base_id, &"z", -_TUNE_POS_STEP)
-		KEY_0: WeaponAttachment.bump_muzzle(base_id, &"z",  _TUNE_POS_STEP)
+		KEY_5: WeaponAttachment.bump_muzzle(base_id, &"x", -_TUNE_POS_STEP, gender)
+		KEY_6: WeaponAttachment.bump_muzzle(base_id, &"x",  _TUNE_POS_STEP, gender)
+		KEY_7: WeaponAttachment.bump_muzzle(base_id, &"y", -_TUNE_POS_STEP, gender)
+		KEY_8: WeaponAttachment.bump_muzzle(base_id, &"y",  _TUNE_POS_STEP, gender)
+		KEY_9: WeaponAttachment.bump_muzzle(base_id, &"z", -_TUNE_POS_STEP, gender)
+		KEY_0: WeaponAttachment.bump_muzzle(base_id, &"z",  _TUNE_POS_STEP, gender)
 		KEY_P:
-			WeaponAttachment.dump_grip_to_console(base_id)
+			WeaponAttachment.dump_grip_to_console(base_id, gender)
 			return true
-		KEY_BACKSPACE: WeaponAttachment.reset_grip(base_id)
+		KEY_BACKSPACE: WeaponAttachment.reset_grip(base_id, gender)
 		_: return false
 	# Recognised bump — re-apply to the live model so the change shows
-	# without re-equipping.
+	# without re-equipping. reapply_grip reads the gender meta off the
+	# skeleton itself so it auto-picks the same table the bump wrote to.
 	WeaponAttachment.reapply_grip(skel, base_id)
 	return true
+
+
+# Resolves the local (controlling) player's gender so the tuner writes
+# to the matching grip table. PlayerState owns the canonical SP/host
+# value; for clients, PlayerState.gender reflects what they picked at
+# character creation, which is what we want here (we're tuning their
+# avatar). Defaults to &"male" if PlayerState isn't reachable.
+func _local_player_gender() -> StringName:
+	if Engine.has_singleton("PlayerState") or PlayerState != null:
+		return PlayerState.gender
+	return &"male"
 
 
 # F8 flips projection mode at runtime so you can A/B perspective vs
@@ -549,7 +566,7 @@ func _update_inspect_label() -> void:
 			var t := _resolve_tune_target()
 			var base_id: StringName = t[1]
 			if base_id != &"":
-				var grip := WeaponAttachment.get_grip(base_id)
+				var grip := WeaponAttachment.get_grip(base_id, _local_player_gender())
 				var p: Vector3 = grip.get("pos", Vector3.ZERO)
 				var r: Vector3 = grip.get("rot", Vector3.ZERO)
 				var s: float = float(grip.get("scale_mult", 1.0))

@@ -73,10 +73,17 @@ const _DEFAULT_TARGET_LENGTH: float = 0.6
 # weapon offsets still need eyeball tuning from there.
 # Mutable at runtime so the live grip tuner (PrototypeCamera + GripTuner
 # in inspect-mode) can bump rotation/position/scale by key, then dump
-# the result to the console for permanent pasting back here. Each entry
-# starts at identity / zero — the keys still ride the auto-scale, so
-# they read as "neutral grip" until tuned.
-static var _GRIP: Dictionary = {
+# the result to the console for permanent pasting back here.
+#
+# Per-gender split: the female X Bot ships with subtly different bone
+# proportions (longer arms, narrower shoulders, smaller hands), so
+# guns sit + rotate differently relative to the hand bone. The female
+# table is hand-tuned per-weapon; enemies and the default (male) path
+# fall through to _GRIP_MALE. _resolve_grip_table picks based on a
+# `gender` meta the prototype_player stashes on its Character root —
+# walked up from the skeleton at lookup time, so callers never have to
+# pass gender explicitly.
+static var _GRIP_MALE: Dictionary = {
 	&"melee_1h":       {"pos": Vector3(0.500, 0.100, 0.050), "rot": Vector3(0.0, 90.0, -75.0), "scale_mult": 1.318},
 	&"melee_2h":       {"pos": Vector3(0.450, 0.100, 0.200), "rot": Vector3(0.0, -105.0, 60.0), "scale_mult": 1.000},
 	&"ranged_1h":      {"pos": Vector3(0.050, 0.100, 0.050), "rot": Vector3(-75.0, 0.0, 0.0), "scale_mult": 1.0},
@@ -89,6 +96,52 @@ static var _GRIP: Dictionary = {
 	&"accelerator_2h": {"pos": Vector3(-0.150, 0.350, 0.000), "rot": Vector3(-105.0, 90.0, 165.0), "scale_mult": 0.990, "muzzle": Vector3(0.000, 0.250, 0.600)},
 	&"taser_2h":       {"pos": Vector3(0.000, 0.250, 0.150), "rot": Vector3(-90.0, 0.0, -15.0), "scale_mult": 0.729, "muzzle": Vector3(-0.100, 0.100, 0.200)},
 }
+
+static var _GRIP_FEMALE: Dictionary = {
+	&"melee_1h":       {"pos": Vector3(0.500, 0.050, 0.050), "rot": Vector3(0.0, 90.0, -75.0), "scale_mult": 1.318, "muzzle": Vector3(0.100, 0.050, 0.800)},
+	&"melee_2h":       {"pos": Vector3(0.450, 0.050, 0.150), "rot": Vector3(0.0, -105.0, 60.0), "scale_mult": 0.970, "muzzle": Vector3(0.000, 0.100, -0.650)},
+	&"ranged_1h":      {"pos": Vector3(0.050, 0.100, 0.050), "rot": Vector3(-75.0, 0.0, 0.0), "scale_mult": 0.980, "muzzle": Vector3(0.000, 0.050, 0.250)},
+	&"ranged_2h":      {"pos": Vector3(0.050, 0.300, -0.050), "rot": Vector3(-90.0, -180.0, 0.0), "scale_mult": 0.810, "muzzle": Vector3(0.000, 0.050, 0.450)},
+	&"smg_1h":         {"pos": Vector3(0.000, 0.150, 0.050), "rot": Vector3(-105.0, -180.0, 0.0), "scale_mult": 1.611, "muzzle": Vector3(-0.050, 0.050, 0.300)},
+	&"rpg_2h":         {"pos": Vector3(0.050, 0.350, 0.000), "rot": Vector3(-90.0, 165.0, 15.0), "scale_mult": 1.078, "muzzle": Vector3(-0.000, 0.050, 0.650)},
+	&"shotgun_2h":     {"pos": Vector3(-0.100, 0.200, -0.000), "rot": Vector3(-120.0, 90.0, 165.0), "scale_mult": 0.762, "muzzle": Vector3(0.000, 0.150, 0.450)},
+	&"accelerator_2h": {"pos": Vector3(-0.150, 0.200, -0.000), "rot": Vector3(-105.0, 90.0, 165.0), "scale_mult": 0.714, "muzzle": Vector3(0.000, 0.300, 0.500)},
+	&"taser_2h":       {"pos": Vector3(-0.000, 0.200, 0.150), "rot": Vector3(-90.0, 0.0, -15.0), "scale_mult": 0.650, "muzzle": Vector3(-0.000, 0.100, 0.350)},
+	# lmg_2h + sniper_2h fall through to male for now — female overrides
+	# can be appended here when they get tuned. Fallback path picks the
+	# male entry when the female table doesn't have the key.
+}
+
+# Returns the per-gender table. Unknown / empty gender falls back to male
+# so enemies + pre-gender-meta call sites stay on the original values.
+static func _grip_table_for_gender(gender: StringName) -> Dictionary:
+	return _GRIP_FEMALE if gender == &"female" else _GRIP_MALE
+
+# Reads the &"gender" meta a prototype_player stashes on the Character
+# node it instantiates for its visual. Walks ancestors from the skeleton
+# because the meta lives on the Character root (the FBX scene), not on
+# the Skeleton3D itself. Returns &"male" when no meta is found — covers
+# enemies, MP avatars before lobby data arrives, and the editor preview.
+static func _resolve_skeleton_gender(skeleton: Skeleton3D) -> StringName:
+	var n: Node = skeleton
+	while n != null:
+		if n.has_meta(&"gender"):
+			return n.get_meta(&"gender") as StringName
+		n = n.get_parent()
+	return &"male"
+
+# Picks the grip dict for `weapon_base_id` from the female table when
+# present, else falls back to male. Lets weapons that haven't been
+# female-tuned yet inherit the male grip silently.
+static func _resolve_grip(weapon_base_id: StringName, gender: StringName) -> Dictionary:
+	var table := _grip_table_for_gender(gender)
+	if table.has(weapon_base_id):
+		return table[weapon_base_id]
+	# Female-untuned weapon → use male as the fallback, not an empty dict
+	# (which would zero out pos/rot/scale_mult and look broken).
+	if gender == &"female" and _GRIP_MALE.has(weapon_base_id):
+		return _GRIP_MALE[weapon_base_id]
+	return table.get(weapon_base_id, {})
 
 
 # Per-weapon list of MeshInstance3D names to hide on attach. Some glbs
@@ -171,7 +224,7 @@ static func set_weapon(skeleton: Skeleton3D, weapon_base_id: StringName) -> void
 	# don't influence the model's AABB during auto-scale.
 	_hide_and_capture(model, weapon_base_id)
 	_backfill_missing_materials(model)
-	_apply_grip(model, weapon_base_id)
+	_apply_grip(model, weapon_base_id, _resolve_skeleton_gender(skeleton))
 
 
 # Some weapon glbs ship without authored materials (the sniper's source
@@ -380,20 +433,35 @@ static func set_weapon_for_enemy(skeleton: Skeleton3D, enemy_weapon_id: StringNa
 ##      final values in a ready-to-paste format so they can be baked back
 ##      into _GRIP as the new default.
 
-## Returns the current grip dict for `weapon_base_id` (creates a default
-## entry if missing). Safe to mutate the returned dict in place.
-static func get_grip(weapon_base_id: StringName) -> Dictionary:
-	if not _GRIP.has(weapon_base_id):
-		_GRIP[weapon_base_id] = {"pos": Vector3.ZERO, "rot": Vector3.ZERO, "scale_mult": 1.0}
-	return _GRIP[weapon_base_id]
+## Returns the mutable grip dict for `weapon_base_id` on the gendered
+## table. Creates a neutral entry if the weapon isn't present yet on the
+## chosen gender (caller is about to bump it). The live tuner passes the
+## player's gender so each keypress writes back to the right table.
+static func get_grip(weapon_base_id: StringName, gender: StringName = &"male") -> Dictionary:
+	var table := _grip_table_for_gender(gender)
+	if not table.has(weapon_base_id):
+		# Seed a female untuned slot from the male defaults so the tuner
+		# starts where the male grip ends rather than at identity — usually
+		# the male values are CLOSE to where female lands, just slightly off.
+		if gender == &"female" and _GRIP_MALE.has(weapon_base_id):
+			var src: Dictionary = _GRIP_MALE[weapon_base_id]
+			table[weapon_base_id] = {
+				"pos": (src.get("pos", Vector3.ZERO) as Vector3),
+				"rot": (src.get("rot", Vector3.ZERO) as Vector3),
+				"scale_mult": float(src.get("scale_mult", 1.0)),
+				"muzzle": (src.get("muzzle", Vector3.ZERO) as Vector3),
+			}
+		else:
+			table[weapon_base_id] = {"pos": Vector3.ZERO, "rot": Vector3.ZERO, "scale_mult": 1.0, "muzzle": Vector3.ZERO}
+	return table[weapon_base_id]
 
 
 ## Adds `delta_deg` degrees to the rotation around `axis` ("x", "y", or
 ## "z") on this weapon's grip entry. No-op for unknown axis or empty id.
-static func bump_rotation(weapon_base_id: StringName, axis: StringName, delta_deg: float) -> void:
+static func bump_rotation(weapon_base_id: StringName, axis: StringName, delta_deg: float, gender: StringName = &"male") -> void:
 	if weapon_base_id == &"":
 		return
-	var grip := get_grip(weapon_base_id)
+	var grip := get_grip(weapon_base_id, gender)
 	var r: Vector3 = grip.get("rot", Vector3.ZERO)
 	match axis:
 		&"x": r.x = wrapf(r.x + delta_deg, -180.0, 180.0)
@@ -405,10 +473,10 @@ static func bump_rotation(weapon_base_id: StringName, axis: StringName, delta_de
 
 ## Adds `delta` (world units) to the position offset along `axis` on this
 ## weapon's grip entry.
-static func bump_position(weapon_base_id: StringName, axis: StringName, delta: float) -> void:
+static func bump_position(weapon_base_id: StringName, axis: StringName, delta: float, gender: StringName = &"male") -> void:
 	if weapon_base_id == &"":
 		return
-	var grip := get_grip(weapon_base_id)
+	var grip := get_grip(weapon_base_id, gender)
 	var p: Vector3 = grip.get("pos", Vector3.ZERO)
 	match axis:
 		&"x": p.x += delta
@@ -422,10 +490,10 @@ static func bump_position(weapon_base_id: StringName, axis: StringName, delta: f
 ## weapon's grip entry. Used by the tuner when the AABB heuristic picks
 ## the wrong corner (laser pistol's dangling cables, smg's many small
 ## sub-meshes) and the muzzle needs to be placed by hand.
-static func bump_muzzle(weapon_base_id: StringName, axis: StringName, delta: float) -> void:
+static func bump_muzzle(weapon_base_id: StringName, axis: StringName, delta: float, gender: StringName = &"male") -> void:
 	if weapon_base_id == &"":
 		return
-	var grip := get_grip(weapon_base_id)
+	var grip := get_grip(weapon_base_id, gender)
 	var m: Vector3 = grip.get("muzzle", Vector3.ZERO)
 	match axis:
 		&"x": m.x += delta
@@ -437,20 +505,21 @@ static func bump_muzzle(weapon_base_id: StringName, axis: StringName, delta: flo
 
 ## Multiplies the scale_mult on this weapon's grip entry by `factor`.
 ## Clamped to [0.1, 10.0] so a sticky keypress can't blow it up.
-static func bump_scale(weapon_base_id: StringName, factor: float) -> void:
+static func bump_scale(weapon_base_id: StringName, factor: float, gender: StringName = &"male") -> void:
 	if weapon_base_id == &"":
 		return
-	var grip := get_grip(weapon_base_id)
+	var grip := get_grip(weapon_base_id, gender)
 	var s: float = float(grip.get("scale_mult", 1.0)) * factor
 	grip["scale_mult"] = clampf(s, 0.1, 10.0)
 
 
 ## Resets this weapon's grip entry to neutral (zero rotation, zero
 ## position, scale_mult 1.0, zero muzzle override).
-static func reset_grip(weapon_base_id: StringName) -> void:
+static func reset_grip(weapon_base_id: StringName, gender: StringName = &"male") -> void:
 	if weapon_base_id == &"":
 		return
-	_GRIP[weapon_base_id] = {"pos": Vector3.ZERO, "rot": Vector3.ZERO, "scale_mult": 1.0, "muzzle": Vector3.ZERO}
+	var table := _grip_table_for_gender(gender)
+	table[weapon_base_id] = {"pos": Vector3.ZERO, "rot": Vector3.ZERO, "scale_mult": 1.0, "muzzle": Vector3.ZERO}
 
 
 ## Re-applies the current grip values to the weapon model already mounted
@@ -465,18 +534,21 @@ static func reapply_grip(skeleton: Skeleton3D, weapon_base_id: StringName) -> vo
 	var model := mount.get_node_or_null(NodePath(_MODEL_NODE_NAME)) as Node3D
 	if model == null:
 		return
-	_apply_grip(model, weapon_base_id)
+	_apply_grip(model, weapon_base_id, _resolve_skeleton_gender(skeleton))
 
 
 ## Prints the current grip entry to the console in a ready-to-paste
 ## format, so once tuning lands on values that read well in-game, the
-## user can copy the line back into _GRIP as the new default.
-static func dump_grip_to_console(weapon_base_id: StringName) -> void:
-	var grip := get_grip(weapon_base_id)
+## user can copy the line back into _GRIP_<gender> as the new default.
+## The gender prefix in the printed comment tells you which table to
+## paste into.
+static func dump_grip_to_console(weapon_base_id: StringName, gender: StringName = &"male") -> void:
+	var grip := get_grip(weapon_base_id, gender)
 	var p: Vector3 = grip.get("pos", Vector3.ZERO)
 	var r: Vector3 = grip.get("rot", Vector3.ZERO)
 	var s: float = float(grip.get("scale_mult", 1.0))
 	var m: Vector3 = grip.get("muzzle", Vector3.ZERO)
+	print("# paste into _GRIP_%s:" % String(gender).to_upper())
 	# Skip the muzzle field in output when it's still default (zero) so
 	# weapons that work fine with the AABB heuristic stay readable in
 	# _GRIP. Print it only when an override has actually been tuned.
@@ -520,7 +592,7 @@ static func get_muzzle_position(skeleton: Skeleton3D, aim_world: Vector3) -> Vec
 	# model's rotation (grip + bone animation) automatically.
 	var weapon_base_id := _weapon_base_id_from_model(mount)
 	if weapon_base_id != &"":
-		var grip: Dictionary = _GRIP.get(weapon_base_id, {})
+		var grip: Dictionary = _resolve_grip(weapon_base_id, _resolve_skeleton_gender(skeleton))
 		var muzzle_offset: Vector3 = grip.get("muzzle", Vector3.ZERO)
 		if muzzle_offset != Vector3.ZERO:
 			return model.global_position + (model.global_transform.basis.orthonormalized() * muzzle_offset)
@@ -587,15 +659,17 @@ static func _ensure_mount(skeleton: Skeleton3D) -> BoneAttachment3D:
 
 
 # Auto-scales `model` so its longest AABB axis matches the per-class
-# target length, then applies the per-weapon grip pos/rot/scale_mult.
-static func _apply_grip(model: Node3D, weapon_base_id: StringName) -> void:
+# target length, then applies the per-weapon grip pos/rot/scale_mult
+# from the gendered table. `gender` defaults to male; enemies + the
+# editor preview hit that branch.
+static func _apply_grip(model: Node3D, weapon_base_id: StringName, gender: StringName = &"male") -> void:
 	var cls: StringName = XBotAnimations.weapon_class_for_id(weapon_base_id)
 	var target_len: float = float(_CLASS_TARGET_LENGTH.get(cls, _DEFAULT_TARGET_LENGTH))
 	# Measure the model's combined AABB to derive the auto-scale.
 	var aabb := _model_aabb(model)
 	var longest: float = maxf(aabb.size.x, maxf(aabb.size.y, aabb.size.z))
 	var auto_scale: float = (target_len / longest) if longest > 0.001 else 1.0
-	var grip: Dictionary = _GRIP.get(weapon_base_id, {})
+	var grip: Dictionary = _resolve_grip(weapon_base_id, gender)
 	var scale_mult: float = float(grip.get("scale_mult", 1.0))
 	model.scale = Vector3.ONE * auto_scale * scale_mult
 	model.position = grip.get("pos", Vector3.ZERO)

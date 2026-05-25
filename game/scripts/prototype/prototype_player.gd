@@ -1053,6 +1053,12 @@ func _apply_gender_appearance() -> void:
 			new_char.rotation.y = PI
 			new_char.position.y = y_offset
 			new_char.scale = Vector3.ONE * char_scale
+			# Stash the resolved gender on the Character node so any helper
+			# that walks up from the skeleton (notably WeaponAttachment, which
+			# picks a per-gender grip table) can resolve the right variant
+			# without consulting PlayerState — which would always return the
+			# LOCAL player's gender, wrong for remote MP avatars.
+			new_char.set_meta(&"gender", effective_gender)
 			visual.add_child(new_char)
 			var new_ap := new_char.find_child("AnimationPlayer", true, false) as AnimationPlayer
 			if new_ap != null:
@@ -1062,6 +1068,7 @@ func _apply_gender_appearance() -> void:
 		# tscn instance was at 0/1 or the per-gender constants changed.
 		current_char.position.y = y_offset
 		current_char.scale = Vector3.ONE * char_scale
+		current_char.set_meta(&"gender", effective_gender)
 	if anim_player != null:
 		XBotAnimations.install_on(anim_player)
 	# Bake uniform scale into the FBX's intermediate Armature / Skeleton
