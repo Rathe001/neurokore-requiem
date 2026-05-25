@@ -10,9 +10,16 @@ id = &"melee_2h"
 display_name = "Sledgehammer"
 glyph = "‡"
 two_handed = true
+; Slowdown pass — the (0.6, 0.85) range had the sledge swinging every
+; 0.82-1.17s at cooldown 0.7s, which read as a fast hammer rather than
+; the heavy maul the silhouette suggests. Halved to ~1.75-2.3s per
+; swing so each strike clearly winds up, commits, and recovers. Damage
+; stays high; if DPS feels too low, bump damage_max_range rather than
+; restoring attack_speed.
+; Previously: attack_speed_range (0.6, 0.85).
 damage_min_range = Vector2(9, 14)
 damage_max_range = Vector2(22, 32)
-attack_speed_range = Vector2(0.6, 0.85)
+attack_speed_range = Vector2(0.3, 0.4)
 crit_chance_range = Vector2(0.0, 0.0)
 accuracy_range = Vector2(0.85, 0.94)
 weapon_range_range = Vector2(3.0, 4.5)
