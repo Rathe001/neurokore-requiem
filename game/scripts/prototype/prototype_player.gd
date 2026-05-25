@@ -306,13 +306,17 @@ const MELEE_BASE_IDS: Array[StringName] = [&"melee_1h", &"melee_2h"]
 # Fraction-through-the-swing where each melee clip's visible impact
 # frame actually lands. Damage + SFX fire at `melee_interval * this`,
 # so dialling per-weapon syncs the visible hit moment with the
-# resolved damage. Default 0.5 = mid-swing; weapons whose Mixamo
-# source clip front-loads the windup land their hit earlier.
-#  - melee_1h: sword_slash clips chain quickly, impact ~50% — keep default
-#  - melee_2h: axe_swing has a heavy windup before strike, impact ~40%
+# resolved damage.
+#  - melee_1h: the registered "sword_slash" keys actually load the
+#    "sword and shield attack" clips (commit 22b07a7 swap), which
+#    begin with the strong sweep motion. Visible strike at ~15% of
+#    the clip — firing damage at 50% left a ~0.25s desync where the
+#    player saw the hit land before the audio + damage ever fired.
+#  - melee_2h: axe_combo clips peak ~mid-swing, impact ~30% feels
+#    natural with a short follow-through.
 const _MELEE_IMPACT_RATIO: Dictionary = {
-	&"melee_1h": 0.5,
-	&"melee_2h": 0.4,
+	&"melee_1h": 0.15,
+	&"melee_2h": 0.3,
 }
 
 
