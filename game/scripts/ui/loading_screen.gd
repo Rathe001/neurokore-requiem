@@ -29,18 +29,35 @@ const OVERLAY_COLOR := Color(0.03, 0.04, 0.05, 1.0)
 const TITLE_COLOR := Color(0.4, 0.85, 0.95, 1.0)
 const SUBTITLE_COLOR := Color(0.6, 0.66, 0.7, 0.85)
 const FADE_OUT_DURATION := 0.35
-const TITLE_FONT_SIZE := 32
-const SUBTITLE_FONT_SIZE := 14
+# Reduced from 32 because the background image now carries the "LOADING"
+# visual identity; the supplied title (e.g. "DESCENDING", "Syncing with
+# host") is supplementary context and reads better at smaller weight
+# against the painted background.
+const TITLE_FONT_SIZE := 22
+const SUBTITLE_FONT_SIZE := 13
 # Progress-bar geometry. Wider than the labels so it dominates the
 # vertical stack visually; thin enough to read as a "filling line"
 # rather than a chunky gauge.
-const PROGRESS_BAR_WIDTH := 360.0
+const PROGRESS_BAR_WIDTH := 420.0
 const PROGRESS_BAR_HEIGHT := 8.0
 # Eases bar fill so a sudden jump from build_progress=0.3 to 0.6 (which
 # can happen when a large room-bundle yields back at once) doesn't snap.
 const PROGRESS_FILL_LERP := 8.0
 
+# Loading-screen background image. The image bakes in its own "LOADING"
+# neon sign + figure composition so the screen has visual identity beyond
+# the bar. Future: per-level backgrounds (level2.png, level3.png, ...) +
+# an API to pick which one before show_loading runs. For now the
+# loader hard-codes level1.png; missing-file path falls back to the dark
+# OVERLAY_COLOR fill behind everything.
+const BG_TEXTURE_PATH := "res://assets/ui/loading/level1.png"
+# Distance from the bottom edge to the UI stack (title + subtitle + bar).
+# Tuned so the stack sits below the image's hooded figure on common 16:9
+# resolutions — the figure's feet land around the image's lower third.
+const UI_BOTTOM_OFFSET := 72.0
+
 var _overlay: ColorRect
+var _bg_texture: TextureRect
 var _title: Label
 var _subtitle: Label
 var _progress_bar: ProgressBar
@@ -114,6 +131,11 @@ func show_loading(title: String = "DESCENDING", subtitle: String = "Generating s
 	_overlay.color = OVERLAY_COLOR
 	_title.modulate.a = 1.0
 	_subtitle.modulate.a = 1.0
+	# Restore bg alpha — the rebuild path (PrototypeRoot._show_loading_screen)
+	# can reuse the same LoadingScreen instance across sub-level transitions.
+	# If hide_loading faded it to 0 last time we'd come back invisible.
+	if _bg_texture != null:
+		_bg_texture.modulate.a = 1.0
 	visible = true
 	# _process drives the bar's eased fill toward _target_progress. Cheap;
 	# runs only while the screen is visible.
@@ -156,6 +178,11 @@ func hide_loading() -> void:
 	tween.parallel().tween_property(_title, "modulate:a", 0.0, FADE_OUT_DURATION)
 	tween.parallel().tween_property(_subtitle, "modulate:a", 0.0, FADE_OUT_DURATION)
 	tween.parallel().tween_property(_progress_bar, "modulate:a", 0.0, FADE_OUT_DURATION)
+	# Fade the painted background too so the world reveals from behind it
+	# instead of the image hard-cutting at the end of the dark overlay
+	# fade. Guarded — TextureRect is null when the bg failed to load.
+	if _bg_texture != null:
+		tween.parallel().tween_property(_bg_texture, "modulate:a", 0.0, FADE_OUT_DURATION)
 	tween.tween_callback(queue_free)
 
 
@@ -180,6 +207,10 @@ func _process(delta: float) -> void:
 
 
 func _build_ui() -> void:
+	# Layer 1 — flat dark fill. Covers any letterbox left around the
+	# image when it doesn't match the aspect ratio of the current
+	# resolution, and acts as the fallback if the bg texture fails to
+	# load. Always swallows input regardless of the layers above.
 	_overlay = ColorRect.new()
 	_overlay.color = OVERLAY_COLOR
 	_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -188,26 +219,58 @@ func _build_ui() -> void:
 	_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(_overlay)
 
+	# Layer 2 — painted background. KEEP_ASPECT_COVERED fills the screen
+	# without letterboxing; crops top/bottom on 16:9 monitors (image is
+	# 4:3-ish) but the figure stays centered and the baked-in "LOADING"
+	# neon sign stays in view at the typical crop band. If the texture
+	# fails to load (renamed, deleted, fresh checkout without LFS pull),
+	# the dark _overlay underneath carries the screen on its own.
+	var bg_tex := load(BG_TEXTURE_PATH) as Texture2D
+	if bg_tex != null:
+		_bg_texture = TextureRect.new()
+		_bg_texture.texture = bg_tex
+		_bg_texture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		_bg_texture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		_bg_texture.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		_bg_texture.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(_bg_texture)
+
+	# Layer 3 — UI stack (title + subtitle + bar). Bottom-anchored center
+	# so it sits in the strip below the figure's feet on common
+	# resolutions without overlapping the figure. Pre-sized wide enough
+	# to host the 420px progress bar comfortably.
 	var vbox := VBoxContainer.new()
-	vbox.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	vbox.offset_left = -260.0
-	vbox.offset_right = 260.0
-	vbox.offset_top = -50.0
-	vbox.offset_bottom = 50.0
+	vbox.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	vbox.offset_left = -240.0
+	vbox.offset_right = 240.0
+	vbox.offset_top = -(UI_BOTTOM_OFFSET + 80.0)
+	vbox.offset_bottom = -UI_BOTTOM_OFFSET
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	vbox.add_theme_constant_override(&"separation", 12)
-	_overlay.add_child(vbox)
+	vbox.add_theme_constant_override(&"separation", 8)
+	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(vbox)
 
 	_title = Label.new()
 	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_title.add_theme_font_size_override(&"font_size", TITLE_FONT_SIZE)
 	_title.add_theme_color_override(&"font_color", TITLE_COLOR)
+	# Drop shadow so the title pops cleanly against the painted background
+	# regardless of which color band it lands on (the image has bright
+	# neon highlights AND deep purple shadows). Cheap; one extra rasterize.
+	_title.add_theme_color_override(&"font_shadow_color", Color(0, 0, 0, 0.85))
+	_title.add_theme_constant_override(&"shadow_offset_x", 1)
+	_title.add_theme_constant_override(&"shadow_offset_y", 2)
+	_title.add_theme_constant_override(&"shadow_outline_size", 4)
 	vbox.add_child(_title)
 
 	_subtitle = Label.new()
 	_subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_subtitle.add_theme_font_size_override(&"font_size", SUBTITLE_FONT_SIZE)
 	_subtitle.add_theme_color_override(&"font_color", SUBTITLE_COLOR)
+	_subtitle.add_theme_color_override(&"font_shadow_color", Color(0, 0, 0, 0.75))
+	_subtitle.add_theme_constant_override(&"shadow_offset_x", 1)
+	_subtitle.add_theme_constant_override(&"shadow_offset_y", 1)
+	_subtitle.add_theme_constant_override(&"shadow_outline_size", 3)
 	vbox.add_child(_subtitle)
 
 	# Thin progress bar centered under the subtitle. Authored without
@@ -215,7 +278,7 @@ func _build_ui() -> void:
 	# fight the bar's clean fill animation). MarginContainer pads it off
 	# the subtitle visually so the bar doesn't crowd the label baseline.
 	var bar_wrap := MarginContainer.new()
-	bar_wrap.add_theme_constant_override(&"margin_top", 6)
+	bar_wrap.add_theme_constant_override(&"margin_top", 4)
 	vbox.add_child(bar_wrap)
 
 	_progress_bar = ProgressBar.new()
