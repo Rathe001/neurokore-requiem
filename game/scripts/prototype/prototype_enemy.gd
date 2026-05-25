@@ -519,6 +519,14 @@ func _ready() -> void:
 	# invisible-idle enemies recovers that cost without breaking any
 	# state-driven anim transitions. visibility_changed survives pool reuse.
 	visibility_changed.connect(_update_anim_player_active)
+	# Same policy for _physics_process. Distance-throttling already drops
+	# far-IDLE ticks to 10Hz, but the function-call overhead + the early-out
+	# branches still cost ~0.2ms per enemy * 155 enemies = 30+ms of phys
+	# per frame in a packed room. Pausing physics on invisible-idle enemies
+	# eliminates that entirely. Wake-up: visibility_changed fires when the
+	# LoS culler reveals them (proximity), and external aggro() / take_damage
+	# calls re-enable via _change_state → _update_physics_process_active.
+	visibility_changed.connect(_update_physics_process_active)
 	# Pre-build the per-bone ragdoll skeleton so _die() can flip it into
 	# physics simulation instantly. Deferred — the FBX's Skeleton3D may not
 	# Physics-bone ragdoll disabled — death pose comes from the Mixamo
@@ -1421,6 +1429,7 @@ func _change_state(new_state: State) -> void:
 	# drives windup → fire / dismember triggers). IDLE-while-invisible is the
 	# common case that pauses for perf — recompute on every state flip.
 	_update_anim_player_active()
+	_update_physics_process_active()
 
 
 # Single source of truth for "should AnimationPlayer be active right now?"
@@ -1433,6 +1442,20 @@ func _update_anim_player_active() -> void:
 		return
 	var should_pause: bool = not visible and _state == State.IDLE
 	anim_player.active = not should_pause
+
+
+# Same policy as _update_anim_player_active but for _physics_process. Pause
+# iff invisible AND idle — anything else (CHASING, CASTING, ATTACKING, etc.)
+# needs the tick to drive AI. DEAD enemies stay paused (the death path
+# already called set_physics_process(false) and a stray visibility flip
+# during corpse cleanup mustn't revive them). Wake-up comes from either
+# the visibility_changed signal (LoS reveal) or _change_state when external
+# code (aggro, take_damage) flips us out of IDLE — both call back into here.
+func _update_physics_process_active() -> void:
+	if _state == State.DEAD:
+		return
+	var should_pause: bool = not visible and _state == State.IDLE
+	set_physics_process(not should_pause)
 
 
 func _physics_process(delta: float) -> void:
