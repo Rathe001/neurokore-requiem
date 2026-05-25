@@ -15,6 +15,16 @@ static func _spawn_list(ctx: LevelBuildContext, room_id: StringName, center: Vec
 		if slot == null or slot.scene == null:
 			push_warning("[InteractableBuilder] Room '%s' has a slot with no scene; skipping." % room_id)
 			continue
+		# Early dedup. The previous "later instance wins" warning fired in
+		# every build because procgen often adds slots in both rd.slots and
+		# piece.additional_slots — the orphaned instance would still get
+		# instantiated, added to the scene tree, AND queue_freed implicitly
+		# by Godot when ctx.slots[key] = inst overwrote the reference,
+		# leaving a leaked dangling Node3D until next frame. Check first,
+		# skip the whole instantiate path on duplicates.
+		var key := StringName("%s.%s" % [room_id, slot.id])
+		if ctx.slots.has(key):
+			continue
 		var inst := slot.scene.instantiate() as Node3D
 		if inst == null:
 			push_error("[InteractableBuilder] Slot '%s' scene didn't instantiate to a Node3D." % slot.id)
@@ -29,10 +39,6 @@ static func _spawn_list(ctx: LevelBuildContext, room_id: StringName, center: Vec
 		# (which it usually is, but we don't want to bet a P0 MP bug on it).
 		inst.name = _slot_node_name(room_id, slot.id)
 		ctx.root.add_child(inst)
-
-		var key := StringName("%s.%s" % [room_id, slot.id])
-		if ctx.slots.has(key):
-			push_warning("[InteractableBuilder] Duplicate slot key '%s'; later instance wins." % key)
 		ctx.slots[key] = inst
 
 
