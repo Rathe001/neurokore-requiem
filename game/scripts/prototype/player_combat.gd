@@ -1058,15 +1058,40 @@ func _resolve_hitscan(skill: Skill, aim: Vector3, eff_range: float, weapon: Item
 		&"impact_burst_pos": impact_burst_pos,
 		&"had_enemy_hit": hit_target != null,
 	}
-	_spawn_hitscan_vfx_deferred.call_deferred(vfx_data)
+	_defer_hitscan_vfx(vfx_data)
+
+
+# Schedule the VFX spawn on the NEXT IDLE PROCESS FRAME, not via
+# call_deferred. The previous call_deferred approach was technically
+# deferred — but MessageQueue.flush() runs immediately after
+# _physics_process callbacks (still inside the engine's physics-tick
+# window), and Godot's Performance.TIME_PHYSICS_PROCESS measurement
+# apparently includes that flush. Connecting to SceneTree.process_frame
+# with CONNECT_ONE_SHOT guarantees the callback fires during the next
+# idle process step, definitively after the current physics frame's
+# accounting closes. Each call adds one connection that auto-disconnects
+# after firing — cheap, no leak.
+func _defer_hitscan_vfx(vfx_data: Dictionary) -> void:
+	if _host == null or not _host.is_inside_tree():
+		return
+	var tree := _host.get_tree()
+	if tree == null:
+		# Defensive — no tree means no scene, just skip VFX rather than
+		# crashing on an invalid signal connect.
+		return
+	tree.process_frame.connect(
+		_spawn_hitscan_vfx_deferred.bind(vfx_data),
+		CONNECT_ONE_SHOT,
+	)
 
 
 # Deferred VFX spawn for _resolve_hitscan / _resolve_hitscan_exact. Runs
-# on the next idle tick so the spawn cost (add_child + tween + material
-# allocations × 6-10 nodes per shot) doesn't attribute to phys_ms. The
-# call site captures every value as a primitive in the dict — no enemy
-# Node3D refs survive across the deferral, so the enemy can die from
-# our damage application without leaving us a freed pointer here.
+# on the next idle process tick so the spawn cost (add_child + tween +
+# material allocations × 6-10 nodes per shot) doesn't attribute to
+# phys_ms. The call site captures every value as a primitive in the
+# dict — no enemy Node3D refs survive across the deferral, so the enemy
+# can die from our damage application without leaving us a freed
+# pointer here.
 func _spawn_hitscan_vfx_deferred(d: Dictionary) -> void:
 	if _host == null or not is_instance_valid(_host) or not _host.is_inside_tree():
 		return
@@ -1578,7 +1603,7 @@ func _resolve_hitscan_exact(skill: Skill, aim_norm: Vector3, eff_range: float, w
 		&"impact_burst_pos": impact_burst_pos,
 		&"had_enemy_hit": hit_target != null,
 	}
-	_spawn_hitscan_vfx_deferred.call_deferred(vfx_data)
+	_defer_hitscan_vfx(vfx_data)
 
 
 # ---------------------------------------------------------------------------

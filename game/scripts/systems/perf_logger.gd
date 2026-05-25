@@ -173,7 +173,7 @@ func _open_log() -> void:
 		set_process(false)
 		return
 	# Header row — keep in sync with _write_row's column order.
-	_file.store_line("time_s,fps,frame_ms,proc_ms,phys_ms,enemies,enemies_active,enemies_chasing,enemies_combat,weapon_id,firing,player_x,player_z,projectiles,decals,casings,corpses,draws,tris,objects,lights_visible,lights_total,mmi_visible,particles_visible,total_nodes,event")
+	_file.store_line("time_s,fps,frame_ms,proc_ms,phys_ms,enemies,enemies_active,enemies_chasing,enemies_combat,weapon_id,firing,player_x,player_z,projectiles,decals,casings,corpses,jolt_bodies,jolt_pairs,jolt_islands,draws,tris,objects,lights_visible,lights_total,mmi_visible,particles_visible,total_nodes,event")
 
 
 ## `skip_tree_walks` — when true, the per-write tree enumeration
@@ -268,6 +268,21 @@ func _write_row(event_name: StringName, skip_tree_walks: bool = false) -> void:
 		corpses = tree.get_nodes_in_group(&"ragdoll_corpses").size()
 	var decals: int = PrototypeAttackIndicator._blood_decal_ring.size() + PrototypeAttackIndicator._wall_impact_ring.size()
 
+	# Jolt physics engine counters. The script-side counters above
+	# (enemies_active / projectiles / casings / corpses) report what
+	# OUR code is doing; these report what JOLT is doing. Useful when
+	# phys_ms spikes with all of our counters at zero — means the cost
+	# is in the physics engine itself (broad-phase, narrow-phase, island
+	# solving) rather than in our _physics_process callbacks.
+	#   jolt_bodies  — active rigid bodies (excludes sleeping)
+	#   jolt_pairs   — broad-phase collision pairs being evaluated
+	#   jolt_islands — solver islands (clusters of touching bodies)
+	# Available via Performance enum since Godot 4.x; return 0 on
+	# rendering-only backends or non-Jolt physics.
+	var jolt_bodies: int = int(Performance.get_monitor(Performance.PHYSICS_3D_ACTIVE_OBJECTS))
+	var jolt_pairs: int = int(Performance.get_monitor(Performance.PHYSICS_3D_COLLISION_PAIRS))
+	var jolt_islands: int = int(Performance.get_monitor(Performance.PHYSICS_3D_ISLAND_COUNT))
+
 	var lights_visible: int = 0
 	var lights_total: int = 0
 	var mmi_visible: int = 0
@@ -290,11 +305,12 @@ func _write_row(event_name: StringName, skip_tree_walks: bool = false) -> void:
 			if (n as GPUParticles3D).is_visible_in_tree():
 				particles_visible += 1
 	# Compact column order — matches header above.
-	_file.store_line("%.2f,%d,%.2f,%.2f,%.2f,%d,%d,%d,%d,%s,%d,%.1f,%.1f,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%s" % [
+	_file.store_line("%.2f,%d,%.2f,%.2f,%.2f,%d,%d,%d,%d,%s,%d,%.1f,%.1f,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%s" % [
 		t_s, fps, frame_ms, proc_ms, phys_ms,
 		enemies, enemies_active, enemies_chasing, enemies_combat,
 		weapon_id, firing, player_x, player_z,
 		projectiles, decals, casings, corpses,
+		jolt_bodies, jolt_pairs, jolt_islands,
 		draws, tris, objects,
 		lights_visible, lights_total,
 		mmi_visible, particles_visible,
