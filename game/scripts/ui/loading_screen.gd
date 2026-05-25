@@ -20,7 +20,12 @@ extends CanvasLayer
 ## Sits above the death screen (DEATH_LAYER = 110) and the HUD; nothing
 ## else should outrank this while it's up.
 const LOADING_LAYER := 120
-const OVERLAY_COLOR := Color(0.03, 0.04, 0.05, 0.96)
+# Full opacity — the world subtree behind us is mid-build (level pieces
+# popping in over multiple frames, navmesh baking, etc.) so any sliver
+# of see-through reads as "scene flashing in pieces." 1.0 makes the
+# transition a clean cut. Fade-out tween still drops to 0.0 at the end
+# so the new world reveals smoothly.
+const OVERLAY_COLOR := Color(0.03, 0.04, 0.05, 1.0)
 const TITLE_COLOR := Color(0.4, 0.85, 0.95, 1.0)
 const SUBTITLE_COLOR := Color(0.6, 0.66, 0.7, 0.85)
 const FADE_OUT_DURATION := 0.35
@@ -35,6 +40,11 @@ var _subtitle_base: String = ""
 var _dot_phase: int = 0
 var _dot_accum: float = 0.0
 var _hiding: bool = false
+# Pause state before show_loading() — restored on hide_loading so we
+# don't clobber an intentional pause (pause menu, spec select, death
+# screen). 99% of the time this is just false→true→false, but the
+# save/restore is cheap insurance.
+var _prev_paused: bool = false
 
 
 func _ready() -> void:
@@ -100,6 +110,23 @@ func show_loading(title: String = "DESCENDING", subtitle: String = "Generating s
 	_subtitle.modulate.a = 1.0
 	visible = true
 	set_process(true)
+	# Pause the world while the cover is up. Default PROCESS_MODE_INHERIT
+	# on the player + level subtrees stops their _process / _physics_process
+	# / _unhandled_input calls under pause, so WASD can't drive the player
+	# around the half-built level (was visible through the previous 0.96
+	# alpha cover before we bumped it to 1.0, and even with full opacity
+	# the player was still moving + the level was still ticking behind
+	# the curtain). LoadingScreen itself runs at PROCESS_MODE_ALWAYS so
+	# its dots animation + hide_loading fade tween keep advancing.
+	#
+	# LevelBuilder's streamed `_build_level` yields via
+	# `await get_tree().process_frame` — process_frame fires regardless
+	# of pause, so the async build keeps making progress while the world
+	# subtree itself is frozen.
+	var tree := get_tree()
+	if tree != null:
+		_prev_paused = tree.paused
+		tree.paused = true
 
 
 func hide_loading() -> void:
@@ -107,6 +134,15 @@ func hide_loading() -> void:
 		return
 	_hiding = true
 	set_process(false)
+	# Restore the pre-show pause state BEFORE the fade-out so the world
+	# is already updating behind the fading cover — gives the cleanest
+	# "world reveals back in motion" feel rather than a frozen frame
+	# during the fade. Restoring (not blanket-clearing) preserves an
+	# intentional outer pause (pause menu, etc.) on the rare path where
+	# loading was kicked off from an already-paused state.
+	var tree := get_tree()
+	if tree != null:
+		tree.paused = _prev_paused
 	var tween := create_tween()
 	tween.tween_property(_overlay, "color:a", 0.0, FADE_OUT_DURATION)
 	tween.parallel().tween_property(_title, "modulate:a", 0.0, FADE_OUT_DURATION)
