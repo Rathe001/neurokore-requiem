@@ -1447,7 +1447,7 @@ func _change_state(new_state: State) -> void:
 func _update_anim_player_active() -> void:
 	if anim_player == null:
 		return
-	var should_pause: bool = not visible and _state == State.IDLE
+	var should_pause: bool = not visible and _is_pauseable_state()
 	var desired: bool = not should_pause
 	# No-op guard. Godot's AnimationPlayer.active setter does internal
 	# bookkeeping (refresh tree, restart playhead) even when the value
@@ -1458,17 +1458,31 @@ func _update_anim_player_active() -> void:
 		anim_player.active = desired
 
 
+# Returns true for states where pausing while LoS-hidden is safe. IDLE
+# is the obvious one. CHASING + RETURNING are also fine — the enemy is
+# pursuing through geometry the player can't see, so frozen movement
+# until they next come into LoS reads as "they were always there." We
+# exclude ATTACKING / CASTING / KNOCKBACK / STUNNED / JUMPING / GRABBED
+# because those states own a timer or trajectory that needs to drain;
+# pausing them would strand the enemy in a half-finished action.
+func _is_pauseable_state() -> bool:
+	return _state == State.IDLE or _state == State.CHASING or _state == State.RETURNING
+
+
 # Same policy as _update_anim_player_active but for _physics_process. Pause
-# iff invisible AND idle — anything else (CHASING, CASTING, ATTACKING, etc.)
-# needs the tick to drive AI. DEAD enemies stay paused (the death path
-# already called set_physics_process(false) and a stray visibility flip
-# during corpse cleanup mustn't revive them). Wake-up comes from either
-# the visibility_changed signal (LoS reveal) or _change_state when external
-# code (aggro, take_damage) flips us out of IDLE — both call back into here.
+# iff invisible AND in a pauseable state (see _is_pauseable_state). Extended
+# from IDLE-only because CHASING enemies pursuing the player out of LoS were
+# the dominant phys cost during room transitions — a horde aggroed in room A
+# would all run full-rate physics + nav agent queries while the player was
+# in room B, even though none of them were visible. DEAD enemies stay
+# paused (the death path already called set_physics_process(false) and a
+# stray visibility flip during corpse cleanup mustn't revive them). Wake-up
+# comes from either the visibility_changed signal (LoS reveal) or
+# _change_state when external code (aggro, take_damage) flips state.
 func _update_physics_process_active() -> void:
 	if _state == State.DEAD:
 		return
-	var should_pause: bool = not visible and _state == State.IDLE
+	var should_pause: bool = not visible and _is_pauseable_state()
 	var desired: bool = not should_pause
 	# No-op guard — same reasoning as _update_anim_player_active. Even
 	# when set_physics_process gets the same value it already had,
