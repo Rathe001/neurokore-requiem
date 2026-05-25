@@ -90,7 +90,7 @@ static var _GRIP_MALE: Dictionary = {
 	&"ranged_2h":      {"pos": Vector3(0.050, 0.350, -0.050), "rot": Vector3(-90.0, -180.0, 0.0), "scale_mult": 1.000, "muzzle": Vector3(0.000, 0.050, 0.550)},
 	&"smg_1h":         {"pos": Vector3(0.050, 0.200, 0.050), "rot": Vector3(-105.0, -180.0, 0.0), "scale_mult": 1.611, "muzzle": Vector3(0.000, 0.000, 0.350)},
 	&"lmg_2h":         {"pos": Vector3(-0.100, 0.050, 0.050), "rot": Vector3(-105.0, 90.0, -180.0), "scale_mult": 1.331},
-	&"sniper_2h":      {"pos": Vector3(-0.050, 0.300, 0.050), "rot": Vector3(-105.0, 75.0, -90.0), "scale_mult": 1.078, "muzzle": Vector3(0.050, 0.050, 0.750)},
+	&"sniper_2h":      {"pos": Vector3(0.000, 0.350, 0.050), "rot": Vector3(-15.0, 75.0, -90.0), "scale_mult": 1.331},
 	&"rpg_2h":         {"pos": Vector3(0.100, 0.350, 0.000), "rot": Vector3(-90.0, 165.0, 0.0), "scale_mult": 1.089},
 	&"shotgun_2h":     {"pos": Vector3(-0.150, 0.350, -0.000), "rot": Vector3(-105.0, 90.0, 165.0), "scale_mult": 1.067},
 	&"accelerator_2h": {"pos": Vector3(-0.150, 0.350, 0.000), "rot": Vector3(-105.0, 90.0, 165.0), "scale_mult": 0.990, "muzzle": Vector3(0.000, 0.250, 0.600)},
@@ -108,8 +108,9 @@ static var _GRIP_FEMALE: Dictionary = {
 	&"accelerator_2h": {"pos": Vector3(-0.150, 0.200, -0.000), "rot": Vector3(-105.0, 90.0, 165.0), "scale_mult": 0.714, "muzzle": Vector3(0.000, 0.300, 0.500)},
 	&"taser_2h":       {"pos": Vector3(-0.000, 0.200, 0.150), "rot": Vector3(-90.0, 0.0, -15.0), "scale_mult": 0.650, "muzzle": Vector3(-0.000, 0.100, 0.350)},
 	&"lmg_2h":         {"pos": Vector3(-0.150, 0.150, 0.050), "rot": Vector3(-105.0, 90.0, -180.0), "scale_mult": 1.186, "muzzle": Vector3(0.000, 0.250, 0.850)},
-	# sniper_2h falls through to male for now — append it here when tuned.
-	# Fallback path picks the male entry when the female table is missing the key.
+	&"sniper_2h":      {"pos": Vector3(-0.050, 0.300, 0.050), "rot": Vector3(-105.0, 75.0, -90.0), "scale_mult": 1.078, "muzzle": Vector3(0.050, 0.050, 0.750)},
+	# All 11 weapons now have female overrides. Fallback path stays in
+	# place for any future weapon additions that ship male-first.
 }
 
 # Returns the per-gender table. Unknown / empty gender falls back to male
