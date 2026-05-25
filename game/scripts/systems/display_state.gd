@@ -107,6 +107,13 @@ func set_bloom_enabled(enabled: bool) -> void:
 	apply()
 	save()
 
+func set_gi_quality(new_quality: DisplayConfig.GiQuality) -> void:
+	if config == null or config.gi_quality == new_quality:
+		return
+	config.gi_quality = new_quality
+	apply()
+	save()
+
 func toggle_fullscreen() -> void:
 	if config == null:
 		return
@@ -136,6 +143,7 @@ func apply() -> void:
 		vp.screen_space_aa = config.screen_space_aa
 		vp.use_taa = config.use_taa
 	_apply_bloom_to_environments()
+	_apply_gi_to_environments()
 	changed.emit()
 
 func _apply_bloom_to_environments() -> void:
@@ -147,14 +155,47 @@ func _apply_bloom_to_environments() -> void:
 		if we != null and we.environment != null:
 			we.environment.glow_enabled = config.bloom_enabled
 
+func _apply_gi_to_environments() -> void:
+	var root := get_tree().root if get_tree() != null else null
+	if root == null:
+		return
+	for node in root.find_children("*", "WorldEnvironment", true, false):
+		var we := node as WorldEnvironment
+		if we != null and we.environment != null:
+			_apply_gi_preset(we.environment)
+
+# Translates GiQuality enum → SDFGI knob values on an Environment.
+# Centralised so the per-frame apply() and the per-node _on_node_added
+# path can't drift. Updating the LOW/HIGH numerics here applies to every
+# WorldEnvironment in the project on the next apply().
+func _apply_gi_preset(env: Environment) -> void:
+	if config == null:
+		return
+	match config.gi_quality:
+		DisplayConfig.GiQuality.OFF:
+			env.sdfgi_enabled = false
+		DisplayConfig.GiQuality.LOW:
+			env.sdfgi_enabled = true
+			env.sdfgi_min_cell_size = 0.35
+			env.sdfgi_cascades = 2
+			env.sdfgi_use_occlusion = false
+			env.sdfgi_bounces = 1
+		DisplayConfig.GiQuality.HIGH:
+			env.sdfgi_enabled = true
+			env.sdfgi_min_cell_size = 0.15
+			env.sdfgi_cascades = 4
+			env.sdfgi_use_occlusion = true
+			env.sdfgi_bounces = 2
+
 func _on_node_added(node: Node) -> void:
 	# Catches WorldEnvironment nodes added after _ready (level loads, scene
-	# changes) so the user's bloom preference applies to them too.
+	# changes) so the user's bloom + GI preferences apply to them too.
 	if config == null:
 		return
 	var we := node as WorldEnvironment
 	if we != null and we.environment != null:
 		we.environment.glow_enabled = config.bloom_enabled
+		_apply_gi_preset(we.environment)
 
 func save() -> void:
 	if config == null:

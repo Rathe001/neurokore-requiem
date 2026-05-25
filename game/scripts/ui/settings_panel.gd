@@ -14,6 +14,7 @@ var _msaa_option: OptionButton
 var _fxaa_option: OptionButton
 var _taa_option: OptionButton
 var _bloom_option: OptionButton
+var _gi_option: OptionButton
 var _sensitivity_slider: HSlider
 var _music_slider: HSlider
 var _sfx_slider: HSlider
@@ -98,6 +99,8 @@ func _build_display_tab() -> VBoxContainer:
 	page.add_child(_make_option_row("MENU_SETTINGS_TAA", _taa_option))
 	_bloom_option = _make_bloom_option()
 	page.add_child(_make_option_row("MENU_SETTINGS_BLOOM", _bloom_option))
+	_gi_option = _make_gi_option()
+	page.add_child(_make_option_row("MENU_SETTINGS_GI_QUALITY", _gi_option))
 	return page
 
 
@@ -233,6 +236,15 @@ func _make_bloom_option() -> OptionButton:
 	option.item_selected.connect(_on_bloom_selected)
 	return option
 
+func _make_gi_option() -> OptionButton:
+	var option := OptionButton.new()
+	option.add_theme_font_size_override(&"font_size", UIThemeState.palette.font_size_sublabel)
+	option.add_item(tr("COMMON_OFF"), DisplayConfig.GiQuality.OFF)
+	option.add_item(tr("GI_QUALITY_LOW"), DisplayConfig.GiQuality.LOW)
+	option.add_item(tr("GI_QUALITY_HIGH"), DisplayConfig.GiQuality.HIGH)
+	option.item_selected.connect(_on_gi_selected)
+	return option
+
 func _make_volume_slider(initial: float) -> HSlider:
 	var slider := HSlider.new()
 	slider.min_value = 0.0
@@ -320,6 +332,7 @@ func _refresh_display_options() -> void:
 	_fxaa_option.select(_fxaa_option.get_item_index(DisplayState.config.screen_space_aa))
 	_taa_option.select(_taa_option.get_item_index(1 if DisplayState.config.use_taa else 0))
 	_bloom_option.select(_bloom_option.get_item_index(1 if DisplayState.config.bloom_enabled else 0))
+	_gi_option.select(_gi_option.get_item_index(DisplayState.config.gi_quality))
 	_sensitivity_slider.set_value_no_signal(DisplayState.config.fps_mouse_sensitivity)
 
 func _on_window_mode_selected(index: int) -> void:
@@ -342,3 +355,6 @@ func _on_taa_selected(index: int) -> void:
 
 func _on_bloom_selected(index: int) -> void:
 	DisplayState.set_bloom_enabled(_bloom_option.get_item_id(index) == 1)
+
+func _on_gi_selected(index: int) -> void:
+	DisplayState.set_gi_quality(_gi_option.get_item_id(index) as DisplayConfig.GiQuality)

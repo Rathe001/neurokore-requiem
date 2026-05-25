@@ -93,3 +93,4 @@
 - [Level-up spike at higher levels](project_levelup_higher_lvl_spike.md) — Lvl 5+ level-ups cost ~100ms proc despite VfxWarmup; Lvl 2 fine; suspect UI re-layout or per-level VFX
 - [PerfLogger feedback loop](project_perf_logger_feedback.md) — Spike rows used to fire every frame with 25ms of tree walks, self-perpetuating. Throttled to 200ms and tree walks skipped on spike rows.
 - [Enemy AnimationPlayer pause](project_enemy_anim_pause.md) — 200+ enemy AnimationPlayers ticking ~40ms/frame at level start; now pause when invisible+IDLE (active states keep ticking)
+- [GI Quality setting](project_gi_quality_setting.md) — SDFGI default OFF (was the ~50s convergence stall on level load); DisplayConfig.gi_quality enum drives runtime apply via DisplayState._apply_gi_preset; LOW/HIGH presets exposed in Display settings

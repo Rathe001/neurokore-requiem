@@ -82,7 +82,16 @@ volumetric_fog_length = 40.0
 ; wall thickness (~2.7 cells thick — solid SDF surface) while still
 ; leaving SDFGI cascade memory budgets reasonable. Going smaller starts
 ; over-resolving and slows cascade rebuilds during procgen transitions.
-sdfgi_enabled = true
+; SDFGI defaults to OFF as of v0.3.x perf pass. Procgen rebakes the
+; cascades on every level load, which stalled idle-room FPS at ~22 for
+; ~50 seconds before the cascades converged. Cyberpunk's identity is
+; emissive + bloom; the soft GI bounce was nice-to-have, not foundation.
+; DisplayState.apply() drives sdfgi_enabled (+ the LOW preset's tuned
+; knobs) at runtime based on DisplayConfig.gi_quality, so anything set
+; here is overwritten — these lines exist only so the editor preview
+; matches the default-off shipping config. Tuning recipe for LOW preset
+; lives in DisplayState._apply_gi_preset(); update there, not here.
+sdfgi_enabled = false
 sdfgi_min_cell_size = 0.15
 sdfgi_cascades = 4
 sdfgi_use_occlusion = true
