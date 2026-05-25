@@ -158,6 +158,15 @@ func _safe_projectile_spawn_position(aim: Vector3, source_offset: Vector3 = Vect
 	var muzzle := _muzzle_world_position(aim, source_offset)
 	if _host == null:
 		return muzzle
+	# Physics state is only readable inside the physics frame. Calling
+	# intersect_ray from the LMB wind-up timer (which fires from a
+	# SceneTreeTimer that doesn't sync to physics) logs `Space state is
+	# inaccessible right now` per shot. Bail to the raw muzzle when we
+	# can't safely raycast; the projectile loses its safety clamp but
+	# the alternative (per-shot stderr spam that tanks proc) is worse.
+	# Same guard pattern proximity_lighting uses.
+	if not Engine.is_in_physics_frame():
+		return muzzle
 	var world := _host.get_world_3d()
 	if world == null:
 		return muzzle

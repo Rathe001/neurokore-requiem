@@ -525,6 +525,18 @@ func _safe_enemy_spawn_position(aim_norm: Vector3) -> Vector3:
 	var barrel_pos: Vector3 = chest + barrel
 	if not _host.is_inside_tree():
 		return barrel_pos
+	# Physics state is only readable inside the physics frame. Calling
+	# space.intersect_ray() from input handlers / animation callbacks
+	# / _process logs `Space state is inaccessible right now, wait for
+	# iteration or physics process notification` per call. Enemy fire
+	# fires from a wind-up timer that resolves outside the physics
+	# frame, so every shot hit this trap (484 errors in one playtest +
+	# the synchronous stderr writes dominated proc time). Bail to the
+	# raw barrel position when we can't safely raycast — the projectile
+	# loses its safety clamp but the alternative (spamming + crashing
+	# perf) is worse. Same guard pattern proximity_lighting uses.
+	if not Engine.is_in_physics_frame():
+		return barrel_pos
 	var world := _host.get_world_3d()
 	if world == null:
 		return barrel_pos

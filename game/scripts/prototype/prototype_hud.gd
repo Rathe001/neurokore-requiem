@@ -319,7 +319,16 @@ func _update_debuffs_bar() -> void:
 		return
 	for child in debuff_entries.get_children():
 		child.queue_free()
-	var player := get_tree().get_first_node_in_group(&"player") as PrototypePlayer
+	# Scene-transition race: this can fire from a deferred call while
+	# the HUD is mid-removal from the tree. get_tree() returns null in
+	# that window, and the next line then errors with
+	# `Parameter "data.tree" is null` + `Cannot call method
+	# 'get_first_node_in_group' on a null value`. Bail cleanly — there's
+	# nothing to draw when we're not in the tree anyway.
+	var tree := get_tree()
+	if tree == null:
+		return
+	var player := tree.get_first_node_in_group(&"player") as PrototypePlayer
 	if player == null or not is_instance_valid(player):
 		return
 	# Per-EFFECT debuff entries (not per surface). One "Slippery" icon
