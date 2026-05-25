@@ -2262,6 +2262,11 @@ const ARM_OFFSET_VERTICAL := 1.0
 func _cast_lmb_combat() -> void:
 	if _lmb_busy:
 		return
+	# Perf-logger event marker. PerfLogger throttles internally so this
+	# is safe to call every frame the button is held — only the first
+	# fire of each burst gets tagged into the CSV.
+	if PerfLogger != null:
+		PerfLogger.tag_fire_lmb()
 	# CHANNEL_BEAM main weapon (Taser tase, Accelerator stream) starts
 	# the channel held-state instead of going through the standard
 	# multi-arm volley for its own slot. _tick_channel ticks damage

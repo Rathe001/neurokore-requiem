@@ -1821,6 +1821,13 @@ func aggro(depth: int = 0) -> void:
 		return
 	if _state == State.RETURNING or _state == State.DEAD:
 		return
+	# Perf-logger event marker, root call only. Cascade waves are the
+	# main "wakes 50+ enemies in one frame" pattern that drives the phys
+	# spikes we've been chasing, so tagging the root makes the CSV show
+	# "fire_lmb → aggro_cascade → spike_phys" runs explicitly. Tagged
+	# only at depth=0 so a single trigger writes one row, not N.
+	if depth == 0 and PerfLogger != null:
+		PerfLogger.tag_event(&"aggro_cascade")
 	# KNOCKBACK / STUNNED / GRABBED resolve to CHASING through their own
 	# tick functions — don't cut those animations short by force-swapping
 	# state here. The pack still gets alerted via the cascade below; this

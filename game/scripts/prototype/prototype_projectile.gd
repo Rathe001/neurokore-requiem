@@ -351,6 +351,10 @@ func _ensure_smoke_trail() -> void:
 
 func _ready() -> void:
 	_connect_signal()
+	# Group membership for the perf logger's projectile count column.
+	# Group adds are cheap and Godot auto-removes on queue_free, so no
+	# cleanup needed when the projectile despawns/recycles.
+	add_to_group(&"projectiles")
 
 func _connect_signal() -> void:
 	if not _connected:

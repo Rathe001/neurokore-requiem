@@ -2,24 +2,35 @@ extends Node
 
 # Session perf logger. Samples performance counters once per second
 # and writes them to user://perf_log.csv. Also tags discrete game
-# events (level-up, level-load, etc.) as event rows so spike
-# correlation is straightforward when reading the CSV back.
+# events (level-up, level-load, fire_lmb, aggro_cascade, etc.) as
+# event rows so spike correlation is straightforward when reading
+# the CSV back.
 #
 # Format:
-#   time_s, fps, frame_ms, proc_ms, phys_ms, enemies, draws, tris,
-#   objects, lights_visible, lights_total, mmi_visible, particles_visible,
+#   time_s, fps, frame_ms, proc_ms, phys_ms,
+#   enemies, enemies_active, enemies_chasing, enemies_combat,
+#   weapon_id, firing, player_x, player_z,
+#   projectiles, decals, casings,
+#   draws, tris, objects,
+#   lights_visible, lights_total, mmi_visible, particles_visible,
 #   total_nodes, event
 #
-# Event column is empty for periodic samples, populated for tagged
-# events (e.g. "level_up", "level_load", "explosion"). The same row
-# layout for both lets a CSV viewer / spreadsheet line them up
-# directly against the timeline.
+# Column groups, in order:
+#   - Frame timing            (time, fps, frame/proc/phys ms)
+#   - Enemy subsystem         (total / actively ticking / chasing / in-combat)
+#   - Player action context   (current weapon, holding fire, world pos)
+#   - Transient counts        (live projectiles / decals / shell casings)
+#   - Render counts           (draws, tris, objects)
+#   - Tree walks              (light/mmi/particles visible — expensive,
+#                              skipped on spike rows to break feedback loop)
+#   - event                   ("" for periodic, populated for tagged events)
 #
 # Output file flushes every sample so a crash mid-session doesn't
 # lose the data. File is at user://perf_log.csv — on Windows that's
 # %APPDATA%\Godot\app_userdata\Neurokore Requiem\perf_log.csv. The
-# autoload deletes the existing file at session start so each playthrough
-# gets a clean log (rename in-place if you want to keep multiple).
+# autoload opens with WRITE mode at session start so each playthrough
+# overwrites the previous log (rename in-place if you want to keep
+# multiple).
 
 const SAMPLE_INTERVAL: float = 1.0
 const LOG_PATH: String = "user://perf_log.csv"
@@ -35,6 +46,22 @@ const SPIKE_THRESHOLD_MS: float = 50.0
 # the logger contributes at most ~150ms/sec of its own overhead during
 # sustained spikes instead of 60×30=1800ms/sec.
 const SPIKE_MIN_INTERVAL_SEC: float = 0.2
+
+# State enum values mirrored from PrototypeEnemy.State so we don't have
+# to load the class here. Update if the enum ever changes; otherwise the
+# enemies_chasing / enemies_combat columns will silently mis-count.
+const _STATE_CHASING: int = 1
+const _STATE_CASTING: int = 6
+const _STATE_ATTACKING: int = 7
+const _STATE_JUMPING: int = 5
+
+# fire_lmb event throttle. _cast_lmb_combat is called every frame the
+# button is held, but we only want one event per burst — otherwise a
+# 5-second laser-pistol hold floods the CSV with 300 fire_lmb rows.
+# Re-tag if a tag was suppressed and the player has now released and
+# pressed again (gap > LMB_TAG_GAP_SEC).
+const LMB_TAG_GAP_SEC: float = 0.5
+var _last_lmb_tag_t: float = -1000.0
 
 var _file: FileAccess
 var _accum: float = 0.0
@@ -90,13 +117,22 @@ func _process(delta: float) -> void:
 		var which: StringName = &"spike_proc" if proc_ms > phys_ms else &"spike_phys"
 		# Spike rows skip the expensive tree walks (they were adding
 		# 20-30ms of feedback overhead per frame). Periodic 1Hz rows
-		# still pay the full cost so the long-run trend data is there.
+		# also skip them now (see below); only explicit event tags pay
+		# the full cost.
 		_write_row(which, true)
 		return
 	if _accum < SAMPLE_INTERVAL:
 		return
 	_accum = 0.0
-	_write_row(&"", false)
+	# Periodic 1Hz samples skip the tree walks too. At ~9000 nodes those
+	# walks cost ~20-30ms each, producing a recurring once-per-second
+	# stutter that was big enough to read as a perf issue on top of the
+	# real spikes we're trying to diagnose. The walks still run on
+	# explicit event tags (build_end, level_up, aggro_cascade, fire_lmb)
+	# so post-event snapshots stay accurate — that's where you'd
+	# actually want to know how many lights or particle systems were
+	# live anyway.
+	_write_row(&"", true)
 
 
 # ── Public API ──────────────────────────────────────────────────────────────
@@ -112,6 +148,22 @@ func tag_event(event_name: StringName) -> void:
 	_write_row(event_name, false)
 
 
+## Specialised LMB-fire tag. Throttled to LMB_TAG_GAP_SEC because
+## _cast_lmb_combat fires every frame the button is held — without
+## this, a long laser-pistol burst would flood the CSV with hundreds
+## of fire_lmb rows. The first fire of a burst gets tagged; subsequent
+## frames within the gap window are suppressed; releasing for >gap
+## seconds re-arms the next press.
+func tag_fire_lmb() -> void:
+	if _file == null:
+		return
+	var now: float = float(Time.get_ticks_msec() - _session_start_msec) / 1000.0
+	if now - _last_lmb_tag_t < LMB_TAG_GAP_SEC:
+		return
+	_last_lmb_tag_t = now
+	_write_row(&"fire_lmb", false)
+
+
 # ── Internals ───────────────────────────────────────────────────────────────
 
 func _open_log() -> void:
@@ -121,7 +173,7 @@ func _open_log() -> void:
 		set_process(false)
 		return
 	# Header row — keep in sync with _write_row's column order.
-	_file.store_line("time_s,fps,frame_ms,proc_ms,phys_ms,enemies,draws,tris,objects,lights_visible,lights_total,mmi_visible,particles_visible,total_nodes,event")
+	_file.store_line("time_s,fps,frame_ms,proc_ms,phys_ms,enemies,enemies_active,enemies_chasing,enemies_combat,weapon_id,firing,player_x,player_z,projectiles,decals,casings,draws,tris,objects,lights_visible,lights_total,mmi_visible,particles_visible,total_nodes,event")
 
 
 ## `skip_tree_walks` — when true, the per-write tree enumeration
@@ -142,10 +194,72 @@ func _write_row(event_name: StringName, skip_tree_walks: bool = false) -> void:
 	var draws: int = int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
 	var tris: int = int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME))
 	var objects: int = int(Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME))
-	# Cheap to gather: SpatialGrid count is O(1), get_node_count is O(1).
 	var tree := get_tree()
-	var enemies: int = SpatialGrid.count(&"enemies") if SpatialGrid != null else 0
 	var total_nodes: int = tree.get_node_count() if tree != null else 0
+
+	# Enemy state breakdown. One pass over the &"enemies" group counts
+	# total + active (is_physics_processing) + per-state buckets. Cheap
+	# even at horde density — group lookup is O(1), iteration is O(N).
+	# Buckets:
+	#   enemies         — every member of the group (alive or dying)
+	#   enemies_active  — is_physics_processing()==true (i.e. NOT paused
+	#                     by _update_physics_process_active). Direct read
+	#                     of whether the pause optimisation is working.
+	#   enemies_chasing — state == CHASING (the dominant cost driver when
+	#                     it isn't paused, e.g. visible pursuers).
+	#   enemies_combat  — state in {CASTING, ATTACKING, JUMPING} — active
+	#                     combat states that are exempt from the pause
+	#                     and run at full 60Hz, so they represent the
+	#                     irreducible per-frame floor.
+	var enemies: int = 0
+	var enemies_active: int = 0
+	var enemies_chasing: int = 0
+	var enemies_combat: int = 0
+	if tree != null:
+		for e: Node in tree.get_nodes_in_group(&"enemies"):
+			if not is_instance_valid(e):
+				continue
+			enemies += 1
+			if e is Node3D and (e as Node3D).is_physics_processing():
+				enemies_active += 1
+			if "_state" in e:
+				var st: int = e.get(&"_state")
+				if st == _STATE_CHASING:
+					enemies_chasing += 1
+				elif st == _STATE_CASTING or st == _STATE_ATTACKING or st == _STATE_JUMPING:
+					enemies_combat += 1
+
+	# Player action context. Empty/zero when no local player (intro
+	# scene, between deaths, etc.).
+	var weapon_id: String = ""
+	var firing: int = 0
+	var player_x: float = 0.0
+	var player_z: float = 0.0
+	if tree != null:
+		var player := tree.get_first_node_in_group(&"player") as Node3D
+		if player != null:
+			player_x = player.global_position.x
+			player_z = player.global_position.z
+			if InventoryState != null:
+				var w: Item = InventoryState.get_equipped(&"weapon")
+				if w != null:
+					weapon_id = String(w.weapon_base_id)
+			# is_action_pressed works for any peer's input on the
+			# host's machine; correlates "spike during firing" cleanly.
+			if InputMap.has_action(&"fire") and Input.is_action_pressed(&"fire"):
+				firing = 1
+
+	# Transient node counts. Projectiles + shell casings are joined to
+	# their respective groups on _ready (group adds are cheap, and
+	# Godot auto-removes on queue_free). Decals are tracked by the
+	# attack indicator's static ring arrays — read them directly.
+	var projectiles: int = 0
+	var casings: int = 0
+	if tree != null:
+		projectiles = tree.get_nodes_in_group(&"projectiles").size()
+		casings = tree.get_nodes_in_group(&"shell_casings").size()
+	var decals: int = PrototypeAttackIndicator._blood_decal_ring.size() + PrototypeAttackIndicator._wall_impact_ring.size()
+
 	var lights_visible: int = 0
 	var lights_total: int = 0
 	var mmi_visible: int = 0
@@ -168,9 +282,12 @@ func _write_row(event_name: StringName, skip_tree_walks: bool = false) -> void:
 			if (n as GPUParticles3D).is_visible_in_tree():
 				particles_visible += 1
 	# Compact column order — matches header above.
-	_file.store_line("%.2f,%d,%.2f,%.2f,%.2f,%d,%d,%d,%d,%d,%d,%d,%d,%d,%s" % [
+	_file.store_line("%.2f,%d,%.2f,%.2f,%.2f,%d,%d,%d,%d,%s,%d,%.1f,%.1f,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%s" % [
 		t_s, fps, frame_ms, proc_ms, phys_ms,
-		enemies, draws, tris, objects,
+		enemies, enemies_active, enemies_chasing, enemies_combat,
+		weapon_id, firing, player_x, player_z,
+		projectiles, decals, casings,
+		draws, tris, objects,
 		lights_visible, lights_total,
 		mmi_visible, particles_visible,
 		total_nodes,

@@ -30,6 +30,9 @@ func setup(mesh: Mesh, init_velocity: Vector3, init_angular_velocity: Vector3, g
 	_vel = init_velocity
 	_ang_vel = init_angular_velocity
 	_ground_y = ground_y
+	# Group membership for the perf logger's casings count column.
+	# Group adds are cheap and Godot auto-removes on queue_free.
+	add_to_group(&"shell_casings")
 	_mesh_inst = MeshInstance3D.new()
 	_mesh_inst.mesh = mesh
 	_mesh_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
