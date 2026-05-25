@@ -330,11 +330,12 @@ func _spawn_enemy_projectile(aim: Vector3, skill_damage_mult: float = 1.0, blast
 	# Barrel offset — push the spawn forward + right of the body so
 	# projectiles emerge from a "muzzle" position rather than the
 	# chest center. Matches PlayerCombat's BARREL_FORWARD_OFFSET /
-	# BARREL_RIGHT_OFFSET conventions.
+	# BARREL_RIGHT_OFFSET conventions. Safety-clamped (see helper
+	# below) so the projectile spawn doesn't land inside a wall when
+	# the enemy fires flush against geometry, or past the player when
+	# firing at point-blank range — same fix shipped player-side.
 	var aim_norm := proj.direction.normalized()
-	var aim_right := Vector3.UP.cross(aim_norm).normalized()
-	var barrel := aim_norm * 0.7 + aim_right * 0.25
-	proj.global_position = _host.global_position + Vector3(0.0, 1.4, 0.0) + barrel
+	proj.global_position = _safe_enemy_spawn_position(aim_norm)
 	proj.monitoring = true
 	proj.reset()
 	# Fire sound is played ONCE per volley by the caller (basic_attack or
@@ -506,11 +507,41 @@ func _spawn_skill_projectile(aim: Vector3, skill: EnemySkill) -> void:
 	_host.get_parent().add_child(proj)
 	# Barrel offset — same as _spawn_enemy_projectile.
 	var aim_norm := proj.direction.normalized()
-	var aim_right := Vector3.UP.cross(aim_norm).normalized()
-	var barrel := aim_norm * 0.7 + aim_right * 0.25
-	proj.global_position = _host.global_position + Vector3(0.0, 1.4, 0.0) + barrel
+	proj.global_position = _safe_enemy_spawn_position(aim_norm)
 	proj.monitoring = true
 	proj.reset()
+
+
+# Mirror of PlayerCombat._safe_projectile_spawn_position. Computes the
+# enemy's "barrel" spawn (chest + 0.4m up + 0.7m forward + 0.25m right),
+# then ray-checks chest -> barrel for walls / pillars / the player's
+# body. Any obstruction → spawn at chest so the projectile doesn't
+# self-collide on the wall it just clipped through or whiff past a
+# player who's right in the enemy's face.
+func _safe_enemy_spawn_position(aim_norm: Vector3) -> Vector3:
+	var aim_right := Vector3.UP.cross(aim_norm).normalized()
+	var barrel := aim_norm * 0.7 + aim_right * 0.25
+	var chest: Vector3 = _host.global_position + Vector3(0.0, 1.4, 0.0)
+	var barrel_pos: Vector3 = chest + barrel
+	if not _host.is_inside_tree():
+		return barrel_pos
+	var world := _host.get_world_3d()
+	if world == null:
+		return barrel_pos
+	var space := world.direct_space_state
+	if space == null:
+		return barrel_pos
+	var query := PhysicsRayQueryParameters3D.create(chest, barrel_pos)
+	# Walls + pillars + player. Use the player mask since enemy
+	# projectiles target the player; charmed-pet enemies don't fire
+	# (they melee), so we don't need CHARMED_ALLY_LAYER_MASK here.
+	query.collision_mask = PrototypeProjectile.PROJECTILE_WORLD_MASK | PrototypeProjectile.PLAYER_LAYER_MASK
+	if _host is CollisionObject3D:
+		query.exclude = [(_host as CollisionObject3D).get_rid()]
+	var hit := space.intersect_ray(query)
+	if not hit.is_empty():
+		return chest
+	return barrel_pos
 
 
 func _cast_skill_self_buff(skill: EnemySkill) -> void:

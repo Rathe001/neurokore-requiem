@@ -102,13 +102,17 @@ func _eject_casing(weapon: Item) -> void:
 	WeaponAttachment.eject_casing(skel, weapon.weapon_base_id)
 
 
-# World-space spawn point for projectiles / hitscan rays / muzzle flashes.
-# Resolves to the actual barrel tip of the equipped weapon's visible
-# glb when one is mounted on the X Bot right-hand bone, so shots emerge
-# from the gun rather than the chest centre. Falls back to the legacy
-# "chest + BARREL_FORWARD/RIGHT_OFFSET" approximation when bare-handed
-# or when an extra arm (Forged Amalgamation) is firing — extra arms
-# don't carry a visible weapon model, so they stay on the legacy path.
+# World-space VISUAL muzzle position. Returns the actual barrel tip of
+# the equipped weapon's visible glb (via the X Bot right-hand bone's
+# BoneAttachment3D + per-weapon muzzle override), or the legacy "chest
+# + BARREL_FORWARD/RIGHT_OFFSET" approximation when bare-handed / when
+# an extra Amalgamation arm is firing (extras don't carry weapon models).
+#
+# Used for muzzle flashes + shell-casing ejection — anything that wants
+# to anchor visually to the gun's barrel. NOT used directly for
+# projectile spawn — that goes through _safe_projectile_spawn_position
+# below, which clamps back to the chest when the visual muzzle has
+# poked through a wall or past a close target.
 func _muzzle_world_position(aim: Vector3, source_offset: Vector3 = Vector3.ZERO) -> Vector3:
 	var aim_norm := aim.normalized() if aim.length_squared() > 0.0001 else Vector3.FORWARD
 	if source_offset != Vector3.ZERO:
@@ -125,6 +129,58 @@ func _muzzle_world_position(aim: Vector3, source_offset: Vector3 = Vector3.ZERO)
 	var aim_right_fb := Vector3.UP.cross(aim_norm).normalized()
 	var barrel_fb := aim_norm * BARREL_FORWARD_OFFSET + aim_right_fb * BARREL_RIGHT_OFFSET
 	return _host.global_position + Vector3(0.0, 1.0, 0.0) + barrel_fb
+
+
+# Projectile / hitscan spawn point. Starts at the visual muzzle, then
+# safety-checks the chest→muzzle segment for occluders. If anything is
+# in the way (wall, pillar, enemy body), spawns at the chest instead.
+#
+# Solves two related symptoms that both come from the gun barrel
+# extending past the player's collision capsule:
+#
+#   1. Standing flush against a wall: the visual muzzle pokes through
+#      the wall, projectile spawns INSIDE the wall, sweep-raycast on
+#      tick 1 immediately hits the wall from the wrong side, projectile
+#      released without ever traveling. Symptom: "I'm clicking and
+#      nothing happens" against walls.
+#
+#   2. Enemy closer than the muzzle's forward offset (a sniper-class
+#      muzzle is ~0.6m forward; an enemy at melee range is ~0.5m away):
+#      muzzle is PAST the enemy when the projectile spawns, projectile
+#      travels FORWARD from past-them, never collides. Symptom: "point-
+#      blank shots whiff."
+#
+# Chest is the player's collision-capsule center — projectile spawned
+# there is guaranteed to be inside the player's own body, so when it
+# starts moving on tick 1 it sweeps through whatever's between player
+# and target on its way out.
+func _safe_projectile_spawn_position(aim: Vector3, source_offset: Vector3 = Vector3.ZERO) -> Vector3:
+	var muzzle := _muzzle_world_position(aim, source_offset)
+	if _host == null:
+		return muzzle
+	var world := _host.get_world_3d()
+	if world == null:
+		return muzzle
+	var space := world.direct_space_state
+	if space == null:
+		return muzzle
+	var chest: Vector3 = _host.global_position + Vector3(0.0, 1.0, 0.0)
+	# If muzzle ≈ chest (bare hands, very short barrel) skip the check —
+	# nothing to clamp to.
+	if chest.distance_squared_to(muzzle) < 0.04:  # < 0.2m
+		return muzzle
+	var query := PhysicsRayQueryParameters3D.create(chest, muzzle)
+	# Walls + pillars + enemies. The world mask catches the wall-clip
+	# case; ENEMY_LAYER_MASK catches the point-blank case (target body
+	# inside the muzzle reach). Player's own capsule is excluded so the
+	# ray doesn't self-hit on the way out from chest.
+	query.collision_mask = PrototypeProjectile.PROJECTILE_WORLD_MASK | PrototypeProjectile.ENEMY_LAYER_MASK
+	if _host is CollisionObject3D:
+		query.exclude = [(_host as CollisionObject3D).get_rid()]
+	var hit := space.intersect_ray(query)
+	if not hit.is_empty():
+		return chest
+	return muzzle
 
 func tick_cooldowns(delta: float) -> void:
 	for skill in _cooldowns.keys():
@@ -709,11 +765,13 @@ func _spawn_projectile(skill: Skill, aim: Vector3, eff_range: float, weapon: Ite
 	# the main hand, re-aim from the offset spawn position toward the
 	# main-hand's target point (player + aim * range). Adds slight random
 	# spread so the volley looks organic, not robotic.
-	# Spawn from the actual muzzle tip of the equipped weapon's mounted
-	# model (falls back to the legacy chest + BARREL_FORWARD/RIGHT offset
-	# when bare-handed or for an extra-arm volley) so projectiles read
-	# as emerging from the barrel instead of the chest centre.
-	var spawn_pos := _muzzle_world_position(aim_norm, source_offset)
+	# Spawn at the visual muzzle when safe; clamp back to chest when the
+	# muzzle is past a wall or a close target (see comment on
+	# _safe_projectile_spawn_position). Muzzle flash below still uses the
+	# visual muzzle so the flash visibly pops at the gun barrel even when
+	# the projectile is spawning from chest center.
+	var visual_muzzle := _muzzle_world_position(aim_norm, source_offset)
+	var spawn_pos := _safe_projectile_spawn_position(aim_norm, source_offset)
 	if source_offset != Vector3.ZERO:
 		var target_point := _host.global_position + Vector3(0.0, 1.0, 0.0) + aim_norm * eff_range
 		aim_norm = (target_point - spawn_pos).normalized()
@@ -762,10 +820,12 @@ func _spawn_projectile(skill: Skill, aim: Vector3, eff_range: float, weapon: Ite
 	proj.global_position = spawn_pos
 	proj.monitoring = true
 	proj.reset()
-	# Muzzle flash — brief point light at the barrel.
+	# Muzzle flash — anchored at the VISUAL muzzle so it pops at the gun
+	# barrel even when the projectile is spawning from chest center
+	# (wall-clamp / point-blank-clamp case in _safe_projectile_spawn_position).
 	var _is_bullet := weapon != null and weapon.is_bullet_weapon()
 	var _tint := _weapon_tint(weapon)
-	CombatVisuals.spawn_muzzle_flash(_host, spawn_pos, _is_bullet, _tint)
+	CombatVisuals.spawn_muzzle_flash(_host, visual_muzzle, _is_bullet, _tint)
 	_eject_casing(weapon)
 	# MP: replicate the projectile spawn so other peers see it travel.
 	# Damage stays host-authoritative; remote echoes are ghost projectiles.
@@ -885,7 +945,13 @@ func _spawn_airstrike(skill: Skill, eff_range: float, weapon: Item) -> void:
 
 func _resolve_hitscan(skill: Skill, aim: Vector3, eff_range: float, weapon: Item, source_offset: Vector3 = Vector3.ZERO) -> void:
 	var aim_norm := aim.normalized()
-	var origin := _muzzle_world_position(aim_norm, source_offset)
+	# Visual muzzle drives the muzzle flash; safe origin drives the
+	# cone-scan + wall raycast. When the player is flush against a
+	# wall or face-to-face with an enemy, the safe origin clamps back
+	# to the chest so point-blank shots land on the target instead of
+	# the cone starting past them.
+	var visual_muzzle := _muzzle_world_position(aim_norm, source_offset)
+	var origin := _safe_projectile_spawn_position(aim_norm, source_offset)
 	# Re-aim from the offset origin toward the main-hand target point so
 	# extra arms converge on the same spot instead of firing parallel.
 	if source_offset != Vector3.ZERO:
@@ -937,9 +1003,13 @@ func _resolve_hitscan(skill: Skill, aim: Vector3, eff_range: float, weapon: Item
 		beam_end = minf(beam_end, origin.distance_to(hit_target.global_position))
 	var hitscan_tint := _weapon_tint(weapon)
 	var _is_bullet := weapon != null and weapon.is_bullet_weapon()
-	CombatVisuals.spawn_muzzle_flash(_host, origin, _is_bullet, hitscan_tint)
+	# Flash anchors at the visual muzzle (gun barrel tip) so it pops at
+	# the weapon even when `origin` got clamped back to chest. The beam
+	# below starts from the visual muzzle too so the tracer reads as
+	# leaving the gun, not the player's torso.
+	CombatVisuals.spawn_muzzle_flash(_host, visual_muzzle, _is_bullet, hitscan_tint)
 	_eject_casing(weapon)
-	CombatVisuals.spawn_beam(_host, aim_norm, beam_end, origin, hitscan_tint)
+	CombatVisuals.spawn_beam(_host, aim_norm, beam_end, visual_muzzle, hitscan_tint)
 	if hit_target != null:
 		CombatVisuals.spawn_impact_burst(_host, hit_target.global_position + Vector3(0.0, 0.9, 0.0), hitscan_tint)
 		var is_crit := _roll_crit(weapon)
@@ -960,9 +1030,11 @@ func _spawn_projectile_exact(skill: Skill, aim_norm: Vector3, eff_range: float, 
 	var proj: PrototypeProjectile = EntityPool.acquire(PROJECTILE_SCENE)
 	if proj == null:
 		return
-	# Same muzzle resolution as _spawn_projectile so projectiles fired
-	# via either path emerge from the same barrel tip.
-	var spawn_pos := _muzzle_world_position(aim_norm, source_offset)
+	# Same safety wrapper as _spawn_projectile — flash at the visual
+	# muzzle, projectile at the safe spawn (chest when muzzle is past
+	# a wall or close target).
+	var visual_muzzle := _muzzle_world_position(aim_norm, source_offset)
+	var spawn_pos := _safe_projectile_spawn_position(aim_norm, source_offset)
 	proj.direction = aim_norm
 	proj.speed = skill.projectile_speed
 	proj.max_range = eff_range
@@ -985,7 +1057,7 @@ func _spawn_projectile_exact(skill: Skill, aim_norm: Vector3, eff_range: float, 
 	proj.global_position = spawn_pos
 	proj.monitoring = true
 	proj.reset()
-	CombatVisuals.spawn_muzzle_flash(_host, spawn_pos, proj.is_bullet, _weapon_tint(weapon))
+	CombatVisuals.spawn_muzzle_flash(_host, visual_muzzle, proj.is_bullet, _weapon_tint(weapon))
 	_eject_casing(weapon)
 	# MP: replicate the Double Tap follow-up shot.
 	CombatVisuals.broadcast_projectile(spawn_pos, aim_norm, proj.speed, proj.max_range,
@@ -1008,7 +1080,10 @@ func _spawn_projectile_exact(skill: Skill, aim_norm: Vector3, eff_range: float, 
 ## `_hit_single` path, identical to a single-pellet hitscan.
 func _resolve_shotgun(skill: Skill, aim: Vector3, eff_range: float, weapon: Item, source_offset: Vector3 = Vector3.ZERO) -> void:
 	var aim_norm := aim.normalized()
-	var origin := _muzzle_world_position(aim_norm, source_offset)
+	# Visual muzzle drives the flash; safe origin drives pellet spawns
+	# so a shotgun blast at point-blank range actually lands.
+	var visual_muzzle := _muzzle_world_position(aim_norm, source_offset)
+	var origin := _safe_projectile_spawn_position(aim_norm, source_offset)
 	if source_offset != Vector3.ZERO:
 		var target_point := _host.global_position + Vector3(0.0, 1.0, 0.0) + aim_norm * eff_range
 		aim_norm = (target_point - origin).normalized()
@@ -1022,7 +1097,7 @@ func _resolve_shotgun(skill: Skill, aim: Vector3, eff_range: float, weapon: Item
 				acc_mult = MELEE_RANGE_ACCURACY_MULT
 				break
 	# One muzzle flash for the whole burst — all pellets leave the barrel together.
-	CombatVisuals.spawn_muzzle_flash(_host, origin, true, _weapon_tint(weapon))
+	CombatVisuals.spawn_muzzle_flash(_host, visual_muzzle, true, _weapon_tint(weapon))
 	_eject_casing(weapon)
 	var pellets: int = maxi(1, skill.pellet_count)
 	if weapon != null:
@@ -1373,7 +1448,9 @@ func _apply_overcharge_status(target: Node, skill: Skill, weapon: Item) -> void:
 
 
 func _resolve_hitscan_exact(skill: Skill, aim_norm: Vector3, eff_range: float, weapon: Item, source_offset: Vector3) -> void:
-	var origin := _muzzle_world_position(aim_norm, source_offset)
+	# Same visual/safe split as _resolve_hitscan.
+	var visual_muzzle := _muzzle_world_position(aim_norm, source_offset)
+	var origin := _safe_projectile_spawn_position(aim_norm, source_offset)
 	var extended_range := eff_range * FALLOFF_RANGE_MULT
 	var wall_dist := extended_range
 	var hit_target: Node3D = null
@@ -1404,9 +1481,9 @@ func _resolve_hitscan_exact(skill: Skill, aim_norm: Vector3, eff_range: float, w
 		beam_end = minf(beam_end, origin.distance_to(hit_target.global_position))
 	var hitscan_exact_tint := _weapon_tint(weapon)
 	var _is_bullet_exact := weapon != null and weapon.is_bullet_weapon()
-	CombatVisuals.spawn_muzzle_flash(_host, origin, _is_bullet_exact, hitscan_exact_tint)
+	CombatVisuals.spawn_muzzle_flash(_host, visual_muzzle, _is_bullet_exact, hitscan_exact_tint)
 	_eject_casing(weapon)
-	CombatVisuals.spawn_beam(_host, aim_norm, beam_end, origin, hitscan_exact_tint)
+	CombatVisuals.spawn_beam(_host, aim_norm, beam_end, visual_muzzle, hitscan_exact_tint)
 	if hit_target != null:
 		CombatVisuals.spawn_impact_burst(_host, hit_target.global_position + Vector3(0.0, 0.9, 0.0), hitscan_exact_tint)
 		var is_crit := _roll_crit(weapon)

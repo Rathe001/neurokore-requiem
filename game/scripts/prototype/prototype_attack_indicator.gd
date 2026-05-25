@@ -4270,9 +4270,17 @@ static func _beam_glow_material(color: Color) -> StandardMaterial3D:
 # just a point light pop that illuminates nearby surfaces for 1-2 frames.
 # Reuses the existing light pool so no allocations at horde scale.
 
-const MUZZLE_FLASH_DURATION: float = 0.06
-const MUZZLE_FLASH_ENERGY: float = 5.0
-const MUZZLE_FLASH_RANGE: float = 4.0
+const MUZZLE_FLASH_DURATION: float = 0.08
+# Energy + range bumped 2026-05-25 — the previous 5.0/4.0 read as a
+# subtle ambient lift rather than a discrete "the gun just fired" pop.
+# 10.0 energy pushes well above bloom threshold so the flash glows
+# brightly through the post-process; 6.0m range floods enough nearby
+# floor + walls that the surrounding geometry briefly catches the
+# light. Combined with the visual_muzzle anchor (flash now lands at
+# the gun barrel tip, not the chest), each shot reads as a real-world
+# muzzle discharge.
+const MUZZLE_FLASH_ENERGY: float = 10.0
+const MUZZLE_FLASH_RANGE: float = 6.0
 # Per-archetype flash color. Bullet weapons flash warm orange-white (muzzle
 # fire); energy weapons flash their damage-type tint.
 const MUZZLE_FLASH_BULLET_COLOR := Color(1.0, 0.8, 0.45)
