@@ -26,6 +26,13 @@ const DIM_FACTOR := 0.0         # full dark when no player nearby. Was 0.05 — 
 								#   the level. With 0.0, lights truly turn off when
 								#   the player isn't near them.
 const OCCLUDED_DIM_FACTOR := 0.0  # ambient level when blocked by wall or closed door
+# Energy threshold below which a light is hidden from the renderer entirely
+# via `visible = false`. Set well below human-perceivable brightness so the
+# toggle is invisible but Godot's forward+ light culling can skip the node.
+# Without this, ProximityLighting was leaving 200+ OmniLight3Ds at energy
+# ≈ 0 still flagged visible, costing ~30ms of per-frame engine proc on
+# dense levels.
+const LIGHT_VISIBILITY_EPSILON: float = 0.01
 const WORLD_LAYER_MASK := 1     # walls + floors + doors
 const RAY_HEIGHT := 0.5         # low sample height — clears floor colliders but stays
 								#   below crouch-tunnel ceilings; the ray is horizontal
@@ -158,6 +165,18 @@ func _physics_process(delta: float) -> void:
 		_visible[key] = (not blocked) and (not room_gated) and (dist < OUTER_RADIUS)
 		var target: float = baseline * factor
 		light.light_energy = lerp(light.light_energy, target, weight)
+		# Cull dimmed lights from the renderer entirely. ProximityLighting
+		# was leaving 200+ OmniLight3Ds at light_energy ≈ 0 but with
+		# `visible = true`, so Godot's forward+ renderer still walked them
+		# every frame for per-tile light culling + buffer allocation —
+		# ~30ms of engine-side proc on dense procgen levels (NG+6 has 259
+		# lights / 16 visible per the perf HUD). Setting visible=false on
+		# energy<EPSILON drops them from the render pipeline. The threshold
+		# is well below human perception so the toggle is invisible. Cheap:
+		# one bool compare + occasional property write per frame.
+		var should_be_visible: bool = light.light_energy > LIGHT_VISIBILITY_EPSILON
+		if light.visible != should_be_visible:
+			light.visible = should_be_visible
 	for key in to_remove:
 		_baselines.erase(key)
 		_visible.erase(key)

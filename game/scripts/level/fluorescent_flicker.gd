@@ -15,6 +15,16 @@ var _base_emission: float
 var _flicker_timer: float = 0.0
 var _light: Light3D
 var _tube_mat: StandardMaterial3D
+# Tick throttle. Flicker is RNG-driven and doesn't need 60Hz precision —
+# 15Hz reads identically (the human eye won't tell the difference between
+# a 33ms flicker dip vs a 66ms one against the natural duration variance).
+# With 128 fixtures per dense level, the previous full-rate _physics_process
+# was 128 calls/tick × ~0.0002ms = ~0.025ms/tick of pure early-out checks.
+# Throttling to 1-in-4 cuts the early-out cost while keeping the visible
+# flicker rate perceptually unchanged. Counter starts at a random offset
+# so 128 fixtures don't all tick the same frame.
+const _TICK_DIVISOR: int = 4
+var _skip_counter: int = randi() % _TICK_DIVISOR
 
 
 func setup(light: Light3D, tube_mat: StandardMaterial3D) -> void:
@@ -27,21 +37,30 @@ func setup(light: Light3D, tube_mat: StandardMaterial3D) -> void:
 func _physics_process(delta: float) -> void:
 	if _light == null:
 		return
+	_skip_counter += 1
+	if _skip_counter < _TICK_DIVISOR:
+		return
+	_skip_counter = 0
 	# Don't flicker lights the player can't see — ProximityLighting fights us
 	# for `light_energy` writes, and a flicker dip on a dimmed-out light reads
 	# as a stray brightness pop in rooms behind walls or doors.
 	if not ProximityLighting.is_visible(_light):
 		return
 
+	# delta passed in is one frame's delta; multiply by the divisor so the
+	# flicker_timer drains at real-time rate even though we tick at 1/N.
+	var effective_delta := delta * _TICK_DIVISOR
 	if _flicker_timer > 0.0:
-		_flicker_timer -= delta
+		_flicker_timer -= effective_delta
 		if _flicker_timer <= 0.0:
 			_light.light_energy = _base_energy
 			if _tube_mat != null:
 				_tube_mat.emission_energy_multiplier = _base_emission
 		return
 
-	if randf() < flicker_chance:
+	# flicker_chance was tuned at 60Hz; rescale so the per-second flicker
+	# rate stays the same at the new tick rate.
+	if randf() < flicker_chance * _TICK_DIVISOR:
 		var depth := randf_range(flicker_depth * 0.3, flicker_depth)
 		var factor := 1.0 - depth
 		_light.light_energy = _base_energy * factor
