@@ -201,10 +201,16 @@ func cast_melee_attack(player: Node3D, aim: Vector3) -> void:
 	_host.velocity.x = 0.0
 	_host.velocity.z = 0.0
 	_host._face_direction(aim)
-	_host._play_anim(XBotAnimations.random_enemy_melee_swing(), 1.6)
 	var range_now := attack_range()
 	var cone_now := melee_cone_deg()
 	var windup_now := attack_windup()
+	# Speed-scale the swing clip so its visible impact frame lands at
+	# windup_now (the damage moment). Previously fixed at 1.6× — that
+	# made sledge (windup 0.7s) finish the swing well before damage
+	# fired, reading as "the hit comes after the animation already
+	# happened." Blade (windup 0.35s) gets a faster speed here, sledge
+	# gets a slower one, both ending on the damage frame.
+	_host._play_swing_to_impact(XBotAnimations.random_enemy_melee_swing(), windup_now)
 	CombatVisuals.spawn_cone(_host, aim, range_now, cone_now, windup_now)
 	var gen := _host._generation
 	await _host.get_tree().create_timer(windup_now).timeout
@@ -270,6 +276,16 @@ func cast_ranged_attack(player: Node3D, aim: Vector3) -> void:
 	var spread_deg: float = ba.projectile_spread_deg if ba != null else 15.0
 	var ba_dmg_mult: float = ba.damage_mult if ba != null else 1.0
 	var ba_blast: float = ba.projectile_blast_radius if ba != null else 0.0
+	# One fire SFX per attack cycle — covers single-pellet, multi-pellet,
+	# AND burst-fire weapons. Previously this was inside the burst loop,
+	# which meant an LMG (burst_count=6, burst_delay=0.1) fired 6 sounds
+	# over 0.6s — six ~0.3s fire clips overlapping reads as audible
+	# phasing rather than rapid fire. One sound at the start represents
+	# the trigger pull; the individual projectiles are the rapid-fire
+	# follow-through and don't each need their own boom.
+	var wid: StringName = _host.enemy_class.weapon_id if _host.enemy_class != null else &""
+	if wid != &"":
+		WeaponSounds.play_fire(wid, _host.global_position)
 	for burst_i in burst:
 		if burst_i > 0:
 			await _host.get_tree().create_timer(burst_delay).timeout
@@ -293,13 +309,6 @@ func cast_ranged_attack(player: Node3D, aim: Vector3) -> void:
 				var offset_angle := (float(i) - half) * spread_rad
 				var rotated_aim := center_aim.rotated(Vector3.UP, offset_angle)
 				_spawn_enemy_projectile(rotated_aim, ba_dmg_mult, ba_blast)
-		# One fire sound per burst tick — pellets of a shotgun / accelerator
-		# volley leave the barrel together, so stacking N sounds reads as
-		# echoey / over-loud. _spawn_enemy_projectile NO LONGER plays its
-		# own per-projectile sound; this call covers all paths.
-		var wid: StringName = _host.enemy_class.weapon_id if _host.enemy_class != null else &""
-		if wid != &"":
-			WeaponSounds.play_fire(wid, _host.global_position)
 	_host._change_state(PrototypeEnemy.State.CHASING)
 
 
@@ -370,7 +379,8 @@ func _cast_skill_cone(target: Node3D, aim: Vector3, skill: EnemySkill) -> void:
 	_host.velocity.x = 0.0
 	_host.velocity.z = 0.0
 	_host._face_direction(aim)
-	_host._play_anim(XBotAnimations.random_enemy_melee_swing(), 1.6)
+	# Speed-scaled swing — same rationale as cast_melee_attack.
+	_host._play_swing_to_impact(XBotAnimations.random_enemy_melee_swing(), skill.wind_up)
 	CombatVisuals.spawn_cone(_host, aim, skill.skill_range, skill.cone_deg, skill.wind_up)
 	var gen := _host._generation
 	await _host.get_tree().create_timer(skill.wind_up).timeout
@@ -409,7 +419,10 @@ func _cast_skill_radial(target: Node3D, skill: EnemySkill) -> void:
 	_host._attack_cd = attack_cooldown()
 	_host.velocity.x = 0.0
 	_host.velocity.z = 0.0
-	_host._play_anim(XBotAnimations.random_enemy_melee_swing(), 1.4)
+	# Radial skill swing — anim peaks at the damage moment. Wider clamp
+	# range than melee since AoE windups can run longer / shorter than
+	# blade/sledge windups.
+	_host._play_swing_to_impact(XBotAnimations.random_enemy_melee_swing(), skill.wind_up)
 	CombatVisuals.spawn_radial(_host, skill.aoe_radius, skill.wind_up)
 	var gen := _host._generation
 	await _host.get_tree().create_timer(skill.wind_up).timeout
@@ -453,6 +466,14 @@ func _cast_skill_projectile(target: Node3D, aim: Vector3, skill: EnemySkill) -> 
 		return
 	var burst: int = skill.burst_count if skill.burst_count > 1 else 1
 	var burst_delay_val: float = skill.burst_delay if skill.burst_delay > 0.0 else 0.1
+	# One fire SFX per skill cast — covers burst + multi-projectile spreads.
+	# Same rationale as cast_ranged_attack above: per-burst-tick stacking
+	# turned LMG-style bursts into phaser. _spawn_skill_projectile doesn't
+	# play its own sound, so this single call covers every projectile in
+	# the cast.
+	var skill_wid: StringName = _host.enemy_class.weapon_id if _host.enemy_class != null else &""
+	if skill_wid != &"":
+		WeaponSounds.play_fire(skill_wid, _host.global_position)
 	for burst_i in burst:
 		if burst_i > 0:
 			await _host.get_tree().create_timer(burst_delay_val).timeout
@@ -477,11 +498,6 @@ func _cast_skill_projectile(target: Node3D, aim: Vector3, skill: EnemySkill) -> 
 				var offset_angle := (float(i) - half) * spread_rad
 				var rotated_aim := center_aim.rotated(Vector3.UP, offset_angle)
 				_spawn_skill_projectile(rotated_aim, skill)
-		# One sound per burst tick — was previously silent because
-		# _spawn_skill_projectile doesn't play fire on its own.
-		var skill_wid: StringName = _host.enemy_class.weapon_id if _host.enemy_class != null else &""
-		if skill_wid != &"":
-			WeaponSounds.play_fire(skill_wid, _host.global_position)
 
 
 func _spawn_skill_projectile(aim: Vector3, skill: EnemySkill) -> void:

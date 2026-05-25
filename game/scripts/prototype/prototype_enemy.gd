@@ -2968,6 +2968,32 @@ func _face_direction(dir: Vector3) -> void:
 		return
 	visual.look_at(visual.global_position + dir, Vector3.UP)
 
+# Play a melee swing clip with playback speed calibrated so its visible
+# impact frame lands at `impact_time` seconds from now. Used by EnemyCombat
+# for blade / sledgehammer / heavy strikes — the previous fixed 1.6× speed
+# made axe_combo clips peak ~0.4s in regardless of the weapon's actual
+# windup, so sledge (windup 0.7s) showed the strike well before the damage
+# moment. Computed: speed = (anim.length * SWING_IMPACT_FRAME_RATIO) / impact_time.
+# Speed is clamped to [0.5, 2.5] so extreme windups don't grind to slow-
+# motion or blur the swing into nothing.
+const SWING_IMPACT_FRAME_RATIO: float = 0.5   # axe_combo clips peak ~mid-clip
+func _play_swing_to_impact(candidates: Array[StringName], impact_time: float) -> void:
+	if anim_player == null or impact_time <= 0.0:
+		_play_anim(candidates, 1.6)
+		return
+	for anim_name in candidates:
+		if not anim_player.has_animation(anim_name):
+			continue
+		var anim: Animation = anim_player.get_animation(anim_name)
+		if anim == null or anim.length <= 0.0:
+			continue
+		var natural_impact: float = anim.length * SWING_IMPACT_FRAME_RATIO
+		var speed: float = clampf(natural_impact / impact_time, 0.5, 2.5)
+		_play_anim([anim_name], speed)
+		return
+	_play_anim(candidates, 1.6)
+
+
 func _play_anim(candidates: Array[StringName], speed: float = 1.0) -> bool:
 	if anim_player == null:
 		return false
