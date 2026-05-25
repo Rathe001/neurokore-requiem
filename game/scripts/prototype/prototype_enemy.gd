@@ -269,6 +269,15 @@ const ANIM_IDLE := CombatConstants.ANIM_IDLE
 const ANIM_RUN := CombatConstants.ANIM_RUN
 const ANIM_ATTACK := CombatConstants.ANIM_ATTACK
 const ANIM_FIRE := CombatConstants.ANIM_FIRE
+# Playback speed for the rifle-hold pose between shots. The Mixamo
+# "Firing Rifle 2" clip bakes a continuous-fire recoil cycle into the
+# loop — at 1.0× that recoil reads as a fast wobble in sync with the
+# enemy's breathing, which looks broken when the enemy is just standing
+# ready (no shot mid-flight). Slowing the picker-side play to 0.4×
+# stretches that cycle to a calm aim-breath cadence; the cast_attack
+# windup still bumps speed back to 1.0× for the actual shot, so each
+# shot reads as: slow breath → snap fire → slow breath.
+const _ANIM_FIRE_IDLE_HOLD_SPEED: float = 0.4
 const ANIM_CROUCH_IDLE := CombatConstants.ANIM_CROUCH_IDLE
 const ANIM_CROUCH_RUN: Array[StringName] = [&"Crouch_Walk_Forward", &"Crouch_Walk", &"CROUCH_WALK", &"Crouch_Idle", &"CROUCH_IDLE"]
 const ANIM_JUMP := CombatConstants.ANIM_JUMP
@@ -1580,8 +1589,10 @@ func _physics_process(delta: float) -> void:
 				# Ranged enemies hold the firing pose at all times so
 				# their weapon stays visibly drawn. Without this they
 				# look like they shoot, then drop the rifle and stand
-				# around relaxed between shots.
-				_play_anim(ANIM_FIRE)
+				# around relaxed between shots. Slow playback so the
+				# baked recoil cycle reads as breathing, not wobble —
+				# see _ANIM_FIRE_IDLE_HOLD_SPEED constant.
+				_play_anim(ANIM_FIRE, _ANIM_FIRE_IDLE_HOLD_SPEED)
 			else:
 				_play_anim(XBotAnimations.idle_anim_for_class(weapon_class))
 			if moving:
@@ -1703,7 +1714,9 @@ func _remote_physics_process() -> void:
 			if moving:
 				_play_anim(XBotAnimations.run_anim_for_class(weapon_class_remote))
 			elif is_ranged_remote:
-				_play_anim(ANIM_FIRE)
+				# Match the local picker — slow rifle-hold so the recoil
+				# cycle reads as a calm breath while standing ready.
+				_play_anim(ANIM_FIRE, _ANIM_FIRE_IDLE_HOLD_SPEED)
 			else:
 				_play_anim(XBotAnimations.idle_anim_for_class(weapon_class_remote))
 	_net_prev_pos = global_position
