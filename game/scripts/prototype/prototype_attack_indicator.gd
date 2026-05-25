@@ -1366,6 +1366,202 @@ static func spawn_blood_wall_splatter(parent: Node, world_pos: Vector3, wall_nor
 	_track_blood_decal(decal, BLOOD_PRIORITY_WALL)
 
 
+# ── Wall projectile impacts (bullet holes + plasma scorches) ─────────
+#
+# Decals spawned when a projectile hits world geometry (walls / floors /
+# ceilings). Two flavours:
+#   - BULLET (is_bullet=true): small dark hole, no glow, longer-lived.
+#   - PLASMA (is_bullet=false): bigger glowing patch tinted to the shot
+#     color; the emission cools over ~2.5s while the albedo lingers for
+#     the full lifetime, so it reads as "still molten → charred ring".
+#
+# Capped global ring (oldest evicted on overflow) like the blood ring,
+# but smaller — wall impacts fire a lot less than blood, and the glow
+# decals are HDR-enabled so each one is more expensive than a flat
+# blood splat. Lives on layer 1 alongside blood so the same wall surface
+# accepts both.
+
+const WALL_IMPACT_DECAL_MAX: int = 80
+# Total visible lifetime before the albedo fades + decal frees. Long
+# enough to read as "I shot up this room", short enough that a 5-minute
+# fight doesn't paper every wall with overlapping scorches.
+const WALL_IMPACT_LIFETIME_SEC: float = 14.0
+# Plasma glow cool window — emission drops to 0 over this time at the
+# start of life. Albedo (the charred mark) keeps the full lifetime.
+const WALL_IMPACT_PLASMA_COOL_SEC: float = 2.5
+const WALL_IMPACT_BULLET_SIZE: float = 0.16
+const WALL_IMPACT_PLASMA_SIZE: float = 0.32
+# HDR emission energy on plasma scorches. > 1.0 puts the decal above the
+# bloom threshold so it actually glows visibly during the cool window.
+const WALL_IMPACT_PLASMA_EMISSION_ENERGY: float = 6.0
+# Surface offset along the normal — same as blood wall splatters; keeps
+# the decal from z-fighting the wall while staying close enough that the
+# projection lands flush.
+const WALL_IMPACT_NORMAL_OFFSET: float = 0.03
+
+static var _wall_impact_ring: Array[Decal] = []
+static var _wall_impact_bullet_texture: ImageTexture = null
+static var _wall_impact_plasma_albedo_texture: ImageTexture = null
+static var _wall_impact_plasma_emission_texture: ImageTexture = null
+
+
+# Bullet hole — small dark disc with soft falloff. 64×64 RGBA, alpha-
+# weighted radial gradient. Charcoal centre (puncture) with a slight
+# brown edge ring (chipped material around the entry hole).
+static func _get_wall_impact_bullet_texture() -> ImageTexture:
+	if _wall_impact_bullet_texture != null:
+		return _wall_impact_bullet_texture
+	const SIZE: int = 64
+	var img := Image.create(SIZE, SIZE, false, Image.FORMAT_RGBA8)
+	var centre := Vector2(SIZE * 0.5, SIZE * 0.5)
+	for y in SIZE:
+		for x in SIZE:
+			var d: float = Vector2(x + 0.5, y + 0.5).distance_to(centre) / (SIZE * 0.5)
+			if d >= 1.0:
+				img.set_pixel(x, y, Color(0, 0, 0, 0))
+				continue
+			# Dark puncture in the inner 40%; brown chip ring 40-85%;
+			# fade to transparent past 85%. Smooth interpolation keeps
+			# the edge from looking pixel-blocky at iso distance.
+			var hole_t: float = clampf(d / 0.4, 0.0, 1.0)
+			var ring_t: float = clampf((d - 0.4) / 0.45, 0.0, 1.0)
+			var edge_t: float = clampf((d - 0.85) / 0.15, 0.0, 1.0)
+			var c := Color(0.04, 0.03, 0.03, 0.92).lerp(Color(0.18, 0.11, 0.07, 0.75), hole_t)
+			c = c.lerp(Color(0.22, 0.16, 0.12, 0.55), ring_t)
+			c.a *= (1.0 - edge_t)
+			img.set_pixel(x, y, c)
+	_wall_impact_bullet_texture = ImageTexture.create_from_image(img)
+	return _wall_impact_bullet_texture
+
+
+# Plasma scorch albedo — wider, irregular charred ring. The molten glow
+# is handled by the emission map; this one is the cool aftermath.
+static func _get_wall_impact_plasma_albedo_texture() -> ImageTexture:
+	if _wall_impact_plasma_albedo_texture != null:
+		return _wall_impact_plasma_albedo_texture
+	const SIZE: int = 64
+	var img := Image.create(SIZE, SIZE, false, Image.FORMAT_RGBA8)
+	var centre := Vector2(SIZE * 0.5, SIZE * 0.5)
+	for y in SIZE:
+		for x in SIZE:
+			var d: float = Vector2(x + 0.5, y + 0.5).distance_to(centre) / (SIZE * 0.5)
+			if d >= 1.0:
+				img.set_pixel(x, y, Color(0, 0, 0, 0))
+				continue
+			# Inner 35% near-black (vaporised); 35-70% charred dark; fade
+			# out beyond. The slight asymmetry from `noise` breaks the
+			# perfect-circle look without needing a real noise texture.
+			var noise: float = fract(sin(float(x) * 12.989 + float(y) * 78.233) * 43758.5453) * 0.12 - 0.06
+			var dd: float = clampf(d + noise, 0.0, 1.0)
+			var inner_t: float = clampf(dd / 0.35, 0.0, 1.0)
+			var char_t: float = clampf((dd - 0.35) / 0.35, 0.0, 1.0)
+			var edge_t: float = clampf((dd - 0.70) / 0.30, 0.0, 1.0)
+			var c := Color(0.02, 0.02, 0.02, 0.88).lerp(Color(0.08, 0.05, 0.04, 0.80), inner_t)
+			c = c.lerp(Color(0.15, 0.10, 0.08, 0.55), char_t)
+			c.a *= (1.0 - edge_t)
+			img.set_pixel(x, y, c)
+	_wall_impact_plasma_albedo_texture = ImageTexture.create_from_image(img)
+	return _wall_impact_plasma_albedo_texture
+
+
+# Plasma scorch emission — bright central hotspot fading to nothing.
+# Tinted at runtime via decal.modulate so the projectile's color carries
+# through. Pure white grayscale here so the modulate multiplies cleanly.
+static func _get_wall_impact_plasma_emission_texture() -> ImageTexture:
+	if _wall_impact_plasma_emission_texture != null:
+		return _wall_impact_plasma_emission_texture
+	const SIZE: int = 64
+	var img := Image.create(SIZE, SIZE, false, Image.FORMAT_RGBA8)
+	var centre := Vector2(SIZE * 0.5, SIZE * 0.5)
+	for y in SIZE:
+		for x in SIZE:
+			var d: float = Vector2(x + 0.5, y + 0.5).distance_to(centre) / (SIZE * 0.5)
+			if d >= 1.0:
+				img.set_pixel(x, y, Color(0, 0, 0, 0))
+				continue
+			# Tight bright core, soft halo. Exponential falloff so the
+			# centre is intensely white and the halo trails off gradually
+			# — emission_energy multiplies past 1.0 so the centre pushes
+			# above bloom threshold.
+			var t: float = pow(1.0 - d, 2.2)
+			img.set_pixel(x, y, Color(t, t, t, t))
+	_wall_impact_plasma_emission_texture = ImageTexture.create_from_image(img)
+	return _wall_impact_plasma_emission_texture
+
+
+## Spawn a projectile-impact decal on world geometry.
+##   is_bullet  — true for physical rounds (smg/sniper/shotgun/lmg) which
+##                leave a dark hole; false for energy/plasma which leave
+##                a glowing molten patch.
+##   glow_color — tint applied to the plasma emission. Ignored when
+##                is_bullet is true. Defaults to white.
+static func spawn_wall_projectile_impact(parent: Node, world_pos: Vector3, wall_normal: Vector3, is_bullet: bool, glow_color: Color = Color.WHITE) -> void:
+	if parent == null:
+		return
+	if wall_normal.length_squared() < 0.0001:
+		return
+	var decal := Decal.new()
+	if is_bullet:
+		decal.texture_albedo = _get_wall_impact_bullet_texture()
+		var s := WALL_IMPACT_BULLET_SIZE * randf_range(0.85, 1.15)
+		decal.size = Vector3(s, 0.3, s)
+		decal.albedo_mix = 1.0
+	else:
+		decal.texture_albedo = _get_wall_impact_plasma_albedo_texture()
+		decal.texture_emission = _get_wall_impact_plasma_emission_texture()
+		# Boost saturation a touch on the glow color so green plasma reads
+		# as green even under bright fluorescents — straight projectile
+		# colors are tuned for muzzle/trail brightness, not surface tint.
+		decal.modulate = Color(glow_color.r, glow_color.g, glow_color.b, 1.0)
+		decal.emission_energy = WALL_IMPACT_PLASMA_EMISSION_ENERGY
+		var s2 := WALL_IMPACT_PLASMA_SIZE * randf_range(0.9, 1.2)
+		decal.size = Vector3(s2, 0.3, s2)
+		decal.albedo_mix = 0.95
+	decal.upper_fade = 0.1
+	decal.lower_fade = 0.1
+	decal.cull_mask = BLOOD_DECAL_CULL_LAYER
+	parent.add_child(decal)
+	decal.global_position = world_pos + wall_normal.normalized() * WALL_IMPACT_NORMAL_OFFSET
+	# Decal projects along its local -Y. Rotate the default Y-up basis
+	# so +Y points along the wall normal — same trick the blood wall
+	# splatter uses. Random spin around the normal breaks the obvious
+	# "every impact axis-aligned" look.
+	var rot := Quaternion(Vector3.UP, wall_normal.normalized())
+	var spin := Basis(wall_normal.normalized(), randf() * TAU)
+	decal.global_basis = spin * Basis(rot)
+	_track_wall_impact_decal(decal, not is_bullet)
+
+
+# Ring eviction + auto-fade timer. Glowing decals get a fast emission
+# cool tween up front; both types get the late-life albedo fade and
+# queue_free.
+static func _track_wall_impact_decal(decal: Decal, is_glowing: bool) -> void:
+	_wall_impact_ring.append(decal)
+	if _wall_impact_ring.size() > WALL_IMPACT_DECAL_MAX:
+		var oldest_var = _wall_impact_ring.pop_front()
+		if oldest_var != null and is_instance_valid(oldest_var):
+			(oldest_var as Decal).queue_free()
+	# Tweens — both safe to start the same frame the decal was added.
+	if is_glowing:
+		var cool := decal.create_tween()
+		cool.tween_property(decal, "emission_energy", 0.0, WALL_IMPACT_PLASMA_COOL_SEC)
+	# Hold the decal at full opacity for most of the lifetime, then fade
+	# over the last 30%. Keeps the visual stable enough to read as a
+	# proper mark instead of constantly half-faded.
+	var hold: float = WALL_IMPACT_LIFETIME_SEC * 0.7
+	var fade: float = WALL_IMPACT_LIFETIME_SEC * 0.3
+	var fade_tw := decal.create_tween()
+	fade_tw.tween_interval(hold)
+	fade_tw.tween_property(decal, "albedo_mix", 0.0, fade)
+	fade_tw.tween_callback(func() -> void:
+		# Drop from the ring before queue_free so subsequent eviction
+		# scans don't trip over a freed entry.
+		_wall_impact_ring.erase(decal)
+		if is_instance_valid(decal):
+			decal.queue_free()
+	)
+
+
 # ── Character blood (decals parented to a character's visual) ────────
 #
 # spawn_blood_on_character() projects a small splatter onto the

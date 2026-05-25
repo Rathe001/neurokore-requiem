@@ -626,6 +626,19 @@ func _physics_process(delta: float) -> void:
 				# detonate against walls. Skip the energy-burst flash that
 				# laser/plasma shots use for their wall-impact tell.
 				CombatVisuals.spawn_impact_burst(self, impact_pos, _projectile_color())
+			# Persistent wall mark — bullet hole for physical rounds,
+			# glowing molten patch for energy/plasma. Skip AoE shots so
+			# their explosion crater isn't competing with a tiny scorch.
+			# Normal comes from the sweep raycast result; falls back to
+			# negative-direction if Jolt didn't populate it (rare, but
+			# safer than spawning a flat unsplayed disc).
+			if blast_radius <= 0.0:
+				var wall_normal_v: Vector3 = hit.get("normal", -direction.normalized())
+				var parent_node := get_parent()
+				if parent_node != null:
+					PrototypeAttackIndicator.spawn_wall_projectile_impact(
+						parent_node, impact_pos, wall_normal_v, is_bullet, _projectile_color()
+					)
 			_release()
 			return
 	global_position = to
