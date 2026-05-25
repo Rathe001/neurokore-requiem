@@ -1440,14 +1440,29 @@ func _change_state(new_state: State) -> void:
 
 
 # Single source of truth for "should AnimationPlayer be active right now?"
-# Reads two inputs — current visibility (set by LoS culler) and current
-# state — and applies the policy: pause iff invisible AND idle. Called
-# from visibility_changed and _change_state, so any input flip re-evaluates.
-# Cheap (one bool read + at most one property write).
+# Pause cases (idle loop is imperceptible if frozen):
+#   - invisible AND _is_pauseable_state  — original case (LoS-hidden)
+#   - visible AND IDLE AND far from player — newly added (2026-05-25):
+#     32 visible IDLE enemies × X Bot's 30+ bone skeleton was costing
+#     35-47ms per render frame (~20fps baseline before this change),
+#     even with physics paused via _update_physics_process_active. The
+#     idle loop animates breathing / weight shifts that aren't legible
+#     at >20m through the iso camera — freezing them on a fixed pose
+#     reads identically. Aggressive 20m cutoff (slightly less than the
+#     existing _IDLE_SKIP_DISTANCE_SQ 25m physics throttle); enemies
+#     standing on the player's screen edge still breathe.
+# Called from visibility_changed and _change_state, so any input flip
+# re-evaluates. Cheap (one bool read + distance check + property write).
+const _ANIM_PAUSE_VISIBLE_FAR_DIST_SQ: float = 20.0 * 20.0
 func _update_anim_player_active() -> void:
 	if anim_player == null:
 		return
-	var should_pause: bool = not visible and _is_pauseable_state()
+	var should_pause: bool = false
+	if _is_pauseable_state():
+		if not visible:
+			should_pause = true
+		elif _state == State.IDLE and _is_far_from_player_by(_ANIM_PAUSE_VISIBLE_FAR_DIST_SQ):
+			should_pause = true
 	var desired: bool = not should_pause
 	# No-op guard. Godot's AnimationPlayer.active setter does internal
 	# bookkeeping (refresh tree, restart playhead) even when the value
@@ -1456,6 +1471,22 @@ func _update_anim_player_active() -> void:
 	# the same value 300x is most of the proc spike we see at t≈7-8s.
 	if anim_player.active != desired:
 		anim_player.active = desired
+
+
+# Distance check used by the visible-far anim pause. Returns true when
+# the player is more than sqrt(dist_sq) metres away on the XZ plane.
+# Y excluded so an enemy on a balcony / different floor stays "near"
+# for animation purposes if they're directly above/below the player.
+func _is_far_from_player_by(dist_sq: float) -> bool:
+	var tree := get_tree()
+	if tree == null:
+		return false
+	var p := tree.get_first_node_in_group(&"player") as Node3D
+	if p == null:
+		return false
+	var dx: float = global_position.x - p.global_position.x
+	var dz: float = global_position.z - p.global_position.z
+	return (dx * dx + dz * dz) > dist_sq
 
 
 # Returns true for states where pausing while LoS-hidden is safe. IDLE
@@ -1533,6 +1564,15 @@ func _physics_process(delta: float) -> void:
 			if _idle_skip_counter < divisor:
 				return
 			_idle_skip_counter = 0
+	# Re-evaluate anim pause for visible IDLE enemies as the player
+	# moves toward / away from us. _update_anim_player_active is only
+	# wired to visibility_changed + _change_state, neither of which
+	# fires when an enemy stands still and the player walks across the
+	# 20m far/near boundary. Cheap (distance squared + bool compare);
+	# runs once per throttled tick (10-20Hz), so the per-frame cost is
+	# bounded even with many visible idlers.
+	if _state == State.IDLE and visible:
+		_update_anim_player_active()
 	_attack_cd = maxf(0.0, _attack_cd - delta)
 	_threat_retarget_t = maxf(0.0, _threat_retarget_t - delta)
 
