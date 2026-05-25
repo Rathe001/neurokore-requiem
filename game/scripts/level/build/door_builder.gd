@@ -14,6 +14,40 @@ const DOOR_LINTEL_RATIO := 0.85
 
 
 static func build_door(ctx: LevelBuildContext, piece_id: StringName, rd: RoomDef, side: RoomDef.Wall, wpos: Vector3) -> void:
+	# Idempotency guard. The per-room wall iteration in LevelBuilder
+	# already visits each side once, but the procgen layer can occasionally
+	# emit redundant connections (same from_room + from_wall pair via
+	# different graph paths). Without this check, a downstream re-entry
+	# stacks a second door at the exact same wpos — two PrototypeDoor
+	# instances overlapping with identical animations, identical lock
+	# state, but registered under the same dict key so only one is
+	# reachable via get_door(). The visible artifact is two doors clipping
+	# through each other at the doorway.
+	var door_key := StringName("%s_%s" % [piece_id, ctx.wall_keys[side]])
+	if ctx.doors.has(door_key):
+		# A door for this (piece, wall) already exists — short-circuit.
+		# Caller intent for the second call (locked? boss-unlock? unlock
+		# requirement?) is dropped, but the existing door's flags were
+		# already set on the first call. If we ever need to merge flags
+		# across multiple emissions, do it explicitly here rather than
+		# silently letting the second instance physically stack.
+		return
+	# Position-based dedup. Two DIFFERENT pieces (e.g. neighboring rooms
+	# whose connecting walls resolve to the same world position because
+	# of a procgen layout quirk) can each emit a door at the same wpos
+	# with different door_keys — the key-based check above wouldn't catch
+	# that. A 0.5m threshold is well below the smallest authored room
+	# size, so legit doors on neighboring walls never collide here, but
+	# stacked doors at identical positions get filtered. Logs a warning
+	# so procgen issues surface in the editor without breaking the level.
+	const _STACK_THRESHOLD_SQ := 0.25  # 0.5m squared
+	for existing_var in ctx.doors.values():
+		var existing := existing_var as Node3D
+		if existing == null or not is_instance_valid(existing):
+			continue
+		if existing.global_position.distance_squared_to(wpos) < _STACK_THRESHOLD_SQ:
+			push_warning("[DoorBuilder] stacked door rejected at %s (piece %s wall %s) — existing door already present" % [wpos, piece_id, ctx.wall_keys[side]])
+			return
 	var door := DOOR_SCENE.instantiate() as Node3D
 	door.transform.origin = wpos
 	if side == RoomDef.Wall.NORTH or side == RoomDef.Wall.SOUTH:
