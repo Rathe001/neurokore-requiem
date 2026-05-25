@@ -784,7 +784,14 @@ func _init_enemy() -> void:
 	# Reset perf-throttle state so a recycled pool entry doesn't carry
 	# the previous enemy's nav-target cache or its mid-skip counter.
 	_nav_last_target = Vector3.INF
-	_idle_skip_counter = 0
+	# RANDOMIZE the starting skip counter so wake-up phases distribute.
+	# When the LoS culler reveals a chunk of a new room (3-40 enemies)
+	# they all get set_physics_process(true) the same frame and would
+	# otherwise all tick the same physics step — a 60-180ms phys spike
+	# at every room reveal. Starting each enemy on a different phase of
+	# the IDLE/CHASE_FAR skip divisors spreads that wake load across the
+	# next ~10 frames. Range chosen to cover the largest divisor in use.
+	_idle_skip_counter = randi() % _IDLE_TICK_DIVISOR
 	set_physics_process(true)
 	collision_layer = EnemyAfflictions._LAYER_ENEMY
 	collision_mask = EnemyAfflictions._DEFAULT_ENEMY_MASK
@@ -1441,7 +1448,14 @@ func _update_anim_player_active() -> void:
 	if anim_player == null:
 		return
 	var should_pause: bool = not visible and _state == State.IDLE
-	anim_player.active = not should_pause
+	var desired: bool = not should_pause
+	# No-op guard. Godot's AnimationPlayer.active setter does internal
+	# bookkeeping (refresh tree, restart playhead) even when the value
+	# doesn't change — at level start the LoS culler triggers 300+
+	# visibility_changed signals over ~0.4s of fade-out, and re-writing
+	# the same value 300x is most of the proc spike we see at t≈7-8s.
+	if anim_player.active != desired:
+		anim_player.active = desired
 
 
 # Same policy as _update_anim_player_active but for _physics_process. Pause
@@ -1455,7 +1469,14 @@ func _update_physics_process_active() -> void:
 	if _state == State.DEAD:
 		return
 	var should_pause: bool = not visible and _state == State.IDLE
-	set_physics_process(not should_pause)
+	var desired: bool = not should_pause
+	# No-op guard — same reasoning as _update_anim_player_active. Even
+	# when set_physics_process gets the same value it already had,
+	# Godot's SceneTree shuffles the node in/out of its processing
+	# list. Suppressing redundant writes drops the level-start spike
+	# from ~440ms to whatever the genuine flips cost.
+	if is_physics_processing() != desired:
+		set_physics_process(desired)
 
 
 func _physics_process(delta: float) -> void:
