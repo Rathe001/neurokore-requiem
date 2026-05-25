@@ -87,6 +87,15 @@ freed entries from the prior level). Pattern applies anywhere a
 Dictionary or Array can outlive its Object values — particularly
 across EntityPool recycle and scene reload.
 
+**7. `fract()` is shader-only — GDScript has no builtin.** Use
+`x - floor(x)` instead. The error reads `Parse Error: Function
+"fract()" not found in base self` and is easy to miss because shader
+code uses fract() constantly (every hash/noise expression). Bit us in
+`prototype_attack_indicator.gd` procedural texture generation — the
+noise hash needed fract for [0,1) wrapping. Same warning applies to
+other shader builtins missing from GDScript: `mix()` (use `lerp`),
+`mod()` (use `fposmod` or `%`).
+
 **5. RichTextLabel `[font_size=N]` is ABSOLUTE, not relative.** Both
 the bare `[font_size=N]` BBCode tag and `add_theme_font_size_override`
 on a RichTextLabel set the pixel size directly. If the label's base

@@ -1451,7 +1451,10 @@ static func _get_wall_impact_plasma_albedo_texture() -> ImageTexture:
 			# Inner 35% near-black (vaporised); 35-70% charred dark; fade
 			# out beyond. The slight asymmetry from `noise` breaks the
 			# perfect-circle look without needing a real noise texture.
-			var noise: float = fract(sin(float(x) * 12.989 + float(y) * 78.233) * 43758.5453) * 0.12 - 0.06
+			# (No GDScript `fract` builtin — use x - floor(x) instead;
+			# `fract` is a shader-side function only.)
+			var hash_f: float = sin(float(x) * 12.989 + float(y) * 78.233) * 43758.5453
+			var noise: float = (hash_f - floor(hash_f)) * 0.12 - 0.06
 			var dd: float = clampf(d + noise, 0.0, 1.0)
 			var inner_t: float = clampf(dd / 0.35, 0.0, 1.0)
 			var char_t: float = clampf((dd - 0.35) / 0.35, 0.0, 1.0)
