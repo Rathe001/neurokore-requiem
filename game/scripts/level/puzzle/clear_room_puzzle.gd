@@ -63,10 +63,22 @@ func apply(ctx: LevelBuildContext, _slots: Dictionary, doors: Dictionary) -> voi
 	_counted.clear()
 	_door.setup_lock(guards.size(), true, false)
 	for e in guards:
+		# `is_connected` guard before connect — EntityPool reuses enemy
+		# instances across level rebuilds, so on the second build the
+		# same Node still carries the connection from the previous apply()
+		# of THIS Resource. Connecting again logs `Signal 'died' is
+		# already connected to given callable`, and on a level with 30+
+		# enemies and frequent rebuilds (NG+, reset) the stderr flood
+		# becomes the dominant proc cost. Same bind(e) creates an equal
+		# Callable so is_connected() correctly detects the duplicate.
 		if e.has_signal(&"died"):
-			e.died.connect(_on_guard_died.bind(e))
+			var died_cb := _on_guard_died.bind(e)
+			if not e.died.is_connected(died_cb):
+				e.died.connect(died_cb)
 		if e.has_signal(&"revived"):
-			e.revived.connect(_on_guard_revived.bind(e))
+			var revived_cb := _on_guard_revived.bind(e)
+			if not e.revived.is_connected(revived_cb):
+				e.revived.connect(revived_cb)
 
 
 func _on_guard_died(guard: Node) -> void:

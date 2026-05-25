@@ -343,6 +343,15 @@ func _bake_navigation() -> void:
 	var region := _find_nav_region(get_tree().current_scene)
 	if region == null:
 		return
+	# Multiple bake calls overlap on fast rebuilds (NG+ → new layout →
+	# _bake_navigation fires while the previous bake from the original
+	# build is still in progress on its worker thread). Godot logs
+	# `NavigationMesh is already baking. Wait for current bake to
+	# finish.` per call. Await the bake_finished signal if the previous
+	# build is still working — gates the new bake behind the old one's
+	# completion instead of stacking warnings.
+	if region.is_baking():
+		await region.bake_finished
 	region.bake_navigation_mesh(true)
 
 

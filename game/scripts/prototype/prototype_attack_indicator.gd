@@ -1523,10 +1523,20 @@ static func spawn_wall_projectile_impact(parent: Node, world_pos: Vector3, wall_
 	else:
 		decal.texture_albedo = _get_wall_impact_plasma_albedo_texture()
 		decal.texture_emission = _get_wall_impact_plasma_emission_texture()
-		# Boost saturation a touch on the glow color so green plasma reads
-		# as green even under bright fluorescents — straight projectile
-		# colors are tuned for muzzle/trail brightness, not surface tint.
-		decal.modulate = Color(glow_color.r, glow_color.g, glow_color.b, 1.0)
+		# Resolved glow color. Callers pass `Color(0,0,0,0)` (sentinel from
+		# _weapon_tint when the weapon has no damage_type — laser pistol
+		# is the immediate case) to mean "no override, use a default."
+		# Without this fallback the modulate landed at black, which then
+		# multiplied the grayscale emission texture down to 0 — visible
+		# charred ring but no glow at all. Default to a warm-white plasma
+		# tint that reads on every wall material.
+		var resolved_glow: Color = glow_color if glow_color.a > 0.0 else Color(1.0, 0.85, 0.55)
+		# Also catch pure black (alpha 1 but RGB zero) — same modulate
+		# wipe-out as the sentinel case. Real weapon tints always have
+		# at least one channel > 0.1.
+		if maxf(resolved_glow.r, maxf(resolved_glow.g, resolved_glow.b)) < 0.05:
+			resolved_glow = Color(1.0, 0.85, 0.55)
+		decal.modulate = Color(resolved_glow.r, resolved_glow.g, resolved_glow.b, 1.0)
 		decal.emission_energy = WALL_IMPACT_PLASMA_EMISSION_ENERGY
 		var s2 := WALL_IMPACT_PLASMA_SIZE * randf_range(0.9, 1.2)
 		decal.size = Vector3(s2, 0.3, s2)
