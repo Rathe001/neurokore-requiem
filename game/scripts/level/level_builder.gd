@@ -23,6 +23,16 @@ signal built
 # responsive than the unstreamed baseline.
 const PIECES_PER_FRAME: int = 1
 
+# Progress allocation across the streamed build. The piece loop is the
+# bulk of the wall-clock cost, so it gets the biggest budget. Pre-loop
+# (graph solve + ground + ceiling + lighting) is one chunk before the
+# loop starts; post-loop is the navmesh bake + MMI commits after.
+# Final 1.0 is set by PrototypeRoot after VfxWarmup, so we cap the
+# builder's own emissions at the loop-end value below.
+const _PROGRESS_PRELOOP_END: float = 0.10  # graph solve + ground + ceiling done
+const _PROGRESS_LOOP_END: float = 0.85     # all pieces placed
+const _PROGRESS_BUILT: float = 0.95        # navmesh + MMI commit done
+
 ## Debug visualization toggle. When `true`:
 ##   - Kit-bash models (theme.wall_model / floor_model) are ignored
 ##   - Procedural SurfaceTool walls + PlaneMesh floors are built with the
@@ -64,6 +74,7 @@ func _ready() -> void:
 	_bake_navigation()
 	_store_mp_seed()
 	is_built = true
+	_emit_progress(_PROGRESS_BUILT)
 	built.emit()
 
 
@@ -126,6 +137,7 @@ func rebuild(new_seed: int = 0) -> void:
 	await _build_level()
 	_bake_navigation()
 	is_built = true
+	_emit_progress(_PROGRESS_BUILT)
 	built.emit()
 
 
@@ -166,14 +178,19 @@ func _build_level() -> void:
 	# rendering. Yielding here doesn't change total build time, just
 	# spreads the cost across enough frames for the loading screen to
 	# stay smooth.
+	_emit_progress(_PROGRESS_PRELOOP_END * 0.3)
 	await get_tree().process_frame
 	GroundBuilder.build(_ctx)
+	_emit_progress(_PROGRESS_PRELOOP_END * 0.7)
 	await get_tree().process_frame
 	CeilingBuilder.build(_ctx)
 	CeilingBuilder.build_void_cover(_ctx)
 	LightingBuilder.configure_fps_fog(_ctx)
+	_emit_progress(_PROGRESS_PRELOOP_END)
 
 	var _pieces_since_yield: int = 0
+	var _piece_index: int = 0
+	var _piece_count: int = _pieces.size()
 	for piece: LevelPiece in _pieces:
 		# Apply per-piece theme override (rooms only) for the duration of
 		# the build, then restore the layout default. Resolution order:
@@ -208,8 +225,16 @@ func _build_level() -> void:
 		# level with ~241 enemies stalled the main thread for 5.8 seconds
 		# (perf log), masking the loading-screen draw entirely.
 		_pieces_since_yield += 1
+		_piece_index += 1
 		if _pieces_since_yield >= PIECES_PER_FRAME:
 			_pieces_since_yield = 0
+			# Linearly map piece-loop progress onto the band between
+			# pre-loop done and loop done. _piece_count > 0 guard for
+			# empty layouts (shouldn't happen but defensive).
+			if _piece_count > 0:
+				var loop_t: float = float(_piece_index) / float(_piece_count)
+				var band_size: float = _PROGRESS_LOOP_END - _PROGRESS_PRELOOP_END
+				_emit_progress(_PROGRESS_PRELOOP_END + band_size * loop_t)
 			await get_tree().process_frame
 
 	# Stamp every piece's footprint into ExplorationState now that final
@@ -319,6 +344,17 @@ func _bake_navigation() -> void:
 	if region == null:
 		return
 	region.bake_navigation_mesh(true)
+
+
+# Drives the loading screen's progress bar. Uses a group dispatch so we
+# don't have to thread a LoadingScreen reference into LevelBuilder — any
+# LoadingScreen currently on the tree (either the one transition_to_scene
+# put on tree.root or a same-scene rebuild instance under PrototypeRoot)
+# picks it up via the &"loading_screen" group it joined on _ready.
+# No-op when no LoadingScreen is alive (e.g. headless tests, editor
+# rebuilds with no UI tree) — call_group just iterates an empty list.
+func _emit_progress(value: float) -> void:
+	get_tree().call_group(&"loading_screen", &"set_progress", value)
 
 
 static func _find_nav_region(node: Node) -> NavigationRegion3D:

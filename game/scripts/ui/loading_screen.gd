@@ -31,14 +31,20 @@ const SUBTITLE_COLOR := Color(0.6, 0.66, 0.7, 0.85)
 const FADE_OUT_DURATION := 0.35
 const TITLE_FONT_SIZE := 32
 const SUBTITLE_FONT_SIZE := 14
-const DOT_ANIM_INTERVAL := 0.35
+# Progress-bar geometry. Wider than the labels so it dominates the
+# vertical stack visually; thin enough to read as a "filling line"
+# rather than a chunky gauge.
+const PROGRESS_BAR_WIDTH := 360.0
+const PROGRESS_BAR_HEIGHT := 8.0
+# Eases bar fill so a sudden jump from build_progress=0.3 to 0.6 (which
+# can happen when a large room-bundle yields back at once) doesn't snap.
+const PROGRESS_FILL_LERP := 8.0
 
 var _overlay: ColorRect
 var _title: Label
 var _subtitle: Label
-var _subtitle_base: String = ""
-var _dot_phase: int = 0
-var _dot_accum: float = 0.0
+var _progress_bar: ProgressBar
+var _target_progress: float = 0.0
 var _hiding: bool = false
 # Pause state before show_loading() — restored on hide_loading so we
 # don't clobber an intentional pause (pause menu, spec select, death
@@ -100,15 +106,17 @@ static func transition_to_scene(scene_path: String, title: String = "DESCENDING"
 
 func show_loading(title: String = "DESCENDING", subtitle: String = "Generating sub-level") -> void:
 	_title.text = title
-	_subtitle_base = subtitle
 	_subtitle.text = subtitle
-	_dot_phase = 0
-	_dot_accum = 0.0
+	_target_progress = 0.0
+	_progress_bar.value = 0.0
+	_progress_bar.modulate.a = 1.0
 	_hiding = false
 	_overlay.color = OVERLAY_COLOR
 	_title.modulate.a = 1.0
 	_subtitle.modulate.a = 1.0
 	visible = true
+	# _process drives the bar's eased fill toward _target_progress. Cheap;
+	# runs only while the screen is visible.
 	set_process(true)
 	# Pause the world while the cover is up. Default PROCESS_MODE_INHERIT
 	# on the player + level subtrees stops their _process / _physics_process
@@ -147,17 +155,28 @@ func hide_loading() -> void:
 	tween.tween_property(_overlay, "color:a", 0.0, FADE_OUT_DURATION)
 	tween.parallel().tween_property(_title, "modulate:a", 0.0, FADE_OUT_DURATION)
 	tween.parallel().tween_property(_subtitle, "modulate:a", 0.0, FADE_OUT_DURATION)
+	tween.parallel().tween_property(_progress_bar, "modulate:a", 0.0, FADE_OUT_DURATION)
 	tween.tween_callback(queue_free)
 
 
+## Bump the displayed progress bar toward `value` (clamped [0, 1]). Driven
+## by LevelBuilder via a group-call on &"loading_screen" — see the per-
+## yield calls in _build_level. The actual bar fill eases toward this
+## target in _process so a jump from 0.3 → 0.6 doesn't snap.
+func set_progress(value: float) -> void:
+	_target_progress = clampf(value, 0.0, 1.0)
+
+
 func _process(delta: float) -> void:
-	_dot_accum += delta
-	if _dot_accum < DOT_ANIM_INTERVAL:
-		return
-	_dot_accum = 0.0
-	_dot_phase = (_dot_phase + 1) % 4
-	# Pad to fixed width so the label doesn't visibly resize each tick.
-	_subtitle.text = "%s %s%s" % [_subtitle_base, ".".repeat(_dot_phase), " ".repeat(3 - _dot_phase)]
+	# Frame-rate-independent damping toward _target_progress. Catches up
+	# ~63% of the gap every ~1/PROGRESS_FILL_LERP seconds — feels lively
+	# without overshooting, and stays smooth even when LevelBuilder yields
+	# back with a big multi-step jump (e.g. corridors batch-finishing).
+	var weight: float = 1.0 - exp(-PROGRESS_FILL_LERP * delta)
+	var current: float = _progress_bar.value
+	# Clamp to no-decrease — if a stale low value somehow arrived late we
+	# don't want the bar visibly retreating.
+	_progress_bar.value = maxf(current, lerp(current, _target_progress, weight))
 
 
 func _build_ui() -> void:
@@ -190,3 +209,44 @@ func _build_ui() -> void:
 	_subtitle.add_theme_font_size_override(&"font_size", SUBTITLE_FONT_SIZE)
 	_subtitle.add_theme_color_override(&"font_color", SUBTITLE_COLOR)
 	vbox.add_child(_subtitle)
+
+	# Thin progress bar centered under the subtitle. Authored without
+	# percentage text (would re-layout the label every value change and
+	# fight the bar's clean fill animation). MarginContainer pads it off
+	# the subtitle visually so the bar doesn't crowd the label baseline.
+	var bar_wrap := MarginContainer.new()
+	bar_wrap.add_theme_constant_override(&"margin_top", 6)
+	vbox.add_child(bar_wrap)
+
+	_progress_bar = ProgressBar.new()
+	_progress_bar.min_value = 0.0
+	_progress_bar.max_value = 1.0
+	_progress_bar.value = 0.0
+	_progress_bar.step = 0.001
+	_progress_bar.show_percentage = false
+	_progress_bar.custom_minimum_size = Vector2(PROGRESS_BAR_WIDTH, PROGRESS_BAR_HEIGHT)
+	_progress_bar.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	# Tint the fill to match the title's cyan accent so the bar reads as
+	# part of the same UI element rather than a generic engine widget.
+	# StyleBoxFlat keeps it crisp at iso scale; tweak `bg_*` if the look
+	# needs to match a later theme pass.
+	var bar_bg := StyleBoxFlat.new()
+	bar_bg.bg_color = Color(0.08, 0.10, 0.12, 1.0)
+	bar_bg.border_color = Color(0.18, 0.22, 0.26, 1.0)
+	bar_bg.border_width_left = 1
+	bar_bg.border_width_right = 1
+	bar_bg.border_width_top = 1
+	bar_bg.border_width_bottom = 1
+	bar_bg.corner_radius_top_left = 2
+	bar_bg.corner_radius_top_right = 2
+	bar_bg.corner_radius_bottom_left = 2
+	bar_bg.corner_radius_bottom_right = 2
+	var bar_fill := StyleBoxFlat.new()
+	bar_fill.bg_color = TITLE_COLOR
+	bar_fill.corner_radius_top_left = 2
+	bar_fill.corner_radius_top_right = 2
+	bar_fill.corner_radius_bottom_left = 2
+	bar_fill.corner_radius_bottom_right = 2
+	_progress_bar.add_theme_stylebox_override(&"background", bar_bg)
+	_progress_bar.add_theme_stylebox_override(&"fill", bar_fill)
+	bar_wrap.add_child(_progress_bar)

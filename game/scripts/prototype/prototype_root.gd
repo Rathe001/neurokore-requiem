@@ -105,6 +105,12 @@ func _ready() -> void:
 	# Awaits two process frames internally; that doubles as the
 	# "freshly-built world is on screen before the cover fades" wait.
 	await VfxWarmup.warmup(self)
+	# Finalize progress at 100% — LevelBuilder caps its own emissions at
+	# _PROGRESS_BUILT (0.95) so the bar lands on a satisfying full-fill
+	# during the brief post-build window (player snap + warmup) instead
+	# of finishing during the streamed build and lingering empty-air
+	# until hide_loading.
+	get_tree().call_group(&"loading_screen", &"set_progress", 1.0)
 	get_tree().call_group(&"loading_screen", &"hide_loading")
 
 
