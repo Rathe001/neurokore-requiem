@@ -253,18 +253,41 @@ static func _backfill_missing_materials(model: Node3D) -> void:
 		if mi.material_override != null:
 			continue
 		var surfaces := mi.mesh.get_surface_count()
-		var needs_fallback := false
+		# Per-surface fallback (not whole-mesh material_override) so a
+		# weapon with some textured surfaces + some untextured ones only
+		# gets the bland metal where it's actually needed. The AWM-F
+		# sniper ships with all surfaces in the "default-white" state
+		# (Blenderkit .blend has no baked textures), so every surface
+		# gets the swap; other guns that are properly textured see no
+		# change.
 		for s in surfaces:
-			# Check both the per-instance override slot AND the mesh's
-			# baked material — either being set means we leave it alone.
 			if mi.get_surface_override_material(s) != null:
 				continue
-			if mi.mesh.surface_get_material(s) != null:
-				continue
-			needs_fallback = true
-			break
-		if needs_fallback:
-			mi.material_override = _fallback_metal_material
+			var baked: Material = mi.mesh.surface_get_material(s)
+			var needs_swap := false
+			if baked == null:
+				# No material at all — the original null-material case.
+				needs_swap = true
+			elif baked is StandardMaterial3D:
+				# Catch the "untextured white default" case — a
+				# StandardMaterial3D with no albedo_texture AND a near-
+				# white albedo_color. That's how Blenderkit assets without
+				# baked textures render: bright featureless white blobs
+				# instead of recognisable weapons. Treating them as
+				# missing-material so the dark-metal fallback paints
+				# over them.
+				var sm := baked as StandardMaterial3D
+				if sm.albedo_texture == null and _is_near_white(sm.albedo_color):
+					needs_swap = true
+			if needs_swap:
+				mi.set_surface_override_material(s, _fallback_metal_material)
+
+
+# True when `c`'s R, G, B channels are all close enough to 1.0 to read as
+# "Blender's default white" — used by _backfill_missing_materials to
+# detect untextured-default surfaces that should fall back to dark metal.
+static func _is_near_white(c: Color) -> bool:
+	return c.r > 0.85 and c.g > 0.85 and c.b > 0.85
 
 
 # Walks the freshly-mounted model and hides every MeshInstance3D whose
