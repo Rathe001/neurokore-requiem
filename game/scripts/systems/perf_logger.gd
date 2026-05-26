@@ -142,10 +142,17 @@ func _process(delta: float) -> void:
 ## level-up, level-load, big explosion, manual marker on a key press.
 ## Event rows DO pay the full tree-walk cost so post-event analysis can
 ## see what the world looked like at that moment.
-func tag_event(event_name: StringName) -> void:
+## Tag an event row. By default skips the tree walks (lights/MMI/
+## particles columns will be 0 on the row) because at ~11000 nodes
+## the three full find_children walks cost 15-30ms each and turn
+## every event tag into a perceptible hitch. Pass `with_snapshot=true`
+## for the handful of events where the snapshot is the whole point
+## (build_start, build_end, level_up) — those are infrequent enough
+## that the cost is acceptable.
+func tag_event(event_name: StringName, with_snapshot: bool = false) -> void:
 	if _file == null:
 		return
-	_write_row(event_name, false)
+	_write_row(event_name, not with_snapshot)
 
 
 ## Specialised LMB-fire tag. Throttled to LMB_TAG_GAP_SEC because
@@ -154,6 +161,13 @@ func tag_event(event_name: StringName) -> void:
 ## of fire_lmb rows. The first fire of a burst gets tagged; subsequent
 ## frames within the gap window are suppressed; releasing for >gap
 ## seconds re-arms the next press.
+##
+## Always skips tree walks. The CSV at t=30-33 caught this: every
+## fire_lmb event was triggering ~15-30ms of tree-walk work in addition
+## to the actual shot, producing the per-shot proc spikes we'd been
+## chasing through the hitscan VFX path. The walks aren't useful at
+## fire moments (the world state doesn't materially change shot-to-shot
+## from a lighting/MMI perspective), so always-skip is fine.
 func tag_fire_lmb() -> void:
 	if _file == null:
 		return
@@ -161,7 +175,7 @@ func tag_fire_lmb() -> void:
 	if now - _last_lmb_tag_t < LMB_TAG_GAP_SEC:
 		return
 	_last_lmb_tag_t = now
-	_write_row(&"fire_lmb", false)
+	_write_row(&"fire_lmb", true)
 
 
 # ── Internals ───────────────────────────────────────────────────────────────
@@ -322,4 +336,4 @@ func _write_row(event_name: StringName, skip_tree_walks: bool = false) -> void:
 
 
 func _on_leveled_up(new_level: int, _hp_gain: int) -> void:
-	tag_event(StringName("level_up_%d" % new_level))
+	tag_event(StringName("level_up_%d" % new_level), true)  # rare event, snapshot is useful

@@ -157,7 +157,7 @@ func _build_level() -> void:
 	# during the build also writes a periodic-sample row, so the section
 	# between the two markers is exactly the build window.
 	if PerfLogger != null:
-		PerfLogger.tag_event(&"build_start")
+		PerfLogger.tag_event(&"build_start", true)  # with_snapshot=true: capture light/MMI counts
 	# Resolve graph + pieces together so we can pass the active graph to
 	# BuildContext. For generator-mode the graph is transient (not stored on
 	# layout); BuildContext + PuzzleBuilder both need it for door indexing
@@ -255,7 +255,7 @@ func _build_level() -> void:
 	# only exist after the geometry pass.
 	PuzzleBuilder.apply_all(_ctx, layout)
 	if PerfLogger != null:
-		PerfLogger.tag_event(&"build_end")
+		PerfLogger.tag_event(&"build_end", true)  # with_snapshot=true: capture post-build counts
 
 
 # Builds the per-instance room_id → piece lookup that puzzles use for
