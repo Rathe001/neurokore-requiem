@@ -569,12 +569,13 @@ func _isolate_visual_from_decals() -> void:
 	if visual == null:
 		return
 	_walk_set_visual_layers(visual, 2 | PrototypeAttackIndicator.CHARACTER_BLOOD_LAYER)
-	# Distance-based GPU cull. See _walk_set_visibility_range comment for
-	# the iso camera reasoning. Runs alongside the LoS culler's binary
-	# hide — the LoS check hides enemies behind walls / in unrevealed
-	# rooms (room-aware), and visibility_range gives a smooth fade-out
-	# as enemies move outside the camera frustum.
-	_walk_set_visibility_range(visual)
+	# NOTE: previously also called _walk_set_visibility_range here. Reverted
+	# in the commit immediately after eb12e5c — baseline fps dropped 58→44
+	# because applying visibility_range_end + FADE_SELF on every
+	# GeometryInstance3D in every enemy's mesh subtree (~3200 instances at
+	# 322 enemies × ~10 GeometryInstance3D each) added a per-frame
+	# camera-distance check + dithering pass that cost more than the LoS
+	# culler's binary hide was costing in the first place.
 
 
 static func _walk_set_visual_layers(node: Node, mask: int) -> void:
@@ -584,27 +585,12 @@ static func _walk_set_visual_layers(node: Node, mask: int) -> void:
 		_walk_set_visual_layers(child, mask)
 
 
-# GPU-side distance cull for enemy meshes. Sets visibility_range_end on
-# every GeometryInstance3D under the visual subtree so the renderer
-# auto-fades meshes past LOD_FADE_END_DIST and skips them entirely past
-# LOD_FADE_END_DIST + LOD_FADE_END_MARGIN. Distance is camera-to-mesh,
-# so the values are tuned for the iso camera's ~70m setback: a mesh
-# 35m XZ from the player is ~85-100m from the camera. Combined with
-# the LoS culler's player-distance hide at MAX_DIST_SQ=30² (which
-# binary-cuts visibility), this gives a smooth fade-out as enemies
-# leave the camera frustum instead of popping. Skinned-mesh bone
-# updates also stop once the renderer marks the mesh fully invisible,
-# saving CPU on top of the GPU saving.
-const LOD_FADE_END_DIST: float = 90.0
-const LOD_FADE_END_MARGIN: float = 15.0
-static func _walk_set_visibility_range(node: Node) -> void:
-	if node is GeometryInstance3D:
-		var gi := node as GeometryInstance3D
-		gi.visibility_range_end = LOD_FADE_END_DIST
-		gi.visibility_range_end_margin = LOD_FADE_END_MARGIN
-		gi.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
-	for child in node.get_children():
-		_walk_set_visibility_range(child)
+# REMOVED 2026-05-25: GPU-side distance cull via visibility_range_end.
+# Net regression — see _isolate_visual_from_decals comment. Keeping the
+# constants below as a tombstone in case we revisit with a smaller scope
+# (e.g., only the body mesh, not every bone-attached child).
+#   const LOD_FADE_END_DIST: float = 90.0
+#   const LOD_FADE_END_MARGIN: float = 15.0
 
 
 # Normalises non-standard Mixamo bone-name prefixes so the shared X Bot
