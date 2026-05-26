@@ -84,5 +84,14 @@ if revisiting):**
    doing nothing." Combat-moment spikes (the user's actual frustration)
    are what they're measuring, not the periodic-sample average.
 
+8. **Check what else is running on the machine before chasing engine
+   regressions.** At the end of the session the user noted WoW was
+   open in the background — WoW idles at noticeable CPU + GPU draw
+   even on the login screen. Future "perf got worse" reports should
+   start with "what other apps are open?" before assuming the change
+   set is the culprit. This may explain part of why the cumulative
+   perf work felt like it wasn't paying off — the test bench was
+   noisy.
+
 Related: [[project_perf_logger]], [[project_perf_logger_feedback]],
 [[project_los_reveal_spikes]], [[project_enemy_anim_pause]]
