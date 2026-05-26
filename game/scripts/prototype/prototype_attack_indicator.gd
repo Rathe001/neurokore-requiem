@@ -434,7 +434,15 @@ static func spawn_beam(host: Node3D, aim: Vector3, length: float, origin: Vector
 	# each. Net per-shot beam cost: ~50%.
 	var core_mat := _beam_core_material(color)
 	var core := MeshInstance3D.new()
-	core.mesh = _beam_core_mesh(length)
+	# Unit cylinder mesh (height=1) shared across every beam; scale per
+	# instance for the actual length. The previous _beam_core_mesh(length)
+	# cached a new CylinderMesh PER unique float length, and with the
+	# laser hitscan firing at varying targets/walls, every shot's distinct
+	# beam_end produced a new mesh + GPU vertex-buffer upload. CSV at
+	# t=30-33s caught the regression: standing still, firing, 0 active
+	# enemies, proc spikes 96-146ms per shot. Sharing one mesh + scaling
+	# eliminates the per-shot allocation entirely.
+	core.mesh = _beam_unit_cylinder_mesh()
 	core.material_override = core_mat
 
 	# Container node — cylinder height runs along local Y, so rotate -90° on X
@@ -451,6 +459,10 @@ static func spawn_beam(host: Node3D, aim: Vector3, length: float, origin: Vector
 
 	core.rotation.x = deg_to_rad(-90.0)
 	core.position.z = -length * 0.5
+	# Scale the Y axis to stretch the unit cylinder to the beam length.
+	# Y is the cylinder's height axis (pre-rotation); rotation.x = -90 then
+	# aligns it with local -Z for the look_at forward.
+	core.scale = Vector3(1.0, length, 1.0)
 	node.add_child(core)
 
 	# Point light at the impact end so walls / floors near the hit catch a
@@ -4196,6 +4208,12 @@ static func _bubble_mesh(radius: float) -> SphereMesh:
 # ── Beam mesh / material caches ──────────────────────────────────────────────
 
 static func _beam_core_mesh(length: float) -> CylinderMesh:
+	# Kept for back-compat with any caller that still uses per-length
+	# caching. Prefer _beam_unit_cylinder_mesh + per-instance Y scale —
+	# the per-length cache grows unboundedly as the laser hitscan fires
+	# at varying targets, and each unique length allocates + uploads a
+	# new GPU vertex buffer (~50-100ms hitch). spawn_beam was rewritten
+	# to use the unit mesh in the 2026-05-25 perf pass.
 	var cached: CylinderMesh = _beam_core_mesh_cache.get(length)
 	if cached != null:
 		return cached
@@ -4207,6 +4225,23 @@ static func _beam_core_mesh(length: float) -> CylinderMesh:
 	m.rings = 1
 	_beam_core_mesh_cache[length] = m
 	return m
+
+
+# Single shared unit-height cylinder for the beam visual. spawn_beam
+# scales the MeshInstance3D by Vector3(1, length, 1) instead of caching
+# a new mesh per unique length. Eliminates the per-shot allocation that
+# was producing 96-146ms proc spikes during rapid laser fire.
+static var _beam_unit_cylinder: CylinderMesh = null
+static func _beam_unit_cylinder_mesh() -> CylinderMesh:
+	if _beam_unit_cylinder == null:
+		var m := CylinderMesh.new()
+		m.top_radius = BEAM_RADIUS
+		m.bottom_radius = BEAM_RADIUS
+		m.height = 1.0  # unit — scaled at the MeshInstance3D level per beam
+		m.radial_segments = 6
+		m.rings = 1
+		_beam_unit_cylinder = m
+	return _beam_unit_cylinder
 
 static func _beam_glow_mesh(length: float) -> CylinderMesh:
 	var cached: CylinderMesh = _beam_glow_mesh_cache.get(length)
