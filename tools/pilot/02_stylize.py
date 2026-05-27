@@ -65,13 +65,22 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 RAW_DIR = PROJECT_ROOT / "tools" / "pilot" / "output" / "raw"
 PAINTED_DIR = PROJECT_ROOT / "tools" / "pilot" / "output" / "painted"
 
-# Painted bible anchor for IP-Adapter style transfer. The soldier
-# character ref — the canonical anchor for all character gens in the
-# bible. See docs/art-reference/README.md for the lock.
-STYLE_REF_PATH = PROJECT_ROOT / "docs" / "art-reference" / (
-    "Rathe001_Diablo_2_style_isometric_character_sprite_sci-fi_sol_"
-    "374b6a95-7aff-46e8-86bf-92ba4f6cdd86_0.png"
-)
+# Style anchor for IP-Adapter.
+#
+# Originally pointed at the bible's painted soldier ref (374b6a95.png) —
+# that worked for STYLE (painted look transferred well) but produced
+# identity drift across the 8-direction batch because the bible ref is a
+# *different* character than what we're trying to lock. Each frame
+# inherited "soldier-ish" style differently, yielding multiple distinct
+# characters rather than one consistent one.
+#
+# Switched to a CANONICAL CHARACTER reference — one specific painted
+# frame of THIS character that all 8 directions should converge on.
+# This is the D2 production pattern: paint ONE definitive character
+# image, anchor every facing on it. Currently using a pick from the
+# previous batch (E_00 yellow military soldier with goggles + hammer);
+# in production this would be a hand-picked or hand-painted master.
+STYLE_REF_PATH = PROJECT_ROOT / "tools" / "pilot" / "canonical_character.png"
 
 # Smoke test: process one image first to validate the pipeline.
 SMOKE_TEST = False
@@ -122,12 +131,16 @@ DENOISE_STRENGTH = 0.65
 SDXL_RESOLUTION = 1024
 
 # ControlNet strength — how strongly the lineart guides the output.
-# 0.7-0.8 keeps silhouette tight without crushing creativity.
-CONTROLNET_STRENGTH = 0.75
+# Dropped from 0.8 → 0.5 so the model has room to RESHAPE the character
+# toward the canonical (armored soldier). At 0.8 the 3D mannequin's
+# silhouette was winning over the canonical — output kept the X Bot
+# rounded-chest mannequin shape with a paint job, ignoring the
+# canonical's armor design.
+CONTROLNET_STRENGTH = 0.5
 
 # IP-Adapter strength — how heavily the style ref biases the result.
-# 0.7-0.8 is strong style transfer without dominating the prompt.
-IPADAPTER_WEIGHT = 0.8
+# Max it out — we want the canonical to dominate.
+IPADAPTER_WEIGHT = 1.0
 
 # Seed for reproducibility while iterating; bump to randomize.
 SEED = 42
@@ -374,9 +387,16 @@ def build_full_workflow(raw_image_name: str, style_ref_name: str, output_prefix:
         },
         # 8: Apply IP-Adapter — bias the model toward the style reference.
         # weight_type controls HOW the style influence is distributed across
-        # diffusion steps. "linear" applies evenly; "style transfer" biases
-        # toward visual style while letting ControlNet drive structure —
-        # that's exactly what we want here.
+        # diffusion steps. Valid values in this version of IPAdapter Plus:
+        #   "standard"                — even distribution, full strength
+        #   "prompt is more important" — prompt dominates style ref
+        #   "style transfer"          — style ref dominates prompt
+        # Switched from "style transfer" → "prompt is more important" in
+        # the consistency-tuning pass. "style transfer" produced different
+        # character interpretations per frame because each frame's silhouette
+        # caused different style-ref blends. With the prompt now dominating
+        # and the prompt being IDENTICAL across all 8 directions, identity
+        # should be more consistent at small cost to painterly distinctness.
         "8": {
             "class_type": "IPAdapter",
             "inputs": {

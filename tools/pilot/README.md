@@ -1,5 +1,11 @@
 # 2D iso pilot — AI render pipeline test
 
+> **STATUS: Wrapped 2026-05-27.** Conclusive findings in
+> [`PILOT_RESULTS.md`](./PILOT_RESULTS.md). Read that first if you're
+> deciding whether to resume this work — the pilot proved the rendering
+> pipeline works, identified character identity locking as the
+> production blocker, and lays out three concrete paths forward.
+
 **Goal:** prove the 3D-model-to-2D-sprite-sheet pipeline end-to-end on a
 single asset (X Bot + hammer + walk cycle) before committing to a full
 rebuild of the project's visual layer.
