@@ -1,43 +1,34 @@
 """
-Pilot: render X Bot + hammer + walk anim as an 8-direction sprite sheet.
+Pilot: render an AI-generated (or any) .glb character as an 8-direction
+iso sprite sheet, with NO AI stylization step.
+
+The character's painted look lives in its baked textures — identity is
+locked across all 8 directions because they're all renders of the same
+mesh. This is the deliberate replacement for the SDXL+IPAdapter pipeline
+that hit the identity-drift wall in earlier iterations.
 
 Run from project root:
     blender -b -P tools/pilot/01_render_sprite_sheet.py
 
-What it does (one pass = one sprite sheet):
-  1. Imports X Bot.fbx (mesh + armature)
-  2. Imports hammer.glb, parents to right hand bone via bone constraint
-  3. Imports Jog Forward.fbx animation, applies its action to the X Bot rig
-  4. Sets up an orthographic dimetric camera (~30 pitch, 45 yaw) — close to D2
-     framing without going to the full 2:1 dimetric pixel ratio (we want a
-     readable mid-quality output for the pilot, not pixel-perfect)
-  5. Sets up 3-point lighting (key/fill/rim) tuned for painterly look
-  6. For each of 8 character rotations (N, NE, E, SE, S, SW, W, NW), renders
-     N animation frames as RGBA PNGs with transparent background
-  7. Also renders a depth pass + canny edge pass per frame to feed ControlNet
-     in the img2img stylization step (02_comfyui_workflow.json)
+What it does:
+  1. Imports a .glb (Meshy / Tripo / Hunyuan output, or any textured GLB)
+  2. Auto-centers + auto-scales the mesh to fit the iso camera frame
+  3. Sets up an orthographic dimetric camera (30 pitch, 45 yaw)
+  4. Sets up 3-point lighting (warm key / cool fill / teal rim)
+  5. For each of 8 character rotations (S, SW, W, NW, N, NE, E, SE),
+     renders one frame as an RGBA PNG with transparent background
 
-Output layout:
-    tools/pilot/output/raw/{dir}_{frame}.png             (color, RGBA)
-    tools/pilot/output/depth/{dir}_{frame}.png           (depth, R-channel)
-    tools/pilot/output/edges/{dir}_{frame}.png           (canny lineart)
-    tools/pilot/output/toon/{dir}_{frame}.png            (Path A reference)
+Output:
+    tools/pilot/output/raw/{dir}_00.png      (RGBA, 256x256 by default)
 
-Default config renders 8 directions x 8 frames = 64 color PNGs. With 256x256
-output, this finishes in ~30 sec on a modern GPU using Eevee.
+Default config renders 8 directions × 1 frame = 8 PNGs in ~5 sec.
+Add animation frames later by setting FRAMES_PER_DIRECTION > 1 once
+the model has a rigged + animated armature.
 
-Gotchas (documented so the next iteration doesn't re-discover them):
-  - Mixamo FBX export includes its OWN armature; importing the anim FBX over
-    the X Bot loads two armatures. We grab the action, kill the duplicate
-    armature, then assign the action to the X Bot rig. Works because both
-    rigs share Mixamo's bone naming convention.
-  - Hammer mesh needs a Child Of bone constraint on right hand
-    (`mixamorig:RightHand`). Direct parenting via parent_set doesn't follow
-    bone transforms.
-  - `scene.render.film_transparent = True` is required for transparent bg.
-    Without it the world background bleeds into the PNG alpha.
-  - Eevee shadow_method='VSM' + soft shadows looks closer to baked-painting
-    shadows than the default cube shadows.
+Notes:
+  - `scene.render.film_transparent = True` is required for transparent bg
+  - Some Meshy/Tripo exports have non-standard orientation/scale —
+    auto-center + bbox-based scale handle this generically
 """
 
 import math
@@ -53,24 +44,16 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 ASSETS = PROJECT_ROOT / "game" / "assets"
 OUTPUT_ROOT = PROJECT_ROOT / "tools" / "pilot" / "output"
 
-CHARACTER_FBX = ASSETS / "characters" / "x_bot" / "X Bot.fbx"
-WEAPON_GLB = ASSETS / "models" / "weapons" / "hammer" / "hammer.glb"
+# Source character. Path to any .glb (AI-generated from Meshy/Tripo/
+# Hunyuan, or hand-modeled). Texture is baked into the mesh; we render
+# the painted look directly — no SDXL stylization step.
+CHARACTER_GLB = Path.home() / "Desktop" / "Meshy_AI_Ironclad_Enforcer_0527171205_texture.glb"
 
-# Animation pilot: DISABLED for first pass.
-#
-# Mixamo's cross-FBX animation pipeline relies on bone-axis-correction
-# retargeting (Godot does this via SkeletonProfileHumanoid + BoneMap;
-# Blender requires an addon like Rokoko Studio Live or Auto Rig Pro).
-# Without retargeting, applying an action from one Mixamo FBX onto a
-# rest-pose armature from another Mixamo FBX produces a contorted result
-# (we saw the character render horizontal-running-pose despite both
-# armatures sharing identical bone names).
-#
-# For the pilot, we render T-pose only — that's enough to validate the
-# rest of the pipeline (camera angle, lighting, weapon attachment,
-# sprite-sheet output, ComfyUI img2img). Animation retargeting will be
-# solved as a separate step.
-ANIM_FBX = None  # ASSETS / "animations" / "core" / "Idle.fbx"
+# Auto-scale target height in meters. Meshy/Tripo exports come at
+# arbitrary scales — we measure the imported mesh's Z extent and scale
+# it to this height before rendering, so the camera frame is always
+# consistent regardless of source.
+TARGET_CHARACTER_HEIGHT = 1.8
 
 # Render resolution. 256 is a sane pilot default — large enough to see detail
 # in the iso scene, small enough that 64 frames + 3 passes (color/depth/edges)
@@ -78,10 +61,10 @@ ANIM_FBX = None  # ASSETS / "animations" / "core" / "Idle.fbx"
 # is validated.
 RESOLUTION = 256
 
-# Frames per direction. D2 used 8-16 per direction depending on speed of the
-# animation. Walk cycles read fine at 8. With ANIM_FBX disabled, we collapse
-# to 1 frame (T-pose) per direction.
-FRAMES_PER_DIRECTION = 1 if True else 8  # toggle by setting ANIM_FBX
+# Frames per direction. With a static-pose model (Meshy default A-pose
+# or T-pose), this is 1. With a rigged+animated model, bump to 8-16 to
+# sample frames evenly across the animation.
+FRAMES_PER_DIRECTION = 1
 
 # 8 directions matches D2's compass. The names are the character's facing
 # relative to the camera, NOT compass-absolute — "S" means the character
@@ -106,11 +89,6 @@ CAMERA_YAW_DEG = 45.0
 CAMERA_DISTANCE = 10.0   # orbit radius
 CAMERA_ORTHO_SCALE = 2.5  # zoom — smaller = closer; 2.5m wide fits a 1.8m char
 
-# Mixamo bone name where weapons attach. Convention is consistent across all
-# Mixamo rigs; if a future character uses a different rig, override here.
-WEAPON_BONE = "mixamorig:RightHand"
-
-
 # ── Pipeline ────────────────────────────────────────────────────────────────
 
 
@@ -120,93 +98,81 @@ def clear_scene() -> None:
     bpy.ops.wm.read_factory_settings(use_empty=True)
 
 
-def import_character_and_anim() -> bpy.types.Object:
-    """Imports X Bot.fbx (mesh + armature). Pilot v1 does NOT apply
-    animation — see ANIM_FBX comment at top of file for why.
+def import_character() -> bpy.types.Object:
+    """Imports a .glb character. Auto-centers at origin, auto-scales to
+    TARGET_CHARACTER_HEIGHT.
 
-    Returns the armature object."""
+    Returns the root Empty/Mesh object that all directions rotate around.
+    For an unrigged Meshy export this is typically a top-level Empty
+    containing one or more Mesh children. We create a wrapper Empty so
+    the direction yaw rotation always has a clean parent regardless of
+    what structure the .glb produced."""
     import mathutils  # type: ignore
 
-    bpy.ops.import_scene.fbx(filepath=str(CHARACTER_FBX))
-    armatures = [o for o in bpy.context.scene.objects if o.type == 'ARMATURE']
-    if not armatures:
-        raise RuntimeError(f"No armature in {CHARACTER_FBX}")
-    armature = armatures[0]
-    armature.name = "AnimArmature"  # name kept for compatibility with rest of script
+    bpy.ops.import_scene.gltf(filepath=str(CHARACTER_GLB))
 
-    # Diagnostic bbox of all mesh children.
+    # Collect every object the import created (selected post-import).
+    imported = [o for o in bpy.context.selected_objects]
+    if not imported:
+        raise RuntimeError(f"No objects imported from {CHARACTER_GLB}")
+
+    # Compute world-space bbox across all imported meshes
     min_x = min_y = min_z = float('inf')
     max_x = max_y = max_z = float('-inf')
-    for child in armature.children_recursive:
-        if child.type != 'MESH':
+    for obj in imported:
+        if obj.type != 'MESH':
             continue
-        for corner in child.bound_box:
-            world_corner = child.matrix_world @ mathutils.Vector(corner)
+        for corner in obj.bound_box:
+            world_corner = obj.matrix_world @ mathutils.Vector(corner)
             min_x, max_x = min(min_x, world_corner.x), max(max_x, world_corner.x)
             min_y, max_y = min(min_y, world_corner.y), max(max_y, world_corner.y)
             min_z, max_z = min(min_z, world_corner.z), max(max_z, world_corner.z)
-    print(f"[pilot] Character bbox (world, T-pose):")
-    print(f"[pilot]   X: [{min_x:.3f}, {max_x:.3f}] = {max_x - min_x:.3f}m wide")
-    print(f"[pilot]   Z: [{min_z:.3f}, {max_z:.3f}] = {max_z - min_z:.3f}m tall")
 
-    return armature
+    width, depth, height = max_x - min_x, max_y - min_y, max_z - min_z
+    print(f"[pilot] Imported bbox (raw):")
+    print(f"[pilot]   X: [{min_x:.3f}, {max_x:.3f}] = {width:.3f}m")
+    print(f"[pilot]   Y: [{min_y:.3f}, {max_y:.3f}] = {depth:.3f}m")
+    print(f"[pilot]   Z: [{min_z:.3f}, {max_z:.3f}] = {height:.3f}m")
 
+    # Create a wrapper Empty at world origin. Parent all imported roots to
+    # it. The Empty becomes our single rotation handle — yawing it
+    # rotates the whole character set as one unit.
+    wrapper = bpy.data.objects.new("CharacterWrapper", None)
+    bpy.context.scene.collection.objects.link(wrapper)
+    for obj in imported:
+        if obj.parent is None:
+            obj.parent = wrapper
 
-def import_weapon(armature: bpy.types.Object) -> bpy.types.Object:
-    """Imports hammer.glb and parents it to the right hand bone.
+    # Scale to target height. If the mesh is upside-down or sideways
+    # (some Meshy exports have unusual axes), the height we measure is
+    # along world Z — we scale uniformly so whichever axis IS the tall
+    # one ends up matching TARGET_CHARACTER_HEIGHT.
+    tallest_axis = max(width, depth, height)
+    if tallest_axis > 0:
+        scale_factor = TARGET_CHARACTER_HEIGHT / tallest_axis
+        wrapper.scale = (scale_factor, scale_factor, scale_factor)
+        print(f"[pilot] Applied uniform scale {scale_factor:.4f} "
+              f"to fit {TARGET_CHARACTER_HEIGHT}m height")
 
-    Uses the `parent_set` operator with type='BONE' rather than a Child Of
-    constraint — the operator handles `matrix_parent_inverse` calculation
-    automatically, where the constraint API doesn't and the weapon ends up
-    at the wrong world position.
-    """
-    bpy.ops.import_scene.gltf(filepath=str(WEAPON_GLB))
-    weapon_meshes = [o for o in bpy.context.selected_objects if o.type == 'MESH']
-    if not weapon_meshes:
-        raise RuntimeError(f"No mesh found after importing {WEAPON_GLB}")
-    # GLB imports often include child meshes — collect them all so they
-    # parent as a group.
-    weapon_roots = [o for o in bpy.context.selected_objects
-                    if o.type in ('MESH', 'EMPTY') and o.parent is None]
-    if weapon_roots:
-        weapon_meshes = weapon_roots
-    weapon = weapon_meshes[0]
-    weapon.name = "Weapon"
+    # Translate so the mesh's feet (lowest Z) sit at world Z=0. Take the
+    # original min_z * scale_factor; that's the post-scale floor offset
+    # that we need to nullify.
+    feet_offset_z = min_z * (TARGET_CHARACTER_HEIGHT / tallest_axis if tallest_axis > 0 else 1.0)
+    wrapper.location = (
+        -(min_x + width / 2) * (TARGET_CHARACTER_HEIGHT / tallest_axis if tallest_axis > 0 else 1.0),
+        -(min_y + depth / 2) * (TARGET_CHARACTER_HEIGHT / tallest_axis if tallest_axis > 0 else 1.0),
+        -feet_offset_z,
+    )
 
-    # parent_set operates on the current selection: select weapons, then the
-    # armature (last = active), then call parent_set with type='BONE' after
-    # making the desired bone the active bone of the armature.
-    bpy.ops.object.select_all(action='DESELECT')
-    for w in weapon_meshes:
-        w.select_set(True)
-    armature.select_set(True)
-    bpy.context.view_layer.objects.active = armature
-    armature.data.bones.active = armature.data.bones.get(WEAPON_BONE)
-    if armature.data.bones.active is None:
-        raise RuntimeError(
-            f"Bone {WEAPON_BONE!r} not found on armature. "
-            f"Bones: {[b.name for b in armature.data.bones][:6]}..."
-        )
-    bpy.ops.object.parent_set(type='BONE')
+    # Force a scene update so the new transforms propagate before render
+    bpy.context.view_layer.update()
 
-    # Eyeball grip offset for the pilot. The project's runtime weapon-grip
-    # tuner (F9+T) emits the canonical offsets per weapon — those values
-    # are in `game/scripts/.../weapon_grips.gd` and can be cross-walked
-    # here once the pilot is locked.
-    weapon.location = (0.0, 0.0, 0.0)
-    weapon.rotation_euler = (0.0, 0.0, 0.0)
-    return weapon
+    return wrapper
 
 
-def verify_animation_loaded(armature: bpy.types.Object) -> None:
-    """Pilot v1 renders T-pose only — no action to verify."""
-    if ANIM_FBX is None:
-        print("[pilot] Animation disabled (T-pose render). See ANIM_FBX comment.")
-        return
-    if not armature.animation_data or not armature.animation_data.action:
-        raise RuntimeError(f"No action attached to {armature.name}")
-    action = armature.animation_data.action
-    print(f"[pilot] Action: {action.name}, frames {int(action.frame_range[0])}-{int(action.frame_range[1])}")
+# (Legacy import_weapon + verify_animation_loaded removed when pilot
+# pivoted from the SDXL stylization path to direct .glb rendering — see
+# PILOT_RESULTS.md for the full reasoning.)
 
 
 def setup_camera() -> bpy.types.Object:
@@ -297,41 +263,21 @@ def setup_render_settings() -> None:
     scene.view_settings.view_transform = 'Standard'
 
 
-def render_all_directions() -> None:
-    """Outer loop: for each direction × frame, set up scene state and render.
-    When ANIM_FBX is None, renders T-pose only (1 frame per direction)."""
-    armature = bpy.data.objects["AnimArmature"]
+def render_all_directions(character_wrapper: bpy.types.Object) -> None:
+    """Outer loop: rotate the character wrapper for each of 8 facings,
+    render an RGBA PNG. Wrapper rotation is around world Z (yaw)."""
     scene = bpy.context.scene
-
     raw_dir = OUTPUT_ROOT / "raw"
     raw_dir.mkdir(parents=True, exist_ok=True)
 
-    # Save the armature's import-time rotation (Mixamo's auto-rotation puts
-    # it at +90°X to stand the character up in Blender's Z-up). Direction
-    # yaw is layered ON TOP of that base rotation, not replacing it.
-    base_rotation = armature.rotation_euler.copy()
-
     for dir_name, yaw_deg in DIRECTIONS:
-        # Preserve the import-time X rotation; only override the Z yaw.
-        armature.rotation_euler = (base_rotation.x, base_rotation.y, math.radians(yaw_deg))
-
+        character_wrapper.rotation_euler = (0, 0, math.radians(yaw_deg))
         for f_idx in range(FRAMES_PER_DIRECTION):
-            # If we have an action, sample evenly across its frame range.
-            # If not, just render at frame 1 (T-pose / rest).
-            if ANIM_FBX is not None and armature.animation_data \
-                    and armature.animation_data.action:
-                action = armature.animation_data.action
-                frame_start, frame_end = int(action.frame_range[0]), int(action.frame_range[1])
-                total = frame_end - frame_start
-                step = max(1, total // FRAMES_PER_DIRECTION)
-                frame = frame_start + f_idx * step
-            else:
-                frame = 1
-            scene.frame_set(frame)
+            scene.frame_set(1)  # static pose for now; armature anim later
             out_path = raw_dir / f"{dir_name}_{f_idx:02d}.png"
             scene.render.filepath = str(out_path)
             bpy.ops.render.render(write_still=True)
-            print(f"  [{dir_name}] frame {f_idx + 1}/{FRAMES_PER_DIRECTION} → {out_path.name}")
+            print(f"  [{dir_name}] → {out_path.name}")
 
 
 # ── Entrypoint ──────────────────────────────────────────────────────────────
@@ -339,27 +285,19 @@ def render_all_directions() -> None:
 
 def main() -> None:
     print(f"[pilot] Project root: {PROJECT_ROOT}")
-    print(f"[pilot] Character: {CHARACTER_FBX.name}")
-    print(f"[pilot] Weapon: {WEAPON_GLB.name}")
-    print(f"[pilot] Animation: {ANIM_FBX.name if ANIM_FBX else '(disabled — T-pose only)'}")
+    print(f"[pilot] Character: {CHARACTER_GLB}")
     print(f"[pilot] Output: {OUTPUT_ROOT}")
 
-    required_assets = [CHARACTER_FBX, WEAPON_GLB]
-    if ANIM_FBX is not None:
-        required_assets.append(ANIM_FBX)
-    for required in required_assets:
-        if not required.exists():
-            print(f"[pilot] ERROR: missing asset {required}")
-            sys.exit(1)
+    if not CHARACTER_GLB.exists():
+        print(f"[pilot] ERROR: missing character glb {CHARACTER_GLB}")
+        sys.exit(1)
 
     clear_scene()
-    armature = import_character_and_anim()
-    verify_animation_loaded(armature)
-    import_weapon(armature)
+    wrapper = import_character()
     setup_camera()
     setup_lighting()
     setup_render_settings()
-    render_all_directions()
+    render_all_directions(wrapper)
 
     print(f"[pilot] Done. Rendered {len(DIRECTIONS) * FRAMES_PER_DIRECTION} frames.")
     print(f"[pilot] Output dir: {OUTPUT_ROOT / 'raw'}")
