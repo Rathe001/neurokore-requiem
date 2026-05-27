@@ -57,7 +57,10 @@ from pathlib import Path
 
 # ── Config ──────────────────────────────────────────────────────────────────
 
-COMFYUI_URL = "http://127.0.0.1:8188"
+# ComfyUI Desktop installs default to port 8000; the source-repo install
+# defaults to 8188. Override via env var if yours differs:
+#   $env:COMFYUI_URL = "http://127.0.0.1:8188"; python tools/pilot/02_stylize.py
+COMFYUI_URL = os.environ.get("COMFYUI_URL", "http://127.0.0.1:8000")
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 RAW_DIR = PROJECT_ROOT / "tools" / "pilot" / "output" / "raw"
 PAINTED_DIR = PROJECT_ROOT / "tools" / "pilot" / "output" / "painted"
@@ -73,6 +76,13 @@ STYLE_REF_PATH = PROJECT_ROOT / "docs" / "art-reference" / (
 # Smoke test: process one image first to validate the pipeline.
 SMOKE_TEST = True
 SMOKE_TEST_INPUT = "S_00.png"
+
+# Minimal mode: skip ControlNet + IP-Adapter, run pure img2img with
+# prompt-driven style only. Set True for the first run on a fresh ComfyUI
+# install — only requires the SDXL checkpoint (~6.5GB), no extras. Style
+# fidelity to the painted bible will be lower (no anchor reference); set
+# False after downloading the full model set + IPAdapter custom node.
+MINIMAL_MODE = True
 
 # Model names. EDIT THESE to match your local ComfyUI installation.
 # After the first run, this script prints what's actually installed so
@@ -204,8 +214,72 @@ def upload_image(path: Path) -> str:
     return result.get("name", path.name)
 
 
-def build_workflow(raw_image_name: str, style_ref_name: str, output_prefix: str, seed: int) -> dict:
-    """Construct the ComfyUI API workflow as a node-id-keyed dict.
+def build_minimal_workflow(raw_image_name: str, output_prefix: str, seed: int) -> dict:
+    """Minimal img2img workflow — SDXL checkpoint only, no ControlNet, no
+    IP-Adapter. Style is purely prompt-driven. Use this to validate the
+    pipeline works end-to-end before installing the full model set.
+
+        LoadImage(raw) ──► VAEEncode ──► (latent) ──┐
+                                                     │
+        Checkpoint ─┬─► (model) ───────────────────► KSampler
+                    ├─► (clip) ─► CLIPTextEnc(+) ──► │
+                    │            CLIPTextEnc(-) ──► │
+                    └─► (vae) ───────────────────────► VAEDecode ──► SaveImage
+    """
+    return {
+        "1": {
+            "class_type": "CheckpointLoaderSimple",
+            "inputs": {"ckpt_name": CKPT_NAME},
+        },
+        "2": {
+            "class_type": "LoadImage",
+            "inputs": {"image": raw_image_name},
+        },
+        "3": {
+            "class_type": "VAEEncode",
+            "inputs": {"pixels": ["2", 0], "vae": ["1", 2]},
+        },
+        "4": {
+            "class_type": "CLIPTextEncode",
+            "inputs": {"text": POSITIVE_PROMPT, "clip": ["1", 1]},
+        },
+        "5": {
+            "class_type": "CLIPTextEncode",
+            "inputs": {"text": NEGATIVE_PROMPT, "clip": ["1", 1]},
+        },
+        "6": {
+            "class_type": "KSampler",
+            "inputs": {
+                "model": ["1", 0],
+                "positive": ["4", 0],
+                "negative": ["5", 0],
+                "latent_image": ["3", 0],
+                "seed": seed,
+                "steps": 30,
+                "cfg": 7.0,
+                "sampler_name": "dpmpp_2m_sde",
+                "scheduler": "karras",
+                "denoise": DENOISE_STRENGTH,
+            },
+        },
+        "7": {
+            "class_type": "VAEDecode",
+            "inputs": {"samples": ["6", 0], "vae": ["1", 2]},
+        },
+        "8": {
+            "class_type": "SaveImage",
+            "inputs": {
+                "images": ["7", 0],
+                "filename_prefix": output_prefix,
+            },
+        },
+    }
+
+
+def build_full_workflow(raw_image_name: str, style_ref_name: str, output_prefix: str, seed: int) -> dict:
+    """Full ComfyUI API workflow — SDXL + IP-Adapter (style anchor) +
+    ControlNet (canny). Requires the full model set + IPAdapter custom
+    node pack. See module docstring for setup.
 
     Graph shape:
 
@@ -397,7 +471,12 @@ def stylize_one(input_filename: str, style_filename: str) -> Path | None:
     client_id = uuid.uuid4().hex
     output_prefix = f"painted_{Path(input_filename).stem}"
 
-    workflow = build_workflow(input_filename, style_filename, output_prefix, SEED)
+    if MINIMAL_MODE:
+        workflow = build_minimal_workflow(input_filename, output_prefix, SEED)
+        save_node_id = "8"
+    else:
+        workflow = build_full_workflow(input_filename, style_filename, output_prefix, SEED)
+        save_node_id = "13"
     print(f"[stylize] Submitting workflow for {input_filename}...")
     prompt_id = submit_prompt(workflow, client_id)
     print(f"[stylize]   prompt_id: {prompt_id}")
@@ -410,7 +489,7 @@ def stylize_one(input_filename: str, style_filename: str) -> Path | None:
 
     # Find the saved image in the result outputs
     outputs = result.get("outputs", {})
-    save_node_output = outputs.get("13", {})
+    save_node_output = outputs.get(save_node_id, {})
     images = save_node_output.get("images", [])
     if not images:
         print(f"[stylize] ERROR: no output image in result. Full result:")
