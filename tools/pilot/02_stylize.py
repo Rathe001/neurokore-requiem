@@ -105,9 +105,21 @@ NEGATIVE_PROMPT = (
 )
 
 # img2img denoising — how much the model can change the input.
-# 0.0 = no change, 1.0 = full re-paint. 0.55-0.65 is the sweet spot for
-# preserving silhouette while heavily restyling.
-DENOISE_STRENGTH = 0.6
+# 0.0 = no change, 1.0 = full re-paint. Higher = more aggressive re-style
+# but less faithful to the input pose. Without ControlNet to enforce
+# silhouette, ~0.65 is the upper limit before the pose drifts.
+#
+# Iteration log on the fresh install:
+#   0.6  -> chromatic noise (input too small, before 1024 upscale fix)
+#   0.4  -> pose preserved but no style shift (looked like 3D render)
+#   0.65 -> trying now
+DENOISE_STRENGTH = 0.65
+
+# SDXL was trained on 1024x1024 and produces garbage on smaller inputs.
+# Raw renders are 256x256, so we upscale them to 1024 before VAE encode.
+# The painted output saves at 1024 — downscale to 256 happens at the
+# Godot import step (high-res masters, scaled at runtime).
+SDXL_RESOLUTION = 1024
 
 # ControlNet strength — how strongly the lineart guides the output.
 # 0.7-0.8 keeps silhouette tight without crushing creativity.
@@ -219,12 +231,12 @@ def build_minimal_workflow(raw_image_name: str, output_prefix: str, seed: int) -
     IP-Adapter. Style is purely prompt-driven. Use this to validate the
     pipeline works end-to-end before installing the full model set.
 
-        LoadImage(raw) ──► VAEEncode ──► (latent) ──┐
-                                                     │
-        Checkpoint ─┬─► (model) ───────────────────► KSampler
-                    ├─► (clip) ─► CLIPTextEnc(+) ──► │
-                    │            CLIPTextEnc(-) ──► │
-                    └─► (vae) ───────────────────────► VAEDecode ──► SaveImage
+        LoadImage(raw) ─► ImageScale(1024) ─► VAEEncode ─► (latent) ─┐
+                                                                      │
+        Checkpoint ─┬─► (model) ────────────────────────────────────► KSampler
+                    ├─► (clip) ─► CLIPTextEnc(+) ──►                   │
+                    │            CLIPTextEnc(-) ──►                   │
+                    └─► (vae) ────────────────────────────────────────► VAEDecode ─► SaveImage
     """
     return {
         "1": {
@@ -235,9 +247,22 @@ def build_minimal_workflow(raw_image_name: str, output_prefix: str, seed: int) -
             "class_type": "LoadImage",
             "inputs": {"image": raw_image_name},
         },
+        # Upscale 256x256 input to 1024x1024 (SDXL's training resolution).
+        # Without this, SDXL outputs chromatic noise — it never saw small
+        # images during training.
+        "2a": {
+            "class_type": "ImageScale",
+            "inputs": {
+                "image": ["2", 0],
+                "width": SDXL_RESOLUTION,
+                "height": SDXL_RESOLUTION,
+                "upscale_method": "lanczos",
+                "crop": "disabled",
+            },
+        },
         "3": {
             "class_type": "VAEEncode",
-            "inputs": {"pixels": ["2", 0], "vae": ["1", 2]},
+            "inputs": {"pixels": ["2a", 0], "vae": ["1", 2]},
         },
         "4": {
             "class_type": "CLIPTextEncode",
