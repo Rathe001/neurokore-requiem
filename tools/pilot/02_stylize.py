@@ -74,7 +74,7 @@ STYLE_REF_PATH = PROJECT_ROOT / "docs" / "art-reference" / (
 )
 
 # Smoke test: process one image first to validate the pipeline.
-SMOKE_TEST = True
+SMOKE_TEST = False
 SMOKE_TEST_INPUT = "S_00.png"
 
 # Minimal mode: skip ControlNet + IP-Adapter, run pure img2img with
