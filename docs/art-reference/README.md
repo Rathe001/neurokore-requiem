@@ -2,7 +2,7 @@
 
 This folder is the visual-style lock for the 2D iso pivot. Every sprite
 gen, every tile gen, every UI element should pass the "does it sit
-cleanly next to these 24 images" test.
+cleanly next to these 48 images" test.
 
 The goal style: **hand-painted 1996-2000 ARPG**, dimetric iso (~26.5°,
 2:1 tile ratio), gritty body-horror cyberpunk tone, complementary-color
@@ -32,7 +32,7 @@ should be the `--sref` source for all future gens. If MJ rejects
 
 ---
 
-## Environments (11 images)
+## Environments (13 images)
 
 Painted iso scenes. Use as `--sref` style anchors for tile / room
 generation. Each one suggests a theme variant for procgen levels.
@@ -84,6 +84,20 @@ generation. Each one suggests a theme variant for procgen levels.
 - **`isometric_..._1990s_..._chaos_50_..._30c97468..._3.png`** — BQB
   bed / personal quarters with neon sign. Flavor piece. Anchor for
   "NPC quarters / vendor room / safe zone."
+
+### Aftermath / post-fight mood
+
+These came back from VFX prompts but read better as
+scene-establishing atmosphere than discrete VFX frames — kept here.
+
+- **`large_realistic_b_746a852c..._0.png`** — Industrial room with
+  glowing yellow energy column erupting from floor + massive blood
+  splatter + character witnessing. Anchor for "boss-arena aftermath"
+  or "scripted-event reveal" framing.
+- **`large_realistic_b_a0df319a..._1.png`** — Gothic interior with
+  body in a giant red blood pool + glowing red center + ceiling
+  apparatus. Heavy body-horror atmosphere. Anchor for "ritual room /
+  Enculted shrine / aftermath set piece."
 
 ---
 
@@ -205,31 +219,70 @@ flat UI, NOT eagles, NOT 40k imperial aesthetic
 
 ---
 
-## Item icons (4 images)
+## Item icons (11 images)
 
-**Lane decision pending.** The four icons split into two adjacent-but-
-distinct stylistic camps:
+**Painted-brush lane locked.** Anchored on `8953d79a` for continuity
+with the painted environment + character bible. Closest to actual D2
+inventory icons. Two early pixel-art-lean icons (`041acdbb`, `18b094ab`)
+are kept as outliers — re-prompt them to match the painted lane if
+they ever ship.
 
-| Image | Style | Best fit |
-|---|---|---|
-| `8953d79a` (red-barrel pistol) | Painted brush, illustrated | Painted lane |
-| `1bf54e31` (sniper on heraldic book) | Painted brush, illustrated | Painted lane (bad framing — see note) |
-| `041acdbb` (green sci-fi rifle) | Pixel-art with painted touches | Pixel-art lane |
-| `18b094ab` (SMG with skull motif) | Pixel-art lean | Pixel-art lane |
+### Weapons
 
-### Recommended lane: painted brush
+- **`8953d79a` red-barrel pistol** — Painted brush. **Anchor for the
+  entire icon lane.** Use as `--sref` for every future icon gen.
+- **`9c062c43` glowing combat knife** — Orange-edged ceremonial blade
+  with ring pommel. Slight fantasy-ceremonial lean but the glow keeps
+  it sci-fi. Anchor for "melee_1h / energy blade."
+- **`01c00396` industrial sledge** — Mechanical hammer with chain +
+  red-slit glow. Body-horror cyberpunk perfect. Anchor for "melee_2h."
+- **`1bf54e31` sniper rifle (on book backdrop)** — Painted beautifully
+  BUT framed on an arcane book + red velvet. Use the *rifle silhouette
+  only*; ignore the framing.
+- **`041acdbb` green sci-fi rifle** — Pixel-art with painted touches.
+  Outlier in the painted-brush bible. Keep for shape reference; re-do
+  in painted-brush lane if shipping.
+- **`18b094ab` SMG with skull motif** — Pixel-art lean. Same caveat as
+  `041acdbb`.
 
-Anchors on `8953d79a` for continuity with the painted environment +
-character bible. Closest to actual D2 inventory icons. Re-prompt the
-pixel-art icons to match if going this route.
+### Armor
 
-### `1bf54e31` framing note
+- **`322b8dee` spiked chest armor** — Spiked rust-orange torso plate
+  with chains crossing. Quintessential D2 inventory icon framing.
+  Anchor for "body armor / chest."
+- **`ddee8728` combat helmet** — Black armor helm with red visor strip
+  + bull-horn pipe. **Style note: leans modern stylized rather than
+  1996 painted-brush** — borderline but kept. Anchor for "helmet"
+  with the caveat that head-armor gens may need a tighter painted-
+  brush sref to stay on-bible.
+- **`623acc0a` industrial gloves** — Bronze + green-glow body-horror
+  gauntlets. Olive bg (not pure black) but the style is dead-on.
+  Anchor for "gloves / gauntlets."
 
-The sniper rifle on the arcane book + red velvet backdrop is **painted
-beautifully** but the heraldic backdrop is irrelevant for an inventory
-icon. Re-prompt with `solid dark background, isolated weapon, no book,
-no fabric, no backdrop` to keep the painting quality + remove the
-framing baggage.
+### Consumables & sockets
+
+- **`b071cbc2` medical stimpack** — Bronze injector with red liquid
+  tube + organic tubing. Body-horror medical perfect. Anchor for
+  "stimpack / battery / consumable."
+- **`60aeac2d` memory chip / rune** — Bronze circuit-board square with
+  green/orange energy tendrils erupting outward. Nails the "arcane
+  circuit motif" intent. Anchor for "chip / rune / socketable."
+
+### Deleted icons (anti-references)
+
+Documented so re-rolling doesn't repeat the same drift:
+
+- **`a68b62ad` trenchcoat** — Returned a full paper-doll panel
+  (multiple items in a framed display) WITH visible **"DIABLT"
+  branding text**. Wrong format + copyright drift.
+- **`1a4caef0` MRAD sniper rifle (dark)** — Returned as clean
+  vector-illustration / tactical-comic style, not painted brush.
+- **`db6188fc` MRAD sniper rifle (light)** — Same style drift + a
+  wolf-skull logo watermark in the corner.
+
+Pattern: when the prompt says "isolated rifle on black background"
+without anchoring `--sref [8953d79a]`, MJ defaults to gun-illustration
+style rather than D2 inventory style. Always pin the anchor.
 
 ### MJ prompt-locking for icon gens
 
@@ -246,114 +299,180 @@ NOT backdrop, NOT velvet, NOT book, just the item on dark background
 
 ---
 
+## VFX (8 images)
+
+Painted aesthetic, embedded in iso scenes (NOT isolated icons). Use
+as `--sref` anchors for the corresponding effect when running the
+3D-to-2D sprite pipeline's stylization pass.
+
+### Strong references (on-bible setting + effect)
+
+- **`VFX_..._blade_slash_impac_edcd8258..._0.png`** — Three characters
+  in a sanctum corridor, red blade beam + impact blast at center.
+  Anchor for "melee impact / red energy weapon discharge."
+- **`VFX_..._plasma_bolt_impac_49056be5..._2.png`** — Industrial
+  corridor with plasma bolt of orange fire/lightning hitting wall
+  apparatus. Anchor for "plasma weapon impact / hitscan VFX."
+- **`VFX_..._sci-fi_grenade_ex_ba5d19c3..._2.png`** — Iso industrial
+  catwalk scene with massive orange explosion + character at scale.
+  Anchor for "grenade / explosive impact."
+- **`VFX_..._sci-fi_weapon_muz_8e964d6b..._0.png`** — Mech-scale unit
+  firing a chaingun with bright muzzle burst against industrial
+  backdrop. Anchor for "muzzle flash / sustained-fire weapon."
+- **`VFX_..._subtle_wispy_gree_37bbf4cb..._1.png`** — Character in iso
+  scene surrounded by green particle swirl, green portal light source.
+  Anchor for "heal / restore / buff burst."
+
+### Marginal references (effect on-bible, setting drifts)
+
+Useful for the effect SHAPE only — the underlying scene drifts to
+gothic-fantasy rather than cyberpunk facility. When re-prompting,
+add explicit facility/industrial/sci-fi setting words.
+
+- **`VFX_..._blue_electric_arc_a84c4062..._2.png`** — Lightning arc
+  visual is excellent; setting is gothic cathedral with arched
+  windows + skull + tomb. Use for lightning shape; re-prompt in a
+  facility setting.
+- **`VFX_..._red_warning_ring__3a59c63a..._1.png`** — Red AoE telegraph
+  ring shape is correct; setting is library with candles + curtains +
+  fireplace. Use for the ring SHAPE; re-prompt in a facility setting.
+- **`VFX_..._large_blood_splat_a8b46a5a..._2.png`** — Industrial room
+  with floor blood pool AND yellow energy column from ceiling. Two
+  effects mashed — useful for both halves separately.
+
+### MJ prompt-locking for VFX gens
+
+```
+[anchor URL = ba5d19c3]
+Diablo 2 style isometric VFX frame, [EFFECT], hand-painted brush,
+embedded in dark industrial cyberpunk facility, iso scene with
+character at scale, painted texture
+--sref [ba5d19c3 URL]
+NOT gothic cathedral, NOT castle, NOT candles, NOT curtains,
+NOT fantasy setting, NOT clean 3D render, NOT modern particle effects
+```
+
+`--sref ba5d19c3` is the new VFX anchor — it has the cleanest
+industrial setting + most legible effect of the eight.
+
+---
+
 ## Gaps to fill before vertical slice starts
 
 | Asset class | Status | Target count | Notes |
 |---|---|---|---|
-| Environments | ✅ Locked | 11 | — |
+| Environments | ✅ Locked | 13 | — |
 | Characters | ✅ Locked | 7 | — |
 | Monsters | ✅ Locked | 6 | — |
-| UI / HUD | ✅ Locked | 3 (2 primary + 1 composition) | — |
-| Item icons | 🟡 Partial | 4 (need 4-8 more for variety) | See re-prompts below |
-| VFX refs | ❌ Missing | 6-8 needed | See re-prompts below |
+| UI / HUD | ✅ Locked | 3 | No-globes solution locked |
+| Item icons | ✅ Locked | 11 | Painted-brush lane locked on `8953d79a` |
+| VFX refs | ✅ Locked | 8 (5 strong + 3 marginal) | Anchor `ba5d19c3` for re-rolls |
 
-### Item icon re-prompts (use `--sref` on `8953d79a`)
+**Bible status: complete.** Vertical slice planning can begin — every
+asset class has a locked anchor reference for the AI render pipeline.
+See `docs/2d-iso-pipeline.md` (TBD) for the production pipeline once
+the pilot test ships.
 
-Target: 6-8 more icons covering the missing categories.
+### Item icon re-prompts (historical — kept for re-rolls)
 
-1. **Melee weapon — blade** (`melee_1h` archetype)
+These were the prompts used to fill the icon set. Most landed
+on-bible; flagged ones drifted and may need re-rolls.
+
+1. ✅ **Melee weapon — blade** (`melee_1h` archetype) → `9c062c43`
    ```
    Diablo 2 inventory item icon, futuristic combat knife with neon
    edge, gritty hand-painted brush style, isolated on solid dark
    background, body-horror cyberpunk, baked lighting
    ```
-2. **Melee weapon — sledgehammer** (`melee_2h`)
+2. ✅ **Melee weapon — sledgehammer** (`melee_2h`) → `01c00396`
    ```
    Diablo 2 inventory item icon, heavy industrial sledgehammer with
    piston head, gritty hand-painted brush style, isolated on solid
    dark background, scrap-metal cyberpunk, baked lighting
    ```
-3. **Body armor — chest piece**
+3. ✅ **Body armor — chest piece** → `322b8dee`
    ```
    Diablo 2 inventory item icon, sci-fi armored chest plate with
    cyberware ports and exposed cabling, hand-painted brush style,
    isolated on solid dark background, body-horror cyberpunk
    ```
-4. **Helmet**
+4. 🟡 **Helmet** → `ddee8728` (style drift — kept, may need re-roll)
    ```
    Diablo 2 inventory item icon, sci-fi combat helmet with glowing
    visor strip, hand-painted brush style, isolated on solid dark
    background, gritty neon noir
    ```
-5. **Consumable — stimpack / battery**
+5. ✅ **Consumable — stimpack / battery** → `b071cbc2`
    ```
    Diablo 2 inventory item icon, sci-fi medical stimpack with red
    liquid and exposed wiring, hand-painted brush style, isolated
    on solid dark background, gritty bio-mechanical
    ```
-6. **Chip / rune / socketable**
+6. ✅ **Chip / rune / socketable** → `60aeac2d`
    ```
    Diablo 2 inventory item icon, glowing sci-fi memory chip with
    etched circuitry, hand-painted brush style, isolated on solid
    dark background, neon-glowing, arcane circuit motif
    ```
-7. **Re-do of `1bf54e31`** — same sniper rifle, painted brush, NO
-   heraldic backdrop, isolated on dark background only
+7. ❌ **Re-do of `1bf54e31`** — Two attempts (`1a4caef0`, `db6188fc`)
+   both drifted to tactical-comic-book style. Deleted. Painted-brush
+   sniper rifle is still an open icon gap.
 
-### VFX re-prompts
+### VFX re-prompts (historical — kept for re-rolls)
 
-Target: 6-8 reference frames for combat VFX. Painted aesthetic,
-embedded in the iso environment (NOT isolated icons).
+All eight landed. Three drifted to gothic-fantasy settings (flagged
+in the VFX section above).
 
-1. **Plasma bolt impact**
+1. ✅ **Plasma bolt impact** → `49056be5`
    ```
    Diablo 2 style isometric VFX frame, plasma bolt impacting a wall,
    red and orange light burst splash, hand-painted, embedded in dark
    industrial corridor, neon noir
    ```
-2. **Muzzle flash**
+2. ✅ **Muzzle flash** → `8e964d6b`
    ```
    Diablo 2 style isometric VFX frame, sci-fi weapon muzzle flash
    bright orange burst at character barrel, hand-painted, embedded
    in dark facility interior
    ```
-3. **Melee swing impact**
+3. ✅ **Melee swing impact** → `edcd8258`
    ```
    Diablo 2 style isometric VFX frame, blade slash impact with
    sparks and red blood splash, hand-painted, embedded in iso scene
    with character
    ```
-4. **Explosion**
+4. ✅ **Explosion** → `ba5d19c3`
    ```
    Diablo 2 style isometric VFX frame, sci-fi grenade explosion with
    orange fireball and debris, hand-painted, embedded in industrial
    iso scene
    ```
-5. **Shock / electric burst** (taser / energy weapon)
+5. 🟡 **Shock / electric burst** → `a84c4062` (gothic setting drift)
    ```
    Diablo 2 style isometric VFX frame, blue electric arc discharge
    between enemy and weapon, hand-painted, embedded in dark iso scene
    ```
-6. **Heal / restore burst** (consumable use)
+6. ✅ **Heal / restore burst** → `37bbf4cb`
    ```
    Diablo 2 style isometric VFX frame, green healing particle burst
    around character, hand-painted, embedded in iso facility scene
    ```
-7. **Blood splatter — large**
+7. 🟡 **Blood splatter — large** → `a8b46a5a` (mixed with energy column)
    ```
    Diablo 2 style isometric VFX frame, large blood splatter on iso
    floor tiles after enemy death, hand-painted, dark industrial
    setting, gore-heavy body horror
    ```
-8. **Boss attack telegraph / AoE ring**
+8. 🟡 **Boss attack telegraph / AoE ring** → `3a59c63a` (gothic setting)
    ```
    Diablo 2 style isometric VFX frame, red warning ring on floor
    tiles indicating incoming AoE attack, hand-painted, embedded in
    iso scene
    ```
 
-Once item icons + VFX land, the bible is complete and the vertical
-slice can be specced with real visual anchors for every asset class.
+All eight VFX prompts landed; three need facility-setting re-rolls
+to fully nail the tone. Bible is complete — vertical slice planning
+can begin.
 
 ---
 
