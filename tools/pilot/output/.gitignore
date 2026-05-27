@@ -1,0 +1,4 @@
+# Rendered output is regenerable from the .glb + animation + script.
+# Ignore everything except this file.
+*
+!.gitignore
