@@ -22,7 +22,7 @@ painted bible look, we eat the slower iteration.
 0a. tools/pilot/01_render_sprite_sheet.py   →  T-pose 8-direction renders (8 frames)  ✅ shipped
 0b. (deferred) animation retargeting        →  walk-cycle frames (64 frames)
 0c. (deferred) weapon grip tuning           →  hammer in hand, not on floor
-1.  tools/pilot/02_comfyui_workflow.json    →  painted img2img output
+1.  tools/pilot/02_stylize.py               →  painted img2img output via ComfyUI API
 2.  tools/pilot/03_test_scene.tscn          →  Godot side-by-side comparison
 ```
 
@@ -90,6 +90,74 @@ All in `01_render_sprite_sheet.py` — top of file:
 | `DIRECTIONS` | The 8-direction sprite-sheet axes. |
 | `CAMERA_PITCH_DEG` / `CAMERA_YAW_DEG` | Iso camera angle. 30/45 ≈ D2. |
 | `CAMERA_ORTHO_SCALE` | Zoom level. Decrease to zoom in, increase to fit. |
+
+## Running step 1 (ComfyUI img2img stylization)
+
+Run from project root:
+
+```pwsh
+python tools/pilot/02_stylize.py
+```
+
+The script defaults to `SMOKE_TEST = True` — it processes one image
+(`S_00.png`) so you can iterate quickly on prompts / strengths / model
+choices before committing to a full 8-image batch.
+
+### What it needs running
+
+ComfyUI listening on `http://127.0.0.1:8188` (start with
+`python main.py` from the ComfyUI dir, or use the
+`run_nvidia_gpu.bat` shortcut on Windows).
+
+### Models the script expects (edit names at top of file if yours differ)
+
+| ComfyUI folder | File | Source |
+|---|---|---|
+| `models/checkpoints/` | `sd_xl_base_1.0.safetensors` | [stabilityai/stable-diffusion-xl-base-1.0](https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0) |
+| `models/controlnet/` | `controlnet-lora-sdxl-canny.safetensors` | [stabilityai/control-lora](https://huggingface.co/stabilityai/control-lora) |
+| `models/ipadapter/` | `ip-adapter-plus_sdxl_vit-h.safetensors` | [h94/IP-Adapter](https://huggingface.co/h94/IP-Adapter) |
+| `models/clip_vision/` | `CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors` | [laion/CLIP-ViT-H-14-...](https://huggingface.co/laion/CLIP-ViT-H-14-laion2B-s32B-b79K) |
+
+### Custom nodes the script expects
+
+- **ComfyUI_IPAdapter_plus** — `git clone https://github.com/cubiq/ComfyUI_IPAdapter_plus` into `ComfyUI/custom_nodes/`, or install via [ComfyUI Manager](https://github.com/ltdrdata/ComfyUI-Manager)
+
+### What the script does (in order)
+
+1. Verifies ComfyUI is reachable and prints what models / custom nodes are installed
+2. Cross-checks the configured `CKPT_NAME` and `CONTROLNET_NAME` against installed models, warns if missing
+3. Uploads the painted style anchor (`374b6a95...` soldier ref) to ComfyUI's input folder
+4. Uploads the raw render to ComfyUI's input folder
+5. Submits a workflow: SDXL → VAE encode → IP-Adapter (style anchor) → ControlNet (canny) → KSampler (denoise 0.6) → VAE decode → save
+6. Polls until ComfyUI reports completion (~30-90s on a 12GB GPU)
+7. Downloads the painted output to `tools/pilot/output/painted/S_00.png`
+
+### Tuning knobs (top of `02_stylize.py`)
+
+| Constant | Default | What it does |
+|---|---|---|
+| `DENOISE_STRENGTH` | 0.6 | How much the model can change input. Lower = more raw, higher = more painted. |
+| `CONTROLNET_STRENGTH` | 0.75 | Silhouette preservation. Higher = tighter to the 3D render. |
+| `IPADAPTER_WEIGHT` | 0.8 | How heavily the painted style ref biases output. |
+| `POSITIVE_PROMPT` | (long) | Style description. Tweak to push toward different aesthetics. |
+| `NEGATIVE_PROMPT` | (long) | Failure modes. Adds words to push away from. |
+| `SEED` | 42 | Reproducibility. Change to randomize. |
+| `SMOKE_TEST` | True | Set False to batch all 8 directions after smoke test passes. |
+
+### Expected smoke-test output
+
+After running, inspect `tools/pilot/output/painted/S_00.png`. Compare
+against `tools/pilot/output/raw/S_00.png`:
+
+- Painted version should look hand-painted, not 3D-rendered
+- Character pose + silhouette should be recognizably the same
+- Color palette should lean toward the painted bible (orange + teal)
+- Lighting should feel baked rather than real-time
+
+If the result drifts heavily from the input pose, raise
+`CONTROLNET_STRENGTH`. If it doesn't look painted enough, raise
+`DENOISE_STRENGTH` and/or `IPADAPTER_WEIGHT`. If it ignores the
+character entirely and paints random scenes, lower `DENOISE_STRENGTH`.
 
 ## Outputs (gitignored)
 
