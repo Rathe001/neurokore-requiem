@@ -19,12 +19,38 @@ painted bible look, we eat the slower iteration.
 ## Steps
 
 ```
-0. tools/pilot/01_render_sprite_sheet.py    →  raw 3D renders (64 frames)
-1. tools/pilot/02_comfyui_workflow.json     →  painted img2img output
-2. tools/pilot/03_test_scene.tscn           →  Godot side-by-side comparison
+0a. tools/pilot/01_render_sprite_sheet.py   →  T-pose 8-direction renders (8 frames)  ✅ shipped
+0b. (deferred) animation retargeting        →  walk-cycle frames (64 frames)
+0c. (deferred) weapon grip tuning           →  hammer in hand, not on floor
+1.  tools/pilot/02_comfyui_workflow.json    →  painted img2img output
+2.  tools/pilot/03_test_scene.tscn          →  Godot side-by-side comparison
 ```
 
 Each step is a separate commit so the work can be evaluated incrementally.
+
+### Why T-pose first (step 0a only)
+
+Mixamo's cross-FBX animation pipeline relies on bone-axis-correction
+retargeting. Godot does this via `SkeletonProfileHumanoid` + a BoneMap
+resource (see `game/assets/characters/x_bot/README.md`). Blender has no
+built-in equivalent — animations from one Mixamo FBX applied to the
+rest pose of another Mixamo FBX produce a contorted result (character
+renders horizontal instead of upright).
+
+Three paths forward for animation:
+
+1. **Use a Blender addon** — Rokoko Studio Live (free) has Mixamo
+   retargeting. ~5-10 min addon install + per-character setup.
+2. **Custom Python retargeter** — port the project's BoneMap logic to
+   Blender. ~1-2 hours of focused work but matches the runtime exactly.
+3. **Download X Bot WITH animation baked in from Mixamo.** Single FBX
+   that doesn't need retargeting. Limits us to whatever animations
+   we re-download but avoids the problem entirely for the pilot.
+
+Pilot picks #3 for the next iteration unless the user picks otherwise.
+
+T-pose is enough to validate the ComfyUI stylization pipeline. Once
+img2img is proven to produce painted output, we layer animation back in.
 
 ## Running step 0 (the Blender render)
 
