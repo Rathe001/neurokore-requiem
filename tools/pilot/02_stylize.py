@@ -82,13 +82,13 @@ SMOKE_TEST_INPUT = "S_00.png"
 # install — only requires the SDXL checkpoint (~6.5GB), no extras. Style
 # fidelity to the painted bible will be lower (no anchor reference); set
 # False after downloading the full model set + IPAdapter custom node.
-MINIMAL_MODE = True
+MINIMAL_MODE = False
 
 # Model names. EDIT THESE to match your local ComfyUI installation.
 # After the first run, this script prints what's actually installed so
 # you can pick the right names without guessing.
 CKPT_NAME = "sd_xl_base_1.0.safetensors"
-CONTROLNET_NAME = "controlnet-lora-sdxl-canny.safetensors"
+CONTROLNET_NAME = "controlnet-canny-sdxl-1.0.safetensors"
 
 # Prompts: positive describes what we want, negative pushes away from
 # the failure modes we've seen in the bible iterations.
@@ -334,15 +334,28 @@ def build_full_workflow(raw_image_name: str, style_ref_name: str, output_prefix:
             "class_type": "LoadImage",
             "inputs": {"image": raw_image_name},
         },
+        # 2a: Upscale 256x256 raw render to 1024x1024 for SDXL. Same fix
+        # as the minimal workflow — SDXL produces chromatic noise on
+        # smaller inputs.
+        "2a": {
+            "class_type": "ImageScale",
+            "inputs": {
+                "image": ["2", 0],
+                "width": SDXL_RESOLUTION,
+                "height": SDXL_RESOLUTION,
+                "upscale_method": "lanczos",
+                "crop": "disabled",
+            },
+        },
         # 3: Load the painted bible style anchor (for IP-Adapter)
         "3": {
             "class_type": "LoadImage",
             "inputs": {"image": style_ref_name},
         },
-        # 4: Encode raw render to latent for img2img
+        # 4: Encode upscaled render to latent for img2img
         "4": {
             "class_type": "VAEEncode",
-            "inputs": {"pixels": ["2", 0], "vae": ["1", 2]},
+            "inputs": {"pixels": ["2a", 0], "vae": ["1", 2]},
         },
         # 5: Positive prompt
         "5": {
@@ -359,7 +372,11 @@ def build_full_workflow(raw_image_name: str, style_ref_name: str, output_prefix:
             "class_type": "IPAdapterUnifiedLoader",
             "inputs": {"model": ["1", 0], "preset": "PLUS (high strength)"},
         },
-        # 8: Apply IP-Adapter — bias the model toward the style reference
+        # 8: Apply IP-Adapter — bias the model toward the style reference.
+        # weight_type controls HOW the style influence is distributed across
+        # diffusion steps. "linear" applies evenly; "style transfer" biases
+        # toward visual style while letting ControlNet drive structure —
+        # that's exactly what we want here.
         "8": {
             "class_type": "IPAdapter",
             "inputs": {
@@ -367,27 +384,35 @@ def build_full_workflow(raw_image_name: str, style_ref_name: str, output_prefix:
                 "ipadapter": ["7", 1],
                 "image": ["3", 0],
                 "weight": IPADAPTER_WEIGHT,
+                "weight_type": "style transfer",
                 "start_at": 0.0,
                 "end_at": 1.0,
             },
         },
-        # 9: Load ControlNet (lineart/canny for structure preservation)
+        # 9: Load ControlNet
         "9": {
             "class_type": "ControlNetLoader",
             "inputs": {"control_net_name": CONTROLNET_NAME},
         },
-        # 10: Apply ControlNet to positive prompt. Use the raw render as
-        # the conditioning image — canny ControlNet will internally extract
-        # edges. If you have a Canny/Lineart preprocessor node from
-        # comfyui_controlnet_aux you can preprocess first; for v1 we let
-        # the ControlNet take the raw image and rely on the model's
-        # tolerance.
+        # 9a: Canny edge detection on the upscaled input. ControlNet for
+        # canny expects edge-detected input, not raw RGB. Thresholds
+        # tuned for clean character silhouettes against a black bg —
+        # lower thresholds catch more edges, higher = cleaner.
+        "9a": {
+            "class_type": "Canny",
+            "inputs": {
+                "image": ["2a", 0],
+                "low_threshold": 0.1,
+                "high_threshold": 0.3,
+            },
+        },
+        # 10: Apply ControlNet using the canny-edge image to lock silhouette.
         "10": {
             "class_type": "ControlNetApply",
             "inputs": {
                 "conditioning": ["5", 0],
                 "control_net": ["9", 0],
-                "image": ["2", 0],
+                "image": ["9a", 0],
                 "strength": CONTROLNET_STRENGTH,
             },
         },
