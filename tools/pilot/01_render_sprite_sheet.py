@@ -265,13 +265,25 @@ def setup_render_settings() -> None:
 
 def render_all_directions(character_wrapper: bpy.types.Object) -> None:
     """Outer loop: rotate the character wrapper for each of 8 facings,
-    render an RGBA PNG. Wrapper rotation is around world Z (yaw)."""
+    render an RGBA PNG. Wrapper rotation is around world Z (yaw).
+
+    Includes a +180° base rotation so the Meshy default orientation
+    (character facing +Y, Blender's away-from-camera direction) lines
+    up with our convention where "S" means facing TOWARD the camera.
+    Adjust BASE_YAW_DEG per-character if a different .glb imports with
+    a different default facing — gltf exporters don't have a standard
+    convention so this can vary.
+    """
+    BASE_YAW_DEG = 180.0
+
     scene = bpy.context.scene
     raw_dir = OUTPUT_ROOT / "raw"
     raw_dir.mkdir(parents=True, exist_ok=True)
 
     for dir_name, yaw_deg in DIRECTIONS:
-        character_wrapper.rotation_euler = (0, 0, math.radians(yaw_deg))
+        character_wrapper.rotation_euler = (
+            0, 0, math.radians(yaw_deg + BASE_YAW_DEG),
+        )
         for f_idx in range(FRAMES_PER_DIRECTION):
             scene.frame_set(1)  # static pose for now; armature anim later
             out_path = raw_dir / f"{dir_name}_{f_idx:02d}.png"
