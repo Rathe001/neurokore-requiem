@@ -1,5 +1,6 @@
 # Memory Index
 
+- [2D iso pivot (2026-05-26)](project_2d_iso_pivot.md) — pivoted to 2D iso sprite ARPG; bible at docs/art-reference/, pilot at tools/pilot/, branches 2d-iso-rework + 2d-iso-pilot
 - [User background](user_background.md) — Josh is a UI/JS dev new to game engines and systems languages; explain via web analogies
 - [Enemy spawning model](project_enemy_spawning_model.md) — D2-style: pre-placed at level load, no runtime respawn, fully clearable (current spawner is a temporary stress-test)
 - [3D pivot](project_3d_pivot.md) — game is now fixed-camera low-poly 3D with PBR + realistic lighting (was isometric pixel art)
