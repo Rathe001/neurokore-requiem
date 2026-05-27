@@ -152,15 +152,208 @@ bible — use these as the foundation for enemy concept work.
 
 ---
 
+## UI / HUD (3 images)
+
+**Anti-pattern: NO globes.** Diablo 2 and Path of Exile use spherical
+health/mana globes at the bottom corners — this game intentionally
+avoids them because they're an over-recognized genre cliché. Use
+**vertical liquid tubes** (the body horror / lab sample-tube read)
+or **horizontal industrial bars** (the Crusader: No Remorse riveted-
+panel read) for resource meters instead.
+
+A fourth UI reference (`5796e8c6`, eagle/skull steampunk panel) was
+deleted from the bible because it (1) included globes despite the
+prompt, and (2) drifted to Warhammer 40k imperial-gothic aesthetic.
+
+### Primary references
+
+- **`UI_HUD_..._419af702..._3.png`** — Three-panel HUD with green/red
+  liquid TUBES + steampunk gauge + tech grid panel. **The gold
+  reference for the no-globes solution.** Reads as bioreactor /
+  pressure-gauge / sample tube, perfectly on tone for the body-horror
+  facility setting. Use as `--sref` anchor for any HUD gen. The "HUD"
+  label across the top is placeholder text — strip in the real build.
+
+- **`action_RPG_UI_..._b229fd9a..._0.png`** — Three UI element renders
+  (top bar with progress meter, big center panel with vertical glass
+  tubes + amber inventory readout, bottom blue/orange status bars).
+  Painted-style retro-industrial, riveted metal, glass tubes again.
+  Pairs cleanly with `419af702` as the second UI anchor. Closest
+  visual reference to the Crusader: No Remorse HUD framing.
+
+### Composition reference (not for meter design)
+
+- **`UI_overlay_..._fcabae0f..._0.png`** — Full in-game frame showing
+  HUD overlay in context (character + tiles + items + skill bar +
+  globes at corners). **Use this for layout** — how the HUD overlays
+  sit relative to the game view, where item icons land in corners,
+  where the skill bar runs along the bottom. **Do NOT use it for the
+  meter design itself** — its globes are exactly what we're avoiding.
+
+### MJ prompt-locking for UI gens
+
+```
+[anchor URL = 419af702]
+Sci-fi neon noir ARPG HUD overlay, vertical liquid-filled glass tubes
+for health and power meters, industrial pipework framing, riveted
+steel panels, painted style, solid black background, isometric overlay,
+hand-painted 1996 ARPG aesthetic
+--sref [419af702 URL]
+NOT globes, NOT orbs, NOT spheres, NOT D2 health globes, NOT modern
+flat UI, NOT eagles, NOT 40k imperial aesthetic
+```
+
+---
+
+## Item icons (4 images)
+
+**Lane decision pending.** The four icons split into two adjacent-but-
+distinct stylistic camps:
+
+| Image | Style | Best fit |
+|---|---|---|
+| `8953d79a` (red-barrel pistol) | Painted brush, illustrated | Painted lane |
+| `1bf54e31` (sniper on heraldic book) | Painted brush, illustrated | Painted lane (bad framing — see note) |
+| `041acdbb` (green sci-fi rifle) | Pixel-art with painted touches | Pixel-art lane |
+| `18b094ab` (SMG with skull motif) | Pixel-art lean | Pixel-art lane |
+
+### Recommended lane: painted brush
+
+Anchors on `8953d79a` for continuity with the painted environment +
+character bible. Closest to actual D2 inventory icons. Re-prompt the
+pixel-art icons to match if going this route.
+
+### `1bf54e31` framing note
+
+The sniper rifle on the arcane book + red velvet backdrop is **painted
+beautifully** but the heraldic backdrop is irrelevant for an inventory
+icon. Re-prompt with `solid dark background, isolated weapon, no book,
+no fabric, no backdrop` to keep the painting quality + remove the
+framing baggage.
+
+### MJ prompt-locking for icon gens
+
+```
+[anchor URL = 8953d79a]
+Diablo 2 inventory item icon, [WEAPON or ARMOR or CONSUMABLE
+description], hand-painted brush style, illustrated, baked lighting,
+isolated on solid dark background, 1996 ARPG aesthetic, gritty sci-fi
+neon noir, painted texture
+--sref [8953d79a URL]
+NOT pixel art, NOT clean 3D render, NOT modern flat icon, NOT scene,
+NOT backdrop, NOT velvet, NOT book, just the item on dark background
+```
+
+---
+
 ## Gaps to fill before vertical slice starts
 
-| Asset class | Target count | Notes |
-|---|---|---|
-| Item icons | 8-12 references | D2-style inventory grid icons. Hand-painted weapons, armor pieces, consumables, "rune" / chip items. Square frames, baked lighting on the icon, dark background. |
-| UI frames | 4-6 references | D2 stone-bordered panel art. Status bars, inventory grid frame, skill tree node art, tooltip background. |
-| VFX refs | 6-8 references | Spell impacts, muzzle flashes, hit-flash bursts, explosions — all in the painted aesthetic. "Frame from an attack animation, painted style, embedded in environment." |
+| Asset class | Status | Target count | Notes |
+|---|---|---|---|
+| Environments | ✅ Locked | 11 | — |
+| Characters | ✅ Locked | 7 | — |
+| Monsters | ✅ Locked | 6 | — |
+| UI / HUD | ✅ Locked | 3 (2 primary + 1 composition) | — |
+| Item icons | 🟡 Partial | 4 (need 4-8 more for variety) | See re-prompts below |
+| VFX refs | ❌ Missing | 6-8 needed | See re-prompts below |
 
-Once those land we have the full bible and can spec the vertical slice.
+### Item icon re-prompts (use `--sref` on `8953d79a`)
+
+Target: 6-8 more icons covering the missing categories.
+
+1. **Melee weapon — blade** (`melee_1h` archetype)
+   ```
+   Diablo 2 inventory item icon, futuristic combat knife with neon
+   edge, gritty hand-painted brush style, isolated on solid dark
+   background, body-horror cyberpunk, baked lighting
+   ```
+2. **Melee weapon — sledgehammer** (`melee_2h`)
+   ```
+   Diablo 2 inventory item icon, heavy industrial sledgehammer with
+   piston head, gritty hand-painted brush style, isolated on solid
+   dark background, scrap-metal cyberpunk, baked lighting
+   ```
+3. **Body armor — chest piece**
+   ```
+   Diablo 2 inventory item icon, sci-fi armored chest plate with
+   cyberware ports and exposed cabling, hand-painted brush style,
+   isolated on solid dark background, body-horror cyberpunk
+   ```
+4. **Helmet**
+   ```
+   Diablo 2 inventory item icon, sci-fi combat helmet with glowing
+   visor strip, hand-painted brush style, isolated on solid dark
+   background, gritty neon noir
+   ```
+5. **Consumable — stimpack / battery**
+   ```
+   Diablo 2 inventory item icon, sci-fi medical stimpack with red
+   liquid and exposed wiring, hand-painted brush style, isolated
+   on solid dark background, gritty bio-mechanical
+   ```
+6. **Chip / rune / socketable**
+   ```
+   Diablo 2 inventory item icon, glowing sci-fi memory chip with
+   etched circuitry, hand-painted brush style, isolated on solid
+   dark background, neon-glowing, arcane circuit motif
+   ```
+7. **Re-do of `1bf54e31`** — same sniper rifle, painted brush, NO
+   heraldic backdrop, isolated on dark background only
+
+### VFX re-prompts
+
+Target: 6-8 reference frames for combat VFX. Painted aesthetic,
+embedded in the iso environment (NOT isolated icons).
+
+1. **Plasma bolt impact**
+   ```
+   Diablo 2 style isometric VFX frame, plasma bolt impacting a wall,
+   red and orange light burst splash, hand-painted, embedded in dark
+   industrial corridor, neon noir
+   ```
+2. **Muzzle flash**
+   ```
+   Diablo 2 style isometric VFX frame, sci-fi weapon muzzle flash
+   bright orange burst at character barrel, hand-painted, embedded
+   in dark facility interior
+   ```
+3. **Melee swing impact**
+   ```
+   Diablo 2 style isometric VFX frame, blade slash impact with
+   sparks and red blood splash, hand-painted, embedded in iso scene
+   with character
+   ```
+4. **Explosion**
+   ```
+   Diablo 2 style isometric VFX frame, sci-fi grenade explosion with
+   orange fireball and debris, hand-painted, embedded in industrial
+   iso scene
+   ```
+5. **Shock / electric burst** (taser / energy weapon)
+   ```
+   Diablo 2 style isometric VFX frame, blue electric arc discharge
+   between enemy and weapon, hand-painted, embedded in dark iso scene
+   ```
+6. **Heal / restore burst** (consumable use)
+   ```
+   Diablo 2 style isometric VFX frame, green healing particle burst
+   around character, hand-painted, embedded in iso facility scene
+   ```
+7. **Blood splatter — large**
+   ```
+   Diablo 2 style isometric VFX frame, large blood splatter on iso
+   floor tiles after enemy death, hand-painted, dark industrial
+   setting, gore-heavy body horror
+   ```
+8. **Boss attack telegraph / AoE ring**
+   ```
+   Diablo 2 style isometric VFX frame, red warning ring on floor
+   tiles indicating incoming AoE attack, hand-painted, embedded in
+   iso scene
+   ```
+
+Once item icons + VFX land, the bible is complete and the vertical
+slice can be specced with real visual anchors for every asset class.
 
 ---
 
