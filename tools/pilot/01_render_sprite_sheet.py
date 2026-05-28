@@ -1,6 +1,6 @@
 """
-Pilot: render an AI-generated (or any) .glb character as an 8-direction
-iso sprite sheet, with NO AI stylization step.
+Pilot: render an AI-generated (or any) rigged + animated .glb character
+as an 8-direction iso sprite sheet, with NO AI stylization step.
 
 The character's painted look lives in its baked textures — identity is
 locked across all 8 directions because they're all renders of the same
@@ -11,28 +11,24 @@ Run from project root:
     blender -b -P tools/pilot/01_render_sprite_sheet.py
 
 What it does:
-  1. Imports a .glb (Meshy / Tripo / Hunyuan output, or any textured GLB)
+  1. Imports a .glb with mesh + armature + multiple baked actions
+     (Meshy's "Merged Animations" output is the canonical input)
   2. Auto-centers + auto-scales the mesh to fit the iso camera frame
   3. Sets up an orthographic dimetric camera (30 pitch, 45 yaw)
   4. Sets up 3-point lighting (warm key / cool fill / teal rim)
-  5. For each of 8 character rotations (S, SW, W, NW, N, NE, E, SE),
-     renders one frame as an RGBA PNG with transparent background
-
-Output:
-    tools/pilot/output/raw/{dir}_00.png      (RGBA, 256x256 by default)
-
-Default config renders 8 directions × 1 frame = 8 PNGs in ~5 sec.
-Add animation frames later by setting FRAMES_PER_DIRECTION > 1 once
-the model has a rigged + animated armature.
+  5. For each (animation, direction, frame) triple, renders an RGBA PNG
+     into output/raw/<character>/<animation>/<dir>_<frame>.png
 
 Notes:
   - `scene.render.film_transparent = True` is required for transparent bg
   - Some Meshy/Tripo exports have non-standard orientation/scale —
     auto-center + bbox-based scale handle this generically
+  - Animations with baked root motion (Walking, Running) translate the
+    character across frames; RECENTER_PER_FRAME re-anchors the hip to
+    origin each frame so the character stays in-frame.
 """
 
 import math
-import os
 import sys
 from pathlib import Path
 
@@ -41,13 +37,26 @@ import bpy  # type: ignore
 # ── Config ──────────────────────────────────────────────────────────────────
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
-ASSETS = PROJECT_ROOT / "game" / "assets"
 OUTPUT_ROOT = PROJECT_ROOT / "tools" / "pilot" / "output"
 
-# Source character. Path to any .glb (AI-generated from Meshy/Tripo/
-# Hunyuan, or hand-modeled). Texture is baked into the mesh; we render
-# the painted look directly — no SDXL stylization step.
-CHARACTER_GLB = Path.home() / "Desktop" / "Meshy_AI_Ironclad_Enforcer_0527171205_texture.glb"
+# Character. `glb` should be the Meshy "Merged Animations" output — the
+# one with all actions baked into a single file. `animations` lists
+# (output_slug, action_name_in_glb, frames_to_sample) triples; only the
+# actions listed here are rendered, so it doubles as a filter.
+CHARACTER = {
+    "name": "crimson_vein_titan",
+    "glb": Path.home() / "Desktop" / "crimson_vein_titan"
+            / "Meshy_AI_Crimson_Vein_Titan_biped"
+            / "Meshy_AI_Crimson_Vein_Titan_biped_Meshy_AI_Meshy_Merged_Animations.glb",
+    "animations": [
+        # (output slug, blender action name,                 frames sampled per dir)
+        ("idle",  "Idle_5",                                   6),
+        ("walk",  "Walking",                                 12),
+        ("cast",  "mage_soell_cast_3",                        8),
+        ("hit",   "Hit_Reaction_1",                          10),
+        ("death", "Dead",                                    12),
+    ],
+}
 
 # Auto-scale target height in meters. Meshy/Tripo exports come at
 # arbitrary scales — we measure the imported mesh's Z extent and scale
@@ -56,15 +65,14 @@ CHARACTER_GLB = Path.home() / "Desktop" / "Meshy_AI_Ironclad_Enforcer_0527171205
 TARGET_CHARACTER_HEIGHT = 1.8
 
 # Render resolution. 256 is a sane pilot default — large enough to see detail
-# in the iso scene, small enough that 64 frames + 3 passes (color/depth/edges)
-# completes in under a minute. Bump to 512 for hero shots once the pipeline
-# is validated.
+# in the iso scene, small enough that a full batch completes in a couple of
+# minutes. Bump to 512 for hero shots once the pipeline is validated.
 RESOLUTION = 256
 
-# Frames per direction. With a static-pose model (Meshy default A-pose
-# or T-pose), this is 1. With a rigged+animated model, bump to 8-16 to
-# sample frames evenly across the animation.
-FRAMES_PER_DIRECTION = 1
+# Re-anchor the hip bone to world origin each frame. Walk/run animations
+# typically have root motion baked in; without re-anchoring, the character
+# slides out of frame across the sampled frames.
+RECENTER_PER_FRAME = True
 
 # 8 directions matches D2's compass. The names are the character's facing
 # relative to the camera, NOT compass-absolute — "S" means the character
@@ -80,239 +88,262 @@ DIRECTIONS = [
     ("SE", 315),
 ]
 
+# Base yaw offset to reconcile Meshy's default +Y forward with our
+# "S = facing camera" convention. Confirmed at 180° for the Ironclad
+# Enforcer — likely the same for any Meshy export.
+BASE_YAW_DEG = 180.0
+
 # Iso angle. 30 degree pitch is close to D2's actual angle (~26.5 deg) but a
 # touch higher — character readability is better at 30, dimetric purity is
 # better at 26.5. Pilot uses 30; the production pipeline will lock the angle
 # once we see what reads best.
 CAMERA_PITCH_DEG = 30.0
 CAMERA_YAW_DEG = 45.0
-CAMERA_DISTANCE = 10.0   # orbit radius
-CAMERA_ORTHO_SCALE = 2.5  # zoom — smaller = closer; 2.5m wide fits a 1.8m char
+CAMERA_DISTANCE = 10.0
+CAMERA_ORTHO_SCALE = 2.5
 
 # ── Pipeline ────────────────────────────────────────────────────────────────
 
 
 def clear_scene() -> None:
-    """Start from a known-empty Blender state, regardless of what the
-    factory default contains (default cube, camera, light, etc.)."""
     bpy.ops.wm.read_factory_settings(use_empty=True)
 
 
-def import_character() -> bpy.types.Object:
-    """Imports a .glb character. Auto-centers at origin, auto-scales to
-    TARGET_CHARACTER_HEIGHT.
-
-    Returns the root Empty/Mesh object that all directions rotate around.
-    For an unrigged Meshy export this is typically a top-level Empty
-    containing one or more Mesh children. We create a wrapper Empty so
-    the direction yaw rotation always has a clean parent regardless of
-    what structure the .glb produced."""
+def import_character(glb_path: Path) -> tuple[bpy.types.Object, bpy.types.Object | None]:
+    """Imports a rigged + textured .glb. Auto-centers at origin, auto-scales
+    to TARGET_CHARACTER_HEIGHT. Returns (wrapper Empty, armature object).
+    The wrapper is the yaw rotation handle; the armature is what we
+    assign actions to."""
     import mathutils  # type: ignore
 
-    bpy.ops.import_scene.gltf(filepath=str(CHARACTER_GLB))
-
-    # Collect every object the import created (selected post-import).
-    imported = [o for o in bpy.context.selected_objects]
+    bpy.ops.import_scene.gltf(filepath=str(glb_path))
+    imported = list(bpy.context.selected_objects)
     if not imported:
-        raise RuntimeError(f"No objects imported from {CHARACTER_GLB}")
+        raise RuntimeError(f"No objects imported from {glb_path}")
 
-    # Compute world-space bbox across all imported meshes
-    min_x = min_y = min_z = float('inf')
-    max_x = max_y = max_z = float('-inf')
+    armature = next((o for o in bpy.data.objects if o.type == "ARMATURE"), None)
+
+    # World-space bbox across all imported meshes (used for scale/center).
+    min_x = min_y = min_z = float("inf")
+    max_x = max_y = max_z = float("-inf")
     for obj in imported:
-        if obj.type != 'MESH':
+        if obj.type != "MESH":
             continue
         for corner in obj.bound_box:
-            world_corner = obj.matrix_world @ mathutils.Vector(corner)
-            min_x, max_x = min(min_x, world_corner.x), max(max_x, world_corner.x)
-            min_y, max_y = min(min_y, world_corner.y), max(max_y, world_corner.y)
-            min_z, max_z = min(min_z, world_corner.z), max(max_z, world_corner.z)
+            wc = obj.matrix_world @ mathutils.Vector(corner)
+            min_x, max_x = min(min_x, wc.x), max(max_x, wc.x)
+            min_y, max_y = min(min_y, wc.y), max(max_y, wc.y)
+            min_z, max_z = min(min_z, wc.z), max(max_z, wc.z)
 
     width, depth, height = max_x - min_x, max_y - min_y, max_z - min_z
-    print(f"[pilot] Imported bbox (raw):")
-    print(f"[pilot]   X: [{min_x:.3f}, {max_x:.3f}] = {width:.3f}m")
-    print(f"[pilot]   Y: [{min_y:.3f}, {max_y:.3f}] = {depth:.3f}m")
-    print(f"[pilot]   Z: [{min_z:.3f}, {max_z:.3f}] = {height:.3f}m")
+    print(f"[pilot] Imported bbox: X={width:.3f} Y={depth:.3f} Z={height:.3f}")
 
-    # Create a wrapper Empty at world origin. Parent all imported roots to
-    # it. The Empty becomes our single rotation handle — yawing it
-    # rotates the whole character set as one unit.
     wrapper = bpy.data.objects.new("CharacterWrapper", None)
     bpy.context.scene.collection.objects.link(wrapper)
     for obj in imported:
         if obj.parent is None:
             obj.parent = wrapper
 
-    # Scale to target height. If the mesh is upside-down or sideways
-    # (some Meshy exports have unusual axes), the height we measure is
-    # along world Z — we scale uniformly so whichever axis IS the tall
-    # one ends up matching TARGET_CHARACTER_HEIGHT.
     tallest_axis = max(width, depth, height)
-    if tallest_axis > 0:
-        scale_factor = TARGET_CHARACTER_HEIGHT / tallest_axis
-        wrapper.scale = (scale_factor, scale_factor, scale_factor)
-        print(f"[pilot] Applied uniform scale {scale_factor:.4f} "
-              f"to fit {TARGET_CHARACTER_HEIGHT}m height")
+    scale_factor = TARGET_CHARACTER_HEIGHT / tallest_axis if tallest_axis > 0 else 1.0
+    wrapper.scale = (scale_factor, scale_factor, scale_factor)
+    print(f"[pilot] Scale factor: {scale_factor:.4f}")
 
-    # Translate so the mesh's feet (lowest Z) sit at world Z=0. Take the
-    # original min_z * scale_factor; that's the post-scale floor offset
-    # that we need to nullify.
-    feet_offset_z = min_z * (TARGET_CHARACTER_HEIGHT / tallest_axis if tallest_axis > 0 else 1.0)
+    feet_offset_z = min_z * scale_factor
     wrapper.location = (
-        -(min_x + width / 2) * (TARGET_CHARACTER_HEIGHT / tallest_axis if tallest_axis > 0 else 1.0),
-        -(min_y + depth / 2) * (TARGET_CHARACTER_HEIGHT / tallest_axis if tallest_axis > 0 else 1.0),
+        -(min_x + width / 2) * scale_factor,
+        -(min_y + depth / 2) * scale_factor,
         -feet_offset_z,
     )
 
-    # Force a scene update so the new transforms propagate before render
     bpy.context.view_layer.update()
+    return wrapper, armature
 
-    return wrapper
+
+def assign_action(armature: bpy.types.Object, action_name: str) -> bpy.types.Action:
+    """Assigns a named action from bpy.data.actions to the armature's
+    animation_data and returns it."""
+    if armature is None:
+        raise RuntimeError("No armature in scene — character is not rigged")
+    if action_name not in bpy.data.actions:
+        available = [a.name for a in bpy.data.actions]
+        raise RuntimeError(
+            f"Action {action_name!r} not in glb. Available: {available}"
+        )
+    action = bpy.data.actions[action_name]
+    if armature.animation_data is None:
+        armature.animation_data_create()
+    armature.animation_data.action = action
+    return action
 
 
-# (Legacy import_weapon + verify_animation_loaded removed when pilot
-# pivoted from the SDXL stylization path to direct .glb rendering — see
-# PILOT_RESULTS.md for the full reasoning.)
+def sample_frame_indices(action: bpy.types.Action, count: int) -> list[int]:
+    """Evenly-spaced frame indices across an action's range. The last
+    frame is included only if count > 1, to avoid duplicating the loop
+    point on looping animations (idle/walk/run end where they start)."""
+    start = int(action.frame_range[0])
+    end = int(action.frame_range[1])
+    span = max(end - start, 1)
+    if count <= 1:
+        return [start]
+    step = span / count
+    return [int(round(start + i * step)) for i in range(count)]
+
+
+def recenter_hip_to_origin(
+    wrapper: bpy.types.Object, armature: bpy.types.Object
+) -> None:
+    """After scene.frame_set, the bone transforms have updated. Compute
+    the Hips bone world position and shift the wrapper so that XY=0
+    (Z is left alone — feet stay on the ground)."""
+    if armature is None or "Hips" not in armature.pose.bones:
+        return
+    hip = armature.pose.bones["Hips"]
+    # Bone matrix is in armature local space; multiply by armature world
+    # matrix (which includes wrapper transform) to get world.
+    hip_world = armature.matrix_world @ hip.matrix.translation
+    wrapper.location.x -= hip_world.x
+    wrapper.location.y -= hip_world.y
+    bpy.context.view_layer.update()
 
 
 def setup_camera() -> bpy.types.Object:
-    """Creates an orthographic camera at iso angle pointing at origin."""
     cam_data = bpy.data.cameras.new("IsoCamera")
-    cam_data.type = 'ORTHO'
+    cam_data.type = "ORTHO"
     cam_data.ortho_scale = CAMERA_ORTHO_SCALE
     cam = bpy.data.objects.new("IsoCamera", cam_data)
     bpy.context.scene.collection.objects.link(cam)
 
-    # Position via spherical coords: pitch + yaw + distance
     pitch_rad = math.radians(CAMERA_PITCH_DEG)
     yaw_rad = math.radians(CAMERA_YAW_DEG)
-    # Camera should look DOWN at origin from above + side
     cam.location = (
         CAMERA_DISTANCE * math.cos(pitch_rad) * math.cos(yaw_rad),
         -CAMERA_DISTANCE * math.cos(pitch_rad) * math.sin(yaw_rad),
-        CAMERA_DISTANCE * math.sin(pitch_rad) + 1.0,  # +1m to look at chest
+        CAMERA_DISTANCE * math.sin(pitch_rad) + 1.0,
     )
 
-    # Point at origin via a Track To constraint — simpler than computing
-    # the rotation Euler manually and surviving config tweaks.
     track_target = bpy.data.objects.new("CamTarget", None)
-    track_target.location = (0, 0, 1.0)  # aim at character chest, not feet
+    track_target.location = (0, 0, 1.0)
     bpy.context.scene.collection.objects.link(track_target)
-    track = cam.constraints.new(type='TRACK_TO')
+    track = cam.constraints.new(type="TRACK_TO")
     track.target = track_target
-    track.track_axis = 'TRACK_NEGATIVE_Z'
-    track.up_axis = 'UP_Y'
+    track.track_axis = "TRACK_NEGATIVE_Z"
+    track.up_axis = "UP_Y"
 
     bpy.context.scene.camera = cam
     return cam
 
 
 def setup_lighting() -> None:
-    """3-point lighting: key + fill + rim. Tuned warm/cool to evoke the
-    bible's complementary-color lighting (orange key, teal rim)."""
-
-    def add_light(name: str, kind: str, energy: float, color: tuple, location: tuple) -> None:
-        light_data = bpy.data.lights.new(name=name, type=kind)
-        light_data.energy = energy
-        light_data.color = color
-        light = bpy.data.objects.new(name, light_data)
+    def add_light(name, kind, energy, color, location):
+        ld = bpy.data.lights.new(name=name, type=kind)
+        ld.energy = energy
+        ld.color = color
+        light = bpy.data.objects.new(name, ld)
         light.location = location
         bpy.context.scene.collection.objects.link(light)
 
-    # Bumped 2x from initial; second iteration with 4x went pure white,
-    # so back off to a middle value.
-    # Key: warm, from camera-front-left
-    add_light("KeyLight", 'AREA', 400.0, (1.0, 0.85, 0.7), (5, -5, 6))
-    # Fill: cool, from camera-front-right
-    add_light("FillLight", 'AREA', 100.0, (0.6, 0.75, 1.0), (-3, -3, 4))
-    # Rim: teal, from behind
-    add_light("RimLight", 'AREA', 200.0, (0.4, 0.85, 1.0), (-2, 4, 3))
+    add_light("KeyLight",  "AREA", 400.0, (1.0, 0.85, 0.7),  (5, -5, 6))
+    add_light("FillLight", "AREA", 100.0, (0.6, 0.75, 1.0), (-3, -3, 4))
+    add_light("RimLight",  "AREA", 200.0, (0.4, 0.85, 1.0), (-2,  4, 3))
 
 
 def setup_render_settings() -> None:
-    """Configures Eevee + transparent background + RGBA output."""
     scene = bpy.context.scene
-    # In Blender 4.2-4.5 the engine was 'BLENDER_EEVEE_NEXT'; in 5.x it was
-    # renamed back to 'BLENDER_EEVEE' (the old Eevee was removed). Try the
-    # 5.x name first, fall back to NEXT for 4.x compatibility.
-    available_engines = scene.render.bl_rna.properties['engine'].enum_items.keys()
-    if 'BLENDER_EEVEE' in available_engines:
-        scene.render.engine = 'BLENDER_EEVEE'
-    elif 'BLENDER_EEVEE_NEXT' in available_engines:
-        scene.render.engine = 'BLENDER_EEVEE_NEXT'
+    engines = scene.render.bl_rna.properties["engine"].enum_items.keys()
+    if "BLENDER_EEVEE" in engines:
+        scene.render.engine = "BLENDER_EEVEE"
+    elif "BLENDER_EEVEE_NEXT" in engines:
+        scene.render.engine = "BLENDER_EEVEE_NEXT"
     else:
-        scene.render.engine = 'CYCLES'  # absolute fallback
+        scene.render.engine = "CYCLES"
     scene.render.resolution_x = RESOLUTION
     scene.render.resolution_y = RESOLUTION
     scene.render.resolution_percentage = 100
     scene.render.film_transparent = True
-    scene.render.image_settings.file_format = 'PNG'
-    scene.render.image_settings.color_mode = 'RGBA'
-    scene.render.image_settings.color_depth = '8'
+    scene.render.image_settings.file_format = "PNG"
+    scene.render.image_settings.color_mode = "RGBA"
+    scene.render.image_settings.color_depth = "8"
 
-    # Soft shadows look closer to painted style than the default hard shadows
-    if hasattr(scene.eevee, 'shadow_method'):
-        scene.eevee.shadow_method = 'VSM'
-    if hasattr(scene.eevee, 'use_soft_shadows'):
+    if hasattr(scene.eevee, "shadow_method"):
+        scene.eevee.shadow_method = "VSM"
+    if hasattr(scene.eevee, "use_soft_shadows"):
         scene.eevee.use_soft_shadows = True
-    if hasattr(scene.eevee, 'taa_render_samples'):
+    if hasattr(scene.eevee, "taa_render_samples"):
         scene.eevee.taa_render_samples = 32
-
-    # Color management — Standard view transform (not Filmic) keeps the
-    # painted palette readable. Filmic crushes saturation.
-    scene.view_settings.view_transform = 'Standard'
+    scene.view_settings.view_transform = "Standard"
 
 
-def render_all_directions(character_wrapper: bpy.types.Object) -> None:
-    """Outer loop: rotate the character wrapper for each of 8 facings,
-    render an RGBA PNG. Wrapper rotation is around world Z (yaw).
-
-    Includes a +180° base rotation so the Meshy default orientation
-    (character facing +Y, Blender's away-from-camera direction) lines
-    up with our convention where "S" means facing TOWARD the camera.
-    Adjust BASE_YAW_DEG per-character if a different .glb imports with
-    a different default facing — gltf exporters don't have a standard
-    convention so this can vary.
-    """
-    BASE_YAW_DEG = 180.0
-
+def render_character(
+    wrapper: bpy.types.Object, armature: bpy.types.Object
+) -> int:
+    """Outer loop: animations × directions × frames. Returns total frame
+    count written."""
     scene = bpy.context.scene
-    raw_dir = OUTPUT_ROOT / "raw"
-    raw_dir.mkdir(parents=True, exist_ok=True)
+    char_name = CHARACTER["name"]
+    char_root = OUTPUT_ROOT / "raw" / char_name
+    char_root.mkdir(parents=True, exist_ok=True)
 
-    for dir_name, yaw_deg in DIRECTIONS:
-        character_wrapper.rotation_euler = (
-            0, 0, math.radians(yaw_deg + BASE_YAW_DEG),
-        )
-        for f_idx in range(FRAMES_PER_DIRECTION):
-            scene.frame_set(1)  # static pose for now; armature anim later
-            out_path = raw_dir / f"{dir_name}_{f_idx:02d}.png"
-            scene.render.filepath = str(out_path)
-            bpy.ops.render.render(write_still=True)
-            print(f"  [{dir_name}] → {out_path.name}")
+    # Capture the wrapper's auto-computed XY home so we can reset it
+    # between frames before re-centering on hip.
+    home_xy = (wrapper.location.x, wrapper.location.y)
+
+    total = 0
+    for slug, action_name, frame_count in CHARACTER["animations"]:
+        action = assign_action(armature, action_name)
+        sampled = sample_frame_indices(action, frame_count)
+        out_dir = char_root / slug
+        out_dir.mkdir(parents=True, exist_ok=True)
+        print(f"[pilot] {slug}: action {action_name!r} sampling {sampled}")
+
+        for dir_name, yaw_deg in DIRECTIONS:
+            wrapper.rotation_euler = (0, 0, math.radians(yaw_deg + BASE_YAW_DEG))
+
+            for f_idx, frame in enumerate(sampled):
+                # Reset wrapper XY before re-centering so successive frames
+                # don't accumulate offset drift.
+                wrapper.location.x, wrapper.location.y = home_xy
+                scene.frame_set(frame)
+                if RECENTER_PER_FRAME:
+                    recenter_hip_to_origin(wrapper, armature)
+
+                out_path = out_dir / f"{dir_name}_{f_idx:02d}.png"
+                scene.render.filepath = str(out_path)
+                bpy.ops.render.render(write_still=True)
+                total += 1
+            print(f"  [{slug}] [{dir_name}] {len(sampled)} frames written")
+
+    return total
 
 
 # ── Entrypoint ──────────────────────────────────────────────────────────────
 
 
 def main() -> None:
-    print(f"[pilot] Project root: {PROJECT_ROOT}")
-    print(f"[pilot] Character: {CHARACTER_GLB}")
-    print(f"[pilot] Output: {OUTPUT_ROOT}")
+    glb = CHARACTER["glb"]
+    print(f"[pilot] Character: {CHARACTER['name']}")
+    print(f"[pilot] Source glb: {glb}")
+    print(f"[pilot] Output:    {OUTPUT_ROOT / 'raw' / CHARACTER['name']}")
 
-    if not CHARACTER_GLB.exists():
-        print(f"[pilot] ERROR: missing character glb {CHARACTER_GLB}")
+    if not glb.exists():
+        print(f"[pilot] ERROR: missing character glb {glb}")
         sys.exit(1)
 
     clear_scene()
-    wrapper = import_character()
+    wrapper, armature = import_character(glb)
+    if armature is None:
+        print("[pilot] ERROR: glb has no armature — needs rigged + animated source")
+        sys.exit(1)
+    print(f"[pilot] Armature: {armature.name} ({len(armature.pose.bones)} bones)")
+    print(f"[pilot] Actions in glb: {[a.name for a in bpy.data.actions]}")
+
     setup_camera()
     setup_lighting()
     setup_render_settings()
-    render_all_directions(wrapper)
+    total = render_character(wrapper, armature)
 
-    print(f"[pilot] Done. Rendered {len(DIRECTIONS) * FRAMES_PER_DIRECTION} frames.")
-    print(f"[pilot] Output dir: {OUTPUT_ROOT / 'raw'}")
+    print(f"[pilot] Done. {total} frames rendered.")
+    print(f"[pilot] Output dir: {OUTPUT_ROOT / 'raw' / CHARACTER['name']}")
 
 
 if __name__ == "__main__":
