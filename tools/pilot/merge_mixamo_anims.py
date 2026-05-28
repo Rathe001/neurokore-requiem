@@ -40,7 +40,7 @@ SOURCE = PILOT_ROOT / "source"
 BUILD  = PILOT_ROOT / "build"
 
 PLAYER_DIR = SOURCE / "player"
-SHARED_PLAYER_ANIMS: list[tuple[str, str]] = [
+SHARED_MALE_ANIMS: list[tuple[str, str]] = [
     ("Walking.fbx",                       "walk"),
     ("Running.fbx",                       "run"),
     ("Stable Sword Outward Slash.fbx",    "attack"),
@@ -50,27 +50,48 @@ SHARED_PLAYER_ANIMS: list[tuple[str, str]] = [
     ("Head Hit.fbx",                      "hit"),
     ("Standing React Death Backward.fbx", "death"),
 ]
+# Female lineup uses slightly different Mixamo clip names than male
+# but the same set of actions. The Two Handed Sword Death clip is an
+# extra death variant; for now we use Standing React Death Backward
+# to keep parity with male's `death` slot.
+SHARED_FEMALE_ANIMS: list[tuple[str, str]] = [
+    ("Walking.fbx",                       "walk"),
+    ("Running.fbx",                       "run"),
+    ("Stable Sword Outward Slash.fbx",    "attack"),
+    ("Mma Kick.fbx",                      "attack2"),
+    ("Standing Dodge Right.fbx",          "dodge"),
+    ("Standing Jump.fbx",                 "jump"),
+    ("Head Hit.fbx",                      "hit"),
+    ("Standing React Death Backward.fbx", "death"),
+]
+
+# --- Cyborg female player (Biomechanical Grace) ---------------------
+BASE_FBX = PLAYER_DIR / "female" / "cyborg" / "Idle.fbx"
+BASE_ACTION_SLUG = "idle"
+ANIM_DIR = PLAYER_DIR / "female"
+ANIMATIONS = SHARED_FEMALE_ANIMS
+OUTPUT_GLB = BUILD / "cyborg_female.glb"
+
+# --- Analog female player (Bandaged Gladiator) ----------------------
+# BASE_FBX = PLAYER_DIR / "female" / "analog" / "Idle.fbx"
+# BASE_ACTION_SLUG = "idle"
+# ANIM_DIR = PLAYER_DIR / "female"
+# ANIMATIONS = SHARED_FEMALE_ANIMS
+# OUTPUT_GLB = BUILD / "analog_female.glb"
 
 # --- Analog male player (Bandaged Gladiator) ------------------------
-BASE_FBX = PLAYER_DIR / "male" / "analog" / "Idle.fbx"
-BASE_ACTION_SLUG = "idle"
-ANIM_DIR = PLAYER_DIR / "male"
-ANIMATIONS = SHARED_PLAYER_ANIMS
-OUTPUT_GLB = BUILD / "analog_male.glb"
+# BASE_FBX = PLAYER_DIR / "male" / "analog" / "Idle.fbx"
+# BASE_ACTION_SLUG = "idle"
+# ANIM_DIR = PLAYER_DIR / "male"
+# ANIMATIONS = SHARED_MALE_ANIMS
+# OUTPUT_GLB = BUILD / "analog_male.glb"
 
 # --- Cyborg male player (Cyborg Gladiator) --------------------------
 # BASE_FBX = PLAYER_DIR / "male" / "cyborg" / "Idle.fbx"
 # BASE_ACTION_SLUG = "idle"
 # ANIM_DIR = PLAYER_DIR / "male"
-# ANIMATIONS = SHARED_PLAYER_ANIMS
+# ANIMATIONS = SHARED_MALE_ANIMS
 # OUTPUT_GLB = BUILD / "cyborg_male.glb"
-
-# --- Analog female player (Bandaged Gladiator) ----------------------
-# BASE_FBX = PLAYER_DIR / "female" / "analog" / "Idle.fbx"
-# BASE_ACTION_SLUG = "idle"
-# ANIM_DIR = PLAYER_DIR / "female"   # once female anims are downloaded
-# ANIMATIONS = SHARED_PLAYER_ANIMS
-# OUTPUT_GLB = BUILD / "analog_female.glb"
 
 # --- Crimson Vein Titan enemy ---------------------------------------
 # BASE_FBX = SOURCE / "enemies" / "crimson_vein_titan" / "Crouching Idle.fbx"

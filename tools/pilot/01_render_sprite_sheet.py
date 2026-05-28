@@ -56,17 +56,22 @@ PLAYER_ANIMS = [
     ("hit",     "hit",     12),
     ("death",   "death",   24),
 ]
+MALE_ANIMS = PLAYER_ANIMS
+FEMALE_ANIMS = PLAYER_ANIMS
 
 CHARACTER = {
-    "name": "analog_male",
-    "glb": BUILD / "analog_male.glb",
-    "animations": PLAYER_ANIMS,
+    "name": "cyborg_female",
+    "glb": BUILD / "cyborg_female.glb",
+    "animations": FEMALE_ANIMS,
 }
 
-# Reference: Cyborg male
+# Reference configs — uncomment one and re-run:
+# CHARACTER = {"name": "analog_female", "glb": BUILD / "analog_female.glb",
+#              "animations": FEMALE_ANIMS}
+# CHARACTER = {"name": "analog_male", "glb": BUILD / "analog_male.glb",
+#              "animations": MALE_ANIMS}
 # CHARACTER = {"name": "cyborg_male", "glb": BUILD / "cyborg_male.glb",
-#              "animations": PLAYER_ANIMS}
-# Reference: Crimson Vein Titan
+#              "animations": MALE_ANIMS}
 # CHARACTER = {"name": "crimson_vein_titan",
 #              "glb": BUILD / "crimson_vein_titan.glb",
 #              "animations": [("idle","idle",12), ("walk","walk",24),
