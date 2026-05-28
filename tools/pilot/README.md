@@ -1,198 +1,184 @@
-# 2D iso pilot — AI render pipeline test
+# 2D iso sprite pipeline
 
-> **STATUS: Wrapped 2026-05-27.** Conclusive findings in
-> [`PILOT_RESULTS.md`](./PILOT_RESULTS.md). Read that first if you're
-> deciding whether to resume this work — the pilot proved the rendering
-> pipeline works, identified character identity locking as the
-> production blocker, and lays out three concrete paths forward.
+**Status:** Production-ready (shipped 2026-05-28). For the architectural
+write-up — what worked, what didn't, the decisions baked in along the
+way — read [`PILOT_RESULTS.md`](./PILOT_RESULTS.md). This file is the
+how-to for the live pipeline.
 
-**Goal:** prove the 3D-model-to-2D-sprite-sheet pipeline end-to-end on a
-single asset (X Bot + hammer + walk cycle) before committing to a full
-rebuild of the project's visual layer.
+## What this does
 
-The pilot tests two stylization paths:
-
-- **Path A — stylized shader at render time.** Blender Eevee + cel/toon
-  shader + painterly post-processing. Deterministic, fast, free.
-- **Path B — img2img AI post-pass.** Render flat-shaded → run each frame
-  through ComfyUI with Stable Diffusion + ControlNet (depth/lineart) +
-  IP-Adapter (painted bible refs as style anchor). Painted look, slower,
-  per-frame stylization variance.
-
-If Path A looks "good enough" we ship it. If only Path B reproduces the
-painted bible look, we eat the slower iteration.
-
-## Steps
+Turns a Midjourney character reference into a Godot-ready 8-direction
+sprite sheet, with full character identity locked across every frame
+and facing.
 
 ```
-0a. tools/pilot/01_render_sprite_sheet.py   →  T-pose 8-direction renders (8 frames)  ✅ shipped
-0b. (deferred) animation retargeting        →  walk-cycle frames (64 frames)
-0c. (deferred) weapon grip tuning           →  hammer in hand, not on floor
-1.  tools/pilot/02_stylize.py               →  painted img2img output via ComfyUI API
-2.  tools/pilot/03_test_scene.tscn          →  Godot side-by-side comparison
+Midjourney ref
+    ↓ image-to-3D
+Meshy.ai (.glb / .fbx mesh + textures)
+    ↓ upload + auto-rig + download anims
+Mixamo (with-skin Idle.fbx + N anim-only FBXs)
+    ↓ merge_mixamo_anims.py
+build/<character>.glb            (mesh + Mixamo rig + retargeted NLA actions)
+    ↓ 01_render_sprite_sheet.py
+output/raw/<character>/<anim>/<dir>_<frame>.png   (256² RGBA, transparent bg)
+    ↓ build_viewer.py
+output/viewer.html               (browser preview, 3×3 grid or single big)
+    ↓ copy_sprites_to_godot.py
+godot_test/sprites/...           (Godot-importable mirror)
+    ↓ sprite_test.tscn
+AnimatedSprite2D playback        (validated in Godot 4.6)
 ```
 
-Each step is a separate commit so the work can be evaluated incrementally.
+## Adding a character (~15 min)
 
-### Why T-pose first (step 0a only)
+### 1. Generate a 3D mesh
 
-Mixamo's cross-FBX animation pipeline relies on bone-axis-correction
-retargeting. Godot does this via `SkeletonProfileHumanoid` + a BoneMap
-resource (see `game/assets/characters/x_bot/README.md`). Blender has no
-built-in equivalent — animations from one Mixamo FBX applied to the
-rest pose of another Mixamo FBX produce a contorted result (character
-renders horizontal instead of upright).
+In Meshy.ai (Pro plan recommended for T-Pose + commercial export):
 
-Three paths forward for animation:
+1. Upload your Midjourney character reference.
+2. Generate textured 3D model.
+3. Apply T-Pose if Meshy supports it for your model.
+4. Download as FBX (texture, biped). Keep the ZIP too — useful if you
+   need to re-rig later.
 
-1. **Use a Blender addon** — Rokoko Studio Live (free) has Mixamo
-   retargeting. ~5-10 min addon install + per-character setup.
-2. **Custom Python retargeter** — port the project's BoneMap logic to
-   Blender. ~1-2 hours of focused work but matches the runtime exactly.
-3. **Download X Bot WITH animation baked in from Mixamo.** Single FBX
-   that doesn't need retargeting. Limits us to whatever animations
-   we re-download but avoids the problem entirely for the pilot.
+### 2. Rig + download anims in Mixamo
 
-Pilot picks #3 for the next iteration unless the user picks otherwise.
+1. Go to mixamo.com, click "Upload Character", drop in your FBX.
+2. Place the 6 joint markers (chin / wrists / elbows / knees / groin).
+   For body-horror characters with non-standard silhouettes, drag the
+   shoulder + wrist markers slightly _outside_ the visible mesh where
+   you imagine the joint should be — keeps the auto-rigger from
+   merging arms into the torso.
+3. Once auto-rig succeeds, your character is selected in the
+   Animations tab.
+4. Browse animations. For each one you want:
+   - Click it.
+   - Click **Download**.
+   - Format: **FBX Binary (.fbx)**, FPS: **30**, Keyframe Reduction:
+     **none**.
+   - **Skin:** _With Skin_ for one base anim (this is the textured
+     mesh you'll render). _Without Skin_ for every other anim (the
+     anim FBXs are tiny — just keyframes).
+   - **In Place:** _ON_ for locomotion (Walking, Running, Dodge,
+     Sprint). _OFF_ for one-shots (Idle, Cast, Hit, Dying).
+5. Naming convention: drop the "With Skin" file into
+   `source/player/{sex}/{class}/Idle.fbx` (any anim works as the base
+   — Idle is just convention). Drop the "Without Skin" anim FBXs into
+   the parent sex folder so other classes can reuse them. See
+   [`source/README.md`](./source/README.md) for the full layout.
 
-T-pose is enough to validate the ComfyUI stylization pipeline. Once
-img2img is proven to produce painted output, we layer animation back in.
+### 3. Merge + render
 
-## Running step 0 (the Blender render)
-
-Run from project root (Windows):
+Edit `merge_mixamo_anims.py` — copy one of the commented config blocks
+at the top and point it at your new character. Then:
 
 ```pwsh
-& "C:\Program Files\Blender Foundation\Blender 4.x\blender.exe" -b -P tools/pilot/01_render_sprite_sheet.py
+blender -b -P tools/pilot/merge_mixamo_anims.py
 ```
 
-Or if Blender is on PATH:
+This writes `build/<character>.glb` (~25 MB) — base mesh + all anim
+keyframes retargeted to the character's bind pose, glued into one
+file the renderer can chew on.
+
+Edit `01_render_sprite_sheet.py` to point `CHARACTER` at the new GLB
+(uncomment one of the reference configs). Then:
 
 ```pwsh
 blender -b -P tools/pilot/01_render_sprite_sheet.py
 ```
 
-Time estimate: ~30 sec on a modern GPU. Outputs 64 PNGs to
-`tools/pilot/output/raw/`.
+Render time: ~6–8 min for a 1344-frame player set, ~1–2 min for a
+500-frame enemy. Output: `output/raw/<character>/<anim>/<dir>_<frame>.png`.
 
-### What the script does
-
-1. Loads `game/assets/characters/x_bot/X Bot.fbx` (the canonical player + enemy mesh)
-2. Attaches `game/assets/models/weapons/hammer/hammer.glb` to the right hand bone
-3. Loads `game/assets/animations/core/Jog Forward.fbx` and applies its action
-4. Sets up an orthographic dimetric camera (30° pitch, 45° yaw)
-5. Sets up 3-point complementary-color lighting (warm key, cool fill, teal rim)
-6. Renders 8 directions × 8 walk frames = 64 RGBA PNGs with transparent
-   background
-
-### Tweak knobs
-
-All in `01_render_sprite_sheet.py` — top of file:
-
-| Constant | Purpose |
-|---|---|
-| `RESOLUTION` | 256 default. Bump to 512 once pipeline is validated. |
-| `FRAMES_PER_DIRECTION` | 8 default. 12-16 for smoother walks. |
-| `DIRECTIONS` | The 8-direction sprite-sheet axes. |
-| `CAMERA_PITCH_DEG` / `CAMERA_YAW_DEG` | Iso camera angle. 30/45 ≈ D2. |
-| `CAMERA_ORTHO_SCALE` | Zoom level. Decrease to zoom in, increase to fit. |
-
-## Running step 1 (ComfyUI img2img stylization)
-
-Run from project root:
+### 4. Preview
 
 ```pwsh
-python tools/pilot/02_stylize.py
+python tools/pilot/build_viewer.py
 ```
 
-The script defaults to `SMOKE_TEST = True` — it processes one image
-(`S_00.png`) so you can iterate quickly on prompts / strengths / model
-choices before committing to a full 8-image batch.
+Opens `output/viewer.html` in your browser. Pick character / animation
+from dropdowns, watch all 8 directions play in sync, or switch to
+single-big mode for a 512×512 detail view.
 
-### What it needs running
+### 5. Test in Godot
 
-ComfyUI listening on `http://127.0.0.1:8188` (start with
-`python main.py` from the ComfyUI dir, or use the
-`run_nvidia_gpu.bat` shortcut on Windows).
+```pwsh
+python tools/pilot/copy_sprites_to_godot.py             # all chars
+python tools/pilot/copy_sprites_to_godot.py <name> ...  # subset
+godot --path tools/pilot/godot_test
+```
 
-### Models the script expects (edit names at top of file if yours differ)
+Run the project. Pick character / anim / direction / FPS in the
+panel. Looping anims (idle / walk / run) loop; one-shots play once
+and freeze on the last frame — re-pick to replay.
 
-| ComfyUI folder | File | Source |
+## Adding an animation
+
+If you want to add (say) a Spell Cast 2 to every player class:
+
+1. In Mixamo, with any one player character selected, download the
+   new anim as **Without Skin**.
+2. Drop the FBX into `source/player/{sex}/`.
+3. In `merge_mixamo_anims.py`, add the filename to
+   `SHARED_MALE_ANIMS` / `SHARED_FEMALE_ANIMS` with a clean output
+   slug (e.g. `"cast2"`).
+4. In `01_render_sprite_sheet.py`, add the slug to `PLAYER_ANIMS`
+   with a frame-count sample (e.g. `("cast2", "cast2", 20)`).
+5. Re-merge + re-render every player character.
+
+The bind-pose retargeter handles the per-character delta automatically
+— you don't need to re-download the same anim per character.
+
+## Knobs (top of `01_render_sprite_sheet.py`)
+
+| Constant | Default | Effect |
 |---|---|---|
-| `models/checkpoints/` | `sd_xl_base_1.0.safetensors` | [stabilityai/stable-diffusion-xl-base-1.0](https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0) |
-| `models/controlnet/` | `controlnet-lora-sdxl-canny.safetensors` | [stabilityai/control-lora](https://huggingface.co/stabilityai/control-lora) |
-| `models/ipadapter/` | `ip-adapter-plus_sdxl_vit-h.safetensors` | [h94/IP-Adapter](https://huggingface.co/h94/IP-Adapter) |
-| `models/clip_vision/` | `CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors` | [laion/CLIP-ViT-H-14-...](https://huggingface.co/laion/CLIP-ViT-H-14-laion2B-s32B-b79K) |
+| `RESOLUTION` | 256 | Render dimensions. Bump to 512 for hero shots; cost scales quadratically. |
+| `RECENTER_PER_FRAME` | True | Hip anchored to world XY=0 each frame. Disable if you want raw root motion. |
+| `CAMERA_PITCH_DEG / CAMERA_YAW_DEG` | 30 / 45 | Iso angle. D2 used ~26.5°/45°. |
+| `CAMERA_ORTHO_SCALE` | 2.2 | Fallback if dynamic fit fails. Otherwise overridden per character. |
+| `ORTHO_SCALE_MARGIN` | 1.10 | Headroom around the worst-case pose. |
+| `TARGET_CHARACTER_HEIGHT` | 1.8 m | Auto-scale target. |
 
-### Custom nodes the script expects
+For animation timing knobs (sample counts per anim), edit
+`CHARACTER["animations"]` directly. Frame counts assume 24 FPS playback
+in-engine; halve for D2-retro 12 FPS feel.
 
-- **ComfyUI_IPAdapter_plus** — `git clone https://github.com/cubiq/ComfyUI_IPAdapter_plus` into `ComfyUI/custom_nodes/`, or install via [ComfyUI Manager](https://github.com/ltdrdata/ComfyUI-Manager)
+## Setup checklist (fresh machine)
 
-### What the script does (in order)
+- Blender 5.1 — Windows default install path works:
+  `C:\Program Files\Blender Foundation\Blender 5.1\blender.exe`
+- Godot 4.6 — any install on PATH
+- Python 3.11+ on PATH (for `build_viewer.py` /
+  `copy_sprites_to_godot.py`)
+- Meshy.ai Pro ($10/mo) — T-Pose + commercial-safe exports
+- Mixamo (adobe.com account)
+- ~5 GB disk per 5 characters (source FBXs + GLBs + renders + Godot copies)
 
-1. Verifies ComfyUI is reachable and prints what models / custom nodes are installed
-2. Cross-checks the configured `CKPT_NAME` and `CONTROLNET_NAME` against installed models, warns if missing
-3. Uploads the painted style anchor (`374b6a95...` soldier ref) to ComfyUI's input folder
-4. Uploads the raw render to ComfyUI's input folder
-5. Submits a workflow: SDXL → VAE encode → IP-Adapter (style anchor) → ControlNet (canny) → KSampler (denoise 0.6) → VAE decode → save
-6. Polls until ComfyUI reports completion (~30-90s on a 12GB GPU)
-7. Downloads the painted output to `tools/pilot/output/painted/S_00.png`
+GPU isn't load-bearing — the pipeline runs CPU-bound Blender Eevee.
+The earlier SDXL stylization attempt did need a GPU; that path was
+abandoned in favor of direct mesh rendering.
 
-### Tuning knobs (top of `02_stylize.py`)
-
-| Constant | Default | What it does |
-|---|---|---|
-| `DENOISE_STRENGTH` | 0.6 | How much the model can change input. Lower = more raw, higher = more painted. |
-| `CONTROLNET_STRENGTH` | 0.75 | Silhouette preservation. Higher = tighter to the 3D render. |
-| `IPADAPTER_WEIGHT` | 0.8 | How heavily the painted style ref biases output. |
-| `POSITIVE_PROMPT` | (long) | Style description. Tweak to push toward different aesthetics. |
-| `NEGATIVE_PROMPT` | (long) | Failure modes. Adds words to push away from. |
-| `SEED` | 42 | Reproducibility. Change to randomize. |
-| `SMOKE_TEST` | True | Set False to batch all 8 directions after smoke test passes. |
-
-### Expected smoke-test output
-
-After running, inspect `tools/pilot/output/painted/S_00.png`. Compare
-against `tools/pilot/output/raw/S_00.png`:
-
-- Painted version should look hand-painted, not 3D-rendered
-- Character pose + silhouette should be recognizably the same
-- Color palette should lean toward the painted bible (orange + teal)
-- Lighting should feel baked rather than real-time
-
-If the result drifts heavily from the input pose, raise
-`CONTROLNET_STRENGTH`. If it doesn't look painted enough, raise
-`DENOISE_STRENGTH` and/or `IPADAPTER_WEIGHT`. If it ignores the
-character entirely and paints random scenes, lower `DENOISE_STRENGTH`.
-
-## Outputs (gitignored)
+## Files in this directory
 
 ```
-tools/pilot/output/
-  raw/        Color RGBA renders (Path A baseline + Path B input)
-  depth/      Depth maps for ControlNet conditioning (step 1)
-  edges/      Canny lineart for ControlNet conditioning (step 1)
-  toon/       Path A toon-shader renders (step 1)
-  painted/    Path B img2img stylized renders (step 1)
-  godot/      Sprite atlases packaged for Godot SpriteFrames import
+tools/pilot/
+├── 01_render_sprite_sheet.py        Blender headless render
+├── merge_mixamo_anims.py            Mixamo FBXs → one rigged GLB
+├── inspect_glb.py                   Diagnostic for .glb / .fbx contents
+├── glb_to_mixamo_fbx.py             Strip an existing rig → mesh-only FBX for Mixamo
+├── build_viewer.py                  Generate output/viewer.html
+├── copy_sprites_to_godot.py         Mirror renders to godot_test/sprites/
+├── PILOT_RESULTS.md                 Architectural write-up
+├── README.md                        This file
+│
+├── source/   (gitignored)           Raw FBX downloads
+├── build/    (gitignored)           Merged GLBs
+├── output/   (gitignored)           Render PNGs + viewer.html
+├── godot_test/                      Godot 4.6 sprite playback test
+│
+└── 02_stylize.py, 03_restore_alpha.py, canonical_character.png
+    Retired: relics from the abandoned SDXL stylization path. See
+    PILOT_RESULTS.md → History for context. Not part of the live
+    pipeline; kept in tree for traceability.
 ```
-
-Output is gitignored (`output/.gitignore`). Sprite frames don't belong in
-git — they're regenerable from the .glb + animation + script.
-
-## Decision criteria
-
-After running the pilot, we judge against this checklist:
-
-- [ ] Character silhouette is readable at the chosen iso angle
-- [ ] 8 directions are visually distinct (animator can tell which way the
-      character is facing)
-- [ ] Walk cycle reads as walking (not awkward, no foot-skate, frames flow)
-- [ ] Weapon attaches cleanly to right hand across all directions/frames
-- [ ] Output is "painted enough" — sits next to the bible refs without
-      looking out of place (Path A vs Path B)
-- [ ] Iteration time per change is acceptable (<5 min from "change the
-      shader" to "see new output")
-
-If Path A passes the painted-enough test, we ship it. If only Path B
-passes, we commit to the slower pipeline.
