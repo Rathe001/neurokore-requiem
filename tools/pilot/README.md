@@ -175,10 +175,5 @@ tools/pilot/
 ├── source/   (gitignored)           Raw FBX downloads
 ├── build/    (gitignored)           Merged GLBs
 ├── output/   (gitignored)           Render PNGs + viewer.html
-├── godot_test/                      Godot 4.6 sprite playback test
-│
-└── 02_stylize.py, 03_restore_alpha.py, canonical_character.png
-    Retired: relics from the abandoned SDXL stylization path. See
-    PILOT_RESULTS.md → History for context. Not part of the live
-    pipeline; kept in tree for traceability.
+└── godot_test/                      Godot 4.6 sprite playback test
 ```

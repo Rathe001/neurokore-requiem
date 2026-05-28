@@ -122,15 +122,11 @@ tools/pilot/
 ├── output/                          (gitignored — render output)
 │   ├── raw/<character>/<anim>/<dir>_<frame>.png
 │   └── viewer.html
-├── godot_test/                      minimal Godot 4.6 project
-│   ├── project.godot
-│   ├── scenes/sprite_test.tscn
-│   ├── scripts/sprite_test.gd
-│   └── sprites/                     (gitignored — populated by copy_sprites_to_godot.py)
-│
-└── 02_stylize.py, 03_restore_alpha.py, canonical_character.png
-    — Retired: SDXL stylization stack from the abandoned Path B
-      attempt. Kept for reference; not part of the live pipeline.
+└── godot_test/                      minimal Godot 4.6 project
+    ├── project.godot
+    ├── scenes/sprite_test.tscn
+    ├── scripts/sprite_test.gd
+    └── sprites/                     (gitignored — populated by copy_sprites_to_godot.py)
 ```
 
 ## What's NOT here yet (open production questions)
