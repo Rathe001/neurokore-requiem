@@ -1,154 +1,207 @@
 # 2D iso pilot — results
 
-**Date:** 2026-05-27
+**Status:** SHIPPED — production-ready pipeline.
 **Branch:** `2d-iso-pilot` (off `2d-iso-rework`, off `main`)
-**Status:** Wrapped. Conclusive findings below.
+**Shipped:** 2026-05-28
+**Originally wrapped:** 2026-05-27 (deferred — see [history](#history))
 
 ## TL;DR
 
-**The 3D-to-2D-sprite pipeline works for rendering, lighting, pose preservation,
-and stylization** but hits a hard limit on character identity locking using
-pure IP-Adapter. Pure-parameter approaches cannot solve identity consistency
-across an 8-direction sprite sheet. Producing usable sprite sheets requires
-adding LoRA training to the pipeline — that's a ~half-day-per-character
-investment before any sprite work starts.
+End-to-end pipeline: Midjourney ref → Meshy.ai (3D mesh + textures) →
+Mixamo (rig + animations) → Blender headless render → Godot 4.6 sprite
+playback. Identity-locked across every frame and facing, no
+stylization step needed. Validated on 5 characters (4 player base
+classes + 1 enemy), 6080 total sprites rendered cleanly.
 
-Three concrete next-step paths laid out in the [Decision](#decision) section.
+Per-character cost: **5 min Mixamo clicking + 6–8 min render
++ ~45 MB disk** at 256² RGBA, then they're in the Godot picker.
 
-## What was tested
-
-The pilot processed one asset (X Bot mesh + hammer weapon, T-pose) end-to-end:
+## Pipeline
 
 ```
-Blender (renders 8 iso directions, RGBA, transparent bg, 256x256)
+Midjourney character ref
     ↓
-ComfyUI (SDXL + IP-Adapter + ControlNet canny, upscales to 1024)
+Meshy.ai image-to-3D Pro plan ($10/mo, T-Pose option, commercial-safe)
+    ↓ <meshy-export>.zip or .glb
+Mixamo auto-rig (place 6 markers) → Idle.fbx With Skin + anim FBXs Without Skin
+    ↓ FBXs
+merge_mixamo_anims.py
+    ↓ Reads base + anim FBXs, retargets each anim to base bind pose,
+      pushes to NLA strips, exports glTF
+  build/<character>.glb
     ↓
-Python (re-applies raw alpha channel to strip painted backgrounds)
+01_render_sprite_sheet.py
+    ↓ Headless Blender 5.1, ortho dimetric (30° pitch / 45° yaw),
+      auto-fit ortho_scale across all frames, per-frame hip recenter
+      + camera-Z tracking
+  output/raw/<character>/<anim>/<dir>_<frame>.png  (256² RGBA)
     ↓
-Painted RGBA sprite sheets, 1024x1024, ready for Godot import
+copy_sprites_to_godot.py
+    ↓
+  godot_test/sprites/...   →   sprite_test.tscn (Godot 4.6, AnimatedSprite2D)
 ```
 
-Iteration log:
+`build_viewer.py` writes a self-contained `output/viewer.html` with
+8-direction grid + single-big playback modes for browser preview.
 
-| Iteration | What we tested | Result |
+## What ships
+
+Five characters fully rendered:
+
+| Character | Class | Anims | Frames | Disk |
+|---|---|---|---|---|
+| analog_male | Analog | 9 | 1344 | 44 MB |
+| analog_female | Analog | 9 | 1344 | 45 MB |
+| cyborg_male | Cyborg | 9 | 1344 | 45 MB |
+| cyborg_female | Cyborg | 9 | 1344 | 46 MB |
+| crimson_vein_titan | Spellcaster enemy | 5 | 736 | 26 MB |
+
+Player anim set: `idle, walk, run, attack, attack2, dodge, jump, hit,
+death`. Enemy anim set: `idle, walk, cast, hit, death`. Frame counts
+per anim are tuned for 24 FPS smooth playback (12–24 frames each).
+
+Validated in Godot 4.6 — 6112 PNGs imported clean, all five
+characters playable in the test scene, looping vs one-shot semantics
+working, direction switching working.
+
+## What got solved along the way
+
+The hard problems (and where each is solved):
+
+| Problem | Solution | Where |
 |---|---|---|
-| 1 | Blender FBX import + Mixamo anim retargeting | ❌ Anim retargeting broke without Rokoko/Auto Rig Pro; pivoted to T-pose only |
-| 2 | Render pipeline at iso angle | ✅ 8-direction T-pose RGBA renders in ~30 sec total |
-| 3 | SDXL img2img minimal (no ControlNet/IPAdapter) at 256² | ❌ Chromatic noise — SDXL needs 1024² inputs |
-| 4 | + 1024² upscale before VAE encode | ✅ Output renders; denoise 0.4 too low (no style shift) |
-| 5 | Denoise 0.65 minimal | ✅ Painted aesthetic emerged but pose drifted (no silhouette lock) |
-| 6 | Full pipeline (IPAdapter + ControlNet on bible-soldier ref) | ✅ Painted style + pose locked; backgrounds painted |
-| 7 | Alpha restoration post-pass | ✅ Painted character on transparent bg |
-| 8 | 8-direction batch on bible-soldier anchor | ❌ Character identity drifts across frames (3 distinct characters) |
-| 9 | Tuned weights (prompt-dominant, lower IPAdapter, tighter ControlNet) | ❌ Same identity drift |
-| 10 | Canonical character anchor (user-provided armored soldier ref) | ❌ Output kept X Bot silhouette with paint job, ignored canonical's armor |
-| 11 | Looser ControlNet (0.5) + max IPAdapter (1.0) | ❌ Better palette match but identity still drifts; canonical's specific features (spikes, bandolier, knee orbs) not transferred |
+| Character identity drift across facings | Direct mesh render — same geometry, same textures every frame | `01_render_sprite_sheet.py` |
+| Wide poses clipping the sprite frame | Auto-compute ortho_scale from worst-case extent across all (anim, frame) pairs | `compute_required_ortho_scale()` |
+| Crouched / dying poses sliding to frame edge | Per-frame camera target Z = bbox midZ of evaluated mesh | `get_mesh_world_z_extent()` |
+| Mixamo "Without Skin" bind pose ≠ character bind pose | Per-bone rotation delta baked into keyframes at merge time | `retarget_action_bind_pose()` |
+| Locomotion clips with root motion sliding character offscreen | Hip bone re-anchored to world XY=0 each frame | `recenter_hip_to_origin()` |
+| Multiple character bone naming conventions (Meshy auto-rig vs Mixamo) | Bone lookup helper accepts both `Hips` and `mixamorig:Hips` | `find_hip_bone()` |
+| Blender 5.x layered actions API broke FCurve walking | Helper that iterates both legacy and `layers[].strips[].channelbags[]` | `iter_action_fcurves()` |
+| Browser caching stale sprites in viewer | `?v=<mtime>` query string per image URL | `build_viewer.py` |
 
-## What worked ✅
+## Architecture decisions worth keeping
 
-| Capability | Status | Evidence |
-|---|---|---|
-| Blender headless render | ✅ Works | `01_render_sprite_sheet.py` — 8 dirs / ~30 sec |
-| Iso camera framing | ✅ Works | 30° pitch / 45° yaw, ortho 2.5, character fills frame |
-| 3-point lighting | ✅ Works | Warm key / cool fill / teal rim reads painterly |
-| Transparent BG render | ✅ Works | `film_transparent = True` gives clean alpha |
-| ComfyUI HTTP API | ✅ Works | `02_stylize.py` submits + polls + downloads cleanly |
-| SDXL img2img stylization | ✅ Works | Painted aesthetic reachable @ denoise 0.65 |
-| ControlNet pose lock | ✅ Works | T-pose preserved across all frames |
-| IP-Adapter style transfer | ✅ Works | Painted palette + atmospheric tone transfer |
-| Alpha restoration | ✅ Works | `03_restore_alpha.py` strips painted bg via raw alpha mask |
-| 8-direction batch | ✅ Works | ~60 sec/frame, ~8 min total on RTX 4070 Laptop |
-
-## What didn't work ❌
-
-| Goal | Status | Evidence |
-|---|---|---|
-| Mixamo anim retargeting in Blender | ❌ Needs addon (Rokoko/Auto Rig Pro) | Cross-FBX retargeting produces contorted poses |
-| Character identity consistency across 8 facings | ❌ Cannot solve via IP-Adapter parameters | Confirmed across 2 anchors × multiple param combos |
-| Specific feature transfer from canonical (armor design, distinct gear) | ❌ IP-Adapter is style-only, not identity | Canonical's spikes / bandolier / orbs not reproduced |
-| Weapon grip on character hand bone | ❌ Bone parented but local offset on floor | Defer to F9+T tuner port |
-
-## Key learnings (worth keeping)
-
-1. **SDXL inputs must be ≥ 1024².** Smaller inputs produce chromatic noise. Always upscale before VAE encode.
-2. **Alpha restoration is essential** for sprite use. SDXL VAE strips alpha; re-apply raw render's alpha as a mask post-decode.
-3. **ControlNet at 0.7-0.8 locks pose** without crushing creativity. Below 0.5, pose drifts. Above 0.85, the source mannequin's silhouette dominates over any style ref.
-4. **IP-Adapter "weight_type" matters more than weight.** "style transfer" pulls atmospheric vibe; "prompt is more important" pulls less; identity-specific features rarely transfer regardless.
-5. **`COMFYUI_URL` differs by install.** Desktop = port 8000, source repo = port 8188. Make it env-var configurable.
-6. **Setup cost is real:** SDXL Base 1.0 + ControlNet SDXL + IP-Adapter Plus SDXL + CLIP-ViT-H-14 + IPAdapter custom node = ~13 GB download and ~30 min of one-time install.
-
-## Decision
-
-Three production paths, with honest cost estimates:
-
-### Path A — invest in LoRA training, ship 2D iso
-
-For every distinct character (player class, enemy archetype, NPC):
-
-1. Generate or hand-paint **20-25 training images** (different angles, poses, lighting). The pilot can produce these candidates at scale; pick the best 20.
-2. Train a **character-specific LoRA** (~2 hours on the RTX 4070 Laptop using `kohya_ss` or ComfyUI's training nodes).
-3. Add the LoRA to the workflow's KSampler model input.
-4. Re-batch → tightly identity-locked sprite sheets.
-
-**Cost:** ~half day per character. The project has ~10 character archetypes total (8 classes + named enemies). That's ~5 days of identity-locking setup work BEFORE any sprite generation work starts.
-
-**Benefit:** True production-quality 2D iso ARPG sprites. Full painted-bible aesthetic. The original creative vision.
-
-### Path B — return to 3D on `main`
-
-The 3D project on `main` already worked. Character identity is automatic (same mesh renders every frame). The bible-painted look isn't reachable directly, but a **stylized toon shader** + **post-process painterly compositor** can approximate it. The shipped 3D project already had a Steam playtest live.
-
-**Cost:** Zero new setup. Just `git checkout main` and resume.
-
-**Tradeoff:** 1996 D2 painted-brush look is approximate rather than literal. Body-horror cyberpunk tone preserved.
-
-### Path C — hybrid: 2D for static assets, 3D for characters
-
-Use 2D iso art **only** for assets where identity doesn't drift between frames:
-
-- ✅ **UI / HUD** — single static designs (covered by the bible's UI section)
-- ✅ **Inventory icons** — single static designs (covered by the bible's icon section)
-- ✅ **Environment art** — paintings as backdrop / loading screens
-- ✅ **Portraits** — single static designs per character/NPC
-- ❌ **In-game characters** — keep these in 3D
-
-**Cost:** Modest. Use the pilot pipeline for static asset categories only. Skip the LoRA work entirely.
-
-**Tradeoff:** Best of both — D2-style painted UI/icons/portraits with 3D characters underneath.
+1. **One shared anim library per sex** (`source/player/male/` and
+   `source/player/female/`), referenced by every class. Adding a new
+   class is just `source/player/{sex}/{class}/Idle.fbx`
+   (with skin) + config block swap. No per-class anim downloads.
+2. **Bind-pose retargeting in code, not in source content.** Lets
+   Meshy generate characters in whatever pose its image-to-3D
+   pipeline picks (A-pose, T-pose, slight stoop) without breaking the
+   shared anim library.
+3. **Output structure mirrors Godot's expectations**:
+   `<character>/<anim>/<dir>_<frame>.png`. The Godot loader scans the
+   tree at runtime and builds `SpriteFrames` on the fly — no
+   per-character `.tres` to author.
+4. **Per-frame mesh-bbox camera Z, not fixed.** Without this, every
+   crouched/lying pose slides to the bottom of the tile. Standing
+   anims still look identical because the bbox center stays at chest
+   height.
+5. **Source FBXs and build GLBs live in the repo, gitignored.** No
+   `~/Desktop/` paths in the pipeline — checkout works on any machine.
 
 ## Files in this directory
 
 ```
 tools/pilot/
-├── 01_render_sprite_sheet.py   Blender render script (T-pose 8 directions)
-├── 02_stylize.py               ComfyUI img2img stylization via HTTP API
-├── 03_restore_alpha.py         Re-apply alpha channel post-stylization
-├── canonical_character.png     Canonical anchor (replace with new char to switch)
-├── README.md                   Pipeline overview + setup instructions
-├── PILOT_RESULTS.md            This file
-└── output/                     Gitignored render outputs
-    ├── raw/                    Blender renders
-    └── painted/                ComfyUI outputs (alpha-restored)
+├── 01_render_sprite_sheet.py        Blender headless render (8 dirs × N anims × M frames)
+├── merge_mixamo_anims.py            Mixamo base + anim FBXs → one rigged GLB w/ all actions
+├── inspect_glb.py                   Diagnostic: list meshes/armatures/actions in a .glb or .fbx
+├── glb_to_mixamo_fbx.py             Strip armature from a .glb → mesh-only FBX for Mixamo upload
+├── build_viewer.py                  Generate self-contained output/viewer.html
+├── copy_sprites_to_godot.py         Mirror PNGs into godot_test/sprites/
+├── PILOT_RESULTS.md                 This file
+├── README.md                        Original pipeline overview (predates current state)
+│
+├── source/                          (gitignored — raw FBX downloads)
+│   ├── player/{male,female}/        shared anim FBXs per sex
+│   │   └── <class>/Idle.fbx         per-class with-skin base
+│   └── enemies/<name>/              per-enemy bases + anims
+├── build/                           (gitignored — merged GLBs)
+│   └── <character>.glb
+├── output/                          (gitignored — render output)
+│   ├── raw/<character>/<anim>/<dir>_<frame>.png
+│   └── viewer.html
+├── godot_test/                      minimal Godot 4.6 project
+│   ├── project.godot
+│   ├── scenes/sprite_test.tscn
+│   ├── scripts/sprite_test.gd
+│   └── sprites/                     (gitignored — populated by copy_sprites_to_godot.py)
+│
+└── 02_stylize.py, 03_restore_alpha.py, canonical_character.png
+    — Retired: SDXL stylization stack from the abandoned Path B
+      attempt. Kept for reference; not part of the live pipeline.
 ```
 
-## What's preserved if we revisit
+## What's NOT here yet (open production questions)
 
-- All three scripts are functional and committed.
-- `canonical_character.png` is a real asset that can be swapped per character.
-- The README documents every model download URL, install path, and tuning knob.
-- Git history captures every iteration — easy to inspect what was tried.
+These were intentionally out of scope for the pilot and need
+decisions before the main game project absorbs the pipeline:
 
-## What's NOT here (intentionally)
+- **Item visualization.** Currently characters render without held
+  weapons or swappable armor. Two paths:
+  - **Path 3:** no visible gear (Hades / Hyper Light Drifter style) —
+    weapons exist as stat sheets + projectile/VFX only. MVP-friendly.
+  - **Path 2:** weapon-only overlay — render each weapon as a separate
+    8-direction sprite, dump hand-bone screen offsets to JSON,
+    composite at runtime. Higher cost but real gear visuals.
+- **Environment / tile / prop sprite pipeline.** The character
+  pipeline doesn't cover backgrounds. Probably MJ → flat PNG for tiles
+  (no need for 8 directions on a wall).
+- **Stylization pass.** Renders look like Blender renders, not painted
+  bible references. A shader pass (cel-shaded outlines, palette
+  posterize) in Godot might bridge the gap cheaper than re-introducing
+  SDXL stylization.
+- **When to merge into the main game project.** Pilot lives in
+  `tools/pilot/godot_test/`. At some point the sprite content moves
+  to `game/assets/sprites/` and the AnimatedSprite2D plumbing moves
+  to the real player / enemy scenes. Probably after item viz decision.
 
-- Animation pipeline (Mixamo retarget unsolved — needs Rokoko addon or custom Python retargeter, both are real engineering jobs)
-- Weapon grip tuning (script attaches to hand bone but local offset lands on floor)
-- LoRA training rig
-- Multi-character pipeline (`canonical_character.png` is single-file; production needs per-character refs)
-- Godot import / SpriteFrames generation (step 2 of the original pilot plan, deferred until step 1 produces sprite-sheet-quality output)
+## Setup checklist (for a fresh machine)
+
+- Blender 5.1 (Windows path:
+  `C:\Program Files\Blender Foundation\Blender 5.1\blender.exe`)
+- Godot 4.6 — any install, `--path tools/pilot/godot_test` to open
+- Python 3.11+ in PATH for `build_viewer.py` and
+  `copy_sprites_to_godot.py`
+- Meshy.ai Pro plan ($10/mo) for the T-Pose feature + commercial-safe
+  exports
+- Mixamo (adobe.com Creative Cloud account)
+- ~5 GB free disk per 5 characters (source FBXs + render output +
+  Godot copy)
+
+GPU is not load-bearing — the whole pipeline runs Blender Eevee on
+CPU at acceptable speed. The earlier SDXL attempt needed an RTX GPU.
+
+## History
+
+- **2026-05-26:** Project pivoted to 2D iso. Visual bible shipped
+  (48 painted MJ refs at `docs/art-reference/`).
+- **2026-05-27:** First pilot wrapped after the SDXL+IPAdapter
+  stylization path hit a wall — pure parameter tuning couldn't lock
+  character identity across the 8 facings. Decision deferred. This
+  document originally documented that failure.
+- **2026-05-28:** Pipeline rebuilt around direct mesh rendering (no
+  AI stylization). Identity locking solved mathematically. Meshy →
+  Mixamo → Blender → Godot end-to-end validated on 5 characters.
+  SDXL stack deleted; pipeline declared production-ready.
+
+The SDXL attempt is worth remembering as a learning, not a dead end:
+the painted-bible look is still reachable if Path C (post-process
+stylization) gets revisited later, and the bible refs at
+`docs/art-reference/` still anchor the visual target.
 
 ## Honest assessment
 
-The pilot answered its question. **2D iso sprite production is feasible via AI**, but the per-character identity-locking step requires LoRA training that wasn't in the original pilot scope. The "drop a 3D model in, get painted sprites out" workflow doesn't exist without it.
+The pilot answered its original question — _is 2D iso sprite
+production feasible for a solo dev?_ — and answered yes, **without
+needing per-character LoRA training**. The fix was lower in the stack:
+swap the stylization-via-AI step for a direct mesh render with baked
+textures. Identity drift disappears because it's the same mesh.
 
-The 3D project on `main` ships today. The 2D iso path is reachable but is a multi-week effort, not a multi-day one. That's the deliberate decision to make outside the iteration loop.
+Per-character production is now a 15-minute operation
+(Mixamo clicking + automated render). The full eight-class roster
+(2 origins + 6 specs from `docs/classes.md`) is ~2 hours of work
+when the designs are settled. The main game project absorbs the
+pipeline whenever the open decisions above (item viz, stylization
+pass) are nailed down.
