@@ -16,6 +16,7 @@ Run:
 Output:
     ~/Desktop/crimson_vein_titan_mixamo.glb
 """
+import os
 import sys
 from pathlib import Path
 
@@ -71,6 +72,19 @@ BASE_ACTION_SLUG = "idle"
 ANIM_DIR = PLAYER_DIR / "female"
 ANIMATIONS = SHARED_FEMALE_ANIMS
 OUTPUT_GLB = BUILD / "cyborg_female.glb"
+
+# Batch override — when invoked with PILOT_CLASS + PILOT_SEX env vars,
+# the hardcoded config above is replaced by a path derived from those.
+# Used by batch_render.py to merge every player class in one sweep
+# without editing this file per character.
+_class = os.environ.get("PILOT_CLASS")
+_sex   = os.environ.get("PILOT_SEX")
+if _class and _sex:
+    BASE_FBX = PLAYER_DIR / _sex / _class / "Idle.fbx"
+    BASE_ACTION_SLUG = "idle"
+    ANIM_DIR = PLAYER_DIR / _sex
+    ANIMATIONS = SHARED_MALE_ANIMS if _sex == "male" else SHARED_FEMALE_ANIMS
+    OUTPUT_GLB = BUILD / f"{_class}_{_sex}.glb"
 
 # --- Analog female player (Bandaged Gladiator) ----------------------
 # BASE_FBX = PLAYER_DIR / "female" / "analog" / "Idle.fbx"

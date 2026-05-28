@@ -29,6 +29,7 @@ Notes:
 """
 
 import math
+import os
 import sys
 from pathlib import Path
 
@@ -64,6 +65,17 @@ CHARACTER = {
     "glb": BUILD / "cyborg_female.glb",
     "animations": FEMALE_ANIMS,
 }
+
+# Batch override — when invoked with PILOT_CLASS + PILOT_SEX env vars,
+# the hardcoded CHARACTER above is replaced. Used by batch_render.py.
+_class = os.environ.get("PILOT_CLASS")
+_sex   = os.environ.get("PILOT_SEX")
+if _class and _sex:
+    CHARACTER = {
+        "name": f"{_class}_{_sex}",
+        "glb": BUILD / f"{_class}_{_sex}.glb",
+        "animations": PLAYER_ANIMS,
+    }
 
 # Reference configs — uncomment one and re-run:
 # CHARACTER = {"name": "analog_female", "glb": BUILD / "analog_female.glb",
