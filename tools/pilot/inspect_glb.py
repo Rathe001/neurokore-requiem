@@ -1,7 +1,7 @@
-"""Quick inspector — lists meshes, armatures, animations in a .glb.
+"""Quick inspector — lists meshes, armatures, animations in a .glb or .fbx.
 
 Run via Blender:
-  blender -b -P tools/pilot/inspect_glb.py -- <path1.glb> [<path2.glb> ...]
+  blender -b -P tools/pilot/inspect_glb.py -- <path1> [<path2> ...]
 """
 import sys
 from pathlib import Path
@@ -13,10 +13,20 @@ def reset_scene():
     bpy.ops.wm.read_factory_settings(use_empty=True)
 
 
+def import_file(path: Path) -> None:
+    ext = path.suffix.lower()
+    if ext in (".glb", ".gltf"):
+        bpy.ops.import_scene.gltf(filepath=str(path))
+    elif ext == ".fbx":
+        bpy.ops.import_scene.fbx(filepath=str(path))
+    else:
+        raise RuntimeError(f"unsupported extension: {ext}")
+
+
 def inspect(path: Path) -> None:
     reset_scene()
     print(f"\n=== {path.name} ===")
-    bpy.ops.import_scene.gltf(filepath=str(path))
+    import_file(path)
 
     meshes = [o for o in bpy.data.objects if o.type == "MESH"]
     armatures = [o for o in bpy.data.objects if o.type == "ARMATURE"]
@@ -45,7 +55,7 @@ def main():
     else:
         paths = []
     if not paths:
-        print("usage: blender -b -P inspect_glb.py -- <file.glb> [<file2.glb> ...]")
+        print("usage: blender -b -P inspect_glb.py -- <file> [<file2> ...]")
         return
     for p in paths:
         inspect(p)

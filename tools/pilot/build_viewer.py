@@ -8,6 +8,7 @@ Run:
 """
 import json
 import re
+import time
 import webbrowser
 from pathlib import Path
 
@@ -40,7 +41,11 @@ def scan() -> dict:
                 d, frame = m.group(1), int(m.group(2))
                 if d not in per_dir:
                     continue
-                rel = f"raw/{char}/{anim}/{png.name}"
+                # mtime-based query string so the browser always loads
+                # the latest pixels even though filenames are stable
+                # across re-renders.
+                mtime = int(png.stat().st_mtime)
+                rel = f"raw/{char}/{anim}/{png.name}?v={mtime}"
                 per_dir[d].append((frame, rel))
             for d in per_dir:
                 per_dir[d] = [p for _, p in sorted(per_dir[d])]
