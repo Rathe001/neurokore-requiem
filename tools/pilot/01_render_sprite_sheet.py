@@ -36,31 +36,55 @@ import bpy  # type: ignore
 
 # ── Config ──────────────────────────────────────────────────────────────────
 
-PROJECT_ROOT = Path(__file__).parent.parent.parent
-OUTPUT_ROOT = PROJECT_ROOT / "tools" / "pilot" / "output"
+PILOT_ROOT = Path(__file__).parent
+PROJECT_ROOT = PILOT_ROOT.parent.parent
+BUILD = PILOT_ROOT / "build"
+OUTPUT_ROOT = PILOT_ROOT / "output"
 
 # Character. `glb` should be the Meshy "Merged Animations" output — the
 # one with all actions baked into a single file. `animations` lists
 # (output_slug, action_name_in_glb, frames_to_sample) triples; only the
 # actions listed here are rendered, so it doubles as a filter.
+PLAYER_ANIMS = [
+    ("idle",    "idle",    12),
+    ("walk",    "walk",    24),
+    ("run",     "run",     20),
+    ("attack",  "attack",  20),
+    ("attack2", "attack2", 20),
+    ("dodge",   "dodge",   16),
+    ("jump",    "jump",    20),
+    ("hit",     "hit",     12),
+    ("death",   "death",   24),
+]
+
 CHARACTER = {
-    "name": "crimson_vein_titan",
-    # Produced by tools/pilot/merge_mixamo_anims.py — the Mixamo "with
-    # skin" base character + 4 anim-only FBXs merged into one .glb
-    # with five NLA-bound actions (idle, walk, cast, hit, death). Source
-    # FBXs live in ~/Desktop/models/crimson vein titan/.
-    "glb": Path.home() / "Desktop" / "crimson_vein_titan_mixamo.glb",
-    "animations": [
-        # (output slug, blender action name, frames sampled per dir)
-        # High-quality counts: smooth playback at 24 FPS. ~80 sec
-        # render and ~10 MB per character at 256² PNG.
-        ("idle",  "idle",  12),
-        ("walk",  "walk",  24),
-        ("cast",  "cast",  20),
-        ("hit",   "hit",   12),
-        ("death", "death", 24),
-    ],
+    "name": "analog_male",
+    "glb": BUILD / "analog_male.glb",
+    "animations": PLAYER_ANIMS,
 }
+
+# Reference: Cyborg male
+# CHARACTER = {"name": "cyborg_male", "glb": BUILD / "cyborg_male.glb",
+#              "animations": PLAYER_ANIMS}
+# Reference: Crimson Vein Titan
+# CHARACTER = {"name": "crimson_vein_titan",
+#              "glb": BUILD / "crimson_vein_titan.glb",
+#              "animations": [("idle","idle",12), ("walk","walk",24),
+#                             ("cast","cast",20), ("hit","hit",12),
+#                             ("death","death",24)]}
+
+# Reference: full Crimson Vein Titan config (enemy spellcaster)
+# CHARACTER = {
+#     "name": "crimson_vein_titan",
+#     "glb": Path.home() / "Desktop" / "crimson_vein_titan_mixamo.glb",
+#     "animations": [
+#         ("idle",  "idle",  12),
+#         ("walk",  "walk",  24),
+#         ("cast",  "cast",  20),
+#         ("hit",   "hit",   12),
+#         ("death", "death", 24),
+#     ],
+# }
 
 # Auto-scale target height in meters. Meshy/Tripo exports come at
 # arbitrary scales — we measure the imported mesh's Z extent and scale

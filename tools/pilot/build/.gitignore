@@ -1,0 +1,4 @@
+# Intermediate merged GLBs written by merge_mixamo_anims.py and
+# consumed by 01_render_sprite_sheet.py. Regenerable from source/.
+*
+!.gitignore

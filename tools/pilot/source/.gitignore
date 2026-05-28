@@ -1,0 +1,6 @@
+# Source FBX assets — large binary files (Meshy exports, Mixamo
+# downloads, ZIPs). Regenerable by downloading again from Meshy/Mixamo.
+# Tracking is local-only; don't bloat git.
+*
+!.gitignore
+!README.md
