@@ -1,6 +1,6 @@
 ---
 name: project_2d_iso_pivot
-description: Project pivot 2026-05-26 to 2D iso sprite ARPG. Pilot wrapped 2026-05-27 — rendering pipeline works, character identity locking requires LoRA per character. Three production paths in tools/pilot/PILOT_RESULTS.md.
+description: Project pivot 2026-05-26 to 2D iso sprite ARPG. SDXL stylization abandoned 2026-05-27; Meshy→Mixamo→Blender pipeline shipped 2026-05-28 with identity-locked 736-sprite output per character.
 metadata:
   type: project
 ---
@@ -19,55 +19,74 @@ scope, iterate, and automate via the AI render pipeline.
 
 48 painted-style MJ references at `docs/art-reference/` across env /
 chars / monsters / UI / icons / VFX. Every asset class has a locked
-`--sref` anchor. Reference document for both hand-painting and AI
-img2img stylization. The bible is complete and reusable regardless of
-which production path the project takes.
+`--sref` anchor.
 
-## Pilot (wrapped 2026-05-27 — see tools/pilot/PILOT_RESULTS.md)
+## Production pipeline (shipped 2026-05-28)
 
-Tested Path B (3D-to-2D AI render pipeline): Blender renders the X Bot
-mesh at iso angle → ComfyUI img2img with SDXL + IP-Adapter + ControlNet
-→ Python alpha-restoration → painted sprite output.
+End-to-end sprite generation pipeline. All scripts in `tools/pilot/`:
 
-**What works:**
-- Pipeline runs end-to-end: ~8 min for 8 directions on RTX 4070 Laptop
-- Painted aesthetic reachable
-- Pose locked by ControlNet
-- Transparent backgrounds via alpha mask
-- All scripts committed and reusable
+```
+Midjourney (character ref)
+    ↓
+Meshy.ai image-to-3D (mesh + textures + Mixamo rig)
+    ↓
+Mixamo (base FBX with skin + N anim-only FBXs)
+    ↓
+merge_mixamo_anims.py (one .glb with all actions as NLA strips)
+    ↓
+01_render_sprite_sheet.py (Blender headless render — 8 dirs × N anims × M frames)
+    ↓
+build_viewer.py → output/viewer.html for interactive review
+    ↓
+Godot SpriteFrames import (not yet wired)
+```
 
-**What doesn't (the blocker):**
-- Character identity drifts across the 8 facings — pure IP-Adapter is a
-  style encoder, not an identity encoder. Confirmed across 2 canonical
-  references × multiple parameter combos. Cannot be solved by tuning.
+**Validated on Crimson Vein Titan** (ranged spellcaster enemy):
+- 5 anims (idle/walk/cast/hit/death) × 8 directions × 12-24 frames
+  = 736 sprites in 83 sec render, ~26 MB at 256² PNG
+- Identity locked across every frame (mesh, no AI stylization)
+- Per-frame camera Z tracking centers crouched + dying poses
+- Dynamic ortho_scale auto-fits the worst-case pose
 
-**Production paths forward:**
-1. **Add LoRA training** (~half day per character × ~10 characters =
-   ~5 days setup before sprite production starts). True 2D iso ARPG.
-2. **Return to 3D on `main`** (project shipped Steam playtest in 3D
-   already). Stylized shader approximates painted look.
-3. **Hybrid: 2D for UI/icons/portraits, 3D for in-game characters**.
-   Best of both, low marginal cost — uses pilot pipeline only for
-   identity-stable static assets.
+**Why SDXL/IP-Adapter was abandoned:** earlier iteration tried
+img2img stylization (Blender render → ComfyUI). Worked end-to-end but
+character identity drifted across the 8 facings — IP-Adapter is a
+style encoder, not an identity encoder. Direct .glb rendering with
+baked textures solves identity locking mathematically. ComfyUI stack
+deleted; relevant scripts removed from the pipeline.
 
-**Decision deferred to a non-fatigued session.**
+## Why Mixamo over Meshy's built-in anims
 
-## Setup that was done (preserved across machines)
+Meshy's auto-baked animations for body-horror characters are
+off-label — "Walking" is a wide-legged creature crouch-stalk,
+"Running" is a hunched crouch, "Dead" doesn't actually fall to the
+ground. Mixamo's anim library uses correct naming + clean motion
+(Walking is an upright walk, Dying lands the character flat). For
+production, every character goes through Meshy → Mixamo (one-time
+per-character upload + manual joint markers + download anims) →
+merge_mixamo_anims.py.
+
+## Open production decisions
+
+- Item visualization: Path 3 (no visible gear, MVP-friendly) vs
+  Path 2 (weapon-only overlay) — not yet decided. Path 3 unblocks
+  player-character pipeline; Path 2 adds weapon sprite layer at
+  render time with per-direction hand-bone offsets dumped to JSON.
+- Godot SpriteFrames import: not yet wired. Each char's output
+  directory layout (`raw/<character>/<anim>/<dir>_<frame>.png`)
+  is already SpriteFrames-friendly.
+
+## Setup preserved across machines
 
 Josh has:
-- Blender 5.1 installed
-- ComfyUI Desktop installed at `~/Documents/ComfyUI` (port 8000)
-- SDXL Base 1.0 in `models/checkpoints/`
-- `controlnet-canny-sdxl-1.0.safetensors` in `models/controlnet/`
-- `ip-adapter-plus_sdxl_vit-h.safetensors` in `models/ipadapter/`
-- `CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors` in `models/clip_vision/`
-- `ComfyUI_IPAdapter_plus` custom node installed
-- GPU: RTX 4070 Laptop GPU (12GB+ VRAM)
+- Blender 5.1 installed (path: `C:\Program Files\Blender Foundation\Blender 5.1\blender.exe`)
+- Meshy.ai Pro plan (commercial-safe exports, T-Pose option for Mixamo)
+- Mixamo (adobe.com/cc account)
+- GPU: RTX 4070 Laptop (12 GB+ VRAM, not actually needed for
+  Blender Eevee renders — pipeline runs CPU-bound)
 
-**Slowness clarification:** Path B is all build-time, zero runtime cost.
-Once sprite sheets are baked they're static PNG textures in Godot.
-Runtime perf identical to any 2D ARPG.
+ComfyUI / SDXL stack from the earlier attempt was deleted.
 
-Related: [[project_xbot_character]], [[project_xbot_ragdoll]],
-[[project_weapon_attachment]] — all 3D-era infra that feeds the
-2D sprite production pipeline (if path 1 or 3 is chosen).
+Related: [[project_xbot_character]], [[project_xbot_ragdoll]] —
+3D-era infra still relevant if returning to Path 2 (3D characters
+with 2D UI).
