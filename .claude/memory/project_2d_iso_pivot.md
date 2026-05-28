@@ -1,6 +1,6 @@
 ---
 name: project_2d_iso_pivot
-description: Project pivot 2026-05-26 to 2D iso sprite ARPG. SDXL stylization abandoned 2026-05-27; Meshy→Mixamo→Blender pipeline shipped 2026-05-28 with identity-locked 736-sprite output per character.
+description: 2D iso sprite ARPG pivot 2026-05-26. Production pipeline shipped 2026-05-28 — Meshy→Mixamo→Blender→Godot, identity-locked, validated end-to-end on 5 characters.
 metadata:
   type: project
 ---
@@ -13,7 +13,7 @@ target. 3D work is preserved on `main`; the rework lives on
 **Why pivoted:** Josh's original game-design vision was 1990s painted
 ARPG, but he'd assumed 3D would be easier for AI workflows. The
 reverse is true — 2D iso sprite production is dramatically easier to
-scope, iterate, and automate via the AI render pipeline.
+scope, iterate, and automate.
 
 ## Visual bible (shipped 2026-05-26)
 
@@ -23,70 +23,87 @@ chars / monsters / UI / icons / VFX. Every asset class has a locked
 
 ## Production pipeline (shipped 2026-05-28)
 
-End-to-end sprite generation pipeline. All scripts in `tools/pilot/`:
+Full end-to-end Midjourney → Godot playback. All scripts in
+`tools/pilot/`, full how-to in `tools/pilot/README.md`,
+architectural write-up in `tools/pilot/PILOT_RESULTS.md`.
 
 ```
-Midjourney (character ref)
-    ↓
-Meshy.ai image-to-3D (mesh + textures + Mixamo rig)
-    ↓
-Mixamo (base FBX with skin + N anim-only FBXs)
-    ↓
-merge_mixamo_anims.py (one .glb with all actions as NLA strips)
-    ↓
-01_render_sprite_sheet.py (Blender headless render — 8 dirs × N anims × M frames)
-    ↓
-build_viewer.py → output/viewer.html for interactive review
-    ↓
-Godot SpriteFrames import (not yet wired)
+Midjourney ref → Meshy.ai (3D mesh + textures)
+              → Mixamo (auto-rig + anim downloads)
+              → merge_mixamo_anims.py (one .glb with retargeted NLA actions)
+              → 01_render_sprite_sheet.py (Blender headless, 8 dirs × N anims × M frames)
+              → output/raw/<character>/<anim>/<dir>_<frame>.png (256² RGBA)
+              → build_viewer.py → output/viewer.html (browser preview)
+              → copy_sprites_to_godot.py → godot_test/sprites/
+              → sprite_test.tscn (Godot 4.6 AnimatedSprite2D playback)
 ```
 
-**Validated on Crimson Vein Titan** (ranged spellcaster enemy):
-- 5 anims (idle/walk/cast/hit/death) × 8 directions × 12-24 frames
-  = 736 sprites in 83 sec render, ~26 MB at 256² PNG
-- Identity locked across every frame (mesh, no AI stylization)
-- Per-frame camera Z tracking centers crouched + dying poses
-- Dynamic ortho_scale auto-fits the worst-case pose
+**Shipped on 5 characters** (~15 min Mixamo clicking + ~6-8 min render
+per character):
+- analog_male, analog_female, cyborg_male, cyborg_female (each 9 anims
+  × 8 dirs × 12-24 frames = 1344 sprites, ~45 MB)
+- crimson_vein_titan enemy (5 anims × 8 dirs × 6-24 frames = 736
+  sprites, ~26 MB)
+- 6080 total sprites validated in Godot 4.6
 
-**Why SDXL/IP-Adapter was abandoned:** earlier iteration tried
-img2img stylization (Blender render → ComfyUI). Worked end-to-end but
-character identity drifted across the 8 facings — IP-Adapter is a
-style encoder, not an identity encoder. Direct .glb rendering with
-baked textures solves identity locking mathematically. ComfyUI stack
-deleted; relevant scripts removed from the pipeline.
+**Key technical solves** (each one bit us before it got fixed):
+- Identity locking: direct mesh render with baked textures (no AI
+  stylization — abandoned the SDXL stack 2026-05-28)
+- Bind-pose mismatch: per-bone rotation delta baked into keyframes
+  in `retarget_action_bind_pose()` — lets the shared anim library
+  work across characters with different rest poses (Meshy generates
+  A-pose, Mixamo's "Without Skin" anims assume T-pose)
+- Per-frame camera Z tracking + dynamic ortho_scale: crouched/dying
+  poses stay centered, wide poses don't clip
+- Hip recentering: locomotion clips with root motion stay in-frame
+- Blender 5.x layered action API: `iter_action_fcurves()` walks
+  `action.layers[].strips[].channelbags[].fcurves` (legacy
+  `action.fcurves` was removed)
+- Browser cache: `?v=<mtime>` query string per image in
+  build_viewer.py — was a major time sink before
 
-## Why Mixamo over Meshy's built-in anims
+## Architecture decisions worth keeping
 
-Meshy's auto-baked animations for body-horror characters are
-off-label — "Walking" is a wide-legged creature crouch-stalk,
-"Running" is a hunched crouch, "Dead" doesn't actually fall to the
-ground. Mixamo's anim library uses correct naming + clean motion
-(Walking is an upright walk, Dying lands the character flat). For
-production, every character goes through Meshy → Mixamo (one-time
-per-character upload + manual joint markers + download anims) →
-merge_mixamo_anims.py.
+1. **Shared anim library per sex** (`source/player/{male,female}/`).
+   New class = drop a with-skin `Idle.fbx` in
+   `{sex}/{class}/Idle.fbx`, copy a config block in merger + renderer,
+   run. No per-class anim downloads.
+2. **Bind-pose retargeting in code**, not in source content. Meshy
+   can generate characters in whatever pose (A, T, stoop); the
+   merger handles the delta.
+3. **Output structure mirrors Godot's expectations**:
+   `<character>/<anim>/<dir>_<frame>.png`. Godot loader scans the
+   tree at runtime — no per-character `.tres` to author.
+4. **Source FBXs and build GLBs in-repo, gitignored.** No
+   `~/Desktop/` paths in the pipeline; works on any machine.
 
 ## Open production decisions
 
-- Item visualization: Path 3 (no visible gear, MVP-friendly) vs
-  Path 2 (weapon-only overlay) — not yet decided. Path 3 unblocks
-  player-character pipeline; Path 2 adds weapon sprite layer at
-  render time with per-direction hand-bone offsets dumped to JSON.
-- Godot SpriteFrames import: not yet wired. Each char's output
-  directory layout (`raw/<character>/<anim>/<dir>_<frame>.png`)
-  is already SpriteFrames-friendly.
+These gate moving the pilot into the main game project:
+
+- **Item visualization** — Path 3 (no visible gear, Hades/HLD style,
+  MVP-friendly) vs Path 2 (weapon-only overlay with per-direction
+  hand-bone screen offsets dumped to JSON). Not yet decided.
+- **Environment/tile/prop sprite pipeline** — character pipeline
+  doesn't cover backgrounds. Probably MJ → flat PNG for tiles, no
+  need for 8 directions on a wall.
+- **Stylization pass** — renders look like Blender renders, not
+  painted bible refs. A Godot shader (cel + posterize) might bridge
+  cheaper than re-introducing SDXL.
+- **When to merge into the main game project** (`2d-iso-rework` →
+  `main` eventually). Pilot currently isolated at
+  `tools/pilot/godot_test/`.
 
 ## Setup preserved across machines
 
-Josh has:
-- Blender 5.1 installed (path: `C:\Program Files\Blender Foundation\Blender 5.1\blender.exe`)
-- Meshy.ai Pro plan (commercial-safe exports, T-Pose option for Mixamo)
-- Mixamo (adobe.com/cc account)
-- GPU: RTX 4070 Laptop (12 GB+ VRAM, not actually needed for
-  Blender Eevee renders — pipeline runs CPU-bound)
+- Blender 5.1 (Windows: `C:\Program Files\Blender Foundation\Blender 5.1\blender.exe`)
+- Godot 4.6 (Josh has `C:\Users\josh\Tools\Godot\godot.cmd` shim on PATH)
+- Meshy.ai Pro plan ($10/mo — T-Pose + commercial-safe exports)
+- Mixamo (adobe.com account)
+- ~5 GB disk per 5 characters in tools/pilot/
 
-ComfyUI / SDXL stack from the earlier attempt was deleted.
+GPU not load-bearing — pipeline is CPU-bound Blender Eevee. The
+earlier SDXL stylization attempt (deleted) needed a GPU.
 
 Related: [[project_xbot_character]], [[project_xbot_ragdoll]] —
-3D-era infra still relevant if returning to Path 2 (3D characters
-with 2D UI).
+3D-era infra still relevant if returning to a hybrid path.
