@@ -1,3 +1,4 @@
-# Godot import cache + sprite copies (regenerable).
+# Godot import cache + sprite/environment copies (regenerable).
 .godot/
 sprites/
+environment/

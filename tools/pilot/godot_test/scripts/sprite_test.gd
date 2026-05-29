@@ -134,6 +134,11 @@ func _on_fps_changed(_v: float) -> void:
 	_update_sprite()
 
 
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and event.keycode == KEY_F1:
+		get_tree().change_scene_to_file("res://scenes/depth_sort_test.tscn")
+
+
 func _update_sprite() -> void:
 	if current_char == "" or current_anim == "" or current_dir == "":
 		return
