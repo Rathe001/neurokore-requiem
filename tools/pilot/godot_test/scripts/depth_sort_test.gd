@@ -121,19 +121,27 @@ func _build_idle_frames() -> SpriteFrames:
 
 
 func _process(delta: float) -> void:
-	var v := Vector2.ZERO
-	# WASD via direct key polling (Godot's default ui_* actions only
-	# cover arrows). Arrow keys still work via the ui_* fallback.
+	# Read input as WORLD direction (D2 / PoE convention): W means
+	# walk world-north, which projects up-and-left on screen.
+	var world_v := Vector2.ZERO
 	if Input.is_physical_key_pressed(KEY_D) or Input.is_action_pressed("ui_right"):
-		v.x += 1
+		world_v.x += 1  # world east
 	if Input.is_physical_key_pressed(KEY_A) or Input.is_action_pressed("ui_left"):
-		v.x -= 1
+		world_v.x -= 1  # world west
 	if Input.is_physical_key_pressed(KEY_S) or Input.is_action_pressed("ui_down"):
-		v.y += 1
+		world_v.y += 1  # world south
 	if Input.is_physical_key_pressed(KEY_W) or Input.is_action_pressed("ui_up"):
-		v.y -= 1
-	if v.length_squared() > 0.0:
-		character.position += v.normalized() * MOVE_SPEED * delta
+		world_v.y -= 1  # world north
+	if world_v.length_squared() > 0.0:
+		# Convert world direction → screen direction using the same
+		# iso projection as _grid_to_screen, then renormalize so the
+		# on-screen speed is uniform regardless of direction.
+		var wn := world_v.normalized()
+		var screen_v := Vector2(
+			(wn.x - wn.y) * TILE_HALF_W,
+			(wn.x + wn.y) * TILE_HALF_H,
+		).normalized()
+		character.position += screen_v * MOVE_SPEED * delta
 	debug.text = "char y=%.0f  (wall row y=%.0f)" % [character.position.y, _grid_to_screen(-1, 2).y]
 
 

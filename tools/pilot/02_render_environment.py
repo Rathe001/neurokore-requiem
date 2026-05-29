@@ -24,7 +24,14 @@ from pathlib import Path
 import bpy  # type: ignore
 
 PILOT_ROOT = Path(__file__).parent
+SOURCE_ROOT = PILOT_ROOT / "source" / "environment" / "facility"
 OUTPUT_ROOT = PILOT_ROOT / "output" / "environment" / "facility"
+
+# Optional asset overrides. When these files exist, the renderer
+# substitutes them for the procedural graybox geometry. Both are
+# optional — drop one in, the other stays graybox.
+FLOOR_TEXTURE_PATH = SOURCE_ROOT / "floor_texture.png"  # MJ top-down tileable
+WALL_GLB_PATH      = SOURCE_ROOT / "wall.glb"            # Meshy textured 3D
 
 # Resolution: 512 because tile/wall pixels will be repeated and zoomed
 # in the game viewport — clarity matters more than for one-off characters.
@@ -115,21 +122,91 @@ def make_concrete_material(name: str, base_color: tuple[float, float, float]) ->
     return mat
 
 
+def make_textured_material(name: str, texture_path: Path) -> bpy.types.Material:
+    """PBR material with an MJ texture wired into Base Color."""
+    mat = bpy.data.materials.new(name)
+    mat.use_nodes = True
+    nodes = mat.node_tree.nodes
+    bsdf = nodes.get("Principled BSDF")
+    tex_node = nodes.new("ShaderNodeTexImage")
+    tex_node.image = bpy.data.images.load(str(texture_path))
+    mat.node_tree.links.new(bsdf.inputs["Base Color"], tex_node.outputs["Color"])
+    bsdf.inputs["Roughness"].default_value = 0.85
+    return mat
+
+
 def build_floor_tile() -> bpy.types.Object:
-    """2m x 2m plane centered at world origin, sitting on Z=0."""
+    """2m x 2m plane centered at world origin, sitting on Z=0. Uses an
+    MJ top-down texture if one was dropped at FLOOR_TEXTURE_PATH;
+    otherwise renders as graybox concrete."""
     bpy.ops.mesh.primitive_plane_add(size=2.0, location=(0, 0, 0))
     plane = bpy.context.active_object
     plane.name = "FloorTile"
-    plane.data.materials.append(make_concrete_material("FloorMat", (0.50, 0.50, 0.53)))
+    if FLOOR_TEXTURE_PATH.exists():
+        print(f"[env] applying MJ floor texture: {FLOOR_TEXTURE_PATH.name}")
+        plane.data.materials.append(make_textured_material("FloorMat", FLOOR_TEXTURE_PATH))
+    else:
+        print(f"[env] no MJ texture — falling back to graybox concrete floor")
+        plane.data.materials.append(make_concrete_material("FloorMat", (0.50, 0.50, 0.53)))
     return plane
 
 
+def import_wall_glb(glb_path: Path) -> bpy.types.Object:
+    """Imports a Meshy wall .glb, auto-centers + auto-scales so the
+    foot-center lands at world origin and the height matches our
+    canonical 2.5m wall. Returns the rotation/scale wrapper Empty so
+    the renderer can target a single object."""
+    import mathutils  # type: ignore
+
+    bpy.ops.import_scene.gltf(filepath=str(glb_path))
+    imported = list(bpy.context.selected_objects)
+    if not imported:
+        raise RuntimeError(f"No objects from {glb_path}")
+
+    min_x = min_y = min_z = float("inf")
+    max_x = max_y = max_z = float("-inf")
+    for obj in imported:
+        if obj.type != "MESH":
+            continue
+        for corner in obj.bound_box:
+            wc = obj.matrix_world @ mathutils.Vector(corner)
+            min_x, max_x = min(min_x, wc.x), max(max_x, wc.x)
+            min_y, max_y = min(min_y, wc.y), max(max_y, wc.y)
+            min_z, max_z = min(min_z, wc.z), max(max_z, wc.z)
+
+    height = max_z - min_z
+    print(f"[env] wall bbox raw: X={max_x-min_x:.3f} Y={max_y-min_y:.3f} Z={height:.3f}")
+
+    # Scale to a canonical 2.5m height (matches procedural fallback).
+    target_height = 2.5
+    scale_factor = target_height / height if height > 0 else 1.0
+
+    wrapper = bpy.data.objects.new("WallWrapper", None)
+    bpy.context.scene.collection.objects.link(wrapper)
+    for obj in imported:
+        if obj.parent is None:
+            obj.parent = wrapper
+    wrapper.scale = (scale_factor, scale_factor, scale_factor)
+    # After scaling, foot-center should be at world origin.
+    wrapper.location = (
+        -(min_x + (max_x - min_x) / 2) * scale_factor,
+        -(min_y + (max_y - min_y) / 2) * scale_factor,
+        -min_z * scale_factor,
+    )
+    bpy.context.view_layer.update()
+    print(f"[env] applied scale {scale_factor:.3f}, centered foot at origin")
+    return wrapper
+
+
 def build_wall_section() -> bpy.types.Object:
-    """Vertical wall: 2m wide (X), 0.1m thick (Y), 2.5m tall (Z).
-    Wall foot-center sits at WORLD ORIGIN so the rendered image has
-    its pivot point (foot-center) at pixel-center. In Godot, this
-    means a Sprite2D at world_to_screen(wall_foot_world_pos) with
-    centered=true lines up perfectly with the floor."""
+    """Wall foot-center at WORLD ORIGIN so a Sprite2D in Godot with
+    centered=true lines up perfectly with the floor at the wall's
+    grid coordinates. Uses a Meshy .glb if present; otherwise
+    procedural graybox cube (2m W x 0.1m thick x 2.5m tall)."""
+    if WALL_GLB_PATH.exists():
+        print(f"[env] importing Meshy wall: {WALL_GLB_PATH.name}")
+        return import_wall_glb(WALL_GLB_PATH)
+    print(f"[env] no Meshy .glb — falling back to graybox concrete wall")
     bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0, 0, 1.25))
     wall = bpy.context.active_object
     wall.name = "WallSection"
