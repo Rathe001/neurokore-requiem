@@ -42,8 +42,13 @@ RESOLUTION = 512
 CAMERA_PITCH_DEG = 30.0
 CAMERA_YAW_DEG = 45.0
 CAMERA_DISTANCE = 10.0
-# Tight enough to fill the frame with a 2m x 2.5m piece + ~15% margin.
-CAMERA_ORTHO_SCALE = 3.5
+# 6.3m ortho_scale at 512² gives ~81 px/m, matching the character
+# renderer's effective density (256² / ~3.15m = ~81 px/m). That ratio
+# is the load-bearing constant — when both renderers use the same
+# px/m, a 2.5m wall ends up ~1.4x the on-screen height of a 1.8m
+# character. Change this number ONLY in tandem with the character
+# renderer; otherwise walls and characters won't be size-comparable.
+CAMERA_ORTHO_SCALE = 6.3
 
 
 def clear_scene() -> None:

@@ -16,7 +16,7 @@ color = Color(0.06, 0.06, 0.08, 1)
 
 [node name="Camera2D" type="Camera2D" parent="."]
 position = Vector2(640, 360)
-zoom = Vector2(0.7, 0.7)
+zoom = Vector2(1.0, 1.0)
 
 [node name="YSort" type="Node2D" parent="."]
 position = Vector2(640, 360)

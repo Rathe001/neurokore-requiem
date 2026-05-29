@@ -13,13 +13,12 @@ const SPRITES_ROOT      := "res://sprites"
 const ENV_ROOT          := "res://environment/facility"
 const SPRITE_TEST_SCENE := "res://scenes/sprite_test.tscn"
 
-# Iso tile geometry — measured from the 512² floor render. The diamond
-# spans ~350 px wide × ~200 px tall, so half-extents are (175, 100).
-# Adjacent tiles in the (row, col) grid offset by these half-extents
-# diagonally — east neighbor is +(half_w, half_h), south neighbor is
-# -(half_w, half_h)…etc.
-const TILE_HALF_W := 175.0
-const TILE_HALF_H := 100.0
+# Iso tile geometry — measured from the 512² floor render at the
+# canonical 81 px/m density. Diamond is 232 × 117 px (true 2:1 iso),
+# so half-extents are (116, 58). Adjacent tiles in the (row, col)
+# grid offset by these half-extents diagonally.
+const TILE_HALF_W := 116.0
+const TILE_HALF_H := 58.0
 
 # 5x5 floor grid centered on (row=2, col=2). Comfortable size for a
 # 1280×720 viewport at the camera zoom set in the scene.
