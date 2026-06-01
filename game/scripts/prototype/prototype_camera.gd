@@ -25,7 +25,7 @@ class_name PrototypeCamera
 ## — view extent stays the same, foreshortening shrinks. Watch the
 ## `far` clip and any SDFGI / shadow distance settings if you push
 ## past ~150m.
-@export var offset: Vector3 = Vector3(27.8, 97.3, 27.8)
+@export var offset: Vector3 = Vector3(20.08, 70.30, 20.08)
 ## Holding mouse-wheel-button and dragging vertically tilts the pitch.
 ## Off = camera is fixed at the @export offset's pitch.
 @export var enable_pitch_drag: bool = true

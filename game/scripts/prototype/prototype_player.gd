@@ -1155,10 +1155,11 @@ func _apply_gender_appearance() -> void:
 	var is_female: bool = effective_gender == &"female"
 	var scene: PackedScene = _mesh_for_class(effective_class, effective_gender)
 	# Per-gender Y offset to keep feet at floor level. The Meshy female
-	# meshes' geometric origin sits ~0.10m above the feet (vs male's
-	# ~0.0m), so without lifting they clip into the floor. Tune here if
-	# a specific class breaks the pattern.
-	var y_offset: float = 0.10 if is_female else 0.0
+	# meshes' geometric origin sits ~0.20m above the feet (vs male's
+	# ~0.0m), so without lifting they clip into the floor. 0.10 was the
+	# initial guess but proved insufficient — the female pivot is
+	# higher than expected. Tune here if a specific class breaks pattern.
+	var y_offset: float = 0.20 if is_female else 0.0
 	# Meshy meshes import a touch smaller than the player capsule
 	# expects. 1.05× over-corrected (feet clipped through floor),
 	# 1.02× is the sweet spot — silhouette reads at iso distance
