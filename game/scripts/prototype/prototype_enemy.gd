@@ -2703,15 +2703,31 @@ func _schedule_corpse_despawn(token: int) -> void:
 	EntityPool.release(self)
 
 
-# Releases the RigidBody3D this enemy dropped on death, if any. Safe to
-# call multiple times — the second call sees instance_id == 0 and noops.
+# Releases the RigidBody3D this enemy dropped on death, if any. Mirrors
+# the corpse sink: freeze physics, tween position.y down by the same
+# _CORPSE_SINK_DEPTH over _CORPSE_SINK_DURATION, then queue_free. Safe
+# to call multiple times — the second call sees instance_id == 0 and
+# noops.
 func _free_dropped_weapon_body() -> void:
 	if _dropped_weapon_body_id == 0:
 		return
 	var b := instance_from_id(_dropped_weapon_body_id)
-	if b != null and is_instance_valid(b):
-		(b as Node).queue_free()
 	_dropped_weapon_body_id = 0
+	if b == null or not is_instance_valid(b):
+		return
+	var body := b as RigidBody3D
+	if body == null or not body.is_inside_tree():
+		(b as Node).queue_free()
+		return
+	# Stop physics so the sink tween can drive position.y without the
+	# simulator fighting the descent every frame.
+	body.freeze = true
+	var sink_tween := body.create_tween()
+	sink_tween.set_ease(Tween.EASE_IN)
+	sink_tween.set_trans(Tween.TRANS_QUAD)
+	var target_y: float = body.position.y - _CORPSE_SINK_DEPTH
+	sink_tween.tween_property(body, ^"position:y", target_y, _CORPSE_SINK_DURATION)
+	sink_tween.tween_callback(body.queue_free)
 
 
 # Apply an impulse to the corpse via the active physics ragdoll. Matches
