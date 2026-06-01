@@ -2655,7 +2655,10 @@ func _spawn_settle_pool() -> void:
 	var parent := get_parent()
 	if parent == null:
 		return
-	PrototypeAttackIndicator.spawn_blood_decal(parent, _settled_corpse_position(), blood_type)
+	# force_new=true skips the attach-or-grow path so the corpse's
+	# pool is a fresh stamp at its hip position instead of stretching
+	# whatever nearby pool a per-hit mist spray happened to leave.
+	PrototypeAttackIndicator.spawn_blood_decal(parent, _settled_corpse_position(), blood_type, true)
 
 
 # Coroutine: wait _CORPSE_DESPAWN_DELAY, sink the corpse into the floor,

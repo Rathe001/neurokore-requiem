@@ -1057,15 +1057,21 @@ static func spawn_blood_kill_scene(parent: Node, world_pos: Vector3, _spray_dir:
 
 # Public entry for "stamp a floor pool at world_pos OR grow the closest
 # existing pool toward it". Used by kill scenes and mist droplets.
-static func spawn_blood_decal(parent: Node, world_pos: Vector3, blood_type: StringName = BLOOD_TYPE_HUMAN) -> void:
+#
+# Pass force_new=true to skip the attach-or-grow path — settle pools
+# under a specific corpse need to be a fresh stamp at the corpse's
+# exact spot, not a stretch of some nearby pool from a per-hit mist
+# spray that happened to land within attach radius.
+static func spawn_blood_decal(parent: Node, world_pos: Vector3, blood_type: StringName = BLOOD_TYPE_HUMAN, force_new: bool = false) -> void:
 	if parent == null or _blood_disabled():
 		return
 	if _is_over_pit(parent, world_pos):
 		return
-	var nearest := _find_pool_near(world_pos, POOL_ATTACH_RADIUS)
-	if nearest != null:
-		_grow_pool_toward(nearest, world_pos)
-		return
+	if not force_new:
+		var nearest := _find_pool_near(world_pos, POOL_ATTACH_RADIUS)
+		if nearest != null:
+			_grow_pool_toward(nearest, world_pos)
+			return
 	_spawn_new_pool(parent, world_pos, blood_type)
 
 
