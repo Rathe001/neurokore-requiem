@@ -24,14 +24,15 @@ from pathlib import Path
 import bpy  # type: ignore
 
 PILOT_ROOT = Path(__file__).parent
-SOURCE_ROOT = PILOT_ROOT / "source" / "environment" / "facility"
 OUTPUT_ROOT = PILOT_ROOT / "output" / "environment" / "facility"
 
-# Optional asset overrides. When these files exist, the renderer
-# substitutes them for the procedural graybox geometry. Both are
-# optional — drop one in, the other stays graybox.
-FLOOR_TEXTURE_PATH = SOURCE_ROOT / "floor_texture.png"  # MJ top-down tileable
-WALL_GLB_PATH      = SOURCE_ROOT / "wall.glb"            # Meshy textured 3D
+# Selected source assets. Point these at any specific file inside
+# tools/pilot/source/environment/ to pick which variant to render
+# (the source/ tree mirrors the user's Meshy/MJ Desktop downloads
+# unchanged, so filenames look like Meshy_AI_...glb).
+ENV_SOURCE = PILOT_ROOT / "source" / "environment"
+FLOOR_TEXTURE_PATH = ENV_SOURCE / "floors" / "Rathe001_top-down_view_of_sci-fi_facility_floor_tile_gunmetal_945dbb89-2e0b-40dd-a334-3546f4a4a3ad_3.png"
+WALL_GLB_PATH      = ENV_SOURCE / "walls"  / "Meshy_AI_Radiant_Core_Between__0529015251_texture.glb"
 
 # Resolution: 512 because tile/wall pixels will be repeated and zoomed
 # in the game viewport — clarity matters more than for one-off characters.

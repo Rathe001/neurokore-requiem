@@ -1,6 +1,8 @@
-# Source FBX assets — large binary files (Meshy exports, Mixamo
-# downloads, ZIPs). Regenerable by downloading again from Meshy/Mixamo.
-# Tracking is local-only; don't bloat git.
-*
-!.gitignore
-!README.md
+# Meshy/Mixamo source FBXs, GLBs, and zips are tracked via LFS — see
+# the repo-root .gitattributes. Regular workflow: drop files in here,
+# `git add`, commit. LFS handles the upload behind the scenes.
+#
+# Ignore filesystem clutter only.
+.DS_Store
+Thumbs.db
+*_extracted/

@@ -1,43 +1,51 @@
 # tools/pilot/source/
 
-Source FBX assets for the sprite-generation pipeline. **Gitignored**
-because raw FBXs are large binaries; download them again from Meshy /
-Mixamo if you need them on a fresh machine.
+Source FBX/GLB/ZIP assets for the sprite generation pipeline. **Tracked
+via Git LFS** (configured in the repo-root `.gitattributes`) so the
+~1 GB of Meshy/Mixamo binaries don't bloat the main pack history.
 
-Layout (canonical):
+Layout (matches the user's local `~/Desktop/models/` tree so they can
+be synced 1:1 with robocopy):
 
 ```
 source/
   player/
-    male/
-      Walking.fbx, Running.fbx, ...     <- shared player anims (without skin)
-      analog/
-        Idle.fbx                        <- "with skin" base (~21 MB)
-        <Meshy zip>                     <- original Meshy export (optional)
-      cyborg/
-        Idle.fbx
-        <Meshy zip>
-    female/
-      (mirror of male/ once female anims are downloaded)
+    male/, female/
+      <shared anim FBXs>.fbx       <- without skin Mixamo downloads
+      <class>/
+        Idle.fbx                   <- with skin Mixamo download
+        Meshy_AI_*.zip             <- original Meshy export (archival)
   enemies/
-    <enemy_name>/
-      <Mixamo "with skin" base>.fbx
-      <other anim>.fbx ...
+    <name>/
+      <Mixamo with-skin .fbx>
+      <Mixamo without-skin anim .fbx files>
+      Meshy_AI_*.fbx               <- original Meshy export (archival)
+  environment/
+    floors/   <- MJ texture PNGs   (top-down, tileable)
+    walls/    <- Meshy GLBs        (full 3D wall sections)
+    doors/    <- Meshy GLBs        (full 3D door pieces)
+  items/
+    <type>/   <- Meshy zips        (props, consoles, chests, etc.)
 ```
 
-The "shared" anim FBXs sit at `player/male/` and `player/female/` so
-every class in that sex reuses the same library. The merger
-(`tools/pilot/merge_mixamo_anims.py`) handles per-character bind-pose
-retargeting so even characters rigged in different rest poses can use
-the same anim set.
+## Sync from local Desktop
 
-To download fresh anims:
+The canonical structure lives in the repo. To sync your local
+Desktop into the repo:
 
-1. Upload your character `.fbx` (or its mesh `.zip`) to mixamo.com
-2. Place 6 joint markers (auto-rigger). Drag wrist/ankle/elbow/knee
-   markers slightly outside the silhouette where the joint should be.
-3. Download `Idle.fbx` (or any anim) **With Skin** — this is the
-   character base. Drop in `source/player/{sex}/{class}/`.
-4. Browse Animations, download each anim **Without Skin**, FBX Binary,
-   30 FPS, no keyframe reduction. **In Place: ON** for locomotion
-   (Walking, Running, Dodge, Sprint). Drop into the parent sex folder.
+```pwsh
+robocopy "$env:USERPROFILE\Desktop\models" `
+         "C:\Users\josh\Projects\neurokore-requiem\tools\pilot\source" `
+         /MIR /XF *.tmp /XD *_extracted
+```
+
+`/MIR` makes the repo source/ exactly match Desktop — adds new files,
+deletes any extras in the repo. Safe because everything is tracked
+in git.
+
+## Selecting which asset the renderer uses
+
+`02_render_environment.py` has two constants near the top
+(`FLOOR_TEXTURE_PATH` and `WALL_GLB_PATH`) that point at specific
+files inside `source/environment/`. Change those to swap which variant
+gets rendered.
