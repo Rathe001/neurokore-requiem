@@ -1139,7 +1139,10 @@ func _apply_gender_appearance() -> void:
 	# ~0.0m), so without lifting they clip into the floor. Tune here if
 	# a specific class breaks the pattern.
 	var y_offset: float = 0.10 if is_female else 0.0
-	var char_scale: float = 1.0
+	# Meshy meshes import a touch smaller than the player capsule
+	# expects — 1.05× lifts visible feet flush with the ground and
+	# scales the silhouette up just enough to read at the iso distance.
+	var char_scale: float = 1.05
 	var current_char := visual.get_node_or_null(^"Character") as Node3D
 	if current_char == null or current_char.scene_file_path != scene.resource_path:
 		if current_char != null:
