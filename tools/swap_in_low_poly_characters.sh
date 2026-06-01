@@ -1,16 +1,11 @@
 #!/usr/bin/env bash
-# Replace the heavy Meshy-zip character meshes with the lower-tri standalone
-# FBX exports the user generated at ~/Desktop/models/{male,female}/<class>/.
-#
-# Source priority per class folder:
-#   1) Meshy_AI_*.zip — extracted; uses the zip's FBX (texture refs point at
-#      Meshy filenames bundled in the same zip, so textures resolve cleanly).
-#      Tri count matches the Mixamo "Idle" FBX in the same folder (both are
-#      the same Meshy-generated mesh), so we get the lower-poly visual the
-#      user asked for without hitting the Idle.fbx's missing-texture issue.
-#   2) (fallback unused) Mixamo Idle.fbx / Unarmed Idle 01.fbx — would give
-#      same tri count but the FBX references textures by Mixamo internal
-#      paths and Godot can't resolve them without manual material wiring.
+# Drop the Mixamo-exported rigged + animated FBX (Idle.fbx for males,
+# "Unarmed Idle 01.fbx" for females) into each character folder. Mixamo
+# FBXs ship the proper humanoid skeleton + a baked Idle animation, so the
+# imported scene's AnimationPlayer exists and the X Bot library installs
+# cleanly. The Meshy zip alongside is the texture source only — its PNGs
+# get extracted next to the FBX and meshy_character_import.gd wires them
+# into a StandardMaterial3D at import time.
 #
 # Spec-name fixups (Desktop → game id):
 #   countess (female) → count
@@ -48,20 +43,33 @@ male   polymath     polymath
 while read -r gender desktop_dir spec; do
     [[ -z "$gender" ]] && continue
     src_dir="$SRC_ROOT/$gender/$desktop_dir"
+    # Mixamo-exported rigged + animated FBX. Filename differs by gender.
+    if [[ "$gender" == "male" ]]; then
+        src_fbx="$src_dir/Idle.fbx"
+    else
+        src_fbx="$src_dir/Unarmed Idle 01.fbx"
+    fi
+    if [[ ! -f "$src_fbx" ]]; then
+        echo "MISSING rigged FBX: $src_fbx" >&2
+        continue
+    fi
     zip=$(find "$src_dir" -maxdepth 1 -name 'Meshy_AI_*.zip' | head -1)
     if [[ -z "$zip" ]]; then
         echo "MISSING zip in $src_dir" >&2
         continue
     fi
     dst_dir="$DST/player_${spec}_${gender}"
-    # Wipe the folder so stale FBX + textures from prior runs don't collide.
+    # Wipe so stale files from prior runs don't collide.
     rm -rf "$dst_dir"
     mkdir -p "$dst_dir"
-    unzip -j -o "$zip" -d "$dst_dir" >/dev/null
-    fbx=$(find "$dst_dir" -maxdepth 1 -name 'Meshy_AI_*.fbx' | head -1)
-    mv "$fbx" "$dst_dir/player_${spec}_${gender}.fbx"
-    echo "extracted: $desktop_dir/$gender → $dst_dir/"
+    # Mesh: Mixamo-exported FBX (has rig + idle animation baked in).
+    cp "$src_fbx" "$dst_dir/player_${spec}_${gender}.fbx"
+    # Textures: extract from the Meshy zip but skip the zip's FBX —
+    # meshy_character_import.gd finds the *.png files by naming convention
+    # and wires them into a single StandardMaterial3D.
+    unzip -j -o "$zip" '*.png' -d "$dst_dir" >/dev/null
+    echo "wired:    $desktop_dir/$gender → $dst_dir/"
 done <<<"$ROWS"
 
 echo
-echo "✓ Extracted all 16 character meshes from new Meshy zips."
+echo "✓ All 16 characters wired (Mixamo rig+anim + Meshy textures)."

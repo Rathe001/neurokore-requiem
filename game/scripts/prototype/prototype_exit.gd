@@ -2,80 +2,28 @@ class_name PrototypeExit
 extends HoverableInteractable
 
 # Freight elevator exit. Joins "boss_listeners" so PrototypeEnemy dispatches
-# on_boss_died() when any boss falls. Once unlocked the status lights turn
-# green, and the player can interact() to trigger a level reset.
+# on_boss_died() when any boss falls. The visual is a single Meshy GLB
+# (assets/models/objects/elevator/elevator.glb); locked/unlocked state is
+# communicated through the interact tooltip rather than a per-corner
+# status light. on_boss_died → unlock → interact() resets the level.
 
-const TINT_LOCKED := Color(0.95, 0.15, 0.15, 1.0)
-const TINT_UNLOCKED := Color(0.25, 1.0, 0.45, 1.0)
-const PULSE_SPEED := 2.4
-const PULSE_MIN := 0.6
-const PULSE_MAX := 1.0
-
-@onready var _platform: MeshInstance3D = $Platform
-var _posts: Array[MeshInstance3D] = []
-var _lights: Array[MeshInstance3D] = []
+@onready var _elevator: Node3D = $Elevator
 
 var _locked: bool = true
-var _platform_mat: StandardMaterial3D
-var _post_mat: StandardMaterial3D
-var _light_mat: StandardMaterial3D
-var _pulse_t: float = 0.0
+var _outline_mesh: MeshInstance3D
 
 
 func _ready() -> void:
 	add_to_group(&"boss_listeners")
 	add_to_group(&"minimap_marker")
-
-	# Platform — dark industrial metal grate.
-	_platform_mat = StandardMaterial3D.new()
-	_platform_mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
-	_platform_mat.albedo_color = Color(0.12, 0.12, 0.14, 1.0)
-	_platform_mat.metallic = 0.7
-	_platform_mat.roughness = 0.45
-	_platform_mat.emission_enabled = false
-	_platform.material_override = _platform_mat
-
-	# Posts — slightly lighter steel.
-	_post_mat = StandardMaterial3D.new()
-	_post_mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
-	_post_mat.albedo_color = Color(0.18, 0.18, 0.2, 1.0)
-	_post_mat.metallic = 0.65
-	_post_mat.roughness = 0.4
-	_post_mat.emission_enabled = false
-	for name_id in [&"PostNW", &"PostNE", &"PostSW", &"PostSE"]:
-		var p := get_node(NodePath(name_id)) as MeshInstance3D
-		p.material_override = _post_mat
-		_posts.append(p)
-
-	# Crossbeams share the post material.
-	for name_id in [&"BeamN", &"BeamS", &"BeamE", &"BeamW"]:
-		var b := get_node(NodePath(name_id)) as MeshInstance3D
-		b.material_override = _post_mat
-
-	# Status lights — emissive indicators that change color.
-	_light_mat = StandardMaterial3D.new()
-	_light_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_light_mat.emission_enabled = true
-	_light_mat.emission_energy_multiplier = 3.0
-	for name_id in [&"LightNW", &"LightNE", &"LightSW", &"LightSE"]:
-		var l := get_node(NodePath(name_id)) as MeshInstance3D
-		l.material_override = _light_mat
-		_lights.append(l)
-
+	# The GLB instance is a Node3D with one MeshInstance3D child — walk
+	# down to grab it for the hover-outline raycaster.
+	_outline_mesh = _find_mesh_instance(_elevator)
 	super._ready()
-	_refresh_tint()
-
-
-func _process(delta: float) -> void:
-	if _locked:
-		return
-	_pulse_t += delta * PULSE_SPEED
-	var pulse := lerpf(PULSE_MIN, PULSE_MAX, 0.5 + 0.5 * sin(_pulse_t))
-	_light_mat.emission_energy_multiplier = 3.0 * pulse
 
 
 func _get_outline_source() -> MeshInstance3D:
-	return _platform
+	return _outline_mesh
 
 
 func _get_tooltip_text() -> String:
@@ -95,7 +43,6 @@ func unlock() -> void:
 	if not _locked:
 		return
 	_locked = false
-	_refresh_tint()
 	MissionState.notify_exit_unlocked()
 
 
@@ -103,7 +50,6 @@ func lock() -> void:
 	if _locked:
 		return
 	_locked = true
-	_refresh_tint()
 
 
 func on_boss_died(_boss: Node) -> void:
@@ -124,10 +70,14 @@ func interact(_user: Node) -> void:
 	get_tree().call_group(&"level_reset_handler", &"reset_level")
 
 
-func _refresh_tint() -> void:
-	var c := TINT_LOCKED if _locked else TINT_UNLOCKED
-	_light_mat.albedo_color = c
-	_light_mat.emission = c
+func _find_mesh_instance(root: Node) -> MeshInstance3D:
+	if root is MeshInstance3D:
+		return root
+	for c in root.get_children():
+		var found := _find_mesh_instance(c)
+		if found != null:
+			return found
+	return null
 
 
 # ── Multiplayer RPCs ──────────────────────────────────────────────────

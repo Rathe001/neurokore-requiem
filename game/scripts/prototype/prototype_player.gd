@@ -1164,9 +1164,17 @@ func _apply_gender_appearance() -> void:
 			# LOCAL player's gender, wrong for remote MP avatars.
 			new_char.set_meta(&"gender", effective_gender)
 			visual.add_child(new_char)
+			# Meshy FBXs ship without baked animations, so the imported scene
+			# has no AnimationPlayer node — create one before
+			# XBotAnimations.install_on can populate it. Old Mixamo "Idle"
+			# FBXs supplied their own AnimationPlayer; this branch covers the
+			# new path uniformly.
 			var new_ap := new_char.find_child("AnimationPlayer", true, false) as AnimationPlayer
-			if new_ap != null:
-				anim_player = new_ap
+			if new_ap == null:
+				new_ap = AnimationPlayer.new()
+				new_ap.name = "AnimationPlayer"
+				new_char.add_child(new_ap)
+			anim_player = new_ap
 	else:
 		# No swap needed; just re-apply Y offset + scale in case the default
 		# tscn instance was at 0/1 or the per-gender constants changed.

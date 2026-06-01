@@ -32,6 +32,9 @@ func _init() -> void:
 
 
 func _walk(node: Node, indent: String) -> void:
+	if node is AnimationPlayer:
+		var ap: AnimationPlayer = node
+		print("%s%s (AnimationPlayer) anims=%s" % [indent, ap.name, ap.get_animation_list()])
 	if node is MeshInstance3D:
 		var mi: MeshInstance3D = node
 		print("%s%s (%s)" % [indent, mi.name, mi.get_class()])

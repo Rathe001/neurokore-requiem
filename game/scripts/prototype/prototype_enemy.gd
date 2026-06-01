@@ -658,10 +658,15 @@ func _apply_class_mesh() -> void:
 	# AnimationPlayer, which is about to be freed. find_child walks the
 	# subtree because the FBX-imported scene's AnimationPlayer node may
 	# be at a non-fixed path depending on importer version.
+	# Meshy FBXs ship without baked animations — no AnimationPlayer in the
+	# imported scene. Create one so the X Bot animation library has a host.
 	var new_ap := new_char.find_child("AnimationPlayer", true, false) as AnimationPlayer
-	if new_ap != null:
-		anim_player = new_ap
-		XBotAnimations.install_on(anim_player)
+	if new_ap == null:
+		new_ap = AnimationPlayer.new()
+		new_ap.name = "AnimationPlayer"
+		new_char.add_child(new_ap)
+	anim_player = new_ap
+	XBotAnimations.install_on(anim_player)
 	# Re-apply layer isolation so blood decals don't paint on the new
 	# mesh — _ready's call ran on the old subtree.
 	_isolate_visual_from_decals()

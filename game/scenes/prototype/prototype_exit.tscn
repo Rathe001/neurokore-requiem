@@ -1,26 +1,13 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/prototype/prototype_exit.gd" id="1_script"]
+[ext_resource type="PackedScene" path="res://assets/models/objects/elevator/elevator.glb" id="2_elevator"]
 
-; ── Platform ─────────────────────────────────────────────────────────────
-; Square freight-elevator floor slab — dark metallic grate look.
-[sub_resource type="BoxMesh" id="mesh_platform"]
-size = Vector3(2.8, 0.1, 2.8)
-
+; Player-interactable footprint sized to the elevator's visual base. Layer
+; 64 (interactable hover) + mask 0 — doesn't block movement, just registers
+; for the hover/raycast system.
 [sub_resource type="BoxShape3D" id="shape_platform"]
-size = Vector3(2.8, 0.1, 2.8)
-
-; ── Corner posts ─────────────────────────────────────────────────────────
-[sub_resource type="BoxMesh" id="mesh_post"]
-size = Vector3(0.15, 2.0, 0.15)
-
-; ── Crossbeam (top frame rail) ───────────────────────────────────────────
-[sub_resource type="BoxMesh" id="mesh_beam"]
-size = Vector3(2.8, 0.1, 0.1)
-
-; ── Status light on each post ────────────────────────────────────────────
-[sub_resource type="BoxMesh" id="mesh_light"]
-size = Vector3(0.12, 0.25, 0.12)
+size = Vector3(2.0, 0.2, 1.5)
 
 [node name="Exit" type="StaticBody3D"]
 collision_layer = 64
@@ -28,63 +15,8 @@ collision_mask = 0
 script = ExtResource("1_script")
 display_name = "Elevator"
 
-; Platform floor
-[node name="Platform" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 0)
-mesh = SubResource("mesh_platform")
+[node name="Elevator" parent="." instance=ExtResource("2_elevator")]
 
 [node name="Collision" type="CollisionShape3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 0)
 shape = SubResource("shape_platform")
-
-; ── Corner posts (4) ─────────────────────────────────────────────────────
-[node name="PostNW" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.25, 1.1, -1.25)
-mesh = SubResource("mesh_post")
-
-[node name="PostNE" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.25, 1.1, -1.25)
-mesh = SubResource("mesh_post")
-
-[node name="PostSW" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.25, 1.1, 1.25)
-mesh = SubResource("mesh_post")
-
-[node name="PostSE" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.25, 1.1, 1.25)
-mesh = SubResource("mesh_post")
-
-; ── Top crossbeams (frame) ───────────────────────────────────────────────
-[node name="BeamN" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.15, -1.25)
-mesh = SubResource("mesh_beam")
-
-[node name="BeamS" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.15, 1.25)
-mesh = SubResource("mesh_beam")
-
-; Rotated 90° for E/W beams
-[node name="BeamE" type="MeshInstance3D" parent="."]
-transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 1.25, 2.15, 0)
-mesh = SubResource("mesh_beam")
-
-[node name="BeamW" type="MeshInstance3D" parent="."]
-transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -1.25, 2.15, 0)
-mesh = SubResource("mesh_beam")
-
-; ── Status lights (on top of each post) ──────────────────────────────────
-[node name="LightNW" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.25, 1.85, -1.25)
-mesh = SubResource("mesh_light")
-
-[node name="LightNE" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.25, 1.85, -1.25)
-mesh = SubResource("mesh_light")
-
-[node name="LightSW" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.25, 1.85, 1.25)
-mesh = SubResource("mesh_light")
-
-[node name="LightSE" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.25, 1.85, 1.25)
-mesh = SubResource("mesh_light")
