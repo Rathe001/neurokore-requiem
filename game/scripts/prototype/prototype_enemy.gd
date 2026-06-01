@@ -2959,6 +2959,47 @@ func _find_pickups_container() -> PickupsContainer:
 	return null
 
 
+# Walks `root`'s MeshInstance3D descendants and unions their AABBs into
+# a single AABB expressed in root's LOCAL space (root.transform itself
+# contributes nothing — only the relative chain from each descendant
+# back to root). Used to size + center the dropped-weapon collision so
+# the box matches the visible silhouette.
+func _compute_local_aabb(root: Node3D) -> AABB:
+	var result := AABB()
+	var first := true
+	for mi in _find_all_mesh_instances_under(root):
+		var rel: Transform3D = _local_transform_chain(mi, root)
+		var mi_aabb: AABB = rel * mi.get_aabb()
+		if first:
+			result = mi_aabb
+			first = false
+		else:
+			result = result.merge(mi_aabb)
+	return result
+
+
+func _find_all_mesh_instances_under(root: Node) -> Array[MeshInstance3D]:
+	var out: Array[MeshInstance3D] = []
+	if root is MeshInstance3D:
+		out.append(root)
+	for child in root.get_children():
+		out.append_array(_find_all_mesh_instances_under(child))
+	return out
+
+
+func _local_transform_chain(descendant: Node3D, root: Node3D) -> Transform3D:
+	# Compose descendant.transform up through parents until we hit root.
+	# Excludes root.transform itself — we want descendant in root's
+	# LOCAL coordinate frame.
+	var t := Transform3D.IDENTITY
+	var n: Node = descendant
+	while n != null and n != root:
+		if n is Node3D:
+			t = (n as Node3D).transform * t
+		n = n.get_parent()
+	return t
+
+
 # Detaches the equipped weapon mesh and re-parents it under a fresh
 # RigidBody3D so it falls, tumbles, and settles on the floor. No-op when
 # the enemy has no weapon attached (bare-handed melee variants etc.) or
@@ -2992,9 +3033,8 @@ func _drop_weapon_physically(kill_from: Vector3) -> void:
 	body.name = "DroppedWeapon"
 	body.mass = 0.5
 	body.linear_damp = 1.5
-	# High angular damp — a capsule on a flat floor has no contact
-	# friction against rotation, so without strong damping it'll spin
-	# forever once it lands. 5.0 brings rotation to rest in ~1s after
+	# High angular damp — without it, a thin shape can rock or roll
+	# noticeably on the floor. 5.0 brings rotation to rest in ~1s after
 	# the initial toss while still letting the toss read as a tumble.
 	body.angular_damp = 5.0
 	# Layer 1 so it lands on world geometry; mask 1 so floor + walls
@@ -3004,20 +3044,30 @@ func _drop_weapon_physically(kill_from: Vector3) -> void:
 	body.collision_mask = 1
 	body.can_sleep = true
 
-	# Generic capsule sized to fit most weapon silhouettes — the visual
-	# mesh stays accurate; only the collision is approximated.
-	var shape_node := CollisionShape3D.new()
-	var caps := CapsuleShape3D.new()
-	caps.radius = 0.08
-	caps.height = 0.5
-	shape_node.shape = caps
-	body.add_child(shape_node)
-
 	# Re-parent the weapon visual under the rigid body. Reset its local
 	# transform — the grip-offset that fit the hand bone is irrelevant
 	# now that it's free in world space.
 	body.add_child(weapon)
 	weapon.transform = Transform3D.IDENTITY
+
+	# Compute the weapon's local AABB so the collision shape matches the
+	# real silhouette and we can re-center the mesh inside the body.
+	# Most weapon meshes have their origin at the grip end, not the
+	# geometric center — without recentering, half the mesh extends past
+	# the body origin and clips through the floor when the body lies on
+	# its side.
+	var weapon_aabb := _compute_local_aabb(weapon)
+	# Shift the visual so its AABB midpoint coincides with body origin.
+	weapon.position = -weapon_aabb.get_center()
+
+	# Box shape sized to the actual weapon — flat-on-floor stable
+	# (boxes don't roll like capsules) and tightly fitted so visual
+	# matches collision.
+	var shape_node := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = weapon_aabb.size.max(Vector3(0.05, 0.05, 0.05))
+	shape_node.shape = box
+	body.add_child(shape_node)
 
 	parent.add_child(body)
 	# Restore world position from the snapshot detach_weapon stashed,
