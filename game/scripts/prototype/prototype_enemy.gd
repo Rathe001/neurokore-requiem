@@ -662,6 +662,11 @@ func _apply_class_mesh() -> void:
 	if new_char == null:
 		return
 	new_char.name = "Character"
+	# Backfill null surface materials BEFORE the node enters the tree.
+	# Doing it after add_child leaves one frame where the renderer sees
+	# the null surfaces and spams material_*: Parameter is null. Same
+	# pattern the player path uses.
+	XBotRagdoll.ensure_surface_materials(new_char)
 	visual.add_child(new_char)
 	# Per-class yaw correction for meshes authored facing the wrong
 	# axis (military_man faces opposite X Bot, so the class sets PI).
@@ -688,10 +693,6 @@ func _apply_class_mesh() -> void:
 		# touch the CharacterBody3D itself. See xbot_ragdoll comment for
 		# the historical Jolt _try_build_shape spam this prevents.
 		XBotRagdoll.normalize_parent_chain_scale(new_skel, visual)
-	# Backfill null surface materials so the renderer doesn't spam
-	# material_casts_shadows / material_is_animated warnings about FBX
-	# sub-meshes that imported without a material slot.
-	XBotRagdoll.ensure_surface_materials(new_char)
 	# Per-class color tint. Multiplied into each surface's albedo via the
 	# material's per-instance modulate path — keeps the authored PBR
 	# textures intact while letting a shared mesh read as distinct
@@ -2963,11 +2964,13 @@ func _find_pickups_container() -> PickupsContainer:
 # the enemy has no weapon attached (bare-handed melee variants etc.) or
 # when the visual / skeleton has already been torn down.
 #
+# Visual only — the dropped weapon isn't pickup-able. Despawns at the
+# same _CORPSE_DESPAWN_DELAY as the corpse it came from so the floor
+# clears at one consistent moment.
+#
 # Perf: each drop = 1 RigidBody3D + 1 CollisionShape3D + the existing
 # weapon mesh. Jolt sleeps the body once it settles (linear+angular
 # damp + can_sleep), so a horde-clear's bodies all idle after ~2-3s.
-# Bodies persist until level reload — fine at typical 10-30 enemies/
-# room density; if it becomes an issue, add a despawn timer.
 func _drop_weapon_physically(kill_from: Vector3) -> void:
 	if visual == null:
 		return
@@ -2988,8 +2991,12 @@ func _drop_weapon_physically(kill_from: Vector3) -> void:
 	var body := RigidBody3D.new()
 	body.name = "DroppedWeapon"
 	body.mass = 0.5
-	body.linear_damp = 0.5
-	body.angular_damp = 1.0
+	body.linear_damp = 1.5
+	# High angular damp — a capsule on a flat floor has no contact
+	# friction against rotation, so without strong damping it'll spin
+	# forever once it lands. 5.0 brings rotation to rest in ~1s after
+	# the initial toss while still letting the toss read as a tumble.
+	body.angular_damp = 5.0
 	# Layer 1 so it lands on world geometry; mask 1 so floor + walls
 	# stop it. Doesn't collide with players/enemies (different layers),
 	# so dying enemies can't pile-drive the player.
@@ -3027,9 +3034,22 @@ func _drop_weapon_physically(kill_from: Vector3) -> void:
 	away.y = clampf(away.y + 0.6, 0.0, 1.0)
 	body.linear_velocity = away.normalized() * 2.5
 	body.angular_velocity = Vector3(
-		randf_range(-6.0, 6.0),
-		randf_range(-6.0, 6.0),
-		randf_range(-6.0, 6.0),
+		randf_range(-3.0, 3.0),
+		randf_range(-3.0, 3.0),
+		randf_range(-3.0, 3.0),
+	)
+
+	# Despawn at the same delay as the corpse it came from, so the floor
+	# clears at one consistent moment. Capture instance_id (not the node
+	# reference) — a level reload between now and the timeout would
+	# leave the lambda holding a freed body and spam "Lambda capture
+	# was freed" errors.
+	var body_id := body.get_instance_id()
+	get_tree().create_timer(_CORPSE_DESPAWN_DELAY).timeout.connect(
+		func() -> void:
+			var b := instance_from_id(body_id)
+			if b != null and is_instance_valid(b):
+				(b as Node).queue_free()
 	)
 
 # Spawns a PrototypeRagdollCorpse next to us with a duplicate of the visual

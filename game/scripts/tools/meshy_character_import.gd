@@ -26,8 +26,19 @@ func _post_import(scene: Node) -> Object:
 	var source: String = get_source_file()
 	var dir: String = source.get_base_dir()
 	var mat: StandardMaterial3D = _build_material(dir)
-	if mat != null:
-		_apply_material(scene, mat)
+	if mat == null:
+		# Fallback: every surface gets a neutral grey StandardMaterial3D
+		# rather than null so the rendering server doesn't spam
+		# "material_*: Parameter 'material' is null" 4x per surface every
+		# frame. Triggered when no Meshy_AI_*_texture.png exists in the
+		# FBX's folder — re-export from Meshy or rename existing color/
+		# normal/roughness/metallic files to match the convention to get
+		# proper PBR coloring instead of grey.
+		mat = StandardMaterial3D.new()
+		mat.albedo_color = Color(0.55, 0.55, 0.58, 1.0)
+		mat.roughness = 0.85
+		push_warning("[meshy_character_import] %s: no Meshy_AI_*_texture.png — grey fallback applied" % dir)
+	_apply_material(scene, mat)
 	return scene
 
 

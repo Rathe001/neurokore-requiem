@@ -1187,6 +1187,12 @@ func _apply_gender_appearance() -> void:
 			# without consulting PlayerState — which would always return the
 			# LOCAL player's gender, wrong for remote MP avatars.
 			new_char.set_meta(&"gender", effective_gender)
+			# Backfill grey for any surface whose material resolved to
+			# null — Meshy FBXs whose post-import texture lookup failed
+			# would otherwise spam "material_*: Parameter 'material' is
+			# null" four times per surface per frame. Same fix the
+			# enemy path uses (prototype_enemy.gd line ~694).
+			XBotRagdoll.ensure_surface_materials(new_char)
 			visual.add_child(new_char)
 			# Meshy FBXs ship without baked animations, so the imported scene
 			# has no AnimationPlayer node — create one before
