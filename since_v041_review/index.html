@@ -1,0 +1,1911 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Game Design Document">
+      
+      
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Work since v0.4.1 — review for selective carry-over - Neurokore: Requiem</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="teal" data-md-color-accent="pink">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#work-since-v041-review-for-selective-carry-over" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Neurokore: Requiem" class="md-header__button md-logo" aria-label="Neurokore: Requiem" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Neurokore: Requiem
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Work since v0.4.1 — review for selective carry-over
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Rathe001/neurokore-requiem" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Rathe001/neurokore-requiem
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../index.md" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../world/tone.md" class="md-tabs__link">
+          
+  
+  
+  World
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../design/attribute-system.md" class="md-tabs__link">
+          
+  
+  
+  Design
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../classes/overview.md" class="md-tabs__link">
+          
+  
+  
+  Classes
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../status.md" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Status
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Neurokore: Requiem" class="md-nav__button md-logo" aria-label="Neurokore: Requiem" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Neurokore: Requiem
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Rathe001/neurokore-requiem" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Rathe001/neurokore-requiem
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../index.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    World
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    World
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../world/tone.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tone & Setting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../world/art-style.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Art Style
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../world/level-design.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Level Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../world/lighting.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lighting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Design
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/attribute-system.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Attribute System
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/combat.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Combat & Scale
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/controls.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Controls
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/coding-conventions.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coding Conventions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/dialog-ui.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dialog & UI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/morality-system.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Morality System
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/skill-tree.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Skill Tree
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/starting-zones.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Starting Zones
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/tech-stack.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tech Stack
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/zones.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Zones
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/platform.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Platform & Performance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/inspirations.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inspirations & References
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Classes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Classes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../classes/overview.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_2" id="__nav_4_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cyborg
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Cyborg
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../classes/cyborg.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Base Class
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../classes/cyborg/forged.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Forged
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../classes/cyborg/automaton.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automaton
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../classes/cyborg/polymath.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Polymath
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_3" id="__nav_4_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Human
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Human
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../classes/human.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Base Class
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../classes/human/survivalist.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Survivalist
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../classes/human/gentleman.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gentleman / Lady
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../classes/human/enculted.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Enculted
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../classes/spec-monsters.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class Monster Variants
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../status.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Status
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-animation-system-phase-1-2-polish-35-commits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Animation system — Phase 1 + 2 + polish (~35 commits)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-weapon-model-attachment-12-visible-weapons-on-right-hand-bone-43-commits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Weapon model attachment — 12 visible weapons on right-hand bone (~43 commits)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-outline-pipeline-rewrite-neon-tube-glow-halo-21-commits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Outline pipeline rewrite — neon tube + glow halo (~21 commits)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-camera-projection-ortho-fake-ortho-perspective-16-commits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Camera projection — ortho → fake-ortho perspective (~16 commits)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-perf-systems-19-commits-supporting-autoloads" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Perf systems (~19 commits + supporting autoloads)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-vfx-additions-crater-shell-casings-warmup-29-commits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. VFX additions — crater / shell casings / warmup (~29 commits)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-blood-gore-ground-effects-39-commits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Blood / gore / ground effects (~39 commits)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-loading-screen-streamed-level-build-6-commits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Loading screen + streamed level build (~6 commits)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-behavior-mods-system-6-commits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Behavior mods system (~6 commits)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-items-affixes-tooltips-19-commits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Items / affixes / tooltips (~19 commits)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-host-migration-scaffolding-2-commits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. Host migration scaffolding (2 commits)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#12-audio-fixes-9-commits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. Audio fixes (~9 commits)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-not-to-carry-perf-rollback-territory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What NOT to carry (perf-rollback territory)
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="work-since-v041-review-for-selective-carry-over">Work since v0.4.1 — review for selective carry-over<a class="headerlink" href="#work-since-v041-review-for-selective-carry-over" title="Permanent link">&para;</a></h1>
+<p><strong>Last Steam release:</strong> <code>b70f2b1</code> Release v0.4.1 (2026-05-20).
+<strong>Current <code>main</code> HEAD:</strong> <code>2e668e2</code>.
+<strong>Scope:</strong> 246 commits, 973 files changed, +11,831 / -977 lines.</p>
+<p>User goal: pick a safe carry-over set that does NOT reintroduce the
+perf issues that drove the 2026-05-25 hard reset (preserved at tag
+<code>perf-session-rollback-point</code> / commit <code>9ec0a64</code>). Items below are
+risk-tagged with a quick perf note.</p>
+<p>Risk legend:
+- 🟢 Low — content, tooling, docs, memory, isolated bugfix
+- 🟡 Medium — gameplay code, visual polish, single-system change
+- 🔴 High — touches rendering pipeline, autoloads, hot paths, scene tree</p>
+<hr />
+<h2 id="1-animation-system-phase-1-2-polish-35-commits">1. Animation system — Phase 1 + 2 + polish (~35 commits)<a class="headerlink" href="#1-animation-system-phase-1-2-polish-35-commits" title="Permanent link">&para;</a></h2>
+<p>Per-weapon-class stances (pistol / rifle / sword / axe / unarmed),
+3-anim sword + axe combos, death-anim playback, directional hit
+reactions, strafe / walk_back / crouch_idle, reload / grenade_throw /
+cast pose, hip-strip on all clips, action-duration drives anim speed.</p>
+<p><strong>Risk: 🟡 Medium overall.</strong> Adds clips to AnimationLibrary (memory),
+runs the picker every physics frame (microseconds). The <code>_anim_stretched</code>
+helper is a hot path but cheap. No autoloads, no per-frame allocations.</p>
+<p>Carry recommendation: <strong>bring it all over.</strong> Visual quality leap, no
+perf footprint of concern.</p>
+<p>Commits (selected):
+- <code>418faf3</code> Animation Phase 2: per-weapon-class stances
+- <code>199a368</code> Animation Phase 1 polish: cast / directional hits / strafe
+- <code>b77c6fd</code> Animation Phase 1: folder reorg + universal slots + reload/grenade/jump wiring
+- <code>5e48740</code> Strip hip position on all animations to keep them in place
+- <code>7ebdb53</code> Play death animations on non-explosion kills (was always ragdoll)
+- <code>7700e66</code> Sync melee animation, sound, and damage on the impact frame
+- <code>8511793</code> Enemies use axe combo for melee swings (was xbot/punch)
+- <code>22b07a7</code> Melee swings read bigger — swap source clips + bump playback speed
+- <code>e3df391</code> Pistol fire pose: swap throw-motion clip for static aim
+- <code>b8d31a1</code> Stretch blade swing — bump cooldown + lower anim speed floor
+- <code>745ab2f</code> Slow 1H + 2H melee weapon attack speed (massive slowdown pass)</p>
+<hr />
+<h2 id="2-weapon-model-attachment-12-visible-weapons-on-right-hand-bone-43-commits">2. Weapon model attachment — 12 visible weapons on right-hand bone (~43 commits)<a class="headerlink" href="#2-weapon-model-attachment-12-visible-weapons-on-right-hand-bone-43-commits" title="Permanent link">&para;</a></h2>
+<p>Blenderkit-sourced glb models mounted on <code>mixamorig_RightHand</code> via
+<code>WeaponAttachment</code> helper. Per-weapon <code>_GRIP</code> tables tuned via live
+F9-inspect + T-tune tooling. Per-weapon muzzle override for the
+AABB-tip heuristic edge cases. Missing-texture fallback for the
+sniper glb (geometry-only).</p>
+<p><strong>Risk: 🟡 Medium.</strong> Adds N visible meshes (1 per character, ~12 per
+common combat encounter at maybe 20 enemies). MeshInstance3D + extra
+draw calls per frame. Per-character mesh ~218 KB-6 MB. Not a hot path
+but does increase render load proportional to enemy count.</p>
+<p>Carry recommendation: <strong>bring it over</strong> — the visual gain is huge.
+Watch the HUD perf overlay's draw-call count during big mob fights;
+if draw calls spike from this, the workaround is to gate weapon
+attachment on LoS visibility (only attach when enemy is visible).</p>
+<p>Commits (selected):
+- <code>79eeac4</code> Import 12 weapon models from Blenderkit
+- <code>bfbcf0c</code> Weapon models attach to right-hand bone on player + enemies
+- <code>c5b7559</code> Commit weapon glb textures + .import sidecars (12 weapons)
+- <code>116bd0d</code> Projectile / hitscan origins emerge from the weapon's muzzle tip
+- <code>c36e5fd</code> Live weapon-grip tuner — keyboard adjust + console dump
+- <code>280b788</code> Per-weapon muzzle override + taser muzzle pulse
+- <code>1b87c8a</code> Weapons: paint untextured-white materials with the dark-metal fallback
+- 11× <code>Bake tuned grip values for &lt;weapon&gt;</code> commits</p>
+<hr />
+<h2 id="3-outline-pipeline-rewrite-neon-tube-glow-halo-21-commits">3. Outline pipeline rewrite — neon tube + glow halo (~21 commits)<a class="headerlink" href="#3-outline-pipeline-rewrite-neon-tube-glow-halo-21-commits" title="Permanent link">&para;</a></h2>
+<p>Two iterations landed:
+- <strong>SubViewport pipeline rewrite</strong> — flat 1px edge → two-tap 8-direction
+  sampling, core_boost 5.5× pushes into HDR for bloom-driven neon look.
+- <strong>Inverted-hull alternate</strong> — <code>outline_hull.gdshader</code> replaces the
+  SubViewport pipeline (<code>11ae475</code>). Simpler, no SubViewport overhead.</p>
+<p><strong>Risk: 🔴 High.</strong> Rendering pipeline change. The inverted-hull approach
+replaces an autoload (<code>OutlineCompositor</code>) with per-mesh material work.
+Could interact with the GI/SDFGI changes, the camera projection switch,
+and any other rendering work in unpredictable ways.</p>
+<p>Carry recommendation: <strong>carry the FIX commits but verify carefully</strong>
+on a low-perf test machine. Specifically the <code>11ae475</code> switch from
+SubViewport to inverted-hull is the most architectural — pull it as a
+single coherent set, test, and only then keep it.</p>
+<p>Commits (selected):
+- <code>11ae475</code> Outline: replace SubViewport pipeline with inverted-hull overlay
+- <code>2b10d55</code> Outline compositor: neon tube + glow halo (was flat 1px edge detect)
+- <code>46ba3c9</code> Fix outline_compositor shader 'Redefinition of TAU' compile error
+- <code>adfb81b</code> Fix outline shader: restructure early-out, return forbidden in fragment
+- <code>09c44ed</code> Interactables: always-on proximity outline within interact range
+- <code>0d81621</code> Outline: strip highlight layer from main camera + update color on re-attach
+- <code>8e46580</code> Outline: gold for special enemies + RMB also locks the target
+- <code>da273e7</code> Hover outline: restore after HitFlash finishes
+- <code>40df4ba</code> Screen-space silhouette outline replaces grow + cull-front halo</p>
+<hr />
+<h2 id="4-camera-projection-ortho-fake-ortho-perspective-16-commits">4. Camera projection — ortho → fake-ortho perspective (~16 commits)<a class="headerlink" href="#4-camera-projection-ortho-fake-ortho-perspective-16-commits" title="Permanent link">&para;</a></h2>
+<p><code>level_shell.tscn</code> + <code>prototype_3d.tscn</code> switched from ortho (size=22)
+to perspective (FOV=18° at ~70m). View-space identical to old ortho
+framing but depth buffer now matches perspective + reverse-Z semantics
+that screen-space passes (SSR, fog, soft-particle alpha, tactical
+overlay LoS clip) actually need. F8 toggles at runtime.</p>
+<p><strong>Risk: 🔴 High.</strong> This IS a rendering-architecture change. Depth-buffer
+semantics affect every screen-space pass, every depth-based VFX, the
+tactical overlay clipping, the soft-particle ranges, decal projections.
+Many things were "rebuilt on top of" the new perspective — reverting
+later would unravel them.</p>
+<p>Carry recommendation: <strong>carry it over but understand the bundle.</strong> If
+you keep this, you keep the camera rig + every consumer that depends on
+the new depth semantics. Reverting requires reverting all the depth-
+dependent fixes that landed since.</p>
+<p>Commits (selected):
+- <code>60ca187</code> Try fake-ortho perspective (FOV=18°, dist=70m) — F8 toggles to ortho
+- <code>3f28537</code> Inspect zoom drives ortho <code>size</code>, not <code>_distance</code>
+- <code>c8689c1</code> Debug camera inspect mode (F9) + first-pass weapon grip rotation
+- <code>dbcdd65</code> Scale Label3D fixed_size pixel_size for the active projection
+- <code>d6815ac</code> Inspect camera: visible HUD label + F9 polling fallback
+- <code>6bc31e3</code> Inspect mode: lift focal to chest for weapon-attachment framing</p>
+<hr />
+<h2 id="5-perf-systems-19-commits-supporting-autoloads">5. Perf systems (~19 commits + supporting autoloads)<a class="headerlink" href="#5-perf-systems-19-commits-supporting-autoloads" title="Permanent link">&para;</a></h2>
+<p>This is the category to think about most carefully.</p>
+<p><strong>Net effect: positive.</strong> These commits ARE the fixes that recovered
+perf after the issues. Most of them ADD throttling / streaming / batching.
+Pulling them is a perf WIN, not a risk.</p>
+<p><strong>Risk: 🟢 Low (they're fixes).</strong></p>
+<p>Carry recommendation: <strong>bring them all.</strong> Especially:
+- <code>2c644c8</code> RagdollQueue: cap XBotRagdoll setup+activate at N/frame
+- <code>3d3bf0d</code> LevelBuilder: stream piece build to kill 5.8s entry freeze
+- <code>fd1096f</code> GI: SDFGI off by default + Display setting "Global Illumination" preset toggle
+- <code>81da9b3</code> MMI batching: corridor walls + decorative pillars
+- <code>afdac82</code> Enemy perf: nav-target throttle + distant-idle tick skip
+- <code>25cbf1b</code> Idle proc: throttle near-IDLE enemies + yield pre-loop build steps
+- <code>d5ad5f4</code> Enemy throttle: extend to distant CHASING enemies
+- <code>b3702a1</code> LoS culler: surgical fixes for 4 reported failure modes
+- <code>0d39645</code> Cache the player skeleton lookup — hot-path saver
+- <code>78c9069</code> PerfLogger autoload + level-up VFX shader warmup
+- <code>6c616ed</code> PerfLogger: per-frame spike detection (catches sub-second freezes)
+- <code>f7883e3</code> Perf pass from latest log: drop PIECES_PER_FRAME to 1 + notes</p>
+<p><strong>Heads-up:</strong> PerfLogger had a positive-feedback-loop bug — spike rows
+wrote <code>find_children</code> walks that fed back into next-frame proc, locking
+in spike mode. Fixed in <code>bc5798e</code> (LIVE_TREE_WALKS=false). Memory file
+<code>project_perf_logger_feedback.md</code> documents it. Don't skip this fix.</p>
+<hr />
+<h2 id="6-vfx-additions-crater-shell-casings-warmup-29-commits">6. VFX additions — crater / shell casings / warmup (~29 commits)<a class="headerlink" href="#6-vfx-additions-crater-shell-casings-warmup-29-commits" title="Permanent link">&para;</a></h2>
+<p><code>hammer_crater.gdshader</code> (refraction + center darken + scorch tint),
+<code>shell_casing.gd</code> (scripted ballistics, no RigidBody), <code>vfx_warmup.gd</code>
+(pre-compiles shaders during loading window so first-LMB doesn't stall),
+HitFlash tuning, blood decal variants.</p>
+<p><strong>Risk: 🟡 Medium.</strong> Adds particles, decals, mesh spawns per shot/hit.
+Per-shot cost is small but compounds at horde scale. Crater shader does
+screen-space refraction — that's a SCREEN_TEXTURE sample, modest cost.</p>
+<p>Carry recommendation: <strong>bring it but watch the per-frame VFX count.</strong>
+The HUD perf overlay's particle/decal counters tell the story. If horde
+combat shows particle counts exceeding ~200, gate behind LoS or pool
+more aggressively.</p>
+<p>Commits (selected):
+- <code>b71d2ad</code> Hammer crater shader: refraction + center darken + scorch tint (+the entire crater stack)
+- <code>bdeedf0</code> Shell casing ejection: hide shotgun's baked-in casing, reuse for fire
+- <code>8a02aff</code> Casing heat-pop emission fades to zero in 80ms
+- <code>78c9069</code> PerfLogger autoload + level-up VFX shader warmup
+- 14× shell-casing / muzzle / VFX polish</p>
+<hr />
+<h2 id="7-blood-gore-ground-effects-39-commits">7. Blood / gore / ground effects (~39 commits)<a class="headerlink" href="#7-blood-gore-ground-effects-39-commits" title="Permanent link">&para;</a></h2>
+<p>Full traction system rework (per-surface mitigation curve, override flags,
+ilvl-scaled rolls), object blood pipeline (props/pillars/interactables
+splatter), blood pool ground effect (slip + slow + stumble), per-effect
+debuff icons, settle pool under ragdoll corpses, enemy bloody footprints.</p>
+<p><strong>Risk: 🟡 Medium.</strong> Adds Area3D detection zones per pool, decal ring
+buffer eviction, per-frame slip/friction multiplier in player movement.
+Decal cap (400 in ring buffer) prevents runaway growth. Pool-attach
+logic is O(N) over the ring per kill which is bounded.</p>
+<p>Carry recommendation: <strong>bring it all over.</strong> This is the polish that
+makes combat feel weighty. The perf characteristics are bounded.</p>
+<p>Commits (selected):
+- <code>b711071</code> Blood pools are now a Divinity-style ground effect
+- <code>69c9caf</code> Traction: per-surface hyperbolic mitigation + override flags
+- <code>4c6d1a6</code> Traction: ilvl-scaled open-ended roll range + tuned endgame k values
+- <code>5ba4d01</code> Per-effect debuff icons (Slippery + Poor Traction) instead of per-surface
+- <code>740e185</code> Fix blood pools disappearing after a fight (ring eviction backwards)
+- <code>7e22052</code> Spawn settle-pool under ragdoll corpse on rest
+- <code>106c301</code> Enemies leave bloody footprints when they step through a pool</p>
+<hr />
+<h2 id="8-loading-screen-streamed-level-build-6-commits">8. Loading screen + streamed level build (~6 commits)<a class="headerlink" href="#8-loading-screen-streamed-level-build-6-commits" title="Permanent link">&para;</a></h2>
+<p>Loading screen redesign with progress bar, full-opacity overlay so the
+world freezes underneath. <code>LevelBuilder._build_level</code> now async — yields
+every N pieces. <code>prototype_root._ready</code> awaits the new <code>built</code> signal.</p>
+<p><strong>Risk: 🟢 Low.</strong> This is the fix for the 5.8s entry freeze. Async +
+signal-driven hide. No allocations, no hot paths.</p>
+<p>Carry recommendation: <strong>bring it all over.</strong></p>
+<p>Commits:
+- <code>3d3bf0d</code> LevelBuilder: stream piece build to kill 5.8s entry freeze
+- <code>0d20b54</code> LoadingScreen: pause SceneTree + full-opaque overlay so the world freezes
+- <code>46e7985</code> LoadingScreen: swap '...' dots for a progress bar driven by LevelBuilder
+- <code>d634d91</code> LoadingScreen: paint level1.png as background, move UI to bottom strip
+- <code>f86ed1e</code> LoadingScreen: drop title + subtitle labels (wording bakes into bg image)
+- <code>497f84a</code> Minimap: gate initial bake on streamed-build completion</p>
+<hr />
+<h2 id="9-behavior-mods-system-6-commits">9. Behavior mods system (~6 commits)<a class="headerlink" href="#9-behavior-mods-system-6-commits" title="Permanent link">&para;</a></h2>
+<p><code>BehaviorModRegistry</code> autoload. 24 mods designed across 6 slots. Two
+dispatch patterns: passive <code>get_active_param</code> query for hot-path reads,
+plus event-style hooks. 6 effects wired so far (Servo Stride, Ammo
+Reclamator, etc.).</p>
+<p><strong>Risk: 🟢 Low.</strong> Autoload + dictionary lookups. Hot-path queries are
+single dict get + bool check.</p>
+<p>Carry recommendation: <strong>bring it over.</strong> This is the identity layer
+of the gear system — without it the gear loop feels flat.</p>
+<p>Commits:
+- <code>054346b</code> Behavior mods: foundation — resource type + 24 designed mods
+- <code>93f5f06</code> Behavior mods: registry + ItemRoller + tooltip + 2 reference effects
+- <code>171ccd5</code> Behavior mods: wire 6 effects + finish servo_stride trade + drop tuning
+- <code>9bf6555</code> CHANGELOG: behavior mods MVP
+- <code>38b6020</code> Behavior mods: tooltip preview/active polish</p>
+<hr />
+<h2 id="10-items-affixes-tooltips-19-commits">10. Items / affixes / tooltips (~19 commits)<a class="headerlink" href="#10-items-affixes-tooltips-19-commits" title="Permanent link">&para;</a></h2>
+<p>Tiered affix ladders (4 tiers per damage stat), ilvl-scaled boots
+traction, per-surface mitigation tooltip on boots, "Resolved" object
+blood pipeline notes, item meter strip updates.</p>
+<p><strong>Risk: 🟢 Low.</strong> ItemRoller is build-time only. Tooltip code is on
+hover (cold path).</p>
+<p>Carry recommendation: <strong>bring it all over.</strong></p>
+<hr />
+<h2 id="11-host-migration-scaffolding-2-commits">11. Host migration scaffolding (2 commits)<a class="headerlink" href="#11-host-migration-scaffolding-2-commits" title="Permanent link">&para;</a></h2>
+<p>Session 1 + 1.5 of multi-session host migration work. Behind
+<code>DebugConfig.host_migration_enabled</code> flag (off by default).</p>
+<p><strong>Risk: 🟢 Low (feature-flagged off).</strong> Code lives but doesn't execute
+in normal play.</p>
+<p>Carry recommendation: <strong>bring it.</strong> Even though it's not active, the
+scaffolding doesn't cost anything and you keep the work-in-progress.</p>
+<p>Commits:
+- <code>083662f</code> Host migration: Session 1 scaffolding (experimental, off by default)
+- <code>eb77b99</code> Host migration Session 1.5: UI overlay + debug trigger + SP guards</p>
+<hr />
+<h2 id="12-audio-fixes-9-commits">12. Audio fixes (~9 commits)<a class="headerlink" href="#12-audio-fixes-9-commits" title="Permanent link">&para;</a></h2>
+<p>Audio listener anchor fix (<code>cea4d12</code> — panning was drifting because sources
+set position once at play-time while listener moved every frame),
+shotgun SFX overhaul, UI sounds inherit SFX volume.</p>
+<p><strong>Risk: 🟢 Low.</strong> Bugfixes.</p>
+<p>Carry recommendation: <strong>bring them.</strong></p>
+<hr />
+<h2 id="what-not-to-carry-perf-rollback-territory">What NOT to carry (perf-rollback territory)<a class="headerlink" href="#what-not-to-carry-perf-rollback-territory" title="Permanent link">&para;</a></h2>
+<p>The 2026-05-25 perf session work that DEGRADED gameplay fps was rolled
+back via hard-reset to <code>cea4d12</code>. Those commits aren't on main today —
+they live in tag <code>perf-session-rollback-point</code> (commit <code>9ec0a64</code>).</p>
+<p><strong>Don't cherry-pick from that tag</strong> without revisiting the rollback
+analysis (<code>project_perf_session_2026_05_25</code> memory). The individual
+optimizations measured as wins, but their cumulative behavior change
+degraded combat fps below the 60fps baseline.</p>
+<p>If you decide to "revert main back to a state I know is lag-free":
+- <code>cea4d12</code> (audio listener anchor fix) is the last commit on the
+  conservative perf baseline.
+- Or <code>f5573fc</code> (Release v0.4.0) — known-good Steam-deployed state.
+- Or <code>b70f2b1</code> (Release v0.4.1) — also Steam-deployed.</p>
+<p>To roll back to one of those AND cherry-pick the carry-over set above,
+the order would be:
+1. <code>git reset --hard &lt;chosen-base&gt;</code> (be sure you've pushed everything!)
+2. Cherry-pick categories 1, 5, 8, 9, 10, 11, 12 first (all 🟢 / safe).
+3. Test combat perf at horde scale.
+4. Cherry-pick categories 2, 6, 7 (🟡 — visual polish that adds work).
+5. Re-test perf.
+6. Only then cherry-pick 3 + 4 (🔴 — the rendering pipeline changes).
+7. Final perf test on slow hardware before any Steam push.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "search.highlight", "search.suggest", "content.tooltips"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
