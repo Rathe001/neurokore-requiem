@@ -2521,10 +2521,14 @@ const _RAGDOLL_SETTLE_DURATION: float = 1.0   # seconds at rest before freezing
 # value at scheduling time and aborts if it doesn't match when its
 # timer fires (i.e. corpse was shoved again, or pool re-acquired us).
 var _despawn_token: int = 0
+# instance_id of the RigidBody3D this enemy dropped on death (if any),
+# stashed by _drop_weapon_physically and freed by the corpse despawn
+# coroutine so the weapon disappears the same moment the corpse does.
+var _dropped_weapon_body_id: int = 0
 # Delay between ragdoll settling and the corpse starting to sink. Long
 # enough that the kill-time splatter is the visual focus, short enough
 # that bodies don't overstay their welcome at horde scale.
-const _CORPSE_DESPAWN_DELAY: float = 5.0
+const _CORPSE_DESPAWN_DELAY: float = 10.0
 # Duration of the sink-into-the-floor tween that hides the corpse before
 # we release it. Avoids the "body abruptly disappears" snap by easing
 # the visual down past Y=0. Depth is generous enough that the full
@@ -2659,10 +2663,26 @@ func _schedule_corpse_despawn(token: int) -> void:
 			return
 		if token != _despawn_token:
 			return
+	# Free the dropped weapon at the exact moment we release the corpse,
+	# so weapon + body disappear together. No-op when this enemy never
+	# dropped a weapon (bare-handed) or when the body was already freed
+	# (level reload, scene change).
+	_free_dropped_weapon_body()
 	# Drop ourselves out of the corpse_manager ring so it doesn't try to
 	# evict (and double-release) a pool-recycled body later.
 	get_tree().call_group(&"corpse_manager", &"deregister_corpse", self)
 	EntityPool.release(self)
+
+
+# Releases the RigidBody3D this enemy dropped on death, if any. Safe to
+# call multiple times — the second call sees instance_id == 0 and noops.
+func _free_dropped_weapon_body() -> void:
+	if _dropped_weapon_body_id == 0:
+		return
+	var b := instance_from_id(_dropped_weapon_body_id)
+	if b != null and is_instance_valid(b):
+		(b as Node).queue_free()
+	_dropped_weapon_body_id = 0
 
 
 # Apply an impulse to the corpse via the active physics ragdoll. Matches
@@ -3096,18 +3116,12 @@ func _drop_weapon_physically(kill_from: Vector3) -> void:
 		randf_range(-3.0, 3.0),
 	)
 
-	# Despawn at the same delay as the corpse it came from, so the floor
-	# clears at one consistent moment. Capture instance_id (not the node
-	# reference) — a level reload between now and the timeout would
-	# leave the lambda holding a freed body and spam "Lambda capture
-	# was freed" errors.
-	var body_id := body.get_instance_id()
-	get_tree().create_timer(_CORPSE_DESPAWN_DELAY).timeout.connect(
-		func() -> void:
-			var b := instance_from_id(body_id)
-			if b != null and is_instance_valid(b):
-				(b as Node).queue_free()
-	)
+	# Stash the body's instance_id so _schedule_corpse_despawn can free
+	# it at the exact moment the corpse releases — fires from the same
+	# coroutine that frees this enemy, so weapon + corpse always go
+	# away together regardless of how long the death anim or settle
+	# took. instance_id (not a node ref) survives level reloads.
+	_dropped_weapon_body_id = body.get_instance_id()
 
 # Spawns a PrototypeRagdollCorpse next to us with a duplicate of the visual
 # subtree, then hands it the kill direction so it tumbles away from the hit.
