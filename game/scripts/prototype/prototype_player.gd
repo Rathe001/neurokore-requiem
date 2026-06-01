@@ -1134,10 +1134,11 @@ func _apply_gender_appearance() -> void:
 	var effective_class: StringName = _effective_class_id()
 	var is_female: bool = effective_gender == &"female"
 	var scene: PackedScene = _mesh_for_class(effective_class, effective_gender)
-	# Meshy meshes import at consistent scale across both genders, so no
-	# per-gender Y offset or scale correction is needed here — kept as
-	# locals in case a future mesh family reintroduces the discrepancy.
-	var y_offset: float = 0.0
+	# Per-gender Y offset to keep feet at floor level. The Meshy female
+	# meshes' geometric origin sits ~0.10m above the feet (vs male's
+	# ~0.0m), so without lifting they clip into the floor. Tune here if
+	# a specific class breaks the pattern.
+	var y_offset: float = 0.10 if is_female else 0.0
 	var char_scale: float = 1.0
 	var current_char := visual.get_node_or_null(^"Character") as Node3D
 	if current_char == null or current_char.scene_file_path != scene.resource_path:

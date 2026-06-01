@@ -13,9 +13,11 @@ extends Node
 const CLASS_DIR := "res://resources/enemies/classes/"
 const CLASS_FILES: Array[String] = [
 	# Melee
+	"basic_melee.tres",
 	"melee_blade.tres",
 	"melee_sledgehammer.tres",
 	# Ranged — kinetic (bullet visuals)
+	"basic_ranged.tres",
 	"ranged_smg.tres",
 	"ranged_lmg.tres",
 	"ranged_shotgun.tres",

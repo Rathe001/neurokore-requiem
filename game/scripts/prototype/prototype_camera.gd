@@ -499,7 +499,12 @@ func _build_inspect_label() -> void:
 	layer.layer = 100
 	add_child(layer)
 	_inspect_label = Label.new()
-	_inspect_label.position = Vector2(8, 280)
+	# Top-center: clear of the top-left controls hint and clear of the
+	# character in inspect mode. Anchored to top so it doesn't drift on
+	# resize.
+	_inspect_label.anchor_left = 0.5
+	_inspect_label.anchor_right = 0.5
+	_inspect_label.position = Vector2(-560, 8)
 	_inspect_label.modulate = Color(0.6, 1.0, 0.6, 1.0)
 	_inspect_label.add_theme_font_size_override(&"font_size", 12)
 	_inspect_label.visible = false

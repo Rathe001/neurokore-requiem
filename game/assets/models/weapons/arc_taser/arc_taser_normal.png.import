@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://dwvy4awdrnd8b"
-path="res://.godot/imported/arc_taser_normal.png-444a3166252da49a51d050caa4681419.ctex"
+path.s3tc="res://.godot/imported/arc_taser_normal.png-444a3166252da49a51d050caa4681419.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "fc881af3166c14cf11ef8acff9e4ffbb"
@@ -14,22 +15,22 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/models/weapons/arc_taser/arc_taser_normal.png"
-dest_files=["res://.godot/imported/arc_taser_normal.png-444a3166252da49a51d050caa4681419.ctex"]
+dest_files=["res://.godot/imported/arc_taser_normal.png-444a3166252da49a51d050caa4681419.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
-compress/normal_map=0
+compress/normal_map=1
 compress/channel_pack=0
 mipmaps/generate=true
 mipmaps/limit=-1
-roughness/mode=0
-roughness/src_normal=""
+roughness/mode=1
+roughness/src_normal="res://assets/models/weapons/arc_taser/arc_taser_normal.png"
 process/channel_remap/red=0
 process/channel_remap/green=1
 process/channel_remap/blue=2
@@ -40,4 +41,4 @@ process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
 process/size_limit=0
-detect_3d/compress_to=1
+detect_3d/compress_to=0

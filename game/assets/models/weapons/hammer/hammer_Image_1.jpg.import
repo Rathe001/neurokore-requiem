@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://qa5luu1ui60y"
-path="res://.godot/imported/hammer_Image_1.jpg-b997311019e952e10302170a8b38b83d.ctex"
+path.s3tc="res://.godot/imported/hammer_Image_1.jpg-b997311019e952e10302170a8b38b83d.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "49b21def62bcd8c8eae7694e367bee4c"
@@ -14,11 +15,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/models/weapons/hammer/hammer_Image_1.jpg"
-dest_files=["res://.godot/imported/hammer_Image_1.jpg-b997311019e952e10302170a8b38b83d.ctex"]
+dest_files=["res://.godot/imported/hammer_Image_1.jpg-b997311019e952e10302170a8b38b83d.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0
@@ -40,4 +41,4 @@ process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
 process/size_limit=0
-detect_3d/compress_to=1
+detect_3d/compress_to=0
