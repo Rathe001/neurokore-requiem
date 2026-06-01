@@ -144,6 +144,22 @@ func _publish_self() -> void:
 	Steam.setLobbyMemberData(NetState.lobby_id, GENDER_KEY, String(PlayerState.gender))
 
 
+## Resolve the most-specific class id (spec when specced, origin otherwise)
+## published by another peer. Maps Godot peer id → Steam id → reads the
+## CLASS_KEY member-data string. Returns &"" when the peer hasn't published
+## yet so PrototypePlayer falls through to the local PlayerState path.
+func class_for_peer(peer_id: int) -> StringName:
+	if NetState.lobby_id == 0:
+		return &""
+	var steam_id: int = NetState.steam_id_for_peer(peer_id)
+	if steam_id == 0:
+		return &""
+	var raw: String = Steam.getLobbyMemberData(NetState.lobby_id, steam_id, CLASS_KEY)
+	if raw.is_empty():
+		return &""
+	return StringName(raw)
+
+
 ## Resolve the gender ("male" / "female") published by another peer in
 ## this gameplay lobby. Maps a Godot peer id → Steam id → reads the
 ## GENDER_KEY member-data string. Returns &"male" as a safe default

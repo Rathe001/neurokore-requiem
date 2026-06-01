@@ -28,19 +28,23 @@ enum SupportRole {
 ## &"blade"). Used for future visual attachment and identity.
 @export var weapon_id: StringName = &""
 ## Character mesh used for this class. Optional override — when null,
-## the enemy scene's authored default mesh (vanguard for melee,
-## alien for ranged) is kept. Set this on a class .tres to give
-## that archetype a distinct silhouette (e.g. military_man for
-## elite ranged variants, crypto for support / utility classes).
-## Must be an FBX/GLB that uses the same Mixamo bonemap as X Bot so
-## the shared animation library still plays.
+## the enemy scene's authored default mesh is kept. Set this on a
+## class .tres to give an archetype a distinct silhouette. Must be an
+## FBX/GLB that uses the same Mixamo bonemap as X Bot so the shared
+## animation library still plays.
 @export var character_mesh: PackedScene
 ## Per-class Y-axis rotation (radians) applied to the swapped mesh's
 ## Character node. Used to correct meshes authored facing the wrong
-## axis (e.g. military_man is authored facing +Y where X Bot faces
-## -Y, so PI flips it around). Default 0 means "no rotation". Only
-## meaningful when character_mesh is set.
+## axis (e.g. crimson_vein_titan is authored facing +Y where X Bot
+## faces -Y, so PI flips it around). Only meaningful when
+## character_mesh is set.
 @export var mesh_yaw_offset: float = 0.0
+## Per-class tint applied as albedo modulation to every MeshInstance3D
+## in the swapped mesh. Multiplied INTO each surface's albedo at
+## runtime — lets a shared mesh (e.g. crimson_vein_titan) read as
+## distinct enemy archetypes via color alone. Alpha < 1.0 is treated
+## as opacity. Default WHITE leaves the mesh's authored PBR untouched.
+@export var mesh_tint: Color = Color(1.0, 1.0, 1.0, 1.0)
 
 @export_group("Attack")
 @export var attack_mode: AttackMode = AttackMode.MELEE

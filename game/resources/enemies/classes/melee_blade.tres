@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="EnemyClass" load_steps=6 format=3]
+[gd_resource type="Resource" script_class="EnemyClass" load_steps=7 format=3]
 
 ; Melee + blade — fast slasher with low per-hit damage. Quick cooldown and
 ; narrow windup make the rhythm feel like a flurry of cuts. Pairs with
@@ -9,12 +9,16 @@
 [ext_resource type="Resource" path="res://resources/enemies/skills/ground_slam.tres" id="ground_slam"]
 [ext_resource type="Resource" path="res://resources/enemies/skills/enrage.tres" id="enrage"]
 [ext_resource type="Resource" path="res://resources/enemies/skills/leap_attack.tres" id="leap_attack"]
+[ext_resource type="PackedScene" path="res://assets/characters/crimson_vein_titan/crimson_vein_titan.fbx" id="char_mesh"]
 
 [resource]
 script = ExtResource("script")
 id = &"melee_blade"
 label = "Blade Runner"
 weapon_id = &"blade"
+character_mesh = ExtResource("char_mesh")
+mesh_yaw_offset = 3.14159
+mesh_tint = Color(1.0, 1.0, 1.0, 1.0)
 basic_attack = ExtResource("basic_attack")
 skill_pool = [ExtResource("ground_slam"), ExtResource("enrage"), ExtResource("leap_attack")]
 attack_mode = 0

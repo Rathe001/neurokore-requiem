@@ -682,6 +682,13 @@ func _apply_class_mesh() -> void:
 	# material_casts_shadows / material_is_animated warnings about FBX
 	# sub-meshes that imported without a material slot.
 	XBotRagdoll.ensure_surface_materials(new_char)
+	# Per-class color tint. Multiplied into each surface's albedo via the
+	# material's per-instance modulate path — keeps the authored PBR
+	# textures intact while letting a shared mesh read as distinct
+	# archetypes (e.g. crimson_vein_titan tinted red for snipers, green
+	# for healers).
+	if enemy_class.mesh_tint != Color(1.0, 1.0, 1.0, 1.0):
+		_apply_mesh_tint(new_char, enemy_class.mesh_tint)
 	# Re-collect the outline mesh list — the swap freed every node in
 	# `_outlined_meshes`, and EnemyVisuals.collect_meshes() is otherwise
 	# only called from _setup_hover() (one-shot, in _ready). Without this,
@@ -689,6 +696,42 @@ func _apply_class_mesh() -> void:
 	# their hover-highlight because every cached mesh fails is_instance_valid.
 	if _visuals != null:
 		_visuals.collect_meshes()
+
+
+# Walks every MeshInstance3D descendant of `root` and multiplies `tint`
+# into each surface's albedo. Duplicates the material per-surface so the
+# tint doesn't leak across class variants that share the underlying mesh
+# resource. A no-op when `tint` is opaque white (caller already guards
+# this, but cheap to defend in case of future call sites).
+func _apply_mesh_tint(root: Node, tint: Color) -> void:
+	if tint == Color(1.0, 1.0, 1.0, 1.0):
+		return
+	for node in _walk_mesh_instances(root):
+		var mi: MeshInstance3D = node
+		var mesh: Mesh = mi.mesh
+		if mesh == null:
+			continue
+		for surf in range(mesh.get_surface_count()):
+			# Per-surface override pulls either an instance override (set
+			# previously) or the mesh's authored material. Duplicate so we
+			# don't mutate a shared resource.
+			var src_mat: Material = mi.get_active_material(surf)
+			if src_mat == null:
+				continue
+			var mat: BaseMaterial3D = src_mat.duplicate() as BaseMaterial3D
+			if mat == null:
+				continue
+			mat.albedo_color = mat.albedo_color * tint
+			mi.set_surface_override_material(surf, mat)
+
+
+func _walk_mesh_instances(node: Node) -> Array[MeshInstance3D]:
+	var out: Array[MeshInstance3D] = []
+	if node is MeshInstance3D:
+		out.append(node as MeshInstance3D)
+	for c in node.get_children():
+		out.append_array(_walk_mesh_instances(c))
+	return out
 
 
 func _setup_ragdoll() -> void:

@@ -116,13 +116,13 @@ func _spawn_for(peer_id: int) -> PrototypePlayer:
 	# set_multiplayer_authority must run BEFORE add_child so the
 	# attached synchronizer picks up the right authority on tree-enter.
 	player.set_multiplayer_authority(peer_id)
-	# Resolve and stash the peer's published gender BEFORE add_child so
-	# _ready_remote's _apply_gender_appearance picks the right mesh on
-	# first render. Local / SP spawns leave remote_gender empty so
-	# PlayerState.gender wins. Late-arriving lobby data is handled by
-	# _on_lobby_data_update below.
+	# Resolve and stash the peer's published gender + class BEFORE add_child
+	# so _ready_remote's _apply_gender_appearance picks the right mesh on
+	# first render. Local / SP spawns leave both empty so PlayerState wins.
+	# Late-arriving lobby data is handled by _on_lobby_data_update below.
 	if NetState.is_in_lobby() and peer_id != multiplayer.get_unique_id():
 		player.remote_gender = GameplayChatState.gender_for_peer(peer_id)
+		player.remote_class_id = GameplayChatState.class_for_peer(peer_id)
 	add_child(player)
 	_spawned[peer_id] = player
 	return player
@@ -145,6 +145,7 @@ func _on_lobby_data_update(updated_lobby_id: int, _member_id: int, _success: int
 		if player == null or not is_instance_valid(player):
 			continue
 		player.refresh_remote_gender(GameplayChatState.gender_for_peer(peer_id))
+		player.refresh_remote_class(GameplayChatState.class_for_peer(peer_id))
 
 
 func _despawn_for(peer_id: int) -> void:

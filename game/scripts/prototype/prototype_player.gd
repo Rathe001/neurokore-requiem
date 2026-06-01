@@ -32,17 +32,45 @@ signal weapon_ammo_changed
 
 const ITEM_PICKUP_SCENE: PackedScene = preload("res://scenes/prototype/prototype_item_pickup.tscn")
 const UNARMED_SKILL: Skill = preload("res://resources/skills/unarmed_attack.tres")
-const _PLAYER_MALE_SCENE: PackedScene = preload("res://assets/characters/player_male/player_male_idle.fbx")
-const _PLAYER_FEMALE_SCENE: PackedScene = preload("res://assets/characters/player_female/player_female_idle.fbx")
-# Per-gender vertical correction. Mixamo FBX origins sit at the mesh's
-# FEET (not center), so scaling the Character node grows the mesh
-# upward from the floor — no Y offset needed to keep feet on the
-# ground. The previous +0.27 m offset (assumption: center-scaling) made
-# her float ~30 cm above the floor. The 2 cm residue from the female
-# FBX's slightly-above-feet origin is left at 0 — visually
-# indistinguishable, and avoids any risk of clipping into the floor.
-const _PLAYER_FEMALE_SCALE: float = 1.30
-const _PLAYER_FEMALE_Y_OFFSET: float = 0.0
+# Per-(class_id, gender) Meshy character meshes. Every class_id from
+# AttributeState — the two origins (analog / cyborg) and all six specs
+# (count, survivalist, enculted, forged, automaton, polymath) — has a
+# unique mesh in both genders, so _mesh_for_class never has to fall back
+# through CLASS_DEFINITIONS.origin.
+const _CHARACTER_MESHES: Dictionary = {
+	&"analog": {
+		&"male":   preload("res://assets/characters/player_analog_male/player_analog_male.fbx"),
+		&"female": preload("res://assets/characters/player_analog_female/player_analog_female.fbx"),
+	},
+	&"cyborg": {
+		&"male":   preload("res://assets/characters/player_cyborg_male/player_cyborg_male.fbx"),
+		&"female": preload("res://assets/characters/player_cyborg_female/player_cyborg_female.fbx"),
+	},
+	&"count": {
+		&"male":   preload("res://assets/characters/player_count_male/player_count_male.fbx"),
+		&"female": preload("res://assets/characters/player_count_female/player_count_female.fbx"),
+	},
+	&"survivalist": {
+		&"male":   preload("res://assets/characters/player_survivalist_male/player_survivalist_male.fbx"),
+		&"female": preload("res://assets/characters/player_survivalist_female/player_survivalist_female.fbx"),
+	},
+	&"enculted": {
+		&"male":   preload("res://assets/characters/player_enculted_male/player_enculted_male.fbx"),
+		&"female": preload("res://assets/characters/player_enculted_female/player_enculted_female.fbx"),
+	},
+	&"forged": {
+		&"male":   preload("res://assets/characters/player_forged_male/player_forged_male.fbx"),
+		&"female": preload("res://assets/characters/player_forged_female/player_forged_female.fbx"),
+	},
+	&"automaton": {
+		&"male":   preload("res://assets/characters/player_automaton_male/player_automaton_male.fbx"),
+		&"female": preload("res://assets/characters/player_automaton_female/player_automaton_female.fbx"),
+	},
+	&"polymath": {
+		&"male":   preload("res://assets/characters/player_polymath_male/player_polymath_male.fbx"),
+		&"female": preload("res://assets/characters/player_polymath_female/player_polymath_female.fbx"),
+	},
+}
 
 const KNOCKBACK_DURATION := CombatConstants.KNOCKBACK_DURATION
 const DEATH_HOLD := 0.9
@@ -195,6 +223,11 @@ var spec_id: StringName = &""
 ## be the local player's gender, not the remote's). Empty string means
 ## "use PlayerState.gender" — the SP / authority path.
 var remote_gender: StringName = &""
+## Companion to remote_gender for the class identity. PlayersContainer
+## reads this from Steam lobby member data (GameplayChatState's CLASS_KEY)
+## before add_child. Empty string falls back to the local PlayerState.spec_id
+## / class_id, which is correct in SP / for the authority peer.
+var remote_class_id: StringName = &""
 var _base_mat: StandardMaterial3D = null
 var _combat: PlayerCombat
 var _camera: Camera3D
@@ -1027,7 +1060,7 @@ func _build_stat_vfx() -> void:
 func _apply_class_appearance() -> void:
 	# Was tinting the whole Visual subtree via material_override to give
 	# the old flat-shaded Quaternius character a class color. The Mixamo
-	# player meshes (player_male / player_female) carry authored PBR
+	# player Meshy character meshes carry authored PBR
 	# textures we want visible, so we no longer override their materials.
 	# _base_mat stays around for StatVFXController, which only uses it as
 	# an emission scratch material.
@@ -1049,23 +1082,63 @@ func refresh_remote_gender(new_gender: StringName) -> void:
 	_apply_gender_appearance()
 
 
-# Swaps the Visual/Character mesh to match PlayerState.gender (local) or
-# remote_gender (remote MP avatar) and installs the X Bot animation library
-# on the new AnimationPlayer. Mirrors the enemy's _apply_class_mesh pattern.
-# Must run BEFORE anim_player.animation_finished is connected and BEFORE
-# _play_anim(ANIM_IDLE) — otherwise the @onready anim_player still points
-# at the freed FBX's AnimationPlayer.
+## Companion to refresh_remote_gender for the class identity. Called from
+## PlayersContainer's lobby_data_update listener so a peer's mesh swaps if
+## their published class_id changes after their Player was spawned.
+func refresh_remote_class(new_class_id: StringName) -> void:
+	if remote_class_id == new_class_id:
+		return
+	remote_class_id = new_class_id
+	_apply_gender_appearance()
+
+
+# Resolves the effective class identity for mesh + appearance lookups.
+# Remote peers in MP carry the value published by that peer through the
+# gameplay lobby's CLASS_KEY (already most-specific: spec when specced,
+# origin otherwise). Local / SP path returns spec_id when set, falling
+# back to the origin class_id — same convention.
+func _effective_class_id() -> StringName:
+	if remote_class_id != &"":
+		return remote_class_id
+	if PlayerState.spec_id != &"":
+		return PlayerState.spec_id
+	return PlayerState.class_id
+
+
+# Picks a PackedScene from _CHARACTER_MESHES for the given (class, gender).
+# Every origin (analog / cyborg) and every spec (count / survivalist /
+# enculted / forged / automaton / polymath) has a unique mesh, so a
+# direct lookup hits in all valid cases. Defensive fallback through
+# CLASS_DEFINITIONS.origin guards against an unexpected class_id (e.g.
+# a corrupted save) — landing on the analog origin's mesh in that case.
+func _mesh_for_class(class_id: StringName, gender: StringName) -> PackedScene:
+	var gender_key: StringName = &"female" if gender == &"female" else &"male"
+	if _CHARACTER_MESHES.has(class_id):
+		return _CHARACTER_MESHES[class_id][gender_key]
+	var def: Dictionary = AttributeState.CLASS_DEFINITIONS.get(class_id, {})
+	var origin: StringName = def.get(&"origin", &"analog")
+	return _CHARACTER_MESHES[origin][gender_key]
+
+
+# Swaps the Visual/Character mesh to match the effective class + gender
+# (local PlayerState OR the remote peer's published lobby data) and
+# installs the X Bot animation library on the new AnimationPlayer. Mirrors
+# the enemy's _apply_class_mesh pattern. Must run BEFORE anim_player.
+# animation_finished is connected and BEFORE _play_anim(ANIM_IDLE) —
+# otherwise the @onready anim_player still points at the freed FBX's
+# AnimationPlayer.
 func _apply_gender_appearance() -> void:
 	if visual == null:
 		return
-	# For remote peers in MP, remote_gender holds the gender published by
-	# that peer through the gameplay lobby. Local / SP path falls back to
-	# PlayerState.gender as before.
 	var effective_gender: StringName = remote_gender if remote_gender != &"" else PlayerState.gender
+	var effective_class: StringName = _effective_class_id()
 	var is_female: bool = effective_gender == &"female"
-	var scene: PackedScene = _PLAYER_FEMALE_SCENE if is_female else _PLAYER_MALE_SCENE
-	var y_offset: float = _PLAYER_FEMALE_Y_OFFSET if is_female else 0.0
-	var char_scale: float = _PLAYER_FEMALE_SCALE if is_female else 1.0
+	var scene: PackedScene = _mesh_for_class(effective_class, effective_gender)
+	# Meshy meshes import at consistent scale across both genders, so no
+	# per-gender Y offset or scale correction is needed here — kept as
+	# locals in case a future mesh family reintroduces the discrepancy.
+	var y_offset: float = 0.0
+	var char_scale: float = 1.0
 	var current_char := visual.get_node_or_null(^"Character") as Node3D
 	if current_char == null or current_char.scene_file_path != scene.resource_path:
 		if current_char != null:

@@ -1,0 +1,8 @@
+# Meshy/Mixamo source FBXs, GLBs, and zips are tracked via LFS — see
+# the repo-root .gitattributes. Regular workflow: drop files in here,
+# `git add`, commit. LFS handles the upload behind the scenes.
+#
+# Ignore filesystem clutter only.
+.DS_Store
+Thumbs.db
+*_extracted/

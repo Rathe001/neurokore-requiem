@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="EnemyClass" load_steps=5 format=3]
+[gd_resource type="Resource" script_class="EnemyClass" load_steps=6 format=3]
 
 ; Default ranged profile — kites to ~8m, fires a slow projectile every 2s.
 ; Reuses the standard player projectile scene so visual differentiation is
@@ -13,12 +13,16 @@
 [ext_resource type="PackedScene" path="res://scenes/prototype/prototype_projectile.tscn" id="projectile_scene"]
 [ext_resource type="Resource" path="res://resources/enemies/skills/basic_ranged_attack.tres" id="basic_attack"]
 [ext_resource type="Resource" path="res://resources/enemies/skills/multi_shot.tres" id="multi_shot"]
+[ext_resource type="PackedScene" path="res://assets/characters/crimson_vein_titan/crimson_vein_titan.fbx" id="char_mesh"]
 
 [resource]
 script = ExtResource("script")
 id = &"basic_ranged"
 label = "Basic Ranged"
 weapon_id = &"smg"
+character_mesh = ExtResource("char_mesh")
+mesh_yaw_offset = 3.14159
+mesh_tint = Color(1.0, 1.0, 1.0, 1.0)
 basic_attack = ExtResource("basic_attack")
 skill_pool = [ExtResource("multi_shot")]
 attack_mode = 1
