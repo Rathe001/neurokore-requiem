@@ -10,7 +10,7 @@
 [ext_resource type="PackedScene" path="res://scenes/prototype/prototype_projectile.tscn" id="projectile_scene"]
 [ext_resource type="Resource" path="res://resources/enemies/skills/shotgun_attack.tres" id="basic_attack"]
 [ext_resource type="Resource" path="res://resources/enemies/skills/multi_shot.tres" id="multi_shot"]
-[ext_resource type="PackedScene" path="res://assets/characters/crimson_vein_titan/crimson_vein_titan.fbx" id="char_mesh"]
+[ext_resource type="PackedScene" path="res://assets/characters/riot_guard_male_2/riot_guard_male_2.fbx" id="char_mesh"]
 
 [resource]
 script = ExtResource("script")

@@ -78,10 +78,13 @@ def main() -> int:
     for entry in sorted(CHARS.iterdir()):
         if not entry.is_dir():
             continue
-        # Skip directories whose .fbx.import files are already authored — only
-        # scaffold for the newly-extracted Meshy / Crimson Vein Titan folders.
-        if entry.name in {"x_bot", "alien", "crypto", "military_man", "vanguard",
-                          "player_male", "player_female"}:
+        # Skip directories whose .fbx.import files are already authored or
+        # whose mesh is non-Meshy (X Bot stays on its own bonemap setup).
+        if entry.name in {"x_bot"}:
+            continue
+        # Skip the v1 crimson_vein_titan — its .fbx.import was hand-tuned
+        # for the rigged Mixamo export and shouldn't be overwritten.
+        if entry.name == "crimson_vein_titan":
             continue
         for fbx in sorted(entry.glob("*.fbx")):
             import_path = fbx.with_suffix(".fbx.import")

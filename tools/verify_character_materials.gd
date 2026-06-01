@@ -12,6 +12,8 @@ const PATHS: Array[String] = [
 	"res://assets/characters/player_cyborg_female/player_cyborg_female.fbx",
 	"res://assets/characters/player_forged_male/player_forged_male.fbx",
 	"res://assets/characters/crimson_vein_titan/crimson_vein_titan.fbx",
+	"res://assets/characters/riot_guard_male_1/riot_guard_male_1.fbx",
+	"res://assets/characters/riot_guard_female_2/riot_guard_female_2.fbx",
 ]
 
 

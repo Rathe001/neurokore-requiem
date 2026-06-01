@@ -20,12 +20,22 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 TRES_DIR = ROOT / "game" / "resources" / "enemies" / "classes"
 
-# All enemy classes share the rigged crimson_vein_titan mesh (Mixamo
-# skeleton, X Bot bonemap-compatible) until a second rigged archetype
-# lands. Molten_Sentinel was tried but exports from Meshy without a
-# skeleton — needs a Mixamo auto-rig pass before it can host the X Bot
-# animation library.
+# Default enemy mesh — every class falls back to this when not in the
+# per-class table below. Mixamo-rigged 65-bone GeneralSkeleton, plays
+# the full X Bot animation library cleanly.
 TITAN_PATH = "res://assets/characters/crimson_vein_titan/crimson_vein_titan.fbx"
+
+# Per-class mesh overrides. Riot Guard variants are the "human paramilitary"
+# enemies — best fit for the common-grunt archetypes (basic_melee + basic_
+# ranged + the close-quarters ranged classes). Specialist archetypes
+# (snipers / RPG / healers / buffers) stay on the titan for body-horror
+# silhouette. Every entry must be Mixamo-rigged with the X Bot bonemap.
+MESH_OVERRIDES = {
+    "basic_melee":   "res://assets/characters/riot_guard_male_1/riot_guard_male_1.fbx",
+    "basic_ranged":  "res://assets/characters/riot_guard_female_1/riot_guard_female_1.fbx",
+    "ranged_shotgun":"res://assets/characters/riot_guard_male_2/riot_guard_male_2.fbx",
+    "ranged_smg":    "res://assets/characters/riot_guard_female_2/riot_guard_female_2.fbx",
+}
 
 # class_id → Color(r, g, b, a). Missing entries default to white (no tint).
 TINTS = {
@@ -47,7 +57,11 @@ def patch_tres(path: Path) -> None:
         return
     class_id = cls_id_match.group(1)
     tint = TINTS.get(class_id, (1.0, 1.0, 1.0, 1.0))
-    mesh_path = TITAN_PATH
+    mesh_path = MESH_OVERRIDES.get(class_id, TITAN_PATH)
+    # Riot guards have authored color variation already — drop tint to white
+    # so the green/red/etc. modifiers don't double up with the mesh's PBR.
+    if class_id in MESH_OVERRIDES:
+        tint = (1.0, 1.0, 1.0, 1.0)
 
     # ── 1) Ensure char_mesh ext_resource entry exists + points at the new path.
     if 'id="char_mesh"' in text:
