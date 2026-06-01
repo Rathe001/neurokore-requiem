@@ -2602,25 +2602,51 @@ func _on_ragdoll_settled() -> void:
 	_schedule_corpse_despawn(_despawn_token)
 
 
-# Returns the centroid (XZ) of the active PhysicalBone3D children, with
-# Y dropped to the death-Y so the pool projects onto the floor instead
-# of mid-air. Falls back to global_position if no PBs are found.
+# Returns where the body actually came to rest, with Y dropped to the
+# death-Y so the pool projects onto the floor instead of mid-air. Two
+# paths converge here:
+#
+#   Ragdoll: centroid (XZ) of the active PhysicalBone3D children —
+#     the physics sim moved them away from the enemy node's origin,
+#     which still sits where the enemy was standing when it died.
+#
+#   Anim: hip bone position on the skeleton — the death animation
+#     translates the hip in the armature (Mixamo death clips have
+#     baked root motion: the character falls forward / collapses),
+#     so the visible body ends up offset from global_position. The
+#     enemy node itself doesn't move during anim playback, so reading
+#     global_position would stamp the pool at the kill spot instead
+#     of under the corpse.
+#
+# Falls back to global_position only when there's no skeleton at all.
 func _settled_corpse_position() -> Vector3:
 	if visual == null:
 		return global_position
 	var skel := _find_skeleton(visual)
 	if skel == null:
 		return global_position
+	# Ragdoll path: average the active physics bones.
 	var sum := Vector3.ZERO
 	var n := 0
 	for child in skel.get_children():
 		if child is PhysicalBone3D:
 			sum += (child as PhysicalBone3D).global_position
 			n += 1
-	if n == 0:
-		return global_position
-	var avg := sum / float(n)
-	return Vector3(avg.x, global_position.y, avg.z)
+	if n > 0:
+		var avg := sum / float(n)
+		return Vector3(avg.x, global_position.y, avg.z)
+	# Anim path: hip bone gives the body's actual settled position.
+	# Both X Bot rig variants (mixamorig:Hips and mixamorig_Hips) are
+	# handled by find_bone falling back to substring match.
+	var hip_idx := skel.find_bone(&"mixamorig:Hips")
+	if hip_idx == -1:
+		hip_idx = skel.find_bone(&"mixamorig_Hips")
+	if hip_idx == -1:
+		hip_idx = skel.find_bone(&"Hips")
+	if hip_idx != -1:
+		var hip_world := skel.global_transform * skel.get_bone_global_pose(hip_idx).origin
+		return Vector3(hip_world.x, global_position.y, hip_world.z)
+	return global_position
 
 
 func _spawn_settle_pool() -> void:
