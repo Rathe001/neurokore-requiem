@@ -2,24 +2,23 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dcn5et2fhac4u"
-path.s3tc="res://.godot/imported/lmg_DefaultMaterial_Metallic.jpg-DefaultMaterial_Roughness.png-2afdaa0525c729589c9eeb331db78427.s3tc.ctex"
+uid="uid://dr0gg4rs2e2py"
+path="res://.godot/imported/plasma_rifle_Old rubber_BaseColor.png-ecd35c6b8bb2263c8941514d72586f44.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
-"vram_texture": true
+"vram_texture": false
 }
 generator_parameters={
-"md5": "ed4fb056172e943a2661a4e5931879c4"
+"md5": "63e162fa1e2864a871e2a717c86633c0"
 }
 
 [deps]
 
-source_file="res://assets/models/weapons/lmg/lmg_DefaultMaterial_Metallic.jpg-DefaultMaterial_Roughness.png"
-dest_files=["res://.godot/imported/lmg_DefaultMaterial_Metallic.jpg-DefaultMaterial_Roughness.png-2afdaa0525c729589c9eeb331db78427.s3tc.ctex"]
+source_file="res://assets/models/weapons/plasma_rifle/plasma_rifle_Old rubber_BaseColor.png"
+dest_files=["res://.godot/imported/plasma_rifle_Old rubber_BaseColor.png-ecd35c6b8bb2263c8941514d72586f44.ctex"]
 
 [params]
 
-compress/mode=2
+compress/mode=0
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0
@@ -41,4 +40,4 @@ process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
 process/size_limit=0
-detect_3d/compress_to=0
+detect_3d/compress_to=1

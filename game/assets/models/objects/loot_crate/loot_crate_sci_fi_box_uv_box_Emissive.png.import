@@ -2,20 +2,20 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dcn5et2fhac4u"
-path.s3tc="res://.godot/imported/lmg_DefaultMaterial_Metallic.jpg-DefaultMaterial_Roughness.png-2afdaa0525c729589c9eeb331db78427.s3tc.ctex"
+uid="uid://buivt8iqbtur4"
+path.s3tc="res://.godot/imported/loot_crate_sci_fi_box_uv_box_Emissive.png-cc8b9467da43737630206d90eab44e65.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
 }
 generator_parameters={
-"md5": "ed4fb056172e943a2661a4e5931879c4"
+"md5": "8313fbd956fec15c686b98d8b72e6b4a"
 }
 
 [deps]
 
-source_file="res://assets/models/weapons/lmg/lmg_DefaultMaterial_Metallic.jpg-DefaultMaterial_Roughness.png"
-dest_files=["res://.godot/imported/lmg_DefaultMaterial_Metallic.jpg-DefaultMaterial_Roughness.png-2afdaa0525c729589c9eeb331db78427.s3tc.ctex"]
+source_file="res://assets/models/objects/loot_crate/loot_crate_sci_fi_box_uv_box_Emissive.png"
+dest_files=["res://.godot/imported/loot_crate_sci_fi_box_uv_box_Emissive.png-cc8b9467da43737630206d90eab44e65.s3tc.ctex"]
 
 [params]
 
