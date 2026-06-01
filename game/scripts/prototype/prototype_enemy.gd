@@ -2351,10 +2351,17 @@ func _die(kill_from: Vector3 = Vector3.ZERO, kill_force: float = 0.0) -> void:
 	death_dir = death_dir.normalized()
 	var death_mult: float = 6.0 if _last_hit_was_crit else 4.0
 	PrototypeAttackIndicator.spawn_blood_burst(get_parent(), death_pos, death_dir, death_mult, blood_type)
-	# Kill scene = primary splat + 2-4 satellite stains. Direction
-	# biases the spray pattern away from the shooter so the gore arcs
-	# toward where the body's heading.
-	PrototypeAttackIndicator.spawn_blood_kill_scene(get_parent(), global_position, death_dir, blood_type)
+	# Kill-site floor pool intentionally NOT spawned here — pools form
+	# where the corpse actually lands instead (via _spawn_settle_pool
+	# fired from _on_ragdoll_settled when the death anim / ragdoll
+	# completes). Stamping at kill time scattered pools at every shot
+	# location regardless of where the body ended up, which read as
+	# floor mess that didn't correspond to any corpse.
+	# Side-paint on nearby props/interactables still wants the kill-
+	# site frame of reference (blood sprays outward from where the
+	# wound opened, not where the body falls), so route that one piece
+	# of spawn_blood_kill_scene's behavior directly.
+	PrototypeAttackIndicator.spawn_blood_on_receivers(get_parent(), global_position, blood_type)
 	# Wall splatter — cast horizontally in the spray direction; if we
 	# hit a wall, paint it. Crits get extra perpendicular shots so the
 	# wall mess looks more chaotic (1 main + 2 spread).
