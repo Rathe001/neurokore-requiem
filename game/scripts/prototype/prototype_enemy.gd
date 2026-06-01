@@ -2335,6 +2335,10 @@ func _die(kill_from: Vector3 = Vector3.ZERO, kill_force: float = 0.0) -> void:
 			p.on_enemy_killed()
 	_drop_credits()
 	_drop_item()
+	# Detach the enemy's equipped weapon and let it fall to the floor as
+	# its own physics body. Visual flair on top of the random-item drop;
+	# the dropped weapon isn't pickup-able (yet) — purely cosmetic.
+	_drop_weapon_physically(kill_from)
 	# Death blood — bigger spray than per-hit, plus a floor splatter at
 	# the kill location. Crit kills get a more dramatic burst (sniper-
 	# style explosive exit wound feel). Splatter decal is single-instance
@@ -2952,6 +2956,81 @@ func _find_pickups_container() -> PickupsContainer:
 	if pc is PickupsContainer:
 		return pc as PickupsContainer
 	return null
+
+
+# Detaches the equipped weapon mesh and re-parents it under a fresh
+# RigidBody3D so it falls, tumbles, and settles on the floor. No-op when
+# the enemy has no weapon attached (bare-handed melee variants etc.) or
+# when the visual / skeleton has already been torn down.
+#
+# Perf: each drop = 1 RigidBody3D + 1 CollisionShape3D + the existing
+# weapon mesh. Jolt sleeps the body once it settles (linear+angular
+# damp + can_sleep), so a horde-clear's bodies all idle after ~2-3s.
+# Bodies persist until level reload — fine at typical 10-30 enemies/
+# room density; if it becomes an issue, add a despawn timer.
+func _drop_weapon_physically(kill_from: Vector3) -> void:
+	if visual == null:
+		return
+	var skel := _find_skeleton(visual)
+	if skel == null:
+		return
+	var weapon := WeaponAttachment.detach_weapon(skel)
+	if weapon == null:
+		return  # bare hands
+
+	var parent := _find_pickups_container() as Node3D
+	if parent == null:
+		parent = get_parent()
+	if parent == null:
+		weapon.queue_free()
+		return
+
+	var body := RigidBody3D.new()
+	body.name = "DroppedWeapon"
+	body.mass = 0.5
+	body.linear_damp = 0.5
+	body.angular_damp = 1.0
+	# Layer 1 so it lands on world geometry; mask 1 so floor + walls
+	# stop it. Doesn't collide with players/enemies (different layers),
+	# so dying enemies can't pile-drive the player.
+	body.collision_layer = 1
+	body.collision_mask = 1
+	body.can_sleep = true
+
+	# Generic capsule sized to fit most weapon silhouettes — the visual
+	# mesh stays accurate; only the collision is approximated.
+	var shape_node := CollisionShape3D.new()
+	var caps := CapsuleShape3D.new()
+	caps.radius = 0.08
+	caps.height = 0.5
+	shape_node.shape = caps
+	body.add_child(shape_node)
+
+	# Re-parent the weapon visual under the rigid body. Reset its local
+	# transform — the grip-offset that fit the hand bone is irrelevant
+	# now that it's free in world space.
+	body.add_child(weapon)
+	weapon.transform = Transform3D.IDENTITY
+
+	parent.add_child(body)
+	# Restore world position from the snapshot detach_weapon stashed,
+	# so the body starts where the hand was, not at origin.
+	var world_xform: Transform3D = weapon.get_meta(&"world_xform", Transform3D.IDENTITY)
+	body.global_transform = world_xform
+
+	# Toss it away from the kill direction with a small upward bias +
+	# random spin. Magnitudes are modest — we want a tumble, not a
+	# launch across the room.
+	var away := (body.global_position - kill_from).normalized() if kill_from != Vector3.ZERO else Vector3.UP
+	if away.length() < 0.01:
+		away = Vector3.UP
+	away.y = clampf(away.y + 0.6, 0.0, 1.0)
+	body.linear_velocity = away.normalized() * 2.5
+	body.angular_velocity = Vector3(
+		randf_range(-6.0, 6.0),
+		randf_range(-6.0, 6.0),
+		randf_range(-6.0, 6.0),
+	)
 
 # Spawns a PrototypeRagdollCorpse next to us with a duplicate of the visual
 # subtree, then hands it the kill direction so it tumbles away from the hit.

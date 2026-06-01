@@ -468,6 +468,30 @@ static func set_weapon_for_enemy(skeleton: Skeleton3D, enemy_weapon_id: StringNa
 	set_weapon(skeleton, base_id)
 
 
+## Removes the mounted weapon model from the bone attachment and returns it
+## (now parentless, with its world transform preserved on the returned node's
+## metadata as &"world_xform"). The caller is responsible for re-parenting
+## or freeing the returned Node3D. Used by the enemy death path to hand the
+## weapon mesh off to a physics body so it falls naturally.
+##
+## Returns null if no weapon is attached (bare hands, missing skeleton, etc.).
+static func detach_weapon(skeleton: Skeleton3D) -> Node3D:
+	if skeleton == null:
+		return null
+	var mount := get_mount(skeleton)
+	if mount == null:
+		return null
+	var model := mount.get_node_or_null(NodePath(_MODEL_NODE_NAME)) as Node3D
+	if model == null:
+		return null
+	# Snapshot the world transform before unparenting — Godot resets
+	# global_transform when a node is orphaned.
+	var world_xform := model.global_transform
+	mount.remove_child(model)
+	model.set_meta(&"world_xform", world_xform)
+	return model
+
+
 ## ─── Live grip tuner ────────────────────────────────────────────────────
 ##
 ## The following statics let an in-game keyboard tuner adjust the mounted
