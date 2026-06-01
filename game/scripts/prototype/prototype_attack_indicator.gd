@@ -1010,8 +1010,8 @@ static func _spawn_mist_drop_wall(parent: Node, world_pos: Vector3, wall_normal:
 const POOL_INITIAL_DIAMETER: float = 0.3        # tiny "fresh splash" at spawn
 const POOL_TARGET_MIN_DIAMETER: float = 0.55    # widened from 0.9 — small kills should
 const POOL_TARGET_MAX_DIAMETER: float = 1.9     # widened from 1.4 — 3.5× range vs 1.5×
-                                                # gives the eye more obvious size variance
-                                                # so clustered pools don't all read at the
+												# gives the eye more obvious size variance
+												# so clustered pools don't all read at the
                                                 # same scale
 const POOL_MAX_DIAMETER: float = 3.0            # cap on any pool's grown diameter
 const POOL_GROWTH_DURATION: float = 4.5         # slow ooze — player shouldn't see the growth tween in motion

@@ -2,24 +2,23 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://byv378ernrh70"
-path.s3tc="res://.godot/imported/crimson_vein_titan_0.png-a6207e81785487b896e82186652957b0.s3tc.ctex"
+uid="uid://y685qks433v2"
+path="res://.godot/imported/plasma_rifle_normal.png-07119452ffbd9ca60dc869df83bb2486.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
-"vram_texture": true
+"vram_texture": false
 }
 generator_parameters={
-"md5": "8225cd32dc2fa17758c36b0e61372c40"
+"md5": "bd9b5104ee40e8cecccac7dc94cbfcba"
 }
 
 [deps]
 
-source_file="res://assets/characters/crimson_vein_titan/crimson_vein_titan_0.png"
-dest_files=["res://.godot/imported/crimson_vein_titan_0.png-a6207e81785487b896e82186652957b0.s3tc.ctex"]
+source_file="res://assets/models/weapons/plasma_rifle/plasma_rifle_normal.png"
+dest_files=["res://.godot/imported/plasma_rifle_normal.png-07119452ffbd9ca60dc869df83bb2486.ctex"]
 
 [params]
 
-compress/mode=2
+compress/mode=0
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0
@@ -41,4 +40,4 @@ process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
 process/size_limit=0
-detect_3d/compress_to=0
+detect_3d/compress_to=1

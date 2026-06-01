@@ -20,7 +20,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 TRES_DIR = ROOT / "game" / "resources" / "enemies" / "classes"
 
-NEW_MESH_PATH = "res://assets/characters/crimson_vein_titan/crimson_vein_titan.fbx"
+# Per-archetype mesh assignment. Melee classes use the chunkier
+# Molten_Sentinel silhouette; ranged classes use Crimson_Vein_Titan's
+# leaner outline. Read at runtime via EnemyClass.character_mesh.
+TITAN_PATH    = "res://assets/characters/crimson_vein_titan/crimson_vein_titan.fbx"
+SENTINEL_PATH = "res://assets/characters/molten_sentinel/molten_sentinel.fbx"
+
+# class_id prefix that triggers sentinel mesh. Anything in the table
+# below overrides this. Default → titan (ranged + utility archetypes).
+SENTINEL_PREFIX = "melee_"
+SENTINEL_OVERRIDES = {"basic_melee"}
 
 # class_id → Color(r, g, b, a). Missing entries default to white (no tint).
 TINTS = {
@@ -42,12 +51,16 @@ def patch_tres(path: Path) -> None:
         return
     class_id = cls_id_match.group(1)
     tint = TINTS.get(class_id, (1.0, 1.0, 1.0, 1.0))
+    use_sentinel = (
+        class_id.startswith(SENTINEL_PREFIX) or class_id in SENTINEL_OVERRIDES
+    )
+    mesh_path = SENTINEL_PATH if use_sentinel else TITAN_PATH
 
     # ── 1) Ensure char_mesh ext_resource entry exists + points at the new path.
     if 'id="char_mesh"' in text:
         text = re.sub(
             r'(\[ext_resource\s+type="PackedScene"\s+path=")[^"]+("\s+id="char_mesh"\])',
-            rf'\g<1>{NEW_MESH_PATH}\g<2>',
+            rf'\g<1>{mesh_path}\g<2>',
             text,
         )
     else:
@@ -55,7 +68,7 @@ def patch_tres(path: Path) -> None:
         # (right before the empty line that precedes the next [section]).
         insertion = (
             f'[ext_resource type="PackedScene" '
-            f'path="{NEW_MESH_PATH}" id="char_mesh"]\n'
+            f'path="{mesh_path}" id="char_mesh"]\n'
         )
         # Find the last [ext_resource ...] line; append after it.
         ext_blocks = list(re.finditer(r'^\[ext_resource[^\]]*\]\n', text, re.MULTILINE))
@@ -93,8 +106,9 @@ def patch_tres(path: Path) -> None:
             count=1,
         )
 
+    mesh_label = "sentinel" if use_sentinel else "titan"
     path.write_text(text)
-    print(f"  ✓ {path.name}  →  {class_id}  tint={tint}")
+    print(f"  ✓ {path.name}  →  {class_id}  mesh={mesh_label}  tint={tint}")
 
 
 def main() -> int:

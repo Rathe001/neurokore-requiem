@@ -2,24 +2,23 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bcctdo43kicvn"
-path.s3tc="res://.godot/imported/crimson_vein_titan_1.png-e03d10cef0be7d71e0c304b0de3b6554.s3tc.ctex"
+uid="uid://faxrpt72iptt"
+path="res://.godot/imported/rpg_Image_1.jpg-0737189c5ddb5e32ea28db2d04a35762.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
-"vram_texture": true
+"vram_texture": false
 }
 generator_parameters={
-"md5": "f114ec8580db94e955cb3fab41bf0bce"
+"md5": "f6a2c5e4a8fe212c7c29075d3dca596e"
 }
 
 [deps]
 
-source_file="res://assets/characters/crimson_vein_titan/crimson_vein_titan_1.png"
-dest_files=["res://.godot/imported/crimson_vein_titan_1.png-e03d10cef0be7d71e0c304b0de3b6554.s3tc.ctex"]
+source_file="res://assets/models/weapons/rpg/rpg_Image_1.jpg"
+dest_files=["res://.godot/imported/rpg_Image_1.jpg-0737189c5ddb5e32ea28db2d04a35762.ctex"]
 
 [params]
 
-compress/mode=2
+compress/mode=0
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0
@@ -41,4 +40,4 @@ process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
 process/size_limit=0
-detect_3d/compress_to=0
+detect_3d/compress_to=1

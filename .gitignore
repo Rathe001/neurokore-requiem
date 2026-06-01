@@ -28,4 +28,17 @@ site/
 
 # Python bytecode
 __pycache__/
+
+# Phantom PNG bookkeeping Godot writes when an FBX references textures it
+# can't actually extract (Meshy/Mixamo standalone FBXs hardcode /tmp/
+# texture paths and don't embed the image data). The .png file never lands
+# on disk; only a .png.import companion gets created pointing at the
+# missing file. Real textures next to these characters use the
+# Meshy_AI_*_texture*.png naming and are tracked normally.
+game/assets/characters/player_*/player_*_[0-9].png
+game/assets/characters/player_*/player_*_[0-9].png.import
+game/assets/characters/crimson_vein_titan/crimson_vein_titan_[0-9].png
+game/assets/characters/crimson_vein_titan/crimson_vein_titan_[0-9].png.import
+game/assets/characters/molten_sentinel/molten_sentinel_[0-9].png
+game/assets/characters/molten_sentinel/molten_sentinel_[0-9].png.import
 *.pyc

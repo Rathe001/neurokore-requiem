@@ -9,7 +9,7 @@
 [ext_resource type="Script" path="res://scripts/enemies/enemy_class.gd" id="script"]
 [ext_resource type="Resource" path="res://resources/enemies/skills/ground_slam.tres" id="ground_slam"]
 [ext_resource type="Resource" path="res://resources/enemies/skills/blade_attack.tres" id="basic_attack"]
-[ext_resource type="PackedScene" path="res://assets/characters/crimson_vein_titan/crimson_vein_titan.fbx" id="char_mesh"]
+[ext_resource type="PackedScene" path="res://assets/characters/molten_sentinel/molten_sentinel.fbx" id="char_mesh"]
 
 [resource]
 script = ExtResource("script")
