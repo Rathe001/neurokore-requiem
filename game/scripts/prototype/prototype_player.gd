@@ -901,6 +901,12 @@ func _ready() -> void:
 	class_id = PlayerState.class_id
 	spec_id = PlayerState.spec_id
 	PlayerState.leveled_up.connect(_on_player_leveled_up)
+	# Local-class swap: when the user picks a different class/spec via the
+	# talents menu, PlayerState fires class_changed / spec_changed. Refresh
+	# the cached IDs + the visual mesh. Remote peers use refresh_remote_class
+	# instead (driven from PlayersContainer's lobby_data_update listener).
+	PlayerState.class_changed.connect(_on_local_class_or_spec_changed)
+	PlayerState.spec_changed.connect(_on_local_class_or_spec_changed)
 	_drone_swarm = PlayerDroneSwarm.new()
 	_drone_swarm.setup(self)
 	add_child(_drone_swarm)
@@ -1090,6 +1096,20 @@ func refresh_remote_class(new_class_id: StringName) -> void:
 		return
 	remote_class_id = new_class_id
 	_apply_gender_appearance()
+
+
+## Local-only: PlayerState.class_changed / spec_changed both route here.
+## Refreshes the cached class/spec IDs (other systems read these locals
+## instead of touching PlayerState every frame) then triggers the mesh
+## swap. _apply_gender_appearance pulls the new values via
+## _effective_class_id, so the mesh always matches the current PlayerState.
+func _on_local_class_or_spec_changed(_id: StringName) -> void:
+	class_id = PlayerState.class_id
+	spec_id = PlayerState.spec_id
+	_apply_gender_appearance()
+	# Class-specific visuals (drone colors, etc.) also need to refresh
+	# since the resolved class drives their identity.
+	_apply_class_appearance()
 
 
 # Resolves the effective class identity for mesh + appearance lookups.

@@ -6,8 +6,10 @@
 ; Player-interactable footprint sized to the elevator's visual base. Layer
 ; 64 (interactable hover) + mask 0 — doesn't block movement, just registers
 ; for the hover/raycast system.
+; Footprint matches the model's scaled XZ extent (3.44 × 3.36); thin Y
+; keeps it hover-only.
 [sub_resource type="BoxShape3D" id="shape_platform"]
-size = Vector3(2.0, 0.2, 1.5)
+size = Vector3(3.44, 0.2, 3.36)
 
 [node name="Exit" type="StaticBody3D"]
 collision_layer = 64
@@ -15,7 +17,12 @@ collision_mask = 0
 script = ExtResource("1_script")
 display_name = "Elevator"
 
+; Scale 1.8× to read as a proper boarding platform (~3.4m wide vs ~1.9m
+; raw). Y +1.23 lifts the geometric origin up so the model's base
+; (which sits 0.68m below origin in the glb) ends up at world Y=0
+; instead of clipping into the floor.
 [node name="Elevator" parent="." instance=ExtResource("2_elevator")]
+transform = Transform3D(1.8, 0, 0, 0, 1.8, 0, 0, 0, 1.8, 0, 1.23, 0)
 
 [node name="Collision" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 0)
