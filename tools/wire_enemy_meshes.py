@@ -20,16 +20,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 TRES_DIR = ROOT / "game" / "resources" / "enemies" / "classes"
 
-# Per-archetype mesh assignment. Melee classes use the chunkier
-# Molten_Sentinel silhouette; ranged classes use Crimson_Vein_Titan's
-# leaner outline. Read at runtime via EnemyClass.character_mesh.
-TITAN_PATH    = "res://assets/characters/crimson_vein_titan/crimson_vein_titan.fbx"
-SENTINEL_PATH = "res://assets/characters/molten_sentinel/molten_sentinel.fbx"
-
-# class_id prefix that triggers sentinel mesh. Anything in the table
-# below overrides this. Default → titan (ranged + utility archetypes).
-SENTINEL_PREFIX = "melee_"
-SENTINEL_OVERRIDES = {"basic_melee"}
+# All enemy classes share the rigged crimson_vein_titan mesh (Mixamo
+# skeleton, X Bot bonemap-compatible) until a second rigged archetype
+# lands. Molten_Sentinel was tried but exports from Meshy without a
+# skeleton — needs a Mixamo auto-rig pass before it can host the X Bot
+# animation library.
+TITAN_PATH = "res://assets/characters/crimson_vein_titan/crimson_vein_titan.fbx"
 
 # class_id → Color(r, g, b, a). Missing entries default to white (no tint).
 TINTS = {
@@ -51,10 +47,7 @@ def patch_tres(path: Path) -> None:
         return
     class_id = cls_id_match.group(1)
     tint = TINTS.get(class_id, (1.0, 1.0, 1.0, 1.0))
-    use_sentinel = (
-        class_id.startswith(SENTINEL_PREFIX) or class_id in SENTINEL_OVERRIDES
-    )
-    mesh_path = SENTINEL_PATH if use_sentinel else TITAN_PATH
+    mesh_path = TITAN_PATH
 
     # ── 1) Ensure char_mesh ext_resource entry exists + points at the new path.
     if 'id="char_mesh"' in text:
@@ -106,9 +99,8 @@ def patch_tres(path: Path) -> None:
             count=1,
         )
 
-    mesh_label = "sentinel" if use_sentinel else "titan"
     path.write_text(text)
-    print(f"  ✓ {path.name}  →  {class_id}  mesh={mesh_label}  tint={tint}")
+    print(f"  ✓ {path.name}  →  {class_id}  tint={tint}")
 
 
 def main() -> int:

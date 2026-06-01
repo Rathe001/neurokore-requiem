@@ -35,6 +35,13 @@ func _walk(node: Node, indent: String) -> void:
 	if node is AnimationPlayer:
 		var ap: AnimationPlayer = node
 		print("%s%s (AnimationPlayer) anims=%s" % [indent, ap.name, ap.get_animation_list()])
+	if node is Skeleton3D:
+		var sk: Skeleton3D = node
+		var sample_bones: Array = []
+		for i in mini(5, sk.get_bone_count()):
+			sample_bones.append(sk.get_bone_name(i))
+		print("%s%s (Skeleton3D) unique_name=%s bone_count=%d sample=%s" % [
+			indent, sk.name, sk.unique_name_in_owner, sk.get_bone_count(), sample_bones])
 	if node is MeshInstance3D:
 		var mi: MeshInstance3D = node
 		print("%s%s (%s)" % [indent, mi.name, mi.get_class()])

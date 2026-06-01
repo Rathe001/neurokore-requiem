@@ -2,17 +2,20 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://oie4eg1y04u7"
-path.s3tc="res://.godot/imported/Meshy_AI_Molten_Sentinel_0601140955_texture.png-498f359f21a3252f5137180a4cb34ac8.s3tc.ctex"
+uid="uid://bcctdo43kicvn"
+path.s3tc="res://.godot/imported/crimson_vein_titan_1.png-e03d10cef0be7d71e0c304b0de3b6554.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
 }
+generator_parameters={
+"md5": "f114ec8580db94e955cb3fab41bf0bce"
+}
 
 [deps]
 
-source_file="res://assets/characters/molten_sentinel/Meshy_AI_Molten_Sentinel_0601140955_texture.png"
-dest_files=["res://.godot/imported/Meshy_AI_Molten_Sentinel_0601140955_texture.png-498f359f21a3252f5137180a4cb34ac8.s3tc.ctex"]
+source_file="res://assets/characters/crimson_vein_titan/crimson_vein_titan_1.png"
+dest_files=["res://.godot/imported/crimson_vein_titan_1.png-e03d10cef0be7d71e0c304b0de3b6554.s3tc.ctex"]
 
 [params]
 

@@ -375,7 +375,13 @@ const NAME_PALETTE_NUMBERED: Array[String] = ["Subject", "Specimen", "Unit"]
 @export var blood_type: StringName = &"human"
 
 @onready var visual: Node3D = $Visual
-@onready var anim_player: AnimationPlayer = $Visual/Character/AnimationPlayer
+## Set in _apply_class_mesh() after the mesh swap, because the scene's
+## authored Character mesh may not include an AnimationPlayer (Meshy
+## rigged-mesh-only FBXs don't ship one). Was previously @onready but
+## that resolved before the swap and logged a "Node not found" error
+## when the default mesh lacked the node. _apply_class_mesh creates one
+## on the fly if the new Character doesn't bring its own.
+var anim_player: AnimationPlayer = null
 @onready var health_bar: MeshInstance3D = $HealthBar
 @onready var collision: CollisionShape3D = $Collision
 @onready var floor_ring: MeshInstance3D = $FloorRing
@@ -632,15 +638,22 @@ static func _rebind_skins_under(node: Node, prefix_from: String, prefix_to: Stri
 # _init_enemy on every spawn so pool re-acquires with a different class
 # pick up the right mesh too.
 func _apply_class_mesh() -> void:
-	if enemy_class == null or enemy_class.character_mesh == null:
-		return
 	if visual == null:
 		return
-	# Skip if the current Character already came from this scene —
+	# If the EnemyClass doesn't override the mesh, the scene's authored
+	# Character node stays. We still need to resolve anim_player from it
+	# (or create one if the authored mesh didn't ship an AnimationPlayer),
+	# otherwise anim_player remains the null default from line 384.
+	var current_char := visual.get_node_or_null(^"Character") as Node3D
+	if enemy_class == null or enemy_class.character_mesh == null:
+		if current_char != null:
+			_ensure_anim_player_on(current_char)
+		return
+	# Skip the swap if the current Character already came from this scene —
 	# checking scene_file_path is the cheapest way to compare since
 	# PackedScene resource_path is canonical.
-	var current_char := visual.get_node_or_null(^"Character") as Node3D
 	if current_char != null and current_char.scene_file_path == enemy_class.character_mesh.resource_path:
+		_ensure_anim_player_on(current_char)
 		return
 	if current_char != null:
 		visual.remove_child(current_char)
@@ -658,15 +671,7 @@ func _apply_class_mesh() -> void:
 	# AnimationPlayer, which is about to be freed. find_child walks the
 	# subtree because the FBX-imported scene's AnimationPlayer node may
 	# be at a non-fixed path depending on importer version.
-	# Meshy FBXs ship without baked animations — no AnimationPlayer in the
-	# imported scene. Create one so the X Bot animation library has a host.
-	var new_ap := new_char.find_child("AnimationPlayer", true, false) as AnimationPlayer
-	if new_ap == null:
-		new_ap = AnimationPlayer.new()
-		new_ap.name = "AnimationPlayer"
-		new_char.add_child(new_ap)
-	anim_player = new_ap
-	XBotAnimations.install_on(anim_player)
+	_ensure_anim_player_on(new_char)
 	# Re-apply layer isolation so blood decals don't paint on the new
 	# mesh — _ready's call ran on the old subtree.
 	_isolate_visual_from_decals()
@@ -701,6 +706,21 @@ func _apply_class_mesh() -> void:
 	# their hover-highlight because every cached mesh fails is_instance_valid.
 	if _visuals != null:
 		_visuals.collect_meshes()
+
+
+# Finds an AnimationPlayer under `char_root` (or creates one when the
+# Meshy FBX shipped without one), stores it on anim_player, and ensures
+# the X Bot animation library is installed. Replaces the previous
+# @onready resolution path so a default authored Character mesh that
+# lacks an AnimationPlayer doesn't log "Node not found" at ready.
+func _ensure_anim_player_on(char_root: Node3D) -> void:
+	var ap := char_root.find_child("AnimationPlayer", true, false) as AnimationPlayer
+	if ap == null:
+		ap = AnimationPlayer.new()
+		ap.name = "AnimationPlayer"
+		char_root.add_child(ap)
+	anim_player = ap
+	XBotAnimations.install_on(anim_player)
 
 
 # Walks every MeshInstance3D descendant of `root` and multiplies `tint`
