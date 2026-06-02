@@ -12,7 +12,12 @@
 // second-pass overlay (additive spec on top of the stain) can add the
 // wet read without breaking the multiply.
 shader_type spatial;
-render_mode blend_mul, depth_test_disabled, cull_back, unshaded;
+// depth_draw_never: this is a multiply pass, we don't want to write
+// the plane into the depth buffer (would block things drawn after it).
+// Default depth TEST stays on so walls / characters / items in front
+// of the floor plane occlude it properly — without depth test the
+// plane was rendering over the entire scene.
+render_mode blend_mul, depth_draw_never, cull_back, unshaded;
 
 // SubViewport coverage mask. Alpha = liquid presence (0 = none, 1 = full).
 uniform sampler2D liquid_mask : hint_default_black, filter_linear, repeat_disable;
