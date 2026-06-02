@@ -7,45 +7,86 @@ extends Node3D
 ## persistent SubViewport mask that's also a child of THIS node. Same
 ## subtree → ViewportTexture references resolve reliably.
 ##
-## Phase 4: overlay quads now use wall_blood_overlay.gdshader instead of
-## solid cyan. Shader samples the SubViewport mask at the quad's local UV;
-## empty mask → discard (wall shows through), stamped → solid red.
-## Verifies the SubViewport-to-shader path works on every actual wall
-## quad we spawn — visible as the Phase 2 test stamp (a circle of red)
-## centered on every overlay quad.
+## Phase 5: world-position UV mapping. Two SubViewport masks now — one
+## for ±X-facing walls (indexed by world (z, y)), one for ±Z-facing
+## walls (indexed by world (x, y)). The shader picks the appropriate
+## mask based on the wall's world normal. A stamp at world (x, y, z)
+## thus shows on exactly the wall at that position with a fixed world-
+## size shape — long walls don't stretch the stamp anymore.
 ##
-## Phase 5 will: switch from local UV to world-position UV so stamps
-## land at the correct world location instead of repeating per quad;
-## add the multiply-stain + PBR wet shading; wire gameplay stamps.
+## Phase 6 will wire spawn_blood_wall_splatter / _spawn_mist_drop_wall
+## to route through this layer instead of the legacy Decal3D path.
+## Drips / multiply-stain come after.
 
-const SUBVIEWPORT_PX: int = 512
+# Mask resolution — rectangular because the world Y range (wall_height,
+# ~3-4m) is much shorter than the X/Z range (~40m). Same px/m density
+# on both axes (~51 px/m at 40m horizontal extent, ~64 px/m at 4m
+# vertical) without wasting memory on a square viewport.
+const MASK_PX_X: int = 2048
+const MASK_PX_Y: int = 256
+# World extents covered by the mask. Stamps outside this range clamp
+# to the edge of the mask (won't be lost — just compressed).
+const WORLD_EXTENT_XZ: float = 40.0
+const WALL_HEIGHT_M: float = 4.0
 # Distance from wall surface to overlay quad — small enough to read
 # as "on" the wall, big enough to avoid z-fighting with the wall mesh.
 const SURFACE_OFFSET: float = 0.005
 
-var _subviewport: SubViewport
-var _stamp_root: Node2D
-var _camera2d: Camera2D
-# Shared ShaderMaterial bound to every overlay quad. Sampling the
-# SubViewport texture through this single material instance means
-# the binding only has to happen once — and stays inside the subtree.
+# Two SubViewports — one for ±X-facing walls, one for ±Z-facing.
+# Stamp routing picks one based on impact normal; shader sampling picks
+# one based on wall's world normal.
+var _mask_x_viewport: SubViewport
+var _mask_z_viewport: SubViewport
+var _mask_x_stamp_root: Node2D
+var _mask_z_stamp_root: Node2D
+# Shared ShaderMaterial bound to every overlay quad. Both mask textures
+# are bound here; the shader picks at sample time.
 var _overlay_material: ShaderMaterial
 
 
 func _ready() -> void:
 	add_to_group(&"wall_liquid_layer")
-	_build_subviewport()
+	_mask_x_viewport = _build_mask_viewport()
+	_mask_z_viewport = _build_mask_viewport()
+	_mask_x_stamp_root = _mask_x_viewport.get_node(^"StampRoot")
+	_mask_z_stamp_root = _mask_z_viewport.get_node(^"StampRoot")
 	_build_overlay_material()
-	_draw_test_stamp()
+	_draw_test_stamps()
 	_hook_level_builder()
 
 
-# One ShaderMaterial shared across all overlay quads. The sampler
-# binding lives here — child quads just reference the material.
+# Builds one rectangular SubViewport configured for persistent (never-
+# clear) accumulation. Used twice — one for each axis mask.
+func _build_mask_viewport() -> SubViewport:
+	var sv := SubViewport.new()
+	sv.size = Vector2i(MASK_PX_X, MASK_PX_Y)
+	sv.render_target_clear_mode = SubViewport.CLEAR_MODE_NEVER
+	sv.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	sv.transparent_bg = true
+	sv.disable_3d = true
+	sv.audio_listener_enable_2d = false
+	add_child(sv)
+	var cam := Camera2D.new()
+	cam.position = Vector2(float(MASK_PX_X) * 0.5, float(MASK_PX_Y) * 0.5)
+	cam.zoom = Vector2.ONE
+	cam.enabled = true
+	sv.add_child(cam)
+	var root := Node2D.new()
+	root.name = &"StampRoot"
+	sv.add_child(root)
+	return sv
+
+
+# Shared material samples BOTH masks; the shader picks based on the
+# wall's world normal. Constants for world extents + wall height are
+# pushed once at startup — they don't change at runtime.
 func _build_overlay_material() -> void:
 	_overlay_material = ShaderMaterial.new()
 	_overlay_material.shader = preload("res://shaders/wall_blood_overlay.gdshader")
-	_overlay_material.set_shader_parameter(&"mask", _subviewport.get_texture())
+	_overlay_material.set_shader_parameter(&"mask_x", _mask_x_viewport.get_texture())
+	_overlay_material.set_shader_parameter(&"mask_z", _mask_z_viewport.get_texture())
+	_overlay_material.set_shader_parameter(&"world_extent_xz", WORLD_EXTENT_XZ)
+	_overlay_material.set_shader_parameter(&"wall_height", WALL_HEIGHT_M)
 
 
 func _hook_level_builder() -> void:
@@ -165,33 +206,30 @@ func _spawn_overlay_for_wall(xform: Transform3D) -> bool:
 	return true
 
 
-# 512² SubViewport with persistent (never-clear) render target. The
-# test stamp from Phase 2 still draws into it — Phase 4 will switch
-# the overlay quads to use a shader that samples this texture.
-func _build_subviewport() -> void:
-	_subviewport = SubViewport.new()
-	_subviewport.name = &"Mask"
-	_subviewport.size = Vector2i(SUBVIEWPORT_PX, SUBVIEWPORT_PX)
-	_subviewport.render_target_clear_mode = SubViewport.CLEAR_MODE_NEVER
-	_subviewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-	_subviewport.transparent_bg = true
-	_subviewport.disable_3d = true
-	_subviewport.audio_listener_enable_2d = false
-	add_child(_subviewport)
-
-	_camera2d = Camera2D.new()
-	_camera2d.position = Vector2(float(SUBVIEWPORT_PX) * 0.5, float(SUBVIEWPORT_PX) * 0.5)
-	_camera2d.zoom = Vector2.ONE
-	_camera2d.enabled = true
-	_subviewport.add_child(_camera2d)
-
-	_stamp_root = Node2D.new()
-	_stamp_root.name = &"StampRoot"
-	_subviewport.add_child(_stamp_root)
+# Draws one static stamp into EACH mask at world (0, wall_height/2)
+# — i.e. at the center of the level horizontally and mid-height
+# vertically. Only walls passing through world x=0 or z=0 at mid-
+# height should show the stamp, and at a fixed ~1m physical size.
+# (Walls elsewhere should stay blood-free.) Phase 6 replaces these
+# debug stamps with real gameplay routing.
+func _draw_test_stamps() -> void:
+	var tex := _make_test_stamp_texture()
+	for root in [_mask_x_stamp_root, _mask_z_stamp_root]:
+		var sprite := Sprite2D.new()
+		sprite.texture = tex
+		# World (0, wall_height/2) → pixel (MASK_PX_X/2, MASK_PX_Y/2).
+		sprite.position = Vector2(float(MASK_PX_X) * 0.5, float(MASK_PX_Y) * 0.5)
+		# Scale so the stamp's physical size is ~0.5m diameter on the
+		# mask's world resolution. tex is 64px wide; 0.5m * (MASK_PX_X /
+		# WORLD_EXTENT_XZ) = 0.5 * 51.2 = 25.6 px diameter target;
+		# scale = 25.6 / 64 = 0.4. Both axes scaled the same so the
+		# stamp stays circular in world units.
+		sprite.scale = Vector2(0.4, 0.4)
+		root.add_child(sprite)
 
 
-# Static test stamp from Phase 2 — kept for Phase 4 to sample.
-func _draw_test_stamp() -> void:
+# Soft-edged white circle, 64px. Reused for both mask debug stamps.
+func _make_test_stamp_texture() -> ImageTexture:
 	var img := Image.create(64, 64, false, Image.FORMAT_RGBA8)
 	for y in 64:
 		for x in 64:
@@ -200,9 +238,4 @@ func _draw_test_stamp() -> void:
 			var d := sqrt(dx * dx + dy * dy) / 28.0
 			var a: float = clampf(1.0 - d, 0.0, 1.0)
 			img.set_pixel(x, y, Color(1.0, 1.0, 1.0, a))
-	var tex := ImageTexture.create_from_image(img)
-	var sprite := Sprite2D.new()
-	sprite.texture = tex
-	sprite.position = Vector2(float(SUBVIEWPORT_PX) * 0.5, float(SUBVIEWPORT_PX) * 0.5)
-	sprite.scale = Vector2(2.0, 2.0)
-	_stamp_root.add_child(sprite)
+	return ImageTexture.create_from_image(img)
