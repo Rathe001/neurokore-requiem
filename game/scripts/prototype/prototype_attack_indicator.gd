@@ -1185,13 +1185,25 @@ static func spawn_blood_wall_splatter(parent: Node, world_pos: Vector3, wall_nor
 	# is fine.
 	var layer: WallLiquidLayer = _resolve_wall_liquid_layer(parent, blood_type, wall_normal)
 	if layer == null:
+		if not _wall_blood_route_warned:
+			push_warning("[wall blood] No WallLiquidLayer found for normal ",
+				wall_normal, " — stamp dropped. Check level_shell has the wall layer nodes.")
+			_wall_blood_route_warned = true
 		return
+	if not _wall_blood_route_logged:
+		print("[wall blood] First stamp routed to layer ", layer.name,
+			" axis=", layer.surface_axis, " at world=", world_pos, " normal=", wall_normal)
+		_wall_blood_route_logged = true
 	var tex: Texture2D = PrototypeEnemy._get_settle_stamp_texture()
 	# Wall splats read smaller at iso angle than floor pools; tighten the
 	# radius range vs the previous Decal size to keep visual parity with
 	# the new shader-based pipeline.
 	var radius: float = randf_range(0.30, 0.55)
 	layer.stamp_with_drips(world_pos, tex, radius, 1.0)
+
+
+static var _wall_blood_route_logged: bool = false
+static var _wall_blood_route_warned: bool = false
 
 
 static func _resolve_wall_liquid_layer(parent: Node, blood_type: StringName, wall_normal: Vector3) -> WallLiquidLayer:

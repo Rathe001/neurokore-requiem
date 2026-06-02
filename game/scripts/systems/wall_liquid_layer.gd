@@ -98,6 +98,10 @@ func _ready() -> void:
 ## procedural_wall.gdshader, and pushes the SubViewport texture +
 ## uniforms onto it. Safe to call multiple times. The first wall layer
 ## instance also pushes the shared color / extent uniforms.
+## Tracks materials it already bound so per-frame retries are cheap
+## once everything's wired.
+var _bound_materials: Array[ShaderMaterial] = []
+
 func bind_to_all_wall_materials() -> void:
 	var tex: Texture2D = _subviewport.get_texture() if _subviewport != null else null
 	if tex == null:
@@ -107,7 +111,12 @@ func bind_to_all_wall_materials() -> void:
 		if surface_axis == SurfaceAxis.X_FACING
 		else &"wall_blood_mask_z"
 	)
+	var before := _bound_materials.size()
 	_walk_and_bind(get_tree().root, key, tex)
+	var after := _bound_materials.size()
+	if after > before:
+		print("[WallLiquidLayer:", surface_axis, "] bound ", after - before,
+			" wall material(s), total ", after)
 
 
 func _walk_and_bind(node: Node, mask_key: StringName, mask_tex: Texture2D) -> void:
@@ -136,28 +145,35 @@ func _bind_wall_sm(gi: GeometryInstance3D, mask_key: StringName, mask_tex: Textu
 		sm.set_shader_parameter(&"wall_blood_dried_color", dried_color)
 		sm.set_shader_parameter(&"wall_blood_extent_xz", WORLD_EXTENT_METERS)
 		sm.set_shader_parameter(&"wall_blood_extent_y", wall_height_meters)
+	if not _bound_materials.has(sm):
+		_bound_materials.append(sm)
 
+
+# How long after _ready to keep retrying bind every frame. Long enough
+# to cover a streamed level build (which can take a few seconds). Once
+# walls are built they don't get added later, so the retry window
+# closes and we stop walking the tree.
+const _RETRY_BIND_WINDOW_SEC: float = 8.0
+var _retry_bind_elapsed: float = 0.0
 
 func _process(delta: float) -> void:
+	# Retry binding for the first few seconds — streamed level builds
+	# add wall MMIs across many frames, so the deferred-call + built-
+	# signal pair sometimes misses the late arrivals.
+	if _retry_bind_elapsed < _RETRY_BIND_WINDOW_SEC:
+		_retry_bind_elapsed += delta
+		bind_to_all_wall_materials()
 	# Shared dry timer ticked by whichever layer registered first;
 	# pushes wall_blood_age to every wall material we've bound to.
 	if get_instance_id() == _shared_ticker_id:
 		_shared_wall_dry_timer += delta
 		var age: float = clampf(_shared_wall_dry_timer / dry_duration_sec, 0.0, 1.0)
-		_push_age_to_wall_materials(get_tree().root, age)
+		for sm in _bound_materials:
+			if sm != null and is_instance_valid(sm):
+				sm.set_shader_parameter(&"wall_blood_age", age)
 	_process_drips(delta)
 
 
-func _push_age_to_wall_materials(node: Node, age: float) -> void:
-	if node is GeometryInstance3D:
-		var gi: GeometryInstance3D = node
-		var mat: Material = gi.material_override
-		if mat is ShaderMaterial:
-			var sm: ShaderMaterial = mat
-			if sm.shader != null and sm.shader.resource_path == _WALL_SHADER_PATH:
-				sm.set_shader_parameter(&"wall_blood_age", age)
-	for c in node.get_children():
-		_push_age_to_wall_materials(c, age)
 
 
 # Reset the shared dry timer whenever a stamp lands on either axis.
