@@ -62,13 +62,16 @@ uniform float density_opacity_max : hint_range(0.4, 1.0) = 0.98;
 // pattern is clearly visible.
 uniform float alpha_min : hint_range(0.0, 1.0) = 0.88;
 
-// Wet-look knobs back to PBR-driven. Dense core glossy (catches
-// nearby lights as wet sheen) but the very dark ALBEDO above means
-// PBR diffuse can't amplify the blood into bright red.
-uniform float roughness : hint_range(0.0, 1.0) = 0.22;
-uniform float normal_strength : hint_range(0.0, 2.0) = 0.06;
+// Wet-look knobs. Applied UNIFORMLY across the whole pool (not
+// density-gated) so there's no bright spot at the dense core — the
+// previous gating made the center pickup spec highlights from
+// overhead lights while edges stayed matte, which read as "shiny
+// dot in the middle." Values dialed down so uniform application
+// doesn't lift the edges back into bright territory.
+uniform float roughness : hint_range(0.0, 1.0) = 0.40;
+uniform float normal_strength : hint_range(0.0, 2.0) = 0.04;
 uniform float noise_scale : hint_range(0.5, 32.0) = 5.0;
-uniform float specular_intensity : hint_range(0.0, 1.0) = 0.40;
+uniform float specular_intensity : hint_range(0.0, 1.0) = 0.22;
 // Brightness bias on the multiplied result. Dropped to 0.25 — the
 // multiply-stain (lit floor × red tint) was lifting the perimeter
 // into visible red despite the very dark colors. At 0.25 the
@@ -141,22 +144,22 @@ void fragment() {
 	vec3 stained = mix(stained_mul, blood_color, opacity_here);
 
 	// Two-octave noise normal map for the wet-sheen surface
-	// perturbation. PBR specular hits this perturbed surface at the
-	// camera angle, giving small bright glints over the dense core.
+	// perturbation. Sheen is uniform across the pool (no density
+	// gate) so there's no bright spot at the center.
 	vec2 n_uv1 = UV * noise_scale;
 	vec2 n_uv2 = UV * noise_scale * 2.3 + vec2(13.7, 5.1);
 	vec3 n1 = texture(surface_noise, n_uv1).rgb * 2.0 - 1.0;
 	vec3 n2 = texture(surface_noise, n_uv2).rgb * 2.0 - 1.0;
 	vec3 n_mixed = normalize(n1 * 0.6 + n2 * 0.4);
 	NORMAL_MAP = vec3(n_mixed.xy * 0.5 + 0.5, 1.0);
-	NORMAL_MAP_DEPTH = normal_strength * mix(0.0, 1.0, density);
+	NORMAL_MAP_DEPTH = normal_strength;
 
 	ALBEDO = stained;
-	// Edges very matte (no spec pickup → can't brighten under
-	// overhead lights), dense core glossy (catches nearby lights).
-	ROUGHNESS = mix(0.92, roughness, density);
+	// Uniform wet sheen — same roughness + specular across the whole
+	// pool so the core doesn't read as a shiny dot in the middle.
+	ROUGHNESS = roughness;
 	METALLIC = 0.0;
-	SPECULAR = specular_intensity * mix(0.0, 1.0, density);
+	SPECULAR = specular_intensity;
 	// ALPHA density-driven: thin areas fade transparent, dense areas
 	// opaque. Perimeter smoothstep gates the discard anti-aliasing.
 	ALPHA = alpha * mix(alpha_min, 1.0, density);
