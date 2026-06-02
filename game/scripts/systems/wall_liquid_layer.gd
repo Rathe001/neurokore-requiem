@@ -42,10 +42,17 @@ var _overlay_material: ShaderMaterial
 
 # ── Drip streak tuning ────────────────────────────────────────────
 const DRIP_RADIUS_THRESHOLD: float = 0.12  # main stamp radius below this skips drips
-const DRIP_LIFETIME_MIN: float = 2.2
-const DRIP_LIFETIME_MAX: float = 3.8
-const DRIP_FALL_SPEED_MIN: float = 0.25  # m/sec — viscous but visibly moving
-const DRIP_FALL_SPEED_MAX: float = 0.45
+# Cap drip vertical reach so a streak stays visually attached to its
+# splatter. Previously fall_speed * lifetime could produce ~1.7m of
+# fall — with the new vertical scatter on splatter positions, streaks
+# ended up far below their parent splatter, reading as disconnected
+# floating drips. Capping fall_distance at ~0.6m keeps the streak
+# anchored to the splatter that spawned it.
+const DRIP_MAX_FALL_DISTANCE_M: float = 0.6
+const DRIP_LIFETIME_MIN: float = 1.4
+const DRIP_LIFETIME_MAX: float = 2.2
+const DRIP_FALL_SPEED_MIN: float = 0.18  # m/sec — viscous but visibly moving
+const DRIP_FALL_SPEED_MAX: float = 0.32
 # Wider drip — 4cm radius (8cm physical width) so the streak is
 # visible against the dark walls. Previous 1.5cm was so thin the
 # streak read as nothing visible.
@@ -59,7 +66,7 @@ const DRIP_VERTICAL_STRETCH: float = 4.0
 # silhouette rather than getting buried inside it, close enough that
 # the streak still visually connects to its parent splatter rather
 # than floating disconnected.
-const DRIP_START_OFFSET_RATIO: float = 0.5
+const DRIP_START_OFFSET_RATIO: float = 0.1
 const DRIP_PER_FRAME_INTENSITY: float = 0.13
 const DRIP_COUNT_MIN: int = 2
 const DRIP_COUNT_MAX: int = 4
@@ -198,7 +205,11 @@ func _spawn_drips(world_pos: Vector3, use_x_mask: bool, stamp_root: Node2D, sour
 	var px_per_m_v: float = float(MASK_PX_Y) / WALL_HEIGHT_M
 	var drip_tex: Texture2D = _get_cached_stamp_texture()  # soft circle fits drip
 	for i in drip_count:
-		var scatter_h: float = randf_range(-source_radius * 0.5, source_radius * 0.5)
+		# Tighter horizontal scatter so drips emerge from inside the
+		# splatter's core (0.25× radius vs the previous 0.5×) instead
+		# of from its perimeter, reading as drainage from the splat
+		# rather than separate ribbons.
+		var scatter_h: float = randf_range(-source_radius * 0.25, source_radius * 0.25)
 		var start_world: Vector3 = world_pos
 		# Drop the drip start BELOW the splatter so its trail emerges into
 		# clean wall instead of overlapping the splatter's own coverage.
@@ -225,7 +236,11 @@ func _spawn_drips(world_pos: Vector3, use_x_mask: bool, stamp_root: Node2D, sour
 		stamp_root.add_child(sprite)
 		var fall_speed: float = randf_range(DRIP_FALL_SPEED_MIN, DRIP_FALL_SPEED_MAX)
 		var lifetime: float = randf_range(DRIP_LIFETIME_MIN, DRIP_LIFETIME_MAX)
-		var fall_distance_px: float = fall_speed * lifetime * px_per_m_v
+		# Cap total fall distance — keeps the streak tail near the
+		# splatter regardless of speed/lifetime roll, so streaks read
+		# as visually anchored rather than floating off into space.
+		var fall_distance_m: float = minf(fall_speed * lifetime, DRIP_MAX_FALL_DISTANCE_M)
+		var fall_distance_px: float = fall_distance_m * px_per_m_v
 		_active_drips.append({
 			&"sprite": sprite,
 			&"elapsed": 0.0,

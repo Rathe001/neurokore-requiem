@@ -2703,8 +2703,8 @@ func _spawn_settle_pool() -> void:
 # growth — a single sprite tweens its scale from initial → final radius
 # over duration seconds, additively painting the mask each frame.
 const _POOL_EXPANSION_DURATION: float = 2.5
-const _POOL_INITIAL_RADIUS: float = 0.18
-const _POOL_FINAL_RADIUS: float = 0.9
+const _POOL_INITIAL_RADIUS: float = 0.22
+const _POOL_FINAL_RADIUS: float = 1.45
 
 
 # Per-hit droplet scatter — stamps `count` tiny lobed splatters around

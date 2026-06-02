@@ -147,7 +147,10 @@ func stamp_growing(world_pos: Vector3, stamp_texture: Texture2D, start_radius: f
 	# build up to a saturated value at the center, with newer outer
 	# pixels (only touched in later frames) ending lighter. Matches
 	# the natural look of blood seeping outward.
-	sprite.modulate = Color(1.0, 1.0, 1.0, intensity * 0.06)
+	# Per-frame alpha bumped from 0.06 → 0.11 so the growing pool
+	# saturates faster — the old value left the larger outer ring
+	# reading as faint pink instead of fully-pooled blood.
+	sprite.modulate = Color(1.0, 1.0, 1.0, intensity * 0.11)
 	sprite.position = _world_to_viewport_px(world_pos)
 	sprite.material = _make_additive_canvas_material()
 	sprite.rotation = randf() * TAU
