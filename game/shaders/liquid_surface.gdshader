@@ -62,16 +62,17 @@ uniform float density_opacity_max : hint_range(0.4, 1.0) = 0.98;
 // pattern is clearly visible.
 uniform float alpha_min : hint_range(0.0, 1.0) = 0.88;
 
-// Wet-look knobs. Applied UNIFORMLY across the whole pool (not
-// density-gated) so there's no bright spot at the dense core — the
-// previous gating made the center pickup spec highlights from
-// overhead lights while edges stayed matte, which read as "shiny
-// dot in the middle." Values dialed down so uniform application
-// doesn't lift the edges back into bright territory.
+// Wet-look knobs. Applied uniformly across the whole pool — see the
+// "no bright center spot" change below the noise sampling.
 uniform float roughness : hint_range(0.0, 1.0) = 0.40;
 uniform float normal_strength : hint_range(0.0, 2.0) = 0.04;
 uniform float noise_scale : hint_range(0.5, 32.0) = 5.0;
 uniform float specular_intensity : hint_range(0.0, 1.0) = 0.22;
+// Fake 3D thickness: derives a normal from the gradient of the
+// density field (dFdx/dFdy of the modulated density value) so the
+// pool reads as raised at the dense center, sloping down toward
+// the thin perimeter. Higher = steeper bump.
+uniform float thickness_strength : hint_range(0.0, 200.0) = 60.0;
 // Brightness bias on the multiplied result. Dropped to 0.25 — the
 // multiply-stain (lit floor × red tint) was lifting the perimeter
 // into visible red despite the very dark colors. At 0.25 the
@@ -143,16 +144,28 @@ void fragment() {
 	float opacity_here = mix(solid_opacity, density_opacity_max, density);
 	vec3 stained = mix(stained_mul, blood_color, opacity_here);
 
-	// Two-octave noise normal map for the wet-sheen surface
-	// perturbation. Sheen is uniform across the pool (no density
-	// gate) so there's no bright spot at the center.
+	// Thickness normal from the density gradient — fakes a raised
+	// 3D pool shape (flat-ish top in the dense core, sloping down
+	// to the thin perimeter). dFdx/dFdy give the per-pixel rate of
+	// change of density, which IS the local surface slope of a
+	// "thickness = density" heightfield.
+	float dx_d = dFdx(density);
+	float dy_d = dFdy(density);
+	vec3 thickness_n = vec3(-dx_d * thickness_strength, -dy_d * thickness_strength, 1.0);
+
+	// Two-octave noise normal for micro wet-sheen detail on top of
+	// the macro thickness bump.
 	vec2 n_uv1 = UV * noise_scale;
 	vec2 n_uv2 = UV * noise_scale * 2.3 + vec2(13.7, 5.1);
 	vec3 n1 = texture(surface_noise, n_uv1).rgb * 2.0 - 1.0;
 	vec3 n2 = texture(surface_noise, n_uv2).rgb * 2.0 - 1.0;
-	vec3 n_mixed = normalize(n1 * 0.6 + n2 * 0.4);
-	NORMAL_MAP = vec3(n_mixed.xy * 0.5 + 0.5, 1.0);
-	NORMAL_MAP_DEPTH = normal_strength;
+	vec3 micro_n = n1 * 0.6 + n2 * 0.4;
+
+	// Combine: thickness drives the macro shape, micro noise adds
+	// surface variation. Micro is weighted by normal_strength.
+	vec3 combined = normalize(thickness_n + vec3(micro_n.xy * normal_strength, 0.0));
+	NORMAL_MAP = vec3(combined.xy * 0.5 + 0.5, 1.0);
+	NORMAL_MAP_DEPTH = 1.0;
 
 	ALBEDO = stained;
 	// Uniform wet sheen — same roughness + specular across the whole
