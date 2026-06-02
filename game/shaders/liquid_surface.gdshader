@@ -43,8 +43,8 @@ uniform float shape_noise_strength : hint_range(0.0, 1.0) = 0.55;
 // amplified pink wash the broken sort order was producing.
 //   fresh_color = THIN/edge tint (dark blood, faint red hint)
 //   dried_color = DENSE/core tint (near-black, barely-there red)
-uniform vec4 fresh_color : source_color = vec4(0.09, 0.020, 0.028, 1.0);
-uniform vec4 dried_color : source_color = vec4(0.038, 0.008, 0.013, 1.0);
+uniform vec4 fresh_color : source_color = vec4(0.14, 0.030, 0.042, 1.0);
+uniform vec4 dried_color : source_color = vec4(0.062, 0.013, 0.020, 1.0);
 uniform float age : hint_range(0.0, 1.0) = 0.0;
 // Shapes the thin→dense ramp.
 uniform float density_power : hint_range(0.3, 4.0) = 0.9;
