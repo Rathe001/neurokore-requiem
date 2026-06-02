@@ -46,13 +46,20 @@ const DRIP_LIFETIME_MIN: float = 2.8
 const DRIP_LIFETIME_MAX: float = 4.5
 const DRIP_FALL_SPEED_MIN: float = 0.35  # m/sec — viscous but visibly moving
 const DRIP_FALL_SPEED_MAX: float = 0.70
-const DRIP_RADIUS_M: float = 0.018  # ~1.8cm wide drip droplet (narrow → reads as a line)
-# Drip sprites stretch vertically so each frame's paint deposits a
-# short vertical line segment rather than a chunky blob — cumulative
-# painting then accumulates into a continuous streak instead of a
-# string of overlapping circles.
-const DRIP_VERTICAL_STRETCH: float = 3.0
-const DRIP_PER_FRAME_INTENSITY: float = 0.11  # low, cumulative across frames
+const DRIP_RADIUS_M: float = 0.015  # ~1.5cm wide drip droplet (narrow → reads as a line)
+# Aggressive vertical stretch so each frame's paint is a long thin
+# line segment rather than a small ellipse. With consecutive-frame
+# overlap, cumulative paints build a clear streak rather than a stack
+# of stretched ovals that read as a single chunky shape.
+const DRIP_VERTICAL_STRETCH: float = 10.0
+# Drips start BELOW the main splatter rather than at its center.
+# Otherwise the first ~half of the drip's path falls inside the
+# splatter's coverage, and the streak doesn't read as separate from
+# the splatter. Offset = source_radius * this ratio (so a 0.3m
+# splatter pushes drip starts 0.24m below its center, well past its
+# bottom edge).
+const DRIP_START_OFFSET_RATIO: float = 0.8
+const DRIP_PER_FRAME_INTENSITY: float = 0.06  # tighter per-frame, more accumulation frames
 const DRIP_COUNT_MIN: int = 2
 const DRIP_COUNT_MAX: int = 4
 const DRIP_FADE_TAIL_SEC: float = 0.8  # drip fades out over last N seconds
@@ -192,6 +199,9 @@ func _spawn_drips(world_pos: Vector3, use_x_mask: bool, stamp_root: Node2D, sour
 	for i in drip_count:
 		var scatter_h: float = randf_range(-source_radius * 0.5, source_radius * 0.5)
 		var start_world: Vector3 = world_pos
+		# Drop the drip start BELOW the splatter so its trail emerges into
+		# clean wall instead of overlapping the splatter's own coverage.
+		start_world.y -= source_radius * DRIP_START_OFFSET_RATIO
 		if use_x_mask:
 			start_world.z += scatter_h
 		else:
