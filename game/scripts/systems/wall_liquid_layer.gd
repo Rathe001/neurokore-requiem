@@ -7,16 +7,13 @@ extends Node3D
 ## persistent SubViewport mask that's also a child of THIS node. Same
 ## subtree → ViewportTexture references resolve reliably.
 ##
-## Phase 6: public stamp(world_pos, normal, radius, intensity) API.
-## PrototypeAttackIndicator.spawn_blood_wall_splatter routes through
-## this for gameplay-driven blood — enemy hits near walls now produce
-## real splatter at the impact location, sized in world units, drawn
-## into the right mask based on impact normal.
-##
-## Phase 7 will add gravity-drip streaks (sprites that fall in viewport
-## space, painting the mask each frame as they descend) and replace
-## the soft-circle stamp with a chaotic lobed splatter texture matching
-## the floor LiquidLayer's look.
+## Phase 7: gravity-drip streaks below splatters. Each splatter over a
+## minimum radius spawns 1-3 drip sprites that fall in viewport-Y space
+## (= world-down) over 1.8-3.0 seconds with ease-out, painting the mask
+## additively each frame. Cumulative per-frame paints form streaks from
+## the impact point downward — the kind of trail blood actually leaves
+## on a vertical surface. Mist drops (below the threshold) skip drips
+## so per-hit specks don't all sprout streaks.
 
 # Mask resolution — rectangular because the world Y range (wall_height,
 # ~3-4m) is much shorter than the X/Z range (~40m). Same px/m density
@@ -43,6 +40,23 @@ var _mask_z_stamp_root: Node2D
 # are bound here; the shader picks at sample time.
 var _overlay_material: ShaderMaterial
 
+# ── Drip streak tuning ────────────────────────────────────────────
+const DRIP_RADIUS_THRESHOLD: float = 0.12  # main stamp radius below this skips drips
+const DRIP_LIFETIME_MIN: float = 1.8
+const DRIP_LIFETIME_MAX: float = 3.0
+const DRIP_FALL_SPEED_MIN: float = 0.20  # m/sec — viscous blood, falls slowly
+const DRIP_FALL_SPEED_MAX: float = 0.45
+const DRIP_RADIUS_M: float = 0.025  # ~2.5cm wide drip droplet
+const DRIP_PER_FRAME_INTENSITY: float = 0.08  # low, cumulative across frames
+const DRIP_COUNT_MIN: int = 1
+const DRIP_COUNT_MAX: int = 3
+const DRIP_FADE_TAIL_SEC: float = 0.6  # drip fades out over last N seconds
+
+# Active drip sprites driven by _process. Each entry tracks the sprite
+# plus its motion parameters so we can update position + alpha per frame.
+# Cleared as drips finish their lifetime.
+var _active_drips: Array[Dictionary] = []
+
 
 func _ready() -> void:
 	add_to_group(&"wall_liquid_layer")
@@ -52,6 +66,43 @@ func _ready() -> void:
 	_mask_z_stamp_root = _mask_z_viewport.get_node(^"StampRoot")
 	_build_overlay_material()
 	_hook_level_builder()
+	set_process(true)
+
+
+func _process(delta: float) -> void:
+	_process_drips(delta)
+
+
+# Per-frame motion + alpha-fade for every live drip. Each drip's
+# position.y advances toward its end-of-life target along an ease-out
+# curve (1 - (1-t)^2), so it slows as it falls — the cumulative draws
+# leave a streak that tapers naturally. Alpha fades out over the last
+# DRIP_FADE_TAIL_SEC so the streak tip pales rather than just stopping.
+func _process_drips(delta: float) -> void:
+	if _active_drips.is_empty():
+		return
+	var i := 0
+	while i < _active_drips.size():
+		var drip: Dictionary = _active_drips[i]
+		var sprite: Sprite2D = drip[&"sprite"] as Sprite2D
+		if sprite == null or not is_instance_valid(sprite):
+			_active_drips.remove_at(i)
+			continue
+		var elapsed: float = drip[&"elapsed"] + delta
+		var lifetime: float = drip[&"lifetime"]
+		if elapsed >= lifetime:
+			sprite.queue_free()
+			_active_drips.remove_at(i)
+			continue
+		drip[&"elapsed"] = elapsed
+		var t: float = elapsed / lifetime
+		var eased: float = 1.0 - (1.0 - t) * (1.0 - t)
+		var start_y: float = drip[&"start_y"]
+		var fall_px: float = drip[&"fall_px"]
+		sprite.position.y = start_y + eased * fall_px
+		var fade: float = clampf((lifetime - elapsed) / DRIP_FADE_TAIL_SEC, 0.0, 1.0)
+		sprite.modulate = Color(1.0, 1.0, 1.0, DRIP_PER_FRAME_INTENSITY * fade)
+		i += 1
 
 
 ## Public API: stamp blood on a wall at the given world position. The
@@ -116,6 +167,53 @@ func stamp(world_pos: Vector3, wall_normal: Vector3, world_radius: float, intens
 				s.queue_free(),
 		CONNECT_ONE_SHOT
 	)
+	# Spawn gravity-drip streaks below the splatter. Tiny mist drops
+	# skip this — would otherwise sprout streaks from every per-hit
+	# speck during a fight, reading as constant rain.
+	if world_radius >= DRIP_RADIUS_THRESHOLD:
+		_spawn_drips(world_pos, use_x_mask, stamp_root, world_radius)
+
+
+# Emits N small drip sprites just below the impact point. Each falls
+# in mask Y (= world down) over its lifetime, paints additively each
+# frame, accumulating a streak. Initial horizontal scatter spreads
+# the start points within the splatter footprint so a single splat
+# trails multiple ribbons instead of one collinear line.
+func _spawn_drips(world_pos: Vector3, use_x_mask: bool, stamp_root: Node2D, source_radius: float) -> void:
+	var drip_count: int = randi_range(DRIP_COUNT_MIN, DRIP_COUNT_MAX)
+	var px_per_m_h: float = float(MASK_PX_X) / WORLD_EXTENT_XZ
+	var px_per_m_v: float = float(MASK_PX_Y) / WALL_HEIGHT_M
+	var drip_tex: Texture2D = _get_cached_stamp_texture()  # soft circle fits drip
+	for i in drip_count:
+		var scatter_h: float = randf_range(-source_radius * 0.5, source_radius * 0.5)
+		var start_world: Vector3 = world_pos
+		if use_x_mask:
+			start_world.z += scatter_h
+		else:
+			start_world.x += scatter_h
+		var horizontal_world: float = start_world.z if use_x_mask else start_world.x
+		var sprite := Sprite2D.new()
+		sprite.texture = drip_tex
+		sprite.material = _get_cached_additive_material()
+		sprite.position = Vector2(
+			horizontal_world * px_per_m_h + float(MASK_PX_X) * 0.5,
+			(WALL_HEIGHT_M - start_world.y) * px_per_m_v,
+		)
+		var diam_px: float = DRIP_RADIUS_M * 2.0 * px_per_m_h
+		var base_scale: float = diam_px / float(drip_tex.get_size().x)
+		sprite.scale = Vector2(base_scale, base_scale)
+		sprite.modulate = Color(1.0, 1.0, 1.0, DRIP_PER_FRAME_INTENSITY)
+		stamp_root.add_child(sprite)
+		var fall_speed: float = randf_range(DRIP_FALL_SPEED_MIN, DRIP_FALL_SPEED_MAX)
+		var lifetime: float = randf_range(DRIP_LIFETIME_MIN, DRIP_LIFETIME_MAX)
+		var fall_distance_px: float = fall_speed * lifetime * px_per_m_v
+		_active_drips.append({
+			&"sprite": sprite,
+			&"elapsed": 0.0,
+			&"lifetime": lifetime,
+			&"start_y": sprite.position.y,
+			&"fall_px": fall_distance_px,
+		})
 
 
 # Builds one rectangular SubViewport configured for persistent (never-
