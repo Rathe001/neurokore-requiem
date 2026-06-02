@@ -130,10 +130,13 @@ void fragment() {
 	float shape_mod = mix(1.0 - effective_strength, 1.0 + effective_strength, noise);
 	density = clamp(density * shape_mod, 0.0, 1.0);
 
-	// Color: thin (pinkish-red) at the edge → dense (near-black
-	// burgundy) at the core. Age desaturates further as it dries.
+	// Color: thin (red-stain) at edge → dense (near-black) at core.
 	vec3 blood_color = mix(fresh_color.rgb, dried_color.rgb, density);
-	blood_color *= mix(1.0, 0.7, age);
+	// Aging: hue shift toward brown (drop blue, hold green) + further
+	// darken. Real dried blood reads less saturated and more muddy
+	// than fresh — adjusts color over the layer's drying window.
+	blood_color *= mix(vec3(1.0, 1.0, 1.0), vec3(0.85, 0.95, 0.55), age);
+	blood_color *= mix(1.0, 0.65, age);
 
 	// Multiply-stain pass: blood color × floor underneath. Edges
 	// thus tint the floor pink rather than painting over it.
@@ -168,11 +171,12 @@ void fragment() {
 	NORMAL_MAP_DEPTH = 1.0;
 
 	ALBEDO = stained;
-	// Uniform wet sheen — same roughness + specular across the whole
-	// pool so the core doesn't read as a shiny dot in the middle.
-	ROUGHNESS = roughness;
+	// Aging shifts roughness toward matte and specular toward dull —
+	// dried blood doesn't reflect light. Uniform across the pool
+	// (no density gate) so there's no bright center spot.
+	ROUGHNESS = mix(roughness, 0.85, age);
 	METALLIC = 0.0;
-	SPECULAR = specular_intensity;
+	SPECULAR = mix(specular_intensity, 0.05, age);
 	// ALPHA density-driven: thin areas fade transparent, dense areas
 	// opaque. Perimeter smoothstep gates the discard anti-aliasing.
 	ALPHA = alpha * mix(alpha_min, 1.0, density);

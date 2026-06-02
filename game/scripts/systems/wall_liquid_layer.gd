@@ -96,6 +96,21 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_process_drips(delta)
+	_advance_age(delta)
+
+
+# Drying tracker — increments while no new splatters land. Resets on
+# every stamp() call so combat keeps blood looking fresh; quiet
+# periods let pools dry to matte brown.
+@export var dry_duration_sec: float = 120.0
+var _time_since_last_stamp: float = 0.0
+
+
+func _advance_age(delta: float) -> void:
+	_time_since_last_stamp += delta
+	var age: float = clampf(_time_since_last_stamp / dry_duration_sec, 0.0, 1.0)
+	if _overlay_material != null:
+		_overlay_material.set_shader_parameter(&"age", age)
 
 
 # Per-frame motion + alpha-fade for every live drip. Each drip's
@@ -139,6 +154,9 @@ func _process_drips(delta: float) -> void:
 func stamp(world_pos: Vector3, wall_normal: Vector3, world_radius: float, intensity: float = 1.0) -> void:
 	if wall_normal.length_squared() < 0.0001:
 		return
+	# Reset the drying timer — fresh splatter keeps the wall blood
+	# looking wet until the next quiet period.
+	_time_since_last_stamp = 0.0
 	var nrm := wall_normal.normalized()
 	var use_x_mask: bool = absf(nrm.x) > absf(nrm.z)
 	var stamp_root: Node2D = _mask_x_stamp_root if use_x_mask else _mask_z_stamp_root

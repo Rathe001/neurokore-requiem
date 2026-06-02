@@ -53,11 +53,17 @@ uniform float blood_roughness : hint_range(0.0, 1.0) = 0.26;
 uniform float solid_opacity : hint_range(0.0, 1.0) = 0.0;
 
 // Wet-sheen tuning (same shape as the floor's normal map sampling).
-// Dialed down so highlights read as a subtle wet film instead of a
-// glass-bright reflection.
 uniform float normal_strength : hint_range(0.0, 2.0) = 0.04;
 uniform float noise_scale : hint_range(0.5, 32.0) = 5.0;
 uniform float specular_intensity : hint_range(0.0, 1.0) = 0.35;
+// Fake 3D thickness: derives a normal from the density-field gradient
+// (dFdx/dFdy) so the wall blood reads as raised at the dense core,
+// sloping down toward the thin perimeter. Matches the floor shader.
+uniform float thickness_strength : hint_range(0.0, 200.0) = 50.0;
+// Aging — 0 = fresh wet blood, 1 = fully dried. Driven by the layer's
+// _process tick. Shifts hue toward brown, raises roughness toward
+// matte, drops specular toward dull.
+uniform float age : hint_range(0.0, 1.0) = 0.0;
 
 varying vec3 v_world_pos;
 varying vec3 v_world_normal;
@@ -106,13 +112,17 @@ void fragment() {
 	float noise_hi = texture(shape_noise, v_quad_uv * shape_noise_scale * 3.7 + vec2(7.3, 2.1)).r;
 	float noise = noise_lo * 0.7 + noise_hi * 0.3;
 	float edge_factor = 1.0 - smoothstep(0.3, 0.95, density);
-	float core_floor = 0.18;
+	float core_floor_amt = 0.18;
 	float effective_strength = shape_noise_strength
-		* (core_floor + (1.0 - core_floor) * edge_factor);
+		* (core_floor_amt + (1.0 - core_floor_amt) * edge_factor);
 	float shape_mod = mix(1.0 - effective_strength, 1.0 + effective_strength, noise);
 	density = clamp(density * shape_mod, 0.0, 1.0);
 
 	vec3 blood_color = mix(blood_thin, blood_dense, density);
+	// Aging: hue shift toward brown (drop blue, hold green) + darken.
+	// Old blood reads less saturated and more muddy than fresh.
+	blood_color *= mix(vec3(1.0, 1.0, 1.0), vec3(0.85, 0.95, 0.55), age);
+	blood_color *= mix(1.0, 0.65, age);
 
 	// Multiply-stain × screen behind. Edges tint the wall pinkish,
 	// dense centers nearly cover it.
@@ -121,22 +131,33 @@ void fragment() {
 	float opacity_here = mix(solid_opacity, density_opacity_max, density);
 	vec3 stained = mix(stained_mul, blood_color, opacity_here);
 
-	// Wet sheen — two-octave static noise normal map. Sampled in
-	// quad-UV space (each wall is a flat QuadMesh) so the noise tiles
-	// consistently regardless of wall size. Strength scales with
-	// density so only the dense blood gets the glossy "wet" reflection.
+	// Thickness normal from density gradient — fakes a raised 3D
+	// splatter shape (raised dense core, sloping down to thin rim).
+	// Matches the floor's thickness shading.
+	float dx_d = dFdx(density);
+	float dy_d = dFdy(density);
+	vec3 thickness_n = vec3(-dx_d * thickness_strength, -dy_d * thickness_strength, 1.0);
+
+	// Two-octave micro noise for wet-sheen surface detail.
 	vec2 n_uv1 = v_quad_uv * noise_scale;
 	vec2 n_uv2 = v_quad_uv * noise_scale * 2.3 + vec2(13.7, 5.1);
 	vec3 n1 = texture(surface_noise, n_uv1).rgb * 2.0 - 1.0;
 	vec3 n2 = texture(surface_noise, n_uv2).rgb * 2.0 - 1.0;
-	vec3 n_mixed = normalize(n1 * 0.6 + n2 * 0.4);
-	NORMAL_MAP = vec3(n_mixed.xy * 0.5 + 0.5, 1.0);
-	NORMAL_MAP_DEPTH = normal_strength * mix(0.3, 1.0, density);
+	vec3 micro_n = n1 * 0.6 + n2 * 0.4;
+
+	// Combine thickness shape with micro variation.
+	vec3 combined = normalize(thickness_n + vec3(micro_n.xy * normal_strength, 0.0));
+	NORMAL_MAP = vec3(combined.xy * 0.5 + 0.5, 1.0);
+	NORMAL_MAP_DEPTH = 1.0;
 
 	ALBEDO = stained;
-	ROUGHNESS = mix(0.75, blood_roughness, density);
+	// Aging shifts roughness toward matte and specular toward dull —
+	// dried blood doesn't catch light highlights.
+	float aged_roughness = mix(blood_roughness, 0.85, age);
+	float aged_specular = mix(specular_intensity, 0.05, age);
+	ROUGHNESS = mix(0.75, aged_roughness, density);
 	METALLIC = 0.0;
-	SPECULAR = specular_intensity * mix(0.15, 1.0, density);
+	SPECULAR = aged_specular * mix(0.15, 1.0, density);
 	// ALPHA driven by density so thin pinkish edges fade to transparent
 	// (wall shows through) and only the dense dark core stays opaque.
 	// blood_alpha keeps the perimeter discard edge anti-aliased.
