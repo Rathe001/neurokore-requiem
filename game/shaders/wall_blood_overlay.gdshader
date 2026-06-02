@@ -27,6 +27,11 @@ uniform float stain_brightness : hint_range(0.5, 4.0) = 2.0;
 uniform float coverage_threshold : hint_range(0.0, 0.5) = 0.015;
 uniform float edge_softness : hint_range(0.0, 0.3) = 0.05;
 uniform float blood_roughness : hint_range(0.0, 1.0) = 0.22;
+// Same uniform as liquid_surface.gdshader (keep in sync so floor +
+// wall blood read as the same material): blends from pure multiply-
+// stain (0.0) toward solid painted tint (1.0). Dense blood reads as
+// painted; edges stay translucent.
+uniform float solid_opacity : hint_range(0.0, 1.0) = 0.3;
 
 varying vec3 v_world_pos;
 varying vec3 v_world_normal;
@@ -62,6 +67,10 @@ void fragment() {
 	// red while preserving the wall's panel detail / shadow / etc.
 	vec3 behind = texture(screen_tex, SCREEN_UV).rgb;
 	vec3 stained = behind * blood_tint * stain_brightness;
+	// Blend toward solid blood color so dense areas read as opaque
+	// blood paint rather than a faint tint over the wall texture.
+	// Same opacity term as the floor shader uses.
+	stained = mix(stained, blood_tint, solid_opacity);
 	ALBEDO = stained;
 	ROUGHNESS = blood_roughness;
 	METALLIC = 0.0;

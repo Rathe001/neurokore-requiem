@@ -47,6 +47,13 @@ uniform float stain_brightness : hint_range(0.5, 3.0) = 2.0;
 uniform float coverage_threshold : hint_range(0.0, 0.5) = 0.015;
 uniform float edge_softness : hint_range(0.0, 0.3) = 0.05;
 uniform float coverage_cap : hint_range(1.0, 4.0) = 1.0;
+// Blends from "pure multiply-stain" (0.0 = surface texture fully
+// shows through, floor pattern visible) toward "solid painted tint"
+// (1.0 = blood reads as paint, surface texture hidden). 0.3 keeps
+// the stain character at the edges where blood is thin while making
+// dense areas read as visibly painted blood rather than a faint
+// shadow on the floor.
+uniform float solid_opacity : hint_range(0.0, 1.0) = 0.3;
 
 void fragment() {
 	float raw_coverage = texture(liquid_mask, UV).a;
@@ -65,6 +72,10 @@ void fragment() {
 	vec3 behind = texture(screen_tex, SCREEN_UV).rgb;
 	vec3 stain_color = mix(fresh_color.rgb, dried_color.rgb, age);
 	vec3 stained = behind * stain_color * stain_brightness;
+	// Blend toward solid blood color (no surface multiply) so dense
+	// areas read as opaque painted blood rather than a faint tint
+	// over the floor pattern.
+	stained = mix(stained, stain_color, solid_opacity);
 
 	// Two-octave STATIC noise → perturbed normal for the wet shimmer.
 	// No TIME term — spilled blood doesn't ripple. The shimmer comes
