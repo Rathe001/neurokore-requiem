@@ -24,16 +24,25 @@ uniform sampler2D surface_noise : hint_normal, filter_linear, repeat_enable;
 // Aging is currently a global tween (uniform-driven) rather than per-
 // pixel timestamp; that's a Phase 2 upgrade if we want crime-scene
 // realism where individual pools age independently.
-uniform vec4 fresh_color : source_color = vec4(0.62, 0.04, 0.04, 1.0);
-uniform vec4 dried_color : source_color = vec4(0.28, 0.08, 0.08, 1.0);
+// Fresh color is a deep arterial red — not full-saturation red, which
+// reads as paint under bright fluorescents.
+uniform vec4 fresh_color : source_color = vec4(0.32, 0.03, 0.03, 1.0);
+uniform vec4 dried_color : source_color = vec4(0.14, 0.04, 0.04, 1.0);
 uniform float age : hint_range(0.0, 1.0) = 0.0;
 
 // Surface look knobs. Roughness is the BIG one for the "wet" read —
 // 0.2-0.4 gives glossy reflection, 0.8+ goes matte.
-uniform float roughness : hint_range(0.0, 1.0) = 0.32;
-uniform float normal_strength : hint_range(0.0, 2.0) = 0.45;
-uniform float noise_scale : hint_range(0.5, 32.0) = 6.0;
-uniform float noise_drift_speed : hint_range(0.0, 1.0) = 0.04;
+uniform float roughness : hint_range(0.0, 1.0) = 0.35;
+uniform float normal_strength : hint_range(0.0, 2.0) = 0.65;
+uniform float noise_scale : hint_range(0.5, 32.0) = 12.0;
+uniform float noise_drift_speed : hint_range(0.0, 1.0) = 0.03;
+// Caps the additive coverage mask. Without this, heavy stamp overlap
+// pushes alpha well past 1.0, the shader sees mask values like 3-4,
+// and any spec highlight in those zones blows out to white. 1.0 is
+// the natural cap of opaque liquid.
+uniform float coverage_cap : hint_range(1.0, 4.0) = 1.0;
+// Tones down spec — fresh blood is shiny, but not chrome.
+uniform float specular_intensity : hint_range(0.0, 1.0) = 0.35;
 
 // Alpha gate. Mask values below this discard the fragment — keeps the
 // floor plane invisible where there's no liquid. 0.04 is just above
@@ -45,10 +54,13 @@ uniform float coverage_threshold : hint_range(0.0, 0.5) = 0.04;
 uniform float edge_softness : hint_range(0.0, 0.3) = 0.05;
 
 void fragment() {
-	float coverage = texture(liquid_mask, UV).a;
-	if (coverage < coverage_threshold) {
+	float raw_coverage = texture(liquid_mask, UV).a;
+	if (raw_coverage < coverage_threshold) {
 		discard;
 	}
+	// Clamp the additive overlap so heavy-overlap pixels don't push
+	// the shader inputs (alpha + spec) into white-blowout territory.
+	float coverage = min(raw_coverage, coverage_cap);
 	// Smooth edge from coverage_threshold up to threshold + softness.
 	float edge_alpha = smoothstep(coverage_threshold, coverage_threshold + edge_softness, coverage);
 
@@ -68,6 +80,6 @@ void fragment() {
 	ALBEDO = albedo;
 	ROUGHNESS = roughness;
 	METALLIC = 0.0;
-	SPECULAR = 0.6;
+	SPECULAR = specular_intensity;
 	ALPHA = edge_alpha;
 }

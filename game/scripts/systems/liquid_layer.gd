@@ -89,14 +89,16 @@ func stamp(world_pos: Vector3, stamp_texture: Texture2D, world_radius: float, in
 	var sprite := Sprite2D.new()
 	sprite.texture = stamp_texture
 	sprite.modulate = Color(1.0, 1.0, 1.0, intensity)
-	# Position in SubViewport 2D space (1 unit = 1 meter). Use world
-	# X + Z; Y is the vertical axis and doesn't map to the floor plane.
-	sprite.position = Vector2(world_pos.x, world_pos.z)
-	# Scale the texture so its diameter renders as `2 * world_radius`
-	# meters in the SubViewport. Sprite2D.scale = world_size / texture_pixels.
+	# Explicit world → viewport-pixel conversion. Camera2D is at zoom
+	# 1.0 (no scaling), so sprite.position is interpreted directly in
+	# viewport pixels and the world-space mapping is one we control.
+	sprite.position = _world_to_viewport_px(world_pos)
+	# Scale the texture so its diameter is (2 * world_radius * PIXELS_PER_METER)
+	# pixels in the viewport. Texture pixel size × scale = on-screen pixel size.
 	var tex_size: Vector2 = stamp_texture.get_size()
 	if tex_size.x > 0.0:
-		sprite.scale = Vector2.ONE * (world_radius * 2.0 / tex_size.x)
+		var target_px: float = world_radius * 2.0 * PIXELS_PER_METER
+		sprite.scale = Vector2.ONE * (target_px / tex_size.x)
 	# Make sure additive blending is on so overlapping stamps sum.
 	sprite.material = _make_additive_canvas_material()
 	# Random rotation for organic variation between stamps.
@@ -112,6 +114,17 @@ func stamp(world_pos: Vector3, stamp_texture: Texture2D, world_radius: float, in
 			if s != null and is_instance_valid(s):
 				(s as Node).queue_free(),
 		CONNECT_ONE_SHOT
+	)
+
+
+# world (x, z) → viewport pixel (px, py). The viewport's pixel-(0, 0)
+# is the top-left, so we offset by half the viewport size to put world
+# (0, 0) at the viewport center.
+func _world_to_viewport_px(world_pos: Vector3) -> Vector2:
+	var half: float = float(SUBVIEWPORT_PX) * 0.5
+	return Vector2(
+		world_pos.x * PIXELS_PER_METER + half,
+		world_pos.z * PIXELS_PER_METER + half,
 	)
 
 
@@ -136,11 +149,12 @@ func _build_subviewport() -> void:
 	add_child(_subviewport)
 
 	_camera2d = Camera2D.new()
-	# Camera position (0, 0) in 2D centers the visible area at world
-	# origin. zoom = PIXELS_PER_METER means 1 world meter → that many
-	# pixels in the SubViewport.
-	_camera2d.position = Vector2.ZERO
-	_camera2d.zoom = Vector2(PIXELS_PER_METER, PIXELS_PER_METER)
+	# Camera centered on the viewport center (= world origin after
+	# _world_to_viewport_px offset). zoom = 1.0 so sprite.position
+	# values flow through unscaled — we do the world→pixel math
+	# ourselves in _world_to_viewport_px for predictability.
+	_camera2d.position = Vector2(float(SUBVIEWPORT_PX) * 0.5, float(SUBVIEWPORT_PX) * 0.5)
+	_camera2d.zoom = Vector2.ONE
 	_camera2d.enabled = true
 	_subviewport.add_child(_camera2d)
 
