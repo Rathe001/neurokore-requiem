@@ -32,32 +32,6 @@ render_mode cull_disabled, depth_draw_opaque, diffuse_burley, specular_schlick_g
 // tangent attribute on the mesh — we build the world-space perturbed
 // normal directly from the height-field gradient.
 
-// ── Wall blood (LiquidLayer) ─────────────────────────────────────────────
-// Two SubViewport masks maintained by WallLiquidLayer instances under
-// the level shell. Bound to this material at level-build time by
-// WallLiquidLayer.bind_to_wall_material — not global uniforms, since
-// Godot 4.6's global sampler2D path doesn't reliably propagate
-// ViewportTextures to all shader instances. Direct material binding
-// avoids that and gives us a clear hook for debugging.
-//
-// wall_blood_mask_x covers walls facing ±X (UV from world.zy).
-// wall_blood_mask_z covers ±Z walls (UV from world.xy).
-uniform sampler2D wall_blood_mask_x : filter_linear, repeat_disable, hint_default_black;
-uniform sampler2D wall_blood_mask_z : filter_linear, repeat_disable, hint_default_black;
-uniform vec4 wall_blood_fresh_color : source_color = vec4(0.55, 0.10, 0.10, 1.0);
-uniform vec4 wall_blood_dried_color : source_color = vec4(0.42, 0.12, 0.12, 1.0);
-uniform float wall_blood_age : hint_range(0.0, 1.0) = 0.0;
-uniform float wall_blood_extent_xz : hint_range(8.0, 200.0) = 40.0;
-uniform float wall_blood_extent_y : hint_range(1.0, 16.0) = 4.0;
-uniform float wall_blood_coverage_threshold : hint_range(0.0, 0.5) = 0.015;
-uniform float wall_blood_coverage_cap : hint_range(0.0, 4.0) = 1.0;
-uniform float wall_blood_edge_softness : hint_range(0.0, 0.3) = 0.05;
-uniform float wall_blood_stain_brightness : hint_range(0.5, 3.0) = 2.0;
-// Wet-sheen roughness pulled down inside the blood region. Outside
-// blood the wall's authored roughness wins; inside it drops toward
-// this value weighted by coverage.
-uniform float wall_blood_roughness : hint_range(0.0, 1.0) = 0.22;
-
 uniform vec3 base_color : source_color = vec3(0.22, 0.24, 0.28);
 uniform vec3 seam_color : source_color = vec3(0.03, 0.04, 0.05);
 // Panel cell size in world meters. 1m matches the level grid the rest of
@@ -438,76 +412,4 @@ void fragment() {
 			+ wear * roughness_wear
 			+ splotch * 0.35
 			+ trim_baseboard * baseboard_roughness_boost, 0.0, 1.0);
-
-	// ── Wall blood overlay (LiquidLayer) ───────────────────────────────
-	// Skip on floors — this wall shader is also bound to floor meshes in
-	// some themes, and floor blood comes from the dedicated floor
-	// LiquidLayer. The wall masks are only meaningful on vertical faces.
-	if (is_wall) {
-		// DEBUG: force ALL walls to render green, regardless of mask.
-		// If walls go green, the wall shader's blood block is reachable
-		// and is_wall is correctly true on vertical surfaces. Then any
-		// failure has to be in the mask-sampling / texture binding path.
-		// If walls STAY GREY, either the shader extension isn't reaching
-		// the actual wall MMIs (something else is rendering them) or
-		// is_wall is somehow false.
-		ALBEDO = vec3(0.0, 1.0, 0.0);
-		ROUGHNESS = 0.5;
-		METALLIC = 0.0;
-		return;
-		// Tri-planar weights: each face samples the mask aligned to its
-		// dominant normal axis. For 45° mitred corners, both samples
-		// blend ~equally so the stain wraps continuously around the seam.
-		float weight_x = abs(v_world_normal.x);
-		float weight_z = abs(v_world_normal.z);
-		float weight_sum = weight_x + weight_z;
-		if (weight_sum > 0.001) {
-			weight_x /= weight_sum;
-			weight_z /= weight_sum;
-			// World → mask UV. Horizontal axis (Z for X-facing walls,
-			// X for Z-facing walls) covers wall_blood_extent_xz meters
-			// centered on world origin. Vertical axis covers
-			// wall_blood_extent_y meters from y=0 (floor, mask v=1) to
-			// y=extent_y (mask v=0). Flipping v matches the layer's
-			// world→viewport_y convention which puts world up at the
-			// top of the mask.
-			float half_h = 0.5;
-			vec2 uv_x = vec2(
-				v_world_pos.z / wall_blood_extent_xz + half_h,
-				1.0 - v_world_pos.y / wall_blood_extent_y
-			);
-			vec2 uv_z = vec2(
-				v_world_pos.x / wall_blood_extent_xz + half_h,
-				1.0 - v_world_pos.y / wall_blood_extent_y
-			);
-			float cov_x = texture(wall_blood_mask_x, uv_x).a * weight_x;
-			float cov_z = texture(wall_blood_mask_z, uv_z).a * weight_z;
-			float coverage = cov_x + cov_z;
-			if (coverage > wall_blood_coverage_threshold) {
-				float capped = min(coverage, wall_blood_coverage_cap);
-				float blood_alpha = smoothstep(
-					wall_blood_coverage_threshold,
-					wall_blood_coverage_threshold + wall_blood_edge_softness,
-					capped
-				);
-				vec3 stain = mix(
-					wall_blood_fresh_color.rgb,
-					wall_blood_dried_color.rgb,
-					wall_blood_age
-				);
-				// Multiply-stain over the wall's authored albedo so the
-				// underlying panel detail (rivets, seams, splotches)
-				// shows through tinted red rather than getting painted
-				// flat. stain_brightness lifts the multiplied result
-				// out of near-black in dim corridors.
-				vec3 stained = ALBEDO * stain * wall_blood_stain_brightness;
-				ALBEDO = mix(ALBEDO, stained, blood_alpha);
-				// Wet sheen: pull roughness down + drop metallic so the
-				// stained area reads as liquid sitting on top of the
-				// steel, not as part of the steel.
-				ROUGHNESS = mix(ROUGHNESS, wall_blood_roughness, blood_alpha);
-				METALLIC = mix(METALLIC, 0.0, blood_alpha);
-			}
-		}
-	}
 }
