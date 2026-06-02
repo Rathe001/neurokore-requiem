@@ -39,11 +39,13 @@ uniform float specular_intensity : hint_range(0.0, 1.0) = 0.55;
 // the stain very dark in shadowed rooms; bumping slightly above 1
 // lifts the stain into visible-red territory without losing the
 // "absorbed into the surface" read.
-uniform float stain_brightness : hint_range(0.5, 3.0) = 1.6;
+uniform float stain_brightness : hint_range(0.5, 3.0) = 2.0;
 
-// Coverage gating.
-uniform float coverage_threshold : hint_range(0.0, 0.5) = 0.04;
-uniform float edge_softness : hint_range(0.0, 0.3) = 0.08;
+// Coverage gating. Threshold kept low so small droplet stamps
+// (per-hit spray) aren't entirely eaten — at 0.04 a 5-10px stamp
+// only kept its center pixel, making individual drops invisible.
+uniform float coverage_threshold : hint_range(0.0, 0.5) = 0.015;
+uniform float edge_softness : hint_range(0.0, 0.3) = 0.05;
 uniform float coverage_cap : hint_range(1.0, 4.0) = 1.0;
 
 void fragment() {

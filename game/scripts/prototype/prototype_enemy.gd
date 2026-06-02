@@ -2719,38 +2719,61 @@ func _stamp_hit_droplets(hit_pos: Vector3, hit_dir: Vector3, count: int) -> void
 			theta = atan2(bias.z, bias.x) + randf_range(-0.96, 0.96)
 		else:
 			theta = randf() * TAU
-		var dist: float = randf_range(0.25, 0.95)
+		# Scatter 0.6-2.0m out — far enough that drops read as
+		# individual spray spots distinct from the eventual corpse pool,
+		# not as inner ring stamps that immediately merge into it.
+		var dist: float = randf_range(0.6, 2.0)
 		var offset := Vector3(cos(theta) * dist, 0.0, sin(theta) * dist)
 		var pos := Vector3(hit_pos.x, floor_y, hit_pos.z) + offset
-		# Small radius (4-9 cm) + reduced intensity so a single hit
-		# doesn't paint a full pool's worth of coverage; many drops
-		# build up gradually in a busy fight.
-		var radius: float = randf_range(0.04, 0.09)
-		var intensity: float = randf_range(0.5, 0.85)
+		# 15-28cm diameter splats — at iso distance into the 2048²
+		# mask, anything smaller than this gets eaten by the shader's
+		# coverage threshold and becomes invisible. Still well under
+		# the corpse pool's 90cm radius so they look like spray, not
+		# spilled puddles.
+		var radius: float = randf_range(0.08, 0.14)
+		var intensity: float = randf_range(0.7, 1.0)
 		layer.stamp(pos, _get_settle_stamp_texture(), radius, intensity)
 
 
-# 8 irregular soft-alpha stamp variants. Each is a lobed blob (two
-# sine-wave-modulated radii per angle) with quadratic alpha falloff
-# so additive blending in the SubViewport produces seamless merged
-# pools — but each variant has its own irregular silhouette, so
-# adjacent stamps don't read as duplicate circles.
-const _SETTLE_STAMP_VARIANT_COUNT: int = 8
+# 12 chaotic soft-alpha stamp variants. The perimeter is shaped by 2D
+# FastNoise sampled around a polar ring rather than by clean
+# sine-wave lobes — at large sizes, periodic sines produced obvious
+# flower-petal silhouettes. Per-stamp also gets internal alpha noise
+# so the interior isn't a uniform disk; combined with additive
+# blending, this produces messy splatter shapes that look like
+# spilled liquid rather than geometric blobs.
+const _SETTLE_STAMP_VARIANT_COUNT: int = 12
 static var _settle_stamp_textures: Array[Texture2D] = []
 static func _get_settle_stamp_texture() -> Texture2D:
 	if _settle_stamp_textures.is_empty():
 		var size := 128
 		var center := Vector2(size, size) * 0.5
-		var base_r: float = float(size) * 0.42
+		var base_r: float = float(size) * 0.40
 		for i in _SETTLE_STAMP_VARIANT_COUNT:
-			var rng := RandomNumberGenerator.new()
-			rng.seed = 0x4B5A11 + i * 0x9E3779B9
-			var freq1: int = rng.randi_range(2, 5)
-			var freq2: int = rng.randi_range(6, 10)
-			var amp1: float = rng.randf_range(0.10, 0.20)
-			var amp2: float = rng.randf_range(0.04, 0.09)
-			var phase1: float = rng.randf() * TAU
-			var phase2: float = rng.randf() * TAU
+			# Per-variant noise driving the perimeter shape. 2D noise
+			# sampled along a small circle gives a smooth, non-periodic
+			# wobble — no two angles read as repeating lobes.
+			var rim_noise := FastNoiseLite.new()
+			rim_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+			rim_noise.seed = 0x4B5A11 + i * 0x9E3779B9
+			rim_noise.frequency = 1.6
+			# Inner alpha noise — breaks up the uniform interior with
+			# subtle density variation, so the stamp doesn't look
+			# painted-on. Different seed + much higher frequency than
+			# the rim noise.
+			var inner_noise := FastNoiseLite.new()
+			inner_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+			inner_noise.seed = 0xC0FFEE + i * 0x12345
+			inner_noise.frequency = 6.0
+			# Amplitude of the rim perturbation, in fractions of base
+			# radius. 0.35 = ±35% — strong enough that silhouettes read
+			# as messy splatters, not perturbed circles.
+			var rim_amp: float = 0.35
+			# Random rotation of the noise space per variant so the
+			# "natural" axis of each splat differs.
+			var rot: float = float(i) * 0.83 + 1.3
+			var cs := cos(rot)
+			var sn := sin(rot)
 			var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
 			img.fill(Color(0, 0, 0, 0))
 			for y in size:
@@ -2759,15 +2782,25 @@ static func _get_settle_stamp_texture() -> Texture2D:
 					var dy := float(y) - center.y
 					var dist := sqrt(dx * dx + dy * dy)
 					var angle := atan2(dy, dx)
-					var r_mod: float = 1.0 \
-						+ amp1 * sin(float(freq1) * angle + phase1) \
-						+ amp2 * sin(float(freq2) * angle + phase2)
-					var max_r: float = base_r * r_mod
+					# Sample 2D noise on a unit circle at this angle —
+					# gives non-periodic angular noise.
+					var nx: float = cos(angle)
+					var ny: float = sin(angle)
+					var rnx: float = cs * nx - sn * ny
+					var rny: float = sn * nx + cs * ny
+					var rim: float = rim_noise.get_noise_2d(rnx, rny)
+					var max_r: float = base_r * (1.0 + rim_amp * rim)
 					if dist >= max_r:
 						continue
-					# Quadratic falloff for smooth additive merging.
 					var d: float = dist / max_r
+					# Quadratic falloff for smooth additive merging.
 					var a: float = 1.0 - d * d
+					# Internal density noise — multiplies alpha in [0.7, 1.0]
+					# so the interior has subtle dark/light variation,
+					# preventing the "smooth disk" read at large sizes.
+					var inner: float = inner_noise.get_noise_2d(float(x) * 0.5, float(y) * 0.5)
+					var density: float = 0.85 + 0.15 * inner
+					a *= density
 					img.set_pixel(x, y, Color(1.0, 1.0, 1.0, a))
 			_settle_stamp_textures.append(ImageTexture.create_from_image(img))
 	return _settle_stamp_textures[randi() % _settle_stamp_textures.size()]
