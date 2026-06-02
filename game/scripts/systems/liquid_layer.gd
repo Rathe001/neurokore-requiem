@@ -162,13 +162,23 @@ func stamp_growing(world_pos: Vector3, stamp_texture: Texture2D, start_radius: f
 		return
 	var start_scale: float = (start_radius * 2.0 * PIXELS_PER_METER) / tex_size.x
 	var end_scale: float = (end_radius * 2.0 * PIXELS_PER_METER) / tex_size.x
-	sprite.scale = Vector2(start_scale, start_scale)
+	# Per-stamp aspect-ratio jitter so pools aren't all perfectly
+	# round. One axis stretched (1.0-1.55×) while the perpendicular
+	# axis stays at base scale — combined with the random rotation
+	# above, produces elongated oval pools at random angles. Mimics
+	# how real spilled blood takes elongated shapes from body
+	# position / surface tilt rather than ideal circles.
+	var stretch_axis_long: float = randf_range(1.0, 1.55)
+	var stretch_axis_short: float = randf_range(0.75, 1.0)
+	sprite.scale = Vector2(start_scale * stretch_axis_long, start_scale * stretch_axis_short)
 	_stamp_root.add_child(sprite)
 	# Ease-out so the pool grows fast at first, then slows — matches
 	# the viscous bleed-out curve of the old Decal3D tween system.
 	var tween := sprite.create_tween()
 	tween.set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
-	tween.tween_property(sprite, ^"scale", Vector2(end_scale, end_scale), duration)
+	tween.tween_property(sprite, ^"scale",
+		Vector2(end_scale * stretch_axis_long, end_scale * stretch_axis_short),
+		duration)
 	tween.tween_callback(sprite.queue_free)
 
 
