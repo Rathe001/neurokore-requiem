@@ -51,7 +51,22 @@ func _ready() -> void:
 	_mask_x_stamp_root = _mask_x_viewport.get_node(^"StampRoot")
 	_mask_z_stamp_root = _mask_z_viewport.get_node(^"StampRoot")
 	_build_overlay_material()
+	# Phase 6.5 diagnostic: drop a static stamp at world origin in both
+	# masks. Lets us verify the rendering pipeline is alive even when
+	# gameplay routing produces no stamps (e.g. enemies dying far from
+	# walls, or wall raycasts not hitting). Remove once gameplay-routed
+	# stamps are confirmed working.
+	_draw_diagnostic_stamps()
 	_hook_level_builder()
+
+
+func _draw_diagnostic_stamps() -> void:
+	for stamp_root: Node2D in [_mask_x_stamp_root, _mask_z_stamp_root]:
+		var sprite := Sprite2D.new()
+		sprite.texture = _get_cached_stamp_texture()
+		sprite.position = Vector2(float(MASK_PX_X) * 0.5, float(MASK_PX_Y) * 0.5)
+		sprite.scale = Vector2(0.4, 0.4)
+		stamp_root.add_child(sprite)
 
 
 ## Public API: stamp blood on a wall at the given world position. The
@@ -60,9 +75,18 @@ func _ready() -> void:
 ## is the stamp's physical diameter in meters. `intensity` multiplies
 ## alpha — overlapping stamps accumulate additively in the mask so
 ## consecutive hits in the same spot pool together cleanly.
+static var _stamp_log_count: int = 0
+
 func stamp(world_pos: Vector3, wall_normal: Vector3, world_radius: float, intensity: float = 1.0) -> void:
 	if wall_normal.length_squared() < 0.0001:
 		return
+	# Log the first few stamps so we can see if gameplay routing is
+	# firing at all. After 5, stop spamming.
+	if _stamp_log_count < 5:
+		_stamp_log_count += 1
+		print("[WallLiquidLayer] stamp #", _stamp_log_count,
+			" world=", world_pos, " normal=", wall_normal,
+			" radius=", world_radius, " intensity=", intensity)
 	var nrm := wall_normal.normalized()
 	var use_x_mask: bool = absf(nrm.x) > absf(nrm.z)
 	var stamp_root: Node2D = _mask_x_stamp_root if use_x_mask else _mask_z_stamp_root

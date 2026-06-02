@@ -1168,6 +1168,9 @@ static func _apply_wall_clamp_deferred(decal: Decal, world_pos: Vector3, request
 # then -Y points INTO the wall and the projection lands flush on the
 # face. Slight offset along the normal keeps the decal from z-fighting
 # with the wall surface.
+static var _wall_splat_log_count: int = 0
+static var _wall_splat_no_layer_warned: bool = false
+
 static func spawn_blood_wall_splatter(parent: Node, world_pos: Vector3, wall_normal: Vector3, blood_type: StringName = BLOOD_TYPE_HUMAN) -> void:
 	if parent == null or _blood_disabled():
 		return
@@ -1178,8 +1181,15 @@ static func spawn_blood_wall_splatter(parent: Node, world_pos: Vector3, wall_nor
 	# Decal3D path. The shader handles wall sampling + lighting; stamps
 	# live in the persistent CLEAR_MODE_NEVER mask so multiple hits
 	# accumulate without per-decal overhead.
+	if _wall_splat_log_count < 3:
+		_wall_splat_log_count += 1
+		print("[wall blood] spawn_blood_wall_splatter call #",
+			_wall_splat_log_count, " world=", world_pos, " normal=", wall_normal)
 	var layer := _find_wall_liquid_layer(parent)
 	if layer == null:
+		if not _wall_splat_no_layer_warned:
+			_wall_splat_no_layer_warned = true
+			push_warning("[wall blood] No WallLiquidLayer found in tree — stamps dropped.")
 		return
 	var radius: float = randf_range(0.20, 0.40)
 	layer.stamp(world_pos, wall_normal, radius, 1.0)
