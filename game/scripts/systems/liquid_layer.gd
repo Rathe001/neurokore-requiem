@@ -227,6 +227,11 @@ func _build_floor_mesh() -> void:
 	# Cast no shadows — the liquid layer is decorative and shouldn't
 	# affect scene lighting.
 	_floor_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# Disable GI participation. With default GI_MODE_STATIC, the red
+	# blood albedo can feed back into SDFGI bounces (when SDFGI is on)
+	# and brighten the pool through its own indirect contribution.
+	# Also keeps the liquid layer out of any future GI baking pass.
+	_floor_mesh.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
 
 	_shader_material = ShaderMaterial.new()
 	_shader_material.shader = preload("res://shaders/liquid_surface.gdshader")

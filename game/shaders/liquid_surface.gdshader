@@ -57,19 +57,15 @@ uniform float density_opacity_max : hint_range(0.4, 1.0) = 0.90;
 // translucent wash. Required by the higher overhead light intensity.
 uniform float alpha_min : hint_range(0.0, 0.5) = 0.70;
 
-// Wet-look knobs. Dense core is GLOSSY (low roughness + high
-// specular) so it picks up nearby colored lights (IED glow,
-// explosions, muzzle flashes) as wet sheen highlights — the
-// "doesn't reflect lights" feedback. Albedo stays dark so the
-// blood reads dark in dim areas; specular only contributes when
-// there's a light to reflect.
-// Edges stay very matte via the density-gated mix in fragment so
-// the thin perimeter doesn't pick up overhead lights and read as
-// pink wash.
-uniform float roughness : hint_range(0.0, 1.0) = 0.16;
-uniform float normal_strength : hint_range(0.0, 2.0) = 0.08;
+// Wet-look knobs — matched to the wall shader's tones (0.26 / 0.04
+// / 0.35) since the user wants the floor pool to read as dark as
+// wall splatters. Floor sits under direct overhead lighting that
+// walls don't, so even at wall-shader values the floor catches more
+// spec; using values BELOW the wall shader to compensate.
+uniform float roughness : hint_range(0.0, 1.0) = 0.45;
+uniform float normal_strength : hint_range(0.0, 2.0) = 0.03;
 uniform float noise_scale : hint_range(0.5, 32.0) = 5.0;
-uniform float specular_intensity : hint_range(0.0, 1.0) = 0.55;
+uniform float specular_intensity : hint_range(0.0, 1.0) = 0.18;
 // Brightness bias on the multiplied result. Cranked all the way
 // down: the floor was still reading pinkish because lit overhead
 // surface × red tint × brightness amplified into bright red even
