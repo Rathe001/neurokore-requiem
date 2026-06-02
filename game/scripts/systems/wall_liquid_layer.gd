@@ -42,24 +42,25 @@ var _overlay_material: ShaderMaterial
 
 # ── Drip streak tuning ────────────────────────────────────────────
 const DRIP_RADIUS_THRESHOLD: float = 0.12  # main stamp radius below this skips drips
-const DRIP_LIFETIME_MIN: float = 2.8
-const DRIP_LIFETIME_MAX: float = 4.5
-const DRIP_FALL_SPEED_MIN: float = 0.35  # m/sec — viscous but visibly moving
-const DRIP_FALL_SPEED_MAX: float = 0.70
-const DRIP_RADIUS_M: float = 0.015  # ~1.5cm wide drip droplet (narrow → reads as a line)
-# Aggressive vertical stretch so each frame's paint is a long thin
-# line segment rather than a small ellipse. With consecutive-frame
-# overlap, cumulative paints build a clear streak rather than a stack
-# of stretched ovals that read as a single chunky shape.
-const DRIP_VERTICAL_STRETCH: float = 10.0
-# Drips start BELOW the main splatter rather than at its center.
-# Otherwise the first ~half of the drip's path falls inside the
-# splatter's coverage, and the streak doesn't read as separate from
-# the splatter. Offset = source_radius * this ratio (so a 0.3m
-# splatter pushes drip starts 0.24m below its center, well past its
-# bottom edge).
-const DRIP_START_OFFSET_RATIO: float = 0.8
-const DRIP_PER_FRAME_INTENSITY: float = 0.06  # tighter per-frame, more accumulation frames
+const DRIP_LIFETIME_MIN: float = 2.2
+const DRIP_LIFETIME_MAX: float = 3.8
+const DRIP_FALL_SPEED_MIN: float = 0.25  # m/sec — viscous but visibly moving
+const DRIP_FALL_SPEED_MAX: float = 0.45
+# Wider drip — 4cm radius (8cm physical width) so the streak is
+# visible against the dark walls. Previous 1.5cm was so thin the
+# streak read as nothing visible.
+const DRIP_RADIUS_M: float = 0.040
+# Moderate vertical stretch — enough that consecutive-frame paints
+# overlap as a streak instead of a stack of ellipses, but not so
+# extreme that the drip looks like a single tall sliver.
+const DRIP_VERTICAL_STRETCH: float = 4.0
+# Drips start at the splatter's lower edge (50% of radius below
+# center). Far enough that the streak emerges from the splatter
+# silhouette rather than getting buried inside it, close enough that
+# the streak still visually connects to its parent splatter rather
+# than floating disconnected.
+const DRIP_START_OFFSET_RATIO: float = 0.5
+const DRIP_PER_FRAME_INTENSITY: float = 0.13
 const DRIP_COUNT_MIN: int = 2
 const DRIP_COUNT_MAX: int = 4
 const DRIP_FADE_TAIL_SEC: float = 0.8  # drip fades out over last N seconds
