@@ -35,8 +35,13 @@ uniform float shape_noise_strength : hint_range(0.0, 1.0) = 0.55;
 // specular on lit floor.
 //   fresh_color  = THIN/edge tint (very dark red-brown stain)
 //   dried_color  = DENSE/center tint (near-black, faintest red hint)
-uniform vec4 fresh_color : source_color = vec4(0.022, 0.007, 0.010, 1.0);
-uniform vec4 dried_color : source_color = vec4(0.006, 0.0015, 0.003, 1.0);
+// Both pure black (#000000) — debug step to confirm the visible
+// blood color is genuinely sourced from these uniforms vs. some
+// other channel lifting the ALBEDO. If the pool still reads red
+// at #000000, the issue is elsewhere (sort order, shader caching,
+// render mode interaction).
+uniform vec4 fresh_color : source_color = vec4(0.0, 0.0, 0.0, 1.0);
+uniform vec4 dried_color : source_color = vec4(0.0, 0.0, 0.0, 1.0);
 uniform float age : hint_range(0.0, 1.0) = 0.0;
 // Shapes the thin→dense ramp.
 uniform float density_power : hint_range(0.3, 4.0) = 0.9;

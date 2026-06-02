@@ -40,8 +40,8 @@ const FLOOR_Y_OFFSET: float = 0.015
 # The shader interpolates between them by mask coverage, so a single
 # pool reads pink-stained at the edges and dark-opaque at the core —
 # matching reference photos of real pooled blood.
-@export var fresh_color: Color = Color(0.55, 0.15, 0.16, 1.0)
-@export var dried_color: Color = Color(0.08, 0.02, 0.03, 1.0)
+@export var fresh_color: Color = Color(0.0, 0.0, 0.0, 1.0)
+@export var dried_color: Color = Color(0.0, 0.0, 0.0, 1.0)
 # Wet pools read smooth (very low roughness) and almost flat (very low
 # normal perturbation). The visual interest comes from coverage shape
 # variation and lighting hitting the slick surface, not from a bumpy
@@ -235,6 +235,13 @@ func _build_floor_mesh() -> void:
 
 	_shader_material = ShaderMaterial.new()
 	_shader_material.shader = preload("res://shaders/liquid_surface.gdshader")
+	# Push the floor liquid behind other transparent geometry. The
+	# 40x40m plane was sorting AFTER Label3D item labels because its
+	# AABB center is far from camera, but with depth_draw_never the
+	# plane then alpha-painted over the already-rendered labels.
+	# render_priority -10 forces it to draw FIRST so labels overlay
+	# on top.
+	_shader_material.render_priority = -10
 	_shader_material.set_shader_parameter(&"liquid_mask", _subviewport.get_texture())
 	_shader_material.set_shader_parameter(&"surface_noise", _ensure_noise_texture())
 	_shader_material.set_shader_parameter(&"shape_noise", _ensure_shape_noise_texture())
