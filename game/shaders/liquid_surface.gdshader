@@ -9,13 +9,7 @@
 // One shader covers all fluid types — uniforms drive the look so
 // blood, oil, water, etc. share a single renderer.
 shader_type spatial;
-// `unshaded` bypasses PBR direct-light contributions so the floor
-// blood's perceived brightness is exactly what ALBEDO outputs,
-// independent of overhead lighting. Wet-sheen highlights are faked
-// in fragment via noise sampling (since spec/roughness no-op here).
-// Natural light response still comes through via the multiply-stain
-// of SCREEN_TEX (which samples the already-lit floor underneath).
-render_mode blend_mix, depth_draw_never, cull_back, unshaded;
+render_mode blend_mix, depth_draw_never, cull_back;
 
 // What the shader needs to read:
 // - liquid_mask:    the SubViewport coverage texture (where & how much liquid)
@@ -35,15 +29,15 @@ uniform sampler2D shape_noise : hint_default_white, filter_linear, repeat_enable
 uniform float shape_noise_scale : hint_range(1.0, 64.0) = 5.0;
 uniform float shape_noise_strength : hint_range(0.0, 1.0) = 0.55;
 
-// Two-color density gradient. Kept narrow in value so thin → dense
-// blends as a smooth darkening rather than a perceptible color jump.
-//   fresh_color  = THIN/edge tint (already dark blood, just slightly
-//                  more saturated than dense — reads as continuation,
-//                  not a separate "halo" color)
-//   dried_color  = DENSE/center tint (near-black core)
-uniform vec4 fresh_color : source_color = vec4(0.18, 0.05, 0.07, 1.0)
-;
-uniform vec4 dried_color : source_color = vec4(0.05, 0.012, 0.020, 1.0);
+// Two-color density gradient. MUCH darker than the wall shader's
+// equivalents because PBR diffuse + specular contributions on the
+// horizontal floor surface amplify any ALBEDO red channel — these
+// values are calibrated so that even AFTER PBR lighting on a lit
+// floor, the rendered pool reads dark, like the wall splatters.
+//   fresh_color  = THIN/edge tint
+//   dried_color  = DENSE/center tint (near-black)
+uniform vec4 fresh_color : source_color = vec4(0.06, 0.018, 0.025, 1.0);
+uniform vec4 dried_color : source_color = vec4(0.015, 0.004, 0.007, 1.0);
 uniform float age : hint_range(0.0, 1.0) = 0.0;
 // Shapes the thin→dense ramp.
 uniform float density_power : hint_range(0.3, 4.0) = 0.9;
@@ -63,18 +57,13 @@ uniform float density_opacity_max : hint_range(0.4, 1.0) = 0.90;
 // translucent wash. Required by the higher overhead light intensity.
 uniform float alpha_min : hint_range(0.0, 0.5) = 0.70;
 
-// Fake wet sheen — sampled from a high-frequency shape_noise pass,
-// gated by density so only the dense core shows glints. Additive
-// white-ish bumps on top of the dark painted blood ALBEDO. Pattern-
-// based (no PBR specular) so the look is consistent regardless of
-// overhead lighting.
-uniform float sheen_intensity : hint_range(0.0, 0.5) = 0.18;
-uniform float sheen_threshold : hint_range(0.3, 0.95) = 0.72;
-// Kept for legacy material bindings — no-op under render_mode unshaded.
-uniform float roughness : hint_range(0.0, 1.0) = 0.45;
-uniform float normal_strength : hint_range(0.0, 2.0) = 0.03;
+// Wet-look knobs back to PBR-driven. Dense core glossy (catches
+// nearby lights as wet sheen) but the very dark ALBEDO above means
+// PBR diffuse can't amplify the blood into bright red.
+uniform float roughness : hint_range(0.0, 1.0) = 0.22;
+uniform float normal_strength : hint_range(0.0, 2.0) = 0.06;
 uniform float noise_scale : hint_range(0.5, 32.0) = 5.0;
-uniform float specular_intensity : hint_range(0.0, 1.0) = 0.18;
+uniform float specular_intensity : hint_range(0.0, 1.0) = 0.40;
 // Brightness bias on the multiplied result. Cranked all the way
 // down: the floor was still reading pinkish because lit overhead
 // surface × red tint × brightness amplified into bright red even
@@ -147,21 +136,24 @@ void fragment() {
 	float opacity_here = mix(solid_opacity, density_opacity_max, density);
 	vec3 stained = mix(stained_mul, blood_color, opacity_here);
 
-	// Fake wet sheen — high-frequency shape_noise sample produces
-	// small bright glints on the dense core. Pure additive contrib
-	// independent of scene lighting; the visual cue for "wet slick"
-	// under unshaded mode where PBR specular is unavailable.
-	float sheen_n = max(
-		texture(shape_noise, UV * shape_noise_scale * 2.7).r,
-		texture(shape_noise, UV * shape_noise_scale * 6.3 + vec2(11.1, 4.7)).r
-	);
-	float sheen = smoothstep(sheen_threshold, 0.98, sheen_n) * density;
-	stained += vec3(sheen * sheen_intensity);
+	// Two-octave noise normal map for the wet-sheen surface
+	// perturbation. PBR specular hits this perturbed surface at the
+	// camera angle, giving small bright glints over the dense core.
+	vec2 n_uv1 = UV * noise_scale;
+	vec2 n_uv2 = UV * noise_scale * 2.3 + vec2(13.7, 5.1);
+	vec3 n1 = texture(surface_noise, n_uv1).rgb * 2.0 - 1.0;
+	vec3 n2 = texture(surface_noise, n_uv2).rgb * 2.0 - 1.0;
+	vec3 n_mixed = normalize(n1 * 0.6 + n2 * 0.4);
+	NORMAL_MAP = vec3(n_mixed.xy * 0.5 + 0.5, 1.0);
+	NORMAL_MAP_DEPTH = normal_strength * mix(0.0, 1.0, density);
 
 	ALBEDO = stained;
-	// ALPHA is density-driven so thin/pink areas fade to transparent
-	// and dense/dark areas stay opaque. `alpha` (the smoothstep) gates
-	// the perimeter anti-aliasing — without it, the discard threshold
-	// would pop as a hard 1-pixel line.
+	// Edges very matte (no spec pickup → can't brighten under
+	// overhead lights), dense core glossy (catches nearby lights).
+	ROUGHNESS = mix(0.92, roughness, density);
+	METALLIC = 0.0;
+	SPECULAR = specular_intensity * mix(0.0, 1.0, density);
+	// ALPHA density-driven: thin areas fade transparent, dense areas
+	// opaque. Perimeter smoothstep gates the discard anti-aliasing.
 	ALPHA = alpha * mix(alpha_min, 1.0, density);
 }
