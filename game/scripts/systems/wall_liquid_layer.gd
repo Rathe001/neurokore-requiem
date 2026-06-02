@@ -7,16 +7,16 @@ extends Node3D
 ## persistent SubViewport mask that's also a child of THIS node. Same
 ## subtree → ViewportTexture references resolve reliably.
 ##
-## Phase 3: walks the scene tree after LevelBuilder fires `built`, finds
-## every wall MultiMeshInstance3D and StaticBody3D-wrapped wall mesh in
-## the &"structures" group, and spawns one cyan overlay quad in front of
-## each wall face. No shader yet — just verifying the enumeration logic
-## + positioning math produces quads that visually align with walls.
+## Phase 4: overlay quads now use wall_blood_overlay.gdshader instead of
+## solid cyan. Shader samples the SubViewport mask at the quad's local UV;
+## empty mask → discard (wall shows through), stamped → solid red.
+## Verifies the SubViewport-to-shader path works on every actual wall
+## quad we spawn — visible as the Phase 2 test stamp (a circle of red)
+## centered on every overlay quad.
 ##
-## After reload: every corridor wall + individual wall should have a
-## cyan rectangle slightly in front of one of its faces. Room procedural
-## walls (one mesh per room covering 4 sides) are NOT handled in this
-## phase — those need layout iteration and come in Phase 4.
+## Phase 5 will: switch from local UV to world-position UV so stamps
+## land at the correct world location instead of repeating per quad;
+## add the multiply-stain + PBR wet shading; wire gameplay stamps.
 
 const SUBVIEWPORT_PX: int = 512
 # Distance from wall surface to overlay quad — small enough to read
@@ -26,13 +26,26 @@ const SURFACE_OFFSET: float = 0.005
 var _subviewport: SubViewport
 var _stamp_root: Node2D
 var _camera2d: Camera2D
+# Shared ShaderMaterial bound to every overlay quad. Sampling the
+# SubViewport texture through this single material instance means
+# the binding only has to happen once — and stays inside the subtree.
+var _overlay_material: ShaderMaterial
 
 
 func _ready() -> void:
 	add_to_group(&"wall_liquid_layer")
 	_build_subviewport()
+	_build_overlay_material()
 	_draw_test_stamp()
 	_hook_level_builder()
+
+
+# One ShaderMaterial shared across all overlay quads. The sampler
+# binding lives here — child quads just reference the material.
+func _build_overlay_material() -> void:
+	_overlay_material = ShaderMaterial.new()
+	_overlay_material.shader = preload("res://shaders/wall_blood_overlay.gdshader")
+	_overlay_material.set_shader_parameter(&"mask", _subviewport.get_texture())
 
 
 func _hook_level_builder() -> void:
@@ -134,11 +147,14 @@ func _spawn_overlay_for_wall(xform: Transform3D) -> bool:
 	var quad := QuadMesh.new()
 	quad.size = Vector2(face_width, size_y)
 	quad_inst.mesh = quad
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color.CYAN
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	quad_inst.material_override = mat
+	# Phase 4: shared shader material samples the SubViewport mask.
+	# Where the mask is empty the shader discards, so the wall behind
+	# shows through normally. Sample the WHOLE mask via local UV so
+	# every overlay quad shows the Phase 2 test stamp (a centered red
+	# circle) — proves the shader path works on actual walls. Phase 5
+	# will switch to world-position UV so stamps land at the right
+	# place.
+	quad_inst.material_override = _overlay_material
 	add_child(quad_inst)
 	quad_inst.global_position = quad_pos
 	# Orient the quad so its local +Z points along face_dir. QuadMesh's
