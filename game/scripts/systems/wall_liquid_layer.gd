@@ -116,11 +116,17 @@ func stamp(world_pos: Vector3, wall_normal: Vector3, world_radius: float, intens
 	sprite.modulate = Color(1.0, 1.0, 1.0, intensity)
 	sprite.material = _get_cached_additive_material()
 	stamp_root.add_child(sprite)
-	# Stamp persists exactly one frame — draws into the persistent
-	# CLEAR_MODE_NEVER render target, then the Sprite2D is freed. The
-	# rasterized pixels stay in the mask across frames.
+	# Phase 6.7 DEBUG: persist the stamp for ~10 frames so additive
+	# blending in the CLEAR_MODE_NEVER target accumulates alpha to
+	# saturation (matches how the static test stamp builds up). If
+	# combat blood is visible after this, the one-frame paint was
+	# depositing too little alpha for the multiply-stain visibility
+	# path to read. The fix becomes proper — e.g. one paint at higher
+	# intensity, or a different blend mode that deposits the full
+	# alpha in a single frame.
 	var stamp_id := sprite.get_instance_id()
-	get_tree().process_frame.connect(
+	var timer := get_tree().create_timer(0.15)
+	timer.timeout.connect(
 		func() -> void:
 			var s := instance_from_id(stamp_id) as Node
 			if s != null and is_instance_valid(s):
