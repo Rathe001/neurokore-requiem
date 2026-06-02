@@ -1011,7 +1011,14 @@ func _resolve_hitscan(skill: Skill, aim: Vector3, eff_range: float, weapon: Item
 		if dist < closest_dist:
 			closest_dist = dist
 			hit_target = enode
-	var beam_end := wall_dist
+	# Visual beam length is capped at `eff_range` (NOT extended_range).
+	# The damage-falloff zone past eff_range is still used by the cone
+	# query above (so enemies in that zone get hit with reduced damage)
+	# but the visible beam should terminate at the weapon's stated
+	# range — drawing it out to extended_range made laser pistols
+	# (eff_range 11m, extended 14m) look like sniper rifles streaking
+	# across the room.
+	var beam_end := minf(wall_dist, eff_range)
 	if hit_target != null:
 		beam_end = minf(beam_end, origin.distance_to(hit_target.global_position))
 	var hitscan_tint := _weapon_tint(weapon)
@@ -1506,7 +1513,8 @@ func _resolve_hitscan_exact(skill: Skill, aim_norm: Vector3, eff_range: float, w
 		if dist < closest_dist:
 			closest_dist = dist
 			hit_target = enode
-	var beam_end := wall_dist
+	# See _resolve_hitscan for the eff_range visual cap rationale.
+	var beam_end := minf(wall_dist, eff_range)
 	if hit_target != null:
 		beam_end = minf(beam_end, origin.distance_to(hit_target.global_position))
 	var hitscan_exact_tint := _weapon_tint(weapon)

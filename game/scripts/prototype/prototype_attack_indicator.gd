@@ -1075,6 +1075,12 @@ static func spawn_blood_slip_zone(parent: Node, world_pos: Vector3, radius: floa
 	area.collision_mask = BLOOD_POOL_PLAYER_MASK
 	area.monitoring = true
 	area.monitorable = false
+	# Group lookup target for is_in_blood() — the footstep system polls
+	# this to decide whether to refresh the bloody-footprint counter.
+	area.add_to_group(&"blood_slip_zone")
+	# Store the cylinder radius as meta so containment checks (which
+	# don't have direct access to the shape) can use it.
+	area.set_meta(&"_blood_radius", maxf(radius, 0.1))
 	var col := CollisionShape3D.new()
 	var shape := CylinderShape3D.new()
 	shape.radius = maxf(radius, 0.1)
@@ -1085,6 +1091,30 @@ static func spawn_blood_slip_zone(parent: Node, world_pos: Vector3, radius: floa
 	area.global_position = Vector3(world_pos.x, world_pos.y + BLOOD_POOL_AREA_HEIGHT * 0.5, world_pos.z)
 	area.body_entered.connect(_on_blood_pool_body_entered)
 	area.body_exited.connect(_on_blood_pool_body_exited)
+
+
+# Is `world_pos` inside any active blood slip zone? Used by the footstep
+# system to refresh the bloody-print counter when a body steps over a
+# pool. XZ-only test (cylinder shape, ignores vertical separation since
+# the player's feet may sit slightly above the zone's base).
+static func is_in_blood(world_pos: Vector3) -> bool:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null:
+		return false
+	for n in tree.get_nodes_in_group(&"blood_slip_zone"):
+		if not (n is Area3D):
+			continue
+		var a := n as Area3D
+		if not is_instance_valid(a):
+			continue
+		var r: float = float(a.get_meta(&"_blood_radius", 0.0))
+		if r <= 0.0:
+			continue
+		var dx: float = world_pos.x - a.global_position.x
+		var dz: float = world_pos.z - a.global_position.z
+		if dx * dx + dz * dz <= r * r:
+			return true
+	return false
 
 
 static func _on_blood_pool_body_entered(body: Node) -> void:
