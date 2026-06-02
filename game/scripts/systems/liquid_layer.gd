@@ -40,8 +40,8 @@ const FLOOR_Y_OFFSET: float = 0.015
 # The shader interpolates between them by mask coverage, so a single
 # pool reads pink-stained at the edges and dark-opaque at the core —
 # matching reference photos of real pooled blood.
-@export var fresh_color: Color = Color(0.06, 0.012, 0.018, 1.0)
-@export var dried_color: Color = Color(0.022, 0.005, 0.008, 1.0)
+@export var fresh_color: Color = Color(0.09, 0.020, 0.028, 1.0)
+@export var dried_color: Color = Color(0.038, 0.008, 0.013, 1.0)
 # Wet pools read smooth (very low roughness) and almost flat (very low
 # normal perturbation). The visual interest comes from coverage shape
 # variation and lighting hitting the slick surface, not from a bumpy

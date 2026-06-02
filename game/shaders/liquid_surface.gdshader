@@ -43,8 +43,8 @@ uniform float shape_noise_strength : hint_range(0.0, 1.0) = 0.55;
 // amplified pink wash the broken sort order was producing.
 //   fresh_color = THIN/edge tint (dark blood, faint red hint)
 //   dried_color = DENSE/core tint (near-black, barely-there red)
-uniform vec4 fresh_color : source_color = vec4(0.06, 0.012, 0.018, 1.0);
-uniform vec4 dried_color : source_color = vec4(0.022, 0.005, 0.008, 1.0);
+uniform vec4 fresh_color : source_color = vec4(0.09, 0.020, 0.028, 1.0);
+uniform vec4 dried_color : source_color = vec4(0.038, 0.008, 0.013, 1.0);
 uniform float age : hint_range(0.0, 1.0) = 0.0;
 // Shapes the thin→dense ramp.
 uniform float density_power : hint_range(0.3, 4.0) = 0.9;
@@ -52,17 +52,15 @@ uniform float density_power : hint_range(0.3, 4.0) = 0.9;
 // the thin/dense gradient is spread across many pixels and reads as
 // a smooth darkening rather than a visible shoulder.
 uniform float density_full : hint_range(0.2, 2.0) = 1.6;
-// Maximum opacity that dense regions reach. Floor pool needs to
-// read as substantially opaque blood at the core (matching how the
-// wall blood already presents), so this is held high. Below 0.85
-// the lit floor texture started bleeding through the dense core and
-// reading as orange-red wash, not blood.
-uniform float density_opacity_max : hint_range(0.4, 1.0) = 0.90;
-// Alpha floor at thinnest visible edge. Floor pool reads as
-// substantially opaque — even thin perimeter areas hide the floor
-// pattern underneath, presenting as continuous blood rather than
-// translucent wash. Required by the higher overhead light intensity.
-uniform float alpha_min : hint_range(0.0, 0.5) = 0.70;
+// Maximum opacity that dense regions reach. Dense core fully opaque
+// so the visible color is exactly the painted blood (no floor
+// texture bleeding through the densest blood patches).
+uniform float density_opacity_max : hint_range(0.4, 1.0) = 0.98;
+// Alpha floor at thinnest visible edge. Raised so even the thin
+// perimeter reads as substantially opaque — pools should look like
+// continuous blood, not translucent wash through which the floor
+// pattern is clearly visible.
+uniform float alpha_min : hint_range(0.0, 1.0) = 0.88;
 
 // Wet-look knobs back to PBR-driven. Dense core glossy (catches
 // nearby lights as wet sheen) but the very dark ALBEDO above means
