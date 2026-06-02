@@ -31,10 +31,10 @@ uniform float age : hint_range(0.0, 1.0) = 0.0;
 // because real spilled blood doesn't ripple — the visible shimmer
 // comes from camera + light angle changes hitting the static
 // noise-perturbed surface, not from animated waves.
-uniform float roughness : hint_range(0.0, 1.0) = 0.30;
-uniform float normal_strength : hint_range(0.0, 2.0) = 0.65;
-uniform float noise_scale : hint_range(0.5, 32.0) = 14.0;
-uniform float specular_intensity : hint_range(0.0, 1.0) = 0.45;
+uniform float roughness : hint_range(0.0, 1.0) = 0.22;
+uniform float normal_strength : hint_range(0.0, 2.0) = 0.08;
+uniform float noise_scale : hint_range(0.5, 32.0) = 5.0;
+uniform float specular_intensity : hint_range(0.0, 1.0) = 0.55;
 // Brightness bias on the multiplied result. Pure mul (1.0×) leaves
 // the stain very dark in shadowed rooms; bumping slightly above 1
 // lifts the stain into visible-red territory without losing the

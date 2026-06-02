@@ -34,10 +34,14 @@ const PIXELS_PER_METER: float = float(SUBVIEWPORT_PX) / WORLD_EXTENT_METERS
 const FLOOR_Y_OFFSET: float = 0.015
 
 @export var fluid_id: StringName = &"blood_human"
-@export var fresh_color: Color = Color(0.62, 0.04, 0.04, 1.0)
-@export var dried_color: Color = Color(0.28, 0.08, 0.08, 1.0)
-@export var roughness: float = 0.32
-@export var normal_strength: float = 0.45
+@export var fresh_color: Color = Color(0.72, 0.06, 0.06, 1.0)
+@export var dried_color: Color = Color(0.30, 0.08, 0.08, 1.0)
+# Wet pools read smooth (very low roughness) and almost flat (very low
+# normal perturbation). The visual interest comes from coverage shape
+# variation and lighting hitting the slick surface, not from a bumpy
+# noise normal — that gave a wrong "raw tissue" look.
+@export var roughness: float = 0.22
+@export var normal_strength: float = 0.08
 # Time from fresh to fully dried. Drives the shader's age uniform via
 # a process tick (linear ramp from 0 to 1 over this duration after
 # the most recent stamp). Reset whenever a new stamp lands.
