@@ -45,17 +45,19 @@ uniform float density_power : hint_range(0.3, 4.0) = 0.9;
 // the thin/dense gradient is spread across many pixels and reads as
 // a smooth darkening rather than a visible shoulder.
 uniform float density_full : hint_range(0.2, 2.0) = 1.6;
-// Maximum opacity that dense regions reach. Dropped vs. 0.92 so the
-// core retains the same multiply-stain character as the outer ring,
-// just darker — both regions show floor-tinted blood, the core is
-// just denser. Net effect: smoother core/outer blend.
-uniform float density_opacity_max : hint_range(0.4, 1.0) = 0.78;
-// Alpha floor at the thinnest visible edge. Raised from 0.0 so small
-// per-hit droplets (which never accumulate enough coverage to reach
-// dense) stay readable. Combined with the now-darker fresh_color,
-// thin areas read as faint dark stain rather than the bright pink
-// ring the previous palette produced at higher alpha floors.
-uniform float alpha_min : hint_range(0.0, 0.5) = 0.32;
+// Maximum opacity that dense regions reach. Floor pool needs to
+// read as substantially opaque blood at the core (matching how the
+// wall blood already presents), so this is held high. Below 0.85
+// the lit floor texture started bleeding through the dense core and
+// reading as orange-red wash, not blood.
+uniform float density_opacity_max : hint_range(0.4, 1.0) = 0.90;
+// Alpha floor at thinnest visible edge. Raised vs. wall shader's
+// 0.32 because the floor pool needs to read as denser stain (the
+// user noted floor blood was too transparent vs. walls); the higher
+// floor brightness from overhead lighting also benefits from a
+// stronger alpha floor to suppress the floor pattern bleeding
+// through the thin perimeter.
+uniform float alpha_min : hint_range(0.0, 0.5) = 0.50;
 
 // Wet-look knobs. The surface normal is STATIC (no time-driven drift)
 // because real spilled blood doesn't ripple — the visible shimmer
@@ -67,11 +69,12 @@ uniform float roughness : hint_range(0.0, 1.0) = 0.26;
 uniform float normal_strength : hint_range(0.0, 2.0) = 0.04;
 uniform float noise_scale : hint_range(0.5, 32.0) = 5.0;
 uniform float specular_intensity : hint_range(0.0, 1.0) = 0.35;
-// Brightness bias on the multiplied result. Lowered vs. 2.0 because
-// brightly-lit floor patches × red tint × 2.0 was pushing the outer
-// halo into neon-pink territory. 1.4 keeps the stain visible in
-// shadow without amplifying bright spots into saturated red.
-uniform float stain_brightness : hint_range(0.5, 3.0) = 1.4;
+// Brightness bias on the multiplied result. Floor surfaces get
+// direct overhead lighting that walls don't, so even at 1.4 the
+// floor pool was reading brighter than wall blood. 0.95 brings the
+// floor pool tonally in line with wall splatters (which use 1.4 in
+// their own shader but sit on darker glancing-lit surfaces).
+uniform float stain_brightness : hint_range(0.5, 3.0) = 0.95;
 
 // Coverage gating. Threshold kept low so small droplet stamps
 // (per-hit spray) aren't entirely eaten — at 0.04 a 5-10px stamp
@@ -81,10 +84,11 @@ uniform float coverage_threshold : hint_range(0.0, 0.5) = 0.015;
 // halo at the perimeter (the lighter edges visible in reference photos).
 uniform float edge_softness : hint_range(0.0, 0.3) = 0.08;
 uniform float coverage_cap : hint_range(1.0, 4.0) = 1.0;
-// Base solid opacity at the thinnest edge. 0 = pure multiply-stain
-// at the perimeter (wall texture fully shows through, just blood-
-// tinted). Dense areas scale UP from here toward density_opacity_max.
-uniform float solid_opacity : hint_range(0.0, 1.0) = 0.0;
+// Base solid opacity at the thinnest edge. Raised from 0 so even
+// thin floor areas show some painted blood layer over the multiply-
+// stain — the previous pure-multiply edge was too translucent on
+// bright-lit floor and read as "pink wash" rather than blood.
+uniform float solid_opacity : hint_range(0.0, 1.0) = 0.15;
 
 void fragment() {
 	float raw_coverage = texture(liquid_mask, UV).a;
