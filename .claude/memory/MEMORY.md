@@ -1,5 +1,6 @@
 # Memory Index
 
+- [2D iso pivot (2026-05-26)](project_2d_iso_pivot.md) — pivoted to 2D iso sprite ARPG; bible at docs/art-reference/, pilot at tools/pilot/, branches 2d-iso-rework + 2d-iso-pilot
 - [User background](user_background.md) — Josh is a UI/JS dev new to game engines and systems languages; explain via web analogies
 - [Enemy spawning model](project_enemy_spawning_model.md) — D2-style: pre-placed at level load, no runtime respawn, fully clearable (current spawner is a temporary stress-test)
 - [3D pivot](project_3d_pivot.md) — game is now fixed-camera low-poly 3D with PBR + realistic lighting (was isometric pixel art)
@@ -47,6 +48,7 @@
 - [Faction dynamic](project_faction_dynamic.md) — Analog/Cyborg oppose each other but unite against the corporation
 - [Itemization revamp](project_itemization_revamp.md) — Removing attributes, gear gets direct bonuses + behavior mods, 5 perk tiers via talents
 - [Audio architecture](project_audio_architecture.md) — bus layout, room-aware reverb, SFX pool, WeaponSounds registry; silent until assets added
+- [Audio listener anchor](project_audio_listener_anchor.md) — listener-anchored sources must follow the listener every frame; setting position once at play-time causes panning to drift opposite player movement
 - [SFX gaps](project_sfx_gaps.md) — what audio still needs wiring as of 2026-05-12 (hit_player, per-weapon impacts, plasma variants, etc.)
 - [Asset manifest](project_asset_manifest.md) — docs/assets.md tracks every third-party asset + license status; append a row when the user shares any new asset link
 - [Blenderkit normals — DO NOT auto-recalc](project_blenderkit_normals_fix.md) — bulk `Recalculate Outside` destroys intentionally-inverted detail (recessed panels, inner flaps); fix individual models by hand in Blender. Models are untracked in git — no rollback. Don't run `tools/fix_normals.py` without a filter
@@ -78,7 +80,9 @@
 - [MP lobby member data pattern](project_mp_lobby_data_pattern.md) — Publish per-character metadata via Steam.setLobbyMemberData → read on remote peers → cache on Player node → refresh on lobby_data_update. Gender is the reference example.
 - [Looping anim hold pattern](project_looping_anim_hold.md) — Sustained-pose animations (LMB-hold fire) need loop=true + per-tick picker override + single source of truth across all call sites — partial fixes spaz at the fire-rate frequency
 - [Procgen switch softlock](project_procgen_switch_softlock.md) — Boss rooms with 3+ doors can over-allocate switch puzzles; debug "Force Unlock Doors" button is the runtime workaround
-- [Blood decal ring](project_blood_decal_ring.md) — Global ring (cap 400) with 3-tier priority eviction (priority asc, area asc, age asc) — walls outrank floors, small evicts before big. Bigger decals cost more per-frame so small-first wins on both perf + visual.
+- [Blood decal ring](project_blood_decal_ring.md) — Cap-400 priority ring. Floor pools moved to LiquidLayer 2026-06-01; ring now backs walls + footprints + character splats only, will shrink as #110/#111 land.
+- [LiquidLayer architecture](project_liquid_layer.md) — SubViewport-rasterized floor fluid (one per fluid_type). Replaces legacy floor-pool decals. Shader does multiply-stain + PBR wet sheen in one pass; per-hit droplets + corpse settle pools both stamp here.
+- [Blood migration status (2026-06-01)](project_blood_migration_status.md) — Snapshot of what's on LiquidLayer vs still old Decal. Floor+droplets ✓; walls/objects/characters/footprints pending. Hints for walls (task #110) and lessons learned (don't sine-wave perimeters, static normal only, etc).
 - [Weapon attachment](project_weapon_attachment.md) — Visible weapon glb mounts to X Bot right-hand bone via BoneAttachment3D; player + enemies, auto-scaled, all 11 weapons tuned via live F9+T grip tuner; per-weapon muzzle override + missing-texture fallback material
 - [Shell casing ejection](project_shell_casing_eject.md) — Spent shells eject on fire (shotgun casing captured from glb, others procedural cylinders); scripted Node3D ballistic arc + bounce + brass material, per-weapon delay
 - [Camera projection (perspective)](project_camera_projection_perspective.md) — Switched from ortho size=22 to fake-ortho perspective (FOV 18° at ~70m). F8 toggles. Fixed LoS clip + explosion alpha + inspect zoom; introduced Label3D fixed_size compensation and accelerator flame muzzle reconnect
@@ -93,5 +97,8 @@
 - [Level-up spike at higher levels](project_levelup_higher_lvl_spike.md) — Lvl 5+ level-ups cost ~100ms proc despite VfxWarmup; Lvl 2 fine; suspect UI re-layout or per-level VFX
 - [PerfLogger feedback loop](project_perf_logger_feedback.md) — Spike rows used to fire every frame with 25ms of tree walks, self-perpetuating. Throttled to 200ms and tree walks skipped on spike rows.
 - [Enemy AnimationPlayer pause](project_enemy_anim_pause.md) — 200+ enemy AnimationPlayers ticking ~40ms/frame at level start; now pause when invisible+IDLE (active states keep ticking)
+- [Enemy physics_process pause](project_enemy_physics_pause.md) — pause _physics_process AND anim when invisible AND state in {IDLE, CHASING, RETURNING}; no-op guards on setters; wake re-randomizes _idle_skip_counter
+- [Laser pistol perf investigation (IN-PROGRESS)](project_laser_pistol_perf_investigation.md) — phys spikes correlate 100% with ranged_1h equipped but enemies/projectiles/casings aren't the cost; corpses column added to next CSV to confirm corpse-accumulation hypothesis
+- [Melee tuning rationale](project_melee_tuning_rationale.md) — basic_attack cooldown 1.5s + attack_speed 0.3-0.55 + anim speed floor 0.3 + impact_ratio 0.15 all cooperate; flipping one back to a "normal" value breaks anim/damage sync
+- [Perf session 2026-05-25](project_perf_session_2026_05_25.md) — final state 60fps baseline + 60fps firing; DON'T apply visibility_range_end blanket to enemy mesh subtrees (cost more than LoS culler saves); call_deferred from _physics_process doesn't actually defer past the tick — use tree.process_frame.connect instead
 - [GI Quality setting](project_gi_quality_setting.md) — SDFGI default OFF (was the ~50s convergence stall on level load); DisplayConfig.gi_quality enum drives runtime apply via DisplayState._apply_gi_preset; LOW/HIGH presets exposed in Display settings
-- [FBX decimation pitfall](project_fbx_decimation_pitfall.md) — Don't decimate Mixamo character FBXs via Blender round-trip; the X Bot animation library can't resolve bone paths after Skeleton3D renaming. GLB decimation is safe; backup tag pre-decimate-2026-06-01 has originals.

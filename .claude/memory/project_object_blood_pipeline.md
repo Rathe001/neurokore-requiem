@@ -1,8 +1,17 @@
 ---
-name: Object blood (splatter on props/interactables)
-description: Receiver opt-in pipeline that paints blood decals on props, interactables, pillars near a kill — group + layer-8 + side-projected decal
-type: project
+name: object-blood-splatter-on-props-interactables
+description: "Receiver opt-in pipeline that paints blood decals on props, interactables, pillars near a kill — group + layer-8 + side-projected decal. NOTE 2026-06-01: still on the old Decal system; migration to [[project_liquid_layer]] is task #111."
+metadata: 
+  node_type: memory
+  type: project
+  originSessionId: 8cb2236a-ff5a-4a76-8cc4-a33a9a8014b8
 ---
+
+**2026-06-01:** This pipeline is unchanged by the floor → LiquidLayer
+migration. Props/interactables/pillars are still painted via Decal3D
+on cull_mask = 8. Task #111 will migrate this alongside character
+splats. Until then everything below remains current.
+
 
 When an enemy dies, `PrototypeAttackIndicator.spawn_blood_on_receivers`
 iterates the `&"blood_receiver"` group, raycasts kill→prop for

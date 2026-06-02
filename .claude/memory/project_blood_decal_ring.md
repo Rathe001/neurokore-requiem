@@ -1,10 +1,19 @@
 ---
 name: blood-decal-ring
-description: Global blood-decal ring buffer (cap 400) with priority eviction sort — (priority asc, area asc, age asc). Walls outrank floors; small evicts before big. Bigger decals cost more per-frame, so small-first eviction is the right perf + visual trade.
-type: project
+description: "Global blood-decal ring buffer (cap 400) with priority eviction sort — (priority asc, area asc, age asc). NOTE 2026-06-01: floor pools moved to [[project_liquid_layer]] so the ring now holds walls + footprints + character splats only. Will shrink further as #110/#111 land."
+metadata: 
+  node_type: memory
+  type: project
+  originSessionId: 8cb2236a-ff5a-4a76-8cc4-a33a9a8014b8
 ---
 
-**Where the dial lives.** `prototype_attack_indicator.gd` — `_track_blood_decal(decal, keep_priority)` is the single registration point. Every floor/wall blood spawn path calls it; object decals self-free via tween and stay out of the ring.
+**2026-06-01 status:** Floor pools no longer use this ring — they
+rasterize into [[project_liquid_layer]]. The ring still backs wall
+splats, footprints, and character splats. Once #110 (walls) and
+#111 (character/object) land, the ring + its priority sort can be
+deleted entirely; until then it's still load-bearing.
+
+**Where the dial lives.** `prototype_attack_indicator.gd` — `_track_blood_decal(decal, keep_priority)` is the single registration point. Every wall/footprint/character blood spawn path calls it; object decals self-free via tween and stay out of the ring.
 
 **Capacity:** `BLOOD_DECAL_MAX = 400`. Cap chosen empirically — bloodier rooms before eviction kicks in. Higher = more persistence, more decal-pass cost; lower = less storytelling but tighter perf budget.
 
