@@ -444,6 +444,17 @@ void fragment() {
 	// some themes, and floor blood comes from the dedicated floor
 	// LiquidLayer. The wall masks are only meaningful on vertical faces.
 	if (is_wall) {
+		// DEBUG: force ALL walls to render green, regardless of mask.
+		// If walls go green, the wall shader's blood block is reachable
+		// and is_wall is correctly true on vertical surfaces. Then any
+		// failure has to be in the mask-sampling / texture binding path.
+		// If walls STAY GREY, either the shader extension isn't reaching
+		// the actual wall MMIs (something else is rendering them) or
+		// is_wall is somehow false.
+		ALBEDO = vec3(0.0, 1.0, 0.0);
+		ROUGHNESS = 0.5;
+		METALLIC = 0.0;
+		return;
 		// Tri-planar weights: each face samples the mask aligned to its
 		// dominant normal axis. For 45° mitred corners, both samples
 		// blend ~equally so the stain wraps continuously around the seam.
