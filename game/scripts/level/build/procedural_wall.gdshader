@@ -140,6 +140,16 @@ uniform float wear_offset : hint_range(-0.5, 0.5) = 0.0;
 uniform float metallic_offset : hint_range(-0.3, 0.3) = 0.0;
 uniform float roughness_offset : hint_range(-0.3, 0.3) = 0.0;
 
+// ── DEBUG: white-walls override ──────────────────────────────────────────
+// When > 0, blends the final ALBEDO toward solid white so wall geometry
+// reads as flat panels with no procedural detail. Lets us see seams,
+// gaps, and missing faces against a uniform color. Combined with the
+// roughness/metallic forces below to suppress specular highlights that
+// would otherwise create false dark edges across the white panels.
+// Set debug_white_strength to 0 to disable (production look) — driven
+// at runtime by BuildContext to make this a global toggle.
+uniform float debug_white_strength : hint_range(0.0, 1.0) = 0.0;
+
 varying vec3 v_world_pos;
 varying vec3 v_world_normal;
 
@@ -412,4 +422,15 @@ void fragment() {
 			+ wear * roughness_wear
 			+ splotch * 0.35
 			+ trim_baseboard * baseboard_roughness_boost, 0.0, 1.0);
+
+	// Debug white-walls override. Lerp final shading toward solid matte
+	// white so wall geometry shows up cleanly under uniform color — gaps
+	// and missing faces stand out against the white. Roughness driven
+	// high + metallic to 0 to kill specular highlights that would create
+	// false dark seams.
+	if (debug_white_strength > 0.0) {
+		ALBEDO = mix(ALBEDO, vec3(1.0), debug_white_strength);
+		ROUGHNESS = mix(ROUGHNESS, 0.85, debug_white_strength);
+		METALLIC = mix(METALLIC, 0.0, debug_white_strength);
+	}
 }

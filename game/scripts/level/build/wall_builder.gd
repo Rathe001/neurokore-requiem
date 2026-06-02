@@ -9,7 +9,13 @@ const SEAM := 0.02  ## anti-z-fight gap for corridor walls abutting room geometr
 # Sub-millimetre vertical bias applied to corridor wall tops so the corridor
 # loses the depth tie wherever it overlaps room geometry under a shared wall
 # — invisible at the fixed top-down camera but eliminates flicker.
-const CORRIDOR_WALL_Y_BIAS := -0.001
+#
+# Reset to 0 (2026-06-02): with the new butt-joint room geometry (zero
+# overlap between corridor and room walls), there's nothing to z-fight
+# against, but the 1mm bias was making corridor wall tops sit 1mm below
+# room wall tops at the T-junction — producing a visible thin dark
+# step strip from the iso camera that read as "top face missing."
+const CORRIDOR_WALL_Y_BIAS := 0.0
 # Room wall faces share the y=0 edge with the floor PlaneMesh. Without
 # overlap, the GPU rasterizer can leave sub-pixel gaps at that edge —
 # visible as thin dark lines at every wall base from the isometric camera.

@@ -212,6 +212,11 @@ static func _make_themed_wall_material(t: LevelTheme) -> ShaderMaterial:
 	m.set_shader_parameter(&"wear_offset", t.wall_wear_offset)
 	m.set_shader_parameter(&"metallic_offset", t.wall_metallic_offset)
 	m.set_shader_parameter(&"roughness_offset", t.wall_roughness_offset)
+	# DEBUG: solid-white walls so the geometry (seams, gaps, missing
+	# faces) reads cleanly. Set back to 0.0 to restore the worn-steel
+	# procedural look once the wall corner / top-face investigation is
+	# done.
+	m.set_shader_parameter(&"debug_white_strength", 1.0)
 	return m
 
 
@@ -269,6 +274,9 @@ static func _make_themed_floor_material(t: LevelTheme) -> ShaderMaterial:
 	m.set_shader_parameter(&"wear_offset", t.floor_wear_offset)
 	m.set_shader_parameter(&"metallic_offset", t.floor_metallic_offset)
 	m.set_shader_parameter(&"roughness_offset", t.floor_roughness_offset)
+	# DEBUG: white surface to match the wall debug. See note on the wall
+	# function for the toggle-off path.
+	m.set_shader_parameter(&"debug_white_strength", 1.0)
 	return m
 
 
