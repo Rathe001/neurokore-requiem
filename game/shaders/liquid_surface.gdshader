@@ -57,17 +57,19 @@ uniform float density_opacity_max : hint_range(0.4, 1.0) = 0.90;
 // translucent wash. Required by the higher overhead light intensity.
 uniform float alpha_min : hint_range(0.0, 0.5) = 0.70;
 
-// Wet-look knobs. The surface normal is STATIC (no time-driven drift)
-// because real spilled blood doesn't ripple — the visible shimmer
-// comes from camera + light angle changes hitting the static
-// noise-perturbed surface, not from animated waves.
-// roughness raised + specular dropped so overhead lights don't catch
-// the floor blood and PBR-relight it into a bright pink wash. Subtle
-// sheen only on the densest core.
-uniform float roughness : hint_range(0.0, 1.0) = 0.42;
-uniform float normal_strength : hint_range(0.0, 2.0) = 0.03;
+// Wet-look knobs. Dense core is GLOSSY (low roughness + high
+// specular) so it picks up nearby colored lights (IED glow,
+// explosions, muzzle flashes) as wet sheen highlights — the
+// "doesn't reflect lights" feedback. Albedo stays dark so the
+// blood reads dark in dim areas; specular only contributes when
+// there's a light to reflect.
+// Edges stay very matte via the density-gated mix in fragment so
+// the thin perimeter doesn't pick up overhead lights and read as
+// pink wash.
+uniform float roughness : hint_range(0.0, 1.0) = 0.16;
+uniform float normal_strength : hint_range(0.0, 2.0) = 0.08;
 uniform float noise_scale : hint_range(0.5, 32.0) = 5.0;
-uniform float specular_intensity : hint_range(0.0, 1.0) = 0.20;
+uniform float specular_intensity : hint_range(0.0, 1.0) = 0.55;
 // Brightness bias on the multiplied result. Cranked all the way
 // down: the floor was still reading pinkish because lit overhead
 // surface × red tint × brightness amplified into bright red even
@@ -155,12 +157,13 @@ void fragment() {
 	NORMAL_MAP_DEPTH = normal_strength * mix(0.3, 1.0, density);
 
 	ALBEDO = stained;
-	// Edges feel drier/matte (high roughness), dense centers slick
-	// (low roughness). Matches real wet pools — thin film is barely
-	// glossy, deep pool reflects strongly.
-	ROUGHNESS = mix(0.75, roughness, density);
+	// Edges very matte (no specular pickup → stay dark under overhead
+	// lighting), dense core glossy (catches nearby colored lights as
+	// wet sheen highlights — IED glow, muzzle flash, etc.). Steep
+	// density gate so only the truly dense core gets the wet read.
+	ROUGHNESS = mix(0.92, roughness, density);
 	METALLIC = 0.0;
-	SPECULAR = specular_intensity * mix(0.15, 1.0, density);
+	SPECULAR = specular_intensity * mix(0.0, 1.0, density);
 	// ALPHA is density-driven so thin/pink areas fade to transparent
 	// and dense/dark areas stay opaque. `alpha` (the smoothstep) gates
 	// the perimeter anti-aliasing — without it, the discard threshold
