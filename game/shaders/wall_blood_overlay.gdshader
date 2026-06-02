@@ -23,9 +23,13 @@ uniform float wall_height : hint_range(1.0, 16.0) = 4.0;
 //   blood_dense = core tint (near-black burgundy, opaque core)
 uniform vec3 blood_thin : source_color = vec3(0.55, 0.15, 0.16);
 uniform vec3 blood_dense : source_color = vec3(0.08, 0.02, 0.03);
-uniform float density_power : hint_range(0.3, 4.0) = 1.6;
-uniform float density_full : hint_range(0.2, 2.0) = 0.7;
+uniform float density_power : hint_range(0.3, 4.0) = 1.0;
+uniform float density_full : hint_range(0.2, 2.0) = 0.85;
 uniform float density_opacity_max : hint_range(0.4, 1.0) = 0.92;
+// Thin edges fade to transparent (alpha ramps with density). Without
+// this the smoothstep alpha stays 1.0 across the thin-tint band and
+// paints a bright pink ring around the dense core.
+uniform float alpha_min : hint_range(0.0, 0.5) = 0.0;
 
 uniform float stain_brightness : hint_range(0.5, 4.0) = 2.0;
 // Threshold raised vs. the original 0.015 to gate trail-end haze
@@ -33,13 +37,17 @@ uniform float stain_brightness : hint_range(0.5, 4.0) = 2.0;
 // along mask rows where stamps had clustered.
 uniform float coverage_threshold : hint_range(0.0, 0.5) = 0.05;
 uniform float edge_softness : hint_range(0.0, 0.3) = 0.10;
-uniform float blood_roughness : hint_range(0.0, 1.0) = 0.22;
-uniform float solid_opacity : hint_range(0.0, 1.0) = 0.10;
+uniform float blood_roughness : hint_range(0.0, 1.0) = 0.26;
+// 0 = pure multiply-stain at thinnest edge. Density scales up from
+// here toward density_opacity_max in the dense core.
+uniform float solid_opacity : hint_range(0.0, 1.0) = 0.0;
 
 // Wet-sheen tuning (same shape as the floor's normal map sampling).
-uniform float normal_strength : hint_range(0.0, 2.0) = 0.08;
+// Dialed down so highlights read as a subtle wet film instead of a
+// glass-bright reflection.
+uniform float normal_strength : hint_range(0.0, 2.0) = 0.04;
 uniform float noise_scale : hint_range(0.5, 32.0) = 5.0;
-uniform float specular_intensity : hint_range(0.0, 1.0) = 0.55;
+uniform float specular_intensity : hint_range(0.0, 1.0) = 0.35;
 
 varying vec3 v_world_pos;
 varying vec3 v_world_normal;
@@ -101,8 +109,11 @@ void fragment() {
 	NORMAL_MAP_DEPTH = normal_strength * mix(0.3, 1.0, density);
 
 	ALBEDO = stained;
-	ROUGHNESS = mix(0.65, blood_roughness, density);
+	ROUGHNESS = mix(0.75, blood_roughness, density);
 	METALLIC = 0.0;
-	SPECULAR = specular_intensity * mix(0.4, 1.0, density);
-	ALPHA = blood_alpha;
+	SPECULAR = specular_intensity * mix(0.15, 1.0, density);
+	// ALPHA driven by density so thin pinkish edges fade to transparent
+	// (wall shows through) and only the dense dark core stays opaque.
+	// blood_alpha keeps the perimeter discard edge anti-aliased.
+	ALPHA = blood_alpha * mix(alpha_min, 1.0, density);
 }
