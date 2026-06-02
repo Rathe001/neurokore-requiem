@@ -1200,11 +1200,11 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 	# the bigger settle pool that forms when the corpse comes to rest.
 	# Crits + bleed-rated weapons (melee_1h) get a richer scatter to
 	# match the bigger spray burst.
-	var droplet_count: int = 3
+	var droplet_count: int = 6
 	if is_crit:
-		droplet_count += 2
+		droplet_count += 3
 	if weapon_base_id == &"melee_1h":
-		droplet_count += 2
+		droplet_count += 4
 	_stamp_hit_droplets(hit_pos, blood_dir, droplet_count)
 	# Directional hit reaction — pick hit_left/right/back/big based on
 	# where the hit came from relative to the enemy's facing. Threshold-
@@ -2725,13 +2725,14 @@ func _stamp_hit_droplets(hit_pos: Vector3, hit_dir: Vector3, count: int) -> void
 		var dist: float = randf_range(0.6, 2.0)
 		var offset := Vector3(cos(theta) * dist, 0.0, sin(theta) * dist)
 		var pos := Vector3(hit_pos.x, floor_y, hit_pos.z) + offset
-		# 15-28cm diameter splats — at iso distance into the 2048²
-		# mask, anything smaller than this gets eaten by the shader's
-		# coverage threshold and becomes invisible. Still well under
-		# the corpse pool's 90cm radius so they look like spray, not
-		# spilled puddles.
-		var radius: float = randf_range(0.08, 0.14)
-		var intensity: float = randf_range(0.7, 1.0)
+		# Mixed sizes — most are small specks, a few are bigger
+		# drips. Heavy weighting toward small via squared roll so a
+		# busy fight produces lots of fine spatter with occasional
+		# fatter splotches, not a uniform field of identical blobs.
+		var size_roll: float = randf()
+		size_roll *= size_roll
+		var radius: float = lerp(0.06, 0.22, size_roll)
+		var intensity: float = randf_range(0.65, 1.0)
 		layer.stamp(pos, _get_settle_stamp_texture(), radius, intensity)
 
 
@@ -2750,25 +2751,29 @@ static func _get_settle_stamp_texture() -> Texture2D:
 		var center := Vector2(size, size) * 0.5
 		var base_r: float = float(size) * 0.40
 		for i in _SETTLE_STAMP_VARIANT_COUNT:
-			# Per-variant noise driving the perimeter shape. 2D noise
-			# sampled along a small circle gives a smooth, non-periodic
-			# wobble — no two angles read as repeating lobes.
-			var rim_noise := FastNoiseLite.new()
-			rim_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
-			rim_noise.seed = 0x4B5A11 + i * 0x9E3779B9
-			rim_noise.frequency = 1.6
+			# Two-octave perimeter noise. Low-octave gives broad lobed
+			# silhouettes, high-octave adds jagged finger-like detail at
+			# the rim. Together: messy spilled-liquid shapes, not
+			# perturbed circles.
+			var rim_lo := FastNoiseLite.new()
+			rim_lo.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+			rim_lo.seed = 0x4B5A11 + i * 0x9E3779B9
+			rim_lo.frequency = 2.2
+			var rim_hi := FastNoiseLite.new()
+			rim_hi.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+			rim_hi.seed = 0x7C0DE5 + i * 0x517CC1B7
+			rim_hi.frequency = 7.0
 			# Inner alpha noise — breaks up the uniform interior with
-			# subtle density variation, so the stamp doesn't look
-			# painted-on. Different seed + much higher frequency than
-			# the rim noise.
+			# density variation, so the stamp doesn't look painted-on.
 			var inner_noise := FastNoiseLite.new()
 			inner_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
 			inner_noise.seed = 0xC0FFEE + i * 0x12345
 			inner_noise.frequency = 6.0
-			# Amplitude of the rim perturbation, in fractions of base
-			# radius. 0.35 = ±35% — strong enough that silhouettes read
-			# as messy splatters, not perturbed circles.
-			var rim_amp: float = 0.35
+			# Rim amplitudes. The low octave warps the silhouette into
+			# broad bulges; the high octave (smaller amp) adds the
+			# jagged finger detail. Combined max ≈ ±55%.
+			var rim_amp_lo: float = 0.40
+			var rim_amp_hi: float = 0.15
 			# Random rotation of the noise space per variant so the
 			# "natural" axis of each splat differs.
 			var rot: float = float(i) * 0.83 + 1.3
@@ -2788,8 +2793,9 @@ static func _get_settle_stamp_texture() -> Texture2D:
 					var ny: float = sin(angle)
 					var rnx: float = cs * nx - sn * ny
 					var rny: float = sn * nx + cs * ny
-					var rim: float = rim_noise.get_noise_2d(rnx, rny)
-					var max_r: float = base_r * (1.0 + rim_amp * rim)
+					var rim_l: float = rim_lo.get_noise_2d(rnx, rny)
+					var rim_h: float = rim_hi.get_noise_2d(rnx * 2.5, rny * 2.5)
+					var max_r: float = base_r * (1.0 + rim_amp_lo * rim_l + rim_amp_hi * rim_h)
 					if dist >= max_r:
 						continue
 					var d: float = dist / max_r
