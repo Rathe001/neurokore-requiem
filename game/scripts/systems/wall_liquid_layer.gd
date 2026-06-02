@@ -139,7 +139,14 @@ func _bind_wall_sm(gi: GeometryInstance3D, mask_key: StringName, mask_tex: Textu
 	var sm: ShaderMaterial = mat
 	if sm.shader == null or sm.shader.resource_path != _WALL_SHADER_PATH:
 		return
+	# Belt + braces: set via the high-level material API AND directly via
+	# RenderingServer. Some Godot 4.x revisions don't propagate
+	# ViewportTexture references through ShaderMaterial.set_shader_parameter
+	# when the texture's SubViewport is cross-tree from the material's
+	# eventual draw context. RenderingServer.material_set_param bypasses
+	# that layer.
 	sm.set_shader_parameter(mask_key, mask_tex)
+	RenderingServer.material_set_param(sm.get_rid(), mask_key, mask_tex)
 	if surface_axis == SurfaceAxis.X_FACING:
 		sm.set_shader_parameter(&"wall_blood_fresh_color", fresh_color)
 		sm.set_shader_parameter(&"wall_blood_dried_color", dried_color)
@@ -147,6 +154,15 @@ func _bind_wall_sm(gi: GeometryInstance3D, mask_key: StringName, mask_tex: Textu
 		sm.set_shader_parameter(&"wall_blood_extent_y", wall_height_meters)
 	if not _bound_materials.has(sm):
 		_bound_materials.append(sm)
+		# One-time diagnostic: read the parameter back and confirm the
+		# texture is what we set. If get_shader_parameter returns null
+		# or a different texture, the material isn't holding our binding.
+		var readback: Variant = sm.get_shader_parameter(mask_key)
+		print("[WallLiquidLayer:", surface_axis,
+			"] bound ", mask_key, " on ", sm.resource_path,
+			" → readback=", readback,
+			" mask_tex=", mask_tex,
+			" tex_size=", (mask_tex.get_size() if mask_tex != null else Vector2.ZERO))
 
 
 # How long after _ready to keep retrying bind every frame. Long enough
