@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3]
+[gd_scene load_steps=13 format=3]
 
 ; Generic level scene: WorldEnvironment + LevelBuilder + EnemiesContainer +
 ; PlayersContainer + HUD + Camera. The LevelBuilder's `layout` export
@@ -18,6 +18,7 @@
 [ext_resource type="PackedScene" path="res://scenes/prototype/prototype_enemy.tscn" id="scene_enemy"]
 [ext_resource type="Resource" path="res://resources/level/layouts/dungeon_demo.tres" id="layout"]
 [ext_resource type="PackedScene" path="res://scenes/world/liquid_layer.tscn" id="scene_liquid_blood"]
+[ext_resource type="PackedScene" path="res://scenes/world/wall_liquid_layer.tscn" id="scene_wall_blood"]
 
 [sub_resource type="Environment" id="env_test"]
 background_mode = 1
@@ -183,6 +184,19 @@ script = ExtResource("script_players_container")
 ; Fluid resource system lands (task #112).
 [node name="BloodLayer" parent="." instance=ExtResource("scene_liquid_blood")]
 fluid_id = &"blood_human"
+
+; Wall blood — two SubViewport masks (one per world axis) sampled by
+; procedural_wall.gdshader via global shader uniforms. Stamps from
+; PrototypeAttackIndicator.spawn_blood_wall_splatter route to whichever
+; layer matches the impact normal; the wall shader's tri-planar blend
+; handles 45° mitred corners across both layers.
+[node name="WallBloodLayerX" parent="." instance=ExtResource("scene_wall_blood")]
+fluid_id = &"blood_human"
+surface_axis = 0
+
+[node name="WallBloodLayerZ" parent="." instance=ExtResource("scene_wall_blood")]
+fluid_id = &"blood_human"
+surface_axis = 1
 
 [node name="HUD" parent="." instance=ExtResource("scene_hud")]
 
