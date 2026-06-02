@@ -76,7 +76,11 @@ func stamp(world_pos: Vector3, wall_normal: Vector3, world_radius: float, intens
 		horizontal_world * px_per_m_h + float(MASK_PX_X) * 0.5,
 		(WALL_HEIGHT_M - world_pos.y) * px_per_m_v,
 	)
-	var tex: Texture2D = _get_cached_stamp_texture()
+	# Reuse the floor LiquidLayer's chaotic lobed splatter textures —
+	# 12 cached two-octave-noise blobs with irregular perimeters.
+	# Wall stamps thus share the same organic silhouette family the
+	# floor uses, instead of reading as smooth circles.
+	var tex: Texture2D = PrototypeEnemy._get_settle_stamp_texture()
 	var sprite := Sprite2D.new()
 	sprite.texture = tex
 	sprite.position = px
