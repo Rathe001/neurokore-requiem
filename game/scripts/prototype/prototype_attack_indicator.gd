@@ -1449,18 +1449,20 @@ static func spawn_blood_on_character(character_visual: Node3D, world_impact_pos:
 	# head region rather than sideways through the feet.
 	var local_impact: Vector3 = character_visual.global_transform.affine_inverse() * world_impact_pos
 	var decal := Decal.new()
-	var variant := _get_blood_splatter_variant(blood_type)
-	decal.texture_albedo = variant[&"albedo"]
-	decal.texture_normal = variant[&"normal"]
+	# Chaotic alpha mask + dark modulate — same look as floor / wall /
+	# prop blood, so a character's splatters read as the same fluid
+	# rather than a brighter cartoon splat.
+	decal.texture_albedo = PrototypeEnemy._get_settle_stamp_texture()
 	decal.texture_orm = _get_blood_orm_texture()
 	# Small footprint (humanoid surface area); tall projection volume
 	# so the splat covers the character even at extreme pose angles
 	# (a kicked-up leg, a turning torso).
 	decal.size = Vector3(randf_range(0.30, 0.55), 1.6, randf_range(0.30, 0.55))
-	decal.modulate = _decal_color_jitter()
+	decal.modulate = _dark_blood_decal_color()
 	decal.upper_fade = 0.1
 	decal.lower_fade = 0.1
-	decal.albedo_mix = BLOOD_DECAL_ALBEDO_MIX
+	# Full-replace — see _spawn_object_blood_decal for rationale.
+	decal.albedo_mix = 1.0
 	decal.cull_mask = CHARACTER_BLOOD_LAYER
 	decal.rotation.y = randf() * TAU
 	# Position at local impact, lifted to torso height. Clamp the XZ
@@ -1692,9 +1694,11 @@ static func _spawn_object_blood_decal(receiver: Node3D, impact_pos: Vector3, imp
 	if not is_instance_valid(receiver):
 		return
 	var decal := Decal.new()
-	var variant := _get_blood_wall_splatter_variant(blood_type)
-	decal.texture_albedo = variant[&"albedo"]
-	decal.texture_normal = variant[&"normal"]
+	# Chaotic lobed alpha mask from the LiquidLayer's stamp generator —
+	# same silhouette family as floor/wall blood. modulate tints the
+	# white mask to dark blood color, so a single texture pool serves
+	# both prop side-paint and floor stamps consistently.
+	decal.texture_albedo = PrototypeEnemy._get_settle_stamp_texture()
 	decal.texture_orm = _get_blood_orm_texture()
 	# Size falls off with distance from the kill — close hits get a big
 	# stamp, farther ones get a small one. Floor at 0.6 so even max-
@@ -1714,10 +1718,14 @@ static func _spawn_object_blood_decal(receiver: Node3D, impact_pos: Vector3, imp
 		projection_depth,
 		randf_range(0.7, 1.4) * size_scale,
 	)
-	decal.modulate = _decal_color_jitter()
+	decal.modulate = _dark_blood_decal_color()
 	decal.upper_fade = 0.08
 	decal.lower_fade = 0.08
-	decal.albedo_mix = OBJECT_BLOOD_ALBEDO_MIX
+	# Full-replace albedo_mix — the chaotic mask is alpha-only, so the
+	# decal needs to fully replace the prop's surface color where it
+	# stamps. Without this the dark color would barely register on a
+	# bright prop.
+	decal.albedo_mix = 1.0
 	decal.cull_mask = OBJECT_BLOOD_LAYER
 	# Orient: decal projects along its local -Y, so build a basis whose
 	# +Y axis IS the surface normal. Texture's V axis is randomly
@@ -2759,6 +2767,16 @@ static func _decal_color_jitter(alpha: float = 1.0) -> Color:
 	var g: float = v * randf_range(0.85, 1.0)  # less green = more red
 	var b: float = v * randf_range(0.78, 0.95) # less blue = warmer
 	return Color(r, g, b, alpha)
+
+
+# Dark-blood decal tint matching the LiquidLayer's `fresh_color`
+# (near-black with a faint red hint). Used by props + characters so
+# their splatter visually matches floor/wall pools instead of reading
+# as a brighter, more saturated red. ±20% jitter per channel so
+# adjacent splats aren't identical.
+static func _dark_blood_decal_color(alpha: float = 1.0) -> Color:
+	var k: float = randf_range(0.85, 1.20)
+	return Color(0.14 * k, 0.030 * k, 0.042 * k, alpha)
 
 
 # AoE explosion burst — flipbook fireball + flash + sparks, palette-keyed
