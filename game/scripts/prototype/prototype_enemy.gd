@@ -2678,14 +2678,14 @@ func _spawn_settle_pool() -> void:
 		layer = get_tree().get_first_node_in_group(&"liquid_layer") as LiquidLayer
 	if layer == null:
 		return
-	# Slow expansion: instead of one instant max-size stamp, schedule a
-	# series of growing stamps over ~2.5 seconds so the pool oozes
-	# outward from the corpse like blood actually seeping. Cumulative
-	# additive blend in the LiquidLayer mask + the bigger stamps
-	# overlapping the smaller ones builds the final coverage shape
-	# organically rather than appearing all at once.
+	# Slow expansion: a single Sprite2D in the LiquidLayer's mask tweens
+	# its scale from a small starting footprint up to the final pool
+	# size over 2.5s. Cumulative additive draws across those frames
+	# build the visible footprint smoothly — no step jumps like the
+	# previous "stamp at increasing radii" scheduler produced.
 	var settle_pos := _settled_corpse_position()
-	_schedule_expanding_pool(layer, settle_pos)
+	layer.stamp_growing(settle_pos, _get_settle_stamp_texture(),
+		_POOL_INITIAL_RADIUS, _POOL_FINAL_RADIUS, _POOL_EXPANSION_DURATION, 1.0)
 	# Gameplay slip-zone — standalone Area3D so the player still gets
 	# the Traction-mediated slow/stumble when walking through this
 	# pool. LiquidLayer is visual-only; gameplay needs its own node.
@@ -2699,42 +2699,12 @@ func _spawn_settle_pool() -> void:
 		PrototypeAttackIndicator.spawn_blood_slip_zone(container, settle_pos, 0.75)
 
 
-# Tween-style expansion: emit N stamps over `duration` seconds at
-# increasing radii. Each stamp is independent in the LiquidLayer mask;
-# overlapping bigger stamps cover the smaller ones via additive blend,
-# producing the visual of a pool oozing outward. SceneTreeTimer keeps
-# the scheduling decoupled from enemy node lifecycle — if the corpse
-# despawns mid-expansion the timers fire anyway and the layer is still
-# valid.
-const _POOL_EXPANSION_STEPS: int = 6
+# Settle pool expansion tuning. LiquidLayer.stamp_growing drives the
+# growth — a single sprite tweens its scale from initial → final radius
+# over duration seconds, additively painting the mask each frame.
 const _POOL_EXPANSION_DURATION: float = 2.5
 const _POOL_INITIAL_RADIUS: float = 0.18
 const _POOL_FINAL_RADIUS: float = 0.9
-
-func _schedule_expanding_pool(layer: LiquidLayer, pos: Vector3) -> void:
-	var layer_id: int = layer.get_instance_id()
-	var tex: Texture2D = _get_settle_stamp_texture()
-	for i in _POOL_EXPANSION_STEPS:
-		var t: float = float(i) / float(_POOL_EXPANSION_STEPS - 1)
-		# Ease-out: pool grows fast at first then slows, mimicking
-		# the viscous bleed-out curve of the old Decal3D tween system.
-		var eased: float = 1.0 - (1.0 - t) * (1.0 - t)
-		var radius: float = lerpf(_POOL_INITIAL_RADIUS, _POOL_FINAL_RADIUS, eased)
-		var delay: float = t * _POOL_EXPANSION_DURATION
-		if delay <= 0.0:
-			layer.stamp(pos, tex, radius, 1.0)
-			continue
-		# SceneTreeTimer fires regardless of caller lifetime. Capturing
-		# the layer's instance id (not the layer itself) is the freed-
-		# capture-safe pattern used elsewhere in this codebase.
-		var timer := get_tree().create_timer(delay)
-		timer.timeout.connect(
-			func() -> void:
-				var l := instance_from_id(layer_id) as LiquidLayer
-				if l != null and is_instance_valid(l):
-					l.stamp(pos, tex, radius, 1.0),
-			CONNECT_ONE_SHOT
-		)
 
 
 # Per-hit droplet scatter — stamps `count` tiny lobed splatters around

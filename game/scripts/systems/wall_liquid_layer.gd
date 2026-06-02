@@ -83,12 +83,14 @@ func stamp(world_pos: Vector3, wall_normal: Vector3, world_radius: float, intens
 	# Scale so the stamp's diameter matches world_radius * 2 in pixels.
 	var diam_px: float = world_radius * 2.0 * px_per_m_h
 	var base_scale: float = diam_px / float(tex.get_size().x)
-	# Slight aspect jitter to hide the round texture silhouette when
-	# multiple stamps overlap. Same trick the floor LiquidLayer uses.
-	var aspect_x: float = randf_range(0.85, 1.20)
-	var aspect_y: float = randf_range(0.85, 1.20)
+	# Wall stamps get vertical-biased aspect jitter — gravity pulls
+	# blood down the wall so a circular splatter reads wrong. Y axis
+	# stretches 1.3-2.0× while X compresses slightly. No rotation
+	# (otherwise the vertical bias points in random directions and
+	# loses the gravity read).
+	var aspect_x: float = randf_range(0.85, 1.10)
+	var aspect_y: float = randf_range(1.30, 2.00)
 	sprite.scale = Vector2(base_scale * aspect_x, base_scale * aspect_y)
-	sprite.rotation = randf() * TAU
 	sprite.modulate = Color(1.0, 1.0, 1.0, intensity)
 	sprite.material = _get_cached_additive_material()
 	stamp_root.add_child(sprite)

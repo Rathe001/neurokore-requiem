@@ -131,6 +131,42 @@ func stamp(world_pos: Vector3, stamp_texture: Texture2D, world_radius: float, in
 	)
 
 
+## Smoothly-expanding stamp. Spawns ONE Sprite2D that tweens its scale
+## from start_radius → end_radius over `duration` seconds. Because the
+## SubViewport uses CLEAR_MODE_NEVER + additive blend, every frame
+## paints the current size on top of the previous frame's content —
+## cumulative footprint grows organically without the step-jumps a
+## series of discrete stamps would produce.
+func stamp_growing(world_pos: Vector3, stamp_texture: Texture2D, start_radius: float, end_radius: float, duration: float, intensity: float = 1.0) -> void:
+	if _stamp_root == null or stamp_texture == null:
+		return
+	_time_since_last_stamp = 0.0
+	var sprite := Sprite2D.new()
+	sprite.texture = stamp_texture
+	# Per-frame alpha is low — cumulative draws across the duration
+	# build up to a saturated value at the center, with newer outer
+	# pixels (only touched in later frames) ending lighter. Matches
+	# the natural look of blood seeping outward.
+	sprite.modulate = Color(1.0, 1.0, 1.0, intensity * 0.06)
+	sprite.position = _world_to_viewport_px(world_pos)
+	sprite.material = _make_additive_canvas_material()
+	sprite.rotation = randf() * TAU
+	var tex_size: Vector2 = stamp_texture.get_size()
+	if tex_size.x <= 0.0:
+		sprite.queue_free()
+		return
+	var start_scale: float = (start_radius * 2.0 * PIXELS_PER_METER) / tex_size.x
+	var end_scale: float = (end_radius * 2.0 * PIXELS_PER_METER) / tex_size.x
+	sprite.scale = Vector2(start_scale, start_scale)
+	_stamp_root.add_child(sprite)
+	# Ease-out so the pool grows fast at first, then slows — matches
+	# the viscous bleed-out curve of the old Decal3D tween system.
+	var tween := sprite.create_tween()
+	tween.set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
+	tween.tween_property(sprite, ^"scale", Vector2(end_scale, end_scale), duration)
+	tween.tween_callback(sprite.queue_free)
+
+
 # world (x, z) → viewport pixel (px, py). The viewport's pixel-(0, 0)
 # is the top-left, so we offset by half the viewport size to put world
 # (0, 0) at the viewport center.

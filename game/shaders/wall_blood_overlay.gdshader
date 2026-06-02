@@ -18,11 +18,15 @@ uniform sampler2D mask_z : filter_linear, repeat_disable, hint_default_black;
 uniform sampler2D screen_tex : hint_screen_texture, filter_linear;
 uniform float world_extent_xz : hint_range(8.0, 200.0) = 40.0;
 uniform float wall_height : hint_range(1.0, 16.0) = 4.0;
+// Match liquid_surface.gdshader's defaults so floor and wall blood
+// read as the same material — same tint, same brightness curve, same
+// roughness for the wet sheen. No emission: floor blood doesn't glow,
+// neither should walls.
 uniform vec3 blood_tint : source_color = vec3(0.55, 0.10, 0.10);
-uniform float stain_brightness : hint_range(0.5, 4.0) = 2.5;
-uniform float emission_strength : hint_range(0.0, 0.5) = 0.15;
-uniform float coverage_threshold : hint_range(0.0, 0.5) = 0.05;
-uniform float edge_softness : hint_range(0.0, 0.3) = 0.06;
+uniform float stain_brightness : hint_range(0.5, 4.0) = 2.0;
+uniform float coverage_threshold : hint_range(0.0, 0.5) = 0.015;
+uniform float edge_softness : hint_range(0.0, 0.3) = 0.05;
+uniform float blood_roughness : hint_range(0.0, 1.0) = 0.22;
 
 varying vec3 v_world_pos;
 varying vec3 v_world_normal;
@@ -59,10 +63,7 @@ void fragment() {
 	vec3 behind = texture(screen_tex, SCREEN_UV).rgb;
 	vec3 stained = behind * blood_tint * stain_brightness;
 	ALBEDO = stained;
-	// Small emission so the stain still reads in pitch-black areas
-	// where there's no underlying wall lighting to multiply against.
-	EMISSION = blood_tint * emission_strength;
-	ROUGHNESS = 0.32;
+	ROUGHNESS = blood_roughness;
 	METALLIC = 0.0;
 	ALPHA = blood_alpha;
 }
