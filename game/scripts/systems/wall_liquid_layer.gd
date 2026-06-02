@@ -305,13 +305,13 @@ func _build_overlay_material() -> void:
 	noise_tex.width = 256
 	noise_tex.height = 256
 	_overlay_material.set_shader_parameter(&"surface_noise", noise_tex)
-	# Shape noise for density modulation — breaks the smooth-circle
-	# silhouette into organic mottled patches. Same FastNoiseLite shape
-	# the floor uses (higher freq than the wet-sheen normal map).
+	# Shape noise for density modulation — low frequency + few octaves
+	# so it reads as large organic patches breaking up the edge
+	# silhouette, NOT a stippled spray of dots inside the splatter.
 	var shape := FastNoiseLite.new()
 	shape.noise_type = FastNoiseLite.TYPE_SIMPLEX
-	shape.frequency = 0.12
-	shape.fractal_octaves = 3
+	shape.frequency = 0.03
+	shape.fractal_octaves = 2
 	var shape_tex := NoiseTexture2D.new()
 	shape_tex.noise = shape
 	shape_tex.width = 256

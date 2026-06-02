@@ -262,16 +262,17 @@ static func _ensure_noise_texture() -> Texture2D:
 
 
 # Separate raw (non-normalmap) noise used by the shader's density
-# modulation. Higher-frequency than surface_noise so the mottled
-# patches inside a pool are smaller than the wet-sheen ripples.
+# modulation. Low frequency + few octaves so the modulation pattern
+# reads as large organic patches breaking up the edge silhouette,
+# not as a stippled spray of dots inside the pool.
 static var _shape_noise_texture: Texture2D = null
 static func _ensure_shape_noise_texture() -> Texture2D:
 	if _shape_noise_texture != null:
 		return _shape_noise_texture
 	var noise := FastNoiseLite.new()
 	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
-	noise.frequency = 0.12
-	noise.fractal_octaves = 3
+	noise.frequency = 0.03
+	noise.fractal_octaves = 2
 	var noise_tex := NoiseTexture2D.new()
 	noise_tex.noise = noise
 	noise_tex.width = 256

@@ -15,11 +15,13 @@ uniform sampler2D mask_x : filter_linear, repeat_disable, hint_default_black;
 uniform sampler2D mask_z : filter_linear, repeat_disable, hint_default_black;
 uniform sampler2D screen_tex : hint_screen_texture, filter_linear;
 uniform sampler2D surface_noise : hint_normal, filter_linear, repeat_enable;
-// Raw noise for density modulation (organic mottled boundaries vs.
-// smooth-circle blobs). See liquid_surface.gdshader for matching pair.
+// Raw noise for density modulation at the splat perimeter (organic
+// mottled boundaries vs. smooth-circle blobs). Strength is gated by
+// inverse density in fragment so dense core stays smooth and only
+// the edges break up. Mirrors liquid_surface.gdshader pair.
 uniform sampler2D shape_noise : hint_default_white, filter_linear, repeat_enable;
-uniform float shape_noise_scale : hint_range(1.0, 64.0) = 14.0;
-uniform float shape_noise_strength : hint_range(0.0, 1.0) = 0.35;
+uniform float shape_noise_scale : hint_range(1.0, 64.0) = 5.0;
+uniform float shape_noise_strength : hint_range(0.0, 1.0) = 0.55;
 uniform float world_extent_xz : hint_range(8.0, 200.0) = 40.0;
 uniform float wall_height : hint_range(1.0, 16.0) = 4.0;
 
@@ -96,8 +98,12 @@ void fragment() {
 		smoothstep(coverage_threshold, density_full, coverage),
 		density_power
 	);
+	// Edge-gated noise modulation: dense core stays smooth and dark,
+	// only the thin/edge regions break up into organic mottled shapes.
 	float noise = texture(shape_noise, v_quad_uv * shape_noise_scale).r;
-	float shape_mod = mix(1.0 - shape_noise_strength, 1.0 + shape_noise_strength, noise);
+	float edge_factor = 1.0 - smoothstep(0.4, 0.85, density);
+	float effective_strength = shape_noise_strength * edge_factor;
+	float shape_mod = mix(1.0 - effective_strength, 1.0 + effective_strength, noise);
 	density = clamp(density * shape_mod, 0.0, 1.0);
 
 	vec3 blood_color = mix(blood_thin, blood_dense, density);

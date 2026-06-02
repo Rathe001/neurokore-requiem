@@ -19,12 +19,15 @@ render_mode blend_mix, depth_draw_never, cull_back;
 uniform sampler2D liquid_mask : hint_default_black, filter_linear, repeat_disable;
 uniform sampler2D screen_tex : hint_screen_texture, filter_linear;
 uniform sampler2D surface_noise : hint_normal, filter_linear, repeat_enable;
-// Raw (non-normalmap) noise used to modulate density spatially so
-// blob shapes aren't smooth circles — breaks the dense/thin boundary
-// into organic mottled edges and varies darkness within a single pool.
+// Raw (non-normalmap) noise used to modulate density at the edges
+// so blob silhouettes aren't smooth circles. shape_noise_scale kept
+// low so the noise reads as large organic patches, not fine dots.
+// Modulation strength is GATED by inverse density in fragment so
+// the dense core stays smooth (continuous blood) while edges break
+// up into organic mottled shapes.
 uniform sampler2D shape_noise : hint_default_white, filter_linear, repeat_enable;
-uniform float shape_noise_scale : hint_range(1.0, 64.0) = 14.0;
-uniform float shape_noise_strength : hint_range(0.0, 1.0) = 0.35;
+uniform float shape_noise_scale : hint_range(1.0, 64.0) = 5.0;
+uniform float shape_noise_strength : hint_range(0.0, 1.0) = 0.55;
 
 // Two-color density gradient driving realism.
 //   fresh_color  = THIN/edge tint  (dark burgundy stain, translucent)
@@ -104,8 +107,14 @@ void fragment() {
 		smoothstep(coverage_threshold, density_full, coverage),
 		density_power
 	);
+	// Noise modulation, gated by inverse density: edges (density < ~0.4)
+	// get the full ±strength variation for organic mottled silhouettes;
+	// dense core (density > ~0.85) gets almost none so it reads as a
+	// smooth continuous dark pool rather than a stippled dot pattern.
 	float noise = texture(shape_noise, UV * shape_noise_scale).r;
-	float shape_mod = mix(1.0 - shape_noise_strength, 1.0 + shape_noise_strength, noise);
+	float edge_factor = 1.0 - smoothstep(0.4, 0.85, density);
+	float effective_strength = shape_noise_strength * edge_factor;
+	float shape_mod = mix(1.0 - effective_strength, 1.0 + effective_strength, noise);
 	density = clamp(density * shape_mod, 0.0, 1.0);
 
 	// Color: thin (pinkish-red) at the edge → dense (near-black
