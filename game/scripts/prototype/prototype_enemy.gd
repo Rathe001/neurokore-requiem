@@ -1194,6 +1194,18 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 		exit_offset = exit_offset.normalized() * 0.30
 	var burst_pos := hit_pos + exit_offset
 	PrototypeAttackIndicator.spawn_blood_burst(get_parent(), burst_pos, blood_dir, hit_mult, blood_type)
+	# Per-hit ground droplets — small lobed stamps scattered in a cone
+	# biased along the shot direction. Lands as faint, irregular drips
+	# that read as "spray from the wound hit the floor", separate from
+	# the bigger settle pool that forms when the corpse comes to rest.
+	# Crits + bleed-rated weapons (melee_1h) get a richer scatter to
+	# match the bigger spray burst.
+	var droplet_count: int = 3
+	if is_crit:
+		droplet_count += 2
+	if weapon_base_id == &"melee_1h":
+		droplet_count += 2
+	_stamp_hit_droplets(hit_pos, blood_dir, droplet_count)
 	# Directional hit reaction — pick hit_left/right/back/big based on
 	# where the hit came from relative to the enemy's facing. Threshold-
 	# gated so a 5% graze doesn't stutter the chase mid-stride. Skipped
@@ -2670,6 +2682,52 @@ func _spawn_settle_pool() -> void:
 	# in the mask resembles old-system pool footprints. Single-meter
 	# default = typical corpse-pool footprint.
 	layer.stamp(_settled_corpse_position(), _get_settle_stamp_texture(), 0.9, 1.0)
+
+
+# Per-hit droplet scatter — stamps `count` tiny lobed splatters around
+# `hit_pos` (at floor level) in a cone biased toward `hit_dir`. The
+# stamps go through the same LiquidLayer as the settle pool, so they
+# read as the same fluid and merge naturally with nearby pools.
+#
+# `hit_dir` is the shot direction (away from the shooter). Droplets
+# bias toward the away side ≈ 70/30, modelling exit-wound spray rather
+# than an omnidirectional spritz.
+func _stamp_hit_droplets(hit_pos: Vector3, hit_dir: Vector3, count: int) -> void:
+	if count <= 0 or not is_inside_tree():
+		return
+	var layer_group: StringName = StringName("liquid_layer:" + String(blood_type))
+	var layer := get_tree().get_first_node_in_group(layer_group) as LiquidLayer
+	if layer == null:
+		layer = get_tree().get_first_node_in_group(&"liquid_layer") as LiquidLayer
+	if layer == null:
+		return
+	# Drop droplets onto the floor under the enemy. Y is taken from
+	# enemy feet so the stamp lands on the actual walkable surface
+	# regardless of where the hit landed on the body.
+	var floor_y: float = global_position.y
+	# Bias the spray cone toward `hit_dir`. Flatten to XZ — droplets
+	# travel along the floor, not up/down.
+	var bias := Vector3(hit_dir.x, 0.0, hit_dir.z)
+	if bias.length_squared() > 0.0001:
+		bias = bias.normalized()
+	else:
+		bias = Vector3.ZERO
+	for i in count:
+		var theta: float
+		if bias != Vector3.ZERO and randf() < 0.7:
+			# Forward arc: ±55° around bias direction.
+			theta = atan2(bias.z, bias.x) + randf_range(-0.96, 0.96)
+		else:
+			theta = randf() * TAU
+		var dist: float = randf_range(0.25, 0.95)
+		var offset := Vector3(cos(theta) * dist, 0.0, sin(theta) * dist)
+		var pos := Vector3(hit_pos.x, floor_y, hit_pos.z) + offset
+		# Small radius (4-9 cm) + reduced intensity so a single hit
+		# doesn't paint a full pool's worth of coverage; many drops
+		# build up gradually in a busy fight.
+		var radius: float = randf_range(0.04, 0.09)
+		var intensity: float = randf_range(0.5, 0.85)
+		layer.stamp(pos, _get_settle_stamp_texture(), radius, intensity)
 
 
 # 8 irregular soft-alpha stamp variants. Each is a lobed blob (two
