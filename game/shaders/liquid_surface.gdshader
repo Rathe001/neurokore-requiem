@@ -20,12 +20,30 @@ uniform sampler2D liquid_mask : hint_default_black, filter_linear, repeat_disabl
 uniform sampler2D screen_tex : hint_screen_texture, filter_linear;
 uniform sampler2D surface_noise : hint_normal, filter_linear, repeat_enable;
 
-// Per-fluid look — multiplied against the floor underneath. Lower
-// values = darker stain. Fresh blood = deep red multiplier; dried =
-// even darker, less saturated.
-uniform vec4 fresh_color : source_color = vec4(0.50, 0.10, 0.10, 1.0);
-uniform vec4 dried_color : source_color = vec4(0.22, 0.07, 0.07, 1.0);
+// Two-color density gradient driving realism.
+//   fresh_color  = THIN/edge tint  (pinkish red, translucent perimeter)
+//   dried_color  = DENSE/center tint (near-black burgundy, opaque core)
+// The shader interpolates between them by the mask's local coverage
+// value, so the same blob naturally reads pink-stained at the edges
+// and dark/almost-opaque at the center — matching how real blood
+// pools concentrate (cf. reference photos: thin perimeter, near-black
+// dense pool surface). `age` desaturates the dense color further as
+// the pool dries.
+uniform vec4 fresh_color : source_color = vec4(0.55, 0.15, 0.16, 1.0);
+uniform vec4 dried_color : source_color = vec4(0.08, 0.02, 0.03, 1.0);
 uniform float age : hint_range(0.0, 1.0) = 0.0;
+// Shapes the thin→dense ramp. >1 keeps more of the splat in the thin
+// tint band (only the densest core goes dark); <1 pulls dense color
+// out earlier. 1.6 reads well across stamp sizes.
+uniform float density_power : hint_range(0.3, 4.0) = 1.6;
+// Where on the ramp [threshold..density_full] we hit "fully dense."
+// Lowering pulls the dark center into smaller blobs; raising keeps
+// edges pink across more of the stamp area.
+uniform float density_full : hint_range(0.2, 2.0) = 0.7;
+// Maximum opacity that dense regions reach. Even the densest pool
+// keeps a hint of translucency at this cap so the wet sheen reads
+// through. 0.92 ≈ "almost opaque, barely-there base material peek."
+uniform float density_opacity_max : hint_range(0.4, 1.0) = 0.92;
 
 // Wet-look knobs. The surface normal is STATIC (no time-driven drift)
 // because real spilled blood doesn't ripple — the visible shimmer
@@ -45,14 +63,15 @@ uniform float stain_brightness : hint_range(0.5, 3.0) = 2.0;
 // (per-hit spray) aren't entirely eaten — at 0.04 a 5-10px stamp
 // only kept its center pixel, making individual drops invisible.
 uniform float coverage_threshold : hint_range(0.0, 0.5) = 0.015;
-uniform float edge_softness : hint_range(0.0, 0.3) = 0.05;
+// Wider edge softness now that we want a perceptible pink translucent
+// halo at the perimeter (the lighter edges visible in reference photos).
+uniform float edge_softness : hint_range(0.0, 0.3) = 0.08;
 uniform float coverage_cap : hint_range(1.0, 4.0) = 1.0;
-// Blends from "pure multiply-stain" (0.0 = surface texture fully
-// shows through) toward "solid painted tint" (1.0). 0.12 is a
-// subtle lift — visible blood reads as paint, edges still keep the
-// stain character. Mirrors the wall shader's value so floor + wall
-// blood stay tonally identical.
-uniform float solid_opacity : hint_range(0.0, 1.0) = 0.12;
+// Base solid opacity floor — even very thin edges get this minimum
+// blend toward blood tint so they aren't pure multiply (which can
+// disappear over dark surfaces). Dense areas scale UP from here
+// toward density_opacity_max.
+uniform float solid_opacity : hint_range(0.0, 1.0) = 0.10;
 
 void fragment() {
 	float raw_coverage = texture(liquid_mask, UV).a;
@@ -61,20 +80,29 @@ void fragment() {
 	}
 	float coverage = min(raw_coverage, coverage_cap);
 	// Smooth alpha falloff at the perimeter (hides the discard
-	// boundary which would otherwise pop as a hard line).
+	// boundary and gives the edge a pink-translucent halo).
 	float alpha = smoothstep(coverage_threshold, coverage_threshold + edge_softness, coverage);
+	// Density factor — 0 at the splat edge, 1 in the saturated core.
+	// Drives both the color ramp (thin→dense) and the opacity ramp
+	// (translucent→nearly opaque).
+	float density = pow(
+		smoothstep(coverage_threshold, density_full, coverage),
+		density_power
+	);
 
-	// Sample the floor underneath this fragment via screen-space and
-	// multiply by the stain color. Result is a realistic absorbed
-	// stain (the floor's tile pattern + lighting + shadows all show
-	// through, just tinted blood-red).
+	// Color: thin (pinkish-red) at the edge → dense (near-black
+	// burgundy) at the core. Age desaturates further as it dries.
+	vec3 blood_color = mix(fresh_color.rgb, dried_color.rgb, density);
+	blood_color *= mix(1.0, 0.7, age);
+
+	// Multiply-stain pass: blood color × floor underneath. Edges
+	// thus tint the floor pink rather than painting over it.
 	vec3 behind = texture(screen_tex, SCREEN_UV).rgb;
-	vec3 stain_color = mix(fresh_color.rgb, dried_color.rgb, age);
-	vec3 stained = behind * stain_color * stain_brightness;
-	// Blend toward solid blood color (no surface multiply) so dense
-	// areas read as opaque painted blood rather than a faint tint
-	// over the floor pattern.
-	stained = mix(stained, stain_color, solid_opacity);
+	vec3 stained_mul = behind * blood_color * stain_brightness;
+	// Opacity ramps with density — edges keep the multiply-stain
+	// character, dense centers become nearly opaque painted blood.
+	float opacity_here = mix(solid_opacity, density_opacity_max, density);
+	vec3 stained = mix(stained_mul, blood_color, opacity_here);
 
 	// Two-octave STATIC noise → perturbed normal for the wet shimmer.
 	// No TIME term — spilled blood doesn't ripple. The shimmer comes
@@ -85,13 +113,17 @@ void fragment() {
 	vec3 n2 = texture(surface_noise, n_uv2).rgb * 2.0 - 1.0;
 	vec3 n_mixed = normalize(n1 * 0.6 + n2 * 0.4);
 	NORMAL_MAP = vec3(n_mixed.xy * 0.5 + 0.5, 1.0);
-	NORMAL_MAP_DEPTH = normal_strength;
+	// Dense areas read wetter (more normal perturbation = more
+	// visible specular highlights). Thin edges damp the sheen so
+	// they don't look like polished plastic.
+	NORMAL_MAP_DEPTH = normal_strength * mix(0.3, 1.0, density);
 
-	// Output. ALBEDO is the stained-floor color (gets lit by PBR).
-	// ROUGHNESS + SPECULAR + METALLIC drive the wet read.
 	ALBEDO = stained;
-	ROUGHNESS = roughness;
+	// Edges feel drier/matte (high roughness), dense centers slick
+	// (low roughness). Matches real wet pools — thin film is barely
+	// glossy, deep pool reflects strongly.
+	ROUGHNESS = mix(0.65, roughness, density);
 	METALLIC = 0.0;
-	SPECULAR = specular_intensity;
+	SPECULAR = specular_intensity * mix(0.4, 1.0, density);
 	ALPHA = alpha;
 }

@@ -1,53 +1,54 @@
-// Wall blood overlay — Phase 6.6 (multiply-stain + emission for visibility).
+// Wall blood overlay — density-gradient + wet-sheen realism pass.
 // Two masks: mask_x covers ±X-facing walls (indexed by (z, y)),
 // mask_z covers ±Z-facing walls (indexed by (x, y)). Wall's world
 // normal picks which mask to sample.
 //
-// Visibility tweaks vs Phase 5:
-// - Multiply-stain over screen_texture (matches floor liquid_surface
-//   look) — bright walls become bright red, dark walls become red-
-//   tinted dark instead of black.
-// - stain_brightness boost lifts the multiplied result so the stain
-//   reads as visible blood even on the dim industrial walls.
-// - Small emission so blood is faintly visible in pitch-black corners.
+// Like the floor shader (liquid_surface.gdshader) the same blob
+// reads pink-translucent at the edges and near-opaque dark burgundy
+// at the dense core, driven by mask coverage value. Adds a wet-sheen
+// normal perturbation so dense blood reflects lights with a glossy
+// highlight instead of looking like flat paint.
 shader_type spatial;
 render_mode blend_mix, depth_draw_opaque, cull_disabled;
 
 uniform sampler2D mask_x : filter_linear, repeat_disable, hint_default_black;
 uniform sampler2D mask_z : filter_linear, repeat_disable, hint_default_black;
 uniform sampler2D screen_tex : hint_screen_texture, filter_linear;
+uniform sampler2D surface_noise : hint_normal, filter_linear, repeat_enable;
 uniform float world_extent_xz : hint_range(8.0, 200.0) = 40.0;
 uniform float wall_height : hint_range(1.0, 16.0) = 4.0;
-// Match liquid_surface.gdshader's defaults so floor and wall blood
-// read as the same material — same tint, same brightness curve, same
-// roughness for the wet sheen. No emission: floor blood doesn't glow,
-// neither should walls.
-uniform vec3 blood_tint : source_color = vec3(0.55, 0.10, 0.10);
+
+// Two-color density gradient (matches floor shader uniforms).
+//   blood_thin  = edge tint (pinkish red, translucent perimeter)
+//   blood_dense = core tint (near-black burgundy, opaque core)
+uniform vec3 blood_thin : source_color = vec3(0.55, 0.15, 0.16);
+uniform vec3 blood_dense : source_color = vec3(0.08, 0.02, 0.03);
+uniform float density_power : hint_range(0.3, 4.0) = 1.6;
+uniform float density_full : hint_range(0.2, 2.0) = 0.7;
+uniform float density_opacity_max : hint_range(0.4, 1.0) = 0.92;
+
 uniform float stain_brightness : hint_range(0.5, 4.0) = 2.0;
-// Higher threshold than the previous 0.015. The lower value let very
-// faint cumulative coverage (drip tails, edge fall-off from many
-// overlapping stamps) render as visible blood — once combined with
-// solid_opacity boosting toward pure tint, those faint areas painted
-// the wall in horizontal bars wherever stamps had clustered along a
-// single mask row. 0.08 keeps real splatter coverage visible while
-// gating the trail-end haze that was producing the strip artifact.
-uniform float coverage_threshold : hint_range(0.0, 0.5) = 0.08;
-uniform float edge_softness : hint_range(0.0, 0.3) = 0.06;
+// Threshold raised vs. the original 0.015 to gate trail-end haze
+// that, combined with solid_opacity, used to paint visible bars
+// along mask rows where stamps had clustered.
+uniform float coverage_threshold : hint_range(0.0, 0.5) = 0.05;
+uniform float edge_softness : hint_range(0.0, 0.3) = 0.10;
 uniform float blood_roughness : hint_range(0.0, 1.0) = 0.22;
-// Same uniform as liquid_surface.gdshader (keep in sync so floor +
-// wall blood read as the same material): blends from pure multiply-
-// stain (0.0) toward solid painted tint (1.0). Dense blood reads as
-// painted; edges stay translucent. 0.12 is a subtle lift — enough to
-// pull dense blood out of "faint shadow" territory without overriding
-// the surface texture.
-uniform float solid_opacity : hint_range(0.0, 1.0) = 0.12;
+uniform float solid_opacity : hint_range(0.0, 1.0) = 0.10;
+
+// Wet-sheen tuning (same shape as the floor's normal map sampling).
+uniform float normal_strength : hint_range(0.0, 2.0) = 0.08;
+uniform float noise_scale : hint_range(0.5, 32.0) = 5.0;
+uniform float specular_intensity : hint_range(0.0, 1.0) = 0.55;
 
 varying vec3 v_world_pos;
 varying vec3 v_world_normal;
+varying vec2 v_quad_uv;
 
 void vertex() {
 	v_world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	v_world_normal = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
+	v_quad_uv = UV;
 }
 
 void fragment() {
@@ -69,19 +70,39 @@ void fragment() {
 	if (a < coverage_threshold) {
 		discard;
 	}
-	float blood_alpha = smoothstep(coverage_threshold, coverage_threshold + edge_softness, min(a, 1.0));
-	// Sample the wall behind this fragment via screen-space — the
-	// overlay quad sits ~5mm in front of the wall, so SCREEN_UV reads
-	// the wall pixel underneath. Multiply-stain darkens that to blood
-	// red while preserving the wall's panel detail / shadow / etc.
+	float coverage = min(a, 1.0);
+	float blood_alpha = smoothstep(coverage_threshold, coverage_threshold + edge_softness, coverage);
+	// Density factor — 0 at edge of blob, 1 in saturated core. Drives
+	// color, opacity, roughness, and normal perturbation strength.
+	float density = pow(
+		smoothstep(coverage_threshold, density_full, coverage),
+		density_power
+	);
+
+	vec3 blood_color = mix(blood_thin, blood_dense, density);
+
+	// Multiply-stain × screen behind. Edges tint the wall pinkish,
+	// dense centers nearly cover it.
 	vec3 behind = texture(screen_tex, SCREEN_UV).rgb;
-	vec3 stained = behind * blood_tint * stain_brightness;
-	// Blend toward solid blood color so dense areas read as opaque
-	// blood paint rather than a faint tint over the wall texture.
-	// Same opacity term as the floor shader uses.
-	stained = mix(stained, blood_tint, solid_opacity);
+	vec3 stained_mul = behind * blood_color * stain_brightness;
+	float opacity_here = mix(solid_opacity, density_opacity_max, density);
+	vec3 stained = mix(stained_mul, blood_color, opacity_here);
+
+	// Wet sheen — two-octave static noise normal map. Sampled in
+	// quad-UV space (each wall is a flat QuadMesh) so the noise tiles
+	// consistently regardless of wall size. Strength scales with
+	// density so only the dense blood gets the glossy "wet" reflection.
+	vec2 n_uv1 = v_quad_uv * noise_scale;
+	vec2 n_uv2 = v_quad_uv * noise_scale * 2.3 + vec2(13.7, 5.1);
+	vec3 n1 = texture(surface_noise, n_uv1).rgb * 2.0 - 1.0;
+	vec3 n2 = texture(surface_noise, n_uv2).rgb * 2.0 - 1.0;
+	vec3 n_mixed = normalize(n1 * 0.6 + n2 * 0.4);
+	NORMAL_MAP = vec3(n_mixed.xy * 0.5 + 0.5, 1.0);
+	NORMAL_MAP_DEPTH = normal_strength * mix(0.3, 1.0, density);
+
 	ALBEDO = stained;
-	ROUGHNESS = blood_roughness;
+	ROUGHNESS = mix(0.65, blood_roughness, density);
 	METALLIC = 0.0;
+	SPECULAR = specular_intensity * mix(0.4, 1.0, density);
 	ALPHA = blood_alpha;
 }

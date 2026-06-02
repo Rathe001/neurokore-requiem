@@ -48,26 +48,31 @@ const DRIP_RADIUS_THRESHOLD: float = 0.12  # main stamp radius below this skips 
 # ended up far below their parent splatter, reading as disconnected
 # floating drips. Capping fall_distance at ~0.6m keeps the streak
 # anchored to the splatter that spawned it.
-const DRIP_MAX_FALL_DISTANCE_M: float = 0.6
-const DRIP_LIFETIME_MIN: float = 1.4
-const DRIP_LIFETIME_MAX: float = 2.2
-const DRIP_FALL_SPEED_MIN: float = 0.18  # m/sec — viscous but visibly moving
-const DRIP_FALL_SPEED_MAX: float = 0.32
-# Wider drip — 4cm radius (8cm physical width) so the streak is
-# visible against the dark walls. Previous 1.5cm was so thin the
-# streak read as nothing visible.
-const DRIP_RADIUS_M: float = 0.040
-# Moderate vertical stretch — enough that consecutive-frame paints
-# overlap as a streak instead of a stack of ellipses, but not so
-# extreme that the drip looks like a single tall sliver.
-const DRIP_VERTICAL_STRETCH: float = 4.0
+# Streaks should read as LONG thin ribbons reaching well below the
+# splatter (cf. reference photos — drips travel half a meter or more
+# down the wall). Anchoring is preserved by the small start-offset
+# (drip starts INSIDE the splatter core) + tight horizontal scatter,
+# so longer fall distance doesn't break the visual connection.
+const DRIP_MAX_FALL_DISTANCE_M: float = 1.8
+const DRIP_LIFETIME_MIN: float = 3.0
+const DRIP_LIFETIME_MAX: float = 5.5
+const DRIP_FALL_SPEED_MIN: float = 0.22  # m/sec — viscous but visibly moving
+const DRIP_FALL_SPEED_MAX: float = 0.42
+# Thinner drip — 2.5cm radius (5cm physical width) reads more as a
+# narrow ribbon than a wide tube. Per-frame intensity bumped to
+# compensate so the streak still saturates.
+const DRIP_RADIUS_M: float = 0.025
+# Stronger vertical stretch — long ribbons rather than a stack of
+# circles. Combined with the extended fall distance this gives the
+# trailing-tail look from the references.
+const DRIP_VERTICAL_STRETCH: float = 5.5
 # Drips start at the splatter's lower edge (50% of radius below
 # center). Far enough that the streak emerges from the splatter
 # silhouette rather than getting buried inside it, close enough that
 # the streak still visually connects to its parent splatter rather
 # than floating disconnected.
 const DRIP_START_OFFSET_RATIO: float = 0.1
-const DRIP_PER_FRAME_INTENSITY: float = 0.13
+const DRIP_PER_FRAME_INTENSITY: float = 0.18
 const DRIP_COUNT_MIN: int = 2
 const DRIP_COUNT_MAX: int = 4
 const DRIP_FADE_TAIL_SEC: float = 0.8  # drip fades out over last N seconds
@@ -282,6 +287,20 @@ func _build_overlay_material() -> void:
 	_overlay_material.set_shader_parameter(&"mask_z", _mask_z_viewport.get_texture())
 	_overlay_material.set_shader_parameter(&"world_extent_xz", WORLD_EXTENT_XZ)
 	_overlay_material.set_shader_parameter(&"wall_height", WALL_HEIGHT_M)
+	# Wet-sheen normal map — small-scale FastNoiseLite as a normal map
+	# gives the dense blood its glossy highlight under scene lights
+	# instead of reading as flat paint. Strength is gated by density
+	# in the shader so only dense areas reflect.
+	var noise := FastNoiseLite.new()
+	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	noise.frequency = 0.04
+	var noise_tex := NoiseTexture2D.new()
+	noise_tex.noise = noise
+	noise_tex.as_normal_map = true
+	noise_tex.bump_strength = 4.0
+	noise_tex.width = 256
+	noise_tex.height = 256
+	_overlay_material.set_shader_parameter(&"surface_noise", noise_tex)
 
 
 func _hook_level_builder() -> void:

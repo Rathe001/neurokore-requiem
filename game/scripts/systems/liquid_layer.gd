@@ -34,13 +34,14 @@ const PIXELS_PER_METER: float = float(SUBVIEWPORT_PX) / WORLD_EXTENT_METERS
 const FLOOR_Y_OFFSET: float = 0.015
 
 @export var fluid_id: StringName = &"blood_human"
-# Fresh / dried multipliers. Kept in a narrow band — fresh isn't a
-# saturated bright red (that reads as "glowing" not "wet"), and dried
-# doesn't crush to near-black (which made shadowed pools look like
-# holes in the floor). Subtle aging is more believable than a strong
-# fresh→black shift.
-@export var fresh_color: Color = Color(0.55, 0.10, 0.10, 1.0)
-@export var dried_color: Color = Color(0.42, 0.12, 0.12, 1.0)
+# Density-gradient colors (drive the shader's thin→dense ramp).
+#   fresh_color  = THIN/edge tint  (pinkish red, translucent perimeter)
+#   dried_color  = DENSE/center tint (near-black burgundy, opaque core)
+# The shader interpolates between them by mask coverage, so a single
+# pool reads pink-stained at the edges and dark-opaque at the core —
+# matching reference photos of real pooled blood.
+@export var fresh_color: Color = Color(0.55, 0.15, 0.16, 1.0)
+@export var dried_color: Color = Color(0.08, 0.02, 0.03, 1.0)
 # Wet pools read smooth (very low roughness) and almost flat (very low
 # normal perturbation). The visual interest comes from coverage shape
 # variation and lighting hitting the slick surface, not from a bumpy
