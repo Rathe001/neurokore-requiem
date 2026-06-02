@@ -444,6 +444,21 @@ void fragment() {
 	// some themes, and floor blood comes from the dedicated floor
 	// LiquidLayer. The wall masks are only meaningful on vertical faces.
 	if (is_wall) {
+		// DEBUG: sample mask at the current world position and visualize
+		// raw coverage as a green channel boost. If walls go GREEN where
+		// blood should land, the mask is reaching the shader correctly
+		// — bug is in the threshold/multiply path. If they stay grey,
+		// the texture binding isn't propagating to GPU sampling.
+		{
+			float dbg_uv_x_x = v_world_pos.z / wall_blood_extent_xz + 0.5;
+			float dbg_uv_x_y = 1.0 - v_world_pos.y / wall_blood_extent_y;
+			float dbg_uv_z_x = v_world_pos.x / wall_blood_extent_xz + 0.5;
+			float dbg_uv_z_y = 1.0 - v_world_pos.y / wall_blood_extent_y;
+			float dbg_a_x = texture(wall_blood_mask_x, vec2(dbg_uv_x_x, dbg_uv_x_y)).a;
+			float dbg_a_z = texture(wall_blood_mask_z, vec2(dbg_uv_z_x, dbg_uv_z_y)).a;
+			float dbg_a = max(dbg_a_x, dbg_a_z);
+			ALBEDO = mix(ALBEDO, vec3(0.0, 1.0, 0.0), clamp(dbg_a * 4.0, 0.0, 1.0));
+		}
 		// Tri-planar weights: each face samples the mask aligned to its
 		// dominant normal axis. For 45° mitred corners, both samples
 		// blend ~equally so the stain wraps continuously around the seam.
