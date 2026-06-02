@@ -961,30 +961,17 @@ static func _spawn_mist_drop_floor(parent: Node, world_pos: Vector3, blood_type:
 	spawn_blood_decal(parent, world_pos, blood_type)
 
 
-# Wall drop — same size band as floor drops, projected along the
-# surface normal of whatever the droplet hit.
-static func _spawn_mist_drop_wall(parent: Node, world_pos: Vector3, wall_normal: Vector3, blood_type: StringName) -> void:
+# Per-hit wall drop — small speck routed through the same WallLiquidLayer
+# pipeline as splatters. Smaller radius and reduced intensity so a
+# fight's worth of specks doesn't saturate the mask.
+static func _spawn_mist_drop_wall(parent: Node, world_pos: Vector3, wall_normal: Vector3, _blood_type: StringName) -> void:
 	if wall_normal.length_squared() < 0.0001:
 		return
-	var decal := Decal.new()
-	var variant := _get_blood_wall_splatter_variant(blood_type)
-	decal.texture_albedo = variant[&"albedo"]
-	decal.texture_normal = variant[&"normal"]
-	decal.texture_orm = _get_blood_orm_texture()
-	decal.size = Vector3(randf_range(0.20, 0.65), 0.4, randf_range(0.20, 0.65))
-	decal.modulate = _decal_color_jitter()
-	decal.upper_fade = 0.05
-	decal.lower_fade = 0.05
-	decal.albedo_mix = BLOOD_DECAL_ALBEDO_MIX
-	decal.cull_mask = BLOOD_DECAL_CULL_LAYER
-	parent.add_child(decal)
-	decal.global_position = world_pos + wall_normal.normalized() * 0.03
-	var rot := Quaternion(Vector3.UP, wall_normal.normalized())
-	# Gravity-aligned twist: aim the texture's V axis at world-down
-	# projected into the wall plane, so drip streaks visibly run down.
-	var twist := Basis(wall_normal.normalized(), _wall_drip_twist_angle(wall_normal))
-	decal.global_basis = twist * Basis(rot)
-	_track_blood_decal(decal, BLOOD_PRIORITY_WALL)
+	var layer := _find_wall_liquid_layer(parent)
+	if layer == null:
+		return
+	var radius: float = randf_range(0.05, 0.10)
+	layer.stamp(world_pos, wall_normal, radius, 0.7)
 
 
 # ── Floor pools via LiquidLayer ───────────────────────────────────────
@@ -1186,36 +1173,25 @@ static func spawn_blood_wall_splatter(parent: Node, world_pos: Vector3, wall_nor
 		return
 	if wall_normal.length_squared() < 0.0001:
 		return
-	var decal := Decal.new()
-	var variant := _get_blood_wall_splatter_variant(blood_type)
-	decal.texture_albedo = variant[&"albedo"]
-	decal.texture_normal = variant[&"normal"]
-	decal.texture_orm = _get_blood_orm_texture()
-	# Slightly smaller than floor splats on average — wall splats look
-	# better as a few medium hits than one huge stamp, since vertical
-	# surfaces read smaller at iso distance. Wide range so multiple
-	# wall splats from one fight stack visually distinct.
-	decal.size = Vector3(randf_range(0.5, 1.8), 0.4, randf_range(0.5, 1.8))
-	decal.modulate = _decal_color_jitter()
-	decal.upper_fade = 0.05
-	decal.lower_fade = 0.05
-	decal.albedo_mix = BLOOD_DECAL_ALBEDO_MIX
-	decal.cull_mask = BLOOD_DECAL_CULL_LAYER
-	parent.add_child(decal)
-	# 3cm offset along the normal keeps the decal off the wall surface
-	# itself (z-fighting prevention).
-	decal.global_position = world_pos + wall_normal.normalized() * 0.03
-	# Build a basis whose +Y axis is the wall_normal. Quaternion(from, to)
-	# rotates the from-vector to align with to-vector; applying it to
-	# the default Y-up basis means the decal's local Y now points along
-	# wall_normal. The twist now aligns the texture's V axis with world-
-	# down (projected onto the wall plane) so drip streaks visibly run
-	# down the wall — was random before, which let some splats look
-	# like blood was running sideways or upward.
-	var rot := Quaternion(Vector3.UP, wall_normal.normalized())
-	var twist := Basis(wall_normal.normalized(), _wall_drip_twist_angle(wall_normal))
-	decal.global_basis = twist * Basis(rot)
-	_track_blood_decal(decal, BLOOD_PRIORITY_WALL)
+	# Phase 6 of wall-blood rebuild: stamps go through WallLiquidLayer
+	# (overlay quads + dual SubViewport masks) instead of the legacy
+	# Decal3D path. The shader handles wall sampling + lighting; stamps
+	# live in the persistent CLEAR_MODE_NEVER mask so multiple hits
+	# accumulate without per-decal overhead.
+	var layer := _find_wall_liquid_layer(parent)
+	if layer == null:
+		return
+	var radius: float = randf_range(0.20, 0.40)
+	layer.stamp(world_pos, wall_normal, radius, 1.0)
+
+
+static func _find_wall_liquid_layer(parent: Node) -> WallLiquidLayer:
+	if parent == null or not parent.is_inside_tree():
+		return null
+	var tree := parent.get_tree()
+	if tree == null:
+		return null
+	return tree.get_first_node_in_group(&"wall_liquid_layer") as WallLiquidLayer
 
 
 # ── Wall projectile impacts (bullet holes + plasma scorches) ─────────

@@ -7,16 +7,16 @@ extends Node3D
 ## persistent SubViewport mask that's also a child of THIS node. Same
 ## subtree → ViewportTexture references resolve reliably.
 ##
-## Phase 5: world-position UV mapping. Two SubViewport masks now — one
-## for ±X-facing walls (indexed by world (z, y)), one for ±Z-facing
-## walls (indexed by world (x, y)). The shader picks the appropriate
-## mask based on the wall's world normal. A stamp at world (x, y, z)
-## thus shows on exactly the wall at that position with a fixed world-
-## size shape — long walls don't stretch the stamp anymore.
+## Phase 6: public stamp(world_pos, normal, radius, intensity) API.
+## PrototypeAttackIndicator.spawn_blood_wall_splatter routes through
+## this for gameplay-driven blood — enemy hits near walls now produce
+## real splatter at the impact location, sized in world units, drawn
+## into the right mask based on impact normal.
 ##
-## Phase 6 will wire spawn_blood_wall_splatter / _spawn_mist_drop_wall
-## to route through this layer instead of the legacy Decal3D path.
-## Drips / multiply-stain come after.
+## Phase 7 will add gravity-drip streaks (sprites that fall in viewport
+## space, painting the mask each frame as they descend) and replace
+## the soft-circle stamp with a chaotic lobed splatter texture matching
+## the floor LiquidLayer's look.
 
 # Mask resolution — rectangular because the world Y range (wall_height,
 # ~3-4m) is much shorter than the X/Z range (~40m). Same px/m density
@@ -51,8 +51,58 @@ func _ready() -> void:
 	_mask_x_stamp_root = _mask_x_viewport.get_node(^"StampRoot")
 	_mask_z_stamp_root = _mask_z_viewport.get_node(^"StampRoot")
 	_build_overlay_material()
-	_draw_test_stamps()
 	_hook_level_builder()
+
+
+## Public API: stamp blood on a wall at the given world position. The
+## wall is the one whose outward normal matches `wall_normal` (which
+## axis is dominant decides which mask receives the stamp). `world_radius`
+## is the stamp's physical diameter in meters. `intensity` multiplies
+## alpha — overlapping stamps accumulate additively in the mask so
+## consecutive hits in the same spot pool together cleanly.
+func stamp(world_pos: Vector3, wall_normal: Vector3, world_radius: float, intensity: float = 1.0) -> void:
+	if wall_normal.length_squared() < 0.0001:
+		return
+	var nrm := wall_normal.normalized()
+	var use_x_mask: bool = absf(nrm.x) > absf(nrm.z)
+	var stamp_root: Node2D = _mask_x_stamp_root if use_x_mask else _mask_z_stamp_root
+	# Horizontal world coordinate for the chosen mask. For X-facing walls
+	# (normal.x dominant), the wall's surface spans Z and Y → use world.z.
+	# For Z-facing walls, use world.x.
+	var horizontal_world: float = world_pos.z if use_x_mask else world_pos.x
+	var px_per_m_h: float = float(MASK_PX_X) / WORLD_EXTENT_XZ
+	var px_per_m_v: float = float(MASK_PX_Y) / WALL_HEIGHT_M
+	var px := Vector2(
+		horizontal_world * px_per_m_h + float(MASK_PX_X) * 0.5,
+		(WALL_HEIGHT_M - world_pos.y) * px_per_m_v,
+	)
+	var tex: Texture2D = _get_cached_stamp_texture()
+	var sprite := Sprite2D.new()
+	sprite.texture = tex
+	sprite.position = px
+	# Scale so the stamp's diameter matches world_radius * 2 in pixels.
+	var diam_px: float = world_radius * 2.0 * px_per_m_h
+	var base_scale: float = diam_px / float(tex.get_size().x)
+	# Slight aspect jitter to hide the round texture silhouette when
+	# multiple stamps overlap. Same trick the floor LiquidLayer uses.
+	var aspect_x: float = randf_range(0.85, 1.20)
+	var aspect_y: float = randf_range(0.85, 1.20)
+	sprite.scale = Vector2(base_scale * aspect_x, base_scale * aspect_y)
+	sprite.rotation = randf() * TAU
+	sprite.modulate = Color(1.0, 1.0, 1.0, intensity)
+	sprite.material = _get_cached_additive_material()
+	stamp_root.add_child(sprite)
+	# Stamp persists exactly one frame — draws into the persistent
+	# CLEAR_MODE_NEVER render target, then the Sprite2D is freed. The
+	# rasterized pixels stay in the mask across frames.
+	var stamp_id := sprite.get_instance_id()
+	get_tree().process_frame.connect(
+		func() -> void:
+			var s := instance_from_id(stamp_id) as Node
+			if s != null and is_instance_valid(s):
+				s.queue_free(),
+		CONNECT_ONE_SHOT
+	)
 
 
 # Builds one rectangular SubViewport configured for persistent (never-
@@ -206,30 +256,13 @@ func _spawn_overlay_for_wall(xform: Transform3D) -> bool:
 	return true
 
 
-# Draws one static stamp into EACH mask at world (0, wall_height/2)
-# — i.e. at the center of the level horizontally and mid-height
-# vertically. Only walls passing through world x=0 or z=0 at mid-
-# height should show the stamp, and at a fixed ~1m physical size.
-# (Walls elsewhere should stay blood-free.) Phase 6 replaces these
-# debug stamps with real gameplay routing.
-func _draw_test_stamps() -> void:
-	var tex := _make_test_stamp_texture()
-	for root in [_mask_x_stamp_root, _mask_z_stamp_root]:
-		var sprite := Sprite2D.new()
-		sprite.texture = tex
-		# World (0, wall_height/2) → pixel (MASK_PX_X/2, MASK_PX_Y/2).
-		sprite.position = Vector2(float(MASK_PX_X) * 0.5, float(MASK_PX_Y) * 0.5)
-		# Scale so the stamp's physical size is ~0.5m diameter on the
-		# mask's world resolution. tex is 64px wide; 0.5m * (MASK_PX_X /
-		# WORLD_EXTENT_XZ) = 0.5 * 51.2 = 25.6 px diameter target;
-		# scale = 25.6 / 64 = 0.4. Both axes scaled the same so the
-		# stamp stays circular in world units.
-		sprite.scale = Vector2(0.4, 0.4)
-		root.add_child(sprite)
+# Cached soft-edged 64px circle reused for every stamp. Phase 7 will
+# swap this for chaotic lobed splatters matching the floor LiquidLayer.
+static var _cached_stamp_texture: ImageTexture = null
 
-
-# Soft-edged white circle, 64px. Reused for both mask debug stamps.
-func _make_test_stamp_texture() -> ImageTexture:
+static func _get_cached_stamp_texture() -> ImageTexture:
+	if _cached_stamp_texture != null:
+		return _cached_stamp_texture
 	var img := Image.create(64, 64, false, Image.FORMAT_RGBA8)
 	for y in 64:
 		for x in 64:
@@ -238,4 +271,19 @@ func _make_test_stamp_texture() -> ImageTexture:
 			var d := sqrt(dx * dx + dy * dy) / 28.0
 			var a: float = clampf(1.0 - d, 0.0, 1.0)
 			img.set_pixel(x, y, Color(1.0, 1.0, 1.0, a))
-	return ImageTexture.create_from_image(img)
+	_cached_stamp_texture = ImageTexture.create_from_image(img)
+	return _cached_stamp_texture
+
+
+# Additive blend mode for stamp Sprite2Ds — overlapping stamps in the
+# same mask region sum rather than over-paint, so dense fight zones
+# build heavier coverage as a natural result of the cumulative draws.
+static var _cached_additive_material: CanvasItemMaterial = null
+
+static func _get_cached_additive_material() -> CanvasItemMaterial:
+	if _cached_additive_material != null:
+		return _cached_additive_material
+	var mat := CanvasItemMaterial.new()
+	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	_cached_additive_material = mat
+	return _cached_additive_material
