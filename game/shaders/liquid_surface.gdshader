@@ -19,38 +19,43 @@ render_mode blend_mix, depth_draw_never, cull_back;
 uniform sampler2D liquid_mask : hint_default_black, filter_linear, repeat_disable;
 uniform sampler2D screen_tex : hint_screen_texture, filter_linear;
 uniform sampler2D surface_noise : hint_normal, filter_linear, repeat_enable;
+// Raw (non-normalmap) noise used to modulate density spatially so
+// blob shapes aren't smooth circles — breaks the dense/thin boundary
+// into organic mottled edges and varies darkness within a single pool.
+uniform sampler2D shape_noise : hint_default_white, filter_linear, repeat_enable;
+uniform float shape_noise_scale : hint_range(1.0, 64.0) = 14.0;
+uniform float shape_noise_strength : hint_range(0.0, 1.0) = 0.35;
 
 // Two-color density gradient driving realism.
-//   fresh_color  = THIN/edge tint  (pinkish red, translucent perimeter)
-//   dried_color  = DENSE/center tint (near-black burgundy, opaque core)
-// The shader interpolates between them by the mask's local coverage
-// value, so the same blob naturally reads pink-stained at the edges
-// and dark/almost-opaque at the center — matching how real blood
-// pools concentrate (cf. reference photos: thin perimeter, near-black
-// dense pool surface). `age` desaturates the dense color further as
-// the pool dries.
-uniform vec4 fresh_color : source_color = vec4(0.55, 0.15, 0.16, 1.0);
-uniform vec4 dried_color : source_color = vec4(0.08, 0.02, 0.03, 1.0);
+//   fresh_color  = THIN/edge tint  (dark burgundy stain, translucent)
+//   dried_color  = DENSE/center tint (near-black, opaque core)
+// The shader interpolates between them by mask coverage so the same
+// blob reads as a translucent dark stain at the edges and an opaque
+// near-black core. Thin color is intentionally darker than reference
+// "fresh blood" pink — that pink only appears in real life where the
+// blood is VERY thin (a fine spray); for stained surfaces it reads as
+// dark red, not bright pink. `age` desaturates dense further as the
+// pool dries.
+uniform vec4 fresh_color : source_color = vec4(0.32, 0.08, 0.10, 1.0);
+uniform vec4 dried_color : source_color = vec4(0.06, 0.015, 0.025, 1.0);
 uniform float age : hint_range(0.0, 1.0) = 0.0;
-// Shapes the thin→dense ramp. Lowered to 1.0 (linear) so the gradient
-// fades smoothly through coverage values without a hard transition
-// band — the previous >1 curve held alpha high through the thin-tint
-// region and produced a bright pink ring around the dense core.
-uniform float density_power : hint_range(0.3, 4.0) = 1.0;
-// Where on the ramp [threshold..density_full] we hit "fully dense."
-// Lowering pulls the dark center into smaller blobs; raising keeps
-// edges pink across more of the stamp area.
-uniform float density_full : hint_range(0.2, 2.0) = 0.85;
+// Shapes the thin→dense ramp.
+uniform float density_power : hint_range(0.3, 4.0) = 0.9;
+// Coverage value at which we hit "fully dense". Raised vs. 0.85 to
+// widen the blend zone — the dense/thin transition is now spread
+// across more pixels so the boundary reads as a smooth gradient
+// rather than a visible shoulder.
+uniform float density_full : hint_range(0.2, 2.0) = 1.25;
 // Maximum opacity that dense regions reach. Even the densest pool
 // keeps a hint of translucency at this cap so the wet sheen reads
 // through. 0.92 ≈ "almost opaque, barely-there base material peek."
 uniform float density_opacity_max : hint_range(0.4, 1.0) = 0.92;
-// Alpha floor for dense regions. Thin edges fade toward 0 alpha
-// (= transparent / wall shows through). Dense core hits 1.0. Linked
-// directly to density so "lighter color = more transparent" reads as
-// a single smooth ramp from invisible edge → opaque dark core,
-// without a bright pink ring at the alpha cliff.
-uniform float alpha_min : hint_range(0.0, 0.5) = 0.0;
+// Alpha floor at the thinnest visible edge. Raised from 0.0 so small
+// per-hit droplets (which never accumulate enough coverage to reach
+// dense) stay readable. Combined with the now-darker fresh_color,
+// thin areas read as faint dark stain rather than the bright pink
+// ring the previous palette produced at higher alpha floors.
+uniform float alpha_min : hint_range(0.0, 0.5) = 0.32;
 
 // Wet-look knobs. The surface normal is STATIC (no time-driven drift)
 // because real spilled blood doesn't ripple — the visible shimmer
@@ -88,15 +93,20 @@ void fragment() {
 	}
 	float coverage = min(raw_coverage, coverage_cap);
 	// Smooth alpha falloff at the perimeter (hides the discard
-	// boundary and gives the edge a pink-translucent halo).
+	// boundary and gives the edge a translucent halo).
 	float alpha = smoothstep(coverage_threshold, coverage_threshold + edge_softness, coverage);
 	// Density factor — 0 at the splat edge, 1 in the saturated core.
-	// Drives both the color ramp (thin→dense) and the opacity ramp
-	// (translucent→nearly opaque).
+	// Modulated by a spatial noise so the thin/dense transition is
+	// mottled rather than a smooth circle. Same noise drives the same
+	// fragment every frame (static UV), so the organic shape is
+	// stable, not flickering.
 	float density = pow(
 		smoothstep(coverage_threshold, density_full, coverage),
 		density_power
 	);
+	float noise = texture(shape_noise, UV * shape_noise_scale).r;
+	float shape_mod = mix(1.0 - shape_noise_strength, 1.0 + shape_noise_strength, noise);
+	density = clamp(density * shape_mod, 0.0, 1.0);
 
 	// Color: thin (pinkish-red) at the edge → dense (near-black
 	// burgundy) at the core. Age desaturates further as it dries.

@@ -148,10 +148,11 @@ func stamp_growing(world_pos: Vector3, stamp_texture: Texture2D, start_radius: f
 	# build up to a saturated value at the center, with newer outer
 	# pixels (only touched in later frames) ending lighter. Matches
 	# the natural look of blood seeping outward.
-	# Per-frame alpha bumped from 0.06 → 0.11 so the growing pool
-	# saturates faster — the old value left the larger outer ring
-	# reading as faint pink instead of fully-pooled blood.
-	sprite.modulate = Color(1.0, 1.0, 1.0, intensity * 0.11)
+	# Per-frame alpha + a per-stamp variance multiplier so different
+	# pools accumulate to different darkness — some heavy/dark, some
+	# thinner/lighter. Breaks the "every pool looks identical" read.
+	var intensity_jitter: float = randf_range(0.65, 1.35)
+	sprite.modulate = Color(1.0, 1.0, 1.0, intensity * 0.11 * intensity_jitter)
 	sprite.position = _world_to_viewport_px(world_pos)
 	sprite.material = _make_additive_canvas_material()
 	sprite.rotation = randf() * TAU
@@ -231,6 +232,7 @@ func _build_floor_mesh() -> void:
 	_shader_material.shader = preload("res://shaders/liquid_surface.gdshader")
 	_shader_material.set_shader_parameter(&"liquid_mask", _subviewport.get_texture())
 	_shader_material.set_shader_parameter(&"surface_noise", _ensure_noise_texture())
+	_shader_material.set_shader_parameter(&"shape_noise", _ensure_shape_noise_texture())
 	_shader_material.set_shader_parameter(&"fresh_color", fresh_color)
 	_shader_material.set_shader_parameter(&"dried_color", dried_color)
 	_shader_material.set_shader_parameter(&"roughness", roughness)
@@ -257,6 +259,26 @@ static func _ensure_noise_texture() -> Texture2D:
 	noise_tex.as_normal_map = true
 	_noise_texture = noise_tex
 	return _noise_texture
+
+
+# Separate raw (non-normalmap) noise used by the shader's density
+# modulation. Higher-frequency than surface_noise so the mottled
+# patches inside a pool are smaller than the wet-sheen ripples.
+static var _shape_noise_texture: Texture2D = null
+static func _ensure_shape_noise_texture() -> Texture2D:
+	if _shape_noise_texture != null:
+		return _shape_noise_texture
+	var noise := FastNoiseLite.new()
+	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	noise.frequency = 0.12
+	noise.fractal_octaves = 3
+	var noise_tex := NoiseTexture2D.new()
+	noise_tex.noise = noise
+	noise_tex.width = 256
+	noise_tex.height = 256
+	noise_tex.seamless = true
+	_shape_noise_texture = noise_tex
+	return _shape_noise_texture
 
 
 # CanvasItemMaterial set to additive blend so overlapping stamps sum

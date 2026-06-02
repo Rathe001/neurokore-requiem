@@ -15,21 +15,29 @@ uniform sampler2D mask_x : filter_linear, repeat_disable, hint_default_black;
 uniform sampler2D mask_z : filter_linear, repeat_disable, hint_default_black;
 uniform sampler2D screen_tex : hint_screen_texture, filter_linear;
 uniform sampler2D surface_noise : hint_normal, filter_linear, repeat_enable;
+// Raw noise for density modulation (organic mottled boundaries vs.
+// smooth-circle blobs). See liquid_surface.gdshader for matching pair.
+uniform sampler2D shape_noise : hint_default_white, filter_linear, repeat_enable;
+uniform float shape_noise_scale : hint_range(1.0, 64.0) = 14.0;
+uniform float shape_noise_strength : hint_range(0.0, 1.0) = 0.35;
 uniform float world_extent_xz : hint_range(8.0, 200.0) = 40.0;
 uniform float wall_height : hint_range(1.0, 16.0) = 4.0;
 
 // Two-color density gradient (matches floor shader uniforms).
-//   blood_thin  = edge tint (pinkish red, translucent perimeter)
-//   blood_dense = core tint (near-black burgundy, opaque core)
-uniform vec3 blood_thin : source_color = vec3(0.55, 0.15, 0.16);
-uniform vec3 blood_dense : source_color = vec3(0.08, 0.02, 0.03);
-uniform float density_power : hint_range(0.3, 4.0) = 1.0;
-uniform float density_full : hint_range(0.2, 2.0) = 0.85;
+//   blood_thin  = THIN/edge tint (dark burgundy stain, translucent)
+//   blood_dense = DENSE/core tint (near-black, opaque)
+// Thin intentionally NOT bright pink — only very-fine-spray blood
+// reads pink in real life; stained surfaces read as dark red.
+uniform vec3 blood_thin : source_color = vec3(0.32, 0.08, 0.10);
+uniform vec3 blood_dense : source_color = vec3(0.06, 0.015, 0.025);
+uniform float density_power : hint_range(0.3, 4.0) = 0.9;
+uniform float density_full : hint_range(0.2, 2.0) = 1.25;
 uniform float density_opacity_max : hint_range(0.4, 1.0) = 0.92;
-// Thin edges fade to transparent (alpha ramps with density). Without
-// this the smoothstep alpha stays 1.0 across the thin-tint band and
-// paints a bright pink ring around the dense core.
-uniform float alpha_min : hint_range(0.0, 0.5) = 0.0;
+// Alpha floor at thinnest visible edge. Raised from 0 so small per-hit
+// droplets (which can't accumulate to dense) stay readable. With the
+// darker fresh tint, thin areas read as faint dark stain, not as a
+// bright pink ring.
+uniform float alpha_min : hint_range(0.0, 0.5) = 0.32;
 
 uniform float stain_brightness : hint_range(0.5, 4.0) = 2.0;
 // Threshold raised vs. the original 0.015 to gate trail-end haze
@@ -82,10 +90,15 @@ void fragment() {
 	float blood_alpha = smoothstep(coverage_threshold, coverage_threshold + edge_softness, coverage);
 	// Density factor — 0 at edge of blob, 1 in saturated core. Drives
 	// color, opacity, roughness, and normal perturbation strength.
+	// Spatial noise modulation breaks the smooth-circle silhouette and
+	// the dense/thin transition into organic mottled patches.
 	float density = pow(
 		smoothstep(coverage_threshold, density_full, coverage),
 		density_power
 	);
+	float noise = texture(shape_noise, v_quad_uv * shape_noise_scale).r;
+	float shape_mod = mix(1.0 - shape_noise_strength, 1.0 + shape_noise_strength, noise);
+	density = clamp(density * shape_mod, 0.0, 1.0);
 
 	vec3 blood_color = mix(blood_thin, blood_dense, density);
 

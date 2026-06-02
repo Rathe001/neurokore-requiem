@@ -171,7 +171,11 @@ func stamp(world_pos: Vector3, wall_normal: Vector3, world_radius: float, intens
 	var aspect_x: float = randf_range(0.85, 1.10)
 	var aspect_y: float = randf_range(1.30, 2.00)
 	sprite.scale = Vector2(base_scale * aspect_x, base_scale * aspect_y)
-	sprite.modulate = Color(1.0, 1.0, 1.0, intensity)
+	# Per-stamp intensity jitter so different splatters accumulate to
+	# different darkness — matches the floor pool variance and breaks
+	# the "every splatter looks identical" read.
+	var intensity_jitter: float = randf_range(0.6, 1.4)
+	sprite.modulate = Color(1.0, 1.0, 1.0, intensity * intensity_jitter)
 	sprite.material = _get_cached_additive_material()
 	stamp_root.add_child(sprite)
 	# Stamps persist ~150ms (~9 frames at 60fps) so additive blending
@@ -301,6 +305,19 @@ func _build_overlay_material() -> void:
 	noise_tex.width = 256
 	noise_tex.height = 256
 	_overlay_material.set_shader_parameter(&"surface_noise", noise_tex)
+	# Shape noise for density modulation — breaks the smooth-circle
+	# silhouette into organic mottled patches. Same FastNoiseLite shape
+	# the floor uses (higher freq than the wet-sheen normal map).
+	var shape := FastNoiseLite.new()
+	shape.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	shape.frequency = 0.12
+	shape.fractal_octaves = 3
+	var shape_tex := NoiseTexture2D.new()
+	shape_tex.noise = shape
+	shape_tex.width = 256
+	shape_tex.height = 256
+	shape_tex.seamless = true
+	_overlay_material.set_shader_parameter(&"shape_noise", shape_tex)
 
 
 func _hook_level_builder() -> void:

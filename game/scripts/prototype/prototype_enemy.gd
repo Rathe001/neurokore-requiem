@@ -2684,8 +2684,14 @@ func _spawn_settle_pool() -> void:
 	# build the visible footprint smoothly — no step jumps like the
 	# previous "stamp at increasing radii" scheduler produced.
 	var settle_pos := _settled_corpse_position()
+	# Per-corpse size variance — final radius rolls between 65% and
+	# 130% of the base so kill aftermath isn't a uniform field of
+	# identical pools. Larger pools tend to look darker (more alpha
+	# accumulation in the center), smaller pools read as quick spills.
+	var radius_jitter: float = randf_range(0.65, 1.3)
+	var final_radius: float = _POOL_FINAL_RADIUS * radius_jitter
 	layer.stamp_growing(settle_pos, _get_settle_stamp_texture(),
-		_POOL_INITIAL_RADIUS, _POOL_FINAL_RADIUS, _POOL_EXPANSION_DURATION, 1.0)
+		_POOL_INITIAL_RADIUS, final_radius, _POOL_EXPANSION_DURATION, 1.0)
 	# Gameplay slip-zone — standalone Area3D so the player still gets
 	# the Traction-mediated slow/stumble when walking through this
 	# pool. LiquidLayer is visual-only; gameplay needs its own node.
