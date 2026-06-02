@@ -29,15 +29,14 @@ uniform sampler2D shape_noise : hint_default_white, filter_linear, repeat_enable
 uniform float shape_noise_scale : hint_range(1.0, 64.0) = 5.0;
 uniform float shape_noise_strength : hint_range(0.0, 1.0) = 0.55;
 
-// Two-color density gradient. MUCH darker than the wall shader's
-// equivalents because PBR diffuse + specular contributions on the
-// horizontal floor surface amplify any ALBEDO red channel — these
-// values are calibrated so that even AFTER PBR lighting on a lit
-// floor, the rendered pool reads dark, like the wall splatters.
-//   fresh_color  = THIN/edge tint
-//   dried_color  = DENSE/center tint (near-black)
-uniform vec4 fresh_color : source_color = vec4(0.06, 0.018, 0.025, 1.0);
-uniform vec4 dried_color : source_color = vec4(0.015, 0.004, 0.007, 1.0);
+// Two-color density gradient. Pushed almost to black — the user
+// wants pools that read as "almost black, just barely red." Even
+// these tiny RGB values amplify visibly through PBR diffuse +
+// specular on lit floor.
+//   fresh_color  = THIN/edge tint (very dark red-brown stain)
+//   dried_color  = DENSE/center tint (near-black, faintest red hint)
+uniform vec4 fresh_color : source_color = vec4(0.022, 0.007, 0.010, 1.0);
+uniform vec4 dried_color : source_color = vec4(0.006, 0.0015, 0.003, 1.0);
 uniform float age : hint_range(0.0, 1.0) = 0.0;
 // Shapes the thin→dense ramp.
 uniform float density_power : hint_range(0.3, 4.0) = 0.9;
@@ -64,13 +63,12 @@ uniform float roughness : hint_range(0.0, 1.0) = 0.22;
 uniform float normal_strength : hint_range(0.0, 2.0) = 0.06;
 uniform float noise_scale : hint_range(0.5, 32.0) = 5.0;
 uniform float specular_intensity : hint_range(0.0, 1.0) = 0.40;
-// Brightness bias on the multiplied result. Cranked all the way
-// down: the floor was still reading pinkish because lit overhead
-// surface × red tint × brightness amplified into bright red even
-// at 0.95. 0.5 makes the multiply-stain barely brighten the
-// underlying floor; the visible blood color now comes mostly from
-// the painted solid_opacity blend below, not from the multiply.
-uniform float stain_brightness : hint_range(0.5, 3.0) = 0.5;
+// Brightness bias on the multiplied result. Dropped to 0.25 — the
+// multiply-stain (lit floor × red tint) was lifting the perimeter
+// into visible red despite the very dark colors. At 0.25 the
+// multiply contribution is barely perceptible; the visible blood
+// color comes almost entirely from the painted solid color below.
+uniform float stain_brightness : hint_range(0.0, 3.0) = 0.25;
 
 // Coverage gating. Threshold kept low so small droplet stamps
 // (per-hit spray) aren't entirely eaten — at 0.04 a 5-10px stamp
@@ -80,11 +78,11 @@ uniform float coverage_threshold : hint_range(0.0, 0.5) = 0.015;
 // halo at the perimeter (the lighter edges visible in reference photos).
 uniform float edge_softness : hint_range(0.0, 0.3) = 0.08;
 uniform float coverage_cap : hint_range(1.0, 4.0) = 1.0;
-// Base solid opacity. Pushed up so even thin floor areas are mostly
-// painted solid blood color (which is our actual dark blood) rather
-// than multiply-stain (which the PBR pipeline re-lights into pink).
-// Dense areas go nearly fully painted.
-uniform float solid_opacity : hint_range(0.0, 1.0) = 0.45;
+// Base solid opacity. Pushed further up: even the thinnest edge is
+// mostly painted solid (= our near-black blood color) rather than
+// multiply-stain (= lit floor lifted by red tint). Dense core goes
+// nearly fully painted.
+uniform float solid_opacity : hint_range(0.0, 1.0) = 0.65;
 
 void fragment() {
 	float raw_coverage = texture(liquid_mask, UV).a;
