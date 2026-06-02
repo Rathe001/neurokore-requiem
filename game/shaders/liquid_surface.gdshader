@@ -27,11 +27,13 @@ uniform vec4 fresh_color : source_color = vec4(0.50, 0.10, 0.10, 1.0);
 uniform vec4 dried_color : source_color = vec4(0.22, 0.07, 0.07, 1.0);
 uniform float age : hint_range(0.0, 1.0) = 0.0;
 
-// Wet-look knobs.
+// Wet-look knobs. The surface normal is STATIC (no time-driven drift)
+// because real spilled blood doesn't ripple — the visible shimmer
+// comes from camera + light angle changes hitting the static
+// noise-perturbed surface, not from animated waves.
 uniform float roughness : hint_range(0.0, 1.0) = 0.30;
 uniform float normal_strength : hint_range(0.0, 2.0) = 0.65;
 uniform float noise_scale : hint_range(0.5, 32.0) = 14.0;
-uniform float noise_drift_speed : hint_range(0.0, 1.0) = 0.03;
 uniform float specular_intensity : hint_range(0.0, 1.0) = 0.45;
 // Brightness bias on the multiplied result. Pure mul (1.0×) leaves
 // the stain very dark in shadowed rooms; bumping slightly above 1
@@ -62,9 +64,11 @@ void fragment() {
 	vec3 stain_color = mix(fresh_color.rgb, dried_color.rgb, age);
 	vec3 stained = behind * stain_color * stain_brightness;
 
-	// Two-octave animated noise → perturbed normal for the wet shimmer.
-	vec2 n_uv1 = UV * noise_scale + vec2(TIME * noise_drift_speed, TIME * noise_drift_speed * 0.7);
-	vec2 n_uv2 = UV * noise_scale * 2.3 + vec2(TIME * noise_drift_speed * -0.5, TIME * noise_drift_speed * 0.9);
+	// Two-octave STATIC noise → perturbed normal for the wet shimmer.
+	// No TIME term — spilled blood doesn't ripple. The shimmer comes
+	// from the camera/lights hitting the static perturbed normal.
+	vec2 n_uv1 = UV * noise_scale;
+	vec2 n_uv2 = UV * noise_scale * 2.3 + vec2(13.7, 5.1);
 	vec3 n1 = texture(surface_noise, n_uv1).rgb * 2.0 - 1.0;
 	vec3 n2 = texture(surface_noise, n_uv2).rgb * 2.0 - 1.0;
 	vec3 n_mixed = normalize(n1 * 0.6 + n2 * 0.4);
