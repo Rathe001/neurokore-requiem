@@ -30,18 +30,18 @@ uniform float wall_height : hint_range(1.0, 16.0) = 4.0;
 //   blood_dense = DENSE/core tint (near-black, opaque)
 // Thin intentionally NOT bright pink — only very-fine-spray blood
 // reads pink in real life; stained surfaces read as dark red.
-uniform vec3 blood_thin : source_color = vec3(0.32, 0.08, 0.10);
-uniform vec3 blood_dense : source_color = vec3(0.06, 0.015, 0.025);
+uniform vec3 blood_thin : source_color = vec3(0.18, 0.05, 0.07);
+uniform vec3 blood_dense : source_color = vec3(0.05, 0.012, 0.020);
 uniform float density_power : hint_range(0.3, 4.0) = 0.9;
-uniform float density_full : hint_range(0.2, 2.0) = 1.25;
-uniform float density_opacity_max : hint_range(0.4, 1.0) = 0.92;
+uniform float density_full : hint_range(0.2, 2.0) = 1.6;
+uniform float density_opacity_max : hint_range(0.4, 1.0) = 0.78;
 // Alpha floor at thinnest visible edge. Raised from 0 so small per-hit
 // droplets (which can't accumulate to dense) stay readable. With the
 // darker fresh tint, thin areas read as faint dark stain, not as a
 // bright pink ring.
 uniform float alpha_min : hint_range(0.0, 0.5) = 0.32;
 
-uniform float stain_brightness : hint_range(0.5, 4.0) = 2.0;
+uniform float stain_brightness : hint_range(0.5, 4.0) = 1.4;
 // Threshold raised vs. the original 0.015 to gate trail-end haze
 // that, combined with solid_opacity, used to paint visible bars
 // along mask rows where stamps had clustered.
@@ -98,11 +98,17 @@ void fragment() {
 		smoothstep(coverage_threshold, density_full, coverage),
 		density_power
 	);
-	// Edge-gated noise modulation: dense core stays smooth and dark,
-	// only the thin/edge regions break up into organic mottled shapes.
-	float noise = texture(shape_noise, v_quad_uv * shape_noise_scale).r;
-	float edge_factor = 1.0 - smoothstep(0.4, 0.85, density);
-	float effective_strength = shape_noise_strength * edge_factor;
+	// Two-octave noise (matches floor shader) — low-freq large patches
+	// + high-freq fine detail = watercolor-marbled look. Edge-gated
+	// with a core baseline so dense areas have subtle internal
+	// variation rather than reading as flat solid red.
+	float noise_lo = texture(shape_noise, v_quad_uv * shape_noise_scale).r;
+	float noise_hi = texture(shape_noise, v_quad_uv * shape_noise_scale * 3.7 + vec2(7.3, 2.1)).r;
+	float noise = noise_lo * 0.7 + noise_hi * 0.3;
+	float edge_factor = 1.0 - smoothstep(0.3, 0.95, density);
+	float core_floor = 0.18;
+	float effective_strength = shape_noise_strength
+		* (core_floor + (1.0 - core_floor) * edge_factor);
 	float shape_mod = mix(1.0 - effective_strength, 1.0 + effective_strength, noise);
 	density = clamp(density * shape_mod, 0.0, 1.0);
 

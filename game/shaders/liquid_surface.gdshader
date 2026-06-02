@@ -29,30 +29,27 @@ uniform sampler2D shape_noise : hint_default_white, filter_linear, repeat_enable
 uniform float shape_noise_scale : hint_range(1.0, 64.0) = 5.0;
 uniform float shape_noise_strength : hint_range(0.0, 1.0) = 0.55;
 
-// Two-color density gradient driving realism.
-//   fresh_color  = THIN/edge tint  (dark burgundy stain, translucent)
-//   dried_color  = DENSE/center tint (near-black, opaque core)
-// The shader interpolates between them by mask coverage so the same
-// blob reads as a translucent dark stain at the edges and an opaque
-// near-black core. Thin color is intentionally darker than reference
-// "fresh blood" pink — that pink only appears in real life where the
-// blood is VERY thin (a fine spray); for stained surfaces it reads as
-// dark red, not bright pink. `age` desaturates dense further as the
-// pool dries.
-uniform vec4 fresh_color : source_color = vec4(0.32, 0.08, 0.10, 1.0);
-uniform vec4 dried_color : source_color = vec4(0.06, 0.015, 0.025, 1.0);
+// Two-color density gradient. Kept narrow in value so thin → dense
+// blends as a smooth darkening rather than a perceptible color jump.
+//   fresh_color  = THIN/edge tint (already dark blood, just slightly
+//                  more saturated than dense — reads as continuation,
+//                  not a separate "halo" color)
+//   dried_color  = DENSE/center tint (near-black core)
+uniform vec4 fresh_color : source_color = vec4(0.18, 0.05, 0.07, 1.0)
+;
+uniform vec4 dried_color : source_color = vec4(0.05, 0.012, 0.020, 1.0);
 uniform float age : hint_range(0.0, 1.0) = 0.0;
 // Shapes the thin→dense ramp.
 uniform float density_power : hint_range(0.3, 4.0) = 0.9;
-// Coverage value at which we hit "fully dense". Raised vs. 0.85 to
-// widen the blend zone — the dense/thin transition is now spread
-// across more pixels so the boundary reads as a smooth gradient
-// rather than a visible shoulder.
-uniform float density_full : hint_range(0.2, 2.0) = 1.25;
-// Maximum opacity that dense regions reach. Even the densest pool
-// keeps a hint of translucency at this cap so the wet sheen reads
-// through. 0.92 ≈ "almost opaque, barely-there base material peek."
-uniform float density_opacity_max : hint_range(0.4, 1.0) = 0.92;
+// Coverage value at which we hit "fully dense". Wide blend zone so
+// the thin/dense gradient is spread across many pixels and reads as
+// a smooth darkening rather than a visible shoulder.
+uniform float density_full : hint_range(0.2, 2.0) = 1.6;
+// Maximum opacity that dense regions reach. Dropped vs. 0.92 so the
+// core retains the same multiply-stain character as the outer ring,
+// just darker — both regions show floor-tinted blood, the core is
+// just denser. Net effect: smoother core/outer blend.
+uniform float density_opacity_max : hint_range(0.4, 1.0) = 0.78;
 // Alpha floor at the thinnest visible edge. Raised from 0.0 so small
 // per-hit droplets (which never accumulate enough coverage to reach
 // dense) stay readable. Combined with the now-darker fresh_color,
@@ -70,11 +67,11 @@ uniform float roughness : hint_range(0.0, 1.0) = 0.26;
 uniform float normal_strength : hint_range(0.0, 2.0) = 0.04;
 uniform float noise_scale : hint_range(0.5, 32.0) = 5.0;
 uniform float specular_intensity : hint_range(0.0, 1.0) = 0.35;
-// Brightness bias on the multiplied result. Pure mul (1.0×) leaves
-// the stain very dark in shadowed rooms; bumping slightly above 1
-// lifts the stain into visible-red territory without losing the
-// "absorbed into the surface" read.
-uniform float stain_brightness : hint_range(0.5, 3.0) = 2.0;
+// Brightness bias on the multiplied result. Lowered vs. 2.0 because
+// brightly-lit floor patches × red tint × 2.0 was pushing the outer
+// halo into neon-pink territory. 1.4 keeps the stain visible in
+// shadow without amplifying bright spots into saturated red.
+uniform float stain_brightness : hint_range(0.5, 3.0) = 1.4;
 
 // Coverage gating. Threshold kept low so small droplet stamps
 // (per-hit spray) aren't entirely eaten — at 0.04 a 5-10px stamp
@@ -107,13 +104,21 @@ void fragment() {
 		smoothstep(coverage_threshold, density_full, coverage),
 		density_power
 	);
-	// Noise modulation, gated by inverse density: edges (density < ~0.4)
-	// get the full ±strength variation for organic mottled silhouettes;
-	// dense core (density > ~0.85) gets almost none so it reads as a
-	// smooth continuous dark pool rather than a stippled dot pattern.
-	float noise = texture(shape_noise, UV * shape_noise_scale).r;
-	float edge_factor = 1.0 - smoothstep(0.4, 0.85, density);
-	float effective_strength = shape_noise_strength * edge_factor;
+	// Two-octave noise modulation for watercolor-style internal
+	// variation. Low-frequency layer gives large organic patches; the
+	// high-frequency layer (×3.7) adds the fine marbled detail that
+	// real pooled blood shows. Combined 70/30.
+	float noise_lo = texture(shape_noise, UV * shape_noise_scale).r;
+	float noise_hi = texture(shape_noise, UV * shape_noise_scale * 3.7 + vec2(7.3, 2.1)).r;
+	float noise = noise_lo * 0.7 + noise_hi * 0.3;
+	// Edge-gated: full noise at edges (mottled silhouette), but a
+	// small NON-ZERO baseline in the dense core so the inside isn't
+	// perfectly flat — gives the pool the watercolor-pigment marbling
+	// look rather than a flat solid disk.
+	float edge_factor = 1.0 - smoothstep(0.3, 0.95, density);
+	float core_floor = 0.18;  // baseline modulation even in dense core
+	float effective_strength = shape_noise_strength
+		* (core_floor + (1.0 - core_floor) * edge_factor);
 	float shape_mod = mix(1.0 - effective_strength, 1.0 + effective_strength, noise);
 	density = clamp(density * shape_mod, 0.0, 1.0);
 
