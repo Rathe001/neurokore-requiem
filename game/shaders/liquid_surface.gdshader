@@ -1,42 +1,47 @@
-// Liquid surface shader — multiply-blend pass that DARKENS the floor
-// beneath the liquid rather than painting over it. This is what real
-// blood does: it absorbs into the surface, tinting whatever's there,
-// not replacing it. The previous mix-blend version read as red paint
-// because it overwrote the floor color entirely.
+// Liquid surface shader. Single pass that does BOTH:
+//   (1) Multiplies the floor color underneath to produce a realistic
+//       stain (blood darkens what's there rather than painting over),
+//       via hint_screen_texture sampling.
+//   (2) Adds PBR lighting on top so the surface reads as wet — low
+//       roughness + animated noise normal gives a glistening highlight
+//       that responds to scene lights.
 //
 // One shader covers all fluid types — uniforms drive the look so
 // blood, oil, water, etc. share a single renderer.
-//
-// Wet specular highlight is a separate concern. blend_mul doesn't
-// participate in PBR lighting, so this shader is matte-only. A future
-// second-pass overlay (additive spec on top of the stain) can add the
-// wet read without breaking the multiply.
 shader_type spatial;
-// depth_draw_never: this is a multiply pass, we don't want to write
-// the plane into the depth buffer (would block things drawn after it).
-// Default depth TEST stays on so walls / characters / items in front
-// of the floor plane occlude it properly — without depth test the
-// plane was rendering over the entire scene.
-render_mode blend_mul, depth_draw_never, cull_back, unshaded;
+render_mode blend_mix, depth_draw_never, cull_back;
 
-// SubViewport coverage mask. Alpha = liquid presence (0 = none, 1 = full).
+// What the shader needs to read:
+// - liquid_mask:    the SubViewport coverage texture (where & how much liquid)
+// - screen_tex:     what's already in the framebuffer where this fragment lands
+//                   (= the floor + anything else rendered before this plane)
+// - surface_noise:  procedural normal map for the wet-shimmer ripple
 uniform sampler2D liquid_mask : hint_default_black, filter_linear, repeat_disable;
+uniform sampler2D screen_tex : hint_screen_texture, filter_linear;
+uniform sampler2D surface_noise : hint_normal, filter_linear, repeat_enable;
 
-// Per-fluid look. In multiply blending, these values get multiplied
-// against the floor color underneath. Lower values = darker stain.
-// Fresh blood = deeper red multiplier; dried = even darker, less
-// saturated.
-uniform vec4 fresh_color : source_color = vec4(0.50, 0.08, 0.08, 1.0);
-uniform vec4 dried_color : source_color = vec4(0.22, 0.06, 0.06, 1.0);
+// Per-fluid look — multiplied against the floor underneath. Lower
+// values = darker stain. Fresh blood = deep red multiplier; dried =
+// even darker, less saturated.
+uniform vec4 fresh_color : source_color = vec4(0.50, 0.10, 0.10, 1.0);
+uniform vec4 dried_color : source_color = vec4(0.22, 0.07, 0.07, 1.0);
 uniform float age : hint_range(0.0, 1.0) = 0.0;
 
-// Below this coverage value the pixel is discarded (no effect on floor).
+// Wet-look knobs.
+uniform float roughness : hint_range(0.0, 1.0) = 0.30;
+uniform float normal_strength : hint_range(0.0, 2.0) = 0.65;
+uniform float noise_scale : hint_range(0.5, 32.0) = 14.0;
+uniform float noise_drift_speed : hint_range(0.0, 1.0) = 0.03;
+uniform float specular_intensity : hint_range(0.0, 1.0) = 0.45;
+// Brightness bias on the multiplied result. Pure mul (1.0×) leaves
+// the stain very dark in shadowed rooms; bumping slightly above 1
+// lifts the stain into visible-red territory without losing the
+// "absorbed into the surface" read.
+uniform float stain_brightness : hint_range(0.5, 3.0) = 1.6;
+
+// Coverage gating.
 uniform float coverage_threshold : hint_range(0.0, 0.5) = 0.04;
-// How quickly the multiply fades in at the edge. Hard edge = 0.0,
-// soft = 0.2+. Soft hides the boundary of overlapping stamps.
-uniform float edge_softness : hint_range(0.0, 0.5) = 0.10;
-// Caps the additive coverage mask. Without this, heavy stamp overlap
-// pushes alpha well past 1.0 and the stain math gets weird.
+uniform float edge_softness : hint_range(0.0, 0.3) = 0.08;
 uniform float coverage_cap : hint_range(1.0, 4.0) = 1.0;
 
 void fragment() {
@@ -45,17 +50,32 @@ void fragment() {
 		discard;
 	}
 	float coverage = min(raw_coverage, coverage_cap);
-	// Smooth fade from threshold to threshold + softness — keeps edges
-	// from hard-popping where the mask alpha just crosses threshold.
-	float effect_strength = smoothstep(coverage_threshold, coverage_threshold + edge_softness, coverage);
+	// Smooth alpha falloff at the perimeter (hides the discard
+	// boundary which would otherwise pop as a hard line).
+	float alpha = smoothstep(coverage_threshold, coverage_threshold + edge_softness, coverage);
 
+	// Sample the floor underneath this fragment via screen-space and
+	// multiply by the stain color. Result is a realistic absorbed
+	// stain (the floor's tile pattern + lighting + shadows all show
+	// through, just tinted blood-red).
+	vec3 behind = texture(screen_tex, SCREEN_UV).rgb;
 	vec3 stain_color = mix(fresh_color.rgb, dried_color.rgb, age);
-	// In blend_mul, ALBEDO is the per-channel multiplier applied to
-	// what's already in the framebuffer (the floor). Lerp from white
-	// (no effect = floor stays unchanged) to stain_color (full darken)
-	// based on how strongly this pixel is covered. Result: the floor
-	// gradually darkens toward red as you approach the pool's
-	// interior, like blood soaked into the surface.
-	ALBEDO = mix(vec3(1.0), stain_color, effect_strength);
-	ALPHA = 1.0;
+	vec3 stained = behind * stain_color * stain_brightness;
+
+	// Two-octave animated noise → perturbed normal for the wet shimmer.
+	vec2 n_uv1 = UV * noise_scale + vec2(TIME * noise_drift_speed, TIME * noise_drift_speed * 0.7);
+	vec2 n_uv2 = UV * noise_scale * 2.3 + vec2(TIME * noise_drift_speed * -0.5, TIME * noise_drift_speed * 0.9);
+	vec3 n1 = texture(surface_noise, n_uv1).rgb * 2.0 - 1.0;
+	vec3 n2 = texture(surface_noise, n_uv2).rgb * 2.0 - 1.0;
+	vec3 n_mixed = normalize(n1 * 0.6 + n2 * 0.4);
+	NORMAL_MAP = vec3(n_mixed.xy * 0.5 + 0.5, 1.0);
+	NORMAL_MAP_DEPTH = normal_strength;
+
+	// Output. ALBEDO is the stained-floor color (gets lit by PBR).
+	// ROUGHNESS + SPECULAR + METALLIC drive the wet read.
+	ALBEDO = stained;
+	ROUGHNESS = roughness;
+	METALLIC = 0.0;
+	SPECULAR = specular_intensity;
+	ALPHA = alpha;
 }

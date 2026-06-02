@@ -2672,33 +2672,47 @@ func _spawn_settle_pool() -> void:
 	layer.stamp(_settled_corpse_position(), _get_settle_stamp_texture(), 0.9, 1.0)
 
 
-# Shared soft-alpha gradient stamp used by every corpse-settle pool.
-# Generated once on first request (128² radial gradient) and reused
-# for all stamps — variation comes from rotation + intensity, not
-# unique textures per stamp.
-static var _settle_stamp_texture: Texture2D = null
+# 8 irregular soft-alpha stamp variants. Each is a lobed blob (two
+# sine-wave-modulated radii per angle) with quadratic alpha falloff
+# so additive blending in the SubViewport produces seamless merged
+# pools — but each variant has its own irregular silhouette, so
+# adjacent stamps don't read as duplicate circles.
+const _SETTLE_STAMP_VARIANT_COUNT: int = 8
+static var _settle_stamp_textures: Array[Texture2D] = []
 static func _get_settle_stamp_texture() -> Texture2D:
-	if _settle_stamp_texture != null:
-		return _settle_stamp_texture
-	var size := 128
-	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
-	img.fill(Color(0, 0, 0, 0))
-	var center := Vector2(size, size) * 0.5
-	var r_max := float(size) * 0.48
-	for y in size:
-		for x in size:
-			var dx := float(x) - center.x
-			var dy := float(y) - center.y
-			var d := sqrt(dx * dx + dy * dy) / r_max
-			if d >= 1.0:
-				continue
-			# Quadratic falloff — full alpha center, smooth edge.
-			# Additive blend in SubViewport will accumulate these where
-			# stamps overlap, producing a seamless merged surface.
-			var a: float = 1.0 - d * d
-			img.set_pixel(x, y, Color(1.0, 1.0, 1.0, a))
-	_settle_stamp_texture = ImageTexture.create_from_image(img)
-	return _settle_stamp_texture
+	if _settle_stamp_textures.is_empty():
+		var size := 128
+		var center := Vector2(size, size) * 0.5
+		var base_r: float = float(size) * 0.42
+		for i in _SETTLE_STAMP_VARIANT_COUNT:
+			var rng := RandomNumberGenerator.new()
+			rng.seed = 0x4B5A11 + i * 0x9E3779B9
+			var freq1: int = rng.randi_range(2, 5)
+			var freq2: int = rng.randi_range(6, 10)
+			var amp1: float = rng.randf_range(0.10, 0.20)
+			var amp2: float = rng.randf_range(0.04, 0.09)
+			var phase1: float = rng.randf() * TAU
+			var phase2: float = rng.randf() * TAU
+			var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
+			img.fill(Color(0, 0, 0, 0))
+			for y in size:
+				for x in size:
+					var dx := float(x) - center.x
+					var dy := float(y) - center.y
+					var dist := sqrt(dx * dx + dy * dy)
+					var angle := atan2(dy, dx)
+					var r_mod: float = 1.0 \
+						+ amp1 * sin(float(freq1) * angle + phase1) \
+						+ amp2 * sin(float(freq2) * angle + phase2)
+					var max_r: float = base_r * r_mod
+					if dist >= max_r:
+						continue
+					# Quadratic falloff for smooth additive merging.
+					var d: float = dist / max_r
+					var a: float = 1.0 - d * d
+					img.set_pixel(x, y, Color(1.0, 1.0, 1.0, a))
+			_settle_stamp_textures.append(ImageTexture.create_from_image(img))
+	return _settle_stamp_textures[randi() % _settle_stamp_textures.size()]
 
 
 # Coroutine: wait _CORPSE_DESPAWN_DELAY, sink the corpse into the floor,

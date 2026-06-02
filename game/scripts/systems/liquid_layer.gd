@@ -94,11 +94,16 @@ func stamp(world_pos: Vector3, stamp_texture: Texture2D, world_radius: float, in
 	# viewport pixels and the world-space mapping is one we control.
 	sprite.position = _world_to_viewport_px(world_pos)
 	# Scale the texture so its diameter is (2 * world_radius * PIXELS_PER_METER)
-	# pixels in the viewport. Texture pixel size × scale = on-screen pixel size.
+	# pixels in the viewport. Per-axis aspect jitter makes each stamp
+	# oblong rather than perfect-circle, hiding the round texture
+	# silhouette when multiple stamps overlap.
 	var tex_size: Vector2 = stamp_texture.get_size()
 	if tex_size.x > 0.0:
 		var target_px: float = world_radius * 2.0 * PIXELS_PER_METER
-		sprite.scale = Vector2.ONE * (target_px / tex_size.x)
+		var base_scale: float = target_px / tex_size.x
+		var aspect_x: float = randf_range(0.85, 1.20)
+		var aspect_y: float = randf_range(0.85, 1.20)
+		sprite.scale = Vector2(base_scale * aspect_x, base_scale * aspect_y)
 	# Make sure additive blending is on so overlapping stamps sum.
 	sprite.material = _make_additive_canvas_material()
 	# Random rotation for organic variation between stamps.
