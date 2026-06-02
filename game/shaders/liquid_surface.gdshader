@@ -48,12 +48,11 @@ uniform float coverage_threshold : hint_range(0.0, 0.5) = 0.015;
 uniform float edge_softness : hint_range(0.0, 0.3) = 0.05;
 uniform float coverage_cap : hint_range(1.0, 4.0) = 1.0;
 // Blends from "pure multiply-stain" (0.0 = surface texture fully
-// shows through, floor pattern visible) toward "solid painted tint"
-// (1.0 = blood reads as paint, surface texture hidden). 0.3 keeps
-// the stain character at the edges where blood is thin while making
-// dense areas read as visibly painted blood rather than a faint
-// shadow on the floor.
-uniform float solid_opacity : hint_range(0.0, 1.0) = 0.3;
+// shows through) toward "solid painted tint" (1.0). 0.12 is a
+// subtle lift — visible blood reads as paint, edges still keep the
+// stain character. Mirrors the wall shader's value so floor + wall
+// blood stay tonally identical.
+uniform float solid_opacity : hint_range(0.0, 1.0) = 0.12;
 
 void fragment() {
 	float raw_coverage = texture(liquid_mask, UV).a;

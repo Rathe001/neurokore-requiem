@@ -1180,8 +1180,13 @@ static func spawn_blood_wall_splatter(parent: Node, world_pos: Vector3, wall_nor
 	var layer := _find_wall_liquid_layer(parent)
 	if layer == null:
 		return
+	# Vertical scatter so splatters spread across the wall's height
+	# instead of clustering at the raycast hit point (typically the
+	# enemy's chest, ~1m up). Upward bias to balance the drip-streak
+	# downward spread that follows.
+	var jittered_pos := world_pos + Vector3(0, randf_range(-0.25, 0.85), 0)
 	var radius: float = randf_range(0.20, 0.40)
-	layer.stamp(world_pos, wall_normal, radius, 1.0)
+	layer.stamp(jittered_pos, wall_normal, radius, 1.0)
 
 
 static func _find_wall_liquid_layer(parent: Node) -> WallLiquidLayer:

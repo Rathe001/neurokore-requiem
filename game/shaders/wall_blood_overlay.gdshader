@@ -24,14 +24,23 @@ uniform float wall_height : hint_range(1.0, 16.0) = 4.0;
 // neither should walls.
 uniform vec3 blood_tint : source_color = vec3(0.55, 0.10, 0.10);
 uniform float stain_brightness : hint_range(0.5, 4.0) = 2.0;
-uniform float coverage_threshold : hint_range(0.0, 0.5) = 0.015;
-uniform float edge_softness : hint_range(0.0, 0.3) = 0.05;
+// Higher threshold than the previous 0.015. The lower value let very
+// faint cumulative coverage (drip tails, edge fall-off from many
+// overlapping stamps) render as visible blood — once combined with
+// solid_opacity boosting toward pure tint, those faint areas painted
+// the wall in horizontal bars wherever stamps had clustered along a
+// single mask row. 0.08 keeps real splatter coverage visible while
+// gating the trail-end haze that was producing the strip artifact.
+uniform float coverage_threshold : hint_range(0.0, 0.5) = 0.08;
+uniform float edge_softness : hint_range(0.0, 0.3) = 0.06;
 uniform float blood_roughness : hint_range(0.0, 1.0) = 0.22;
 // Same uniform as liquid_surface.gdshader (keep in sync so floor +
 // wall blood read as the same material): blends from pure multiply-
 // stain (0.0) toward solid painted tint (1.0). Dense blood reads as
-// painted; edges stay translucent.
-uniform float solid_opacity : hint_range(0.0, 1.0) = 0.3;
+// painted; edges stay translucent. 0.12 is a subtle lift — enough to
+// pull dense blood out of "faint shadow" territory without overriding
+// the surface texture.
+uniform float solid_opacity : hint_range(0.0, 1.0) = 0.12;
 
 varying vec3 v_world_pos;
 varying vec3 v_world_normal;
