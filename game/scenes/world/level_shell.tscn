@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=12 format=3]
 
 ; Generic level scene: WorldEnvironment + LevelBuilder + EnemiesContainer +
 ; PlayersContainer + HUD + Camera. The LevelBuilder's `layout` export
@@ -17,6 +17,7 @@
 [ext_resource type="PackedScene" path="res://scenes/prototype/prototype_hud.tscn" id="scene_hud"]
 [ext_resource type="PackedScene" path="res://scenes/prototype/prototype_enemy.tscn" id="scene_enemy"]
 [ext_resource type="Resource" path="res://resources/level/layouts/dungeon_demo.tres" id="layout"]
+[ext_resource type="PackedScene" path="res://scenes/world/liquid_layer.tscn" id="scene_liquid_blood"]
 
 [sub_resource type="Environment" id="env_test"]
 background_mode = 1
@@ -174,6 +175,14 @@ script = ExtResource("script_pickups_container")
 ; spawn / despawn when networked.
 [node name="PlayersContainer" type="Node3D" parent="."]
 script = ExtResource("script_players_container")
+
+; Persistent SubViewport composite + liquid_surface.gdshader pass. One
+; instance per fluid type — this is the human blood layer. Other
+; liquids (oil, water, alien blood, etc.) will instance their own
+; LiquidLayer with different fresh/dried/roughness uniforms once the
+; Fluid resource system lands (task #112).
+[node name="BloodLayer" parent="." instance=ExtResource("scene_liquid_blood")]
+fluid_id = &"blood_human"
 
 [node name="HUD" parent="." instance=ExtResource("scene_hud")]
 

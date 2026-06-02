@@ -2652,13 +2652,53 @@ func _settled_corpse_position() -> Vector3:
 func _spawn_settle_pool() -> void:
 	if not is_inside_tree():
 		return
-	var parent := get_parent()
-	if parent == null:
+	# New liquid-shader path: stamp into the per-fluid LiquidLayer's
+	# accumulator SubViewport. Overlapping stamps blend additively in
+	# the mask, so adjacent corpses' pools merge into one continuous
+	# wet surface with no per-stamp silhouette. Pulls the layer for
+	# this enemy's blood_type via the group LiquidLayer adds itself to.
+	var layer_group: StringName = StringName("liquid_layer:" + String(blood_type))
+	var layer := get_tree().get_first_node_in_group(layer_group) as LiquidLayer
+	if layer == null:
+		# Fallback: any liquid layer at all (covers legacy levels where
+		# the blood_type-specific layer wasn't instanced). Better than
+		# silently dropping the stamp.
+		layer = get_tree().get_first_node_in_group(&"liquid_layer") as LiquidLayer
+	if layer == null:
 		return
-	# force_new=true skips the attach-or-grow path so the corpse's
-	# pool is a fresh stamp at its hip position instead of stretching
-	# whatever nearby pool a per-hit mist spray happened to leave.
-	PrototypeAttackIndicator.spawn_blood_decal(parent, _settled_corpse_position(), blood_type, true)
+	# Stamp radius scales with the pool diameter range so cluster size
+	# in the mask resembles old-system pool footprints. Single-meter
+	# default = typical corpse-pool footprint.
+	layer.stamp(_settled_corpse_position(), _get_settle_stamp_texture(), 0.9, 1.0)
+
+
+# Shared soft-alpha gradient stamp used by every corpse-settle pool.
+# Generated once on first request (128² radial gradient) and reused
+# for all stamps — variation comes from rotation + intensity, not
+# unique textures per stamp.
+static var _settle_stamp_texture: Texture2D = null
+static func _get_settle_stamp_texture() -> Texture2D:
+	if _settle_stamp_texture != null:
+		return _settle_stamp_texture
+	var size := 128
+	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	var center := Vector2(size, size) * 0.5
+	var r_max := float(size) * 0.48
+	for y in size:
+		for x in size:
+			var dx := float(x) - center.x
+			var dy := float(y) - center.y
+			var d := sqrt(dx * dx + dy * dy) / r_max
+			if d >= 1.0:
+				continue
+			# Quadratic falloff — full alpha center, smooth edge.
+			# Additive blend in SubViewport will accumulate these where
+			# stamps overlap, producing a seamless merged surface.
+			var a: float = 1.0 - d * d
+			img.set_pixel(x, y, Color(1.0, 1.0, 1.0, a))
+	_settle_stamp_texture = ImageTexture.create_from_image(img)
+	return _settle_stamp_texture
 
 
 # Coroutine: wait _CORPSE_DESPAWN_DELAY, sink the corpse into the floor,
