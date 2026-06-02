@@ -34,20 +34,21 @@ render_mode cull_disabled, depth_draw_opaque, diffuse_burley, specular_schlick_g
 
 // ── Wall blood (LiquidLayer) ─────────────────────────────────────────────
 // Two SubViewport masks maintained by WallLiquidLayer instances under
-// the level shell. Tri-planar-sampled below: wall_blood_mask_x covers
-// walls facing ±X (UV = world.zy), wall_blood_mask_z covers ±Z walls
-// (UV = world.xy). World extents come from globals so the shader
-// matches whatever WallLiquidLayer is configured for.
-global uniform sampler2D wall_blood_mask_x : filter_linear, repeat_disable;
-global uniform sampler2D wall_blood_mask_z : filter_linear, repeat_disable;
-global uniform vec4 wall_blood_fresh_color : source_color;
-global uniform vec4 wall_blood_dried_color : source_color;
-global uniform float wall_blood_age;
-global uniform float wall_blood_extent_xz;
-global uniform float wall_blood_extent_y;
-// Stain knobs — local to this shader, not exposed as globals (one set
-// of values per shader instance is fine). Match liquid_surface.gdshader's
-// defaults so floor and wall stains read as the same material.
+// the level shell. Bound to this material at level-build time by
+// WallLiquidLayer.bind_to_wall_material — not global uniforms, since
+// Godot 4.6's global sampler2D path doesn't reliably propagate
+// ViewportTextures to all shader instances. Direct material binding
+// avoids that and gives us a clear hook for debugging.
+//
+// wall_blood_mask_x covers walls facing ±X (UV from world.zy).
+// wall_blood_mask_z covers ±Z walls (UV from world.xy).
+uniform sampler2D wall_blood_mask_x : filter_linear, repeat_disable, hint_default_black;
+uniform sampler2D wall_blood_mask_z : filter_linear, repeat_disable, hint_default_black;
+uniform vec4 wall_blood_fresh_color : source_color = vec4(0.55, 0.10, 0.10, 1.0);
+uniform vec4 wall_blood_dried_color : source_color = vec4(0.42, 0.12, 0.12, 1.0);
+uniform float wall_blood_age : hint_range(0.0, 1.0) = 0.0;
+uniform float wall_blood_extent_xz : hint_range(8.0, 200.0) = 40.0;
+uniform float wall_blood_extent_y : hint_range(1.0, 16.0) = 4.0;
 uniform float wall_blood_coverage_threshold : hint_range(0.0, 0.5) = 0.015;
 uniform float wall_blood_coverage_cap : hint_range(0.0, 4.0) = 1.0;
 uniform float wall_blood_edge_softness : hint_range(0.0, 0.3) = 0.05;

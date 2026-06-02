@@ -74,32 +74,90 @@ func _ready() -> void:
 	add_to_group(&"wall_liquid_layer")
 	add_to_group(StringName("wall_liquid_layer:" + String(fluid_id)))
 	_build_subviewport()
-	_publish_global_uniform()
 	if _shared_ticker_id == 0:
 		_shared_ticker_id = get_instance_id()
-		_publish_constant_globals()
 	set_process(true)
+	# Bind after LevelBuilder finishes constructing walls. The builder
+	# yields across frames during a streamed build (see project_streamed_
+	# level_build memory), so binding on _ready alone would race the
+	# wall MMIs into existence. Also bind once immediately in case the
+	# build already completed before we joined the tree.
+	call_deferred(&"bind_to_all_wall_materials")
+	var builder := get_tree().get_first_node_in_group(&"level_builder")
+	if builder == null:
+		# LevelBuilder isn't in a group today; walk the parents to find
+		# the level shell, then locate the builder child by name.
+		var shell := get_parent()
+		if shell != null:
+			builder = shell.get_node_or_null(^"LevelBuilder")
+	if builder != null and builder.has_signal(&"built"):
+		builder.built.connect(bind_to_all_wall_materials)
 
 
-# Author the static globals (colors + world extents) once. The X-facing
-# layer wins the race in practice since it's instanced first in the
-# level shell; both layers would otherwise write identical values.
-func _publish_constant_globals() -> void:
-	RenderingServer.global_shader_parameter_set(&"wall_blood_fresh_color", fresh_color)
-	RenderingServer.global_shader_parameter_set(&"wall_blood_dried_color", dried_color)
-	RenderingServer.global_shader_parameter_set(&"wall_blood_extent_xz", WORLD_EXTENT_METERS)
-	RenderingServer.global_shader_parameter_set(&"wall_blood_extent_y", wall_height_meters)
+## Walks the scene tree, finds every wall ShaderMaterial that uses
+## procedural_wall.gdshader, and pushes the SubViewport texture +
+## uniforms onto it. Safe to call multiple times. The first wall layer
+## instance also pushes the shared color / extent uniforms.
+func bind_to_all_wall_materials() -> void:
+	var tex: Texture2D = _subviewport.get_texture() if _subviewport != null else null
+	if tex == null:
+		return
+	var key: StringName = (
+		&"wall_blood_mask_x"
+		if surface_axis == SurfaceAxis.X_FACING
+		else &"wall_blood_mask_z"
+	)
+	_walk_and_bind(get_tree().root, key, tex)
+
+
+func _walk_and_bind(node: Node, mask_key: StringName, mask_tex: Texture2D) -> void:
+	if node is GeometryInstance3D:
+		_bind_wall_sm(node as GeometryInstance3D, mask_key, mask_tex)
+	for c in node.get_children():
+		_walk_and_bind(c, mask_key, mask_tex)
+
+
+# Pushes wall blood uniforms onto a single GeometryInstance3D's material
+# IF its ShaderMaterial uses procedural_wall.gdshader. set_shader_parameter
+# is a silent no-op on shaders that don't declare the uniform, but the
+# resource_path check filters out other ShaderMaterials cheaply.
+const _WALL_SHADER_PATH := "res://scripts/level/build/procedural_wall.gdshader"
+
+func _bind_wall_sm(gi: GeometryInstance3D, mask_key: StringName, mask_tex: Texture2D) -> void:
+	var mat: Material = gi.material_override
+	if not (mat is ShaderMaterial):
+		return
+	var sm: ShaderMaterial = mat
+	if sm.shader == null or sm.shader.resource_path != _WALL_SHADER_PATH:
+		return
+	sm.set_shader_parameter(mask_key, mask_tex)
+	if surface_axis == SurfaceAxis.X_FACING:
+		sm.set_shader_parameter(&"wall_blood_fresh_color", fresh_color)
+		sm.set_shader_parameter(&"wall_blood_dried_color", dried_color)
+		sm.set_shader_parameter(&"wall_blood_extent_xz", WORLD_EXTENT_METERS)
+		sm.set_shader_parameter(&"wall_blood_extent_y", wall_height_meters)
 
 
 func _process(delta: float) -> void:
-	# Skip the parent's _process — its dry-timer pushes to a per-instance
-	# ShaderMaterial we don't have. The shared static below handles the
-	# global age uniform for both wall layers.
+	# Shared dry timer ticked by whichever layer registered first;
+	# pushes wall_blood_age to every wall material we've bound to.
 	if get_instance_id() == _shared_ticker_id:
 		_shared_wall_dry_timer += delta
 		var age: float = clampf(_shared_wall_dry_timer / dry_duration_sec, 0.0, 1.0)
-		RenderingServer.global_shader_parameter_set(&"wall_blood_age", age)
+		_push_age_to_wall_materials(get_tree().root, age)
 	_process_drips(delta)
+
+
+func _push_age_to_wall_materials(node: Node, age: float) -> void:
+	if node is GeometryInstance3D:
+		var gi: GeometryInstance3D = node
+		var mat: Material = gi.material_override
+		if mat is ShaderMaterial:
+			var sm: ShaderMaterial = mat
+			if sm.shader != null and sm.shader.resource_path == _WALL_SHADER_PATH:
+				sm.set_shader_parameter(&"wall_blood_age", age)
+	for c in node.get_children():
+		_push_age_to_wall_materials(c, age)
 
 
 # Reset the shared dry timer whenever a stamp lands on either axis.
@@ -142,13 +200,6 @@ func _build_floor_mesh() -> void:
 	pass
 
 
-func _publish_global_uniform() -> void:
-	var key: StringName = (
-		&"wall_blood_mask_x"
-		if surface_axis == SurfaceAxis.X_FACING
-		else &"wall_blood_mask_z"
-	)
-	RenderingServer.global_shader_parameter_set(key, _subviewport.get_texture())
 
 
 # Maps world (h, y) to viewport pixel space, where (h) is the wall's

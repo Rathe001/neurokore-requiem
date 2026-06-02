@@ -140,34 +140,6 @@ player_world_pos={
 "type": "vec3",
 "value": Vector3(0, 0, 0)
 }
-wall_blood_mask_x={
-"type": "sampler2D",
-"value": ""
-}
-wall_blood_mask_z={
-"type": "sampler2D",
-"value": ""
-}
-wall_blood_fresh_color={
-"type": "color",
-"value": Color(0.55, 0.1, 0.1, 1)
-}
-wall_blood_dried_color={
-"type": "color",
-"value": Color(0.42, 0.12, 0.12, 1)
-}
-wall_blood_age={
-"type": "float",
-"value": 0.0
-}
-wall_blood_extent_xz={
-"type": "float",
-"value": 40.0
-}
-wall_blood_extent_y={
-"type": "float",
-"value": 4.0
-}
 
 [steam]
 
