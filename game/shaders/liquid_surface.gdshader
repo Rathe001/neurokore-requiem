@@ -9,7 +9,13 @@
 // One shader covers all fluid types — uniforms drive the look so
 // blood, oil, water, etc. share a single renderer.
 shader_type spatial;
-render_mode blend_mix, depth_draw_never, cull_back;
+// `unshaded` bypasses PBR direct-light contributions so the floor
+// blood's perceived brightness is exactly what ALBEDO outputs,
+// independent of overhead lighting. Wet-sheen highlights are faked
+// in fragment via noise sampling (since spec/roughness no-op here).
+// Natural light response still comes through via the multiply-stain
+// of SCREEN_TEX (which samples the already-lit floor underneath).
+render_mode blend_mix, depth_draw_never, cull_back, unshaded;
 
 // What the shader needs to read:
 // - liquid_mask:    the SubViewport coverage texture (where & how much liquid)
@@ -57,11 +63,14 @@ uniform float density_opacity_max : hint_range(0.4, 1.0) = 0.90;
 // translucent wash. Required by the higher overhead light intensity.
 uniform float alpha_min : hint_range(0.0, 0.5) = 0.70;
 
-// Wet-look knobs — matched to the wall shader's tones (0.26 / 0.04
-// / 0.35) since the user wants the floor pool to read as dark as
-// wall splatters. Floor sits under direct overhead lighting that
-// walls don't, so even at wall-shader values the floor catches more
-// spec; using values BELOW the wall shader to compensate.
+// Fake wet sheen — sampled from a high-frequency shape_noise pass,
+// gated by density so only the dense core shows glints. Additive
+// white-ish bumps on top of the dark painted blood ALBEDO. Pattern-
+// based (no PBR specular) so the look is consistent regardless of
+// overhead lighting.
+uniform float sheen_intensity : hint_range(0.0, 0.5) = 0.18;
+uniform float sheen_threshold : hint_range(0.3, 0.95) = 0.72;
+// Kept for legacy material bindings — no-op under render_mode unshaded.
 uniform float roughness : hint_range(0.0, 1.0) = 0.45;
 uniform float normal_strength : hint_range(0.0, 2.0) = 0.03;
 uniform float noise_scale : hint_range(0.5, 32.0) = 5.0;
@@ -138,28 +147,18 @@ void fragment() {
 	float opacity_here = mix(solid_opacity, density_opacity_max, density);
 	vec3 stained = mix(stained_mul, blood_color, opacity_here);
 
-	// Two-octave STATIC noise → perturbed normal for the wet shimmer.
-	// No TIME term — spilled blood doesn't ripple. The shimmer comes
-	// from the camera/lights hitting the static perturbed normal.
-	vec2 n_uv1 = UV * noise_scale;
-	vec2 n_uv2 = UV * noise_scale * 2.3 + vec2(13.7, 5.1);
-	vec3 n1 = texture(surface_noise, n_uv1).rgb * 2.0 - 1.0;
-	vec3 n2 = texture(surface_noise, n_uv2).rgb * 2.0 - 1.0;
-	vec3 n_mixed = normalize(n1 * 0.6 + n2 * 0.4);
-	NORMAL_MAP = vec3(n_mixed.xy * 0.5 + 0.5, 1.0);
-	// Dense areas read wetter (more normal perturbation = more
-	// visible specular highlights). Thin edges damp the sheen so
-	// they don't look like polished plastic.
-	NORMAL_MAP_DEPTH = normal_strength * mix(0.3, 1.0, density);
+	// Fake wet sheen — high-frequency shape_noise sample produces
+	// small bright glints on the dense core. Pure additive contrib
+	// independent of scene lighting; the visual cue for "wet slick"
+	// under unshaded mode where PBR specular is unavailable.
+	float sheen_n = max(
+		texture(shape_noise, UV * shape_noise_scale * 2.7).r,
+		texture(shape_noise, UV * shape_noise_scale * 6.3 + vec2(11.1, 4.7)).r
+	);
+	float sheen = smoothstep(sheen_threshold, 0.98, sheen_n) * density;
+	stained += vec3(sheen * sheen_intensity);
 
 	ALBEDO = stained;
-	// Edges very matte (no specular pickup → stay dark under overhead
-	// lighting), dense core glossy (catches nearby colored lights as
-	// wet sheen highlights — IED glow, muzzle flash, etc.). Steep
-	// density gate so only the truly dense core gets the wet read.
-	ROUGHNESS = mix(0.92, roughness, density);
-	METALLIC = 0.0;
-	SPECULAR = specular_intensity * mix(0.0, 1.0, density);
 	// ALPHA is density-driven so thin/pink areas fade to transparent
 	// and dense/dark areas stay opaque. `alpha` (the smoothstep) gates
 	// the perimeter anti-aliasing — without it, the discard threshold
