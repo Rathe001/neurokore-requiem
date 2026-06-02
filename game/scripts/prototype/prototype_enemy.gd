@@ -2681,7 +2681,16 @@ func _spawn_settle_pool() -> void:
 	# Stamp radius scales with the pool diameter range so cluster size
 	# in the mask resembles old-system pool footprints. Single-meter
 	# default = typical corpse-pool footprint.
-	layer.stamp(_settled_corpse_position(), _get_settle_stamp_texture(), 0.9, 1.0)
+	var settle_pos := _settled_corpse_position()
+	layer.stamp(settle_pos, _get_settle_stamp_texture(), 0.9, 1.0)
+	# Gameplay slip-zone — standalone Area3D so the player still gets
+	# the Traction-mediated slow/stumble when walking through this
+	# pool. LiquidLayer is visual-only; gameplay needs its own node.
+	# Radius slightly smaller than the visual pool so the effect
+	# triggers only inside the bulk of the stain, not its faded edge.
+	var container := get_parent()
+	if container != null:
+		PrototypeAttackIndicator.spawn_blood_slip_zone(container, settle_pos, 0.75)
 
 
 # Per-hit droplet scatter — stamps `count` tiny lobed splatters around

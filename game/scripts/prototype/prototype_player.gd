@@ -4254,7 +4254,7 @@ var _blood_stumble_remaining: float = 0.0
 
 ## Increments the blood-pool overlap count. Called by the slip-zone
 ## Area3D under each pool (see PrototypeAttackIndicator
-## ._attach_blood_pool_slip_zone). Rolls the stumble chance on the
+## .spawn_blood_slip_zone). Rolls the stumble chance on the
 ## 0→1 transition only, so walking from one pool into an overlapping
 ## one doesn't keep re-rolling.
 func enter_blood_pool() -> void:

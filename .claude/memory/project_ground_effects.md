@@ -1,7 +1,10 @@
 ---
-name: Ground effects (blood as the first instance)
+name: ground-effects-blood-as-the-first-instance
 description: Environmental floor types as a Divinity-style combat layer. Blood + procgen water/oil puddles ship today; oil/acid/ice/fire planned. Per-surface mitigation curve via Traction autoload.
-type: project
+metadata: 
+  node_type: memory
+  type: project
+  originSessionId: 8cb2236a-ff5a-4a76-8cc4-a33a9a8014b8
 ---
 
 Blood pools and the procgen oil/water puddles are the first two
@@ -52,21 +55,20 @@ shared across all effect types — registry-driven, no per-effect
 code path needed.
 
 **Blood pool specifics:**
-- Area3D ("SlipZone") child of each pool Decal. Cylinder radius
-  tweens in lockstep with the visual pool size so the player only
-  slips inside the actually-visible footprint.
+- Visual: rasterized into LiquidLayer SubViewport (see
+  [[project_liquid_layer]]); no per-pool node.
+- Slip Area3D is now standalone — spawned by
+  `PrototypeAttackIndicator.spawn_blood_slip_zone(parent, pos, radius)`
+  from `PrototypeEnemy._spawn_settle_pool`. Per-hit droplets get NO
+  slip zone (would spawn dozens of overlapping areas per fight); only
+  the corpse settle pool gets one.
 - T0 values (mitigated by traction k=5 — entry-level):
   −15% move, 0.55 decel friction, 12% stumble chance, 0.3 s stumble.
-- Generic skill-facing query API:
-  - `PrototypeAttackIndicator.get_blood_pools_near(pos, radius)` →
-    Array[Decal]. Filtered by priority FLOOR + recorded area
-    ≥ 0.6 m² so mist drops and wall splats are excluded.
-  - `PrototypeAttackIndicator.consume_blood_pool(pool)` — frees the
-    SlipZone first (clean body_exited for any standing player),
-    then routes through `_fade_and_free`.
-  - Future Enculted "Blood Ritual" calls these. Forged "consume
-    oil for HP" gets a parallel `get_oil_pools_near` /
-    `consume_oil_pool` pair when oil ground type lands.
+- Skill-facing query API (`get_blood_pools_near` / `consume_blood_pool`)
+  was deleted with the legacy decal-pool system. When Enculted "Blood
+  Ritual" lands, query directly against the LiquidLayer mask or
+  against the slip-zone Area3Ds in the &"blood_slip_zone" group
+  (group not added yet — add when first caller needs it).
 
 **Water puddle migration:** procgen oil/water puddles
 (`DecalBuilder`) keep their existing enter_slow_pool /

@@ -729,17 +729,7 @@ static func _blood_disabled() -> bool:
 	return AccessibilityState.config != null and AccessibilityState.config.disable_blood
 
 
-# Debug toggle — when true, every blood spawn except the corpse settle
-# pool is suppressed. Lets the player visually identify which pool
-# belongs to which corpse without scatter from per-hit mist, kill-time
-# bursts, wall splatters, footprints, or side-paint on receivers.
-# Flip to false to restore full blood behavior.
-const _CORPSE_POOLS_ONLY: bool = true
-
-
 static func spawn_blood_burst(parent: Node, world_pos: Vector3, direction: Vector3 = Vector3.UP, count_mult: float = 1.0, blood_type: StringName = BLOOD_TYPE_HUMAN) -> void:
-	if _CORPSE_POOLS_ONLY:
-		return
 	if parent == null or _blood_disabled():
 		return
 	var particles := GPUParticles3D.new()
@@ -997,44 +987,27 @@ static func _spawn_mist_drop_wall(parent: Node, world_pos: Vector3, wall_normal:
 	_track_blood_decal(decal, BLOOD_PRIORITY_WALL)
 
 
-# Kill-scene splatter pattern — one big primary decal at the kill point
-# plus 2-4 satellite stains at random offsets within ~2m. Looks like a
-# proper "gory mess" rather than a single neat stamp. Direction biases
-# the satellites away from the shooter so the spray pattern matches the
-# kill direction (~70% of satellites in the away-from-shooter arc).
-# Approach A: one pool per kill, animated growth, proximity attach.
+# ── Floor pools via LiquidLayer ───────────────────────────────────────
+# Floor pools are now rasterized into a persistent SubViewport mask
+# owned by LiquidLayer (one per fluid type) and rendered by a single
+# floor plane through liquid_surface.gdshader. The old per-pool Decal +
+# tween-grow + proximity-attach system was replaced because adjacent
+# decals showed visible silhouette seams that couldn't be hidden no
+# matter how the alpha falloff was tuned.
 #
-# Each kill produces ONE central pool that tweens from a small initial
-# diameter to a final diameter over POOL_GROWTH_DURATION. If the kill
-# happens close to an existing pool (within POOL_ATTACH_RADIUS of its
-# edge), the existing pool GROWS toward the new spawn instead of
-# stamping a fresh decal — models how real liquid spreads to absorb
-# nearby splatters into one continuous puddle.
+# Slip-zone Area3D for the Traction gameplay hook is created separately
+# at corpse settle (see PrototypeEnemy._spawn_settle_pool) — it no
+# longer rides on a per-pool Decal node.
 #
-# Models liquid spreading: no satellite stamps that overlap visually,
-# no bounding-circle cascade. Far-apart kills create distinct pools;
-# adjacent kills coalesce smoothly via the texture's soft alpha
-# edges. Persistence comes from a slower fade and lower stamp rate.
-
-# Pool sizing.
-const POOL_INITIAL_DIAMETER: float = 0.3        # tiny "fresh splash" at spawn
-const POOL_TARGET_MIN_DIAMETER: float = 1.4     # tightened range — every corpse pool reads
-const POOL_TARGET_MAX_DIAMETER: float = 1.8     # consistent size, slightly larger overall
-												# gives the eye more obvious size variance
-												# so clustered pools don't all read at the
-                                                # same scale
-const POOL_MAX_DIAMETER: float = 3.0            # cap on any pool's grown diameter
-const POOL_GROWTH_DURATION: float = 4.5         # slow ooze — player shouldn't see the growth tween in motion
-# Attach: if a new kill lands within this distance of an existing
-# pool's *edge*, grow that pool to encompass the new spawn instead of
-# stamping fresh. Fresh stamps still happen for kills in clear space.
-const POOL_ATTACH_RADIUS: float = 2.5            # widened from 1.2 — adjacent corpses absorb into the same pool more aggressively, hiding inter-pool edges
-# How much "buffer" we leave around the new spawn when growing — the
-# pool extends past the new spawn by this much so the spawn point is
-# safely inside the new bounds, not on its rim.
-const POOL_GROWTH_BUFFER: float = 0.4
-const _POOL_GROWTH_TWEEN_META: StringName = &"_pool_growth_tween"
-const _POOL_SLIP_SHAPE_META: StringName = &"_pool_slip_shape"
+# Mist-drop pool radii — small per-hit stamps that build up over a
+# busy fight. Tuned for visibility into the LiquidLayer mask (anything
+# smaller gets eaten by the shader's coverage threshold).
+const _MIST_POOL_RADIUS_MIN: float = 0.10
+const _MIST_POOL_RADIUS_MAX: float = 0.22
+# Kill-scene central pool — bigger single stamp at the kill point.
+# Settle pools (under the corpse after death-anim ends) use their own
+# radius set on the PrototypeEnemy side.
+const _KILL_POOL_RADIUS: float = 0.55
 
 # ── Blood as a "ground effect" ────────────────────────────────────────
 # Blood pools behave like a Divinity-style environmental floor type:
@@ -1050,260 +1023,68 @@ const _POOL_SLIP_SHAPE_META: StringName = &"_pool_slip_shape"
 #
 # Player-only by design — enemies don't have a Traction stat to
 # mediate against. If we ever want slipping enemies, add the Enemy
-# layer to _BLOOD_POOL_PLAYER_MASK + give PrototypeEnemy an
+# layer to BLOOD_POOL_PLAYER_MASK + give PrototypeEnemy an
 # enter/exit_blood_pool pair.
-const _BLOOD_POOL_AREA_HEIGHT: float = 0.9
-const _BLOOD_POOL_PLAYER_MASK: int = 4      # Layer 3 = Player
+const BLOOD_POOL_AREA_HEIGHT: float = 0.9
+const BLOOD_POOL_PLAYER_MASK: int = 4      # Layer 3 = Player
 
 
 static func spawn_blood_kill_scene(parent: Node, world_pos: Vector3, _spray_dir: Vector3 = Vector3.ZERO, blood_type: StringName = BLOOD_TYPE_HUMAN) -> void:
-	if _CORPSE_POOLS_ONLY:
-		return
 	if parent == null or _blood_disabled():
 		return
-	# Floor pool — one per kill, with attach-or-grow.
+	# Floor pool — stamped into the LiquidLayer for the blood type.
 	spawn_blood_decal(parent, world_pos, blood_type)
 	# Side-paint nearby props / interactables / pillars.
 	spawn_blood_on_receivers(parent, world_pos, blood_type)
 
 
-# Public entry for "stamp a floor pool at world_pos OR grow the closest
-# existing pool toward it". Used by kill scenes and mist droplets.
+# Stamp a floor pool at world_pos via the LiquidLayer for `blood_type`.
+# Replaces the old decal-pool spawn path entirely — overlapping stamps
+# merge in the SubViewport mask, so there's no need for the
+# attach-or-grow logic the old system used to hide inter-pool seams.
 #
-# Pass force_new=true to skip the attach-or-grow path — settle pools
-# under a specific corpse need to be a fresh stamp at the corpse's
-# exact spot, not a stretch of some nearby pool from a per-hit mist
-# spray that happened to land within attach radius.
-static func spawn_blood_decal(parent: Node, world_pos: Vector3, blood_type: StringName = BLOOD_TYPE_HUMAN, force_new: bool = false, is_corpse_settle: bool = false) -> void:
-	# Corpse-only debug mode: only settle-pool calls survive; per-hit
-	# mist droplets that route through here without is_corpse_settle
-	# are suppressed. (Was previously keyed on force_new, but the
-	# settle path needs force_new=false to attach-or-grow with adjacent
-	# pools and hide the inter-pool edges.)
-	if _CORPSE_POOLS_ONLY and not is_corpse_settle:
-		return
+# `parent` / `force_new` / `is_corpse_settle` retained for call-site
+# compatibility but no longer drive separate code paths — every stamp
+# routes through the LiquidLayer the same way.
+static func spawn_blood_decal(parent: Node, world_pos: Vector3, blood_type: StringName = BLOOD_TYPE_HUMAN, _force_new: bool = false, is_corpse_settle: bool = false) -> void:
 	if parent == null or _blood_disabled():
 		return
 	if _is_over_pit(parent, world_pos):
 		return
-	if not force_new:
-		var nearest := _find_pool_near(world_pos, POOL_ATTACH_RADIUS)
-		if nearest != null:
-			_grow_pool_toward(nearest, world_pos)
-			return
-	_spawn_new_pool(parent, world_pos, blood_type)
+	# Pick a radius based on caller intent: kill scenes get a chunky
+	# single stamp; mist drops are small. Settle pools have their own
+	# bigger stamp wired in PrototypeEnemy._spawn_settle_pool — those
+	# call layer.stamp() directly and bypass this entry.
+	var radius: float = randf_range(_MIST_POOL_RADIUS_MIN, _MIST_POOL_RADIUS_MAX)
+	if is_corpse_settle:
+		radius = _KILL_POOL_RADIUS
+	_stamp_to_liquid_layer(parent, world_pos, blood_type, radius, 1.0)
 
 
-# Returns the live floor pool whose XZ edge is closest to `world_pos`,
-# OR null if no pool sits within `max_edge_dist` of its edge.
-#
-# The global blood-decal ring holds POOLS, WALL SPLATS, and FOOTPRINTS
-# under different priorities. Only true pools have a slip-zone meta
-# attached (set in _spawn_new_pool). We filter on that meta as the
-# "this is a growable pool" marker — without the filter, footprints
-# get treated as pools, get ballooned by subsequent mist drops, and
-# fire missing-meta warnings inside _grow_pool_toward. That's how
-# the "blood all disappeared after a big fight" bug happened: pools
-# evicted by ballooned footprints, footprints stretched into
-# unrecognizable blobs.
-static func _find_pool_near(world_pos: Vector3, max_edge_dist: float) -> Decal:
-	var best: Decal = null
-	var best_edge_dist: float = max_edge_dist
-	for d_var in _blood_decal_ring:
-		if not is_instance_valid(d_var):
-			continue
-		var d := d_var as Decal
-		if d == null:
-			continue
-		if not d.has_meta(_POOL_SLIP_SHAPE_META):
-			continue  # not a pool (footprint, wall splat, etc.)
-		var dx: float = world_pos.x - d.global_position.x
-		var dz: float = world_pos.z - d.global_position.z
-		var centre_dist: float = sqrt(dx * dx + dz * dz)
-		var pool_r: float = (d.size.x + d.size.z) * 0.25
-		var edge_dist: float = maxf(centre_dist - pool_r, 0.0)
-		if edge_dist < best_edge_dist:
-			best = d
-			best_edge_dist = edge_dist
-	return best
-
-
-# Grow `pool` so its bounds extend toward (and slightly past) `new_pos`.
-# Tweens the size change so the growth is visibly animated. Kills any
-# previous growth tween on this pool so the latest target wins.
-static func _grow_pool_toward(pool: Decal, new_pos: Vector3) -> void:
-	if not is_instance_valid(pool):
+# Standalone slip-zone Area3D for the Traction gameplay hook. Replaces
+# the old per-decal SlipZone child — LiquidLayer stamps don't have
+# per-pool nodes, so callers (e.g. PrototypeEnemy._spawn_settle_pool)
+# spawn one of these alongside each settle pool. Player enter/exit
+# drives the same enter_blood_pool / exit_blood_pool methods as before.
+static func spawn_blood_slip_zone(parent: Node, world_pos: Vector3, radius: float) -> void:
+	if parent == null or not parent.is_inside_tree():
 		return
-	var dx: float = new_pos.x - pool.global_position.x
-	var dz: float = new_pos.z - pool.global_position.z
-	var centre_dist: float = sqrt(dx * dx + dz * dz)
-	# Radius the pool would need to cover the new spawn + a buffer so
-	# the spawn isn't on the rim.
-	var needed_r: float = centre_dist + POOL_GROWTH_BUFFER
-	var current_r: float = (pool.size.x + pool.size.z) * 0.25
-	var target_r: float = clampf(maxf(current_r, needed_r), current_r, POOL_MAX_DIAMETER * 0.5)
-	if target_r <= current_r + 0.01:
-		# Already covers the new spawn — just re-sort so this pool stays
-		# on top of older nearby stamps.
-		_refresh_pool_sort_offset(pool)
-		return
-	_cancel_pool_growth_tween(pool)
-	var target_diameter: float = target_r * 2.0
-	var tween := pool.create_tween().set_parallel(true)
-	tween.tween_property(pool, "size:x", target_diameter, POOL_GROWTH_DURATION) \
-		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	tween.tween_property(pool, "size:z", target_diameter, POOL_GROWTH_DURATION) \
-		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	# Slip-zone follows the visual growth so the player only slips inside
-	# the visible pool footprint, not the eventual target before it's
-	# actually grown that far. has_meta first so non-pool decals (if
-	# they ever slip through _find_pool_near's filter) don't fire a
-	# missing-meta warning; is_instance_valid in case the shape was
-	# freed (e.g. consume_blood_pool detached the SlipZone but the
-	# pool itself is still mid-fade and got picked up here).
-	if pool.has_meta(_POOL_SLIP_SHAPE_META):
-		var slip_shape: CylinderShape3D = pool.get_meta(_POOL_SLIP_SHAPE_META) as CylinderShape3D
-		if slip_shape != null and is_instance_valid(slip_shape):
-			tween.tween_property(slip_shape, "radius", target_r, POOL_GROWTH_DURATION) \
-				.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	pool.set_meta(_POOL_GROWTH_TWEEN_META, tween)
-	_refresh_pool_sort_offset(pool)
-
-
-# Spawn a fresh floor pool that animates from POOL_INITIAL_DIAMETER up
-# to a randomised target in [POOL_TARGET_MIN_DIAMETER, POOL_TARGET_MAX_DIAMETER].
-static func _spawn_new_pool(parent: Node, world_pos: Vector3, blood_type: StringName) -> void:
-	var pool := Decal.new()
-	# Clean radial-gradient pool — no splatter detail. Per-spawn random
-	# Y rotation + aspect-ratio jitter (further down) still give organic
-	# variation between adjacent pools without the splatter streaks
-	# growing alongside the puddle.
-	var variant := _get_blood_pool_texture(blood_type)
-	pool.texture_albedo = variant[&"albedo"]
-	pool.texture_normal = variant[&"normal"]
-	pool.texture_orm = _get_blood_orm_texture()
-	# Start tiny; grow to the random target over POOL_GROWTH_DURATION.
-	pool.size = Vector3(POOL_INITIAL_DIAMETER, 0.6, POOL_INITIAL_DIAMETER)
-	# Fresh blood — every pool starts at full saturation (white modulate
-	# leaves the underlying texture color untouched). _darken_pool_over_time
-	# below tweens the modulate toward dark dried-blood brown so older
-	# pools read distinctly from fresh kills.
-	pool.modulate = Color(1.0, 1.0, 1.0, 1.0)
-	pool.upper_fade = 0.15
-	pool.lower_fade = 0.15
-	pool.albedo_mix = BLOOD_DECAL_ALBEDO_MIX
-	pool.cull_mask = BLOOD_DECAL_CULL_LAYER
-	pool.rotation.y = randf() * TAU
-	parent.add_child(pool)
-	pool.global_position = Vector3(
-		world_pos.x,
-		randf_range(_DECAL_Y_JITTER_MIN, _DECAL_Y_JITTER_MAX),
-		world_pos.z,
-	)
-	_track_blood_decal(pool)  # ring buffer + sort offset
-	var target_diameter: float = randf_range(POOL_TARGET_MIN_DIAMETER, POOL_TARGET_MAX_DIAMETER)
-	# Override the area meta the ring stamped at INITIAL diameter (0.3 m,
-	# 0.09 m²) with the post-grow target. The ring's tie-break-by-area
-	# evicts smallest first, and pools share priority with mist drops —
-	# without this override, pools recorded as 0.09 m² evict BEFORE
-	# the ~0.20 m² mist drops, which is backwards. The grown pool is the
-	# storytelling element; mist drops are the cheap filler.
-	pool.set_meta(&"_blood_area", target_diameter * target_diameter)
-	# Slip-zone Area3D — drives enter/exit_blood_pool on the player so
-	# blood acts as an environmental ground type (mild slow + stumble
-	# chance, mitigated by Traction). Attached before the growth tween
-	# so the radius reference exists when the tween wires its own
-	# shape.radius track below.
-	_attach_blood_pool_slip_zone(pool, POOL_INITIAL_DIAMETER)
-	# Per-spawn aspect-ratio jitter — X and Z final sizes diverge so
-	# pools end oblong/teardrop rather than perfect circles. Squared
-	# pools next to each other immediately read as "same stamp"; oblong
-	# pools with random rotation look like organic splatters even when
-	# the underlying texture variant repeats. Slip zone uses the
-	# AVERAGE radius so gameplay stays predictable. ±20% spread.
-	var aspect_x: float = randf_range(0.85, 1.20)
-	var aspect_z: float = randf_range(0.85, 1.20)
-	var target_x: float = target_diameter * aspect_x
-	var target_z: float = target_diameter * aspect_z
-	var tween := pool.create_tween().set_parallel(true)
-	tween.tween_property(pool, "size:x", target_x, POOL_GROWTH_DURATION) \
-		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	tween.tween_property(pool, "size:z", target_z, POOL_GROWTH_DURATION) \
-		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	# Slip cylinder grows in lockstep with the visual; uses average of
-	# the oblong X/Z so the cylinder approximates the pool's actual
-	# footprint area.
-	var slip_shape: CylinderShape3D = pool.get_meta(_POOL_SLIP_SHAPE_META, null) as CylinderShape3D
-	if slip_shape != null:
-		tween.tween_property(slip_shape, "radius", (target_x + target_z) * 0.25, POOL_GROWTH_DURATION) \
-			.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	pool.set_meta(_POOL_GROWTH_TWEEN_META, tween)
-	# Darken-over-time: separate tween that fades modulate from white
-	# (fresh blood = full texture color) toward dried-brown over
-	# POOL_DARKEN_DURATION. Holds at the dark value indefinitely once
-	# the tween finishes, so old pools stay visibly older than fresh
-	# kills no matter how long the level lingers.
-	var darken_tween := pool.create_tween()
-	darken_tween.tween_property(pool, "modulate", POOL_DRIED_MODULATE, POOL_DARKEN_DURATION) \
-		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-
-
-# Dried-blood modulate: multiplies into the texture's red so the pool
-# reads as oxidized / older. Bumped from (0.42, 0.18, 0.18) — that was
-# crushing the texture nearly black, reading as a shadow instead of
-# dark blood. New value keeps clearly red-toned with ~30% darkening.
-const POOL_DRIED_MODULATE: Color = Color(0.70, 0.30, 0.30, 1.0)
-# Time from fresh spawn to fully-dried look. Extended 30s → 120s so
-# the transition happens slowly over a few rooms' worth of combat
-# rather than every kill aging visibly within one fight.
-const POOL_DARKEN_DURATION: float = 120.0
-
-
-# Kill any in-flight growth tween on `pool` so a fresh one can run.
-# A second growth toward a different new_pos shouldn't blend with the
-# previous one's target — the latest spawn defines the new target.
-static func _cancel_pool_growth_tween(pool: Decal) -> void:
-	if not pool.has_meta(_POOL_GROWTH_TWEEN_META):
-		return
-	var prior: Tween = pool.get_meta(_POOL_GROWTH_TWEEN_META, null) as Tween
-	if prior != null and prior.is_valid():
-		prior.kill()
-	pool.remove_meta(_POOL_GROWTH_TWEEN_META)
-
-
-# Re-stamp a pool's sort offset to the latest counter so it stays on
-# top of older stamps it visually overlaps (newer blood over older).
-static func _refresh_pool_sort_offset(pool: Decal) -> void:
-	_blood_sort_counter += 1
-	pool.sorting_offset = float(_blood_sort_counter) * _BLOOD_SORT_STEP
-
-
-# Attach the slip-zone Area3D to a freshly-spawned blood pool. The
-# cylinder radius starts at the pool's initial diameter and is
-# tweened by the caller (_spawn_new_pool / _grow_pool_toward) in
-# lockstep with the visual. Only the player can trigger it — enemies
-# don't have a Traction stat to mediate the slip against.
-static func _attach_blood_pool_slip_zone(pool: Decal, initial_diameter: float) -> void:
 	var area := Area3D.new()
-	area.name = &"SlipZone"
+	area.name = &"BloodSlipZone"
 	area.collision_layer = 0
-	area.collision_mask = _BLOOD_POOL_PLAYER_MASK
+	area.collision_mask = BLOOD_POOL_PLAYER_MASK
 	area.monitoring = true
 	area.monitorable = false
-	# Lift the cylinder so it sits ABOVE the floor — pool decal is at
-	# y≈0 (with tiny Y-jitter); centering the slip zone at half-height
-	# keeps the bottom flush with the floor.
-	area.position = Vector3(0.0, _BLOOD_POOL_AREA_HEIGHT * 0.5, 0.0)
 	var col := CollisionShape3D.new()
 	var shape := CylinderShape3D.new()
-	shape.radius = initial_diameter * 0.5
-	shape.height = _BLOOD_POOL_AREA_HEIGHT
+	shape.radius = maxf(radius, 0.1)
+	shape.height = BLOOD_POOL_AREA_HEIGHT
 	col.shape = shape
 	area.add_child(col)
-	pool.add_child(area)
+	parent.add_child(area)
+	area.global_position = Vector3(world_pos.x, world_pos.y + BLOOD_POOL_AREA_HEIGHT * 0.5, world_pos.z)
 	area.body_entered.connect(_on_blood_pool_body_entered)
 	area.body_exited.connect(_on_blood_pool_body_exited)
-	pool.set_meta(_POOL_SLIP_SHAPE_META, shape)
 
 
 static func _on_blood_pool_body_entered(body: Node) -> void:
@@ -1318,49 +1099,27 @@ static func _on_blood_pool_body_exited(body: Node) -> void:
 		body.exit_blood_pool()
 
 
-## Returns blood-pool decals whose centers fall within `radius` of
-## `world_pos`. For skills that consume or interact with pools (e.g. the
-## planned Enculted "Blood Ritual"). Filters out wall splats and mist
-## drops via priority + recorded area so callers only get the
-## storytelling-grade pools.
-##
-## First slice of a generic ground-effect query API. As more ground
-## types land (oil, frozen, fire), each gets a parallel get_X_pools_near()
-## — when there are 3+, the shared scan logic gets extracted to a
-## GroundEffects autoload. Until then, parallel methods read cleaner
-## than a polymorphic registry would.
-static func get_blood_pools_near(world_pos: Vector3, radius: float) -> Array[Decal]:
-	var out: Array[Decal] = []
-	var r_sq: float = radius * radius
-	# Mist drops cap around 0.42 m² (0.65 m diameter squared); pools
-	# spawn at ≥ 0.81 m² (0.9 m target diameter squared). 0.6 m² lands
-	# safely between, so we can filter pools by recorded area.
-	const _MIN_POOL_AREA: float = 0.6
-	for entry in _blood_decal_ring:
-		if not is_instance_valid(entry) or not (entry is Decal):
-			continue
-		var d := entry as Decal
-		var prio: int = int(d.get_meta(&"_blood_priority", BLOOD_PRIORITY_FLOOR))
-		if prio != BLOOD_PRIORITY_FLOOR:
-			continue
-		var area_m2: float = float(d.get_meta(&"_blood_area", 0.0))
-		if area_m2 < _MIN_POOL_AREA:
-			continue
-		if d.global_position.distance_squared_to(world_pos) <= r_sq:
-			out.append(d)
-	return out
-
-
-## Fade-and-free a blood pool (call from skills that consume it). Frees
-## the slip zone first so any standing-in-pool player gets a clean
-## body_exited and decrements their _blood_pool_count to zero.
-static func consume_blood_pool(pool: Decal) -> void:
-	if not is_instance_valid(pool):
+# Resolve the LiquidLayer for `blood_type` (or any layer as fallback)
+# and stamp a randomly-rotated lobed splatter at `world_pos`. Returns
+# silently if no LiquidLayer is in the scene (covers test scenes that
+# never instanced one).
+static func _stamp_to_liquid_layer(parent: Node, world_pos: Vector3, blood_type: StringName, world_radius: float, intensity: float) -> void:
+	if parent == null or not parent.is_inside_tree():
 		return
-	var area := pool.get_node_or_null(^"SlipZone") as Area3D
-	if area != null:
-		area.queue_free()
-	_fade_and_free(pool)
+	var tree := parent.get_tree()
+	if tree == null:
+		return
+	var layer_group: StringName = StringName("liquid_layer:" + String(blood_type))
+	var layer := tree.get_first_node_in_group(layer_group) as LiquidLayer
+	if layer == null:
+		layer = tree.get_first_node_in_group(&"liquid_layer") as LiquidLayer
+	if layer == null:
+		return
+	# Reuse the lobed/noise-perturbed splatter textures generated for
+	# corpse settle pools — they're already chaotic stamps that read
+	# as messy splatter rather than discs.
+	var tex := PrototypeEnemy._get_settle_stamp_texture()
+	layer.stamp(world_pos, tex, world_radius, intensity)
 
 
 # Reads the world's physics space (now safely outside any signal flush)
@@ -1393,8 +1152,6 @@ static func _apply_wall_clamp_deferred(decal: Decal, world_pos: Vector3, request
 # face. Slight offset along the normal keeps the decal from z-fighting
 # with the wall surface.
 static func spawn_blood_wall_splatter(parent: Node, world_pos: Vector3, wall_normal: Vector3, blood_type: StringName = BLOOD_TYPE_HUMAN) -> void:
-	if _CORPSE_POOLS_ONLY:
-		return
 	if parent == null or _blood_disabled():
 		return
 	if wall_normal.length_squared() < 0.0001:
@@ -1655,8 +1412,6 @@ static func _track_wall_impact_decal(decal: Decal, is_glowing: bool) -> void:
 # The per-character list is stored in the visual's `_blood_decals`
 # meta to avoid touching every character class.
 static func spawn_blood_on_character(character_visual: Node3D, world_impact_pos: Vector3, blood_type: StringName = BLOOD_TYPE_HUMAN) -> void:
-	if _CORPSE_POOLS_ONLY:
-		return
 	if character_visual == null or not is_instance_valid(character_visual):
 		return
 	if not character_visual.is_inside_tree():
@@ -1757,8 +1512,6 @@ static func _fade_character_blood_decal(decal: Decal, duration: float) -> void:
 # register_as_blood_receiver — no per-class decal logic to author.
 
 static func spawn_blood_on_receivers(parent: Node, kill_pos: Vector3, blood_type: StringName = BLOOD_TYPE_HUMAN) -> void:
-	if _CORPSE_POOLS_ONLY:
-		return
 	if parent == null or _blood_disabled():
 		return
 	var node := parent as Node3D
@@ -2398,8 +2151,6 @@ static func is_in_blood(world_pos: Vector3) -> bool:
 # "footprints"). `right_foot` selects between the right-foot silhouette
 # and its mirror so a trail of prints alternates L/R.
 static func spawn_blood_footprint(parent: Node, world_pos: Vector3, forward_dir: Vector3, intensity: float, right_foot: bool = true, blood_type: StringName = BLOOD_TYPE_HUMAN) -> void:
-	if _CORPSE_POOLS_ONLY:
-		return
 	if parent == null or _blood_disabled():
 		return
 	var decal := Decal.new()
@@ -2555,90 +2306,6 @@ static func _get_blood_splatter_variant(blood_type: StringName) -> Dictionary:
 		&"albedo": variants[idx],
 		&"normal": (_blood_splatter_normals[blood_type] as Array)[idx],
 	}
-
-
-# Organic blood pool variants — soft-edged blobs with irregular
-# perimeters (lobed via overlapping sine waves) but no streaks,
-# satellite drops, or splatter arms. Each variant is a different
-# RNG seed so adjacent pools don't read as duplicate stamps. Per-
-# spawn rotation + aspect-ratio jitter compound on top.
-const _POOL_VARIANT_COUNT: int = 8
-static var _blood_pool_variants: Dictionary = {}  # StringName -> Array[Texture2D]
-static var _blood_pool_normals: Dictionary = {}   # StringName -> Array[Texture2D]
-static func _get_blood_pool_texture(blood_type: StringName) -> Dictionary:
-	if not _blood_pool_variants.has(blood_type):
-		var fluid_color := blood_color_for(blood_type)
-		var albedos: Array[Texture2D] = []
-		var normals: Array[Texture2D] = []
-		for i in _POOL_VARIANT_COUNT:
-			# Coprime offset so each variant gets uncorrelated noise phases.
-			var seed: int = 0x3C71A9 + i * 0x9E3779B9
-			var pool_img := _make_pool_image(seed, fluid_color)
-			albedos.append(ImageTexture.create_from_image(pool_img))
-			normals.append(ImageTexture.create_from_image(_make_splatter_normal(pool_img)))
-		_blood_pool_variants[blood_type] = albedos
-		_blood_pool_normals[blood_type] = normals
-	var variants: Array = _blood_pool_variants[blood_type]
-	var idx: int = randi() % variants.size()
-	return {
-		&"albedo": variants[idx],
-		&"normal": (_blood_pool_normals[blood_type] as Array)[idx],
-	}
-
-
-# Soft-edged organic blob — base radius modulated per-angle by two
-# overlapping sine waves so the perimeter is lumpy rather than a
-# perfect circle. Alpha is full inside ~65% of the per-angle radius
-# and smoothstep-falls to 0 at the edge. Reads as a liquid puddle
-# (slightly irregular outline) instead of either a clean disc or a
-# streaky splatter.
-static func _make_pool_image(seed: int, fluid_color: Color) -> Image:
-	var size := 128
-	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
-	img.fill(Color(0, 0, 0, 0))
-	var rng := RandomNumberGenerator.new()
-	rng.seed = seed
-	var center := Vector2(size, size) * 0.5
-	# Base radius leaves a small margin from the texture edge so the
-	# lumpiness can push outward without clipping.
-	var base_r: float = float(size) * 0.42
-	# inner_frac controls the alpha-falloff zone (inner=full opacity,
-	# outer=transparent). 1.0 = no fade = binary edge, so overlapping
-	# pools blend into a single seamless silhouette with zero halo
-	# at the boundary. Edges aliased but the eye reads them as
-	# "where the puddle stops" rather than "two pools touching."
-	var inner_frac: float = 1.0
-	# Two sine waves give lumpy-but-not-chaotic perimeters. Low
-	# frequency = a few big lobes; higher frequency = surface noise.
-	# Amplitudes kept small (≤6% / ≤3%) so adjacent pools blend into a
-	# single amorphous mass when their hulls touch, rather than reading
-	# as two distinct lumpy silhouettes joined at an obvious seam.
-	var freq1: int = rng.randi_range(3, 6)
-	var freq2: int = rng.randi_range(7, 11)
-	var amp1: float = rng.randf_range(0.03, 0.06)
-	var amp2: float = rng.randf_range(0.01, 0.03)
-	var phase1: float = rng.randf() * TAU
-	var phase2: float = rng.randf() * TAU
-	for y in size:
-		for x in size:
-			var dx := float(x) - center.x
-			var dy := float(y) - center.y
-			var d := sqrt(dx * dx + dy * dy)
-			var angle := atan2(dy, dx)
-			var r_mod: float = 1.0 \
-				+ amp1 * sin(float(freq1) * angle + phase1) \
-				+ amp2 * sin(float(freq2) * angle + phase2)
-			var max_r: float = base_r * r_mod
-			if d >= max_r:
-				continue
-			var inner_r: float = max_r * inner_frac
-			var a: float = 1.0
-			if d > inner_r:
-				a = 1.0 - smoothstep(inner_r, max_r, d)
-			var c := fluid_color
-			c.a = fluid_color.a * a
-			img.set_pixel(x, y, c)
-	return img
 
 
 # Lazy-bakes the full variant set for a blood type. Each variant uses
