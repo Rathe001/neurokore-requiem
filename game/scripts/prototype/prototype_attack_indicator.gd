@@ -2158,21 +2158,6 @@ const _FOOTPRINT_HOLD: float = 6.0
 const _FOOTPRINT_FADE: float = 2.5
 
 
-# True if `world_pos` is inside any tracked blood decal's horizontal
-# footprint. Iterates the cap-bounded ring — O(BLOOD_DECAL_MAX) which
-# is ~60 distance checks max, called per-footstep so cheap.
-static func is_in_blood(world_pos: Vector3) -> bool:
-	for decal in _blood_decal_ring:
-		if not is_instance_valid(decal):
-			continue
-		var dx: float = world_pos.x - decal.global_position.x
-		var dz: float = world_pos.z - decal.global_position.z
-		var r: float = decal.size.x * 0.5
-		if dx * dx + dz * dz < r * r:
-			return true
-	return false
-
-
 # Small floor decal at a footstep position. `intensity` (0..1) fades the
 # print as the bloody-steps counter ticks down — first step after
 # walking through blood is full, last step before drying is faint.
