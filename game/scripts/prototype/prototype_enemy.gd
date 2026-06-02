@@ -3260,10 +3260,11 @@ func _drop_weapon_physically(kill_from: Vector3) -> void:
 	# noticeably on the floor. 5.0 brings rotation to rest in ~1s after
 	# the initial toss while still letting the toss read as a tumble.
 	body.angular_damp = 5.0
-	# Layer 1 so it lands on world geometry; mask 1 so floor + walls
-	# stop it. Doesn't collide with players/enemies (different layers),
-	# so dying enemies can't pile-drive the player.
-	body.collision_layer = 1
+	# Off all collision_layers so no other body (player, enemies) can
+	# scan it — player was getting snagged on dropped weapons because
+	# the player capsule's mask includes world layer 1. Mask stays 1
+	# so the weapon still detects + falls onto the floor.
+	body.collision_layer = 0
 	body.collision_mask = 1
 	body.can_sleep = true
 
