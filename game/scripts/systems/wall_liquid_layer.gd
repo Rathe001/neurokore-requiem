@@ -61,6 +61,16 @@ const DRIP_RADIUS_M: float = 0.022
 # so additive overlap blends cleanly between consecutive frames.
 static var _drip_texture: ImageTexture = null
 
+# ImageTexture proxy of the SubViewport's render. Refreshed each frame
+# the mask changed (stamps, active drips). Bound to wall materials in
+# place of the raw ViewportTexture — ViewportTexture references from a
+# cross-tree SubViewport don't propagate to the wall MMI's GPU sampler
+# in Godot 4.6 (the material's get_shader_parameter readback shows the
+# ViewportTexture is held, but the rendered fragment samples black).
+# ImageTexture is a plain Texture2D resource and propagates normally.
+var _proxy_tex: ImageTexture = null
+var _proxy_dirty: bool = true
+
 
 # Class-level so both X_FACING and Z_FACING instances agree on the
 # shared `wall_blood_age` global. Reset to 0 on any stamp; ticked once
@@ -95,16 +105,16 @@ func _ready() -> void:
 
 
 ## Walks the scene tree, finds every wall ShaderMaterial that uses
-## procedural_wall.gdshader, and pushes the SubViewport texture +
-## uniforms onto it. Safe to call multiple times. The first wall layer
-## instance also pushes the shared color / extent uniforms.
-## Tracks materials it already bound so per-frame retries are cheap
-## once everything's wired.
+## procedural_wall.gdshader, and pushes the proxy texture + uniforms
+## onto it. Safe to call multiple times.
 var _bound_materials: Array[ShaderMaterial] = []
 
 func bind_to_all_wall_materials() -> void:
-	var tex: Texture2D = _subviewport.get_texture() if _subviewport != null else null
-	if tex == null:
+	# Make sure the proxy is up-to-date before binding it on first wall.
+	# Subsequent _process ticks refresh it whenever stamps land.
+	if _proxy_tex == null:
+		_refresh_proxy_texture()
+	if _proxy_tex == null:
 		return
 	var key: StringName = (
 		&"wall_blood_mask_x"
@@ -112,11 +122,35 @@ func bind_to_all_wall_materials() -> void:
 		else &"wall_blood_mask_z"
 	)
 	var before := _bound_materials.size()
-	_walk_and_bind(get_tree().root, key, tex)
+	_walk_and_bind(get_tree().root, key, _proxy_tex)
 	var after := _bound_materials.size()
 	if after > before:
 		print("[WallLiquidLayer:", surface_axis, "] bound ", after - before,
 			" wall material(s), total ", after)
+
+
+# Copy the SubViewport's current render result into a plain ImageTexture
+# resource. The SubViewport keeps doing its 2D rasterization the same as
+# before — we just hop the result through an ImageTexture before handing
+# it to the wall shader. Per-frame cost: ~2MB GPU→CPU readback on the
+# 2048×256 RGBA8 image, well under 1ms on M1-class hardware. Skipped
+# entirely on frames where no stamps or drips changed the mask.
+func _refresh_proxy_texture() -> void:
+	if _subviewport == null:
+		return
+	var vp_tex: ViewportTexture = _subviewport.get_texture()
+	if vp_tex == null:
+		return
+	var img: Image = vp_tex.get_image()
+	if img == null:
+		return
+	if _proxy_tex == null:
+		_proxy_tex = ImageTexture.create_from_image(img)
+	else:
+		_proxy_tex.update(img)
+	# Keep already-bound wall materials pointing at the SAME proxy
+	# texture; update() replaces the pixels in place so existing
+	# bindings remain valid. No need to re-bind.
 
 
 func _walk_and_bind(node: Node, mask_key: StringName, mask_tex: Texture2D) -> void:
@@ -139,14 +173,7 @@ func _bind_wall_sm(gi: GeometryInstance3D, mask_key: StringName, mask_tex: Textu
 	var sm: ShaderMaterial = mat
 	if sm.shader == null or sm.shader.resource_path != _WALL_SHADER_PATH:
 		return
-	# Belt + braces: set via the high-level material API AND directly via
-	# RenderingServer. Some Godot 4.x revisions don't propagate
-	# ViewportTexture references through ShaderMaterial.set_shader_parameter
-	# when the texture's SubViewport is cross-tree from the material's
-	# eventual draw context. RenderingServer.material_set_param bypasses
-	# that layer.
 	sm.set_shader_parameter(mask_key, mask_tex)
-	RenderingServer.material_set_param(sm.get_rid(), mask_key, mask_tex)
 	if surface_axis == SurfaceAxis.X_FACING:
 		sm.set_shader_parameter(&"wall_blood_fresh_color", fresh_color)
 		sm.set_shader_parameter(&"wall_blood_dried_color", dried_color)
@@ -154,15 +181,6 @@ func _bind_wall_sm(gi: GeometryInstance3D, mask_key: StringName, mask_tex: Textu
 		sm.set_shader_parameter(&"wall_blood_extent_y", wall_height_meters)
 	if not _bound_materials.has(sm):
 		_bound_materials.append(sm)
-		# One-time diagnostic: read the parameter back and confirm the
-		# texture is what we set. If get_shader_parameter returns null
-		# or a different texture, the material isn't holding our binding.
-		var readback: Variant = sm.get_shader_parameter(mask_key)
-		print("[WallLiquidLayer:", surface_axis,
-			"] bound ", mask_key, " on ", sm.resource_path,
-			" → readback=", readback,
-			" mask_tex=", mask_tex,
-			" tex_size=", (mask_tex.get_size() if mask_tex != null else Vector2.ZERO))
 
 
 # How long after _ready to keep retrying bind every frame. Long enough
@@ -188,14 +206,25 @@ func _process(delta: float) -> void:
 			if sm != null and is_instance_valid(sm):
 				sm.set_shader_parameter(&"wall_blood_age", age)
 	_process_drips(delta)
+	# Active drips paint into the SubViewport each frame they live, so
+	# the proxy needs refreshing while any drip is alive. Stamps without
+	# drips set _proxy_dirty once via the stamp() override above.
+	if not _active_drips.is_empty():
+		_proxy_dirty = true
+	if _proxy_dirty:
+		_refresh_proxy_texture()
+		_proxy_dirty = false
 
 
 
 
 # Reset the shared dry timer whenever a stamp lands on either axis.
+# Also mark the proxy texture dirty so the wall materials see the new
+# coverage at next refresh.
 func stamp(world_pos: Vector3, stamp_texture: Texture2D, world_radius: float, intensity: float = 1.0) -> void:
 	super.stamp(world_pos, stamp_texture, world_radius, intensity)
 	_shared_wall_dry_timer = 0.0
+	_proxy_dirty = true
 
 
 # Override parent's square SubViewport with a rectangular one sized to
