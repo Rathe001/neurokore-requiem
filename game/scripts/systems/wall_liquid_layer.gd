@@ -42,15 +42,20 @@ var _overlay_material: ShaderMaterial
 
 # ── Drip streak tuning ────────────────────────────────────────────
 const DRIP_RADIUS_THRESHOLD: float = 0.12  # main stamp radius below this skips drips
-const DRIP_LIFETIME_MIN: float = 1.8
-const DRIP_LIFETIME_MAX: float = 3.0
-const DRIP_FALL_SPEED_MIN: float = 0.20  # m/sec — viscous blood, falls slowly
-const DRIP_FALL_SPEED_MAX: float = 0.45
-const DRIP_RADIUS_M: float = 0.025  # ~2.5cm wide drip droplet
-const DRIP_PER_FRAME_INTENSITY: float = 0.08  # low, cumulative across frames
-const DRIP_COUNT_MIN: int = 1
-const DRIP_COUNT_MAX: int = 3
-const DRIP_FADE_TAIL_SEC: float = 0.6  # drip fades out over last N seconds
+const DRIP_LIFETIME_MIN: float = 2.8
+const DRIP_LIFETIME_MAX: float = 4.5
+const DRIP_FALL_SPEED_MIN: float = 0.35  # m/sec — viscous but visibly moving
+const DRIP_FALL_SPEED_MAX: float = 0.70
+const DRIP_RADIUS_M: float = 0.018  # ~1.8cm wide drip droplet (narrow → reads as a line)
+# Drip sprites stretch vertically so each frame's paint deposits a
+# short vertical line segment rather than a chunky blob — cumulative
+# painting then accumulates into a continuous streak instead of a
+# string of overlapping circles.
+const DRIP_VERTICAL_STRETCH: float = 3.0
+const DRIP_PER_FRAME_INTENSITY: float = 0.11  # low, cumulative across frames
+const DRIP_COUNT_MIN: int = 2
+const DRIP_COUNT_MAX: int = 4
+const DRIP_FADE_TAIL_SEC: float = 0.8  # drip fades out over last N seconds
 
 # Active drip sprites driven by _process. Each entry tracks the sprite
 # plus its motion parameters so we can update position + alpha per frame.
@@ -201,7 +206,10 @@ func _spawn_drips(world_pos: Vector3, use_x_mask: bool, stamp_root: Node2D, sour
 		)
 		var diam_px: float = DRIP_RADIUS_M * 2.0 * px_per_m_h
 		var base_scale: float = diam_px / float(drip_tex.get_size().x)
-		sprite.scale = Vector2(base_scale, base_scale)
+		# Stretch vertically so each frame's paint is a short line
+		# segment instead of a circle. Cumulative paints across frames
+		# overlap as a continuous streak rather than a stack of circles.
+		sprite.scale = Vector2(base_scale, base_scale * DRIP_VERTICAL_STRETCH)
 		sprite.modulate = Color(1.0, 1.0, 1.0, DRIP_PER_FRAME_INTENSITY)
 		stamp_root.add_child(sprite)
 		var fall_speed: float = randf_range(DRIP_FALL_SPEED_MIN, DRIP_FALL_SPEED_MAX)
