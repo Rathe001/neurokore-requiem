@@ -1,16 +1,28 @@
-// Wall blood overlay — Phase 5 (world-position UV).
+// Wall blood overlay — Phase 6.6 (multiply-stain + emission for visibility).
 // Two masks: mask_x covers ±X-facing walls (indexed by (z, y)),
 // mask_z covers ±Z-facing walls (indexed by (x, y)). Wall's world
-// normal picks which mask to sample. A single stamp at world (x, y, z)
-// thus lands on exactly the wall at that position — not on every
-// wall like the Phase 4 local-UV test did.
+// normal picks which mask to sample.
+//
+// Visibility tweaks vs Phase 5:
+// - Multiply-stain over screen_texture (matches floor liquid_surface
+//   look) — bright walls become bright red, dark walls become red-
+//   tinted dark instead of black.
+// - stain_brightness boost lifts the multiplied result so the stain
+//   reads as visible blood even on the dim industrial walls.
+// - Small emission so blood is faintly visible in pitch-black corners.
 shader_type spatial;
-render_mode cull_disabled, depth_draw_opaque;
+render_mode blend_mix, depth_draw_opaque, cull_disabled;
 
 uniform sampler2D mask_x : filter_linear, repeat_disable, hint_default_black;
 uniform sampler2D mask_z : filter_linear, repeat_disable, hint_default_black;
+uniform sampler2D screen_tex : hint_screen_texture, filter_linear;
 uniform float world_extent_xz : hint_range(8.0, 200.0) = 40.0;
 uniform float wall_height : hint_range(1.0, 16.0) = 4.0;
+uniform vec3 blood_tint : source_color = vec3(0.55, 0.10, 0.10);
+uniform float stain_brightness : hint_range(0.5, 4.0) = 2.5;
+uniform float emission_strength : hint_range(0.0, 0.5) = 0.15;
+uniform float coverage_threshold : hint_range(0.0, 0.5) = 0.05;
+uniform float edge_softness : hint_range(0.0, 0.3) = 0.06;
 
 varying vec3 v_world_pos;
 varying vec3 v_world_normal;
@@ -21,9 +33,6 @@ void vertex() {
 }
 
 void fragment() {
-	// Branch on which world axis the wall's normal aligns with —
-	// horizontal-X-facing walls sample mask_x with the wall's Z and Y;
-	// horizontal-Z-facing walls sample mask_z with X and Y.
 	float a;
 	float half_h = 0.5;
 	if (abs(v_world_normal.x) > abs(v_world_normal.z)) {
@@ -39,10 +48,21 @@ void fragment() {
 		);
 		a = texture(mask_z, uv).a;
 	}
-	if (a < 0.05) {
+	if (a < coverage_threshold) {
 		discard;
 	}
-	ALBEDO = vec3(0.7, 0.08, 0.08);
-	ROUGHNESS = 0.4;
+	float blood_alpha = smoothstep(coverage_threshold, coverage_threshold + edge_softness, min(a, 1.0));
+	// Sample the wall behind this fragment via screen-space — the
+	// overlay quad sits ~5mm in front of the wall, so SCREEN_UV reads
+	// the wall pixel underneath. Multiply-stain darkens that to blood
+	// red while preserving the wall's panel detail / shadow / etc.
+	vec3 behind = texture(screen_tex, SCREEN_UV).rgb;
+	vec3 stained = behind * blood_tint * stain_brightness;
+	ALBEDO = stained;
+	// Small emission so the stain still reads in pitch-black areas
+	// where there's no underlying wall lighting to multiply against.
+	EMISSION = blood_tint * emission_strength;
+	ROUGHNESS = 0.32;
 	METALLIC = 0.0;
+	ALPHA = blood_alpha;
 }
