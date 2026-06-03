@@ -286,6 +286,12 @@ func cast_ranged_attack(player: Node3D, aim: Vector3) -> void:
 	var wid: StringName = _host.enemy_class.weapon_id if _host.enemy_class != null else &""
 	if wid != &"":
 		WeaponSounds.play_fire(wid, _host.global_position)
+	# Restart the fire-pose anim from frame 0 at projectile-spawn time
+	# — the windup pose has been showing for ~0.5s already, and the
+	# user reported the firing motion peaks too early relative to the
+	# actual bullet. HOLD-mode fire pose replays the recoil clip from
+	# the start; LOOP-mode skips via the same-anim early-out.
+	_host._play_fire_pose(true)
 	for burst_i in burst:
 		if burst_i > 0:
 			await _host.get_tree().create_timer(burst_delay).timeout
@@ -347,6 +353,10 @@ func _spawn_enemy_projectile(aim: Vector3, skill_damage_mult: float = 1.0, blast
 	proj.global_position = _safe_enemy_spawn_position(aim_norm)
 	proj.monitoring = true
 	proj.reset()
+	# Muzzle flash at the actual barrel tip. CombatVisuals.spawn_muzzle_flash
+	# is the same helper PlayerCombat uses on every shot — sells the
+	# fire moment, sources the same per-bullet tint pipeline.
+	CombatVisuals.spawn_muzzle_flash(_host, proj.global_position, proj.is_bullet, _enemy_muzzle_tint())
 	# Fire sound is played ONCE per volley by the caller (basic_attack or
 	# skill cast), not per projectile — shotgun / accelerator pellets all
 	# emerge in the same frame and stacking 6 sounds reads as a phaser.
@@ -537,6 +547,13 @@ func _spawn_skill_projectile(aim: Vector3, skill: EnemySkill) -> void:
 # mounted (bare-hand attackers, missing skeleton, etc.). Then ray-checks
 # chest → barrel for walls / pillars / player body; obstruction → spawn
 # at chest so the projectile doesn't self-collide.
+# Warm muzzle-flash tint for enemies. EnemyClass doesn't carry a
+# per-archetype color yet — kept as a single helper so future per-
+# weapon enemy tints route through one place.
+func _enemy_muzzle_tint() -> Color:
+	return Color(1.0, 0.7, 0.35, 1.0)
+
+
 func _safe_enemy_spawn_position(aim_norm: Vector3) -> Vector3:
 	var chest: Vector3 = _host.global_position + Vector3(0.0, 1.4, 0.0)
 	var barrel_pos: Vector3

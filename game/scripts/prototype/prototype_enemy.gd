@@ -2177,22 +2177,39 @@ func _chase_tick() -> void:
 			_holding_position = false
 			_combat.cast_attack(target, to_target / dist)
 		else:
-			# Melee on cooldown — strafe sideways instead of standing
-			# still. Per-enemy L/R bias from instance_id parity so a
-			# pack doesn't all strafe the same way. _face_override
-			# keeps the weapon on target while moving perpendicular.
+			# Melee on cooldown — only strafe if there's actually room
+			# to do so (no allied melee in the way). Multiple melee
+			# enemies converging on the player kept shoving each other
+			# sideways looking for opening; better to stand still and
+			# commit to the position when crowded.
 			_holding_position = true
 			_face_override = to_target / dist
-			var to_target_norm := to_target / dist
-			var perp := Vector3.UP.cross(to_target_norm).normalized()
-			var strafe_dir := perp if (get_instance_id() & 1) == 0 else -perp
-			var strafe_speed: float = CHASE_SPEED * 0.45 \
-				* _crouch_speed_factor() \
-				* _combat.affix_move_speed_mult() \
-				* _combat._self_buff_speed_mult
-			_want_dir = strafe_dir
-			velocity.x = strafe_dir.x * strafe_speed
-			velocity.z = strafe_dir.z * strafe_speed
+			var crowded: bool = false
+			if SpatialGrid != null:
+				var near_allies: Array[Node3D] = SpatialGrid.query_radius(
+					global_position, _STRAFE_CROWDED_RADIUS, &"enemies")
+				for n in near_allies:
+					if n != self and is_instance_valid(n):
+						crowded = true
+						break
+			if crowded:
+				# Stand and stare — strafing would shove the neighbor.
+				_want_dir = Vector3.ZERO
+				velocity.x = 0.0
+				velocity.z = 0.0
+			else:
+				# Per-enemy L/R bias from instance_id parity so any
+				# pair that isn't crowded doesn't strafe parallel.
+				var to_target_norm := to_target / dist
+				var perp := Vector3.UP.cross(to_target_norm).normalized()
+				var strafe_dir := perp if (get_instance_id() & 1) == 0 else -perp
+				var strafe_speed: float = CHASE_SPEED * 0.45 \
+					* _crouch_speed_factor() \
+					* _combat.affix_move_speed_mult() \
+					* _combat._self_buff_speed_mult
+				_want_dir = strafe_dir
+				velocity.x = strafe_dir.x * strafe_speed
+				velocity.z = strafe_dir.z * strafe_speed
 		return
 
 	# Reaching the chase block means the enemy is meaningfully outside
@@ -3639,6 +3656,13 @@ var _face_override: Vector3 = Vector3.ZERO
 const _WALL_STUCK_VEL_SQ: float = 0.5 * 0.5   # < 0.5 m/s wished but not moving
 const _WALL_STUCK_TIMEOUT: float = 0.35
 var _wall_stuck_timer: float = 0.0
+
+# Strafe is suppressed when any other enemy is within this radius —
+# multiple melee enemies trying to strafe at the same time was
+# producing the "running into each other" cluster movement the user
+# noticed. 1.6m ≈ two body widths, enough that a clean 1v1 still
+# strafes while pile-ups stand and commit.
+const _STRAFE_CROWDED_RADIUS: float = 1.6
 
 
 func _face_direction(dir: Vector3) -> void:
