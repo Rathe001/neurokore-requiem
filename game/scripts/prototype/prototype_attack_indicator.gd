@@ -2176,15 +2176,21 @@ static func spawn_fluid_footprint(parent: Node, world_pos: Vector3,
 	var rot_y: float = 0.0
 	if forward_dir.length_squared() > 0.0001:
 		rot_y = atan2(forward_dir.x, forward_dir.z)
-	# Visible footprint at ~0.55m × 0.75m in world space — larger than
-	# the actual physical boot dimensions, but the source silhouette
-	# only fills ~45% of texture width / ~91% of height, so the visible
-	# print on the mask is ~50% smaller than these numbers. At the
-	# current LiquidLayer resolution (40.96 px/m), 0.55 × 0.75 lands the
-	# rendered boot at roughly 10 × 28 mask pixels — enough to read
-	# through the shader's edge softness + density gating.
+	# Use stamp_growing as the proven-working path (same as corpse
+	# settle pools). Width/length passed via start_radius / end_radius
+	# — we want a single-frame draw, not a growth tween, so start and
+	# end are the same value. world_radius semantics differ from
+	# stamp_oriented's world_size (radius vs diameter), so half the
+	# desired footprint extent goes here.
+	# Larger footprint (~1.0m diameter) so the print reads cleanly at
+	# the current LiquidLayer resolution after edge softness + density
+	# gating chew through small stamps.
 	var alpha: float = lerpf(0.1, 1.0, intensity) * randf_range(0.85, 1.0)
-	layer.stamp_oriented(world_pos, tex, Vector2(0.55, 0.75), rot_y, alpha)
+	# Per-frame alpha in stamp_growing is intensity * 0.11. To compensate
+	# for that we need a higher intensity value so the single draw of
+	# the growing-stamp actually deposits visible alpha — boost by ~5×.
+	# Also tween duration is short so it draws fast (no expansion).
+	layer.stamp_growing(world_pos, tex, 0.5, 0.5, 0.1, alpha * 5.0)
 
 
 # Back-compat shim. Existing call sites still reference this name;
