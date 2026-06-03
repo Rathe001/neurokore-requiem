@@ -4832,11 +4832,18 @@ func _play_anim(candidates: Array[StringName], speed: float = 1.0, blend: float 
 		# Without this, anim_player.play(name, blend, speed, reverse)
 		# only takes effect when we DON'T early-out; same-anim calls
 		# inherit the old speed and the loop visibly wobbles.
+		#
+		# Use speed_scale for ALL speed control; pass 1.0 as
+		# play()'s custom_speed. Effective playback speed is
+		# `speed_scale × custom_speed`, so setting both to `speed`
+		# made stretched anims play at speed² — unarmed punches
+		# completed in 0.43s instead of 0.65s and de-synced from the
+		# impact_delay damage fire.
 		anim_player.speed_scale = absf(speed)
 		if anim_player.current_animation == name_str and anim_player.is_playing() and _anim_reverse == reverse:
 			return true
 		_anim_reverse = reverse
-		anim_player.play(name_str, blend, absf(speed), reverse)
+		anim_player.play(name_str, blend, 1.0, reverse)
 		return true
 	push_warning("[player] _play_anim: no match found for candidates %s (current: %s)" % [str(candidates), anim_player.current_animation])
 	return false
