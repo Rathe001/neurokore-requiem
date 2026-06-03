@@ -364,7 +364,10 @@ const MELEE_BASE_IDS: Array[StringName] = [&"melee_1h", &"melee_2h"]
 ## holds across all weapon-speed rolls automatically.
 const _MELEE_IMPACT_RATIO_PER_STEP: Dictionary = {
 	&"melee_1h": [0.65, 0.5, 0.5],
-	&"melee_2h": [0.4, 0.3, 0.3],
+	# Pulled all 3 steps ~0.08 earlier (was [0.4, 0.3, 0.3]) so the
+	# crater + damage land on the visible hammer impact frame instead
+	# of one beat after it.
+	&"melee_2h": [0.32, 0.22, 0.22],
 }
 
 
