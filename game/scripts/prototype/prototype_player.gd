@@ -352,19 +352,28 @@ const MELEE_BASE_IDS: Array[StringName] = [&"melee_1h", &"melee_2h"]
 #    player saw the hit land before the audio + damage ever fired.
 #  - melee_2h: axe_combo clips peak ~mid-swing, impact ~30% feels
 #    natural with a short follow-through.
-const _MELEE_IMPACT_RATIO: Dictionary = {
-	# Bumped 0.15 → 0.5. The previous comment claimed the sword_attack
-	# clip's visible blade-contact moment was at 15% in, but in practice
-	# the user reports the visible impact lands mid-swing, with damage
-	# + VFX firing before the blade ever connects. 0.5 puts the strike
-	# at the swing's actual peak, matching what the eye sees.
-	&"melee_1h": 0.5,
-	&"melee_2h": 0.3,
+## Per-(base_id, combo_step) damage-frame ratio. The combo uses DIFFERENT
+## clips per step (sword_slash / sword_slash_2 / sword_slash_3), and
+## each clip's visible blade-contact frame lands at a different fraction
+## of its duration. A single ratio per weapon left step 0 desynced
+## while step 1/2 looked right.
+##
+## Ratios are read as `melee_interval * ratio` where melee_interval =
+## skill.cooldown / atk_spd, so any change to weapon attack_speed
+## scales the anim duration AND the impact timing together — sync
+## holds across all weapon-speed rolls automatically.
+const _MELEE_IMPACT_RATIO_PER_STEP: Dictionary = {
+	&"melee_1h": [0.65, 0.5, 0.5],
+	&"melee_2h": [0.4, 0.3, 0.3],
 }
 
 
-func _melee_impact_ratio(base_id: StringName) -> float:
-	return _MELEE_IMPACT_RATIO.get(base_id, 0.5)
+func _melee_impact_ratio(base_id: StringName, combo_step: int = 0) -> float:
+	var arr: Array = _MELEE_IMPACT_RATIO_PER_STEP.get(base_id, [0.5])
+	if arr.is_empty():
+		return 0.5
+	var i: int = clampi(combo_step, 0, arr.size() - 1)
+	return float(arr[i])
 var _melee_combo_step: int = 0
 var _melee_combo_last_t: float = -1000.0
 var _melee_combo_last_weapon_id: StringName = &""
@@ -2548,7 +2557,13 @@ func _cast_lmb_combat() -> void:
 			# the strike — the visible impact lands ~40% in, not 50%.
 			# Per-class table lets each weapon dial its own ratio without
 			# tuning the others.
-			wind_up_delay = melee_interval * _melee_impact_ratio(item.weapon_base_id)
+			# Use the combo step the upcoming swing will resolve at
+			# (peek, not advance — combat will advance the step a few
+			# ms later inside _resolve_cone). Different combo clips
+			# have different impact frames; the per-step ratio table
+			# keeps every step's damage synced to its own clip.
+			var impact_step: int = peek_next_melee_combo_step(item)
+			wind_up_delay = melee_interval * _melee_impact_ratio(item.weapon_base_id, impact_step)
 		else:
 			wind_up_delay = (skill.wind_up / atk_spd) if skill.wind_up > 0.0 else 0.0
 		var fire_delay: float = float(i) * stagger + wind_up_delay
