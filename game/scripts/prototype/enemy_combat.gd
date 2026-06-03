@@ -528,17 +528,29 @@ func _spawn_skill_projectile(aim: Vector3, skill: EnemySkill) -> void:
 	proj.reset()
 
 
-# Mirror of PlayerCombat._safe_projectile_spawn_position. Computes the
-# enemy's "barrel" spawn (chest + 0.4m up + 0.7m forward + 0.25m right),
-# then ray-checks chest -> barrel for walls / pillars / the player's
-# body. Any obstruction → spawn at chest so the projectile doesn't
-# self-collide on the wall it just clipped through or whiff past a
-# player who's right in the enemy's face.
+# Mirror of PlayerCombat._safe_projectile_spawn_position. Prefers the
+# weapon model's per-weapon muzzle override (read via
+# WeaponAttachment.get_muzzle_position — the same API the player uses,
+# so projectile spawns sit at the actual barrel tip of the equipped
+# weapon mesh and respect per-gender grip-table overrides). Falls back
+# to the legacy chest+forward approximation when no weapon model is
+# mounted (bare-hand attackers, missing skeleton, etc.). Then ray-checks
+# chest → barrel for walls / pillars / player body; obstruction → spawn
+# at chest so the projectile doesn't self-collide.
 func _safe_enemy_spawn_position(aim_norm: Vector3) -> Vector3:
-	var aim_right := Vector3.UP.cross(aim_norm).normalized()
-	var barrel := aim_norm * 0.7 + aim_right * 0.25
 	var chest: Vector3 = _host.global_position + Vector3(0.0, 1.4, 0.0)
-	var barrel_pos: Vector3 = chest + barrel
+	var barrel_pos: Vector3
+	var skel := _host._find_skeleton(_host.visual) if _host.visual != null else null
+	var weapon_muzzle := Vector3.ZERO
+	if skel != null:
+		weapon_muzzle = WeaponAttachment.get_muzzle_position(skel, aim_norm)
+	if weapon_muzzle != Vector3.ZERO:
+		barrel_pos = weapon_muzzle
+	else:
+		# Legacy approximation — chest + forward + right.
+		var aim_right := Vector3.UP.cross(aim_norm).normalized()
+		var barrel := aim_norm * 0.7 + aim_right * 0.25
+		barrel_pos = chest + barrel
 	if not _host.is_inside_tree():
 		return barrel_pos
 	# Physics state is only readable inside the physics frame. Calling
