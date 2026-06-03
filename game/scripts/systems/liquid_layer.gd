@@ -31,7 +31,13 @@ extends Node3D
 # ~20 px/m, which is still crisp for blood pools (a 1.5m pool is
 # ~60 pixels diameter).
 const WORLD_EXTENT_METERS: float = 100.0
-const SUBVIEWPORT_PX: int = 2048
+# Was 2048 — at the 100m extent that's ~20 px/m which shows pixel
+# grid distinctly under the current iso zoom (~5cm per mask pixel,
+# ~10 screen pixels per mask pixel). 4096 doubles linear resolution
+# to ~40 px/m (~2.4cm per pixel), making pool edges look smooth
+# rather than blocky. Memory cost: 64MB single-channel (was 16MB) —
+# fine on the 8GB target.
+const SUBVIEWPORT_PX: int = 4096
 const PIXELS_PER_METER: float = float(SUBVIEWPORT_PX) / WORLD_EXTENT_METERS
 
 # Vertical offset above floor — high enough that micro Z-fighting with

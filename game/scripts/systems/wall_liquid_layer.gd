@@ -19,8 +19,11 @@ extends Node3D
 # ~3-4m) is much shorter than the X/Z range (~40m). Same px/m density
 # on both axes (~51 px/m at 40m horizontal extent, ~64 px/m at 4m
 # vertical) without wasting memory on a square viewport.
-const MASK_PX_X: int = 2048
-const MASK_PX_Y: int = 256
+# Was 2048 × 256 — at the 100m extent that's ~20 px/m, visibly
+# blocky under the current iso zoom. Doubled to 4096 × 512 for
+# ~40 px/m. ~8MB per mask (×2 for x/y walls) is well within budget.
+const MASK_PX_X: int = 4096
+const MASK_PX_Y: int = 512
 # World extents covered by the mask. Stamps outside this range clamp
 # to the edge of the mask (won't be lost — just compressed).
 # Was 40 — same procgen-coverage bug as the floor LiquidLayer. 100m
