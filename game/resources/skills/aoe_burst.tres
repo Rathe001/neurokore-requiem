@@ -8,7 +8,11 @@ display_name = "AoE Burst"
 glyph = "AoE"
 damage = 15
 skill_range = 5.0
-cooldown = 1.6
+; Dropped 1.6 → 1.0 — the AoE Burst cycle felt sluggish for the
+; sledge's flagship special. Anim duration is now capped separately
+; via MELEE_SKILL_MAX_ANIM_DUR in prototype_player.gd so a heavier
+; cooldown can't drag the swing animation out into 4-5s of windup.
+cooldown = 1.0
 wind_up = 0.40
 resource_cost = 35
 targeting_mode = 1

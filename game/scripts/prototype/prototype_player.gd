@@ -362,6 +362,17 @@ const MELEE_BASE_IDS: Array[StringName] = [&"melee_1h", &"melee_2h"]
 ## skill.cooldown / atk_spd, so any change to weapon attack_speed
 ## scales the anim duration AND the impact timing together — sync
 ## holds across all weapon-speed rolls automatically.
+# Cap on the stretched-anim duration for melee SKILL casts (RMB
+# specials like AoE Burst). Without it, skill_dur = cooldown / atk_spd
+# can blow out to 4-5s on slow weapons with high skill cooldowns —
+# the AoE Burst (cooldown 1.0 / atk_spd 0.35) would otherwise play
+# the swing animation across 2.86s, which feels disconnected from
+# the VFX impact regardless of impact_ratio. Cooldown itself is
+# untouched — it still gates the next cast. Only the visual swing
+# window + the damage-fire delay are capped.
+const MELEE_SKILL_MAX_ANIM_DUR: float = 1.2
+
+
 const _MELEE_IMPACT_RATIO_PER_STEP: Dictionary = {
 	# Pulled step 0 from 0.65 → 0.55. After dropping basic_attack
 	# cooldown to 0.6 and bumping atk_spd_range to 1.0-1.4, the swing
@@ -2844,11 +2855,14 @@ func _cast_skill(skill: Skill) -> void:
 		_play_fire_pose(0.15, true)
 	else:
 		# Combo-aware melee swing — see peek_next_melee_combo_step.
-		# Plays the full clip stretched to fit the skill's effective
-		# cooldown (so attack speed scales the animation rate too).
+		# Plays the clip stretched to fit the skill's effective window,
+		# but capped at MELEE_SKILL_MAX_ANIM_DUR so a long cooldown
+		# doesn't drag the visible swing into multi-second windup
+		# territory. Cooldown still gates the next cast independently.
 		var combo_step := peek_next_melee_combo_step(weapon)
 		var skill_atk_spd: float = atk_spd if atk_spd > 0.0 else 1.0
 		var skill_dur: float = skill.cooldown / skill_atk_spd if skill.cooldown > 0.0 else 0.7
+		skill_dur = minf(skill_dur, MELEE_SKILL_MAX_ANIM_DUR)
 		_play_anim_stretched(XBotAnimations.combo_attack_anim_for_class(_equipped_weapon_class(), combo_step), skill_dur)
 	PrototypeAttackIndicator.spawn(self, skill, aim, _combat.effective_range(skill, weapon))
 	# Per-weapon SFX timing:
@@ -2860,13 +2874,17 @@ func _cast_skill(skill: Skill) -> void:
 	var skill_is_melee: bool = weapon != null and weapon.weapon_base_id in MELEE_BASE_IDS
 	if weapon != null and not WeaponSounds.is_channel_weapon(weapon.weapon_base_id) and not skill_is_melee:
 		WeaponSounds.play_fire(weapon.weapon_base_id, global_position)
-	# Damage-event delay. Mirrors the LMB sync: for melee, ignore
-	# skill.wind_up and use effective_cooldown * 0.5 so the damage
-	# lands on the swing's mid-anim impact frame. Ranged keeps the
-	# authored wind_up so pre-roll audio stays aligned.
+	# Damage-event delay. For melee, derive from the SAME capped
+	# anim window the swing animation uses + the per-step impact ratio
+	# (matches the LMB sync logic) so the strike lands at the visible
+	# impact frame regardless of cooldown. Ranged keeps the authored
+	# wind_up so pre-roll audio stays aligned.
 	var resolve_delay: float
 	if skill_is_melee and skill.cooldown > 0.0:
-		resolve_delay = (skill.cooldown / atk_spd) * 0.5
+		var melee_dur: float = minf(skill.cooldown / atk_spd, MELEE_SKILL_MAX_ANIM_DUR)
+		var base_id: StringName = weapon.weapon_base_id if weapon != null else &""
+		var step: int = peek_next_melee_combo_step(weapon)
+		resolve_delay = melee_dur * _melee_impact_ratio(base_id, step)
 	elif skill.wind_up > 0.0:
 		resolve_delay = skill.wind_up / atk_spd
 	else:
