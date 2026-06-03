@@ -411,6 +411,12 @@ var _state: State = State.IDLE
 var _health: int
 var _last_hit_weapon_base_id: StringName = &""
 var _last_hit_was_crit: bool = false
+# Throttle hit_flesh playback so a single multi-pellet shotgun blast
+# (12 pellets landing within ~1 frame) doesn't stack 12 simultaneous
+# impact sounds. Each pellet still does damage + visuals; only the
+# audio is gated.
+var _last_hit_sfx_msec: int = -10000
+const _HIT_SFX_THROTTLE_MS: int = 60
 # Set in take_damage; consumed by _die's dismemberment roll. Explosion
 # deaths get a 25% dismember chance; crits always dismember regardless
 # of damage source.
@@ -1219,7 +1225,13 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 	# Subliminal "this is landing" layer. -15 dB was inaudible against the
 	# weapon fire mix; -3 dB sits just under the weapon fire volume so the
 	# pop reads as a confirmation rather than competing for attention.
-	WeaponSounds.play_generic(&"hit_flesh", global_position, -3.0)
+	# Per-enemy throttle: multi-pellet weapons (shotgun = 12 pellets) all
+	# resolve in the same frame, so without gating each pellet would
+	# stack a full-volume hit_flesh and the result was painfully loud.
+	var now_ms: int = Time.get_ticks_msec()
+	if now_ms - _last_hit_sfx_msec >= _HIT_SFX_THROTTLE_MS:
+		_last_hit_sfx_msec = now_ms
+		WeaponSounds.play_generic(&"hit_flesh", global_position, -3.0)
 	# Crit hitstop — brief time-scale dip on non-fatal crits from single-hit
 	# weapons. Fatal crits route through _die for the longer crit-kill freeze.
 	if is_crit and _health > 0:
