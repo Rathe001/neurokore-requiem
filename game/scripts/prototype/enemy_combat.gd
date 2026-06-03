@@ -255,9 +255,15 @@ func cast_ranged_attack(player: Node3D, aim: Vector3) -> void:
 	_host.velocity.x = 0.0
 	_host.velocity.z = 0.0
 	_host._face_direction(aim)
-	# Ranged enemies hold the firing-rifle pose during the windup so the
-	# silhouette reads as "shooter aiming" rather than "puncher swinging".
-	_host._play_fire_pose(true)
+	# DON'T play the recoil-cycle fire pose at windup start — the user
+	# saw the recoil 500ms before the projectile, because the windup
+	# played the full firing loop while the projectile only spawned
+	# after the await timer below. The per-tick locomotion picker is
+	# already keeping ranged enemies in the fire pose between shots
+	# (they're stationary in the hold band), so the pose during
+	# windup stays correct without an explicit call here. The recoil
+	# snap fires at projectile-spawn time via _play_fire_pose(true)
+	# below — that's where it should land for visible sync.
 	var windup_now := attack_windup()
 	var gen := _host._generation
 	await _host.get_tree().create_timer(windup_now).timeout

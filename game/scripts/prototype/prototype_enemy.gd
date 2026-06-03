@@ -3817,6 +3817,15 @@ func _play_fire_pose(restart: bool = false) -> bool:
 	_fire_pose_holding = false
 	var speed: float = clip.length / fire_int
 	speed = clampf(speed, 0.5, 1.3)
+	if restart:
+		# Force replay from frame 0 — _play_anim's same-anim early-out
+		# would otherwise skip the restart silently, leaving LOOP-mode
+		# recoil cycles desynced from per-shot fire events. This is
+		# the path that fires at projectile-spawn time, so it MUST
+		# snap the visible recoil to the actual bullet.
+		anim_player.speed_scale = speed
+		anim_player.play(name_str, 0.05)
+		return true
 	return _play_anim([chosen], speed)
 
 
