@@ -32,33 +32,33 @@ render_mode blend_mix, depth_draw_never, cull_back;
 uniform sampler2D screen_texture : hint_screen_texture, repeat_disable, filter_linear_mipmap;
 uniform sampler2D normal_tex : hint_normal, filter_linear_mipmap;
 uniform sampler2D roughness_tex : hint_roughness_r, filter_linear_mipmap;
-// Scorch tint multiplied into the sampled floor color. Warm
-// burnt-sienna picks up contrast against the floor's cool palette.
-uniform vec3 tint : source_color = vec3(0.75, 0.45, 0.25);
-uniform float tint_mix : hint_range(0.0, 1.0) = 0.55;
+// Scorch tint multiplied into the sampled floor color. Much darker
+// burnt-charred tone now (was 0.75/0.45/0.25 "burnt sienna") so the
+// pit reads as scorched/burned, not just lightly tinted.
+uniform vec3 tint : source_color = vec3(0.22, 0.13, 0.07);
+uniform float tint_mix : hint_range(0.0, 1.0) = 0.90;
 uniform float fade : hint_range(0.0, 1.0) = 1.0;
 uniform float fade_radius : hint_range(0.5, 100.0) = 20.0;
 uniform float vignette_start : hint_range(0.0, 1.0) = 0.45;
 uniform float vignette_end : hint_range(0.0, 1.0) = 0.85;
 // Roughness boost — matte against polished floor.
-uniform float roughness_boost : hint_range(0.0, 1.0) = 0.45;
+uniform float roughness_boost : hint_range(0.0, 1.0) = 0.55;
 // Normal-map exaggeration. > 1 amplifies the crater's sculpted bump
 // for stronger highlights/shadows under world lighting.
-uniform float normal_strength : hint_range(0.5, 5.0) = 3.0;
+uniform float normal_strength : hint_range(0.5, 6.0) = 4.5;
+// Hot-rim emission: scorching glow at the slope between center and
+// edge. Reads as "the impact JUST happened — the floor is still
+// glowing where the hammer struck." Tied to the lifetime fade so it
+// dims as the crater ages.
+uniform vec3 rim_emission_color : source_color = vec3(1.4, 0.45, 0.10);
+uniform float rim_emission_strength : hint_range(0.0, 5.0) = 1.8;
 // Screen-space refraction — distorts the floor texture sample by
 // the crater's surface normal. Sells real depth by making the floor
-// tiles visibly bend through the rim/depression slopes (the eye
-// reads slope refraction as 3D far more strongly than lighting
-// shading alone). Strength is in SCREEN_UV space, so very small
-// values are fine — 0.05 reads as "looking through a real
-// indentation in glass" without losing recognisability of the
-// floor pattern.
-uniform float distort_strength : hint_range(0.0, 0.30) = 0.08;
+// tiles visibly bend through the rim/depression slopes.
+uniform float distort_strength : hint_range(0.0, 0.30) = 0.14;
 // Center darkening — multiplies ALBEDO down inside the crater
-// interior, with the strongest darken at the bottom of the
-// depression. Falls off to 1.0 by the rim so the surrounding
-// floor isn't dimmed.
-uniform float center_darken : hint_range(0.0, 1.0) = 0.55;
+// interior. 0.85 makes the pit read almost-black against the floor.
+uniform float center_darken : hint_range(0.0, 1.0) = 0.85;
 
 // Model-local vertex position carried into fragment — needed because
 // the built-in VERTEX in fragment() is in VIEW space, not model space.
@@ -106,5 +106,14 @@ void fragment() {
 	NORMAL_MAP_DEPTH = normal_strength;
 	ROUGHNESS = clamp(rough + roughness_boost, 0.0, 1.0);
 	METALLIC = 0.0;
+	// Hot-rim emission band — peak between the dark center and the
+	// fading perimeter, where the impact's "scorched edge" lives in
+	// reference imagery. Falls off symmetrically on both sides so
+	// it doesn't bleed into the center darken or past the vignette.
+	float rim_lo = vignette_start * 0.55;
+	float rim_hi = vignette_start;
+	float rim_band = smoothstep(rim_lo, rim_hi, r)
+		* (1.0 - smoothstep(rim_hi, vignette_end, r));
+	EMISSION = rim_emission_color * rim_emission_strength * rim_band * fade;
 	ALPHA = mask * fade;
 }
