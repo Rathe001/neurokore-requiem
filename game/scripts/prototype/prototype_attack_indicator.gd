@@ -2176,21 +2176,16 @@ static func spawn_fluid_footprint(parent: Node, world_pos: Vector3,
 	var rot_y: float = 0.0
 	if forward_dir.length_squared() > 0.0001:
 		rot_y = atan2(forward_dir.x, forward_dir.z)
-	# Use stamp_growing as the proven-working path (same as corpse
-	# settle pools). Width/length passed via start_radius / end_radius
-	# — we want a single-frame draw, not a growth tween, so start and
-	# end are the same value. world_radius semantics differ from
-	# stamp_oriented's world_size (radius vs diameter), so half the
-	# desired footprint extent goes here.
-	# Larger footprint (~1.0m diameter) so the print reads cleanly at
-	# the current LiquidLayer resolution after edge softness + density
-	# gating chew through small stamps.
-	var alpha: float = lerpf(0.1, 1.0, intensity) * randf_range(0.85, 1.0)
-	# Per-frame alpha in stamp_growing is intensity * 0.11. To compensate
-	# for that we need a higher intensity value so the single draw of
-	# the growing-stamp actually deposits visible alpha — boost by ~5×.
-	# Also tween duration is short so it draws fast (no expansion).
-	layer.stamp_growing(world_pos, tex, 0.5, 0.5, 0.1, alpha * 5.0)
+	# Use stamp_oriented now that its lifecycle bug is fixed (sprite
+	# was being freed before its SubViewport render pass completed —
+	# the new internal timer keeps it alive for ~100ms). Boot-print
+	# silhouette is oriented along the walking direction; no random
+	# rotation or aspect jitter so every print reads the same and
+	# trails point where the player is going.
+	# 0.32 × 0.45m is roughly real boot dimensions; the silhouette's
+	# bounding box is slightly larger than the actual painted shape.
+	var alpha: float = lerpf(0.15, 1.0, intensity)
+	layer.stamp_oriented(world_pos, tex, Vector2(0.32, 0.45), rot_y, alpha)
 
 
 # Back-compat shim. Existing call sites still reference this name;

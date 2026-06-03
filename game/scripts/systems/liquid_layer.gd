@@ -176,13 +176,20 @@ func stamp_oriented(world_pos: Vector3, stamp_texture: Texture2D,
 	# matches a CCW 2D rotation in the viewport's pixel space.
 	sprite.rotation = -rotation_y
 	_stamp_root.add_child(sprite)
+	# Keep the sprite alive long enough for the SubViewport to render
+	# at least one full frame with it in the tree. process_frame fires
+	# BEFORE rendering, so a single-frame queue_free could discard the
+	# sprite before its render pass — that was the silent failure mode
+	# that made footprints invisible. ~100ms covers a few render frames
+	# without leaving sprites accumulating in the tree.
 	var stamp_id := sprite.get_instance_id()
-	get_tree().process_frame.connect(
+	var t := get_tree().create_timer(0.1)
+	t.timeout.connect(
 		func() -> void:
 			var s := instance_from_id(stamp_id)
 			if s != null and is_instance_valid(s):
 				(s as Node).queue_free(),
-		CONNECT_ONE_SHOT
+		CONNECT_ONE_SHOT,
 	)
 
 
