@@ -3600,7 +3600,7 @@ func _play_fire_pose(restart: bool = false) -> bool:
 		if restart:
 			_fire_pose_holding = false
 			anim_player.speed_scale = 1.0
-			anim_player.play(name_str)
+			anim_player.play(name_str, 0.15)
 			return true
 		if _fire_pose_holding and assigned == name_str:
 			# Held at end frame — leave it.
@@ -3623,7 +3623,8 @@ func _play_fire_pose(restart: bool = false) -> bool:
 	return _play_anim([chosen], speed)
 
 
-func _play_anim(candidates: Array[StringName], speed: float = 1.0) -> bool:
+func _play_anim(candidates: Array[StringName], speed: float = 1.0,
+		blend: float = 0.15) -> bool:
 	if anim_player == null:
 		return false
 	for anim_name in candidates:
@@ -3640,7 +3641,10 @@ func _play_anim(candidates: Array[StringName], speed: float = 1.0) -> bool:
 		anim_player.speed_scale = speed
 		if anim_player.current_animation == name_str and anim_player.is_playing():
 			return true
-		anim_player.play(name_str)
+		# Pass blend so transitions between run/idle/attack-windup pose
+		# cross-fade instead of snapping. 0.15s is the player's default
+		# and reads as natural posture-shift, not slow morph.
+		anim_player.play(name_str, blend)
 		return true
 	return false
 
