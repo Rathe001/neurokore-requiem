@@ -8,16 +8,14 @@ display_name = "Basic Attack"
 glyph = "X"
 damage = 25
 skill_range = 3.5
-; Swing duration controlled by cooldown — the LMB melee path uses
-; cooldown / atk_spd as the stretched anim duration (and the damage
-; timer fires at impact_ratio * that duration). 1.5 over-corrected
-; from the previous 0.7 — combined with the lowered atk_spd_range
-; (0.4-0.55) it produced 2.7-3.8s swings, which crushed melee DPS to
-; ~7 vs pistols at ~25. 0.85 lands the swing window at 1.55-2.13s;
-; the anim plays close to its natural ~1.5s clip length without
-; stretching past readable, and DPS climbs to ~17-18 (paired with
-; the damage bump on melee_1h.tres).
-cooldown = 0.85
+; Swing duration controlled by cooldown — LMB melee uses
+; cooldown / atk_spd as the stretched anim duration. basic_attack
+; is BLADE-ONLY now (sledgehammer uses melee_2h_attack.tres), so we
+; can dial this hard for the snappy skirmisher feel without touching
+; the heavy-2H pacing. 0.6 + atk_spd 1.0-1.4 lands the swing window
+; at 0.43-0.60s — proper dart cadence. Lunge follows at half that
+; (~0.22-0.30s).
+cooldown = 0.6
 wind_up = 0.22
 resource_cost = 10
 targeting_mode = 0

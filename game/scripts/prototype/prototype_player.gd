@@ -353,7 +353,12 @@ const MELEE_BASE_IDS: Array[StringName] = [&"melee_1h", &"melee_2h"]
 #  - melee_2h: axe_combo clips peak ~mid-swing, impact ~30% feels
 #    natural with a short follow-through.
 const _MELEE_IMPACT_RATIO: Dictionary = {
-	&"melee_1h": 0.15,
+	# Bumped 0.15 → 0.5. The previous comment claimed the sword_attack
+	# clip's visible blade-contact moment was at 15% in, but in practice
+	# the user reports the visible impact lands mid-swing, with damage
+	# + VFX firing before the blade ever connects. 0.5 puts the strike
+	# at the swing's actual peak, matching what the eye sees.
+	&"melee_1h": 0.5,
 	&"melee_2h": 0.3,
 }
 
