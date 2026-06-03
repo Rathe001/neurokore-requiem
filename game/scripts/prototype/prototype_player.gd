@@ -951,6 +951,17 @@ func _ready() -> void:
 	_ensure_loop(ANIM_CROUCH_IDLE)
 	_ensure_loop(ANIM_CROUCH_MOVE)
 	_ensure_loop(ANIM_JUMP_AIR)
+	# LMB-hold fire poses MUST loop — when the clip finishes,
+	# is_playing flips false, and the per-tick picker's "same anim
+	# already playing" early-out fails, so it calls anim_player.play
+	# again and restarts the clip from frame 0 (visible hitch / re-
+	# starting motion). Memory: project_looping_anim_hold.
+	_ensure_loop(ANIM_FIRE)
+	_ensure_loop(ANIM_FIRE_MOVE)
+	# Pistol-specific fire pose. fire_anim_for_class falls back to
+	# ANIM_FIRE for non-pistol classes, so xbot/fire above covers
+	# rifle/smg/shotgun/etc.
+	_ensure_loop(XBotAnimations.fire_anim_for_class(&"pistol"))
 	if anim_player != null:
 		anim_player.animation_finished.connect(_on_anim_finished)
 	_play_anim(ANIM_IDLE)
