@@ -906,6 +906,11 @@ func _init_enemy() -> void:
 	if visual != null:
 		visual.rotation = Vector3.ZERO
 		visual.scale = Vector3.ONE
+	# Pool re-acquire: clear facing-slew state so the first _face_direction
+	# on the new spawn snaps to its initial target instead of slewing
+	# from the previous occupant's last facing.
+	_target_facing_set = false
+	_target_facing_y = 0.0
 	if _hit_tween != null and _hit_tween.is_valid():
 		_hit_tween.kill()
 		_hit_tween = null
@@ -1622,9 +1627,14 @@ func _update_anim_player_active() -> void:
 func _physics_process(delta: float) -> void:
 	if _is_remote_enemy():
 		_remote_physics_process()
+		_tick_facing(delta)
 		return
 	if _state == State.DEAD:
 		return
+	# Facing slew always runs (independent of distance throttle) so the
+	# visual rotation isn't visibly chunky for distant enemies that
+	# tick AI logic at lower rates.
+	_tick_facing(delta)
 	# Distance-throttle. Non-special enemies far from the player get a
 	# reduced tick rate based on their state:
 	#   - IDLE far  → 1 in _IDLE_TICK_DIVISOR (~10Hz)
@@ -3532,10 +3542,44 @@ func _become_corpse() -> void:
 		floor_ring.visible = false
 	get_tree().call_group(&"corpse_manager", &"register_corpse", self)
 
+# Per-frame angular slew toward the most recent _face_direction target.
+# rad/sec — 8.0 ≈ 458°/s, fast enough that the enemy reorients within
+# ~0.4s for a full 180° flip but slow enough that the turn reads as
+# physical motion instead of a snap. Tune here if specific
+# weapon-class enemies need to turn faster/slower.
+const _FACING_TURN_SPEED: float = 8.0
+
+# True once any _face_direction call has been made on this instance.
+# The first call snaps so a newly-spawned enemy doesn't slowly rotate
+# from its imported default orientation. Subsequent calls only update
+# the target; the slew runs in _tick_facing.
+var _target_facing_y: float = 0.0
+var _target_facing_set: bool = false
+
+
 func _face_direction(dir: Vector3) -> void:
 	if visual == null or dir.length_squared() < 0.0001:
 		return
-	visual.look_at(visual.global_position + dir, Vector3.UP)
+	# Compute the target yaw via a temp basis so we don't snap the
+	# visual node on every call. Basis.looking_at returns the rotation
+	# that points the basis's -Z along `dir` — same orientation
+	# convention look_at uses, just without the in-place mutation.
+	var target_xform := Transform3D.IDENTITY
+	target_xform.basis = target_xform.basis.looking_at(dir, Vector3.UP)
+	_target_facing_y = target_xform.basis.get_euler().y
+	if not _target_facing_set:
+		_target_facing_set = true
+		visual.rotation.y = _target_facing_y
+
+
+# Smoothly rotates the visual toward the latest _face_direction target.
+# Called from _physics_process; handles wrap-around via rotate_toward.
+func _tick_facing(delta: float) -> void:
+	if visual == null or not _target_facing_set:
+		return
+	visual.rotation.y = rotate_toward(
+		visual.rotation.y, _target_facing_y, _FACING_TURN_SPEED * delta
+	)
 
 # Play a melee swing clip with playback speed calibrated so its visible
 # impact frame lands at `impact_time` seconds from now. Used by EnemyCombat
