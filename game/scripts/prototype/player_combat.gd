@@ -309,6 +309,9 @@ func resolve_skill_hit(skill: Skill, aim: Vector3, weapon: Item, source_offset: 
 			var is_knife: bool = weapon != null and weapon.weapon_base_id == &"melee_1h"
 			var is_hammer: bool = weapon != null and weapon.weapon_base_id == &"melee_2h"
 			var is_hammer_finisher: bool = is_hammer and combo_step == 2
+			print("[combat] cone hit: weapon=%s base_id=%s is_knife=%s is_hammer=%s step=%d skip=%s"
+				% [weapon, weapon.weapon_base_id if weapon != null else &"<null>",
+					is_knife, is_hammer, combo_step, skip_cone_visual])
 			if not skip_cone_visual:
 				if is_knife:
 					CombatVisuals.spawn_blade_slash(_host, aim, eff_range, visual_cone_deg)

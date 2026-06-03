@@ -248,9 +248,9 @@ var _knockback_remain: float = 0.0
 var _lunge_vel: Vector3 = Vector3.ZERO
 var _lunge_remain: float = 0.0
 var _lunge_duration: float = 0.0
-const BLADE_LUNGE_SEARCH_RADIUS: float = 3.5    # how close enemy must be to cursor
-const BLADE_LUNGE_MAX_DISTANCE: float = 2.6     # cap on how far the player slides
-const BLADE_LUNGE_STOP_GAP: float = 1.6         # gap left to the target enemy
+const BLADE_LUNGE_SEARCH_RADIUS: float = 4.5    # how close enemy must be to cursor
+const BLADE_LUNGE_MAX_DISTANCE: float = 4.0     # cap on how far the player slides
+const BLADE_LUNGE_STOP_GAP: float = 1.4         # gap left to the target enemy
 const BLADE_LUNGE_MIN_DISTANCE: float = 0.35    # below this, skip the lunge
 # Independent busy flags for the two firing paths so LMB-hold and RMB-hold
 # can interleave. Movement halt and facing gate on EITHER being true (any

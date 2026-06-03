@@ -9,17 +9,18 @@ id = &"melee_1h"
 display_name = "Blade"
 glyph = "†"
 two_handed = false
-; Blade tuning, speed pass. Previous (0.4-0.55) read as a heavy chop;
-; user explicitly wanted "much faster" snap. Bumped to (0.8, 1.1)
-; pairs with basic_attack cooldown 0.85 → swing window 0.77-1.06s.
-; The lunge duration (cooldown/atk_spd * 0.5) also drops to ~0.4s
-; which fixes the slow-glide complaint. DPS climbs to ~32 with the
-; bumped damage; close-range risk + lunge commitment justifies it
-; sitting above ranged target.
+; Blade tuning, snappy zip pass. User wants the 1H blade to read as
+; a high-mobility skirmisher — zipping between enemies, lower damage
+; per hit but lots of hits per second. atk_spd_range bumped to
+; (1.0, 1.4); paired with basic_attack cooldown 0.85 the swing window
+; lands at 0.61-0.85s. The lunge duration (cooldown/atk_spd × 0.5)
+; drops to ~0.32s, well into "dart" territory rather than glide.
+; Damage cut to ~half so DPS lands ~24 instead of 32 — close to
+; ranged target without overshooting from the close-range commit.
 ; Previously: damage (10,15)/(24,36), atk_spd (0.4, 0.55).
-damage_min_range = Vector2(16, 24)
-damage_max_range = Vector2(38, 55)
-attack_speed_range = Vector2(0.8, 1.1)
+damage_min_range = Vector2(8, 14)
+damage_max_range = Vector2(18, 28)
+attack_speed_range = Vector2(1.0, 1.4)
 crit_chance_range = Vector2(0.0, 0.0)
 accuracy_range = Vector2(0.92, 0.98)
 weapon_range_range = Vector2(2.5, 3.5)
