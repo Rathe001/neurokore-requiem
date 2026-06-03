@@ -9,17 +9,17 @@ id = &"melee_1h"
 display_name = "Blade"
 glyph = "†"
 two_handed = false
-; Heavy-blade tuning. attack_speed_range kept low (0.4-0.55) so each
-; strike still reads as committed — but the basic_attack cooldown
-; was overcorrected to 1.5s, producing 2.7-3.8s swings that crushed
-; DPS to ~7 (vs ~25 for pistols). Damage bumped ~1.6× alongside the
-; cooldown drop (basic_attack.tres: 1.5 → 0.85) to land DPS in the
-; 17-19 range — close to ranged target but not punishing the close-
-; range commitment.
-; Previously: damage (10,15)/(24,36).
+; Blade tuning, speed pass. Previous (0.4-0.55) read as a heavy chop;
+; user explicitly wanted "much faster" snap. Bumped to (0.8, 1.1)
+; pairs with basic_attack cooldown 0.85 → swing window 0.77-1.06s.
+; The lunge duration (cooldown/atk_spd * 0.5) also drops to ~0.4s
+; which fixes the slow-glide complaint. DPS climbs to ~32 with the
+; bumped damage; close-range risk + lunge commitment justifies it
+; sitting above ranged target.
+; Previously: damage (10,15)/(24,36), atk_spd (0.4, 0.55).
 damage_min_range = Vector2(16, 24)
 damage_max_range = Vector2(38, 55)
-attack_speed_range = Vector2(0.4, 0.55)
+attack_speed_range = Vector2(0.8, 1.1)
 crit_chance_range = Vector2(0.0, 0.0)
 accuracy_range = Vector2(0.92, 0.98)
 weapon_range_range = Vector2(2.5, 3.5)

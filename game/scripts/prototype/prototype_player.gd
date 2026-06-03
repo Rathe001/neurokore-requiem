@@ -333,7 +333,12 @@ var _attack_weapon: Item = null
 # or weapon-archetype change. PlayerCombat reads this in _resolve_cone to
 # scale cone width / damage / knockback / 3rd-hit status (bleed for 1H,
 # stun for 2H). Hits 0/1/2 represent swing 1/2/3 of the chain.
-const MELEE_COMBO_RESET_TIME: float = 1.5
+# Was 1.5 — but with the slower base swing cadence (cooldown / atk_spd
+# can exceed 2s on the heaviest rolls), every swing's elapsed time hit
+# the reset window before the next click landed, so the combo never
+# advanced past step 0. 2.8 leaves room for full-slow rolls while
+# still resetting after a real idle pause.
+const MELEE_COMBO_RESET_TIME: float = 2.8
 const MELEE_BASE_IDS: Array[StringName] = [&"melee_1h", &"melee_2h"]
 
 # Fraction-through-the-swing where each melee clip's visible impact
