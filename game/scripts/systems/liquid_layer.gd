@@ -24,7 +24,13 @@ extends Node3D
 # How much world area one LiquidLayer covers. 40m × 40m is large enough
 # for typical procgen rooms while keeping the SubViewport memory cost
 # modest (16 MB per fluid type at 2048² RGBA).
-const WORLD_EXTENT_METERS: float = 40.0
+# Was 40 — too small for procgen levels. Once the player walked into
+# a room more than ~20m from world origin, stamps landed outside the
+# mask and pools silently dropped. 100m covers the bulk of typical
+# 25-40 room procgen layouts. Precision drops from ~51 px/m to
+# ~20 px/m, which is still crisp for blood pools (a 1.5m pool is
+# ~60 pixels diameter).
+const WORLD_EXTENT_METERS: float = 100.0
 const SUBVIEWPORT_PX: int = 2048
 const PIXELS_PER_METER: float = float(SUBVIEWPORT_PX) / WORLD_EXTENT_METERS
 

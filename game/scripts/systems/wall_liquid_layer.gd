@@ -23,7 +23,10 @@ const MASK_PX_X: int = 2048
 const MASK_PX_Y: int = 256
 # World extents covered by the mask. Stamps outside this range clamp
 # to the edge of the mask (won't be lost — just compressed).
-const WORLD_EXTENT_XZ: float = 40.0
+# Was 40 — same procgen-coverage bug as the floor LiquidLayer. 100m
+# matches the floor extent so wall splatters and pool footprints stay
+# in sync across the full level area.
+const WORLD_EXTENT_XZ: float = 100.0
 const WALL_HEIGHT_M: float = 4.0
 # Distance from wall surface to overlay quad — small enough to read
 # as "on" the wall, big enough to avoid z-fighting with the wall mesh.
