@@ -7,7 +7,7 @@ extends Node
 ## the chain pulls them all into a consistent character so they feel like
 ## they belong in the game rather than stitched-in audition clips.
 
-const POOL_SIZE := 24
+const POOL_SIZE := 64
 const DEFAULT_BUS := &"SFX"
 
 # Distance filter — far-away sounds lose their high end. Cheap fake of
