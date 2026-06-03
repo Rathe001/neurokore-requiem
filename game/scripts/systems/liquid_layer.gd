@@ -144,6 +144,48 @@ func stamp(world_pos: Vector3, stamp_texture: Texture2D, world_radius: float, in
 	)
 
 
+## Stamp an oriented (non-rotation-jittered) shape — for things that
+## need to point along a specific direction like footprints, scuff
+## trails, drag marks. world_size is (width, length) in metres,
+## because directional stamps aren't circular. rotation_y is the
+## world-space yaw the texture should be oriented to (atan2(x, z)
+## from a forward vector).
+##
+## Backwards compatibility note: the existing stamp() does a random
+## rotation + radius-only sizing for organic pool blobs. Keep using
+## that for splatters; this one is for shapes whose silhouette has
+## an intentional orientation.
+func stamp_oriented(world_pos: Vector3, stamp_texture: Texture2D,
+		world_size: Vector2, rotation_y: float, intensity: float = 1.0) -> void:
+	if _stamp_root == null or stamp_texture == null:
+		return
+	_time_since_last_stamp = 0.0
+	var sprite := Sprite2D.new()
+	sprite.texture = stamp_texture
+	sprite.modulate = Color(1.0, 1.0, 1.0, intensity)
+	sprite.position = _world_to_viewport_px(world_pos)
+	var tex_size: Vector2 = stamp_texture.get_size()
+	if tex_size.x > 0.0 and tex_size.y > 0.0 \
+			and world_size.x > 0.0 and world_size.y > 0.0:
+		sprite.scale = Vector2(
+			(world_size.x * PIXELS_PER_METER) / tex_size.x,
+			(world_size.y * PIXELS_PER_METER) / tex_size.y,
+		)
+	sprite.material = _make_additive_canvas_material()
+	# Negate so a +Y world-rotation (counter-clockwise looking down)
+	# matches a CCW 2D rotation in the viewport's pixel space.
+	sprite.rotation = -rotation_y
+	_stamp_root.add_child(sprite)
+	var stamp_id := sprite.get_instance_id()
+	get_tree().process_frame.connect(
+		func() -> void:
+			var s := instance_from_id(stamp_id)
+			if s != null and is_instance_valid(s):
+				(s as Node).queue_free(),
+		CONNECT_ONE_SHOT
+	)
+
+
 ## Smoothly-expanding stamp. Spawns ONE Sprite2D that tweens its scale
 ## from start_radius → end_radius over `duration` seconds. Because the
 ## SubViewport uses CLEAR_MODE_NEVER + additive blend, every frame

@@ -2146,64 +2146,68 @@ const _FOOTPRINT_HOLD: float = 6.0
 const _FOOTPRINT_FADE: float = 2.5
 
 
-# Small floor decal at a footstep position. `intensity` (0..1) fades the
-# print as the bloody-steps counter ticks down — first step after
-# walking through blood is full, last step before drying is faint.
-# `forward_dir` orients the print so it points along the walking
-# direction (otherwise random orientation reads as "puddle drips", not
-# "footprints"). `right_foot` selects between the right-foot silhouette
-# and its mirror so a trail of prints alternates L/R.
-static func spawn_blood_footprint(parent: Node, world_pos: Vector3, forward_dir: Vector3, intensity: float, right_foot: bool = true, blood_type: StringName = BLOOD_TYPE_HUMAN) -> void:
+# Spawn a directional footprint into the matching LiquidLayer for
+# `fluid_id`. The boot-print silhouette is a WHITE-on-alpha texture —
+# the per-fluid color comes from the LiquidLayer's shader (so a single
+# silhouette covers blood, oil, water, etc. with no per-fluid asset
+# duplication). intensity (0..1) attenuates the stamp's alpha so a
+# trail visibly fades as the foot wipes its load off.
+#
+# fluid_id defaults to BLOOD_TYPE_HUMAN; expand to other liquids by
+# adding a LiquidLayer instance with the matching fluid_id and the
+# group lookup below picks it up automatically.
+static func spawn_fluid_footprint(parent: Node, world_pos: Vector3,
+		forward_dir: Vector3, intensity: float, right_foot: bool = true,
+		fluid_id: StringName = BLOOD_TYPE_HUMAN) -> void:
 	if parent == null or _blood_disabled():
 		return
-	var decal := Decal.new()
-	decal.texture_albedo = _get_blood_bootprint_texture(right_foot, blood_type)
-	decal.texture_orm = _get_blood_orm_texture()
-	# Boot-shaped silhouette baked into the texture, so decal size is the
-	# physical print footprint at iso scale: ~30 cm wide × 42 cm long.
-	# Y is the vertical projection volume — kept generous so the projector
-	# wraps prints onto step lips. Width tuned so the print reads as a
-	# boot at iso distance, not a narrow streak.
-	decal.size = Vector3(0.30, 0.4, 0.42)
-	# Linear ramp from full → 10% alpha across the bloody-step counter.
-	# First print after stepping in blood is full strength; each
-	# successive print loses ~1/N of the alpha as the foot wipes its
-	# load off, so the trail visibly dries up rather than ending
-	# abruptly at a hard floor (was clamped to 0.4 — last prints looked
-	# identical to mid-trail prints, making the end of the trail
-	# feel like the player just stopped tracking blood).
-	# Per-print brightness jitter on top of the intensity ramp — a fresh
-	# print of an old foot might still vary slightly in saturation.
-	decal.modulate = _decal_color_jitter(lerpf(0.1, 1.0, intensity))
-	decal.upper_fade = 0.4
-	decal.lower_fade = 0.4
-	decal.albedo_mix = BLOOD_DECAL_ALBEDO_MIX
-	decal.cull_mask = BLOOD_DECAL_CULL_LAYER
-	# Orient along movement direction. forward_dir is XZ-plane; yaw is
-	# atan2(x, z) so the prints point where the player is going.
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null:
+		return
+	var group: StringName = StringName("liquid_layer:" + String(fluid_id))
+	var layer := tree.get_first_node_in_group(group) as LiquidLayer
+	if layer == null:
+		# Fallback to any liquid layer — covers legacy levels where the
+		# fluid-specific instance wasn't created.
+		layer = tree.get_first_node_in_group(&"liquid_layer") as LiquidLayer
+	if layer == null:
+		return
+	var tex: Texture2D = _get_white_bootprint_texture(right_foot)
+	var rot_y: float = 0.0
 	if forward_dir.length_squared() > 0.0001:
-		decal.rotation.y = atan2(forward_dir.x, forward_dir.z)
-	parent.add_child(decal)
-	# Tiny per-spawn Y jitter to avoid z-fight against other floor decals.
-	decal.global_position = Vector3(world_pos.x, randf_range(_DECAL_Y_JITTER_MIN, _DECAL_Y_JITTER_MAX), world_pos.z)
-	_track_blood_decal(decal)
-	# Self-fade: each print lingers for _FOOTPRINT_HOLD, then tweens
-	# to alpha 0 and queue_free's. Independent of the ring buffer so
-	# prints clean themselves up rather than accumulating across a
-	# session — kill splatters stay (more dramatic, fewer of them),
-	# footprints don't.
-	var initial_alpha: float = decal.modulate.a
-	var fade_tween := decal.create_tween()
-	fade_tween.tween_interval(_FOOTPRINT_HOLD)
-	fade_tween.tween_property(decal, ^"modulate:a", 0.0, _FOOTPRINT_FADE).from(initial_alpha)
-	# Capture instance_id (int) so lambda doesn't bind to the Object —
-	# see _fade_and_free for the freed-receiver race rationale.
-	var decal_id: int = decal.get_instance_id()
-	fade_tween.tween_callback(func() -> void:
-		var d := instance_from_id(decal_id) as Node
-		if d != null:
-			d.queue_free()
-	)
+		rot_y = atan2(forward_dir.x, forward_dir.z)
+	# Print footprint at iso scale: ~30 cm wide × 42 cm long.
+	# intensity gets a small extra alpha-jitter so successive prints
+	# don't look stamped-identical at the same wear level.
+	var alpha: float = lerpf(0.1, 1.0, intensity) * randf_range(0.85, 1.0)
+	layer.stamp_oriented(world_pos, tex, Vector2(0.30, 0.42), rot_y, alpha)
+
+
+# Back-compat shim. Existing call sites still reference this name;
+# delegate to the fluid-aware path so the LiquidLayer migration is
+# transparent to callers. New code should call spawn_fluid_footprint
+# directly with the matching fluid_id.
+static func spawn_blood_footprint(parent: Node, world_pos: Vector3,
+		forward_dir: Vector3, intensity: float, right_foot: bool = true,
+		blood_type: StringName = BLOOD_TYPE_HUMAN) -> void:
+	spawn_fluid_footprint(parent, world_pos, forward_dir, intensity, right_foot, blood_type)
+
+
+# Procedurally-baked WHITE boot silhouette in alpha — LiquidLayer's
+# shader applies the per-fluid color. Cached per L/R variant; a few
+# hundred KB total for both variants combined.
+static var _white_bootprint_right_tex: Texture2D = null
+static var _white_bootprint_left_tex: Texture2D = null
+static func _get_white_bootprint_texture(right_foot: bool) -> Texture2D:
+	if right_foot:
+		if _white_bootprint_right_tex == null:
+			_white_bootprint_right_tex = ImageTexture.create_from_image(
+				_make_bootprint_image(false, Color.WHITE))
+		return _white_bootprint_right_tex
+	if _white_bootprint_left_tex == null:
+		_white_bootprint_left_tex = ImageTexture.create_from_image(
+			_make_bootprint_image(true, Color.WHITE))
+	return _white_bootprint_left_tex
 
 
 # Procedurally-baked boot print silhouette in the fluid color. Heel oval
