@@ -88,8 +88,14 @@ const RETURN_STUCK_PROGRESS_SQ := 2.0  # must close 1.4m in 3s or stuck
 # Chase stuck: if chasing but unable to close distance for this long, warp
 # to the next nav waypoint. Fires more aggressively than return-stuck because
 # the player is watching and a frozen enemy reads as broken.
-const CHASE_STUCK_TIMEOUT := 2.0
-const CHASE_STUCK_PROGRESS_SQ := 1.0  # must close ~1m in 2s or stuck
+# Was 2.0s — felt sluggish, enemies stayed wedged on prop corners
+# for 2 full seconds before the warp kicked in. 0.9s feels reactive
+# without firing under normal nav slowdowns (e.g. tight doorways).
+const CHASE_STUCK_TIMEOUT := 0.9
+# Was 1.0m / 2.0s = 0.5 m/s minimum closing rate. Loosened to 0.4 so
+# tight nav corners (where enemies briefly slow as the agent finds a
+# new waypoint) don't false-trigger the stuck warp.
+const CHASE_STUCK_PROGRESS_SQ := 0.4
 # Nav-throttle: only re-push target_position to NavigationAgent3D when
 # the target has moved >sqrt(_NAV_REPATH_DIST_SQ) since the last set.
 # Setting target_position is what triggers the agent to recompute its
@@ -1788,7 +1794,13 @@ func _physics_process(delta: float) -> void:
 				_play_fire_pose(false)
 			else:
 				_play_anim(XBotAnimations.idle_anim_for_class(weapon_class))
-			if moving:
+			# Prefer _face_override (set by chase logic when we want to
+			# look one way while moving another — e.g. ranged backpedal
+			# keeps the weapon trained on the player). Falls back to the
+			# move direction when no override is set.
+			if _face_override.length_squared() > 0.0001:
+				_face_direction(_face_override)
+			elif moving:
 				_face_direction(_want_dir)
 
 
@@ -1989,6 +2001,14 @@ func _front_row_kite_reduction(my_dist_sq: float, target_pos: Vector3) -> float:
 # here. Each branch may transition between them; CASTING and JUMPING are
 # entered from CHASING via _cast_attack / _on_link_reached.
 func _chase_tick() -> void:
+	# Reset the facing override every tick — branches that want it set
+	# (currently just ranged-backpedal) will assign before returning.
+	_face_override = Vector3.ZERO
+	# Wall-stuck timer also resets whenever we're not in active backpedal
+	# (handled in the backpedal branch). Reset here too so leaving the
+	# backpedal range cleanly clears the timer for next time.
+	if _state != State.CHASING:
+		_wall_stuck_timer = 0.0
 	_want_dir = Vector3.ZERO
 	if _player_ref == null or not is_instance_valid(_player_ref):
 		_player_ref = get_tree().get_first_node_in_group(&"player") as Node3D
@@ -2098,9 +2118,38 @@ func _chase_tick() -> void:
 			_combat.cast_attack(target, to_target / dist)
 			return
 		if dist < kite * 0.7:
+			# Wall-stuck check: if we've been trying to backpedal but
+			# the actual horizontal velocity has been near zero for
+			# WALL_STUCK_TIMEOUT seconds, treat as "wall behind me" and
+			# commit to firing from here. Otherwise the enemy runs the
+			# same futile back-step forever and the player can stand
+			# still farming them.
+			var actual_horiz_sq: float = velocity.x * velocity.x + velocity.z * velocity.z
+			var delta_t: float = get_physics_process_delta_time()
+			if actual_horiz_sq < _WALL_STUCK_VEL_SQ:
+				_wall_stuck_timer += delta_t
+			else:
+				_wall_stuck_timer = 0.0
+			if _wall_stuck_timer >= _WALL_STUCK_TIMEOUT and has_los:
+				# Treat as the hold band → fire if cooldown allows, else
+				# stand and stare. Picker face_override keeps weapon on
+				# target so the locomotion branch doesn't spin them.
+				_holding_position = true
+				_face_override = to_target / dist
+				_want_dir = Vector3.ZERO
+				velocity.x = 0.0
+				velocity.z = 0.0
+				if _attack_cd <= 0.0:
+					_combat.cast_attack(target, to_target / dist)
+				return
 			_holding_position = false
 			var away := -to_target / dist
 			_want_dir = away
+			# Face the player while backpedaling — the picker's default of
+			# "face the move direction" turned ranged enemies away from
+			# their target. _face_override is consumed in the locomotion
+			# branch above.
+			_face_override = to_target / dist
 			var back_speed := CHASE_SPEED * 0.55 * _crouch_speed_factor() * _combat.affix_move_speed_mult() * _combat._self_buff_speed_mult
 			velocity.x = away.x * back_speed
 			velocity.z = away.z * back_speed
@@ -3555,6 +3604,24 @@ const _FACING_TURN_SPEED: float = 8.0
 # the target; the slew runs in _tick_facing.
 var _target_facing_y: float = 0.0
 var _target_facing_set: bool = false
+
+# Per-tick "face this direction even though we're moving differently"
+# override. When non-zero, the locomotion picker uses this instead of
+# _want_dir so backpedaling ranged enemies keep their weapon trained
+# on the player rather than spinning to face away. Reset to Vector3.ZERO
+# at the top of _chase_tick so the override is opt-in per frame.
+var _face_override: Vector3 = Vector3.ZERO
+
+# Wall-stuck detection for ranged backpedal. When a ranged enemy
+# wants to back away from the player but velocity stays near zero
+# (wall behind them), they used to spin in place trying. Now: track
+# how long the actual velocity has been below WALL_STUCK_VEL_SQ
+# while in backpedal mode. After WALL_STUCK_TIMEOUT seconds the
+# chase tick switches them into "commit to firing from here"
+# instead of futile backpedal. Resets on every successful step.
+const _WALL_STUCK_VEL_SQ: float = 0.5 * 0.5   # < 0.5 m/s wished but not moving
+const _WALL_STUCK_TIMEOUT: float = 0.35
+var _wall_stuck_timer: float = 0.0
 
 
 func _face_direction(dir: Vector3) -> void:
