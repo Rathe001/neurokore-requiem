@@ -2800,8 +2800,15 @@ const EXPLOSION_FLIPBOOK_LIFETIME: float = 2.6
 # impactful, so the scale formula maps blast_radius directly to scale
 # with a generous max — a Tactical Strike at 9 m hits the clamp and
 # still reads as a huge kaboom.
-const FLIPBOOK_SCALE_FLOOR: float = 1.5
-const FLIPBOOK_SCALE_CEILING: float = 5.0
+const FLIPBOOK_SCALE_FLOOR: float = 1.2
+const FLIPBOOK_SCALE_CEILING: float = 3.5
+# Soft-particle fade distance (the shader's Soft_limit uniform). The
+# scene-default 0.10 only softens fragments within 10cm of geometry,
+# which let smoke billboards rise visibly above wall tops at iso
+# angles before any fade kicked in. 0.55 widens the fade zone so the
+# upper portion of the column blends out against walls instead of
+# clipping over their tops.
+const FLIPBOOK_SOFT_LIMIT: float = 0.55
 const FLIPBOOK_EXPLOSION_SCENE: PackedScene = preload("res://assets/vfx/explosion/BigExplosionScene.tscn")
 
 # Elemental palettes for the procedural fireball. Each entry gives the
@@ -2975,6 +2982,9 @@ static func _spawn_fireball_explosion(parent: Node, world_pos: Vector3, blast_ra
 		# the glow is proportionally dimmer.
 		if is_enemy:
 			mat.set_shader_parameter(&"alpha_multiplier", 0.5)
+		# Wider soft-particle fade so the billboard blends out where it
+		# meets wall geometry instead of clipping above wall tops.
+		mat.set_shader_parameter(&"Soft_limit", FLIPBOOK_SOFT_LIMIT)
 		particles.material_override = mat
 		# GPU particles ignore parent node scale (local_coords=false), so
 		# resize the draw pass QuadMesh directly. Energy explosions use a
