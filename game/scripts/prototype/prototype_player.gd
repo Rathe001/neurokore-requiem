@@ -4608,28 +4608,33 @@ func _play_fire_pose(blend: float = 0.15, restart: bool = false) -> void:
 	if is_slow_weapon:
 		# HOLD MODE — play once, freeze at end frame.
 		clip.loop_mode = Animation.LOOP_NONE
-		var current_is_fire_anim: bool = anim_player.current_animation == name_str
+		# `assigned_animation` stays = the last anim we asked to play,
+		# even after a non-looping anim finishes (where
+		# `current_animation` resets to ""). That gap is exactly what
+		# we need to distinguish "fire anim played out and is now
+		# holding its end frame" (assigned = fire anim) from "RUN took
+		# over while the player was moving" (assigned = run anim).
+		var assigned: String = anim_player.assigned_animation
+		var current: String = anim_player.current_animation
 		if restart:
 			# Per-shot event: visible recoil cycle from frame 0.
 			_fire_pose_holding = false
 			anim_player.speed_scale = 1.0
 			anim_player.play(name_str, blend, 1.0, false)
 			_anim_reverse = false
-		elif _fire_pose_holding and current_is_fire_anim:
-			# Anim already played through and is still showing on its
-			# last frame — leave it. (The current_is_fire_anim guard
-			# is critical: if the player moved → locomotion swapped
-			# RUN in → and then stopped, the stale _fire_pose_holding
-			# flag would otherwise skip restarting the fire pose and
-			# RUN would keep playing until the next shot.)
+		elif _fire_pose_holding and assigned == name_str:
+			# Anim played through and is sitting on its last frame.
+			# assigned == fire anim → nothing else has been started
+			# over it → leave the held pose alone.
 			pass
-		elif current_is_fire_anim and anim_player.is_playing():
+		elif current == name_str and anim_player.is_playing():
 			# Mid-cycle on the fire anim — leave it alone.
 			pass
 		else:
-			# Either just transitioned back from movement (RUN was
-			# playing), or first frame after LMB press before any
-			# shot has fired. Start the fire pose fresh.
+			# Either just transitioned back from movement (RUN had
+			# taken over, assigned/current points to it), or first
+			# frame after LMB press before any shot has fired. Start
+			# the fire pose fresh.
 			_fire_pose_holding = false
 			anim_player.speed_scale = 1.0
 			anim_player.play(name_str, blend, 1.0, false)
