@@ -374,12 +374,14 @@ const MELEE_SKILL_MAX_ANIM_DUR: float = 1.2
 
 
 const _MELEE_IMPACT_RATIO_PER_STEP: Dictionary = {
-	# Pulled step 0 from 0.65 → 0.55. After dropping basic_attack
-	# cooldown to 0.6 and bumping atk_spd_range to 1.0-1.4, the swing
-	# completes faster, so the previous 0.65 ratio landed the strike
-	# noticeably after the visible blade-contact frame again. 0.55
-	# keeps step 0 marginally later than steps 1/2 (which fit at 0.5).
-	&"melee_1h": [0.55, 0.5, 0.5],
+	# Step 0 pulled 0.55 → 0.35 — user reports the first swing's VFX/
+	# damage was firing ~0.25s after the visible blade contact. The
+	# sword_slash clip's actual strike frame is much closer to 1/3 of
+	# the way through than to mid-swing; the previous 0.5+ values were
+	# tuned against a slower clip read that doesn't match this anim.
+	# Sync is preserved across weapon-speed rolls automatically because
+	# impact_time = swing_duration × ratio.
+	&"melee_1h": [0.35, 0.5, 0.5],
 	# Pulled all 3 steps ~0.08 earlier (was [0.4, 0.3, 0.3]) so the
 	# crater + damage land on the visible hammer impact frame instead
 	# of one beat after it.
