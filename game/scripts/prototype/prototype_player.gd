@@ -2047,8 +2047,17 @@ func _physics_process(delta: float) -> void:
 			# firing pose would be a lie. Fall through to the idle/move
 			# branches so the character reads as "topping off the mag,
 			# not currently shooting".
+			# Bullet-weapon fire pose only overrides locomotion while
+			# the player is STATIONARY. Moving + firing falls through
+			# to the locomotion branch below for properly speed-scaled
+			# run legs — matching what arc taser (CHANNEL_BEAM) does
+			# implicitly via is_bullet_weapon() = false. Trying to
+			# play ANIM_FIRE_MOVE here held the legs at fixed 1.0×,
+			# which is slower than the actual movement speed, so the
+			# character glided and the clip cut off when it ran out.
 			var firing_held: bool = false
-			if _is_aim_input_held() and not is_reloading():
+			if (_is_aim_input_held() and not is_reloading()
+					and _want_dir.length_squared() <= 0.01):
 				var held_weapon: Item = InventoryState.get_equipped(&"weapon")
 				firing_held = held_weapon != null and held_weapon.is_bullet_weapon()
 			if is_reloading():
@@ -2063,10 +2072,8 @@ func _physics_process(delta: float) -> void:
 				else:
 					_play_anim(ANIM_RELOAD, 1.0, 0.15)
 			elif firing_held:
-				# Moving + firing → strafe (legs at natural cadence).
-				# Standing still + firing → upper-body recoil cycle
-				# stretched to match fire interval. See _play_fire_pose
-				# header for the full rationale.
+				# Stationary firing only — _want_dir gate above makes
+				# sure moving+firing falls into the locomotion branch.
 				_play_fire_pose(0.15)
 			elif _want_dir.length_squared() > 0.01:
 				# Fixed animation speed — sprint and backing are the only
@@ -4548,28 +4555,26 @@ func _held_weapon_fire_interval() -> float:
 	return w.fire_skill.cooldown / maxf(eff_atk, 0.1)
 
 
-# Single source of truth for "I'm holding LMB on a bullet weapon."
-# Two distinct cases, each needing a different speed strategy:
+# Stationary firing pose only — upper-body recoil cycle (ANIM_FIRE)
+# scaled so anim.length / fire_interval ≈ 1 cycle per shot, clamped
+# 0.6×–1.3× so fast (LMG) doesn't spaz and slow (sniper) doesn't
+# freeze.
 #
-#  * Moving + firing → ANIM_FIRE_MOVE (xbot/fire_move) plays a STRAFE
-#    that bundles leg + upper-body motion in one clip. Stretching the
-#    speed_scale here would distort the LEG cadence — slow sniper made
-#    legs glide, fast LMG made them spaz. Held at 1.0× so the strafe
-#    reads naturally regardless of fire rate. Slight recoil drift is
-#    invisible against the leg motion at this distance.
+# No-op when MOVING. The locomotion picker handles run/walk legs at
+# the right speed in that case — same flow CHANNEL_BEAM weapons
+# (arc taser) get implicitly via is_bullet_weapon() = false. We don't
+# try to play a strafe-fire combo clip because that clip's leg
+# cadence is fixed and doesn't match actual movement speed.
 #
-#  * Stationary firing → ANIM_FIRE (upper body only — no leg cadence
-#    to corrupt). Speed-scaled to match fire_interval so the recoil
-#    cycle syncs to actual shots. Clamped 0.6×–1.3× so very fast
-#    (LMG) doesn't spaz and very slow (sniper) doesn't freeze.
-#
-# Single helper called from every "currently firing" site (per-tick
-# picker AND fire-event handlers) so the speed never conflicts.
+# Called from every "currently firing" site (per-tick picker AND
+# fire-event handlers); each is responsible for ALSO calling the
+# locomotion picker if movement is happening, OR running this through
+# the same elif chain so locomotion takes over for the moving case.
 func _play_fire_pose(blend: float = 0.15) -> void:
 	if anim_player == null:
 		return
 	if _want_dir.length_squared() > 0.01:
-		_play_anim(ANIM_FIRE_MOVE, 1.0, blend)
+		# Moving — let the caller's locomotion picker run instead.
 		return
 	var candidates: Array[StringName] = _ranged_fire_anim()
 	var chosen: StringName = &""
