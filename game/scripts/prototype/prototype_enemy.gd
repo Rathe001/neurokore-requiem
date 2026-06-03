@@ -2177,11 +2177,22 @@ func _chase_tick() -> void:
 			_holding_position = false
 			_combat.cast_attack(target, to_target / dist)
 		else:
+			# Melee on cooldown — strafe sideways instead of standing
+			# still. Per-enemy L/R bias from instance_id parity so a
+			# pack doesn't all strafe the same way. _face_override
+			# keeps the weapon on target while moving perpendicular.
 			_holding_position = true
-			_face_direction(to_target / dist)
-			_want_dir = Vector3.ZERO
-			velocity.x = 0.0
-			velocity.z = 0.0
+			_face_override = to_target / dist
+			var to_target_norm := to_target / dist
+			var perp := Vector3.UP.cross(to_target_norm).normalized()
+			var strafe_dir := perp if (get_instance_id() & 1) == 0 else -perp
+			var strafe_speed: float = CHASE_SPEED * 0.45 \
+				* _crouch_speed_factor() \
+				* _combat.affix_move_speed_mult() \
+				* _combat._self_buff_speed_mult
+			_want_dir = strafe_dir
+			velocity.x = strafe_dir.x * strafe_speed
+			velocity.z = strafe_dir.z * strafe_speed
 		return
 
 	# Reaching the chase block means the enemy is meaningfully outside
@@ -2238,6 +2249,12 @@ func _chase_tick() -> void:
 	var chase_speed := _movement_speed_base() * _crouch_speed_factor() * _combat.affix_move_speed_mult() * _combat._self_buff_speed_mult
 	velocity.x = dir.x * chase_speed
 	velocity.z = dir.z * chase_speed
+	# Group spacing — small repulsion from other nearby CHASING enemies
+	# so the pack spreads out around obstacles instead of merging into
+	# one clump. Only applied to actively-chasing enemies (skipped for
+	# holding-position and the strafe branch above) so it doesn't fight
+	# the attack-range stopping logic.
+	_apply_group_repulsion()
 
 
 # Charmed pet idle behaviour — wander loosely around the player when no
@@ -3637,6 +3654,51 @@ func _face_direction(dir: Vector3) -> void:
 	if not _target_facing_set:
 		_target_facing_set = true
 		visual.rotation.y = _target_facing_y
+
+
+# Soft repulsion from other actively-chasing enemies inside
+# _GROUP_REPULSION_RADIUS. Adds (not replaces) horizontal velocity
+# so movement still primarily follows the navmesh; the push just
+# spreads densely-packed chasers out instead of letting them clip
+# through each other into one mass. Held-position and strafing
+# enemies are skipped (they're not in the "marching toward target"
+# path that benefits from spacing).
+const _GROUP_REPULSION_RADIUS: float = 1.4    # meters
+const _GROUP_REPULSION_MAX: float = 1.8       # m/s peak push
+func _apply_group_repulsion() -> void:
+	if SpatialGrid == null:
+		return
+	var nearby: Array[Node3D] = SpatialGrid.query_radius(
+		global_position, _GROUP_REPULSION_RADIUS, &"enemies")
+	if nearby.is_empty():
+		return
+	var push := Vector3.ZERO
+	for n in nearby:
+		if n == self or n == null or not is_instance_valid(n):
+			continue
+		# Skip non-chasing neighbors so we don't push the held melee
+		# enemies away from their attack position.
+		if n is PrototypeEnemy:
+			var e := n as PrototypeEnemy
+			if e._state != State.CHASING or e._holding_position:
+				continue
+		var away := global_position - n.global_position
+		away.y = 0.0
+		var d: float = away.length()
+		if d < 0.001 or d >= _GROUP_REPULSION_RADIUS:
+			continue
+		# Stronger when closer; zero at the radius edge.
+		var strength: float = 1.0 - (d / _GROUP_REPULSION_RADIUS)
+		push += (away / d) * strength
+	if push.length_squared() < 0.0001:
+		return
+	# Cap the combined push so a dense cluster doesn't catapult the
+	# enemy sideways at high speed.
+	var len: float = push.length()
+	if len > 1.0:
+		push = (push / len)
+	velocity.x += push.x * _GROUP_REPULSION_MAX
+	velocity.z += push.z * _GROUP_REPULSION_MAX
 
 
 # Smoothly rotates the visual toward the latest _face_direction target.

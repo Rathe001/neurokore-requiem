@@ -2181,8 +2181,13 @@ static func spawn_fluid_footprint(parent: Node, world_pos: Vector3,
 	var rot_y: float = 0.0
 	if forward_dir.length_squared() > 0.0001:
 		rot_y = atan2(forward_dir.x, forward_dir.z)
-	# Boot-print silhouette oriented along walking direction. 0.32 ×
-	# 0.45m matches real boot dimensions.
+	# Boot-print silhouette oriented along walking direction. Was
+	# 0.32 × 0.45m — but the shader's edge softness + density gradient
+	# bleed the visible stamp outward by a noticeable margin, so the
+	# rendered print read closer to ~50cm wide × 70cm long (much
+	# bigger than the character's actual foot). 0.18 × 0.28m measured
+	# at the silhouette bounding box puts the rendered print closer to
+	# realistic boot dimensions once shader bleed is accounted for.
 	#
 	# Steeper power curve + longer trail (14 prints) so the tail prints
 	# drop well below visibility — the cutoff to "no more prints"
@@ -2195,7 +2200,7 @@ static func spawn_fluid_footprint(parent: Node, world_pos: Vector3,
 	#   step 12 (intensity 0.214) → alpha 0.02   (sub-perceptible)
 	#   step 14 (intensity 0.071) → alpha 0.001  (vanishes into floor)
 	var alpha: float = pow(intensity, 2.6)
-	layer.stamp_oriented(world_pos, tex, Vector2(0.32, 0.45), rot_y, alpha)
+	layer.stamp_oriented(world_pos, tex, Vector2(0.18, 0.28), rot_y, alpha)
 
 
 # Back-compat shim. Existing call sites still reference this name;
