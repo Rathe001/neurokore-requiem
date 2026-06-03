@@ -208,7 +208,7 @@ current = true
 ; framing identical while reducing perspective convergence at the
 ; edges. Pushing distance further requires bumping `far` to keep
 ; the play area inside the clip range.
-fov = 12.0
+fov = 9.5
 size = 22.0
 near = 0.1
 far = 350.0
