@@ -87,7 +87,61 @@ func _ready() -> void:
 	add_to_group(StringName("liquid_layer:" + String(fluid_id)))
 	_build_subviewport()
 	_build_floor_mesh()
+	# Re-center the mask + floor mesh over the actual level's centroid
+	# after LevelBuilder finishes. The 100m coverage stays the same, but
+	# its center moves from world (0,0) to wherever the level is. Without
+	# this, levels whose rooms extend past ±50m from origin had stamps
+	# silently dropping outside the mask — visible as pools "stop
+	# spawning" once the player walked far enough.
+	_hook_level_builder()
 	set_process(true)
+
+
+func _hook_level_builder() -> void:
+	if get_parent() == null:
+		return
+	var builder := get_parent().get_node_or_null(^"LevelBuilder")
+	if builder == null:
+		return
+	if builder.has_signal(&"built"):
+		builder.built.connect(_on_level_built)
+
+
+# Compute the centroid of all level structures and re-center the layer
+# there. Also forces a one-frame clear so any previous stamps (from a
+# prior level) get wiped from the persistent mask.
+func _on_level_built() -> void:
+	var aabb := AABB()
+	var first := true
+	for n in get_tree().get_nodes_in_group(&"structures"):
+		if not (n is Node3D):
+			continue
+		var n3 := n as Node3D
+		if not n3.is_inside_tree():
+			continue
+		if first:
+			aabb = AABB(n3.global_position, Vector3.ZERO)
+			first = false
+		else:
+			aabb = aabb.expand(n3.global_position)
+	if first:
+		return  # no structures found — keep default origin
+	var center := aabb.position + aabb.size * 0.5
+	_world_origin = Vector3(center.x, 0.0, center.z)
+	if _floor_mesh != null:
+		_floor_mesh.position = Vector3(_world_origin.x, FLOOR_Y_OFFSET, _world_origin.z)
+	# Wipe the mask: ONCE clears on the next render then reverts to NEVER
+	# so subsequent stamps accumulate as usual. Important on level
+	# transitions when the same LiquidLayer instance is reused with a
+	# different _world_origin — old stamps would otherwise show up at
+	# the wrong world position relative to the new origin.
+	if _subviewport != null:
+		_subviewport.render_target_clear_mode = SubViewport.CLEAR_MODE_ONCE
+
+
+# Layer's center in world space. Set by _on_level_built; default (0,0,0)
+# for test scenes that don't have a LevelBuilder.
+var _world_origin: Vector3 = Vector3.ZERO
 
 
 func _process(delta: float) -> void:
@@ -284,13 +338,17 @@ func stamp_growing(world_pos: Vector3, stamp_texture: Texture2D, start_radius: f
 
 
 # world (x, z) → viewport pixel (px, py). The viewport's pixel-(0, 0)
-# is the top-left, so we offset by half the viewport size to put world
-# (0, 0) at the viewport center.
+# is the top-left, so we offset by half the viewport size to put the
+# layer's `_world_origin` at the viewport center. Subtracting
+# `_world_origin` first means levels whose centroids aren't at world
+# (0, 0) still have their full coverage area inside the mask — they
+# don't lose stamps to clipping just because the level builder placed
+# the rooms far from origin.
 func _world_to_viewport_px(world_pos: Vector3) -> Vector2:
 	var half: float = float(SUBVIEWPORT_PX) * 0.5
 	return Vector2(
-		world_pos.x * PIXELS_PER_METER + half,
-		world_pos.z * PIXELS_PER_METER + half,
+		(world_pos.x - _world_origin.x) * PIXELS_PER_METER + half,
+		(world_pos.z - _world_origin.z) * PIXELS_PER_METER + half,
 	)
 
 
