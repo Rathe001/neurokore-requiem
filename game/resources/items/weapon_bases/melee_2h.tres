@@ -10,15 +10,14 @@ id = &"melee_2h"
 display_name = "Sledgehammer"
 glyph = "‡"
 two_handed = true
-; Slowdown pass — the (0.6, 0.85) range had the sledge swinging every
-; 0.82-1.17s at cooldown 0.7s, which read as a fast hammer rather than
-; the heavy maul the silhouette suggests. Halved to ~1.75-2.3s per
-; swing so each strike clearly winds up, commits, and recovers. Damage
-; stays high; if DPS feels too low, bump damage_max_range rather than
-; restoring attack_speed.
-; Previously: attack_speed_range (0.6, 0.85).
-damage_min_range = Vector2(9, 14)
-damage_max_range = Vector2(22, 32)
+; Sledge stance — attack_speed_range stays low (0.3-0.4) so each strike
+; clearly winds up + commits, but melee_2h_attack cooldown dropped
+; 0.7 → 0.50 to lift swings out of the 2s+ range that made melee feel
+; punishing vs ranged. Damage bumped ~1.6× alongside the cooldown drop
+; to land DPS around 18-19 (close to ranged target).
+; Previously: damage (9,14)/(22,32).
+damage_min_range = Vector2(14, 22)
+damage_max_range = Vector2(35, 50)
 attack_speed_range = Vector2(0.3, 0.4)
 crit_chance_range = Vector2(0.0, 0.0)
 accuracy_range = Vector2(0.85, 0.94)

@@ -13,7 +13,11 @@ display_name = "Heavy Strike"
 glyph = "X"
 damage = 25
 skill_range = 3.5
-cooldown = 0.7
+; Dropped from 0.7 → 0.50 to pull 2H swings out of the 2s+ range
+; that made melee DPS lag pistols badly. With atk_spd_range
+; (0.3-0.4), swing window is now 1.25-1.67s. melee_2h.tres damage
+; was bumped ~1.6× in parallel to land DPS around 18-19.
+cooldown = 0.50
 wind_up = 0.22
 resource_cost = 20
 targeting_mode = 0
