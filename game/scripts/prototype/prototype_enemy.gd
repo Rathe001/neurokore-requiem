@@ -304,6 +304,12 @@ const _HIT_REACT_MIN_DMG_PCT: float = 0.10
 # speed. While remain > 0, the locomotion picker plays the hit anim
 # at the configured speed instead of idle/run.
 var _hit_react_remain: float = 0.0
+# Mirrors player's _fire_pose_holding. Set true by the anim-finished
+# hook when ANIM_FIRE plays out under HOLD mode (slow ranged
+# enemies); the per-tick picker checks this so it doesn't restart
+# the fire anim on every frame after it ends, waiting instead for
+# the next attack windup to replay from frame 0.
+var _fire_pose_holding: bool = false
 var _hit_react_anim: Array[StringName] = []
 var _hit_react_speed: float = 1.0
 
@@ -728,6 +734,15 @@ func _ensure_anim_player_on(char_root: Node3D) -> void:
 		char_root.add_child(ap)
 	anim_player = ap
 	XBotAnimations.install_on(anim_player)
+	# HOLD-mode fire-pose flag: set true when a non-looping fire anim
+	# finishes so the per-tick picker can keep it held at end frame.
+	if not anim_player.animation_finished.is_connected(_on_fire_anim_finished):
+		anim_player.animation_finished.connect(_on_fire_anim_finished)
+
+
+func _on_fire_anim_finished(anim_name: StringName) -> void:
+	if anim_name in ANIM_FIRE:
+		_fire_pose_holding = true
 
 
 # Walks every MeshInstance3D descendant of `root` and multiplies `tint`
@@ -1679,13 +1694,12 @@ func _physics_process(delta: float) -> void:
 			elif moving:
 				_play_anim(XBotAnimations.run_anim_for_class(weapon_class))
 			elif is_ranged_enemy:
-				# Ranged enemies hold the firing pose at all times so
-				# their weapon stays visibly drawn. Without this they
-				# look like they shoot, then drop the rifle and stand
-				# around relaxed between shots. Slow playback so the
-				# baked recoil cycle reads as breathing, not wobble —
-				# see _ANIM_FIRE_IDLE_HOLD_SPEED constant.
-				_play_anim(ANIM_FIRE, _ANIM_FIRE_IDLE_HOLD_SPEED)
+				# Ranged enemies hold the firing pose between shots
+				# so their weapon stays visibly drawn. _play_fire_pose
+				# branches HOLD/LOOP based on attack_cooldown vs clip
+				# length so slow-firing enemies don't wobble (HOLD =
+				# play once per attack windup, hold at end frame).
+				_play_fire_pose(false)
 			else:
 				_play_anim(XBotAnimations.idle_anim_for_class(weapon_class))
 			if moving:
@@ -1807,9 +1821,9 @@ func _remote_physics_process() -> void:
 			if moving:
 				_play_anim(XBotAnimations.run_anim_for_class(weapon_class_remote))
 			elif is_ranged_remote:
-				# Match the local picker — slow rifle-hold so the recoil
-				# cycle reads as a calm breath while standing ready.
-				_play_anim(ANIM_FIRE, _ANIM_FIRE_IDLE_HOLD_SPEED)
+				# Match the local picker — _play_fire_pose handles
+				# HOLD vs LOOP based on the enemy's attack cooldown.
+				_play_fire_pose(false)
 			else:
 				_play_anim(XBotAnimations.idle_anim_for_class(weapon_class_remote))
 	_net_prev_pos = global_position
@@ -3471,6 +3485,66 @@ func _play_swing_to_impact(candidates: Array[StringName], impact_time: float) ->
 		_play_anim([anim_name], speed)
 		return
 	_play_anim(candidates, 1.6)
+
+
+# Ranged-enemy fire pose with HOLD/LOOP branching, matching the player
+# helper of the same name. Slow attack_cooldown ≥ clip.length triggers
+# HOLD mode (play once per shot, freeze at end frame); faster cadences
+# stay in LOOP mode with speed clamped so the recoil cycle doesn't
+# wobble against the shot timing.
+#
+#   restart=true  → per-shot fire event (force restart from frame 0
+#                    so the recoil cycle is visible)
+#   restart=false → per-tick locomotion picker (leave the anim alone
+#                    if it's playing or held)
+func _play_fire_pose(restart: bool = false) -> bool:
+	if anim_player == null:
+		return false
+	var chosen: StringName = &""
+	for key in ANIM_FIRE:
+		if anim_player.has_animation(key):
+			chosen = key
+			break
+	if chosen == &"":
+		return false
+	var clip: Animation = anim_player.get_animation(chosen)
+	if clip == null or clip.length <= 0.0:
+		return _play_anim([chosen], 1.0)
+	var fire_int: float = 1.0
+	if _combat != null:
+		fire_int = _combat.attack_cooldown()
+	if fire_int <= 0.0:
+		return _play_anim([chosen], 1.0)
+	var is_slow: bool = fire_int > clip.length * 1.05
+	var name_str: String = String(chosen)
+	if is_slow:
+		clip.loop_mode = Animation.LOOP_NONE
+		var assigned: String = anim_player.assigned_animation
+		var current: String = anim_player.current_animation
+		if restart:
+			_fire_pose_holding = false
+			anim_player.speed_scale = 1.0
+			anim_player.play(name_str)
+			return true
+		if _fire_pose_holding and assigned == name_str:
+			# Held at end frame — leave it.
+			return true
+		if current == name_str and anim_player.is_playing():
+			# Mid-cycle on the fire anim — leave it.
+			return true
+		# Some other anim is showing (e.g. just transitioned from RUN),
+		# or first frame after the enemy entered the ranged-ready state
+		# before any shot fired. Start fresh.
+		_fire_pose_holding = false
+		anim_player.speed_scale = 1.0
+		anim_player.play(name_str)
+		return true
+	# LOOP mode — continuous cycle scaled to attack_cooldown, clamped.
+	clip.loop_mode = Animation.LOOP_LINEAR
+	_fire_pose_holding = false
+	var speed: float = clip.length / fire_int
+	speed = clampf(speed, 0.5, 1.3)
+	return _play_anim([chosen], speed)
 
 
 func _play_anim(candidates: Array[StringName], speed: float = 1.0) -> bool:

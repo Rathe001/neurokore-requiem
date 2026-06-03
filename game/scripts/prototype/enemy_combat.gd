@@ -257,7 +257,7 @@ func cast_ranged_attack(player: Node3D, aim: Vector3) -> void:
 	_host._face_direction(aim)
 	# Ranged enemies hold the firing-rifle pose during the windup so the
 	# silhouette reads as "shooter aiming" rather than "puncher swinging".
-	_host._play_anim(PrototypeEnemy.ANIM_FIRE, 1.0)
+	_host._play_fire_pose(true)
 	var windup_now := attack_windup()
 	var gen := _host._generation
 	await _host.get_tree().create_timer(windup_now).timeout
@@ -454,7 +454,7 @@ func _cast_skill_projectile(target: Node3D, aim: Vector3, skill: EnemySkill) -> 
 	_host._face_direction(aim)
 	# Projectile skills come from ranged casters — match cast_ranged_attack
 	# and play the firing-rifle pose during windup.
-	_host._play_anim(PrototypeEnemy.ANIM_FIRE, 1.0)
+	_host._play_fire_pose(true)
 	var gen := _host._generation
 	await _host.get_tree().create_timer(skill.wind_up).timeout
 	if not _host.is_inside_tree() or _host._generation != gen or _host._state != PrototypeEnemy.State.CASTING:
