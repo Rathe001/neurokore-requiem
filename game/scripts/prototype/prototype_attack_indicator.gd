@@ -2160,26 +2160,29 @@ static func spawn_fluid_footprint(parent: Node, world_pos: Vector3,
 		forward_dir: Vector3, intensity: float, right_foot: bool = true,
 		fluid_id: StringName = BLOOD_TYPE_HUMAN) -> void:
 	if parent == null or _blood_disabled():
+		print("[footprint] skip — parent_null=%s disabled=%s" % [parent == null, _blood_disabled()])
 		return
 	var tree := Engine.get_main_loop() as SceneTree
 	if tree == null:
+		print("[footprint] no SceneTree")
 		return
 	var group: StringName = StringName("liquid_layer:" + String(fluid_id))
 	var layer := tree.get_first_node_in_group(group) as LiquidLayer
+	var via_specific := layer != null
 	if layer == null:
 		# Fallback to any liquid layer — covers legacy levels where the
 		# fluid-specific instance wasn't created.
 		layer = tree.get_first_node_in_group(&"liquid_layer") as LiquidLayer
 	if layer == null:
+		print("[footprint] no LiquidLayer found for fluid_id=%s (specific group=%s)" % [fluid_id, group])
 		return
 	var tex: Texture2D = _get_white_bootprint_texture(right_foot)
 	var rot_y: float = 0.0
 	if forward_dir.length_squared() > 0.0001:
 		rot_y = atan2(forward_dir.x, forward_dir.z)
 	# Print footprint at iso scale: ~30 cm wide × 42 cm long.
-	# intensity gets a small extra alpha-jitter so successive prints
-	# don't look stamped-identical at the same wear level.
 	var alpha: float = lerpf(0.1, 1.0, intensity) * randf_range(0.85, 1.0)
+	print("[footprint] stamp pos=%s rot=%.2f alpha=%.2f intensity=%.2f layer=%s via_specific=%s" % [world_pos, rot_y, alpha, intensity, layer, via_specific])
 	layer.stamp_oriented(world_pos, tex, Vector2(0.30, 0.42), rot_y, alpha)
 
 

@@ -70,9 +70,11 @@ static func tick(
 # step_idx parity drives both the lateral offset (L/R of body centerline)
 # AND which boot-print silhouette is used (right-foot vs mirrored).
 static func _handle_bloody_footstep(body: CharacterBody3D, scene: Node, pos: Vector3, move_delta: Vector3) -> void:
-	if PrototypeAttackIndicator.is_in_blood(pos):
+	var in_blood := PrototypeAttackIndicator.is_in_blood(pos)
+	if in_blood:
 		body.set_meta(&"bloody_steps_remaining", PrototypeAttackIndicator.BLOODY_STEPS_INITIAL)
 	var remaining: int = int(body.get_meta(&"bloody_steps_remaining", 0))
+	print("[footstep] in_blood=%s remaining=%d pos=%s" % [in_blood, remaining, pos])
 	if remaining <= 0:
 		return
 	var step_idx: int = int(body.get_meta(&"bloody_step_idx", 0))
