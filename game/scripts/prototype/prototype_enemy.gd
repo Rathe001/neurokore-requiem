@@ -310,6 +310,34 @@ var _hit_react_remain: float = 0.0
 # the fire anim on every frame after it ends, waiting instead for
 # the next attack windup to replay from frame 0.
 var _fire_pose_holding: bool = false
+
+# Mob body variants. Non-boss enemies override the EnemyClass-authored
+# mesh with a randomly-rolled riot_guard variant (4 total — 2 male, 2
+# female) so squads read as varied bodies instead of clones. Bosses
+# fall through to enemy_class.character_mesh (crimson_vein_titan, etc.)
+# so boss silhouettes stay unique. The picked variant is stored in
+# `_mob_variant_index` at _init_enemy time and read by _apply_class_mesh,
+# so the same enemy doesn't flicker between bodies if _apply_class_mesh
+# runs more than once during a spawn cycle.
+const _MOB_MESH_VARIANTS: Array = [
+	{
+		&"mesh": preload("res://assets/characters/riot_guard_male_1/riot_guard_male_1.fbx"),
+		&"gender": &"male",
+	},
+	{
+		&"mesh": preload("res://assets/characters/riot_guard_male_2/riot_guard_male_2.fbx"),
+		&"gender": &"male",
+	},
+	{
+		&"mesh": preload("res://assets/characters/riot_guard_female_1/riot_guard_female_1.fbx"),
+		&"gender": &"female",
+	},
+	{
+		&"mesh": preload("res://assets/characters/riot_guard_female_2/riot_guard_female_2.fbx"),
+		&"gender": &"female",
+	},
+]
+var _mob_variant_index: int = -1
 var _hit_react_anim: Array[StringName] = []
 var _hit_react_speed: float = 1.0
 
@@ -652,28 +680,58 @@ static func _rebind_skins_under(node: Node, prefix_from: String, prefix_to: Stri
 func _apply_class_mesh() -> void:
 	if visual == null:
 		return
+	# Mob variant override: non-boss enemies use a random riot_guard
+	# variant rolled in _init_enemy regardless of what EnemyClass.
+	# character_mesh authored. Bosses fall through to the authored
+	# mesh (crimson_vein_titan, etc.) so boss silhouettes stay unique.
+	var picked_mesh: PackedScene = null
+	var picked_gender: StringName = &"male"
+	if _mob_variant_index >= 0 and _mob_variant_index < _MOB_MESH_VARIANTS.size():
+		var variant: Dictionary = _MOB_MESH_VARIANTS[_mob_variant_index]
+		picked_mesh = variant.get(&"mesh") as PackedScene
+		picked_gender = variant.get(&"gender", &"male") as StringName
+	elif enemy_class != null and enemy_class.character_mesh != null:
+		picked_mesh = enemy_class.character_mesh
+		# Boss mesh has no built-in gender concept — male grip table
+		# is the default fallback in WeaponAttachment anyway.
+		picked_gender = &"male"
 	# If the EnemyClass doesn't override the mesh, the scene's authored
 	# Character node stays. We still need to resolve anim_player from it
 	# (or create one if the authored mesh didn't ship an AnimationPlayer),
 	# otherwise anim_player remains the null default from line 384.
 	var current_char := visual.get_node_or_null(^"Character") as Node3D
-	if enemy_class == null or enemy_class.character_mesh == null:
+	if picked_mesh == null:
 		if current_char != null:
 			_ensure_anim_player_on(current_char)
 		return
 	# Skip the swap if the current Character already came from this scene —
 	# checking scene_file_path is the cheapest way to compare since
 	# PackedScene resource_path is canonical.
-	if current_char != null and current_char.scene_file_path == enemy_class.character_mesh.resource_path:
+	if current_char != null and current_char.scene_file_path == picked_mesh.resource_path:
+		# Even on the no-swap path, refresh the gender meta in case a
+		# pool re-acquire shifted us to a different variant of the same
+		# mesh family. WeaponAttachment grip table depends on this.
+		current_char.set_meta(&"gender", picked_gender)
+		# Female meshes ship with their geometric origin ~0.20m above
+		# the feet (same as the player path); lift them so feet sit at
+		# floor level. Male meshes stay at y=0.
+		current_char.position.y = 0.20 if picked_gender == &"female" else 0.0
 		_ensure_anim_player_on(current_char)
 		return
 	if current_char != null:
 		visual.remove_child(current_char)
 		current_char.queue_free()
-	var new_char := enemy_class.character_mesh.instantiate() as Node3D
+	var new_char := picked_mesh.instantiate() as Node3D
 	if new_char == null:
 		return
 	new_char.name = "Character"
+	# Stash the gender meta so WeaponAttachment._resolve_skeleton_gender
+	# can pick the right grip table (per-weapon offset/rotation/scale
+	# tuned for female bone proportions). Matches player setup.
+	new_char.set_meta(&"gender", picked_gender)
+	# Female meshes need a Y lift so feet sit at floor level (geometric
+	# origin sits ~0.20m above the feet on the Meshy female imports).
+	new_char.position.y = 0.20 if picked_gender == &"female" else 0.0
 	# Backfill null surface materials BEFORE the node enters the tree.
 	# Doing it after add_child leaves one frame where the renderer sees
 	# the null surfaces and spams material_*: Parameter is null. Same
@@ -682,7 +740,7 @@ func _apply_class_mesh() -> void:
 	visual.add_child(new_char)
 	# Per-class yaw correction for meshes authored facing the wrong
 	# axis (military_man faces opposite X Bot, so the class sets PI).
-	if absf(enemy_class.mesh_yaw_offset) > 0.0001:
+	if enemy_class != null and absf(enemy_class.mesh_yaw_offset) > 0.0001:
 		new_char.rotation.y = enemy_class.mesh_yaw_offset
 	# Re-resolve anim_player — the @onready cached the OLD Character's
 	# AnimationPlayer, which is about to be freed. find_child walks the
@@ -842,6 +900,14 @@ func _init_enemy() -> void:
 		_hit_tween.kill()
 		_hit_tween = null
 	_apply_level_stats()
+	# Roll a mob-body variant BEFORE _apply_class_mesh reads it. Non-boss
+	# enemies show one of the 4 riot_guard variants; bosses skip the roll
+	# and use the EnemyClass-authored mesh. Rolled here so the pick is
+	# fresh on every pool re-acquire (matches _generation bump above).
+	if is_boss:
+		_mob_variant_index = -1
+	else:
+		_mob_variant_index = randi() % _MOB_MESH_VARIANTS.size()
 	# Apply the EnemyClass's character_mesh override AFTER _apply_level_stats
 	# so any named-monster class swap (which happens inside that function)
 	# is in effect first — the named monster's class drives the mesh, not
