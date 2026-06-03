@@ -2788,7 +2788,11 @@ const EXPLOSION_DURATION := 0.8
 # moment" punch — the flipbook itself handles fireball + smoke phases
 # internally over its own ~2s sprite-sheet lifetime, so we don't need
 # a separate procedural smoke layer.
-const EXPLOSION_SPARK_LIFETIME := 0.45
+# Was 0.45 — combined with the previous high spark velocity, that
+# gave each spark a long flight path well past wall boundaries.
+# Shorter lifetime helps the cloud die out inside the blast radius
+# alongside the velocity/damping changes in _spawn_explosion_sparks.
+const EXPLOSION_SPARK_LIFETIME := 0.32
 const EXPLOSION_FLASH_DURATION: float = 0.18
 # Lifetime of the flipbook GPUParticles3D scene before we queue_free
 # its instance. Matches the BigExplosionScene's particle lifetime
@@ -3134,11 +3138,18 @@ static func _spawn_explosion_sparks(parent: Node, world_pos: Vector3, blast_radi
 	pm.emission_sphere_radius = blast_radius * 0.15
 	pm.direction = Vector3(0.0, 0.3, 0.0)
 	pm.spread = 180.0  # full radial spray
-	pm.initial_velocity_min = blast_radius * 5.0
-	pm.initial_velocity_max = blast_radius * 9.0
-	pm.gravity = Vector3(0.0, -12.0, 0.0)
-	pm.damping_min = 6.0
-	pm.damping_max = 10.0
+	# Previously velocity 5-9 × blast_radius with damping 6-10 sent
+	# sparks well past wall boundaries into adjacent rooms (no
+	# particle-collision setup in the project, so sparks pass through
+	# geometry). Dialed velocity ~50% lower and damping ~70% higher
+	# so the spark cloud decays inside the blast radius — visually
+	# still reads as a dramatic burst, but the perimeter sparks
+	# stop short of where typical walls sit.
+	pm.initial_velocity_min = blast_radius * 2.5
+	pm.initial_velocity_max = blast_radius * 4.5
+	pm.gravity = Vector3(0.0, -18.0, 0.0)
+	pm.damping_min = 11.0
+	pm.damping_max = 16.0
 	pm.scale_min = 0.04
 	pm.scale_max = 0.10
 	pm.color = Color(tint.r, tint.g, tint.b, 1.0)
