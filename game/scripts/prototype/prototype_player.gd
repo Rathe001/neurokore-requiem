@@ -2054,8 +2054,20 @@ func _physics_process(delta: float) -> void:
 			elif firing_held:
 				# Moving + firing → strafe (legs walk, rifle stays up).
 				# Standing still + firing → fire (rifle recoil cycle only).
-				anim_player.speed_scale = 1.0
-				_play_anim(_ranged_fire_anim(), 1.0, 0.15)
+				# Speed-scale the fire loop to MATCH the actual fire
+				# interval. Previously the anim ran at fixed 1.0× while
+				# different weapons fire on different cadences (skill.cooldown
+				# / effective attack speed), so the anim loop boundary and
+				# the shot timing drifted relative to each other and
+				# produced a visible recoil wobble. _play_anim_stretched
+				# scales speed_scale so anim.length / fire_interval = 1
+				# cycle per shot. Re-called per frame; _play_anim early-
+				# outs on same-anim and just updates speed_scale.
+				_play_anim_stretched(
+					_ranged_fire_anim(),
+					_held_weapon_fire_interval(),
+					0.15,
+				)
 			elif _want_dir.length_squared() > 0.01:
 				# Fixed animation speed — sprint and backing are the only
 				# modifiers. All speed control goes through speed_scale
@@ -4520,6 +4532,20 @@ func _ranged_fire_anim() -> Array[StringName]:
 	# rifle stays on the wide-stance xbot/fire. Class lookup makes
 	# SMG read as 1H instead of inheriting the rifle pose.
 	return XBotAnimations.fire_anim_for_class(_equipped_weapon_class())
+
+
+# Effective seconds between shots for the currently-equipped weapon.
+# Used by the per-tick fire-pose picker to scale the looping fire
+# animation so one anim cycle == one shot, eliminating the recoil
+# wobble that happens when anim_length and fire_interval drift.
+# Returns 1.0 as a safe fallback for melee or no-skill weapons (the
+# fire branch only runs for bullet weapons anyway).
+func _held_weapon_fire_interval() -> float:
+	var w: Item = InventoryState.get_equipped(&"weapon")
+	if w == null or w.fire_skill == null or w.fire_skill.cooldown <= 0.0:
+		return 1.0
+	var eff_atk: float = w.effective_attack_speed() * (1.0 + _gear_attack_speed_bonus)
+	return w.fire_skill.cooldown / maxf(eff_atk, 0.1)
 
 
 # Returns the stance class of the currently-equipped main weapon
