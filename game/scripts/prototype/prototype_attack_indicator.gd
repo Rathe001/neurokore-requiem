@@ -2176,15 +2176,20 @@ static func spawn_fluid_footprint(parent: Node, world_pos: Vector3,
 	var rot_y: float = 0.0
 	if forward_dir.length_squared() > 0.0001:
 		rot_y = atan2(forward_dir.x, forward_dir.z)
-	# Use stamp_oriented now that its lifecycle bug is fixed (sprite
-	# was being freed before its SubViewport render pass completed —
-	# the new internal timer keeps it alive for ~100ms). Boot-print
-	# silhouette is oriented along the walking direction; no random
-	# rotation or aspect jitter so every print reads the same and
-	# trails point where the player is going.
-	# 0.32 × 0.45m is roughly real boot dimensions; the silhouette's
-	# bounding box is slightly larger than the actual painted shape.
-	var alpha: float = lerpf(0.15, 1.0, intensity)
+	# Boot-print silhouette oriented along walking direction. 0.32 ×
+	# 0.45m matches real boot dimensions.
+	#
+	# Power-curve alpha so the trail fades out smoothly instead of
+	# ending at a hard floor. Linear lerp(0.15, 1.0, intensity)
+	# bottomed at 0.15 → next step was nothing, which read as an
+	# abrupt cutoff. pow(intensity, 1.6) drives the last prints
+	# toward ~0 alpha naturally:
+	#   intensity 1.0  → 1.00
+	#   intensity 0.7  → 0.57
+	#   intensity 0.4  → 0.23
+	#   intensity 0.2  → 0.08
+	#   intensity 0.1  → 0.03  (barely-there final print)
+	var alpha: float = pow(intensity, 1.6)
 	layer.stamp_oriented(world_pos, tex, Vector2(0.32, 0.45), rot_y, alpha)
 
 
