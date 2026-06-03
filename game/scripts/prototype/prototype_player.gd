@@ -4608,26 +4608,32 @@ func _play_fire_pose(blend: float = 0.15, restart: bool = false) -> void:
 	if is_slow_weapon:
 		# HOLD MODE — play once, freeze at end frame.
 		clip.loop_mode = Animation.LOOP_NONE
+		var current_is_fire_anim: bool = anim_player.current_animation == name_str
 		if restart:
 			# Per-shot event: visible recoil cycle from frame 0.
 			_fire_pose_holding = false
 			anim_player.speed_scale = 1.0
 			anim_player.play(name_str, blend, 1.0, false)
 			_anim_reverse = false
-		elif _fire_pose_holding:
-			# Anim already played through; sitting on last frame.
-			# Do nothing — wait for the next shot to restart.
+		elif _fire_pose_holding and current_is_fire_anim:
+			# Anim already played through and is still showing on its
+			# last frame — leave it. (The current_is_fire_anim guard
+			# is critical: if the player moved → locomotion swapped
+			# RUN in → and then stopped, the stale _fire_pose_holding
+			# flag would otherwise skip restarting the fire pose and
+			# RUN would keep playing until the next shot.)
 			pass
-		elif anim_player.current_animation != name_str or not anim_player.is_playing():
-			# Fire pose isn't currently playing (e.g. first frame
-			# after LMB press, before the fire event fires) — start
-			# it once. Subsequent ticks see the playing state and
-			# fall through to the no-op path.
+		elif current_is_fire_anim and anim_player.is_playing():
+			# Mid-cycle on the fire anim — leave it alone.
+			pass
+		else:
+			# Either just transitioned back from movement (RUN was
+			# playing), or first frame after LMB press before any
+			# shot has fired. Start the fire pose fresh.
 			_fire_pose_holding = false
 			anim_player.speed_scale = 1.0
 			anim_player.play(name_str, blend, 1.0, false)
 			_anim_reverse = false
-		# else: anim is playing; leave it alone.
 	else:
 		# LOOP MODE — continuous cycle scaled to fire_interval.
 		clip.loop_mode = Animation.LOOP_LINEAR
