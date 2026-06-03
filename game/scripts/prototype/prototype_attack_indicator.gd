@@ -2137,7 +2137,12 @@ static func _fade_and_free(decal: Decal) -> void:
 # room's width or one short corridor before the trail dries up. Each
 # print also self-cleans via the fade timer in spawn_blood_footprint,
 # so even at this count the floor doesn't accumulate trails over time.
-const BLOODY_STEPS_INITIAL: int = 10
+# Was 10 — the trail's last visible print was still ~0.03 alpha,
+# bright enough that the cut to nothing read as abrupt. 14 prints
+# combined with the steeper alpha curve below means the final two or
+# three prints are well below the visible threshold, so the trail
+# tapers organically into the floor rather than ending hard.
+const BLOODY_STEPS_INITIAL: int = 14
 # Footprint self-fade: linger fully visible for _FOOTPRINT_HOLD seconds,
 # then tween modulate.alpha to 0 over _FOOTPRINT_FADE seconds and free.
 # Independent of the global _blood_decal_ring eviction so prints clean
@@ -2179,17 +2184,17 @@ static func spawn_fluid_footprint(parent: Node, world_pos: Vector3,
 	# Boot-print silhouette oriented along walking direction. 0.32 ×
 	# 0.45m matches real boot dimensions.
 	#
-	# Power-curve alpha so the trail fades out smoothly instead of
-	# ending at a hard floor. Linear lerp(0.15, 1.0, intensity)
-	# bottomed at 0.15 → next step was nothing, which read as an
-	# abrupt cutoff. pow(intensity, 1.6) drives the last prints
-	# toward ~0 alpha naturally:
-	#   intensity 1.0  → 1.00
-	#   intensity 0.7  → 0.57
-	#   intensity 0.4  → 0.23
-	#   intensity 0.2  → 0.08
-	#   intensity 0.1  → 0.03  (barely-there final print)
-	var alpha: float = pow(intensity, 1.6)
+	# Steeper power curve + longer trail (14 prints) so the tail prints
+	# drop well below visibility — the cutoff to "no more prints"
+	# becomes invisible rather than abrupt. pow(intensity, 2.6) at
+	# 14-step granularity:
+	#   step 1  (intensity 1.000) → alpha 1.00
+	#   step 4  (intensity 0.786) → alpha 0.55
+	#   step 7  (intensity 0.571) → alpha 0.25
+	#   step 10 (intensity 0.357) → alpha 0.07
+	#   step 12 (intensity 0.214) → alpha 0.02   (sub-perceptible)
+	#   step 14 (intensity 0.071) → alpha 0.001  (vanishes into floor)
+	var alpha: float = pow(intensity, 2.6)
 	layer.stamp_oriented(world_pos, tex, Vector2(0.32, 0.45), rot_y, alpha)
 
 
