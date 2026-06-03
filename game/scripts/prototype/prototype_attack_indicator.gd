@@ -2903,7 +2903,27 @@ static func spawn_explosion(host: Node3D, world_pos: Vector3, blast_radius: floa
 		# uses local_coords = false so the particles don't follow the
 		# anchor after spawn.
 		dust_anchor.queue_free()
-		spawn_explosion_debris(host, ground_pos, blast_radius)
+		# Delay debris spawn so the flipbook smoke has time to bloom
+		# before the chunks fly out of it. Opaque debris meshes always
+		# render before the transparent smoke, so without this delay
+		# the smoke (depth-tested behind every airborne shard) was
+		# discarded under each debris fragment — debris read as a
+		# layer pasted on top of the cloud rather than emerging from
+		# inside it. ~0.12s lets the smoke fill the impact volume
+		# first; once shards spawn, they fly out of an established
+		# cloud and the smoke blends correctly over the portions of
+		# the shard arcs that are behind it.
+		var debris_host_id := host.get_instance_id()
+		var debris_pos := ground_pos
+		var debris_radius := blast_radius
+		var t := host.get_tree().create_timer(0.12)
+		t.timeout.connect(
+			func() -> void:
+				var h := instance_from_id(debris_host_id) as Node3D
+				if h != null and is_instance_valid(h) and h.is_inside_tree():
+					spawn_explosion_debris(h, debris_pos, debris_radius),
+			CONNECT_ONE_SHOT
+		)
 
 
 ## Flipbook-driven explosion using the BigExplosionScene's pre-baked
