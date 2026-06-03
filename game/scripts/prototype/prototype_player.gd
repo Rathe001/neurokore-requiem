@@ -2063,22 +2063,11 @@ func _physics_process(delta: float) -> void:
 				else:
 					_play_anim(ANIM_RELOAD, 1.0, 0.15)
 			elif firing_held:
-				# Moving + firing → strafe (legs walk, rifle stays up).
-				# Standing still + firing → fire (rifle recoil cycle only).
-				# Speed-scale the fire loop to MATCH the actual fire
-				# interval. Previously the anim ran at fixed 1.0× while
-				# different weapons fire on different cadences (skill.cooldown
-				# / effective attack speed), so the anim loop boundary and
-				# the shot timing drifted relative to each other and
-				# produced a visible recoil wobble. _play_anim_stretched
-				# scales speed_scale so anim.length / fire_interval = 1
-				# cycle per shot. Re-called per frame; _play_anim early-
-				# outs on same-anim and just updates speed_scale.
-				_play_anim_stretched(
-					_ranged_fire_anim(),
-					_held_weapon_fire_interval(),
-					0.15,
-				)
+				# Moving + firing → strafe (legs at natural cadence).
+				# Standing still + firing → upper-body recoil cycle
+				# stretched to match fire interval. See _play_fire_pose
+				# header for the full rationale.
+				_play_fire_pose(0.15)
 			elif _want_dir.length_squared() > 0.01:
 				# Fixed animation speed — sprint and backing are the only
 				# modifiers. All speed control goes through speed_scale
@@ -2806,7 +2795,7 @@ func _cast_skill(skill: Skill) -> void:
 	# animation. Same FIRE / FIRE_MOVE branch as the LMB path so the
 	# per-tick picker doesn't undo our choice.
 	if weapon != null and weapon.is_bullet_weapon():
-		_play_anim(_ranged_fire_anim(), 1.0)
+		_play_fire_pose()
 	else:
 		# Combo-aware melee swing — see peek_next_melee_combo_step.
 		# Plays the full clip stretched to fit the skill's effective
@@ -4557,6 +4546,50 @@ func _held_weapon_fire_interval() -> float:
 		return 1.0
 	var eff_atk: float = w.effective_attack_speed() * (1.0 + _gear_attack_speed_bonus)
 	return w.fire_skill.cooldown / maxf(eff_atk, 0.1)
+
+
+# Single source of truth for "I'm holding LMB on a bullet weapon."
+# Two distinct cases, each needing a different speed strategy:
+#
+#  * Moving + firing → ANIM_FIRE_MOVE (xbot/fire_move) plays a STRAFE
+#    that bundles leg + upper-body motion in one clip. Stretching the
+#    speed_scale here would distort the LEG cadence — slow sniper made
+#    legs glide, fast LMG made them spaz. Held at 1.0× so the strafe
+#    reads naturally regardless of fire rate. Slight recoil drift is
+#    invisible against the leg motion at this distance.
+#
+#  * Stationary firing → ANIM_FIRE (upper body only — no leg cadence
+#    to corrupt). Speed-scaled to match fire_interval so the recoil
+#    cycle syncs to actual shots. Clamped 0.6×–1.3× so very fast
+#    (LMG) doesn't spaz and very slow (sniper) doesn't freeze.
+#
+# Single helper called from every "currently firing" site (per-tick
+# picker AND fire-event handlers) so the speed never conflicts.
+func _play_fire_pose(blend: float = 0.15) -> void:
+	if anim_player == null:
+		return
+	if _want_dir.length_squared() > 0.01:
+		_play_anim(ANIM_FIRE_MOVE, 1.0, blend)
+		return
+	var candidates: Array[StringName] = _ranged_fire_anim()
+	var chosen: StringName = &""
+	for key in candidates:
+		if anim_player.has_animation(key):
+			chosen = key
+			break
+	if chosen == &"":
+		return
+	var clip: Animation = anim_player.get_animation(chosen)
+	if clip == null or clip.length <= 0.0:
+		_play_anim([chosen], 1.0, blend)
+		return
+	var fire_int: float = _held_weapon_fire_interval()
+	if fire_int <= 0.0:
+		_play_anim([chosen], 1.0, blend)
+		return
+	var speed: float = clip.length / fire_int
+	speed = clampf(speed, 0.6, 1.3)
+	_play_anim([chosen], speed, blend)
 
 
 # Returns the stance class of the currently-equipped main weapon
