@@ -15,7 +15,14 @@ Player melee damage + strike SFX fire at `melee_interval * _melee_impact_ratio(w
 
 Default for unknown weapon ids is 0.5. Add an entry when a new melee base lands.
 
-**Current values:** `melee_1h: 0.5`, `melee_2h: 0.4`.
+**Current values are PER COMBO STEP** (the 3-hit chain plays different clips per step, and the visible-impact frame differs per clip):
+```gdscript
+const _MELEE_IMPACT_RATIO_PER_STEP: Dictionary = {
+    &"melee_1h": [0.35, 0.5, 0.5],   # step 0 sword_slash impacts earlier
+    &"melee_2h": [0.32, 0.22, 0.22], # 2H heavy windup carries forward
+}
+```
+Caller `peek_next_melee_combo_step(weapon)` to get the upcoming step (don't `advance_` — combat advances later inside `_resolve_cone`). Pass that step to `_melee_impact_ratio(base_id, step)`.
 
 **Animation duration handling:** the swing anim is stretched via `_play_anim_stretched` to fit `melee_interval = skill.cooldown / atk_spd`. So the impact ratio is fraction-through-the-stretched-clip, which equals fraction-through-the-cooldown regardless of source clip length. Same ratio works at every attack_speed.
 

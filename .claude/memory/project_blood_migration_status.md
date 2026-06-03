@@ -31,6 +31,20 @@ against `git log --oneline` before assuming this is current.**
   too many overlapping areas). `is_in_blood(world_pos)` scans the
   group for footstep system polling.
 
+## Update 2026-06-03
+
+- **Footprints migrated** — `spawn_fluid_footprint` now stamps into
+  the per-fluid LiquidLayer via new `stamp_oriented` method. WHITE
+  silhouette texture; color from layer shader; back-compat shim on
+  `spawn_blood_footprint` so callers (Footsteps.gd) didn't change.
+  Hit a hidden lifecycle bug with `process_frame.connect` cleanup —
+  see [[liquid-layer-stamp-lifecycle]] before adding any new
+  `stamp_*` variants.
+- **Slippery / Poor Traction debuff window tied to the visual trail.**
+  `_active_ground_surfaces` checks `bloody_steps_remaining` meta
+  alongside `_blood_pool_count`, so the debuff persists as long as
+  prints are visibly being tracked. Same pattern for future fluids.
+
 ## Still on the old Decal system (pending tasks)
 
 - **#110 Walls** — `spawn_blood_wall_splatter` still spawns a Decal3D
