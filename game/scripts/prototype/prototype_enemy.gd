@@ -319,6 +319,16 @@ var _fire_pose_holding: bool = false
 # `_mob_variant_index` at _init_enemy time and read by _apply_class_mesh,
 # so the same enemy doesn't flicker between bodies if _apply_class_mesh
 # runs more than once during a spawn cycle.
+# Per-gender Y position for the riot_guard mesh Character node, tuned
+# so feet sit ON the floor at the CharacterBody3D origin. The Meshy
+# player meshes use 0.20m for female because their origin sits 0.20m
+# above the feet; riot_guard imports have their origins LOWER than the
+# Meshy meshes, so they need a negative lift for males and a smaller
+# positive lift for females. Tune here if specific variants drift.
+const _ENEMY_FEET_Y_MALE: float = -0.10
+const _ENEMY_FEET_Y_FEMALE: float = 0.10
+
+
 const _MOB_MESH_VARIANTS: Array = [
 	{
 		&"mesh": preload("res://assets/characters/riot_guard_male_1/riot_guard_male_1.fbx"),
@@ -715,7 +725,7 @@ func _apply_class_mesh() -> void:
 		# Female meshes ship with their geometric origin ~0.20m above
 		# the feet (same as the player path); lift them so feet sit at
 		# floor level. Male meshes stay at y=0.
-		current_char.position.y = 0.20 if picked_gender == &"female" else 0.0
+		current_char.position.y = _ENEMY_FEET_Y_FEMALE if picked_gender == &"female" else _ENEMY_FEET_Y_MALE
 		_ensure_anim_player_on(current_char)
 		return
 	if current_char != null:
@@ -731,7 +741,7 @@ func _apply_class_mesh() -> void:
 	new_char.set_meta(&"gender", picked_gender)
 	# Female meshes need a Y lift so feet sit at floor level (geometric
 	# origin sits ~0.20m above the feet on the Meshy female imports).
-	new_char.position.y = 0.20 if picked_gender == &"female" else 0.0
+	new_char.position.y = _ENEMY_FEET_Y_FEMALE if picked_gender == &"female" else _ENEMY_FEET_Y_MALE
 	# Backfill null surface materials BEFORE the node enters the tree.
 	# Doing it after add_child leaves one frame where the renderer sees
 	# the null surfaces and spams material_*: Parameter is null. Same
