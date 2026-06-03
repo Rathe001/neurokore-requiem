@@ -705,6 +705,11 @@ var _sprint_regen_penalty: float = 0.0
 var _is_airborne: bool = false
 var _backing: bool = false
 var _interacting: bool = false
+# HOLD-mode fire pose flag — true while a non-looping fire anim has
+# played through and is sitting on its last frame, waiting for the
+# next shot. Set by _on_anim_finished; cleared on the next fire
+# event (or when we restart fire-anim playback). See _play_fire_pose.
+var _fire_pose_holding: bool = false
 var _fps_hovered: Node3D = null
 var _crosshair_root: Control = null
 var _crosshair_bars: Array[ColorRect] = []
@@ -2594,12 +2599,12 @@ func _cast_lmb_combat() -> void:
 	if main_fired:
 		_face_direction(aim)
 		# Ranged weapons play the looping firing-rifle pose; melee + unarmed
-		# fall back to the punch/swing animation. Ranged picks the strafe
-		# variant when moving so it agrees with the per-tick anim picker —
-		# otherwise the two sites alternate between FIRE / FIRE_MOVE and
-		# restart the loop every shot.
+		# fall back to the punch/swing animation. _play_fire_pose with
+		# restart=true triggers a visible recoil cycle for slow weapons
+		# (HOLD mode) and is a no-op restart for fast weapons (LOOP
+		# mode's _play_anim early-out skips it).
 		if main_item != null and main_item.is_bullet_weapon():
-			_play_anim(_ranged_fire_anim(), 1.0)
+			_play_fire_pose(0.15, true)
 		else:
 			# Melee swing — picks the variant for the current combo
 			# step (0/1/2). peek_next_melee_combo_step previews what
@@ -2800,9 +2805,10 @@ func _cast_skill(skill: Skill) -> void:
 	# Ranged skills (RPG, sniper alt-fire, etc.) use the firing-rifle pose;
 	# melee skills and class skills with no weapon fall back to the swing
 	# animation. Same FIRE / FIRE_MOVE branch as the LMB path so the
-	# per-tick picker doesn't undo our choice.
+	# per-tick picker doesn't undo our choice. restart=true for the
+	# per-shot recoil cycle in slow-weapon HOLD mode.
 	if weapon != null and weapon.is_bullet_weapon():
-		_play_fire_pose()
+		_play_fire_pose(0.15, true)
 	else:
 		# Combo-aware melee swing — see peek_next_melee_combo_step.
 		# Plays the full clip stretched to fit the skill's effective
@@ -4555,26 +4561,29 @@ func _held_weapon_fire_interval() -> float:
 	return w.fire_skill.cooldown / maxf(eff_atk, 0.1)
 
 
-# Stationary firing pose only — upper-body recoil cycle (ANIM_FIRE)
-# scaled so anim.length / fire_interval ≈ 1 cycle per shot, clamped
-# 0.6×–1.3× so fast (LMG) doesn't spaz and slow (sniper) doesn't
-# freeze.
+# Stationary firing pose with two modes:
 #
-# No-op when MOVING. The locomotion picker handles run/walk legs at
-# the right speed in that case — same flow CHANNEL_BEAM weapons
-# (arc taser) get implicitly via is_bullet_weapon() = false. We don't
-# try to play a strafe-fire combo clip because that clip's leg
-# cadence is fixed and doesn't match actual movement speed.
+#  * FAST weapons (fire_interval < clip.length): continuous LOOP at
+#    a speed scaled by anim.length / fire_interval, clamped so it
+#    doesn't spaz/freeze.
 #
-# Called from every "currently firing" site (per-tick picker AND
-# fire-event handlers); each is responsible for ALSO calling the
-# locomotion picker if movement is happening, OR running this through
-# the same elif chain so locomotion takes over for the moving case.
-func _play_fire_pose(blend: float = 0.15) -> void:
+#  * SLOW weapons (fire_interval ≥ clip.length, e.g. sniper): HOLD
+#    mode — anim plays once at 1.0× per shot, then freezes on the
+#    last frame until the next shot. Looping a slow weapon at sub-
+#    1.0× speed read as wobble because the loop boundary drifted
+#    against the shot timing.
+#
+# No-op when MOVING — locomotion picker takes over (same flow that
+# arc taser gets implicitly via is_bullet_weapon() = false).
+#
+# `restart` is true when called from a fire EVENT (per-shot) and
+# false when called from the per-tick picker. In HOLD mode the fire
+# event restarts from frame 0 (visible recoil per shot) while the
+# tick picker leaves the anim alone (lets it play through and hold).
+func _play_fire_pose(blend: float = 0.15, restart: bool = false) -> void:
 	if anim_player == null:
 		return
 	if _want_dir.length_squared() > 0.01:
-		# Moving — let the caller's locomotion picker run instead.
 		return
 	var candidates: Array[StringName] = _ranged_fire_anim()
 	var chosen: StringName = &""
@@ -4592,9 +4601,40 @@ func _play_fire_pose(blend: float = 0.15) -> void:
 	if fire_int <= 0.0:
 		_play_anim([chosen], 1.0, blend)
 		return
-	var speed: float = clip.length / fire_int
-	speed = clampf(speed, 0.6, 1.3)
-	_play_anim([chosen], speed, blend)
+	# Margin so weapons right at the boundary land in LOOP mode where
+	# the clamp can still produce a reasonable visual.
+	var is_slow_weapon: bool = fire_int > clip.length * 1.05
+	var name_str: String = String(chosen)
+	if is_slow_weapon:
+		# HOLD MODE — play once, freeze at end frame.
+		clip.loop_mode = Animation.LOOP_NONE
+		if restart:
+			# Per-shot event: visible recoil cycle from frame 0.
+			_fire_pose_holding = false
+			anim_player.speed_scale = 1.0
+			anim_player.play(name_str, blend, 1.0, false)
+			_anim_reverse = false
+		elif _fire_pose_holding:
+			# Anim already played through; sitting on last frame.
+			# Do nothing — wait for the next shot to restart.
+			pass
+		elif anim_player.current_animation != name_str or not anim_player.is_playing():
+			# Fire pose isn't currently playing (e.g. first frame
+			# after LMB press, before the fire event fires) — start
+			# it once. Subsequent ticks see the playing state and
+			# fall through to the no-op path.
+			_fire_pose_holding = false
+			anim_player.speed_scale = 1.0
+			anim_player.play(name_str, blend, 1.0, false)
+			_anim_reverse = false
+		# else: anim is playing; leave it alone.
+	else:
+		# LOOP MODE — continuous cycle scaled to fire_interval.
+		clip.loop_mode = Animation.LOOP_LINEAR
+		_fire_pose_holding = false
+		var speed: float = clip.length / fire_int
+		speed = clampf(speed, 0.6, 1.3)
+		_play_anim([chosen], speed, blend)
 
 
 # Returns the stance class of the currently-equipped main weapon
@@ -4828,6 +4868,12 @@ func _update_interact_cursor() -> void:
 func _on_anim_finished(anim_name: String) -> void:
 	if anim_name == "Interact":
 		_interacting = false
+	# HOLD-mode fire pose just finished — mark held so the per-tick
+	# picker doesn't restart it. The next fire event will clear this
+	# flag and replay from frame 0.
+	var name_sn: StringName = StringName(anim_name)
+	if name_sn in ANIM_FIRE or name_sn in XBotAnimations.fire_anim_for_class(&"pistol"):
+		_fire_pose_holding = true
 
 func _would_hit_ceiling_if_standing() -> bool:
 	if _stand_test_shape == null:
