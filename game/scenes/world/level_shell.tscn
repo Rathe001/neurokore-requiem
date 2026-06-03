@@ -183,7 +183,7 @@ script = ExtResource("script_players_container")
 ; LiquidLayer with different fresh/dried/roughness uniforms once the
 ; Fluid resource system lands (task #112).
 [node name="BloodLayer" parent="." instance=ExtResource("scene_liquid_blood")]
-fluid_id = &"blood_human"
+fluid_id = &"human"
 
 ; Wall blood overlay (Phase 1 of rebuild). Currently spawns a debug
 ; magenta quad at level origin to verify the foundation — no shader,

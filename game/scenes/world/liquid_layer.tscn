@@ -4,4 +4,4 @@
 
 [node name="LiquidLayer" type="Node3D"]
 script = ExtResource("1")
-fluid_id = &"blood_human"
+fluid_id = &"human"

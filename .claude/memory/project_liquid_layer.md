@@ -15,12 +15,17 @@ tweens, and visible inter-pool silhouette seams.
 ## Layout
 
 - **`game/scripts/systems/liquid_layer.gd`** — LiquidLayer class. One
-  per fluid type, found via group `liquid_layer:<fluid_id>` (e.g.
-  `liquid_layer:blood_human`).
+  per fluid type, found via `LiquidLayer.find_for(tree, fluid_id)`
+  (which wraps the `liquid_layer:<fluid_id>` group lookup and emits a
+  one-time warning if it falls back to "any liquid layer"). The
+  fluid_id is a single-token key matching `PrototypeEnemy.blood_type`:
+  `&"human"`, `&"cyborg"`, `&"machine"`, future `&"oil"`, `&"water"`.
+  Never prefix with `"blood_"` — those keys are shared between blood
+  and non-blood fluids.
 - **`game/scenes/world/liquid_layer.tscn`** — Thin scene wrapper.
   Instanced in `game/scenes/world/level_shell.tscn` as `BloodLayer`
-  with `fluid_id = &"blood_human"`. Other fluids will instance their
-  own copy here.
+  with `fluid_id = &"human"`. Other fluids will instance their own
+  copy here.
 - **`game/shaders/liquid_surface.gdshader`** — Single shader that
   samples a coverage mask + the floor underneath (via
   `hint_screen_texture`) and outputs a multiplied-stain ALBEDO with

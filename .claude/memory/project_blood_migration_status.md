@@ -54,14 +54,16 @@ against `git log --oneline` before assuming this is current.**
   [[project_object_blood_pipeline]] (props/interactables/pillars)
   and `spawn_blood_on_character` (per-character splats). Different
   pipelines, similar migration shape.
-- **#112 Fluid type generalization** — Currently
-  `BloodLayer` is hardcoded in `level_shell.tscn` with
-  `fluid_id = &"blood_human"`. To support cyborg blood / machine
-  fluid / oil / water as separate fluids, instance more LiquidLayer
-  scenes per fluid_type and let `spawn_blood_decal` look up the
-  right one by `liquid_layer:<id>` group. Code is mostly there —
-  just need to instance the scenes + audit the call sites that
-  hardcode `BLOOD_TYPE_HUMAN`.
+- **#112 Fluid type generalization (in-progress 2026-06-03)** —
+  Floor LiquidLayer naming + lookup unified. `fluid_id` now matches
+  `blood_type` directly (`&"human"`, not `&"blood_human"`); a single
+  `LiquidLayer.find_for(tree, fluid_id)` static helper routes every
+  spawn call site. Silent fallbacks replaced with one-time
+  push_warning calls so missing layers surface in dev.
+  Still pending: instancing additional LiquidLayer scenes for
+  non-human fluids (cyborg / machine / oil / water — needs different
+  color uniforms per instance); wall LiquidLayer multi-fluid support
+  (currently a singleton — would need per-axis masks per fluid).
 
 ## Approach hint for walls (task #110)
 

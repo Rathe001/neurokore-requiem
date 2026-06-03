@@ -2859,18 +2859,11 @@ func _settled_corpse_position() -> Vector3:
 func _spawn_settle_pool() -> void:
 	if not is_inside_tree():
 		return
-	# New liquid-shader path: stamp into the per-fluid LiquidLayer's
-	# accumulator SubViewport. Overlapping stamps blend additively in
-	# the mask, so adjacent corpses' pools merge into one continuous
-	# wet surface with no per-stamp silhouette. Pulls the layer for
-	# this enemy's blood_type via the group LiquidLayer adds itself to.
-	var layer_group: StringName = StringName("liquid_layer:" + String(blood_type))
-	var layer := get_tree().get_first_node_in_group(layer_group) as LiquidLayer
-	if layer == null:
-		# Fallback: any liquid layer at all (covers legacy levels where
-		# the blood_type-specific layer wasn't instanced). Better than
-		# silently dropping the stamp.
-		layer = get_tree().get_first_node_in_group(&"liquid_layer") as LiquidLayer
+	# Stamp into the per-fluid LiquidLayer's accumulator SubViewport.
+	# Overlapping stamps blend additively in the mask, so adjacent
+	# corpses' pools merge into one continuous wet surface with no
+	# per-stamp silhouette. LiquidLayer.find_for routes by fluid_id.
+	var layer := LiquidLayer.find_for(get_tree(), blood_type)
 	if layer == null:
 		return
 	# Slow expansion: a single Sprite2D in the LiquidLayer's mask tweens
@@ -2922,10 +2915,7 @@ const _POOL_FINAL_RADIUS: float = 0.85
 func _stamp_hit_droplets(hit_pos: Vector3, hit_dir: Vector3, count: int) -> void:
 	if count <= 0 or not is_inside_tree():
 		return
-	var layer_group: StringName = StringName("liquid_layer:" + String(blood_type))
-	var layer := get_tree().get_first_node_in_group(layer_group) as LiquidLayer
-	if layer == null:
-		layer = get_tree().get_first_node_in_group(&"liquid_layer") as LiquidLayer
+	var layer := LiquidLayer.find_for(get_tree(), blood_type)
 	if layer == null:
 		return
 	# Drop droplets onto the floor under the enemy. Y is taken from

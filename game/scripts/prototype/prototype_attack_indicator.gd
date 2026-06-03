@@ -1116,20 +1116,14 @@ static func _on_blood_pool_body_exited(body: Node) -> void:
 		body.exit_blood_pool()
 
 
-# Resolve the LiquidLayer for `blood_type` (or any layer as fallback)
-# and stamp a randomly-rotated lobed splatter at `world_pos`. Returns
-# silently if no LiquidLayer is in the scene (covers test scenes that
-# never instanced one).
+# Resolve the LiquidLayer for `blood_type` and stamp a randomly-rotated
+# lobed splatter at `world_pos`. Returns silently if no LiquidLayer is
+# in the scene (covers test scenes that never instanced one);
+# LiquidLayer.find_for surfaces a one-time warning if it falls back.
 static func _stamp_to_liquid_layer(parent: Node, world_pos: Vector3, blood_type: StringName, world_radius: float, intensity: float) -> void:
 	if parent == null or not parent.is_inside_tree():
 		return
-	var tree := parent.get_tree()
-	if tree == null:
-		return
-	var layer_group: StringName = StringName("liquid_layer:" + String(blood_type))
-	var layer := tree.get_first_node_in_group(layer_group) as LiquidLayer
-	if layer == null:
-		layer = tree.get_first_node_in_group(&"liquid_layer") as LiquidLayer
+	var layer := LiquidLayer.find_for(parent.get_tree(), blood_type)
 	if layer == null:
 		return
 	# Reuse the lobed/noise-perturbed splatter textures generated for
@@ -2166,15 +2160,7 @@ static func spawn_fluid_footprint(parent: Node, world_pos: Vector3,
 		fluid_id: StringName = BLOOD_TYPE_HUMAN) -> void:
 	if parent == null or _blood_disabled():
 		return
-	var tree := Engine.get_main_loop() as SceneTree
-	if tree == null:
-		return
-	var group: StringName = StringName("liquid_layer:" + String(fluid_id))
-	var layer := tree.get_first_node_in_group(group) as LiquidLayer
-	if layer == null:
-		# Fallback to any liquid layer — covers legacy levels where the
-		# fluid-specific instance wasn't created.
-		layer = tree.get_first_node_in_group(&"liquid_layer") as LiquidLayer
+	var layer := LiquidLayer.find_for(Engine.get_main_loop() as SceneTree, fluid_id)
 	if layer == null:
 		return
 	var tex: Texture2D = _get_white_bootprint_texture(right_foot)

@@ -45,7 +45,13 @@ const PIXELS_PER_METER: float = float(SUBVIEWPORT_PX) / WORLD_EXTENT_METERS
 # reads as physically on the ground.
 const FLOOR_Y_OFFSET: float = 0.015
 
-@export var fluid_id: StringName = &"blood_human"
+# The canonical fluid identifier. Must match the `blood_type` StringName
+# on any enemy whose stamps should land here, AND the `fluid_id` arg
+# callers pass to spawn_fluid_footprint / find_for. Naming convention:
+# short single-token keys (&"human", &"cyborg", &"machine", &"oil",
+# &"water"). Don't prefix with "blood_" — those keys are shared between
+# blood and non-blood fluids.
+@export var fluid_id: StringName = &"human"
 # Density-gradient colors (drive the shader's thin→dense ramp).
 #   fresh_color  = THIN/edge tint  (pinkish red, translucent perimeter)
 #   dried_color  = DENSE/center tint (near-black burgundy, opaque core)
@@ -89,6 +95,40 @@ func _process(delta: float) -> void:
 	var age: float = clampf(_time_since_last_stamp / dry_duration_sec, 0.0, 1.0)
 	if _shader_material != null:
 		_shader_material.set_shader_parameter(&"age", age)
+
+
+# ── Lookup helpers ──────────────────────────────────────────────────────────
+
+
+## Single source of truth for "find the LiquidLayer that handles a
+## given fluid_id". Every blood-spawn call site routes through this —
+## hides the group-naming convention and surfaces missing-layer cases
+## as a one-time warning instead of silently dropping the stamp.
+##
+## Falls back to "any LiquidLayer" if the fluid-specific one isn't in
+## the scene. The fallback exists so dev scenes that only instance the
+## default human-blood layer don't drop cyborg-enemy stamps entirely —
+## but a warning fires once per (fluid_id, fallback) pair so the gap
+## is visible during development.
+static func find_for(tree: SceneTree, fluid_id: StringName) -> LiquidLayer:
+	if tree == null:
+		return null
+	var group: StringName = StringName("liquid_layer:" + String(fluid_id))
+	var layer := tree.get_first_node_in_group(group) as LiquidLayer
+	if layer != null:
+		return layer
+	# Fallback: any liquid layer. Used by test scenes that instance only
+	# the default human-blood layer.
+	layer = tree.get_first_node_in_group(&"liquid_layer") as LiquidLayer
+	if layer != null and not _warned_fallback.has(fluid_id):
+		push_warning("[LiquidLayer] No layer for fluid_id=%s; falling back to %s. Add a LiquidLayer instance with that fluid_id to remove this warning." % [String(fluid_id), String(layer.fluid_id)])
+		_warned_fallback[fluid_id] = true
+	return layer
+
+
+# Tracks which fluid_ids have already logged a fallback warning so we
+# don't spam the same message on every kill.
+static var _warned_fallback: Dictionary = {}
 
 
 # ── Public API ──────────────────────────────────────────────────────────────
