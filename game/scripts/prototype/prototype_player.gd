@@ -363,7 +363,12 @@ const MELEE_BASE_IDS: Array[StringName] = [&"melee_1h", &"melee_2h"]
 ## scales the anim duration AND the impact timing together — sync
 ## holds across all weapon-speed rolls automatically.
 const _MELEE_IMPACT_RATIO_PER_STEP: Dictionary = {
-	&"melee_1h": [0.65, 0.5, 0.5],
+	# Pulled step 0 from 0.65 → 0.55. After dropping basic_attack
+	# cooldown to 0.6 and bumping atk_spd_range to 1.0-1.4, the swing
+	# completes faster, so the previous 0.65 ratio landed the strike
+	# noticeably after the visible blade-contact frame again. 0.55
+	# keeps step 0 marginally later than steps 1/2 (which fit at 0.5).
+	&"melee_1h": [0.55, 0.5, 0.5],
 	# Pulled all 3 steps ~0.08 earlier (was [0.4, 0.3, 0.3]) so the
 	# crater + damage land on the visible hammer impact frame instead
 	# of one beat after it.
