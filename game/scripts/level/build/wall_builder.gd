@@ -843,33 +843,6 @@ static func _vquad(st: SurfaceTool, bl: Vector3, br: Vector3, h: float) -> void:
 	st.set_uv(Vector2(0, 1)); st.add_vertex(tl)
 	st.set_uv(Vector2(1, 1)); st.add_vertex(top_right)
 
-
-# Adds a horizontal quad at height y with normal +Y (CCW from above).
-# x1>x0, z1>z0 required.
-static func _hquad_top(st: SurfaceTool, x0: float, z0: float, x1: float, z1: float, y: float) -> void:
-	var a := Vector3(x0, y, z0)
-	var b := Vector3(x0, y, z1)
-	var c := Vector3(x1, y, z1)
-	var d := Vector3(x1, y, z0)
-	st.set_normal(Vector3.UP)
-	st.set_uv(Vector2(0, 0)); st.add_vertex(a)
-	st.set_uv(Vector2(1, 1)); st.add_vertex(c)
-	st.set_uv(Vector2(0, 1)); st.add_vertex(b)
-	st.set_uv(Vector2(0, 0)); st.add_vertex(a)
-	st.set_uv(Vector2(1, 0)); st.add_vertex(d)
-	st.set_uv(Vector2(1, 1)); st.add_vertex(c)
-
-
-# Adds one wall (full or split by a door opening) with mitred ends at the
-# room corners. Inputs are the four wall corner points at y=0:
-#   *_o : outer corner (room outer boundary, ±ox/±oz)
-#   *_i : inner corner (room inner boundary, ±ix/±iz)
-# Plus the door-opening edge points (used only when has_opening is true).
-# Wall axis direction is start→end; perpendicular thickness is outer→inner.
-# Each segment renders outer face, inner face, top quad (trapezoidal at the
-# mitred end), and a door-jamb reveal face when the segment terminates at
-# the opening. The mitred wall ends have no end-cap face — the perpendicular
-# wall's trapezoid covers that boundary from its own side.
 static func _add_mitred_wall(st: SurfaceTool, h: float,
 		start_o: Vector3, start_i: Vector3, end_o: Vector3, end_i: Vector3,
 		gap_start_o: Vector3, gap_start_i: Vector3,

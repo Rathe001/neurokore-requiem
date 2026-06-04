@@ -35,12 +35,6 @@ var _loading_screen: LoadingScreen = null
 func _get_enemy_parent() -> Node3D:
 	return _enemies_container if _enemies_container != null else self
 
-func _get_pickup_parent() -> PickupsContainer:
-	return _pickups_container
-
-## True when we're a non-host client in an active MP session. Enemy spawning,
-## wave clears, and boss creation are host-only; clients receive enemy nodes
-## via the MultiplayerSpawner on EnemiesContainer.
 func _is_mp_client() -> bool:
 	return NetState.is_in_lobby() and not NetState.is_host()
 
@@ -241,9 +235,6 @@ func deregister_corpse(corpse: Node3D) -> void:
 	var idx := _corpses.find(corpse)
 	if idx >= 0:
 		_corpses[idx] = null
-
-func corpse_count() -> int:
-	return _corpses.size()
 
 func _spawn_wave(count: int) -> void:
 	var player_node := get_tree().get_first_node_in_group(&"player")

@@ -106,29 +106,9 @@ func play_fire(weapon_key: StringName, pos: Vector3) -> void:
 func play_impact(weapon_key: StringName, pos: Vector3) -> void:
 	_play_random(_resolve_key(weapon_key), &"impact", pos, IMPACT_DB, _is_enemy_key(weapon_key))
 
-
-## Play a miss/whiff sound at the attack origin.
-func play_miss(weapon_key: StringName, pos: Vector3) -> void:
-	_play_random(_resolve_key(weapon_key), &"miss", pos, MISS_DB, _is_enemy_key(weapon_key))
-
-
-## Play a reload sound at the weapon holder's position.
 func play_reload(weapon_key: StringName, pos: Vector3) -> void:
 	_play_random(_resolve_key(weapon_key), &"reload", pos, FIRE_DB, _is_enemy_key(weapon_key))
 
-
-## Play alt-fire sound.
-func play_alt_fire(weapon_key: StringName, pos: Vector3) -> void:
-	_play_random(_resolve_key(weapon_key), &"alt_fire", pos, FIRE_DB, _is_enemy_key(weapon_key))
-
-
-## Play a pump-action / mechanism sound. Used by WeaponAttachment.eject_casing
-## to drop the chk-chunk on the casing-eject frame (the spent shell rolls
-## out of the breech as the pump cycles forward → back). Currently only the
-## shotgun has a pump registered; other weapons silently no-op via the
-## empty-pool guard in _play_random. Played slightly quieter than the
-## fire boom so it reads as a sub-event of the same shot, not a separate
-## hit.
 const PUMP_DB := -2.0
 func play_pump(weapon_key: StringName, pos: Vector3) -> void:
 	_play_random(_resolve_key(weapon_key), &"pump", pos, PUMP_DB, _is_enemy_key(weapon_key))
@@ -189,21 +169,6 @@ func play_channel_loop(weapon_key: StringName, parent_node: Node3D) -> AudioStre
 	else:
 		return SFX.claim_reserved_at_listener(stream, 0.0, pitch)
 
-
-## Reposition a channel-loop player to follow its source. Called each
-## frame by _tick_channel so the 3D sound tracks the wielder. Players
-## flagged as listener-anchored skip the reposition — SFX._process
-## already locks them to the listener every frame, and writing here
-## would briefly displace the source before that re-anchor lands.
-func update_channel_position(player: AudioStreamPlayer3D, pos: Vector3) -> void:
-	if player != null and is_instance_valid(player):
-		if player.has_meta(&"sfx_anchored_to_listener"):
-			return
-		player.global_position = pos
-
-
-## Stop a previously-claimed channel-loop player. Fades out then releases
-## the reserved pool slot. Safe to call with null (no-op).
 func stop_channel_loop(player: AudioStreamPlayer3D) -> void:
 	if player == null or not is_instance_valid(player):
 		return

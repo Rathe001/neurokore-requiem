@@ -93,21 +93,6 @@ static func _rarity_rollf_inv(lo: float, hi: float, rarity: StringName, rng: Ran
 	var mult: float = float(RARITY_BUDGET_MULT.get(rarity, 1.0))
 	return _curved_randf(lo, hi, rng, curve) / mult
 
-## Inverse int version.
-static func _rarity_rolli_inv(lo: int, hi: int, rarity: StringName, rng: RandomNumberGenerator) -> int:
-	var curve: float = float(RARITY_ROLL_CURVE.get(rarity, 2.0))
-	var mult: float = float(RARITY_BUDGET_MULT.get(rarity, 1.0))
-	return int(round(float(_curved_randi(lo, hi, rng, curve)) / mult))
-
-
-# Registry of weapon bases keyed by main_type, with per-base drop weights.
-# Picker normalizes weights at roll time, so the numbers are relative — bump
-# a base's weight to make it appear more often without rebalancing the rest.
-# All bases at 1.0 = uniform within their main_type pool. Per-archetype
-# absolute drop rate is equalised at the main_type layer below: 1H Weapon
-# carries weight 3 (matching its 3 bases), 2H carries weight 5 (matching
-# its 5 bases), so every weapon archetype lands at the same absolute
-# probability per random drop regardless of which pool it lives in.
 const WEAPON_BASE_DROPS: Dictionary = {
 	"1H Weapon": [
 		{"path": "res://resources/items/weapon_bases/melee_1h.tres", "weight": 1.0},

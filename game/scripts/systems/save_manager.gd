@@ -187,24 +187,6 @@ func list_saves() -> Array[Dictionary]:
 	)
 	return saves
 
-
-func has_any_saves() -> bool:
-	var dir := DirAccess.open(SAVE_DIR)
-	if dir == null:
-		return false
-	dir.list_dir_begin()
-	var filename := dir.get_next()
-	while filename != "":
-		if not dir.current_is_dir() and filename.ends_with(".json"):
-			dir.list_dir_end()
-			return true
-		filename = dir.get_next()
-	dir.list_dir_end()
-	return false
-
-
-# ── Migration ─────────────────────────────────────────────────────────────
-
 func _migrate(data: Dictionary) -> Dictionary:
 	var v: int = int(data.get("save_version", 0))
 	# Future migrations go here:

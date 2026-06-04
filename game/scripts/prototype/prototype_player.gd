@@ -319,12 +319,6 @@ var _shield: PlayerShield
 var _grenade: PlayerGrenade
 var _recovery: PlayerRecovery
 
-## Called by pickups/interactables to suppress the fire input this frame.
-func consume_click() -> void:
-	_click_consumed = true
-# Item that owns the in-flight skill (weapon or offhand). Captured at cast
-# start so wind-up timing and hit resolution use the same stats even if the
-# player swaps gear mid-attack. Null for class skills.
 var _attack_weapon: Item = null
 
 # ── Melee 3-hit combo ───────────────────────────────────────────────────────
@@ -2374,10 +2368,6 @@ func resolve_skill(index: int) -> Skill:
 		return skills[skill_index]
 	return null
 
-func _is_near_world_interactable() -> bool:
-	var interact_range := sqrt(INTERACT_RANGE_SQ)
-	return SpatialGrid.query_nearest(global_position, interact_range, &"interactables") != null
-
 func _hovered_clickable() -> Node:
 	var nodes := get_tree().get_nodes_in_group(&"hovered_clickable")
 	for node in nodes:
@@ -3135,15 +3125,6 @@ func start_reload() -> void:
 
 # ── AIM_HOLD (Tripod / Aimed Shot) ───────────────────────────────────────────────
 
-## True while the player is holding the LMG Tripod / Aimed Shot RMB
-## buff. Read by player_combat for accuracy + crit modifiers and by the
-## movement loop to lock the player in place if the skill demands it.
-func is_aim_holding() -> bool:
-	return _aim_hold_skill != null
-
-
-## Additive accuracy bonus from the active aim hold (0 when not holding).
-## player_combat folds this into _apply_aim_spread.
 func aim_hold_accuracy_bonus() -> float:
 	if _aim_hold_skill == null:
 		return 0.0
@@ -3309,15 +3290,6 @@ func _update_aim_laser() -> void:
 
 # ── CHANNEL_BEAM (Taser hold, Accelerator stream) ───────────────────────────
 
-## True while the player is holding a CHANNEL_BEAM skill. Used by combat
-## visuals and movement code that wants to know "the player is mid-stream".
-func is_channeling() -> bool:
-	return _channel_skill != null
-
-
-## Begin a channeled cast — bound input is which input the player pressed
-## to start it (LMB or RMB). The hold continues until the input releases,
-## the resource pool empties, or the channel skill changes (weapon swap).
 func _start_channel(skill: Skill, input_action: StringName) -> void:
 	if skill == null or skill.active_kind != Skill.ActiveKind.CHANNEL_BEAM:
 		return
@@ -3782,20 +3754,6 @@ func get_effective_atk_speed_delta_pct() -> int:
 	var atk := w.effective_attack_speed() * (1.0 + _gear_attack_speed_bonus)
 	return int(round((atk - 1.0) * 100.0))
 
-
-## Weapon damage range as a Vector2i (min, max). Returns (-1, -1) when
-## no weapon is equipped — UI renders a dash in that case.
-func get_effective_damage_range() -> Vector2i:
-	var w: Item = InventoryState.get_equipped(&"weapon")
-	if w == null or w.damage_max <= 0:
-		return Vector2i(-1, -1)
-	return Vector2i(
-		w.effective_damage_min() + _gear_base_damage_bonus,
-		w.effective_damage_max() + _gear_base_damage_bonus,
-	)
-
-
-## Cooldown reduction percentage from gear (no weapon contribution).
 func get_effective_cdr_pct() -> int:
 	return int(round(_gear_cooldown_reduction * 100.0))
 
@@ -4087,16 +4045,6 @@ func _set_meshes_visible(node: Node, make_visible: bool) -> void:
 	for child in node.get_children():
 		_set_meshes_visible(child, make_visible)
 
-func _set_group_visible(group: StringName, make_visible: bool) -> void:
-	for node: Node in get_tree().get_nodes_in_group(group):
-		if node is Node3D:
-			(node as Node3D).visible = make_visible
-
-# Switches every GeometryInstance3D in `group` between SHADOWS_ONLY (invisible
-# but still occludes light) and ON (visible + casts shadow). Used by the FPS
-# toggle for the room ceilings — iso view wants them invisible-but-occluding
-# so ceiling fluorescents can't spray light over the wall tops, FPS view
-# wants them visible overhead so the player isn't staring at sky.
 func _set_group_cast_shadow(group: StringName, mode: GeometryInstance3D.ShadowCastingSetting) -> void:
 	for node: Node in get_tree().get_nodes_in_group(group):
 		if node is GeometryInstance3D:
@@ -4341,17 +4289,6 @@ func exit_slow_pool() -> void:
 	if _slow_pool_count == 0:
 		slow_pool_changed.emit(false)
 
-
-## True while the player is overlapping at least one slow-pool Area3D.
-## HUD reads this on slow_pool_changed to decide whether the Slowed
-## entry belongs in the debuffs bar.
-func is_in_slow_pool() -> bool:
-	return _slow_pool_count > 0
-
-## Move-speed multiplier from slow-pool overlap (procgen oil/water
-## puddles). Routes through the per-surface curve with surface_id
-## "water" — base −50% slow at T0, asymptotic mitigation by traction
-## with k=8.
 func _slow_pool_factor() -> float:
 	if _slow_pool_count <= 0:
 		return 1.0
@@ -4396,15 +4333,6 @@ func exit_blood_pool() -> void:
 	if _blood_pool_count == 0:
 		blood_pool_changed.emit(false)
 
-
-## True while the player is overlapping at least one blood pool.
-func is_in_blood_pool() -> bool:
-	return _blood_pool_count > 0
-
-
-## Move-speed multiplier from blood pool overlap. Routes through the
-## per-surface curve — base −15% slow at T0, asymptotic mitigation
-## by traction with k=5 (so even mid-tier boots shrug it off).
 func _blood_pool_factor() -> float:
 	if _blood_pool_count <= 0:
 		return 1.0
