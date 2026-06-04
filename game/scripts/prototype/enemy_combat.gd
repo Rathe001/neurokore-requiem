@@ -243,7 +243,9 @@ func cast_melee_attack(player: Node3D, aim: Vector3) -> void:
 	if player.has_method(&"take_damage"):
 		var dmg := int(round(float(_host._attack_damage) * outgoing_damage_mult()))
 		dmg = maxi(1, int(round(float(dmg) * PlayerCombat.range_falloff(dist, range_now))))
-		player.take_damage(dmg, _host.global_position, melee_knockback())
+		# Route through apply_damage so remote co-op players take the
+		# hit too — direct take_damage early-returns on non-authority.
+		PrototypePlayer.apply_damage(player, dmg, _host.global_position, melee_knockback())
 
 
 func cast_ranged_attack(player: Node3D, aim: Vector3) -> void:
@@ -427,7 +429,13 @@ func _cast_skill_cone(target: Node3D, aim: Vector3, skill: EnemySkill) -> void:
 	if target.has_method(&"take_damage"):
 		var dmg := int(round(float(_host._attack_damage) * skill.damage_mult * outgoing_damage_mult()))
 		dmg = maxi(1, int(round(float(dmg) * PlayerCombat.range_falloff(dist, skill.skill_range))))
-		target.take_damage(dmg, _host.global_position, skill.knockback)
+		# Player target → route through apply_damage for MP authority.
+		# Enemy target (charmed pet hitting an enemy) → direct take_damage:
+		# host runs all enemy AI + has authority over enemies, no RPC needed.
+		if target is PrototypePlayer:
+			PrototypePlayer.apply_damage(target, dmg, _host.global_position, skill.knockback)
+		else:
+			target.take_damage(dmg, _host.global_position, skill.knockback)
 
 
 func _cast_skill_radial(target: Node3D, skill: EnemySkill) -> void:
@@ -459,7 +467,12 @@ func _cast_skill_radial(target: Node3D, skill: EnemySkill) -> void:
 		var dmg := int(round(float(_host._attack_damage) * skill.damage_mult * outgoing_damage_mult()))
 		var dist_to_n := _host.global_position.distance_to((n as Node3D).global_position)
 		dmg = maxi(1, int(round(float(dmg) * PlayerCombat.range_falloff(dist_to_n, aoe_r))))
-		n.take_damage(dmg, _host.global_position, skill.knockback)
+		# Player → apply_damage for MP authority routing; enemy → direct.
+		# See _cast_skill_directed for the same split rationale.
+		if n is PrototypePlayer:
+			PrototypePlayer.apply_damage(n, dmg, _host.global_position, skill.knockback)
+		else:
+			n.take_damage(dmg, _host.global_position, skill.knockback)
 
 
 func _cast_skill_projectile(target: Node3D, aim: Vector3, skill: EnemySkill) -> void:

@@ -756,7 +756,10 @@ func _hit_single(body: Node3D, impact_pos: Vector3) -> void:
 	if overcharge_chance_pct > 0 and randf() * 100.0 < float(overcharge_chance_pct):
 		dmg *= 2
 	if target_group == &"player":
-		body.take_damage(dmg, source_position, knockback_strength)
+		# Enemy projectile hitting a player — route through apply_damage
+		# so remote co-op players take the hit (their take_damage
+		# early-returns on non-authority by design).
+		PrototypePlayer.apply_damage(body, dmg, source_position, knockback_strength)
 	else:
 		PrototypeEnemy.deal_damage(body, dmg, source_position, knockback_strength, 1, is_crit, weapon_base_id)
 		_apply_exile_curse_if_active(body)
@@ -836,7 +839,10 @@ func _explode(impact_pos: Vector3) -> void:
 		var is_crit := _roll_crit()
 		var dmg := _roll_damage(is_crit)
 		if target_group == &"player":
-			target.take_damage(dmg, source_position, knockback_strength)
+			# Enemy AoE blast hitting a player — route through
+			# apply_damage for MP authority. See _hit_single for the
+			# same rationale.
+			PrototypePlayer.apply_damage(target, dmg, source_position, knockback_strength)
 		else:
 			# blast_radius > 0 means this is the AoE shockwave call —
 			# flag is_explosion so the death code rolls the 25%

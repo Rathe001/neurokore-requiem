@@ -1405,6 +1405,48 @@ func is_player_friendly(target: Node) -> bool:
 	return _combat.is_player_friendly(target)
 
 
+## Static helper: route damage to a player, handling SP / MP authority
+## transparently. Every enemy-side damage source (enemy_combat melee /
+## skill / AoE, projectile direct hit + AoE blast) calls this instead
+## of target.take_damage() so remote co-op players receive the hit.
+##
+## In SP or when the local instance owns the target: calls take_damage
+## directly. In MP when targeting a player owned by a different peer:
+## sends request_damage.rpc_id to that peer's authority. Mirrors the
+## PrototypeEnemy.deal_damage pattern.
+static func apply_damage(target: Node3D, amount: int, knockback_from: Vector3, knockback_strength: float = 0.0) -> void:
+	if target == null or not is_instance_valid(target):
+		return
+	if not (target is PrototypePlayer):
+		# Defensive fallback — callers should pre-filter, but in case a
+		# caller passes a generic Node3D we still dispatch take_damage if
+		# present rather than silently dropping the hit.
+		if target.has_method(&"take_damage"):
+			target.take_damage(amount, knockback_from, knockback_strength)
+		return
+	# MP routing: if this peer doesn't own the player, send the damage
+	# request to the peer that does. Otherwise apply locally.
+	if NetState.is_in_lobby() and not target.is_multiplayer_authority():
+		var auth_id: int = target.get_multiplayer_authority()
+		target.request_damage.rpc_id(auth_id, amount, knockback_from, knockback_strength)
+		return
+	target.take_damage(amount, knockback_from, knockback_strength)
+
+
+## RPC endpoint: any peer can request damage on a player. Only the
+## peer with authority over this player applies it; everyone else's
+## local take_damage is gated by `_is_remote_player()`. Mirrors
+## PrototypeEnemy.request_damage but with the player's narrower 3-arg
+## signature.
+@rpc("any_peer", "call_remote", "reliable")
+func request_damage(amount: int, knockback_from: Vector3, knockback_strength: float) -> void:
+	if not is_multiplayer_authority():
+		return
+	if not is_inside_tree():
+		return
+	take_damage(amount, knockback_from, knockback_strength)
+
+
 func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_strength: float = 0.0) -> void:
 	if _is_remote_player():
 		return
