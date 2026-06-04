@@ -1,15 +1,30 @@
 ---
 name: codebase-audit-2026-06-03
-description: "9-pass audit completed 2026-06-03. 4 critical bugs, 5 medium debts, 4 polish items totalling ~675 LOC cleanup. Action plan at docs/audit-2026-06-03-action-plan.md."
+description: "9-pass audit + all 13 findings shipped 2026-06-03 across 6 phases. 4 🟥 bugs fixed, ~1100 LOC net removed. Commit range 1c7cc4c..9339c96. Action plan history at docs/audit-2026-06-03-action-plan.md."
 metadata: 
   node_type: memory
   type: project
   originSessionId: 8cb2236a-ff5a-4a76-8cc4-a33a9a8014b8
 ---
 
-Full codebase audit completed 2026-06-03 across 9 passes. Reference
-[[audit-action-plan]] for the sequenced fix plan; this memory captures
-the state and pointers so future sessions can pick up mid-stream.
+**SHIPPED 2026-06-03.** All 13 findings closed across 6 phases. Reference
+[[audit-action-plan]] for the original sequencing; this memory now
+records the as-shipped state.
+
+## Phase shipping log
+
+| Phase | Commit | What |
+|---|---|---|
+| 1c | `1c7cc4c` | Item.to_dict + from_dict gained max_charges, recharge_time. MP consumable drops preserve charges. |
+| 1b | `4729bae` | LiquidLayer stamp() race fixed; both SubViewports UPDATE_DISABLED baseline with `_begin/_end_render_window` counter. |
+| 1a | `8880d59` | PrototypePlayer.apply_damage + request_damage RPC; 5 enemy → player call sites routed. Remote co-op players now take enemy damage. |
+| 2a | `284cf67` | -790 lines of orphaned decal-ring system from prototype_attack_indicator.gd. File 4307 → 3517. Zero remaining orphans. |
+| 2b | `31882ff` | -176 lines / 16 designed-not-adopted orphans across 6 files. |
+| 3 | `9339c96` | Defensive: enemy MP _state side-effect mirror; player _exit_tree disconnect pattern; apply_heal helper; behavior_mod_registry inline condition_checks stub. |
+
+Net delta: ~+200 / -1300 = -1100 LOC. The 4 critical bugs are
+documented in [[mp-damage-heal-routing]] (#1 + #2 follow-up),
+[[liquid-layer-architecture]] (#3 + #4), and [[savemanager-schema-drift]] (#5).
 
 ## Scope
 

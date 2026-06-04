@@ -48,6 +48,22 @@ how many land in the same spot.
 
 ## Non-obvious things that already burned us
 
+- **SubViewport baseline is UPDATE_DISABLED** (audit Phase 1b,
+  commit `4729bae`). Was `UPDATE_ALWAYS`, which re-rendered the 4096²
+  mask every frame even with zero stamps in the StampRoot — wasting
+  ~1 GB/s of fillrate in quiet rooms. `_begin_render_window()` flips
+  to `UPDATE_ALWAYS` on the first active stamp; `_end_render_window()`
+  flips back to `UPDATE_DISABLED` when the last sprite frees.
+  Counter (not bool) because long-lived `stamp_growing` tweens can
+  overlap with per-hit `stamp()` calls. Wall layer uses the same
+  pattern with a shared counter across both X/Z mask viewports.
+- **Stamp Sprite2D lifetime must outlive one render frame.**
+  `process_frame.connect(...queue_free)` fires BEFORE the SubViewport
+  renders, so a single-frame cleanup discarded sprites before they
+  deposited into the mask. Use `create_timer(0.1).timeout.connect` +
+  `instance_from_id` instead. All three stamp paths (`stamp`,
+  `stamp_oriented`, `stamp_growing`) use this. Memory:
+  [[liquid-layer-stamp-lifecycle]].
 - **Camera2D.zoom MUST be 1.0.** Anything else interacts with sprite
   pixel positions in surprising ways. World→pixel conversion is done
   manually in `_world_to_viewport_px()`: `world_xz * PIXELS_PER_METER + half_size`.
