@@ -97,7 +97,7 @@
 - [Ragdoll frame-budget queue](project_ragdoll_queue.md) — RagdollQueue autoload caps XBotRagdoll setup+activate at N/frame so multi-kill explosions don't stack 100-200ms spikes; budget-saturated path degrades to legacy capsule corpse
 - [Streamed level build](project_streamed_level_build.md) — LevelBuilder._build_level yields every N pieces so the loading screen stays responsive; prototype_root awaits new `built` signal before hide_loading. Was a 5.8s freeze.
 - [LoS reveal proc spikes](project_los_reveal_spikes.md) — Was 100-240ms freeze at room-cross. Fix shipped 2026-06-04: per-frame reveal budgets (12 entities + 4 MMIs/tick) trade soft pop-in for smooth pacing
-- [Level-up spike at higher levels](project_levelup_higher_lvl_spike.md) — Lvl 5+ level-ups cost ~100ms proc despite VfxWarmup; Lvl 2 fine; suspect UI re-layout or per-level VFX
+- [Level-up spike at higher levels](project_levelup_higher_lvl_spike.md) — Was ~100ms at Lvl 5+. Root cause: hidden TalentsPanel still ran _repaint on leveled_up. Fixed 2026-06-04 with dirty-flag + visibility_changed flush
 - [PerfLogger feedback loop](project_perf_logger_feedback.md) — Spike rows used to fire every frame with 25ms of tree walks, self-perpetuating. Throttled to 200ms and tree walks skipped on spike rows.
 - [Enemy AnimationPlayer pause](project_enemy_anim_pause.md) — 200+ enemy AnimationPlayers ticking ~40ms/frame at level start; now pause when invisible+IDLE (active states keep ticking)
 - [Enemy physics_process pause](project_enemy_physics_pause.md) — pause _physics_process AND anim when invisible AND state in {IDLE, CHASING, RETURNING}; no-op guards on setters; wake re-randomizes _idle_skip_counter

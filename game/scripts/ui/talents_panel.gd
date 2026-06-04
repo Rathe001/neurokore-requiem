@@ -74,6 +74,15 @@ var _analog_group_bg: ColorRect
 var _cyborg_group_bg: ColorRect
 var _rows: Array[Dictionary] = []
 var _perk_ladders: Dictionary = {}  # stat_id → PerkLadder
+# When the panel is hidden, _repaint marks itself dirty and skips the work
+# instead of walking 240 ColorRects + tier labels and firing
+# add_theme_color_override on each. Each override invalidates the
+# control's min-size cache and queues a redraw, which Godot 4 cascades
+# up the parent chain — at higher levels with allocations spread across
+# tiers the cost was ~100ms per leveled_up signal even with the panel
+# hidden. The visibility_changed signal flushes the deferred repaint
+# the next time the player opens the panel.
+var _repaint_dirty: bool = false
 
 func _ready() -> void:
 	visible = false
@@ -86,8 +95,14 @@ func _ready() -> void:
 	PlayerState.spec_changed.connect(_on_player_class_changed)
 	PlayerState.talents_changed.connect(_repaint)
 	PlayerState.leveled_up.connect(_on_leveled_up)
+	visibility_changed.connect(_on_visibility_changed)
 	_load_perk_ladders()
 	_build_layout()
+
+
+func _on_visibility_changed() -> void:
+	if visible and _repaint_dirty:
+		_repaint()
 
 func _exit_tree() -> void:
 	UIThemeState.changed.disconnect(_on_theme_changed)
@@ -95,6 +110,7 @@ func _exit_tree() -> void:
 	PlayerState.spec_changed.disconnect(_on_player_class_changed)
 	PlayerState.talents_changed.disconnect(_repaint)
 	PlayerState.leveled_up.disconnect(_on_leveled_up)
+	visibility_changed.disconnect(_on_visibility_changed)
 
 
 func _on_theme_changed() -> void:
@@ -448,6 +464,14 @@ func _layout_row(row: Dictionary, row_pos: Vector2, row_w: float, bar_w: float, 
 func _repaint() -> void:
 	if _rows.is_empty():
 		return
+	# Defer when hidden — every add_theme_color_override below invalidates
+	# min-size + queues redraw, and at higher levels that totals ~100ms
+	# per leveled_up even with the panel offscreen. Flushed by
+	# _on_visibility_changed when the player opens the panel.
+	if not visible:
+		_repaint_dirty = true
+		return
+	_repaint_dirty = false
 	var p := UIThemeState.palette
 	var spent := PlayerState.get_talent_points_spent()
 	var remaining := PlayerState.talent_points_total - spent
