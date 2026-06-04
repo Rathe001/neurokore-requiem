@@ -47,13 +47,21 @@ against `git log --oneline` before assuming this is current.**
 
 ## Still on the old Decal system (pending tasks)
 
-- **#110 Walls** — `spawn_blood_wall_splatter` still spawns a Decal3D
-  with the wall-projected texture variant. User flagged on 2026-06-01
-  that walls "look different from the blood on the floor". Next step.
-- **#111 Objects + characters** —
-  [[project_object_blood_pipeline]] (props/interactables/pillars)
-  and `spawn_blood_on_character` (per-character splats). Different
-  pipelines, similar migration shape.
+- **#110 Walls — DONE.** `spawn_blood_wall_splatter` routes through
+  `WallLiquidLayer.stamp()` with overlay quads + dual SubViewport
+  masks (one per ±X / ±Z axis). Shader handles wall sampling +
+  lighting; stamps persist in CLEAR_MODE_NEVER. Full polish session
+  (Phase 6 + 7 commits, mid-late May) iterated color, drip streaks,
+  thickness gradient, aging. This bullet predated the migration
+  landing.
+- **#111 Objects + characters — still pending.**
+  `spawn_blood_on_character` (line 1399) for per-character splats
+  and `_spawn_object_blood_decal` (line 1644) for props /
+  interactables / pillars. Both still create Decal3D nodes directly.
+  Different pipelines from floor/wall (per-instance Decal, not a
+  shared SubViewport mask) so the migration shape is its own work.
+  See [[project_object_blood_pipeline]] for the receiver opt-in +
+  side-decal mechanism that survives migration.
 - **#112 Fluid type generalization (in-progress 2026-06-03)** —
   Floor LiquidLayer naming + lookup unified. `fluid_id` now matches
   `blood_type` directly (`&"human"`, not `&"blood_human"`); a single
