@@ -122,13 +122,13 @@ func is_active(id: StringName) -> bool:
 # Condition registry. condition_id → Callable returning bool. Mods with
 # a condition_id only fire their effects (and only show green in the
 # tooltip) when the registered check passes. Add new conditions here as
-# new conditional mods get authored.
-#
-# Example future entries:
-#   &"wielding_laser_pistol": func() -> bool:
-#       var w: Item = InventoryState.get_equipped(&"weapon")
-#       return w != null and w.weapon_base_id == &"laser_pistol"
-const _CONDITION_CHECKS: Dictionary = {}
+# new conditional mods get authored — uncomment the example as a
+# starting template.
+const _CONDITION_CHECKS: Dictionary = {
+	# &"wielding_laser_pistol": func() -> bool:
+	#     var w: Item = InventoryState.get_equipped(&"weapon")
+	#     return w != null and w.weapon_base_id == &"ranged_1h",
+}
 
 
 # Resolves a condition_id to a runtime bool. Unknown ids read as "not

@@ -1874,7 +1874,13 @@ func _remote_physics_process() -> void:
 	# Detect death transition on the client side.
 	if synced_state == State.DEAD:
 		if _state != State.DEAD:
+			# Direct assignment bypasses _change_state because this is a
+			# client observing a synced transition, not a local AI decision.
+			# WARNING: if you add new side effects to _change_state(State.DEAD)
+			# (counter resets, anim hooks, etc.), mirror them in this block —
+			# the remote-side observer will silently miss them otherwise.
 			_state = State.DEAD
+			_update_anim_player_active()
 			set_physics_process(false)
 			set_deferred(&"collision_layer", 0)
 			set_deferred(&"collision_mask", 0)

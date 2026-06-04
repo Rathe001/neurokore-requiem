@@ -1038,6 +1038,36 @@ func _ready() -> void:
 	_doomsayer.reconcile()
 
 
+# Mirrors prototype_hud.gd's disconnect pattern. Autoload signals
+# (PlayerState / PerkState / InventoryState) live beyond the player
+# node, so we must unwire them on tree exit to prevent stale callbacks
+# firing into freed lambdas / methods. is_connected guards each
+# disconnect so the remote-player path (which only connects a subset
+# of these) doesn't error on signals it never wired.
+#
+# Skipped intentionally: signals on owned descendants (anim_player,
+# shield_buff_changed, screen.continue_pressed) — those nodes are
+# freed with this one, so their connections evaporate. Timer.timeout
+# lambdas also skipped — one-shot timers + CONNECT_ONE_SHOT.
+func _exit_tree() -> void:
+	if PlayerState.leveled_up.is_connected(_on_player_leveled_up):
+		PlayerState.leveled_up.disconnect(_on_player_leveled_up)
+	if PlayerState.class_changed.is_connected(_on_local_class_or_spec_changed):
+		PlayerState.class_changed.disconnect(_on_local_class_or_spec_changed)
+	if PlayerState.spec_changed.is_connected(_on_local_class_or_spec_changed):
+		PlayerState.spec_changed.disconnect(_on_local_class_or_spec_changed)
+	if _drone_swarm != null and is_instance_valid(_drone_swarm) \
+			and PerkState.perks_changed.is_connected(_drone_swarm.reconcile):
+		PerkState.perks_changed.disconnect(_drone_swarm.reconcile)
+	if _doomsayer != null and is_instance_valid(_doomsayer) \
+			and PerkState.perks_changed.is_connected(_doomsayer.reconcile):
+		PerkState.perks_changed.disconnect(_doomsayer.reconcile)
+	if InventoryState.equipment_changed.is_connected(_on_equipment_changed):
+		InventoryState.equipment_changed.disconnect(_on_equipment_changed)
+	if InventoryState.items_overflowed.is_connected(_on_items_overflowed):
+		InventoryState.items_overflowed.disconnect(_on_items_overflowed)
+
+
 # Minimal _ready path for non-authority remote players. Only sets up the
 # visual side (animation player wiring, mesh shadow layers) — the rest of
 # the player's behavior is intentionally inert because it's driven by
@@ -1518,6 +1548,41 @@ func get_recovery_heal_remaining() -> int:
 	if _recovery == null:
 		return 0
 	return _recovery.get_heal_remaining()
+
+
+## Static helper: route a heal to a player, handling SP / MP authority
+## transparently. Mirrors apply_damage. Today the only heal callers are
+## self-targeting (player_recovery sends heals to the local player's
+## own _host), so this is defensive — the moment any AoE / ally-heal
+## feature targets a remote player, the routing will already work.
+##
+## Note: heal() itself has no _is_remote_player() guard the way
+## take_damage does, so SP "heal whoever" still works via direct
+## call. The MP routing here only kicks in when the target is owned
+## by another peer.
+static func apply_heal(target: Node3D, amount: int) -> void:
+	if target == null or not is_instance_valid(target):
+		return
+	if not (target is PrototypePlayer):
+		if target.has_method(&"heal"):
+			target.heal(amount)
+		return
+	if NetState.is_in_lobby() and not target.is_multiplayer_authority():
+		var auth_id: int = target.get_multiplayer_authority()
+		target.request_heal.rpc_id(auth_id, amount)
+		return
+	target.heal(amount)
+
+
+## RPC endpoint: any peer can request a heal on a player. Only the peer
+## with authority over this player applies it. Mirrors request_damage.
+@rpc("any_peer", "call_remote", "reliable")
+func request_heal(amount: int) -> void:
+	if not is_multiplayer_authority():
+		return
+	if not is_inside_tree():
+		return
+	heal(amount)
 
 
 func heal(amount: int) -> void:
