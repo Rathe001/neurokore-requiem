@@ -19,6 +19,7 @@
 - [Zone lighting profiles](project_lighting_profiles.md) — proximity dim / global light behavior should be driven by per-zone profiles, not hardcoded constants (outdoor ≠ indoor)
 - [Enemy navigation systems](project_enemy_navigation.md) — crouch tunnels, pit-pillar nav links, leash override; navmesh agent_height MUST stay synced with enemy CROUCH_HEIGHT
 - [Enemy state machine pattern](project_enemy_state_machine.md) — enum State with _change_state() helper; new behaviours extend the enum, never add flags
+- [Ranged LoS-search + melee ring formation](project_enemy_los_search_and_formation.md) — ranged sidesteps when cover breaks LoS (stuck-flip on wall); melee biases strafe away from nearest ally's angular position around the player
 - [Item modifier dict](project_item_modifiers.md) — Item.stat_modifiers (StringName-keyed) is the single home for ALL numeric bonuses; read via Item.get_modifier()
 - [ID registries](project_id_registries.md) — SlotRegistry owns slot/main_type IDs; AttributeState.CLASS_DEFINITIONS/ORIGIN_DEFINITIONS own class metadata; do not duplicate
 - [Perk Resources](project_perk_resources.md) — perks live in res://resources/perks/{stat_id}.tres; add new perks via the editor, not GDScript

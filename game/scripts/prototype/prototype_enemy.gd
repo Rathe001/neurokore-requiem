@@ -2015,6 +2015,8 @@ func _chase_tick() -> void:
 	# backpedal range cleanly clears the timer for next time.
 	if _state != State.CHASING:
 		_wall_stuck_timer = 0.0
+		_los_search_stuck_timer = 0.0
+		_los_search_dir = 0
 	_want_dir = Vector3.ZERO
 	if _player_ref == null or not is_instance_valid(_player_ref):
 		_player_ref = get_tree().get_first_node_in_group(&"player") as Node3D
@@ -2166,9 +2168,38 @@ func _chase_tick() -> void:
 		# the kite boundary — which read in playtest as a stutter step.
 		if dist <= kite or (_holding_position and dist <= kite + RANGED_KITE_HYSTERESIS):
 			_holding_position = true
-			_want_dir = Vector3.ZERO
-			velocity.x = 0.0
-			velocity.z = 0.0
+			var to_target_norm := to_target / dist
+			_face_override = to_target_norm
+			if has_los:
+				# Shot is clear — stand still; the cast path above fires when
+				# cooldown allows. Reset the search timer so re-entering hold
+				# without LoS starts fresh.
+				_want_dir = Vector3.ZERO
+				velocity.x = 0.0
+				velocity.z = 0.0
+				_los_search_stuck_timer = 0.0
+				return
+			# Cover broken the shot — sidestep to find a firing angle instead
+			# of standing in place forever waiting for LoS to return.
+			var perp := Vector3.UP.cross(to_target_norm).normalized()
+			if _los_search_dir == 0:
+				_los_search_dir = 1 if (get_instance_id() & 1) == 0 else -1
+			var actual_horiz_sq: float = velocity.x * velocity.x + velocity.z * velocity.z
+			if actual_horiz_sq < _WALL_STUCK_VEL_SQ:
+				_los_search_stuck_timer += get_physics_process_delta_time()
+				if _los_search_stuck_timer >= _LOS_SEARCH_FLIP_TIMEOUT:
+					_los_search_stuck_timer = 0.0
+					_los_search_dir = -_los_search_dir
+			else:
+				_los_search_stuck_timer = 0.0
+			var search_dir := perp * float(_los_search_dir)
+			var search_speed: float = CHASE_SPEED * 0.5 \
+				* _crouch_speed_factor() \
+				* _combat.affix_move_speed_mult() \
+				* _combat._self_buff_speed_mult
+			_want_dir = search_dir
+			velocity.x = search_dir.x * search_speed
+			velocity.z = search_dir.z * search_speed
 			return
 		# else: too far, fall through to navmesh chase below
 
@@ -2190,25 +2221,50 @@ func _chase_tick() -> void:
 			# commit to the position when crowded.
 			_holding_position = true
 			_face_override = to_target / dist
+			# One spatial query around the target serves two purposes:
+			#   1. local crowded check — is anyone shoulder-to-shoulder
+			#      with me right now (would my strafe shove them)?
+			#   2. formation check — which arc around the target has the
+			#      nearest ally (so I strafe the other way and spread)?
 			var crowded: bool = false
+			var nearest_ally_delta: float = 0.0
+			var has_ally: bool = false
 			if SpatialGrid != null:
-				var near_allies: Array[Node3D] = SpatialGrid.query_radius(
-					global_position, _STRAFE_CROWDED_RADIUS, &"enemies")
-				for n in near_allies:
-					if n != self and is_instance_valid(n):
+				var allies: Array[Node3D] = SpatialGrid.query_radius(
+					target.global_position, _FORMATION_QUERY_RADIUS, &"enemies")
+				var to_player_self := target.global_position - global_position
+				var my_angle: float = atan2(to_player_self.x, to_player_self.z)
+				var crowded_sq: float = _STRAFE_CROWDED_RADIUS * _STRAFE_CROWDED_RADIUS
+				for n in allies:
+					if n == self or not is_instance_valid(n):
+						continue
+					if global_position.distance_squared_to(n.global_position) < crowded_sq:
 						crowded = true
-						break
+					var to_player_ally := target.global_position - n.global_position
+					var ally_angle: float = atan2(to_player_ally.x, to_player_ally.z)
+					var delta: float = wrapf(ally_angle - my_angle, -PI, PI)
+					if not has_ally or abs(delta) < abs(nearest_ally_delta):
+						nearest_ally_delta = delta
+						has_ally = true
 			if crowded:
 				# Stand and stare — strafing would shove the neighbor.
 				_want_dir = Vector3.ZERO
 				velocity.x = 0.0
 				velocity.z = 0.0
 			else:
-				# Per-enemy L/R bias from instance_id parity so any
-				# pair that isn't crowded doesn't strafe parallel.
 				var to_target_norm := to_target / dist
 				var perp := Vector3.UP.cross(to_target_norm).normalized()
-				var strafe_dir := perp if (get_instance_id() & 1) == 0 else -perp
+				# Ring formation: +perp = CW around the target (verified by
+				# hand). If the nearest ally is at a higher angle (CCW of
+				# me), strafe CW (+perp) to widen the gap; if lower, -perp.
+				# No ally → fall back to instance_id parity so isolated
+				# pairs don't both pick the same side.
+				var strafe_sign: float
+				if has_ally:
+					strafe_sign = 1.0 if nearest_ally_delta > 0.0 else -1.0
+				else:
+					strafe_sign = 1.0 if (get_instance_id() & 1) == 0 else -1.0
+				var strafe_dir := perp * strafe_sign
 				var strafe_speed: float = CHASE_SPEED * 0.45 \
 					* _crouch_speed_factor() \
 					* _combat.affix_move_speed_mult() \
@@ -3653,12 +3709,28 @@ const _WALL_STUCK_VEL_SQ: float = 0.5 * 0.5   # < 0.5 m/s wished but not moving
 const _WALL_STUCK_TIMEOUT: float = 0.35
 var _wall_stuck_timer: float = 0.0
 
+# LoS-search sidestep for ranged enemies in the hold band without line
+# of sight. Strafe perpendicular to find a firing angle; if velocity
+# stays low for FLIP_TIMEOUT (walled in), flip direction. Seeded per-
+# enemy via instance_id parity so a cluster behind cover spreads both
+# ways instead of all sliding the same direction.
+const _LOS_SEARCH_FLIP_TIMEOUT: float = 0.6
+var _los_search_dir: int = 0
+var _los_search_stuck_timer: float = 0.0
+
 # Strafe is suppressed when any other enemy is within this radius —
 # multiple melee enemies trying to strafe at the same time was
 # producing the "running into each other" cluster movement the user
 # noticed. 1.6m ≈ two body widths, enough that a clean 1v1 still
 # strafes while pile-ups stand and commit.
 const _STRAFE_CROWDED_RADIUS: float = 1.6
+
+# Radius around the player used to detect formation neighbours. When a
+# melee enemy strafes between swings, it biases away from the nearest
+# ally's angular position so the group spreads into a ring instead of
+# all hugging one side of the player. ~4m catches typical attack-band
+# clusters without dragging in far-side allies whose angle is noise.
+const _FORMATION_QUERY_RADIUS: float = 4.0
 
 
 func _face_direction(dir: Vector3) -> void:
