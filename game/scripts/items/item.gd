@@ -344,6 +344,8 @@ func to_dict() -> Dictionary:
 	d[&"ammo_max"] = ammo_max
 	d[&"ammo_current"] = ammo_current
 	d[&"reload_time"] = reload_time
+	d[&"max_charges"] = max_charges
+	d[&"recharge_time"] = recharge_time
 	d[&"damage_type"] = String(damage_type)
 	d[&"model_name"] = model_name
 	d[&"light_mod"] = int(light_mod)
@@ -389,6 +391,8 @@ static func from_dict(d: Dictionary) -> Item:
 	item.ammo_max = int(d.get(&"ammo_max", 0))
 	item.ammo_current = int(d.get(&"ammo_current", 0))
 	item.reload_time = float(d.get(&"reload_time", 0.0))
+	item.max_charges = int(d.get(&"max_charges", 0))
+	item.recharge_time = float(d.get(&"recharge_time", 0.0))
 	item.damage_type = StringName(d.get(&"damage_type", ""))
 	item.model_name = String(d.get(&"model_name", ""))
 	item.light_mod = int(d.get(&"light_mod", 0)) as LightMod
