@@ -48,6 +48,14 @@ const FADE_RATE := 18.0  ## ~55ms half-life — bumped from 12 (80ms) for snappi
 # we'd render imperceptibly transparent geometry forever.
 const HIDE_THRESHOLD := 0.98
 
+# Reveal budget per frame. Stops the 100-240ms proc spike that hit when a
+# room boundary cross flipped hundreds of entities to visible in one tick.
+# Budget-blocked entries stay invisible (lerp frozen at 1.0) and retry next
+# frame, trading a soft ~400ms reveal lag for smooth frame pacing. Hides
+# are free, so only true→visible transitions are throttled.
+const MAX_REVEAL_NODES_PER_FRAME := 12  # entity flips per _process render tick
+const MAX_REVEAL_GEOMS_PER_TICK := 4    # room-geometry flips per _physics_process tick
+
 var _query := PhysicsRayQueryParameters3D.new()
 # node -> bool: visual LoS — walls only (written by physics, read by process)
 var _target_los: Dictionary = {}
@@ -362,6 +370,12 @@ func _physics_process(_delta: float) -> void:
 	# and the room-gate adjacency already keeps "one room over" visible.
 	# Skipping vertex + shadow work on offscreen rooms is the biggest perf
 	# win for kit-bash levels.
+	# Reveal budget per physics tick — hide flips are free (renderer just stops
+	# drawing), but a true→visible flip costs GPU upload + first-frame draw
+	# setup. Capping spreads a multi-room reveal across a few ticks so the
+	# 240ms spike at room-cross becomes invisible pacing. Unbudgeted entries
+	# stay hidden and are re-checked next tick (loop runs every tick).
+	var geom_reveal_budget: int = MAX_REVEAL_GEOMS_PER_TICK
 	for rg in _room_geometry_cache:
 		if not is_instance_valid(rg) or not rg.is_inside_tree():
 			continue
@@ -375,7 +389,11 @@ func _physics_process(_delta: float) -> void:
 		var geom_room: StringName = ExplorationState.room_at_world(geom.global_position)
 		var should_hide := player_room != &"" and not ExplorationState.rooms_geometry_visible_together(player_room, geom_room)
 		if geom.visible == should_hide:
-			geom.visible = not should_hide
+			if should_hide:
+				geom.visible = false
+			elif geom_reveal_budget > 0:
+				geom.visible = true
+				geom_reveal_budget -= 1
 	# Interactibles — static (doors, switches, crates). Re-raycast only when the
 	# player crosses a cell boundary, since neither side is moving otherwise.
 	# Iterate SpatialGrid's flat membership set (no per-frame allocation).
@@ -468,6 +486,14 @@ func _process(delta: float) -> void:
 	var weight: float = 1.0 - exp(-FADE_RATE * delta)
 	var to_remove: Array = []
 	var settled: Array = []
+	# Cap how many entities can flip from invisible→visible this frame.
+	# Hide flips are free (renderer just stops drawing); reveal flips force
+	# Godot to add the geometry to draw lists + first-frame upload, and 365
+	# at once was the 240ms spike at room-cross. Budget-blocked entries
+	# keep transparency frozen at 1.0 (no lerp) and retry next frame so the
+	# eventual fade-in still starts from invisible, not from "already half
+	# opaque while node was hidden."
+	var reveal_budget: int = MAX_REVEAL_NODES_PER_FRAME
 	for key in _transitioning:
 		if not is_instance_valid(key):
 			to_remove.append(key)
@@ -482,6 +508,17 @@ func _process(delta: float) -> void:
 		var los: bool = _target_los.get(key, false)
 		var target_t: float = 0.0 if los else 1.0
 		var current: float = _transparency.get(key, 1.0)
+		# Budget gate: if we want to reveal but no budget left this frame,
+		# skip both the lerp and the visible flip — try again next frame.
+		var revealing: bool = los and not node.visible
+		if revealing:
+			if reveal_budget <= 0:
+				# Stay invisible at full transparency. Don't add to settled —
+				# we still need to flip eventually. _transitioning entry
+				# survives so we retry next frame.
+				continue
+			node.visible = true
+			reveal_budget -= 1
 		current = lerp(current, target_t, weight)
 		# lerp asymptotes — it never reaches exactly 0 or 1. When current
 		# is non-zero, Godot routes the GeometryInstance3D through the
@@ -497,21 +534,21 @@ func _process(delta: float) -> void:
 		elif current > HIDE_THRESHOLD:
 			current = 1.0
 		_transparency[key] = current
-		# Show as soon as the target flips to visible — the alpha fade does the
-		# rest. Hide only once we've fully faded out, so a brief LoS flicker
+		# Hide only once we've fully faded out, so a brief LoS flicker
 		# (e.g. a pickup briefly behind a glancing wall) doesn't hard-cut.
-		if los and not node.visible:
-			node.visible = true
-		elif not los and current >= HIDE_THRESHOLD and node.visible:
+		if not los and current >= HIDE_THRESHOLD and node.visible:
 			node.visible = false
 		var geoms: Array = _geom_cache.get(key, [])
 		for g in geoms:
 			if is_instance_valid(g):
 				(g as GeometryInstance3D).transparency = current
-		# Check if this entity has settled at its target transparency.
-		if los and current < 0.005:
+		# Settle only when transparency AND node.visible both match the target
+		# state. A budget-blocked reveal can have current near 1.0 (frozen)
+		# but los=true — if we settled it now, _transitioning would drop the
+		# entry and we'd never retry the visible flip.
+		if los and current < 0.005 and node.visible:
 			settled.append(key)
-		elif not los and current >= HIDE_THRESHOLD:
+		elif not los and current >= HIDE_THRESHOLD and not node.visible:
 			settled.append(key)
 	for k in to_remove:
 		_target_los.erase(k)

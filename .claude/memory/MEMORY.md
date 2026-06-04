@@ -96,7 +96,7 @@
 - [Melee impact ratio](project_melee_impact_ratio.md) — Per-weapon dial for fraction-through-swing where damage/SFX fire; sledge=0.4, blade=0.5
 - [Ragdoll frame-budget queue](project_ragdoll_queue.md) — RagdollQueue autoload caps XBotRagdoll setup+activate at N/frame so multi-kill explosions don't stack 100-200ms spikes; budget-saturated path degrades to legacy capsule corpse
 - [Streamed level build](project_streamed_level_build.md) — LevelBuilder._build_level yields every N pieces so the loading screen stays responsive; prototype_root awaits new `built` signal before hide_loading. Was a 5.8s freeze.
-- [LoS reveal proc spikes](project_los_reveal_spikes.md) — 100-240ms proc spikes when player enters a new room (draws + objects surge in one frame from LoS un-hiding); now dominant after ragdoll spikes fixed
+- [LoS reveal proc spikes](project_los_reveal_spikes.md) — Was 100-240ms freeze at room-cross. Fix shipped 2026-06-04: per-frame reveal budgets (12 entities + 4 MMIs/tick) trade soft pop-in for smooth pacing
 - [Level-up spike at higher levels](project_levelup_higher_lvl_spike.md) — Lvl 5+ level-ups cost ~100ms proc despite VfxWarmup; Lvl 2 fine; suspect UI re-layout or per-level VFX
 - [PerfLogger feedback loop](project_perf_logger_feedback.md) — Spike rows used to fire every frame with 25ms of tree walks, self-perpetuating. Throttled to 200ms and tree walks skipped on spike rows.
 - [Enemy AnimationPlayer pause](project_enemy_anim_pause.md) — 200+ enemy AnimationPlayers ticking ~40ms/frame at level start; now pause when invisible+IDLE (active states keep ticking)
