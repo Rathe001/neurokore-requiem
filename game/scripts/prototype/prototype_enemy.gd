@@ -1309,15 +1309,17 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 	# Scaled by % of max health dealt so rapid-fire low-damage sources
 	# (Aura of Dread, Energy Accelerator ramp ticks, DoTs) don't carpet
 	# the floor — 1 drop per 10% of HP, ticks under that threshold skip
-	# the droplet pass entirely. Crits and bleed weapons still add bonus
-	# scatter on top so heavy hits leave a richer trail.
+	# the droplet pass entirely. Crits add bonus scatter so heavy hits
+	# leave a richer initial mark. Blade weapons no longer get a flat
+	# initial bonus — the bleed status they apply now drips a single
+	# drop per tick from the enemy's feet (see _stamp_bleed_drop), so a
+	# bleeding enemy trails blood as it moves rather than dumping the
+	# whole spread at the wound point.
 	var dmg_ratio: float = float(amount) / float(maxi(max_health, 1))
 	var droplet_count: int = int(dmg_ratio * 10.0)
 	if droplet_count > 0:
 		if is_crit:
 			droplet_count += 3
-		if weapon_base_id == &"melee_1h":
-			droplet_count += 4
 		_stamp_hit_droplets(hit_pos, blood_dir, droplet_count)
 	# Directional hit reaction — pick hit_left/right/back/big based on
 	# where the hit came from relative to the enemy's facing. Threshold-
@@ -3033,6 +3035,30 @@ func _stamp_hit_droplets(hit_pos: Vector3, hit_dir: Vector3, count: int) -> void
 		var radius: float = lerp(0.06, 0.22, size_roll)
 		var intensity: float = randf_range(0.65, 1.0)
 		layer.stamp(pos, _get_settle_stamp_texture(), radius, intensity)
+
+
+# Single small droplet at the enemy's feet — fired each bleed tick so a
+# bleeding enemy leaves a visible trail as they move. Distinct from the
+# hit-droplet spray (smaller, single drop, no cone bias, lower opacity)
+# so the cumulative trail of a fleeing bleeder reads as "they're losing
+# blood as they go" rather than mistakable hit spatter.
+func _stamp_bleed_drop() -> void:
+	if not is_inside_tree():
+		return
+	var layer := LiquidLayer.find_for(get_tree(), blood_type)
+	if layer == null:
+		return
+	var floor_y: float = global_position.y
+	var theta: float = randf() * TAU
+	var dist: float = randf_range(0.0, 0.4)
+	var pos := Vector3(
+		global_position.x + cos(theta) * dist,
+		floor_y,
+		global_position.z + sin(theta) * dist
+	)
+	var radius: float = randf_range(0.05, 0.09)
+	var intensity: float = randf_range(0.45, 0.7)
+	layer.stamp(pos, _get_settle_stamp_texture(), radius, intensity)
 
 
 # 12 chaotic soft-alpha stamp variants. The perimeter is shaped by 2D

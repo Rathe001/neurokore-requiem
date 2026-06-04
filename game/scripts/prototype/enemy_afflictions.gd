@@ -393,6 +393,12 @@ func tick(delta: float) -> void:
 			var per_tick_pct: float = BLEED_HP_PCT_PER_SEC * BLEED_TICK_INTERVAL * float(_bleed_stacks)
 			var tick_dmg: int = maxi(1, int(round(float(_host.max_health) * per_tick_pct)))
 			_host.take_damage(tick_dmg, _host.global_position, 0.0, 1, false)
+			# Trail drip — one small drop at the enemy's feet per tick so a
+			# bleeding enemy leaves a visible trail as it moves. The tick
+			# damage itself is below the droplet threshold inside
+			# take_damage, so without this the bleed status would be
+			# invisible on the floor.
+			_host._stamp_bleed_drop()
 		if _bleed_remain <= 0.0:
 			_bleed_remain = 0.0
 			_bleed_stacks = 0
