@@ -75,7 +75,7 @@ func _register_spatial() -> void:
 	PrototypeAttackIndicator.register_as_blood_receiver(self)
 
 
-func take_damage(amount: int, _knockback_from: Vector3 = Vector3.ZERO, _knockback_strength: float = 0.0, multistrike: int = 1, is_crit: bool = false, _weapon_base_id: StringName = &"", _is_explosion: bool = false) -> void:
+func take_damage(amount: int, _knockback_from: Vector3 = Vector3.ZERO, _knockback_strength: float = 0.0, multistrike: int = 1, is_crit: bool = false, _weapon_base_id: StringName = &"", _is_explosion: bool = false, _is_dot: bool = false) -> void:
 	if not _alive:
 		return
 	# In MP only the host applies damage; clients route hits via the
