@@ -54,14 +54,29 @@ against `git log --oneline` before assuming this is current.**
   (Phase 6 + 7 commits, mid-late May) iterated color, drip streaks,
   thickness gradient, aging. This bullet predated the migration
   landing.
-- **#111 Objects + characters — still pending.**
-  `spawn_blood_on_character` (line 1399) for per-character splats
-  and `_spawn_object_blood_decal` (line 1644) for props /
-  interactables / pillars. Both still create Decal3D nodes directly.
-  Different pipelines from floor/wall (per-instance Decal, not a
-  shared SubViewport mask) so the migration shape is its own work.
-  See [[project_object_blood_pipeline]] for the receiver opt-in +
-  side-decal mechanism that survives migration.
+- **#111 Objects + characters — CLOSED, not migrating (2026-06-04).**
+  Reviewed the call sites with the user; concluded Decal3D is the
+  correct tech for these and LiquidLayer doesn't fit. Reasons:
+    - `_spawn_object_blood_decal` relies on **receiver opt-in via
+      `cull_mask = 8`** so blood only paints registered geometry
+      (props, interactables, pillars). LiquidLayer's shared
+      SubViewport mask can't filter to registered receivers — it'd
+      paint everything in its world extent. The opt-in
+      pattern is the entire point of the object pipeline.
+    - `spawn_blood_on_character` parents the Decal to the character
+      visual so it tracks the moving body. LiquidLayer is a world-
+      fixed mask; following a running enemy would require per-
+      character SubViewport instances (heavy memory + draw-call cost
+      for horde-density combat).
+    - Visual uniformity with floor/wall blood was the original
+      driver, and it's already in place: both functions use
+      `PrototypeEnemy._get_settle_stamp_texture()` (same chaotic-
+      noise family) and `_dark_blood_decal_color()` (same dark
+      palette). The "walls look different" complaint that motivated
+      the migration roadmap was wall-specific; #110 shipped and
+      walls now match the floor.
+  Bottom line: not every Decal3D call site needs to migrate. These
+  two are using Decal correctly for what they do.
 - **#112 Fluid type generalization (in-progress 2026-06-03)** —
   Floor LiquidLayer naming + lookup unified. `fluid_id` now matches
   `blood_type` directly (`&"human"`, not `&"blood_human"`); a single

@@ -1,16 +1,24 @@
 ---
 name: object-blood-splatter-on-props-interactables
-description: "Receiver opt-in pipeline that paints blood decals on props, interactables, pillars near a kill — group + layer-8 + side-projected decal. NOTE 2026-06-01: still on the old Decal system; migration to [[project_liquid_layer]] is task #111."
+description: "Receiver opt-in pipeline that paints blood decals on props, interactables, pillars near a kill — group + layer-8 + side-projected decal. As of 2026-06-04 Decal3D is the chosen tech; migration to LiquidLayer (was task #111) was closed because the opt-in cull_mask is the whole point and LiquidLayer can't filter to registered receivers."
 metadata: 
   node_type: memory
   type: project
   originSessionId: 8cb2236a-ff5a-4a76-8cc4-a33a9a8014b8
 ---
 
-**2026-06-01:** This pipeline is unchanged by the floor → LiquidLayer
-migration. Props/interactables/pillars are still painted via Decal3D
-on cull_mask = 8. Task #111 will migrate this alongside character
-splats. Until then everything below remains current.
+**2026-06-04:** Task #111 (migrate this to LiquidLayer) was reviewed
+and CLOSED. The receiver opt-in via `cull_mask = 8` is the
+architectural value of this pipeline — only registered geometry
+gets painted. LiquidLayer's shared SubViewport mask paints
+everything in its world extent and has no per-receiver filter, so
+migrating would break the opt-in semantic. The character-blood
+variant (`spawn_blood_on_character`) has its own reason to stay on
+Decal3D — the decal is parented to the moving character visual.
+Visual uniformity with floor/wall blood is already in place via
+shared stamp texture + dark color, so the look-uniformity goal of
+#111 was already satisfied. See [[blood-migration-status]] for the
+full close-out rationale.
 
 
 When an enemy dies, `PrototypeAttackIndicator.spawn_blood_on_receivers`
