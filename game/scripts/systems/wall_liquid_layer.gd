@@ -64,10 +64,12 @@ const DRIP_LIFETIME_MIN: float = 3.0
 const DRIP_LIFETIME_MAX: float = 5.5
 const DRIP_FALL_SPEED_MIN: float = 0.22  # m/sec — viscous but visibly moving
 const DRIP_FALL_SPEED_MAX: float = 0.42
-# Thinner drip — 2.5cm radius (5cm physical width) reads more as a
-# narrow ribbon than a wide tube. Per-frame intensity bumped to
-# compensate so the streak still saturates.
-const DRIP_RADIUS_M: float = 0.025
+# Drip ribbon width — 4cm radius (8cm physical width). Originally tried
+# 2.5cm for "narrow ribbon" look but at iso camera distance the result
+# was nearly invisible. Wider stamps the streak with more mask coverage
+# per frame, which the shader's density gradient then renders as a
+# proper dark ribbon instead of a faint smudge.
+const DRIP_RADIUS_M: float = 0.04
 # Stronger vertical stretch — long ribbons rather than a stack of
 # circles. Combined with the extended fall distance this gives the
 # trailing-tail look from the references.
@@ -78,7 +80,7 @@ const DRIP_VERTICAL_STRETCH: float = 5.5
 # the streak still visually connects to its parent splatter rather
 # than floating disconnected.
 const DRIP_START_OFFSET_RATIO: float = 0.1
-const DRIP_PER_FRAME_INTENSITY: float = 0.18
+const DRIP_PER_FRAME_INTENSITY: float = 0.32
 const DRIP_COUNT_MIN: int = 2
 const DRIP_COUNT_MAX: int = 4
 const DRIP_FADE_TAIL_SEC: float = 0.8  # drip fades out over last N seconds

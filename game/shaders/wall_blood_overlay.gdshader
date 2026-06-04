@@ -34,14 +34,15 @@ uniform vec3 blood_thin : source_color = vec3(0.18, 0.05, 0.07);
 uniform vec3 blood_dense : source_color = vec3(0.05, 0.012, 0.020);
 uniform float density_power : hint_range(0.3, 4.0) = 0.9;
 uniform float density_full : hint_range(0.2, 2.0) = 1.6;
-uniform float density_opacity_max : hint_range(0.4, 1.0) = 0.78;
+uniform float density_opacity_max : hint_range(0.4, 1.0) = 0.92;
 // Alpha floor at thinnest visible edge. Raised from 0 so small per-hit
 // droplets (which can't accumulate to dense) stay readable. With the
 // darker fresh tint, thin areas read as faint dark stain, not as a
-// bright pink ring.
-uniform float alpha_min : hint_range(0.0, 0.5) = 0.32;
+// bright pink ring. 0.5 keeps single droplets clearly visible against
+// fluorescent-lit walls; previous 0.32 read as too faint.
+uniform float alpha_min : hint_range(0.0, 0.5) = 0.50;
 
-uniform float stain_brightness : hint_range(0.5, 4.0) = 1.4;
+uniform float stain_brightness : hint_range(0.5, 4.0) = 1.7;
 // Threshold raised vs. the original 0.015 to gate trail-end haze
 // that, combined with solid_opacity, used to paint visible bars
 // along mask rows where stamps had clustered.
@@ -49,8 +50,11 @@ uniform float coverage_threshold : hint_range(0.0, 0.5) = 0.05;
 uniform float edge_softness : hint_range(0.0, 0.3) = 0.10;
 uniform float blood_roughness : hint_range(0.0, 1.0) = 0.26;
 // 0 = pure multiply-stain at thinnest edge. Density scales up from
-// here toward density_opacity_max in the dense core.
-uniform float solid_opacity : hint_range(0.0, 1.0) = 0.0;
+// here toward density_opacity_max in the dense core. Small positive
+// value keeps thin edges from washing out completely against bright
+// wall surfaces — pure multiply over a fluorescent-lit panel left
+// edge stains nearly invisible.
+uniform float solid_opacity : hint_range(0.0, 1.0) = 0.15;
 
 // Wet-sheen tuning (same shape as the floor's normal map sampling).
 uniform float normal_strength : hint_range(0.0, 2.0) = 0.04;
