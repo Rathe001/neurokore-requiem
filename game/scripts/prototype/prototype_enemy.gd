@@ -1306,14 +1306,19 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 	# biased along the shot direction. Lands as faint, irregular drips
 	# that read as "spray from the wound hit the floor", separate from
 	# the bigger settle pool that forms when the corpse comes to rest.
-	# Crits + bleed-rated weapons (melee_1h) get a richer scatter to
-	# match the bigger spray burst.
-	var droplet_count: int = 6
-	if is_crit:
-		droplet_count += 3
-	if weapon_base_id == &"melee_1h":
-		droplet_count += 4
-	_stamp_hit_droplets(hit_pos, blood_dir, droplet_count)
+	# Scaled by % of max health dealt so rapid-fire low-damage sources
+	# (Aura of Dread, Energy Accelerator ramp ticks, DoTs) don't carpet
+	# the floor — 1 drop per 10% of HP, ticks under that threshold skip
+	# the droplet pass entirely. Crits and bleed weapons still add bonus
+	# scatter on top so heavy hits leave a richer trail.
+	var dmg_ratio: float = float(amount) / float(maxi(max_health, 1))
+	var droplet_count: int = int(dmg_ratio * 10.0)
+	if droplet_count > 0:
+		if is_crit:
+			droplet_count += 3
+		if weapon_base_id == &"melee_1h":
+			droplet_count += 4
+		_stamp_hit_droplets(hit_pos, blood_dir, droplet_count)
 	# Directional hit reaction — pick hit_left/right/back/big based on
 	# where the hit came from relative to the enemy's facing. Threshold-
 	# gated so a 5% graze doesn't stutter the chase mid-stride. Skipped
