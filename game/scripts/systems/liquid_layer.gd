@@ -135,8 +135,11 @@ func _on_level_built() -> void:
 	# transitions when the same LiquidLayer instance is reused with a
 	# different _world_origin — old stamps would otherwise show up at
 	# the wrong world position relative to the new origin.
+	# Pair with UPDATE_ONCE so the viewport actually renders (and thus
+	# applies the clear) — the baseline is UPDATE_DISABLED.
 	if _subviewport != null:
 		_subviewport.render_target_clear_mode = SubViewport.CLEAR_MODE_ONCE
+		_subviewport.render_target_update_mode = SubViewport.UPDATE_ONCE
 
 
 # Layer's center in world space. Set by _on_level_built; default (0,0,0)
@@ -225,15 +228,20 @@ func stamp(world_pos: Vector3, stamp_texture: Texture2D, world_radius: float, in
 	# Random rotation for organic variation between stamps.
 	sprite.rotation = randf() * TAU
 	_stamp_root.add_child(sprite)
-	# Stamp persists exactly one frame — it draws into the SubViewport's
-	# persistent render target, then we free the Sprite2D. The mask
-	# keeps the rasterized pixels.
+	_begin_render_window()
+	# Sprite must outlive the SubViewport's render pass. process_frame
+	# fires BEFORE the render, so a single-frame queue_free was the
+	# silent-failure mode footprints hit. ~100ms covers several render
+	# frames and matches the stamp_oriented pattern.
+	# Memory: [[liquid-layer-stamp-lifecycle]]
 	var stamp_id := sprite.get_instance_id()
-	get_tree().process_frame.connect(
+	var t := get_tree().create_timer(0.1)
+	t.timeout.connect(
 		func() -> void:
 			var s := instance_from_id(stamp_id)
 			if s != null and is_instance_valid(s):
-				(s as Node).queue_free(),
+				(s as Node).queue_free()
+			_end_render_window(),
 		CONNECT_ONE_SHOT
 	)
 
@@ -270,6 +278,7 @@ func stamp_oriented(world_pos: Vector3, stamp_texture: Texture2D,
 	# matches a CCW 2D rotation in the viewport's pixel space.
 	sprite.rotation = -rotation_y
 	_stamp_root.add_child(sprite)
+	_begin_render_window()
 	# Keep the sprite alive long enough for the SubViewport to render
 	# at least one full frame with it in the tree. process_frame fires
 	# BEFORE rendering, so a single-frame queue_free could discard the
@@ -282,7 +291,8 @@ func stamp_oriented(world_pos: Vector3, stamp_texture: Texture2D,
 		func() -> void:
 			var s := instance_from_id(stamp_id)
 			if s != null and is_instance_valid(s):
-				(s as Node).queue_free(),
+				(s as Node).queue_free()
+			_end_render_window(),
 		CONNECT_ONE_SHOT,
 	)
 
@@ -327,6 +337,7 @@ func stamp_growing(world_pos: Vector3, stamp_texture: Texture2D, start_radius: f
 	var stretch_axis_short: float = randf_range(0.75, 1.0)
 	sprite.scale = Vector2(start_scale * stretch_axis_long, start_scale * stretch_axis_short)
 	_stamp_root.add_child(sprite)
+	_begin_render_window()
 	# Ease-out so the pool grows fast at first, then slows — matches
 	# the viscous bleed-out curve of the old Decal3D tween system.
 	var tween := sprite.create_tween()
@@ -335,6 +346,7 @@ func stamp_growing(world_pos: Vector3, stamp_texture: Texture2D, start_radius: f
 		Vector2(end_scale * stretch_axis_long, end_scale * stretch_axis_short),
 		duration)
 	tween.tween_callback(sprite.queue_free)
+	tween.tween_callback(_end_render_window)
 
 
 # world (x, z) → viewport pixel (px, py). The viewport's pixel-(0, 0)
@@ -355,6 +367,36 @@ func _world_to_viewport_px(world_pos: Vector3) -> Vector2:
 # ── Internals ───────────────────────────────────────────────────────────────
 
 
+# Count of stamps currently alive in the StampRoot. When > 0 we keep
+# the SubViewport rendering; when 0 we let it idle. Every stamp call
+# bumps this on entry and decrements on cleanup. Counter (not bool)
+# because stamps overlap freely — a tween-driven stamp_growing pool
+# can be live while per-hit droplets land on top of it.
+var _active_stamp_count: int = 0
+
+
+# Pair with _end_render_window — must call exactly once per stamp.
+# Idempotent in the sense that if multiple stamps are alive, only the
+# first flip to UPDATE_ALWAYS matters; the rest just bump the counter.
+func _begin_render_window() -> void:
+	if _subviewport == null:
+		return
+	_active_stamp_count += 1
+	if _active_stamp_count == 1:
+		_subviewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+
+
+# Pair with _begin_render_window. When the last stamp finishes the
+# viewport stops rendering — the mask is persistent (CLEAR_MODE_NEVER)
+# so the accumulated coverage stays visible.
+func _end_render_window() -> void:
+	if _subviewport == null:
+		return
+	_active_stamp_count = maxi(_active_stamp_count - 1, 0)
+	if _active_stamp_count == 0:
+		_subviewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
+
+
 func _build_subviewport() -> void:
 	_subviewport = SubViewport.new()
 	_subviewport.size = Vector2i(SUBVIEWPORT_PX, SUBVIEWPORT_PX)
@@ -362,9 +404,11 @@ func _build_subviewport() -> void:
 	# clear after first draw — wrong for our use case. ALWAYS would
 	# wipe every frame — also wrong.
 	_subviewport.render_target_clear_mode = SubViewport.CLEAR_MODE_NEVER
-	# Once: render the first frame to clear-init the texture. After
-	# that, NEVER + add_child stamps drive subsequent draws.
-	_subviewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	# UPDATE_DISABLED baseline — every frame of UPDATE_ALWAYS on a 4096²
+	# render target burned ~1 GB/s fillrate even with zero active
+	# stamps. _begin/_end_render_window flip UPDATE_ALWAYS on only
+	# while stamps are alive in the tree.
+	_subviewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	# Transparent BG = alpha 0 where nothing has been drawn.
 	_subviewport.transparent_bg = true
 	# No 3D, no audio listener — pure 2D compositor.

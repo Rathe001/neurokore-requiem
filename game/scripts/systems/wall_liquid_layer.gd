@@ -133,12 +133,14 @@ func _process_drips(delta: float) -> void:
 		var sprite: Sprite2D = drip[&"sprite"] as Sprite2D
 		if sprite == null or not is_instance_valid(sprite):
 			_active_drips.remove_at(i)
+			_end_render_window()
 			continue
 		var elapsed: float = drip[&"elapsed"] + delta
 		var lifetime: float = drip[&"lifetime"]
 		if elapsed >= lifetime:
 			sprite.queue_free()
 			_active_drips.remove_at(i)
+			_end_render_window()
 			continue
 		drip[&"elapsed"] = elapsed
 		var t: float = elapsed / lifetime
@@ -211,13 +213,15 @@ func stamp(world_pos: Vector3, wall_normal: Vector3, world_radius: float, intens
 	# is trivial: ~10-20 active sprites at peak combat density, all
 	# rendered into the same SubViewport that's already updating each
 	# frame.
+	_begin_render_window()
 	var stamp_id := sprite.get_instance_id()
 	var timer := get_tree().create_timer(0.15)
 	timer.timeout.connect(
 		func() -> void:
 			var s := instance_from_id(stamp_id) as Node
 			if s != null and is_instance_valid(s):
-				s.queue_free(),
+				s.queue_free()
+			_end_render_window(),
 		CONNECT_ONE_SHOT
 	)
 	# Spawn gravity-drip streaks below the splatter. Tiny mist drops
@@ -281,6 +285,32 @@ func _spawn_drips(world_pos: Vector3, use_x_mask: bool, stamp_root: Node2D, sour
 			&"start_y": sprite.position.y,
 			&"fall_px": fall_distance_px,
 		})
+		_begin_render_window()
+
+
+# Shared counter across BOTH SubViewports — when any stamp or drip is
+# live we flip both to UPDATE_ALWAYS. Could split per-viewport for
+# finer control, but both masks together are only 4MB × 2 = 8MB and
+# the savings are dominated by the floor layer's 64MB one anyway.
+var _active_render_clients: int = 0
+
+
+func _begin_render_window() -> void:
+	_active_render_clients += 1
+	if _active_render_clients == 1:
+		if _mask_x_viewport != null:
+			_mask_x_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+		if _mask_z_viewport != null:
+			_mask_z_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+
+
+func _end_render_window() -> void:
+	_active_render_clients = maxi(_active_render_clients - 1, 0)
+	if _active_render_clients == 0:
+		if _mask_x_viewport != null:
+			_mask_x_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
+		if _mask_z_viewport != null:
+			_mask_z_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
 
 
 # Builds one rectangular SubViewport configured for persistent (never-
@@ -289,7 +319,10 @@ func _build_mask_viewport() -> SubViewport:
 	var sv := SubViewport.new()
 	sv.size = Vector2i(MASK_PX_X, MASK_PX_Y)
 	sv.render_target_clear_mode = SubViewport.CLEAR_MODE_NEVER
-	sv.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	# Baseline DISABLED — _begin/_end_render_window flip both viewports
+	# to UPDATE_ALWAYS only while stamps or drips are alive. Idle wall-
+	# blood rooms then cost zero per-frame fillrate on this layer.
+	sv.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	sv.transparent_bg = true
 	sv.disable_3d = true
 	sv.audio_listener_enable_2d = false
