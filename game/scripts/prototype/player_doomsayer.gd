@@ -72,7 +72,11 @@ func tick(delta: float) -> void:
 		if dot_per_tick > 0.0 and falloff > 0.0 and enemy.has_method(&"take_damage"):
 			var dmg_f := dot_per_tick * falloff * dmg_mult
 			var dmg := maxi(1, int(round(dmg_f)))
-			PrototypeEnemy.deal_damage(enemy, dmg, _host.global_position)
+			# is_dot=true → take_damage skips the per-hit blood burst +
+			# floor droplets. The aura ticks every 0.4s for every enemy
+			# in range; without the gate, 10 enemies in range produced
+			# 25 droplet stamps/sec that carpeted the floor.
+			PrototypeEnemy.deal_damage(enemy, dmg, _host.global_position, 0.0, 1, false, &"", false, true)
 		if charm_capacity > 0 and enemy.is_charmable():
 			var d2 := _host.global_position.distance_squared_to(enemy.global_position)
 			if d2 < charm_candidate_dist_sq:

@@ -917,6 +917,10 @@ func _init_enemy() -> void:
 	# from the previous occupant's last facing.
 	_target_facing_set = false
 	_target_facing_y = 0.0
+	# Bleed-trail movement gate — new spawn shouldn't inherit the
+	# previous occupant's last drop position.
+	_bleed_drop_anchor_set = false
+	_last_bleed_drop_pos = Vector3.ZERO
 	if _hit_tween != null and _hit_tween.is_valid():
 		_hit_tween.kill()
 		_hit_tween = null
@@ -1215,22 +1219,27 @@ func refresh_locked_tooltip() -> void:
 ## the hit to the host via RPC. Hit visuals (damage number, flash, squash)
 ## are broadcast to ALL clients by the host's take_damage via _client_show_hit,
 ## so the client path no longer spawns local feedback.
-static func deal_damage(target: Node3D, amount: int, knockback_from: Vector3, knockback_strength: float = 0.0, multistrike: int = 1, is_crit: bool = false, weapon_base_id: StringName = &"", is_explosion: bool = false) -> void:
+## `is_dot` flags damage that came from a tick source (aura, bleed, ignite)
+## rather than a direct hit. The hit-droplet pass inside take_damage skips
+## when is_dot=true, so rapid low-magnitude ticks don't carpet the floor.
+## Bleed-specific trail droplets are still spawned by enemy_afflictions
+## (see _stamp_bleed_drop), independent of this flag.
+static func deal_damage(target: Node3D, amount: int, knockback_from: Vector3, knockback_strength: float = 0.0, multistrike: int = 1, is_crit: bool = false, weapon_base_id: StringName = &"", is_explosion: bool = false, is_dot: bool = false) -> void:
 	if NetState.is_in_lobby() and not NetState.is_host():
-		target.request_damage.rpc_id(1, amount, knockback_from, knockback_strength, multistrike, is_crit, weapon_base_id, is_explosion)
+		target.request_damage.rpc_id(1, amount, knockback_from, knockback_strength, multistrike, is_crit, weapon_base_id, is_explosion, is_dot)
 		return
-	target.take_damage(amount, knockback_from, knockback_strength, multistrike, is_crit, weapon_base_id, is_explosion)
+	target.take_damage(amount, knockback_from, knockback_strength, multistrike, is_crit, weapon_base_id, is_explosion, is_dot)
 
 ## RPC endpoint: any peer can request damage on an enemy. Only the host
 ## (authority) actually applies it — clients' local take_damage is gated.
 ## Clients call `request_damage.rpc_id(1, ...)` to route hits to the host.
 @rpc("any_peer", "call_remote", "reliable")
-func request_damage(amount: int, knockback_from: Vector3, knockback_strength: float, multistrike: int, is_crit: bool, weapon_base_id: StringName = &"", is_explosion: bool = false) -> void:
+func request_damage(amount: int, knockback_from: Vector3, knockback_strength: float, multistrike: int, is_crit: bool, weapon_base_id: StringName = &"", is_explosion: bool = false, is_dot: bool = false) -> void:
 	if not multiplayer.is_server():
 		return
 	if not is_inside_tree():
 		return
-	take_damage(amount, knockback_from, knockback_strength, multistrike, is_crit, weapon_base_id, is_explosion)
+	take_damage(amount, knockback_from, knockback_strength, multistrike, is_crit, weapon_base_id, is_explosion, is_dot)
 
 ## Host → all clients: play hit visuals (damage number, squash, flash).
 ## Sent from take_damage after the host applies damage so every client
@@ -1243,7 +1252,7 @@ func _client_show_hit(amount: int, multistrike: int, is_crit: bool) -> void:
 	_visuals.play_hit_squash()
 	_hit_flash_tween = HitFlash.play(self, visual, _hit_flash_tween)
 
-func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_strength: float = 0.0, multistrike: int = 1, is_crit: bool = false, weapon_base_id: StringName = &"", is_explosion: bool = false) -> void:
+func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_strength: float = 0.0, multistrike: int = 1, is_crit: bool = false, weapon_base_id: StringName = &"", is_explosion: bool = false, is_dot: bool = false) -> void:
 	if not _is_alive():
 		return
 	# Clients don't apply damage locally — they route hits through
@@ -1301,26 +1310,24 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 	if exit_offset.length_squared() > 0.0001:
 		exit_offset = exit_offset.normalized() * 0.30
 	var burst_pos := hit_pos + exit_offset
-	PrototypeAttackIndicator.spawn_blood_burst(get_parent(), burst_pos, blood_dir, hit_mult, blood_type)
-	# Per-hit ground droplets — small lobed stamps scattered in a cone
-	# biased along the shot direction. Lands as faint, irregular drips
-	# that read as "spray from the wound hit the floor", separate from
-	# the bigger settle pool that forms when the corpse comes to rest.
-	# Scaled by % of max health dealt so rapid-fire low-damage sources
-	# (Aura of Dread, Energy Accelerator ramp ticks, DoTs) don't carpet
-	# the floor — 1 drop per 10% of HP, ticks under that threshold skip
-	# the droplet pass entirely. Crits add bonus scatter so heavy hits
-	# leave a richer initial mark. Blade weapons no longer get a flat
-	# initial bonus — the bleed status they apply now drips a single
-	# drop per tick from the enemy's feet (see _stamp_bleed_drop), so a
-	# bleeding enemy trails blood as it moves rather than dumping the
-	# whole spread at the wound point.
-	var dmg_ratio: float = float(amount) / float(maxi(max_health, 1))
-	var droplet_count: int = int(dmg_ratio * 10.0)
-	if droplet_count > 0:
-		if is_crit:
-			droplet_count += 3
-		_stamp_hit_droplets(hit_pos, blood_dir, droplet_count)
+	# All visible blood from this hit (3D particle burst, sampled mist
+	# floor stamps, scattered ground droplets) is skipped for DoT ticks.
+	# Aura / bleed / ignite paths pass is_dot=true; they fire dozens of
+	# small ticks per second at horde scale and each would otherwise
+	# stamp the floor through spawn_blood_burst → _paint_mist_droplets,
+	# carpeting the scene. Bleed-trail droplets still spawn separately
+	# via enemy_afflictions → _stamp_bleed_drop (movement-gated) so the
+	# status remains visually communicated.
+	if not is_dot:
+		PrototypeAttackIndicator.spawn_blood_burst(get_parent(), burst_pos, blood_dir, hit_mult, blood_type)
+		# Direct-hit ground droplets — 1 drop per 10% of max HP, +3 on
+		# crit. Sub-10% hits skip the pass.
+		var dmg_ratio: float = float(amount) / float(maxi(max_health, 1))
+		var droplet_count: int = int(dmg_ratio * 10.0)
+		if droplet_count > 0:
+			if is_crit:
+				droplet_count += 3
+			_stamp_hit_droplets(hit_pos, blood_dir, droplet_count)
 	# Directional hit reaction — pick hit_left/right/back/big based on
 	# where the hit came from relative to the enemy's facing. Threshold-
 	# gated so a 5% graze doesn't stutter the chase mid-stride. Skipped
@@ -3042,8 +3049,16 @@ func _stamp_hit_droplets(hit_pos: Vector3, hit_dir: Vector3, count: int) -> void
 # hit-droplet spray (smaller, single drop, no cone bias, lower opacity)
 # so the cumulative trail of a fleeing bleeder reads as "they're losing
 # blood as they go" rather than mistakable hit spatter.
+#
+# Movement-gated: a stationary bleeding enemy stamps once on the first
+# tick (anchor not set) and then stops until it has moved at least
+# sqrt(_BLEED_DROP_MIN_DIST_SQ) from the last drop. This prevents the
+# "carpet under a held-in-place cluster" failure mode while still
+# tracing a clean trail behind anyone walking around bleeding.
 func _stamp_bleed_drop() -> void:
 	if not is_inside_tree():
+		return
+	if _bleed_drop_anchor_set and global_position.distance_squared_to(_last_bleed_drop_pos) < _BLEED_DROP_MIN_DIST_SQ:
 		return
 	var layer := LiquidLayer.find_for(get_tree(), blood_type)
 	if layer == null:
@@ -3059,6 +3074,8 @@ func _stamp_bleed_drop() -> void:
 	var radius: float = randf_range(0.05, 0.09)
 	var intensity: float = randf_range(0.45, 0.7)
 	layer.stamp(pos, _get_settle_stamp_texture(), radius, intensity)
+	_last_bleed_drop_pos = global_position
+	_bleed_drop_anchor_set = true
 
 
 # 12 chaotic soft-alpha stamp variants. The perimeter is shaped by 2D
@@ -3769,6 +3786,17 @@ const _LOS_SEARCH_GIVE_UP: float = 1.5
 var _los_search_dir: int = 0
 var _los_search_stuck_timer: float = 0.0
 var _los_search_total_stuck: float = 0.0
+
+# Movement gate for the bleed-trail droplet. A stationary bleeding
+# enemy would otherwise stamp a drop every 0.5s in the same spot,
+# producing a pool — defeats the "trail when moving" intent and
+# carpets the floor under any cluster of bleeders held in place by
+# a melee player. First call after bleed starts always drops; later
+# calls require the enemy to have moved at least MIN_DIST since the
+# last drop.
+const _BLEED_DROP_MIN_DIST_SQ: float = 0.4 * 0.4
+var _last_bleed_drop_pos: Vector3 = Vector3.ZERO
+var _bleed_drop_anchor_set: bool = false
 
 # Strafe is suppressed when any other enemy is within this radius —
 # multiple melee enemies trying to strafe at the same time was

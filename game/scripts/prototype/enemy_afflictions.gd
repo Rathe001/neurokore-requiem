@@ -380,7 +380,9 @@ func tick(delta: float) -> void:
 		if _ignite_tick_accum >= IGNITE_TICK_INTERVAL:
 			_ignite_tick_accum -= IGNITE_TICK_INTERVAL
 			var tick_dmg: int = maxi(1, int(round(_ignite_dps * IGNITE_TICK_INTERVAL)))
-			_host.take_damage(tick_dmg, _host.global_position, 0.0, 1, false)
+			# is_dot=true → take_damage skips the per-hit blood burst +
+			# floor droplets. Ignite is fire-based anyway, not a wound.
+			_host.take_damage(tick_dmg, _host.global_position, 0.0, 1, false, &"", false, true)
 		if _ignite_remain <= 0.0:
 			_ignite_remain = 0.0
 			_ignite_dps = 0.0
@@ -392,17 +394,20 @@ func tick(delta: float) -> void:
 			_bleed_tick_accum -= BLEED_TICK_INTERVAL
 			var per_tick_pct: float = BLEED_HP_PCT_PER_SEC * BLEED_TICK_INTERVAL * float(_bleed_stacks)
 			var tick_dmg: int = maxi(1, int(round(float(_host.max_health) * per_tick_pct)))
-			_host.take_damage(tick_dmg, _host.global_position, 0.0, 1, false)
-			# Trail drip — one small drop at the enemy's feet per tick so a
-			# bleeding enemy leaves a visible trail as it moves. The tick
-			# damage itself is below the droplet threshold inside
-			# take_damage, so without this the bleed status would be
-			# invisible on the floor.
+			# is_dot=true → take_damage skips the per-hit blood burst +
+			# floor droplets. The trail drip below is the visual signature
+			# for bleed instead, movement-gated so stationary bleeders
+			# don't pool in place.
+			_host.take_damage(tick_dmg, _host.global_position, 0.0, 1, false, &"", false, true)
 			_host._stamp_bleed_drop()
 		if _bleed_remain <= 0.0:
 			_bleed_remain = 0.0
 			_bleed_stacks = 0
 			_bleed_tick_accum = 0.0
+			# Reset the trail anchor so the next bleed application
+			# always drops on its first tick, regardless of where the
+			# enemy stood when the previous bleed ended.
+			_host._bleed_drop_anchor_set = false
 	if _charmed:
 		var needs_repick := _charm_target == null or not _host._is_target_alive(_charm_target)
 		if not needs_repick and _charm_target is PrototypeEnemy:
