@@ -335,6 +335,18 @@ const _ENEMY_FEET_Y_MALE: float = -0.10
 const _ENEMY_FEET_Y_FEMALE: float = 0.10
 
 
+# Combined feet-Y placement. Gender-default + per-EnemyClass adjust.
+# Single source of truth used by both code paths in _apply_class_mesh
+# (the swap-skip and full-swap branches). Bosses and quirky one-off
+# meshes whose pivot doesn't match the gender default tune via
+# EnemyClass.feet_y_adjust.
+func _feet_y_for(picked_gender: StringName) -> float:
+	var base: float = _ENEMY_FEET_Y_FEMALE if picked_gender == &"female" else _ENEMY_FEET_Y_MALE
+	if enemy_class != null:
+		base += enemy_class.feet_y_adjust
+	return base
+
+
 const _MOB_MESH_VARIANTS: Array = [
 	{
 		&"mesh": preload("res://assets/characters/riot_guard_male_1/riot_guard_male_1.fbx"),
@@ -730,8 +742,9 @@ func _apply_class_mesh() -> void:
 		current_char.set_meta(&"gender", picked_gender)
 		# Female meshes ship with their geometric origin ~0.20m above
 		# the feet (same as the player path); lift them so feet sit at
-		# floor level. Male meshes stay at y=0.
-		current_char.position.y = _ENEMY_FEET_Y_FEMALE if picked_gender == &"female" else _ENEMY_FEET_Y_MALE
+		# floor level. Male meshes stay at y=0. EnemyClass.feet_y_adjust
+		# stacks on top for per-class meshes that drift.
+		current_char.position.y = _feet_y_for(picked_gender)
 		_ensure_anim_player_on(current_char)
 		return
 	if current_char != null:
@@ -747,7 +760,10 @@ func _apply_class_mesh() -> void:
 	new_char.set_meta(&"gender", picked_gender)
 	# Female meshes need a Y lift so feet sit at floor level (geometric
 	# origin sits ~0.20m above the feet on the Meshy female imports).
-	new_char.position.y = _ENEMY_FEET_Y_FEMALE if picked_gender == &"female" else _ENEMY_FEET_Y_MALE
+	# EnemyClass.feet_y_adjust stacks on top — non-zero values nudge
+	# the floor contact per-class for boss / unique meshes whose pivot
+	# doesn't match the gender default.
+	new_char.position.y = _feet_y_for(picked_gender)
 	# Backfill null surface materials BEFORE the node enters the tree.
 	# Doing it after add_child leaves one frame where the renderer sees
 	# the null surfaces and spams material_*: Parameter is null. Same

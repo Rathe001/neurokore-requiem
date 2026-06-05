@@ -45,6 +45,13 @@ enum SupportRole {
 ## distinct enemy archetypes via color alone. Alpha < 1.0 is treated
 ## as opacity. Default WHITE leaves the mesh's authored PBR untouched.
 @export var mesh_tint: Color = Color(1.0, 1.0, 1.0, 1.0)
+## Per-class vertical nudge added on top of the gender-default feet Y.
+## Use when a boss/unique mesh sits a few cm above or below the floor
+## with the default offset. Positive values lift the mesh (feet move
+## up); negative values lower it. Leave at 0.0 to keep the gendered
+## default unchanged. PrototypeEnemy._apply_class_mesh adds this to
+## the base offset every spawn.
+@export var feet_y_adjust: float = 0.0
 
 @export_group("Attack")
 @export var attack_mode: AttackMode = AttackMode.MELEE
