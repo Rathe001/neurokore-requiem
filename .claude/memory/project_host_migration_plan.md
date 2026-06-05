@@ -8,7 +8,7 @@ metadata:
 ---
 
 User explicitly opted into multi-session host migration work despite the
-docs flagging it as out of scope. Session 1 shipped (commit pending):
+docs flagging it as out of scope. Session 1 shipped (mid-May 2026):
 
 - `HostMigration` autoload — election + rebind + re-authority
 - `DebugConfig.host_migration_enabled` (off by default)

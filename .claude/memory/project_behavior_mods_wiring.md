@@ -1,6 +1,6 @@
 ---
 name: project_behavior_mods_wiring
-description: Behavior-mod effect dispatch pattern + which mods are implemented vs preview as of 2026-05-24
+description: "Behavior-mod effect dispatch pattern + which mods are implemented vs preview. 8/24 implemented as of 2026-06-04 (unchanged since 2026-05-24); recount with `grep -rln 'is_implemented = true' game/resources/behavior_mods/` before quoting numbers."
 metadata: 
   node_type: memory
   type: project
@@ -25,7 +25,7 @@ empty penalty), aggregate through `PrototypePlayer.behavior_mod_damage_mult()`
 — a single read by `PlayerCombat._deal_damage`. Adding a new offensive
 buff = appending to that function, not patching every call site.
 
-**Implemented (9 of 24) as of 2026-05-24:**
+**Implemented (8 of 24), unchanged 2026-05-24 → 2026-06-04. Recount before quoting:**
 - legs: `servo_stride`, `crouch_tactician`, `glide_pads`
 - hands: `reflex_loader`
 - chest: `pain_compiler`, `shock_discharge`

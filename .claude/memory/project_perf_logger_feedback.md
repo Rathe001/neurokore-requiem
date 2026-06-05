@@ -20,7 +20,7 @@ at 65-100ms with player at spawn, screenshot showing 156 draws and
 115k tris. Hardware should handle that easily. CPU was the
 bottleneck, and the logger was 30-50% of it.
 
-Fix (commit pending):
+Fix (shipped 2026-05):
 - Spike rows throttled to one every 200ms (`SPIKE_MIN_INTERVAL_SEC`)
 - Spike rows skip the expensive tree walks (`skip_tree_walks` param
   to `_write_row`); periodic 1Hz samples and event tags still do

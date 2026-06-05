@@ -1,8 +1,10 @@
 ---
 name: project_perf_session_2026_05_25
-description: Long perf session on 2026-05-25 ended in a hard reset. Solid 60fps baseline restored by reverting to cea4d12 + cherry-picking bug fixes. Tag `perf-session-rollback-point` preserves the work-in-progress for revisit.
-metadata:
+description: "Historical: long perf session on 2026-05-25 ended in a hard reset. The 'lessons saved' section is evergreen and still applicable; the specific REVERTED-work list is for archive only. Tag `perf-session-rollback-point` still exists if revisiting the perf experiments."
+metadata: 
+  node_type: memory
   type: project
+  originSessionId: 8cb2236a-ff5a-4a76-8cc4-a33a9a8014b8
 ---
 
 A long perf session on 2026-05-25 chased "laser pistol lag" through 15+

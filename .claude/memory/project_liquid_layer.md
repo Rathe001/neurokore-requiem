@@ -118,18 +118,22 @@ slip-zone group with an XZ cylinder check. The footstep system
 (`game/scripts/util/footsteps.gd`) polls it to decide when to
 refresh the bloody-print counter.
 
-## What's still on the old Decal system
+## What's on each rendering tech (current 2026-06-04)
 
-Migration is partial as of 2026-06-01. See [[project_blood_migration_status]]:
-- ✓ Floor pools (LiquidLayer)
-- ✓ Per-hit droplets (LiquidLayer)
-- Walls — still old Decal `spawn_blood_wall_splatter`
-- Receivers (props/interactables/pillars) — still old Decal,
-  see [[project_object_blood_pipeline]]
-- Footprints — still old Decal
-- Character splats — still old Decal
-- Mist particle bursts — GPUParticles3D, not decals (stays as-is)
+See [[project_blood_migration_status]] for the full history.
+- ✓ **LiquidLayer (floor)** — pools, per-hit droplets, footprints
+- ✓ **WallLiquidLayer** — wall splatters + gravity drips. Task #110
+  shipped. Same SubViewport-mask architecture, two viewports (one
+  per ±X / ±Z axis).
+- **Decal3D, kept intentionally** — Object splats
+  (`_spawn_object_blood_decal`, [[project_object_blood_pipeline]])
+  and character splats (`spawn_blood_on_character`). Task #111 was
+  reviewed and **CLOSED — not migrating**: the receiver-opt-in
+  `cull_mask = 8` filter and the parent-the-decal-to-the-visual
+  tracking-with-the-body trick can't be done with a shared
+  SubViewport. Decal3D is the right tech for these.
+- **GPUParticles3D** — mist bursts (`spawn_blood_burst`). Stays.
 
-Once walls land on LiquidLayer (task #110), the old decal-ring
-infrastructure can shrink significantly — it'd only need to cover
-footprints + character splats.
+The decal-ring infrastructure (`_blood_decal_ring`, `BLOOD_DECAL_MAX`,
+priority eviction) was deleted in audit Phase 2a (commit `284cf67`).
+Object + character splats use per-spawn fade tweens instead.
