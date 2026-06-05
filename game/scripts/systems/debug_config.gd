@@ -30,6 +30,12 @@ extends Resource
 
 @export_group("Overlay")
 @export var show_debug_overlay: bool = false
+## When true, every HoverableInteractable prints its visual AABB +
+## CollisionShape3D extents + a mismatch flag on _ready. One-shot
+## diagnostic for the collision-vs-visual audit (pre-release task 3).
+## Walk the level with this enabled, grep console for "INTERACTABLE
+## COLLISION AUDIT" to find mismatches.
+@export var dump_interactable_collision_audit: bool = false
 
 @export_group("Post-Processing")
 ## Screen filter mode. 0=Off, 1=VHS, 2=Security Cam, 3=Night Vision,
