@@ -1,0 +1,61 @@
+[gd_resource type="Resource" script_class="ClutterPropDef" load_steps=2 format=3]
+
+; Copy this file as resources/clutter/<id>.tres, swap mesh_scene for your
+; Meshy .glb, and fill in the fields. Documentation lives in
+; scripts/items/clutter_prop_def.gd.
+;
+; Quick-fill cheat sheet (typical values for the four categories):
+;
+;   DESTRUCTIBLE_SOFT (barrels, crates, filing cabinets — breakable cover)
+;     hp: 5-20  provides_cover: true  drops_credits: maybe  weight: 2-3
+;
+;   DESTRUCTIBLE_HARD (exam tables, gurneys — blocks AI but breakable)
+;     hp: 60-100  provides_cover: true  weight: 1-2
+;
+;   STATIC_BLOCKER (cell bars, security barriers, coolant tanks)
+;     hp: ignored  provides_cover: true  weight: 1-2  prefer_wall/corner: often
+;
+;   DECOR (papers, cable spools, debris — pure visual)
+;     hp: ignored  provides_cover: false  weight: 3-5  (cheap, can be dense)
+;
+; Footprint cheat sheet (rough XYZ in metres at the chosen mesh_scale):
+;   small floor item:    0.4 × 0.5 × 0.4   (toolbox, mug)
+;   medium prop:         0.7 × 1.2 × 0.6   (filing cabinet, vending)
+;   large blocker:       1.2 × 1.8 × 1.2   (coolant tank, generator)
+;   wall-tall:           0.5 × 2.0 × 0.8   (server rack, junction panel)
+
+[ext_resource type="Script" path="res://scripts/items/clutter_prop_def.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+
+; ── Identity ──
+id = &""
+display_name = ""
+
+; ── Visual ──
+; Point this at the imported Meshy .glb. Drag-drop the .glb file from
+; the FileSystem dock into the Inspector slot.
+mesh_scene = null
+mesh_scale = 1.0
+mesh_y_offset = 0.0
+mesh_yaw_offset = 0.0
+random_yaw_range = 3.14159
+
+; ── Gameplay ──
+; 0 = DESTRUCTIBLE_SOFT, 1 = DESTRUCTIBLE_HARD, 2 = STATIC_BLOCKER, 3 = DECOR
+category = 0
+footprint = Vector3(1.0, 1.0, 1.0)
+hp = 10
+provides_cover = true
+
+; ── Loot ──
+drops_loot = false
+drops_credits = false
+credit_range = Vector2i(1, 3)
+
+; ── Placement ──
+weight = 2
+min_clearance = 1.0
+prefer_wall = false
+prefer_corner = false
