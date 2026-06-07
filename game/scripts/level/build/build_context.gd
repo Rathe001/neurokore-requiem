@@ -80,6 +80,14 @@ var wall_keys: Array = []
 ## tiling pattern.
 var corridor_wall_visuals: Dictionary = {}
 var decorative_pillar_visuals: Dictionary = {}
+## Floor-litter MMI accumulator. Keyed by FloorDecalDef → Array[Transform3D].
+## FloorDecalBuilder.scatter_decals appends per-room; commit_floor_decals
+## collapses each def into one MultiMeshInstance3D of flat quads at the end
+## of the build. See docs/floor-decal-scatter-spec.md.
+var floor_decal_visuals: Dictionary = {}
+## Shared 1×1 PlaneMesh (XZ, +Y normal) reused by every floor-decal MMI.
+## Per-instance scale handles real size, so one unit mesh serves all decals.
+var floor_decal_unit_mesh: PlaneMesh
 ## Lazily-cached unit BoxMesh (1×1×1) shared by every batched wall /
 ## pillar. The procedural shader scales tiling by world position, so a
 ## unit mesh + per-instance scale produces the same look as a

@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="FloorDecalDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/floor_decal_def.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"medwaste_scatter"
+albedo_texture = null
+normal_texture = null
+size_range = Vector2(0.6, 1.0)
+aspect_jitter = 0.2
+random_yaw_range = 3.14159
+weight = 1
+min_spacing = 0.4
+prefer_wall = false

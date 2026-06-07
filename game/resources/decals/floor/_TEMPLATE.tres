@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="FloorDecalDef" load_steps=2 format=3]
+
+; Copy this file as resources/decals/floor/<id>.tres, drag your top-down
+; alpha-background texture into albedo_texture, and fill in the fields.
+; Documentation lives in scripts/items/floor_decal_def.gd and
+; docs/floor-decal-scatter-spec.md.
+;
+; Leave albedo_texture null to use the procedural placeholder keyed by id
+; (FloorDecalBuilder generates one) until real art is ready.
+;
+; size_range cheat sheet (world metres, square cluster footprint):
+;   paper / debris cluster:   0.8 .. 1.4
+;   small medical-waste bits:  0.5 .. 0.9
+;   large scorch / drag mark:  1.5 .. 2.5
+;
+; Remember to add the .tres path to FloorDecalBuilder.POOL_PATHS.
+
+[ext_resource type="Script" path="res://scripts/items/floor_decal_def.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &""
+albedo_texture = null
+normal_texture = null
+size_range = Vector2(0.8, 1.4)
+aspect_jitter = 0.15
+random_yaw_range = 3.14159
+weight = 2
+min_spacing = 0.4
+prefer_wall = false

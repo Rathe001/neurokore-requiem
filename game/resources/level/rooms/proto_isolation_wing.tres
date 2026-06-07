@@ -16,5 +16,6 @@ opening_width = 4.0
 light_color = ExtResource("light")
 enemy_count = 1
 clutter_density = 1
+decal_density = 2
 puddle_count = 4
 puddle_size = Vector2(0.7, 1.3)

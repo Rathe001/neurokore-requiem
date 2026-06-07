@@ -250,6 +250,8 @@ func _build_level() -> void:
 	# their own draw call. Major draw-call reduction on corridor-dense
 	# levels — 50+ corridor walls → 1 MMI draw.
 	WallBuilder.commit_batched_mmi(_ctx)
+	# Floor litter MMIs — one draw call per decal texture for the whole level.
+	FloorDecalBuilder.commit_floor_decals(_ctx)
 
 	# Puzzles run last — they reference doors and interactable slots, which
 	# only exist after the geometry pass.
@@ -445,6 +447,7 @@ func _build_room(piece: LevelPiece) -> void:
 	LightingBuilder.create_room_particles(_ctx, center, rd.size.x, rd.size.y)
 	DecalBuilder.place_puddles(_ctx, center, hx, hz, rd)
 	ClutterBuilder.scatter_clutter(_ctx, center, hx, hz, rd, piece_id)
+	FloorDecalBuilder.scatter_decals(_ctx, center, hx, hz, rd, piece_id)
 	InteractableBuilder.spawn_slots(_ctx, piece_id, center, rd, piece.additional_slots)
 	# Per-instance count beats template default; -1 sentinel falls back.
 	var enemy_count: int = piece.enemy_count_override if piece.enemy_count_override >= 0 else rd.enemy_count

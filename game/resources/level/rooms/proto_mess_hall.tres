@@ -18,5 +18,6 @@ enemy_count = 4
 decorative_pillars = [Vector2(-4, -3), Vector2(4, -3), Vector2(-4, 3), Vector2(4, 3)]
 decorative_pillar_size = Vector2(1.0, 1.0)
 clutter_density = 3
+decal_density = 3
 puddle_count = 1
 puddle_size = Vector2(0.9, 1.4)

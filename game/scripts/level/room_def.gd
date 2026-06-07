@@ -95,3 +95,9 @@ enum Wall { NORTH, SOUTH, EAST, WEST }
 ## Density of scattered props. 0 = none, 1 = sparse (2 destructible + 1
 ## indestructible), 2 = moderate (4 + 2), 3 = dense (6 + 3).
 @export_range(0, 3) var clutter_density: int = 0
+
+@export_group("Floor Decals")
+## Density of flat floor litter (scattered papers, debris, medical waste).
+## 0 = none. Each unit is ~6 placement attempts. Collision-free, batched
+## into one MMI per texture. See docs/floor-decal-scatter-spec.md.
+@export_range(0, 4) var decal_density: int = 0
