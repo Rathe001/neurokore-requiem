@@ -1694,7 +1694,7 @@ func on_enemy_killed() -> void:
 		var weapon: Item = InventoryState.get_equipped(&"weapon")
 		if weapon != null and weapon.is_bullet_weapon() and weapon.ammo_current < weapon.ammo_max:
 			weapon.ammo_current += 1
-			InventoryState.equipment_changed.emit()
+			InventoryState.equipment_changed.emit(&"weapon")
 
 
 func _has_melee_equipped() -> bool:
