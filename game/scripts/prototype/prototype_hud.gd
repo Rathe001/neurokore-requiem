@@ -317,14 +317,16 @@ func _update_buffs_bar() -> void:
 func _update_debuffs_bar() -> void:
 	if debuff_entries == null:
 		return
+	# Scene-transition race: deferred / signal-fired calls can land while
+	# the HUD is mid-removal from the tree. Bail before touching
+	# get_tree() — checking is_inside_tree() suppresses the
+	# `Parameter "data.tree" is null` console spam that the existing
+	# late-guard (below) was logging once per fire. Nothing to draw
+	# when we're not in the tree anyway.
+	if not is_inside_tree():
+		return
 	for child in debuff_entries.get_children():
 		child.queue_free()
-	# Scene-transition race: this can fire from a deferred call while
-	# the HUD is mid-removal from the tree. get_tree() returns null in
-	# that window, and the next line then errors with
-	# `Parameter "data.tree" is null` + `Cannot call method
-	# 'get_first_node_in_group' on a null value`. Bail cleanly — there's
-	# nothing to draw when we're not in the tree anyway.
 	var tree := get_tree()
 	if tree == null:
 		return
