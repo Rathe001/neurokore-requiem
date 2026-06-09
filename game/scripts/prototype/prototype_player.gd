@@ -4722,19 +4722,17 @@ func _drive_aim_overlay(delta: float) -> void:
 	var modifier := _ensure_aim_modifier()
 	if modifier == null:
 		return
-	# Engage the overlay when moving (strafe clips otherwise twist the
-	# upper body toward the strafe direction) or while firing
-	# (recoil cycle). Standing idle with a ranged weapon does NOT
-	# engage — the modifier's continuous recoil clock made the arms
-	# wobble noticeably when the player was just standing still.
-	# Reloading + melee weapons keep the prior exclusion.
+	# Overlay engages only while firing. The authored jog / strafe clips
+	# already pose the upper body in a rifle-stance facing forward, so
+	# applying the recoil overlay during locomotion would just make the
+	# arms cycle noticeably while moving. The clip stack stays clean —
+	# strafe drives both legs and upper body, recoil only kicks in
+	# when LMB is actually held. Reload uses a separate play_swing
+	# overlay (see start_reload).
 	var aiming := false
-	if not is_reloading():
+	if _is_aim_input_held() and not is_reloading():
 		var w: Item = InventoryState.get_equipped(&"weapon")
-		var ranged_equipped := w != null and not _attack_is_melee(w)
-		var moving := _want_dir.length_squared() > 0.01
-		var firing := _is_aim_input_held()
-		aiming = ranged_equipped and (moving or firing)
+		aiming = w != null and not _attack_is_melee(w)
 	if aiming:
 		# Point the overlay at the class-appropriate fire clip so SMG/pistol
 		# read 1H and rifle/shotgun read 2H. configure() early-outs when the
