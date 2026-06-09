@@ -506,12 +506,15 @@ static func _mirror_animation_x(anim: Animation) -> void:
 		var path_str: String = String(anim.track_get_path(i))
 		var ci: int = path_str.rfind(":")
 		var bone: String = path_str.substr(ci + 1) if ci >= 0 else ""
-		# The Hips is the root bone: mirroring its rotation spins the whole
-		# character's facing (the east strafe held facing north, the mirrored
-		# west strafe turned the body left). Keep the root orientation from the
-		# source clip; only the limbs, posed relative to the root, get mirrored.
-		if bone.contains("Hips"):
-			continue
+		# Earlier comment skipped Hips here because a previous mirror attempt
+		# "turned the body left" — but skipping it means strafe_left keeps the
+		# Hips rotation of strafe_right verbatim, so the player aiming north
+		# and strafing west has hips leaning toward east (the wrong way).
+		# Mirroring Hips negates the Y/Z components of the rotation, which
+		# correctly inverts the yaw/roll lean that the source clip authored
+		# into the strafe stance. If the body-turning bug recurs, the right
+		# fix is to compose the mirrored rotation against the character's
+		# desired facing rather than skipping the bone entirely.
 		var swapped: String = _swap_lr(bone)
 		if ci >= 0 and swapped != bone:
 			anim.track_set_path(i, NodePath(path_str.substr(0, ci) + ":" + swapped))
