@@ -1282,17 +1282,26 @@ func _mesh_for_class(class_id: StringName, gender: StringName) -> PackedScene:
 	return _CHARACTER_MESHES[origin][gender_key]
 
 
-# Y offset that seats `char_root`'s lowest visible point at floor level
-# (+2cm anti-clip margin). Walks every VisualInstance3D descendant, composes
-# its transform relative to char_root via parent-chain walk (the node may not
-# be in the tree yet, so global_transform is unavailable), and unions the
-# AABBs. char_root's own transform is excluded, so the result is identical
-# whether the root has already been scaled/positioned or not; the root's
-# uniform char_scale is applied to the measured minimum instead. The
-# WeaponMount subtree is skipped — a mounted weapon hanging below the feet
-# would otherwise hoist the body on re-seat.
-static func _character_seat_offset(char_root: Node3D, char_scale: float) -> float:
-	var min_y: float = INF
+# Character height target — matches the player capsule (1.6m) and the
+# project-wide "everything is scaled to the 1.6m player" convention. Every
+# class/gender mesh is normalised to this height so genders and classes
+# render at a consistent world size regardless of each Meshy export's
+# authored scale.
+const CHAR_TARGET_HEIGHT_M: float = 1.6
+# Fine-seat margin: the toe BONE sits a hair above the visible sole, so the
+# bone-based seat lifts by this much to land the sole on the floor plane.
+const CHAR_SEAT_BONE_MARGIN: float = 0.02
+
+
+# Union of every VisualInstance3D descendant's AABB in char_root-local space
+# (bind pose). Transforms are composed via parent-chain walk because the node
+# may not be in the tree yet (global_transform unavailable). char_root's own
+# transform is excluded, so the result is identical whether the root has
+# already been scaled/positioned or not. The WeaponMount subtree is skipped —
+# a mounted weapon hanging below the feet would skew the measurement.
+static func _character_visual_aabb(char_root: Node3D) -> AABB:
+	var out := AABB()
+	var first := true
 	var stack: Array[Node] = [char_root]
 	while not stack.is_empty():
 		var n: Node = stack.pop_back()
@@ -1310,10 +1319,50 @@ static func _character_seat_offset(char_root: Node3D, char_scale: float) -> floa
 				xf = (walk as Node3D).transform * xf
 			walk = walk.get_parent()
 		var aabb: AABB = xf * vi.get_aabb()
-		min_y = minf(min_y, aabb.position.y)
+		if first:
+			out = aabb
+			first = false
+		else:
+			out = out.merge(aabb)
+	return out
+
+
+# Runtime fine seat: the bind-pose AABB seat is only an estimate — the idle /
+# aim stances bend the knees and drop the hips, so a bind-pose-flush mesh ends
+# up ankle-deep in the floor once the animation poses the skeleton. Two frames
+# after the swap (tree entry + first AnimationPlayer tick) read the actual
+# foot/toe bone positions from the posed skeleton and shift the Character so
+# the lowest one sits on the capsule's bottom plane. Body-relative, so it's
+# correct mid-air and on remote MP avatars; idempotent under a fixed pose.
+func _fine_seat_character(char_node: Node3D) -> void:
+	await get_tree().process_frame
+	await get_tree().process_frame
+	if not is_instance_valid(self) or not is_instance_valid(char_node) or not char_node.is_inside_tree():
+		return
+	var skel := _find_player_skeleton()
+	if skel == null:
+		return
+	var min_y: float = INF
+	for i in skel.get_bone_count():
+		var bn: String = skel.get_bone_name(i)
+		if not (bn.contains("Foot") or bn.contains("Toe")):
+			continue
+		var wy: float = (skel.global_transform * skel.get_bone_global_pose(i)).origin.y
+		min_y = minf(min_y, wy)
 	if min_y == INF:
-		return 0.0
-	return 0.02 - min_y * char_scale
+		return
+	char_node.position.y += (_capsule_bottom_world_y() - min_y) + CHAR_SEAT_BONE_MARGIN
+
+
+# World Y of the player capsule's bottom — the plane that touches the floor
+# when grounded. Resolved from the live CollisionShape3D so .tscn edits to
+# the capsule can't drift out of sync with the seat.
+func _capsule_bottom_world_y() -> float:
+	for child in get_children():
+		var cs := child as CollisionShape3D
+		if cs != null and cs.shape is CapsuleShape3D:
+			return cs.global_position.y - (cs.shape as CapsuleShape3D).height * 0.5
+	return global_position.y
 
 
 # Swaps the Visual/Character mesh to match the effective class + gender
@@ -1329,11 +1378,6 @@ func _apply_gender_appearance() -> void:
 	var effective_gender: StringName = remote_gender if remote_gender != &"" else PlayerState.gender
 	var effective_class: StringName = _effective_class_id()
 	var scene: PackedScene = _mesh_for_class(effective_class, effective_gender)
-	# Meshy meshes import a touch smaller than the player capsule
-	# expects. 1.05× over-corrected (feet clipped through floor),
-	# 1.02× is the sweet spot — silhouette reads at iso distance
-	# without pushing feet below the floor plane.
-	var char_scale: float = 1.02
 	var current_char := visual.get_node_or_null(^"Character") as Node3D
 	if current_char == null or current_char.scene_file_path != scene.resource_path:
 		if current_char != null:
@@ -1350,12 +1394,18 @@ func _apply_gender_appearance() -> void:
 			# opposite direction from what the Visual node's facing logic
 			# expects.
 			new_char.rotation.y = PI
-			# Measured seat: each of the 16 Meshy class/gender meshes ships
-			# with a different authored origin (some at the feet, some ~0.2m
-			# above), so the old fixed per-gender offset (0.26 female / 0.06
-			# male) floated some meshes and buried others. Measure the
-			# instance's lowest visible point instead and put it at the floor.
-			new_char.position.y = _character_seat_offset(new_char, char_scale)
+			# Measured scale + seat: each of the 16 Meshy class/gender meshes
+			# ships with its own authored height and origin, so the old fixed
+			# 1.02× scale and per-gender Y constants rendered genders at
+			# different sizes and floated/buried feet depending on the mesh.
+			# Normalise height to the 1.6m player convention and seat the
+			# bind-pose minimum at the floor; _fine_seat_character below
+			# corrects the residual animated-stance drop one frame later.
+			var aabb := _character_visual_aabb(new_char)
+			var char_scale: float = 1.02
+			if aabb.size.y > 0.5:
+				char_scale = clampf(CHAR_TARGET_HEIGHT_M / aabb.size.y, 0.8, 1.3)
+			new_char.position.y = 0.02 - aabb.position.y * char_scale
 			new_char.scale = Vector3.ONE * char_scale
 			# Stash the resolved gender on the Character node so any helper
 			# that walks up from the skeleton (notably WeaponAttachment, which
@@ -1382,13 +1432,22 @@ func _apply_gender_appearance() -> void:
 				new_char.add_child(new_ap)
 			anim_player = new_ap
 	else:
-		# No swap needed; just re-apply the measured seat + scale in case the
+		# No swap needed; just re-apply the measured scale + seat in case the
 		# default tscn instance was at 0/1.
-		current_char.position.y = _character_seat_offset(current_char, char_scale)
-		current_char.scale = Vector3.ONE * char_scale
+		var cur_aabb := _character_visual_aabb(current_char)
+		var cur_scale: float = 1.02
+		if cur_aabb.size.y > 0.5:
+			cur_scale = clampf(CHAR_TARGET_HEIGHT_M / cur_aabb.size.y, 0.8, 1.3)
+		current_char.position.y = 0.02 - cur_aabb.position.y * cur_scale
+		current_char.scale = Vector3.ONE * cur_scale
 		current_char.set_meta(&"gender", effective_gender)
 	if anim_player != null:
 		XBotAnimations.install_on(anim_player)
+	# Bone-based seat refinement once the idle animation has posed the
+	# skeleton (covers both the swap and re-seat branches above).
+	var seated_char := visual.get_node_or_null(^"Character") as Node3D
+	if seated_char != null:
+		_fine_seat_character(seated_char)
 	# Bake uniform scale into the FBX's intermediate Armature / Skeleton
 	# nodes so any future PhysicalBone3D children Jolt builds inherit a
 	# clean parent chain. Without this, Mixamo's per-axis scale residue
