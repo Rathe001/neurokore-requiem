@@ -122,6 +122,10 @@ const SPRINT_SPEED_FACTOR := 1.6
 # Bullet-weapon reload drags movement so the reload window is a real
 # tactical pause, not a free reposition.
 const RELOAD_SPEED_FACTOR := 0.85
+# Moving while attacking (holding fire / mid-swing) drags movement: you trade
+# mobility for putting out damage, so you commit to a stance instead of
+# kiting at full speed. Replaces the old backpedal-only penalty.
+const ATTACK_MOVE_SLOW_FACTOR := 0.6
 const SPRINT_RESOURCE_PER_SEC := 8.0
 ## Penalty delay before resource regen starts after hitting 0 while sprinting.
 const SPRINT_EMPTY_REGEN_DELAY := 2.0
@@ -1338,6 +1342,9 @@ func _walk_player_visual_layers(node: Node, mask: int) -> void:
 # is_instance_valid covers the gender-swap case where the previous
 # skeleton is queue_freed.
 var _cached_skeleton: Skeleton3D = null
+# Upper-body aim overlay (lazily built under the skeleton). See
+# UpperBodyAimModifier + _drive_aim_overlay.
+var _aim_modifier: UpperBodyAimModifier = null
 
 
 # Walks the visual subtree looking for any Skeleton3D. FBX skeleton node
@@ -2073,7 +2080,11 @@ func _physics_process(delta: float) -> void:
 			# during the slow window — heavy enough to feel, short enough
 			# that it doesn't punish casual movement.
 			var recoil_slow_factor: float = 0.6 if _recoil_landed_slow_remain > 0.0 else 1.0
-			var speed := move_speed * (crouch_factor if _crouching else 1.0) * (0.5 if _backing else 1.0) * sprint_factor * shield_factor * gear_speed_factor * pool_factor * blood_factor * stumble_factor * reload_factor * aim_hold_factor * servo_factor * recoil_slow_factor
+			# Attacking-while-moving trade: holding fire or swinging on the move
+			# costs speed. _is_aim_input_held() covers held LMB fire and active
+			# RMB attack skills (passive shield / aim-hold RMB are excluded).
+			var attack_factor: float = ATTACK_MOVE_SLOW_FACTOR if _is_aim_input_held() else 1.0
+			var speed := move_speed * (crouch_factor if _crouching else 1.0) * attack_factor * sprint_factor * shield_factor * gear_speed_factor * pool_factor * blood_factor * stumble_factor * reload_factor * aim_hold_factor * servo_factor * recoil_slow_factor
 			_target_move_speed = speed
 			var flat := Vector2(velocity.x, velocity.z)
 			var target := Vector2(wish_dir.x, wish_dir.z) * speed
@@ -2180,32 +2191,10 @@ func _physics_process(delta: float) -> void:
 			# CharacterBody3D drives travel regardless of which anim plays.
 			pass
 		elif not _interacting:
-			# Ranged-fire override: while the player holds LMB/RMB with a
-			# bullet weapon equipped, keep the looping firing-rifle pose
-			# regardless of movement. Without this, between each per-shot
-			# _lmb_busy window the state machine drops back to idle/run
-			# and the next shot restarts ANIM_FIRE from frame 0 — reads
-			# as the character spasming through aim-and-recoil over and
-			# over instead of holding the gun out.
-			#
-			# Reload gate: no shots are actually coming out during reload
-			# (the fire gate in _skill_can_fire returns false), so the
-			# firing pose would be a lie. Fall through to the idle/move
-			# branches so the character reads as "topping off the mag,
-			# not currently shooting".
-			# Bullet-weapon fire pose only overrides locomotion while
-			# the player is STATIONARY. Moving + firing falls through
-			# to the locomotion branch below for properly speed-scaled
-			# run legs — matching what arc taser (CHANNEL_BEAM) does
-			# implicitly via is_bullet_weapon() = false. Trying to
-			# play ANIM_FIRE_MOVE here held the legs at fixed 1.0×,
-			# which is slower than the actual movement speed, so the
-			# character glided and the clip cut off when it ran out.
-			var firing_held: bool = false
-			if (_is_aim_input_held() and not is_reloading()
-					and _want_dir.length_squared() <= 0.01):
-				var held_weapon: Item = InventoryState.get_equipped(&"weapon")
-				firing_held = held_weapon != null and held_weapon.is_bullet_weapon()
+			# Firing no longer takes over the body here. The legs stay on the
+			# locomotion / idle picker below (grounded feet, free to move while
+			# firing); the aim pose is layered onto the upper body only by
+			# UpperBodyAimModifier via _drive_aim_overlay() each tick.
 			if is_reloading():
 				# Reload pose overrides the locomotion picker. While the
 				# player is reloading, run picks reload_run (full-body
@@ -2217,20 +2206,18 @@ func _physics_process(delta: float) -> void:
 					_play_anim(ANIM_RELOAD_RUN, 1.0, 0.15)
 				else:
 					_play_anim(ANIM_RELOAD, 1.0, 0.15)
-			elif firing_held:
-				# Stationary firing only — _want_dir gate above makes
-				# sure moving+firing falls into the locomotion branch.
-				_play_fire_pose(0.15)
 			elif _want_dir.length_squared() > 0.01:
 				# Fixed animation speed — sprint and backing are the only
 				# modifiers. All speed control goes through speed_scale
 				# (never custom_speed in _play_anim) so the rate can't
 				# flicker when _backing toggles at the dot-product boundary.
-				var anim_speed := RUN_ANIM_SPEED_FACTOR
-				if _sprinting:
-					anim_speed *= SPRINT_SPEED_FACTOR
-				elif _backing:
-					anim_speed *= 0.5
+				# Leg cadence tracks the player's ACTUAL horizontal speed so the
+				# animation matches real travel — slower while firing (the attack
+				# penalty), crouching, or bloodied; faster sprinting — instead of
+				# always playing at the jog tempo (which foot-slid whenever a speed
+				# factor was active).
+				var actual_speed: float = Vector2(velocity.x, velocity.z).length()
+				var anim_speed := RUN_ANIM_SPEED_FACTOR * (actual_speed / maxf(move_speed, 0.01))
 				anim_player.speed_scale = clampf(anim_speed, RUN_ANIM_SPEED_MIN, RUN_ANIM_SPEED_MAX)
 				if _crouching:
 					_play_anim(ANIM_CROUCH_MOVE, 1.0, 0.15)
@@ -2278,6 +2265,7 @@ func _physics_process(delta: float) -> void:
 					# guard / axe shoulder-rest / fists up / relaxed.
 					_play_anim(XBotAnimations.idle_anim_for_class(_equipped_weapon_class()), 1.0, 0.15)
 
+	_drive_aim_overlay(delta)
 	_handle_skill_input()
 	# Replicated to remote peers via the player's MultiplayerSynchronizer.
 	# Threshold matches the existing `_want_dir.length_squared() > 0.01`
@@ -2746,8 +2734,8 @@ func _cast_lmb_combat() -> void:
 		# restart=true triggers a visible recoil cycle for slow weapons
 		# (HOLD mode) and is a no-op restart for fast weapons (LOOP
 		# mode's _play_anim early-out skips it).
-		if main_item != null and main_item.is_bullet_weapon():
-			_play_fire_pose(0.15, true)
+		if main_item != null and not _attack_is_melee(main_item):
+			_pulse_fire_recoil()
 		else:
 			# Melee swing — picks the variant for the current combo
 			# step (0/1/2). peek_next_melee_combo_step previews what
@@ -2950,8 +2938,8 @@ func _cast_skill(skill: Skill) -> void:
 	# animation. Same FIRE / FIRE_MOVE branch as the LMB path so the
 	# per-tick picker doesn't undo our choice. restart=true for the
 	# per-shot recoil cycle in slow-weapon HOLD mode.
-	if weapon != null and weapon.is_bullet_weapon():
-		_play_fire_pose(0.15, true)
+	if weapon != null and not _attack_is_melee(weapon):
+		_pulse_fire_recoil()
 	else:
 		# Combo-aware melee swing — see peek_next_melee_combo_step.
 		# Plays the clip stretched to fit the skill's effective window,
@@ -4656,6 +4644,65 @@ func _held_weapon_fire_interval() -> float:
 		return 1.0
 	var eff_atk: float = w.effective_attack_speed() * (1.0 + _gear_attack_speed_bonus)
 	return w.fire_skill.cooldown / maxf(eff_atk, 0.1)
+
+
+# True only for weapons whose attack is a melee SWING (full-body one-shot).
+# Pistol/rifle classes — including the energy guns (laser pistol, plasma
+# rifle, accelerator, taser) that aren't ammo-based and so report
+# is_bullet_weapon() == false — are ranged and aim through the overlay.
+func _attack_is_melee(item: Item) -> bool:
+	if item == null:
+		return false
+	var cls := XBotAnimations.weapon_class_for_id(item.weapon_base_id)
+	return cls == &"melee_1h" or cls == &"melee_2h" or cls == &"unarmed"
+
+
+# ── Upper-body aim overlay ────────────────────────────────────────────────
+# Layers the ranged-fire pose onto the upper body (spine→arms) while the legs
+# keep whatever the locomotion picker chose, via UpperBodyAimModifier. Fixes
+# the floated feet (legs stay on grounded clips), keeps the legs moving while
+# firing, and ramps the influence so the aim-in is smooth instead of a snap.
+func _drive_aim_overlay(delta: float) -> void:
+	var modifier := _ensure_aim_modifier()
+	if modifier == null:
+		return
+	var aiming := false
+	if _is_aim_input_held() and not is_reloading():
+		var w: Item = InventoryState.get_equipped(&"weapon")
+		aiming = w != null and not _attack_is_melee(w)
+	if aiming:
+		# Point the overlay at the class-appropriate fire clip so SMG/pistol
+		# read 1H and rifle/shotgun read 2H. configure() early-outs when the
+		# clip is unchanged, so this is cheap to call every tick.
+		var skel := _find_player_skeleton()
+		for key in XBotAnimations.fire_anim_for_class(_equipped_weapon_class()):
+			if anim_player != null and anim_player.has_animation(key):
+				modifier.configure(skel, anim_player, key)
+				break
+	modifier.tick(delta, aiming)
+
+
+# Lazily build the aim modifier under the current skeleton. Re-creates it if a
+# gender swap rebuilt the skeleton subtree (the old modifier goes with it).
+func _ensure_aim_modifier() -> UpperBodyAimModifier:
+	var skel := _find_player_skeleton()
+	if skel == null or anim_player == null:
+		return null
+	if _aim_modifier != null and is_instance_valid(_aim_modifier) and _aim_modifier.get_parent() == skel:
+		return _aim_modifier
+	if _aim_modifier != null and is_instance_valid(_aim_modifier):
+		_aim_modifier.queue_free()
+	var m := UpperBodyAimModifier.new()
+	m.name = &"UpperBodyAim"
+	skel.add_child(m)
+	_aim_modifier = m
+	return m
+
+
+# Kick the upper-body overlay through a fresh recoil cycle on a shot event.
+func _pulse_fire_recoil() -> void:
+	if _aim_modifier != null and is_instance_valid(_aim_modifier):
+		_aim_modifier.pulse_recoil()
 
 
 # Stationary firing pose with two modes:

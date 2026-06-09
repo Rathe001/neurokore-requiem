@@ -38,13 +38,10 @@ const _FIRE_MOVE_FBX: PackedScene = preload("res://assets/animations/core/Strafi
 # state machine without requiring per-weapon-class branching.
 const _CROUCH_IDLE_FBX: PackedScene = preload("res://assets/animations/ranged 2h/idle crouching.fbx")
 const _WALK_BACK_FBX: PackedScene = preload("res://assets/animations/ranged 2h/walk backward.fbx")
-# Strafe sources use the rifle pack's "run left/right" (not "walk
-# left/right") because the player's locomotion speed matches the
-# jog tempo. The walk-tempo strafe clips read as a slow shuffle
-# under the player's actual move speed — feet barely lift while the
-# body glides sideways.
-const _STRAFE_LEFT_FBX: PackedScene = preload("res://assets/animations/ranged 2h/run left.fbx")
-const _STRAFE_RIGHT_FBX: PackedScene = preload("res://assets/animations/ranged 2h/run right.fbx")
+# Single authored right-strafe clip; the left direction is a runtime mirror
+# of this same clip (see _extract_mirrored). Replaces the old rifle-pack
+# run-left / run-right pair, which read as forward-runs angled sideways.
+const _STRAFE_FBX: PackedScene = preload("res://assets/animations/core/Strafe.fbx")
 const _JUMP_START_FBX: PackedScene = preload("res://assets/animations/ranged 2h/jump up.fbx")
 const _JUMP_AIR_FBX: PackedScene = preload("res://assets/animations/ranged 2h/jump loop.fbx")
 const _JUMP_LAND_FBX: PackedScene = preload("res://assets/animations/ranged 2h/jump down.fbx")
@@ -193,8 +190,10 @@ static func get_library() -> AnimationLibrary:
 	_extract(_library, &"crouch_idle", _CROUCH_IDLE_FBX, true, true)
 	# Backward / lateral movement.
 	_extract(_library, &"walk_back", _WALK_BACK_FBX, true, true)
-	_extract(_library, &"strafe_left", _STRAFE_LEFT_FBX, true, true)
-	_extract(_library, &"strafe_right", _STRAFE_RIGHT_FBX, true, true)
+	# Strafe — one authored right-strafe clip. strafe_left is the same clip
+	# mirrored across X (L/R bones swapped) so both directions step correctly.
+	_extract(_library, &"strafe_right", _STRAFE_FBX, true, true)
+	_extract_mirrored(_library, &"strafe_left", _STRAFE_FBX, true, true)
 	# Jump split into start (wind-up + push-off, one-shot) / air
 	# (falling loop) / land (touchdown, one-shot). Replaces the single
 	# xbot/jump that played for all three phases. Hip-stripping leaves
@@ -464,6 +463,69 @@ static func _extract(lib: AnimationLibrary, dst_name: StringName, src_scene: Pac
 		_strip_hip_position(dup)
 	lib.add_animation(dst_name, dup)
 	inst.queue_free()
+
+
+# Same as _extract, but mirrors the clip across the sagittal (X=0) plane so a
+# single right-strafe authored clip yields a correct left strafe. Each track is
+# retargeted to its left/right counterpart bone and its keys are reflected:
+# position.x negates, rotation maps (x, y, z, w) -> (x, -y, -z, w). Mixamo bind
+# poses are symmetric, so this produces a clean mirror.
+static func _extract_mirrored(lib: AnimationLibrary, dst_name: StringName, src_scene: PackedScene, loop: bool, strip_hip_position: bool) -> void:
+	var inst: Node = src_scene.instantiate()
+	if inst == null:
+		return
+	var ap: AnimationPlayer = inst.find_child("AnimationPlayer", true, false) as AnimationPlayer
+	if ap == null:
+		inst.queue_free()
+		return
+	var chosen: StringName = &""
+	for n in ap.get_animation_list():
+		if not String(n).contains("RESET"):
+			chosen = n
+			break
+	if chosen == &"":
+		inst.queue_free()
+		return
+	var anim: Animation = ap.get_animation(chosen)
+	if anim == null:
+		inst.queue_free()
+		return
+	var dup: Animation = anim.duplicate()
+	_mirror_animation_x(dup)
+	dup.loop_mode = Animation.LOOP_LINEAR if loop else Animation.LOOP_NONE
+	if strip_hip_position:
+		_strip_hip_position(dup)
+	lib.add_animation(dst_name, dup)
+	inst.queue_free()
+
+
+# Reflect an animation across the X=0 plane in place: retarget every Left/Right
+# bone track to its mirror, negate position X, and flip the y/z of rotations.
+static func _mirror_animation_x(anim: Animation) -> void:
+	for i in range(anim.get_track_count()):
+		var path_str: String = String(anim.track_get_path(i))
+		var ci: int = path_str.rfind(":")
+		if ci >= 0:
+			var bone: String = path_str.substr(ci + 1)
+			var swapped: String = _swap_lr(bone)
+			if swapped != bone:
+				anim.track_set_path(i, NodePath(path_str.substr(0, ci) + ":" + swapped))
+		var t: int = anim.track_get_type(i)
+		for k in range(anim.track_get_key_count(i)):
+			var v: Variant = anim.track_get_key_value(i, k)
+			if t == Animation.TYPE_POSITION_3D:
+				anim.track_set_key_value(i, k, Vector3(-v.x, v.y, v.z))
+			elif t == Animation.TYPE_ROTATION_3D:
+				anim.track_set_key_value(i, k, Quaternion(v.x, -v.y, -v.z, v.w))
+
+
+# Swap "Left"<->"Right" in a bone name (Mixamo names carry exactly one).
+static func _swap_lr(bone: String) -> String:
+	if bone.contains("Left"):
+		return bone.replace("Left", "Right")
+	if bone.contains("Right"):
+		return bone.replace("Right", "Left")
+	return bone
 
 
 # Mixamo bakes forward locomotion into the hip bone's position track.
