@@ -1335,15 +1335,16 @@ func take_damage(amount: int, knockback_from: Vector3 = Vector3.ZERO, knockback_
 	# via enemy_afflictions → _stamp_bleed_drop (movement-gated) so the
 	# status remains visually communicated.
 	if not is_dot:
-		PrototypeAttackIndicator.spawn_blood_burst(get_parent(), burst_pos, blood_dir, hit_mult, blood_type)
-		# Direct-hit ground droplets — 1 drop per 10% of max HP, +3 on
-		# crit. Sub-10% hits skip the pass.
-		var dmg_ratio: float = float(amount) / float(maxi(max_health, 1))
-		var droplet_count: int = int(dmg_ratio * 10.0)
-		if droplet_count > 0:
-			if is_crit:
-				droplet_count += 3
-			_stamp_hit_droplets(hit_pos, blood_dir, droplet_count)
+		# Exactly one floor stamp per hit. spawn_blood_burst still
+		# spawns the 3D particle spray for visual feedback, but its
+		# mist-droplet floor-paint pass is overridden to a single
+		# landing — previously combined with _stamp_hit_droplets it
+		# was producing 3-13 stamps per shot, which read as the
+		# floor filling up with blood faster than the combat justified.
+		# Death-scene burst at the kill site keeps its wider 2-6
+		# spread (no override) so kill scenes still feel heavier
+		# than per-hit chip damage.
+		PrototypeAttackIndicator.spawn_blood_burst(get_parent(), burst_pos, blood_dir, hit_mult, blood_type, 1)
 	# Directional hit reaction — pick hit_left/right/back/big based on
 	# where the hit came from relative to the enemy's facing. Threshold-
 	# gated so a 5% graze doesn't stutter the chase mid-stride. Skipped

@@ -702,7 +702,10 @@ static func _blood_disabled() -> bool:
 	return AccessibilityState.config != null and AccessibilityState.config.disable_blood
 
 
-static func spawn_blood_burst(parent: Node, world_pos: Vector3, direction: Vector3 = Vector3.UP, count_mult: float = 1.0, blood_type: StringName = BLOOD_TYPE_HUMAN) -> void:
+## `mist_sample_override` (default -1 = "use count_mult-derived
+## sample_count") lets per-hit callers cap floor stamps at 1 drop
+## while death-scene callers keep the wider 2-6 spread.
+static func spawn_blood_burst(parent: Node, world_pos: Vector3, direction: Vector3 = Vector3.UP, count_mult: float = 1.0, blood_type: StringName = BLOOD_TYPE_HUMAN, mist_sample_override: int = -1) -> void:
 	if parent == null or _blood_disabled():
 		return
 	var particles := GPUParticles3D.new()
@@ -800,7 +803,7 @@ static func spawn_blood_burst(parent: Node, world_pos: Vector3, direction: Vecto
 	# burst cone and place a tiny drop at each predicted landing point.
 	# Fire-and-forget: the function awaits a process frame internally so
 	# its raycasts run safely outside any active physics-signal flush.
-	_paint_mist_droplets(parent, world_pos, pm.direction, blood_type, count_mult)
+	_paint_mist_droplets(parent, world_pos, pm.direction, blood_type, count_mult, mist_sample_override)
 
 
 # Samples N particle trajectories from the burst cone and stamps a tiny
@@ -815,7 +818,7 @@ static func spawn_blood_burst(parent: Node, world_pos: Vector3, direction: Vecto
 # NOT await — call as a regular function, the work happens later.
 const _MIST_CONE_HALF_ANGLE_RAD: float = deg_to_rad(25.0)
 const _MIST_GRAVITY: float = 12.0  # matches pm.gravity.y magnitude in spawn_blood_burst
-static func _paint_mist_droplets(parent: Node, origin: Vector3, direction: Vector3, blood_type: StringName, count_mult: float) -> void:
+static func _paint_mist_droplets(parent: Node, origin: Vector3, direction: Vector3, blood_type: StringName, count_mult: float, sample_override: int = -1) -> void:
 	if parent == null:
 		return
 	var node := parent as Node3D
@@ -848,7 +851,7 @@ static func _paint_mist_droplets(parent: Node, origin: Vector3, direction: Vecto
 	# physics step. 2-6 drops per hit; larger drop size (see
 	# _spawn_mist_drop_floor) means coverage stays similar to the old
 	# 4-10 count.
-	var sample_count: int = clampi(int(round(2.0 * count_mult)), 2, 6)
+	var sample_count: int = sample_override if sample_override >= 0 else clampi(int(round(2.0 * count_mult)), 2, 6)
 	var query := PhysicsRayQueryParameters3D.new()
 	query.collision_mask = _DECAL_WALL_MASK
 	query.collide_with_areas = false
