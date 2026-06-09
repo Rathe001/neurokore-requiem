@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://c6oi2m0nu6coo"
-path="res://.godot/imported/Strafe.fbx-a7c3d60350db2a61a02263af563c3ea8.scn"
+uid="uid://bxtgpa7oklx6i"
+path="res://.godot/imported/Strafe_Left.fbx-d3f47f44a6931904d27211a83c5eda34.scn"
 
 [deps]
 
-source_file="res://assets/animations/core/Strafe.fbx"
-dest_files=["res://.godot/imported/Strafe.fbx-a7c3d60350db2a61a02263af563c3ea8.scn"]
+source_file="res://assets/animations/core/Strafe_Left.fbx"
+dest_files=["res://.godot/imported/Strafe_Left.fbx-d3f47f44a6931904d27211a83c5eda34.scn"]
 
 [params]
 
