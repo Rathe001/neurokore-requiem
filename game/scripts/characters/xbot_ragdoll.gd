@@ -57,16 +57,27 @@ const _META_KEY: StringName = &"xbot_ragdoll_setup"
 static func ensure_surface_materials(root: Node) -> void:
 	if root == null:
 		return
+	# Walks Mesh AND MultiMesh hosts — RenderingServer fires
+	# "Parameter 'material' is null" on either type when a surface lacks
+	# an active material. Both extend GeometryInstance3D and share the
+	# get_active_material / set_surface_override_material API; just the
+	# mesh resource source differs.
+	var mesh: Mesh = null
 	if root is MeshInstance3D:
-		var mi := root as MeshInstance3D
-		if mi.mesh != null:
-			for i in range(mi.mesh.get_surface_count()):
-				if mi.get_active_material(i) == null:
-					var mat := StandardMaterial3D.new()
-					mat.albedo_color = Color(0.6, 0.6, 0.6)
-					mat.roughness = 0.85
-					mat.metallic = 0.0
-					mi.set_surface_override_material(i, mat)
+		mesh = (root as MeshInstance3D).mesh
+	elif root is MultiMeshInstance3D:
+		var mmi := root as MultiMeshInstance3D
+		if mmi.multimesh != null:
+			mesh = mmi.multimesh.mesh
+	if mesh != null:
+		var gi := root as GeometryInstance3D
+		for i in range(mesh.get_surface_count()):
+			if gi.get_active_material(i) == null:
+				var mat := StandardMaterial3D.new()
+				mat.albedo_color = Color(0.6, 0.6, 0.6)
+				mat.roughness = 0.85
+				mat.metallic = 0.0
+				gi.set_surface_override_material(i, mat)
 	for child in root.get_children():
 		ensure_surface_materials(child)
 

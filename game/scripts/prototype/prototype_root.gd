@@ -110,20 +110,26 @@ func _ready() -> void:
 	# fails we fall back to the standard disconnect screen.
 	HostMigration.migration_starting.connect(_on_host_migration_starting)
 	HostMigration.migration_completed.connect(_on_host_migration_completed)
-	# Walk every MeshInstance3D under the world root and assign a default
-	# StandardMaterial3D to any surface whose active material resolves to
-	# null. Eliminates the RenderingServer's 4-error-per-frame burst
-	# (material_update_dependency / material_casts_shadows /
-	# material_is_animated / material_get_instance_shader_parameters) that
-	# fires per null-material surface every render frame. Existing
-	# helper from XBotRagdoll — exact same pass it does for ragdoll
-	# bodies, just extended to the whole world tree.
+	# Walk every MeshInstance3D / MultiMeshInstance3D under the world
+	# root and assign a default StandardMaterial3D to any surface whose
+	# active material resolves to null. Eliminates the RenderingServer's
+	# 4-error-per-frame burst (material_update_dependency /
+	# material_casts_shadows / material_is_animated /
+	# material_get_instance_shader_parameters) that fires per null-
+	# material surface every render frame. Existing helper from
+	# XBotRagdoll — same pass it does for ragdoll bodies, just
+	# extended to the whole world tree + multimesh hosts.
 	XBotRagdoll.ensure_surface_materials(self)
 	# Pre-compile combat VFX shaders while the loading cover is still up,
 	# so the first LMB/RMB doesn't stall a frame on lazy shader compile.
 	# Awaits two process frames internally; that doubles as the
 	# "freshly-built world is on screen before the cover fades" wait.
 	await VfxWarmup.warmup(self)
+	# Second material pass after warmup — VfxWarmup spawns + frees a
+	# few transient meshes for the shader-compile pass, and any of the
+	# late streaming-build pieces that landed after the first sweep get
+	# caught here too.
+	XBotRagdoll.ensure_surface_materials(self)
 	# Finalize progress at 100% — LevelBuilder caps its own emissions at
 	# _PROGRESS_BUILT (0.95) so the bar lands on a satisfying full-fill
 	# during the brief post-build window (player snap + warmup) instead
