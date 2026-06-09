@@ -16,4 +16,5 @@ opening_width = 4.0
 light_color = ExtResource("light")
 enemy_count = 3
 clutter_density = 1
-decal_density = 2
+decal_density = 1
+decal_pool = &"abandoned"

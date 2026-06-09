@@ -101,3 +101,12 @@ enum Wall { NORTH, SOUTH, EAST, WEST }
 ## 0 = none. Each unit is ~6 placement attempts. Collision-free, batched
 ## into one MMI per texture. See docs/floor-decal-scatter-spec.md.
 @export_range(0, 4) var decal_density: int = 0
+## Themed decal pool. Empty / &"general" uses the legacy mixed pool
+## (paper + small debris). Named keys pick a curated set defined in
+## FloorDecalBuilder.THEMED_POOLS — &"medical" for wards, &"damaged"
+## for fought-in rooms, &"office" for paper-heavy, &"industrial" for
+## machine spaces, &"abandoned" for disused, &"none" to disable
+## decals while keeping density set (lets you wipe a room without
+## touching density). Unknown names fall back to general with a
+## warning.
+@export var decal_pool: StringName = &""

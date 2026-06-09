@@ -15,4 +15,4 @@ opening_width = 4.0
 light_color = ExtResource("light")
 enemy_count = 2
 clutter_density = 1
-decal_density = 1
+decal_density = 0

@@ -30,5 +30,5 @@ openings = [2]
 opening_width = 4.0
 light_color = ExtResource("light")
 clutter_density = 1
-decal_density = 1
+decal_density = 0
 slots = [SubResource("slot_player_spawn"), SubResource("slot_starter_chest")]

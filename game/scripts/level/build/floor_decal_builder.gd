@@ -16,27 +16,64 @@ class_name FloorDecalBuilder
 # Explicit pool list. NEVER enumerate res:// with DirAccess — it returns
 # nothing in exported Godot 4 builds (project_resource_loader_gotcha, bit us
 # 4 times). Add a path here when a new FloorDecalDef .tres is authored.
+# Legacy / fallback pool — used when a room doesn't specify a theme,
+# also kept as the default for the old random-mix behaviour. Lighter
+# than before: dropped the multi-tile pile variants and the flavor
+# specials (scorch / oil / dried_blood / glass), since the random mix
+# made every floor read as "junk yard". Themed pools below carry the
+# specials per-room theme.
 const POOL_PATHS: Array[String] = [
-	# Small per-tile scatter — most common, weight 1-3
 	"res://resources/decals/floor/paper_scatter.tres",
 	"res://resources/decals/floor/debris_scatter.tres",
-	"res://resources/decals/floor/medwaste_scatter.tres",
-	# Multi-tile variants. Paper stays a loose scatter (just covering
-	# more area) so it reads as a wider abandoned mess, not a pile.
-	# Debris uses a denser pile silhouette by intent. Medwaste large
-	# is a wide-area discarded spread (different art from the pile).
-	# All weight 1 so small versions still dominate; bigger min_spacing
-	# keeps multi-tile placements distinct from each other.
-	"res://resources/decals/floor/paper_scatter_large.tres",
-	"res://resources/decals/floor/debris_pile_large.tres",
-	"res://resources/decals/floor/medwaste_scatter_large.tres",
-	# Special-flavor decals — landed 2026-06-09. Lower weights so they
-	# stay flavor accents rather than dominating the floor.
-	"res://resources/decals/floor/scorch_marks.tres",
-	"res://resources/decals/floor/oil_stain_dry.tres",
-	"res://resources/decals/floor/dried_blood_old.tres",
-	"res://resources/decals/floor/broken_glass.tres",
 ]
+
+# Named themed pools keyed by RoomDef.decal_pool. A room sets
+# decal_pool = &"medical" and gets a curated set; &"" or &"general"
+# falls back to POOL_PATHS; &"none" explicitly disables decals even
+# if decal_density > 0. All paths still live under
+# res://resources/decals/floor/.
+const THEMED_POOLS: Dictionary = {
+	# Sterile / patrolled facility — no clutter, no signage litter.
+	&"none": [] as Array[String],
+	# Generic facility floor — light paper + debris scatter only.
+	&"general": [
+		"res://resources/decals/floor/paper_scatter.tres",
+		"res://resources/decals/floor/debris_scatter.tres",
+	],
+	# Office / records area — paper-heavy with the occasional drift.
+	&"office": [
+		"res://resources/decals/floor/paper_scatter.tres",
+		"res://resources/decals/floor/paper_scatter_large.tres",
+	],
+	# Medical wing — gauze + vials + ambient dried blood.
+	&"medical": [
+		"res://resources/decals/floor/medwaste_scatter.tres",
+		"res://resources/decals/floor/medwaste_scatter_large.tres",
+		"res://resources/decals/floor/dried_blood_old.tres",
+		"res://resources/decals/floor/broken_glass.tres",
+	],
+	# Damaged / fought-in rooms — debris piles, scorch marks, glass,
+	# old blood. Reads as "something happened here".
+	&"damaged": [
+		"res://resources/decals/floor/debris_scatter.tres",
+		"res://resources/decals/floor/debris_pile_large.tres",
+		"res://resources/decals/floor/scorch_marks.tres",
+		"res://resources/decals/floor/broken_glass.tres",
+		"res://resources/decals/floor/dried_blood_old.tres",
+	],
+	# Industrial / machine room — oil stains + debris.
+	&"industrial": [
+		"res://resources/decals/floor/oil_stain_dry.tres",
+		"res://resources/decals/floor/debris_scatter.tres",
+		"res://resources/decals/floor/debris_pile_large.tres",
+	],
+	# Abandoned / disused — paper drift + dust patches + light debris.
+	&"abandoned": [
+		"res://resources/decals/floor/paper_scatter.tres",
+		"res://resources/decals/floor/paper_scatter_large.tres",
+		"res://resources/decals/floor/debris_scatter.tres",
+	],
+}
 
 # Stencil pool — kept separate from the random-scatter pool. Stencils
 # are intentional painted signage and need to be placed AT doorways,
@@ -70,9 +107,10 @@ const OPENING_CLEARANCE: float = 0.8
 # is meant to read dense and overlaps freely.
 const ATTEMPTS_PER_DENSITY: int = 6
 
-# Lazily-loaded pool of FloorDecalDefs (resolved once, reused every room).
-static var _pool: Array[FloorDecalDef] = []
-static var _pool_loaded: bool = false
+# Lazily-loaded pools of FloorDecalDefs, keyed by theme name (&"" or
+# &"general" for the legacy POOL_PATHS, named keys from THEMED_POOLS
+# otherwise). Resolved once per theme, reused every room.
+static var _pools_by_theme: Dictionary = {}
 # Per-def StandardMaterial3D cache (built once, reused at commit).
 static var _material_cache: Dictionary = {}
 # Per-id procedural placeholder texture cache (for defs with no art yet).
@@ -80,18 +118,21 @@ static var _placeholder_cache: Dictionary = {}
 
 
 static func scatter_decals(ctx: LevelBuildContext, center: Vector3, hx: float, hz: float, rd: RoomDef, room_id: StringName = &"") -> void:
-	if rd.decal_density <= 0:
+	# &"none" theme disables decals even when density > 0 — lets the
+	# author keep density nonzero on a base RoomDef and override it
+	# to clean per-room without resetting both fields.
+	if rd.decal_pool == &"none":
+		_place_stencils(ctx, center, hx, hz, rd, _stencil_rng(rd, room_id))
 		return
-	var pool := _load_pool()
+	if rd.decal_density <= 0:
+		_place_stencils(ctx, center, hx, hz, rd, _stencil_rng(rd, room_id))
+		return
+	var pool := _load_pool(rd.decal_pool)
 	if pool.is_empty():
+		_place_stencils(ctx, center, hx, hz, rd, _stencil_rng(rd, room_id))
 		return
 
-	# Per-instance room_id keeps each room's litter stable across re-entry
-	# and distinct between rooms that share a RoomDef template.
-	var id_for_seed: StringName = room_id if room_id != &"" else rd.id
-	var seed_hash := _hash_id(id_for_seed)
-	var rng := RandomNumberGenerator.new()
-	rng.seed = seed_hash if seed_hash != 0 else 1
+	var rng := _stencil_rng(rd, room_id)
 
 	var placed: Array[Vector3] = []
 	var weights := _build_weights(pool)
@@ -320,11 +361,22 @@ static func _get_material(def: FloorDecalDef) -> StandardMaterial3D:
 
 # ── Pool loading ───────────────────────────────────────────────────────────
 
-static func _load_pool() -> Array[FloorDecalDef]:
-	if _pool_loaded:
-		return _pool
-	_pool_loaded = true
-	for path in POOL_PATHS:
+static func _load_pool(theme: StringName = &"") -> Array[FloorDecalDef]:
+	# &"none" is an explicit disable — returns empty even if THEMED_POOLS
+	# happened to define it (which it does, to make the disable explicit
+	# at the data layer too). scatter_decals short-circuits on empty.
+	if _pools_by_theme.has(theme):
+		return _pools_by_theme[theme]
+	var paths: Array[String]
+	if theme == &"" or theme == &"general":
+		paths = POOL_PATHS
+	elif THEMED_POOLS.has(theme):
+		paths = THEMED_POOLS[theme]
+	else:
+		push_warning("[FloorDecalBuilder] Unknown decal_pool theme: %s — falling back to general" % theme)
+		paths = POOL_PATHS
+	var pool: Array[FloorDecalDef] = []
+	for path in paths:
 		# ResourceLoader.exists guards against missing files; explicit list
 		# (not DirAccess) keeps it working in exported builds.
 		if not ResourceLoader.exists(path):
@@ -332,8 +384,9 @@ static func _load_pool() -> Array[FloorDecalDef]:
 			continue
 		var def := load(path) as FloorDecalDef
 		if def != null:
-			_pool.append(def)
-	return _pool
+			pool.append(def)
+	_pools_by_theme[theme] = pool
+	return pool
 
 
 static func _build_weights(pool: Array[FloorDecalDef]) -> Array[int]:
@@ -363,6 +416,18 @@ static func _hash_id(id: StringName) -> int:
 	for c in String(id):
 		h = (h * 31 + c.unicode_at(0)) & 0x7FFFFFFF
 	return h
+
+
+# Per-instance RNG seeded by room id (or the runtime piece id when set,
+# so two pieces sharing a RoomDef template still get distinct layouts).
+# Shared by the litter scatter pass and the stencil pass so both stay
+# deterministic with the level seed.
+static func _stencil_rng(rd: RoomDef, room_id: StringName) -> RandomNumberGenerator:
+	var id_for_seed: StringName = room_id if room_id != &"" else rd.id
+	var seed_hash := _hash_id(id_for_seed)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_hash if seed_hash != 0 else 1
+	return rng
 
 
 # ── Procedural placeholders ────────────────────────────────────────────────
