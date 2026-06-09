@@ -3913,6 +3913,12 @@ func _die() -> void:
 	_doomsayer.cleanup()
 	_shield.cleanup()
 	_grenade.cleanup()
+	# Drop the upper-body aim/swing overlay so the death animation drives
+	# the full spine+arms+legs chain. Without this the modifier keeps
+	# applying its sampled fire/swing pose to the upper body each frame
+	# and the death clip only reads on the legs.
+	if _aim_modifier != null and is_instance_valid(_aim_modifier):
+		_aim_modifier.active = false
 	# XBotAnimations exposes deaths as xbot/death_0..N, not the generic
 	# xbot/death. Pick a random one via the library helper and fall back
 	# to the legacy candidate list (Quaternius / older meshes) if the
@@ -4687,6 +4693,11 @@ func _attack_is_melee(item: Item) -> bool:
 # the floated feet (legs stay on grounded clips), keeps the legs moving while
 # firing, and ramps the influence so the aim-in is smooth instead of a snap.
 func _drive_aim_overlay(delta: float) -> void:
+	# Dead player has no upper-body overlay — the death anim owns the
+	# whole rig. Belt-and-suspenders with the modifier.active=false set
+	# in _die() so a late tick can't reactivate the overlay.
+	if not _alive:
+		return
 	var modifier := _ensure_aim_modifier()
 	if modifier == null:
 		return
