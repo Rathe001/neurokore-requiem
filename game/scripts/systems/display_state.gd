@@ -142,6 +142,12 @@ func apply() -> void:
 		vp.msaa_3d = config.msaa_3d
 		vp.screen_space_aa = config.screen_space_aa
 		vp.use_taa = config.use_taa
+	# Framerate ceiling — vsync pins to monitor refresh rate, max_fps
+	# enforces a hard cap below that. Combined, the smaller of the two
+	# wins: a 144Hz monitor with vsync=on + max_fps=60 runs at 60.
+	var vsync_mode := DisplayServer.VSYNC_ENABLED if config.vsync_enabled else DisplayServer.VSYNC_DISABLED
+	DisplayServer.window_set_vsync_mode(vsync_mode)
+	Engine.max_fps = maxi(config.fps_cap, 0)
 	_apply_bloom_to_environments()
 	_apply_gi_to_environments()
 	changed.emit()

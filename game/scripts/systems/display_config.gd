@@ -23,6 +23,19 @@ enum Mode {
 @export var use_taa: bool = false
 @export var bloom_enabled: bool = true
 
+## VSync on/off. ON pins frame rate to the monitor's refresh rate
+## (60Hz monitor → 60fps, 144Hz → 144fps). Trades a frame of latency
+## for zero tearing.
+@export var vsync_enabled: bool = true
+
+## Hard FPS ceiling. 0 = no cap. 60 reads as the "smoothness baseline"
+## an iso-camera ARPG can deliver everywhere; uncapping is a
+## perceptible improvement only on twitch-aim genres. Combined with
+## vsync_enabled=true, a 144Hz monitor will still cap at 60 (the
+## smaller of the two limits), so a Mac at 60Hz and a Windows box at
+## 144Hz produce the same framerate-coupled feel.
+@export_range(0, 360) var fps_cap: int = 60
+
 ## Global Illumination quality. Drives SDFGI on/off + tuning at scene apply time.
 ## OFF       — sdfgi_enabled = false. Lowest GPU/CPU cost, fastest level load.
 ##              Default for the v0.3.x perf pass after the 50-second SDFGI
