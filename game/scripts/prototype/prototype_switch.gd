@@ -124,12 +124,17 @@ func _mark_used() -> void:
 
 # Used switches drop out of mouse picking, the SpatialGrid interactable index,
 # and any active hover/tooltip state so they read as inert. reset_state() flips
-# this back on for NG+ runs. We toggle BOTH input_ray_pickable AND
-# collision_layer because either alone is enough to leak picks in some
-# Godot 4 builds — belt and suspenders.
+# this back on for NG+ runs.
+#
+# collision_layer stays 64 (INTERACTABLE) in BOTH states. The old code zeroed
+# it when used — which also removed BODY collision, so the player walked
+# straight through the console the moment a switch was activated. And it
+# restored 1 (WORLD) instead of 64, which would have made reset switches eat
+# projectiles (projectiles collide with WORLD but deliberately pass through
+# layer 64). input_ray_pickable + group/SpatialGrid removal carry the full
+# "inert" behaviour; interact() additionally early-returns when _used.
 func _set_interactive(on: bool) -> void:
 	input_ray_pickable = on
-	collision_layer = 1 if on else 0
 	if on:
 		add_to_group(&"interactables")
 		SpatialGrid.register(self, &"interactables")
