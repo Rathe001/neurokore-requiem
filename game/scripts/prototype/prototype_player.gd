@@ -205,7 +205,13 @@ const _CLIP_AUTHORED_SPEED: Dictionary = {
 	&"xbot/axe_run": 3.5,
 }
 
-@export var move_speed: float = 6.0
+## Base ground-travel speed in m/s. 4.0 reads as a brisk jog and lines
+## up with Mixamo's authored locomotion clip speeds (jog ~3.5 m/s,
+## strafe ~3 m/s, walk_back ~1.8 m/s) so the per-clip authored-speed
+## table in _CLIP_AUTHORED_SPEED produces playback rates close to 1.0×
+## under normal travel — feet plant cleanly without sliding. Sprint
+## multiplies on top via SPRINT_SPEED_FACTOR.
+@export var move_speed: float = 4.0
 @export var accel: float = 30.0
 @export var max_health: int = 100
 @export var skills: Array[Skill] = []
