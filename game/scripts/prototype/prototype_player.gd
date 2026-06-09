@@ -2221,18 +2221,7 @@ func _physics_process(delta: float) -> void:
 			# locomotion / idle picker below (grounded feet, free to move while
 			# firing); the aim pose is layered onto the upper body only by
 			# UpperBodyAimModifier via _drive_aim_overlay() each tick.
-			if is_reloading():
-				# Reload pose overrides the locomotion picker. While the
-				# player is reloading, run picks reload_run (full-body
-				# move-while-reload); standing picks reload (stationary
-				# rack-and-load loop). The pose persists until
-				# _reload_remain reaches 0.
-				anim_player.speed_scale = 1.0
-				if _want_dir.length_squared() > 0.01:
-					_play_anim(ANIM_RELOAD_RUN, 1.0, 0.15)
-				else:
-					_play_anim(ANIM_RELOAD, 1.0, 0.15)
-			elif _want_dir.length_squared() > 0.01:
+			if _want_dir.length_squared() > 0.01:
 				# Fixed animation speed — sprint and backing are the only
 				# modifiers. All speed control goes through speed_scale
 				# (never custom_speed in _play_anim) so the rate can't
@@ -3219,10 +3208,18 @@ func start_reload() -> void:
 	_reload_target = &"weapon"
 	WeaponSounds.play_reload(w.weapon_base_id, global_position)
 	weapon_ammo_changed.emit()
-	# Play the dedicated reload anim. The locomotion picker prefers
-	# reload_run when wish_dir is active so the player can keep moving
-	# during the reload window.
-	_play_anim(ANIM_RELOAD, 1.0, 0.15)
+	# Route the reload as an upper-body overlay via UpperBodyAimModifier
+	# rather than a full-body anim. Legs continue with whatever the
+	# locomotion picker chose (idle, jog, strafe), so the player can
+	# walk through a reload without the legs snapping into the
+	# stationary reload pose.
+	var modifier := _ensure_aim_modifier()
+	if modifier != null:
+		var skel := _find_player_skeleton()
+		for key in ANIM_RELOAD:
+			if anim_player != null and anim_player.has_animation(key):
+				modifier.play_swing(skel, anim_player, key, _reload_total)
+				break
 
 # ── AIM_HOLD (Tripod / Aimed Shot) ───────────────────────────────────────────────
 
@@ -4725,17 +4722,19 @@ func _drive_aim_overlay(delta: float) -> void:
 	var modifier := _ensure_aim_modifier()
 	if modifier == null:
 		return
-	# Engage the overlay any time a ranged weapon is equipped — the
-	# authored strafe clips have the upper body facing the strafe
-	# direction, so without the fire-pose overlay holding the gun
-	# forward, the character looks like they're aiming sideways while
-	# strafing. Reloading is still excluded so the reload pose plays
-	# clean; melee weapons are excluded because their swing path runs
-	# through play_swing rather than the looping aim hold.
+	# Engage the overlay when moving (strafe clips otherwise twist the
+	# upper body toward the strafe direction) or while firing
+	# (recoil cycle). Standing idle with a ranged weapon does NOT
+	# engage — the modifier's continuous recoil clock made the arms
+	# wobble noticeably when the player was just standing still.
+	# Reloading + melee weapons keep the prior exclusion.
 	var aiming := false
 	if not is_reloading():
 		var w: Item = InventoryState.get_equipped(&"weapon")
-		aiming = w != null and not _attack_is_melee(w)
+		var ranged_equipped := w != null and not _attack_is_melee(w)
+		var moving := _want_dir.length_squared() > 0.01
+		var firing := _is_aim_input_held()
+		aiming = ranged_equipped and (moving or firing)
 	if aiming:
 		# Point the overlay at the class-appropriate fire clip so SMG/pistol
 		# read 1H and rifle/shotgun read 2H. configure() early-outs when the
