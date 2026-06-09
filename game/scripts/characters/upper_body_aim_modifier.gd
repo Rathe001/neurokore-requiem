@@ -53,6 +53,13 @@ var _clip_len: float = 0.0
 var _tracks: Array[Dictionary] = []
 var _configured_clip: StringName = &""
 
+# One-shot melee swing: plays a swing clip ONCE over a set duration on the
+# upper body while the legs keep locomoting. Mutually exclusive with the
+# looping aim hold (you either hold a gun or swing a melee weapon, never both).
+var _swing_active: bool = false
+var _swing_time: float = 0.0
+var _swing_duration: float = 0.0
+
 # Set of short names for O(1) membership during configure.
 static var _upper_set: Dictionary = {}
 
@@ -99,10 +106,32 @@ func configure(skel: Skeleton3D, anim_player: AnimationPlayer, clip_name: String
 ## in _process_modification, which has no delta) keeps the cadence frame-rate
 ## independent.
 func tick(delta: float, aiming: bool) -> void:
+	# Swing takes priority: scrub the swing clip across its full length over
+	# the swing duration at full weight. When it finishes, fall through so the
+	# weight ramps back to the aim target (0 for melee) for a smooth settle.
+	if _swing_active:
+		_swing_time += delta
+		if _swing_time < _swing_duration and _clip_len > 0.0:
+			_recoil_time = (_swing_time / _swing_duration) * _clip_len
+			_weight = 1.0
+			return
+		_swing_active = false
 	_target = 1.0 if aiming else 0.0
 	_weight = move_toward(_weight, _target, delta / maxf(ramp_time, 0.001))
 	if aiming and _clip_len > 0.0:
 		_recoil_time = fmod(_recoil_time + delta * recoil_speed, _clip_len)
+
+
+## Start a one-shot melee swing overlay: play `clip_name` once over `duration`
+## seconds on the upper body. The legs are left to the locomotion picker, so
+## the player can swing while moving. Call when a moving melee attack fires.
+func play_swing(skel: Skeleton3D, anim_player: AnimationPlayer, clip_name: StringName, duration: float) -> void:
+	configure(skel, anim_player, clip_name)
+	if _anim == null:
+		return
+	_swing_active = true
+	_swing_time = 0.0
+	_swing_duration = maxf(duration, 0.05)
 
 
 ## Restart the sampled clip from frame 0 — call on a shot event so the upper

@@ -505,11 +505,16 @@ static func _mirror_animation_x(anim: Animation) -> void:
 	for i in range(anim.get_track_count()):
 		var path_str: String = String(anim.track_get_path(i))
 		var ci: int = path_str.rfind(":")
-		if ci >= 0:
-			var bone: String = path_str.substr(ci + 1)
-			var swapped: String = _swap_lr(bone)
-			if swapped != bone:
-				anim.track_set_path(i, NodePath(path_str.substr(0, ci) + ":" + swapped))
+		var bone: String = path_str.substr(ci + 1) if ci >= 0 else ""
+		# The Hips is the root bone: mirroring its rotation spins the whole
+		# character's facing (the east strafe held facing north, the mirrored
+		# west strafe turned the body left). Keep the root orientation from the
+		# source clip; only the limbs, posed relative to the root, get mirrored.
+		if bone.contains("Hips"):
+			continue
+		var swapped: String = _swap_lr(bone)
+		if ci >= 0 and swapped != bone:
+			anim.track_set_path(i, NodePath(path_str.substr(0, ci) + ":" + swapped))
 		var t: int = anim.track_get_type(i)
 		for k in range(anim.track_get_key_count(i)):
 			var v: Variant = anim.track_get_key_value(i, k)

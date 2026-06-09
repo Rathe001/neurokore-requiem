@@ -182,6 +182,10 @@ const FACE_BY_VELOCITY_MIN := 0.5
 const RUN_ANIM_SPEED_FACTOR := 1.0
 const RUN_ANIM_SPEED_MIN := 0.6
 const RUN_ANIM_SPEED_MAX := 2.0
+# The strafe clip's baked ground speed (~3 m/s, half the run clips') means at
+# a given travel speed it needs ~2x the playback rate to keep the feet
+# planted rather than sliding. Tunable if a different strafe clip is used.
+const STRAFE_ANIM_SPEED_MULT := 2.0
 
 @export var move_speed: float = 6.0
 @export var accel: float = 30.0
@@ -305,7 +309,10 @@ func _attack_locks_movement() -> bool:
 		var weapon: Item = InventoryState.get_equipped(&"weapon")
 		if weapon == null:
 			return true  # bare hands → unarmed strike, anchor in place
-		return weapon.weapon_base_id in MELEE_BASE_IDS
+		# Melee weapons no longer freeze movement: the swing plays on the
+		# upper body via UpperBodyAimModifier (see _swing_overlay_if_moving)
+		# while the legs keep locomoting, so you can move while swinging.
+		return false
 	return false
 var _attack_aim: Vector3 = Vector3.ZERO
 var _click_consumed: bool = false
@@ -742,6 +749,10 @@ var _sprinting: bool = false
 var _sprint_regen_penalty: float = 0.0
 var _is_airborne: bool = false
 var _backing: bool = false
+# Strafe-selection hysteresis state so the strafe/jog and left/right choice
+# can't flip-flop frame-to-frame (which restarted the clip and read as a pause).
+var _strafing: bool = false
+var _strafe_right: bool = false
 var _interacting: bool = false
 # HOLD-mode fire pose flag — true while a non-looping fire anim has
 # played through and is sitting on its last frame, waiting for the
@@ -2237,16 +2248,27 @@ func _physics_process(delta: float) -> void:
 					right_axis.y = 0.0
 					var dot_fwd: float = _want_dir.dot(fwd.normalized()) if fwd.length_squared() > 0.0001 else 1.0
 					var dot_right: float = _want_dir.dot(right_axis.normalized()) if right_axis.length_squared() > 0.0001 else 0.0
-					var lateral_dominates: bool = absf(dot_right) > absf(dot_fwd) + 0.10
-					# Strafe / walk_back stay universal (rifle-stance clips
-					# from the Rifle Pack). A swordsman strafing with
-					# rifle-arm pose looks slightly off but the legs read
-					# correctly; dedicated per-class strafe is a future
-					# polish pass.
+					# Strafe selection with hysteresis: enter strafe only on clear lateral
+					# dominance, stay until movement is clearly forward again, and keep a
+					# deadband on the L/R direction. Without this the choice flip-flopped as
+					# the player circled a target, restarting the strafe clip every switch
+					# (the "pausing"). Strafe clips are rifle-stance but the legs read fine.
+					var lat_margin: float = absf(dot_right) - absf(dot_fwd)
+					if _strafing:
+						_strafing = lat_margin > -0.10
+					else:
+						_strafing = lat_margin > 0.10
+					if dot_right > 0.12:
+						_strafe_right = true
+					elif dot_right < -0.12:
+						_strafe_right = false
 					if _backing and not _sprinting:
 						_play_anim(ANIM_WALK_BACK, 1.0, 0.15)
-					elif lateral_dominates and not _sprinting:
-						if dot_right > 0.0:
+					elif _strafing and not _sprinting:
+						# Strafe clip is slower-natured than the run clips; boost so the feet
+						# keep up with travel speed instead of sliding (see STRAFE_ANIM_SPEED_MULT).
+						anim_player.speed_scale = clampf(anim_speed * STRAFE_ANIM_SPEED_MULT, RUN_ANIM_SPEED_MIN, RUN_ANIM_SPEED_MAX)
+						if _strafe_right:
 							_play_anim([&"xbot/strafe_right"] as Array[StringName], 1.0, 0.15)
 						else:
 							_play_anim([&"xbot/strafe_left"] as Array[StringName], 1.0, 0.15)
@@ -2748,7 +2770,8 @@ func _cast_lmb_combat() -> void:
 			# motion. main_interval is already computed for multi-arm
 			# stagger above; reuse it here as the animation duration.
 			var combo_step := peek_next_melee_combo_step(main_item)
-			_play_anim_stretched(XBotAnimations.combo_attack_anim_for_class(_equipped_weapon_class(), combo_step), main_interval)
+			if not _swing_overlay_if_moving(combo_step, main_interval):
+				_play_anim_stretched(XBotAnimations.combo_attack_anim_for_class(_equipped_weapon_class(), combo_step), main_interval)
 			# Blade-only auto-lunge toward the closest enemy under the
 			# cursor — closes the gap so the player doesn't have to
 			# manually walk into range on every swing. main_atk_spd
@@ -2950,7 +2973,8 @@ func _cast_skill(skill: Skill) -> void:
 		var skill_atk_spd: float = atk_spd if atk_spd > 0.0 else 1.0
 		var skill_dur: float = skill.cooldown / skill_atk_spd if skill.cooldown > 0.0 else 0.7
 		skill_dur = minf(skill_dur, MELEE_SKILL_MAX_ANIM_DUR)
-		_play_anim_stretched(XBotAnimations.combo_attack_anim_for_class(_equipped_weapon_class(), combo_step), skill_dur)
+		if not _swing_overlay_if_moving(combo_step, skill_dur):
+			_play_anim_stretched(XBotAnimations.combo_attack_anim_for_class(_equipped_weapon_class(), combo_step), skill_dur)
 	PrototypeAttackIndicator.spawn(self, skill, aim, _combat.effective_range(skill, weapon))
 	# Per-weapon SFX timing:
 	#   Ranged → synchronous at press so audio pre-roll (RPG charge,
@@ -4703,6 +4727,25 @@ func _ensure_aim_modifier() -> UpperBodyAimModifier:
 func _pulse_fire_recoil() -> void:
 	if _aim_modifier != null and is_instance_valid(_aim_modifier):
 		_aim_modifier.pulse_recoil()
+
+
+# Moving melee swing: play the swing on the UPPER body via the aim modifier so
+# the legs keep locomoting (you can swing while moving). Returns true if it
+# fired — player is moving and a swing clip resolved — in which case the caller
+# skips the full-body _play_anim_stretched swing. Stationary swings stay
+# full-body (planted legs read fine when you're standing still).
+func _swing_overlay_if_moving(combo_step: int, duration: float) -> bool:
+	if _want_dir.length_squared() <= 0.01:
+		return false
+	var modifier := _ensure_aim_modifier()
+	if modifier == null:
+		return false
+	var skel := _find_player_skeleton()
+	for key in XBotAnimations.combo_attack_anim_for_class(_equipped_weapon_class(), combo_step):
+		if anim_player != null and anim_player.has_animation(key):
+			modifier.play_swing(skel, anim_player, key, duration)
+			return true
+	return false
 
 
 # Stationary firing pose with two modes:
