@@ -499,22 +499,36 @@ static func _extract_mirrored(lib: AnimationLibrary, dst_name: StringName, src_s
 	inst.queue_free()
 
 
-# Reflect an animation across the X=0 plane in place: retarget every Left/Right
-# bone track to its mirror, negate position X, and flip the y/z of rotations.
+# Lower-body bones — the only ones we mirror in strafe clips. Mirroring the
+# upper-body chain (spine/arms/head) makes the character's aim flip when
+# strafing west, which reads as the avatar suddenly looking the other way
+# mid-step. Keeping the upper body on the source clip preserves the
+# forward-aim stance; the legs + hips do the side-step work.
+const _LOWER_BODY_SUBSTRINGS: Array[String] = [
+	"Hips",
+	"UpLeg", "Leg", "Foot", "Toe",
+]
+
+
+static func _is_lower_body_bone(bone: String) -> bool:
+	for token in _LOWER_BODY_SUBSTRINGS:
+		if bone.contains(token):
+			return true
+	return false
+
+
+# Reflect an animation across the X=0 plane in place: for lower-body tracks
+# only — retarget Left/Right paths, negate position X, flip y/z of rotations.
+# Upper-body tracks (spine, neck, head, arms, hands) are left exactly as the
+# source clip authored them so the character keeps facing / aiming forward
+# while only the legs sidestep the opposite direction.
 static func _mirror_animation_x(anim: Animation) -> void:
 	for i in range(anim.get_track_count()):
 		var path_str: String = String(anim.track_get_path(i))
 		var ci: int = path_str.rfind(":")
 		var bone: String = path_str.substr(ci + 1) if ci >= 0 else ""
-		# Earlier comment skipped Hips here because a previous mirror attempt
-		# "turned the body left" — but skipping it means strafe_left keeps the
-		# Hips rotation of strafe_right verbatim, so the player aiming north
-		# and strafing west has hips leaning toward east (the wrong way).
-		# Mirroring Hips negates the Y/Z components of the rotation, which
-		# correctly inverts the yaw/roll lean that the source clip authored
-		# into the strafe stance. If the body-turning bug recurs, the right
-		# fix is to compose the mirrored rotation against the character's
-		# desired facing rather than skipping the bone entirely.
+		if not _is_lower_body_bone(bone):
+			continue
 		var swapped: String = _swap_lr(bone)
 		if ci >= 0 and swapped != bone:
 			anim.track_set_path(i, NodePath(path_str.substr(0, ci) + ":" + swapped))
