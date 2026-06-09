@@ -2283,7 +2283,11 @@ func _physics_process(delta: float) -> void:
 					if _backing and not _sprinting:
 						_play_anim_with_synced_speed(ANIM_WALK_BACK, actual_speed)
 					elif _strafing and not _sprinting:
-						var strafe_clip: Array[StringName] = ([&"xbot/strafe_right"] if _strafe_right else [&"xbot/strafe_left"]) as Array[StringName]
+						var strafe_clip: Array[StringName]
+						if _strafe_right:
+							strafe_clip = [&"xbot/strafe_right"]
+						else:
+							strafe_clip = [&"xbot/strafe_left"]
 						_play_anim_with_synced_speed(strafe_clip, actual_speed)
 					else:
 						# Forward jog — pick the per-class run stance
