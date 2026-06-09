@@ -179,13 +179,31 @@ const FACE_BY_VELOCITY_MIN := 0.5
 # at a brisk cadence matched to ~6 m/s travel, so the old 1.8 (tuned for the
 # slower Quaternius Jog_Fwd) made feet shuffle visibly. Sprint still ramps
 # via SPRINT_SPEED_FACTOR on top of this base.
-const RUN_ANIM_SPEED_FACTOR := 1.0
 const RUN_ANIM_SPEED_MIN := 0.6
 const RUN_ANIM_SPEED_MAX := 2.0
-# The strafe clip's baked ground speed (~3 m/s, half the run clips') means at
-# a given travel speed it needs ~2x the playback rate to keep the feet
-# planted rather than sliding. Tunable if a different strafe clip is used.
-const STRAFE_ANIM_SPEED_MULT := 2.0
+
+# Each locomotion clip's authored ground-travel rate in m/s. The picker
+# divides actual horizontal velocity by this number to get the
+# playback-rate multiplier that makes the feet visibly match real
+# travel — slower while a debuff caps speed, faster while sprinting.
+# Tune by eye if a clip's feet slide: speed_scale = actual / authored,
+# so raise the value if feet move TOO FAST at full speed, lower if too
+# slow. Default for unknown clips falls back to the player's full
+# move_speed (assume "authored for ~the same speed as the player").
+const _CLIP_AUTHORED_SPEED: Dictionary = {
+	&"xbot/jog": 3.5,
+	&"xbot/fast_run": 6.0,
+	&"xbot/walk_back": 1.8,
+	&"xbot/strafe_left": 3.0,
+	&"xbot/strafe_right": 3.0,
+	&"xbot/crouch_move": 2.0,
+	# Per-class run clips share Mixamo's run-pack cadence — same authored
+	# speed as the generic jog.
+	&"xbot/pistol_run": 3.5,
+	&"xbot/rifle_run": 3.5,
+	&"xbot/sword_run": 3.5,
+	&"xbot/axe_run": 3.5,
+}
 
 @export var move_speed: float = 6.0
 @export var accel: float = 30.0
@@ -2222,20 +2240,16 @@ func _physics_process(delta: float) -> void:
 			# firing); the aim pose is layered onto the upper body only by
 			# UpperBodyAimModifier via _drive_aim_overlay() each tick.
 			if _want_dir.length_squared() > 0.01:
-				# Fixed animation speed — sprint and backing are the only
-				# modifiers. All speed control goes through speed_scale
-				# (never custom_speed in _play_anim) so the rate can't
-				# flicker when _backing toggles at the dot-product boundary.
-				# Leg cadence tracks the player's ACTUAL horizontal speed so the
-				# animation matches real travel — slower while firing (the attack
-				# penalty), crouching, or bloodied; faster sprinting — instead of
-				# always playing at the jog tempo (which foot-slid whenever a speed
-				# factor was active).
+				# Leg cadence tracks ACTUAL horizontal speed against each
+				# clip's authored ground-travel rate (see
+				# _CLIP_AUTHORED_SPEED). speed_scale = actual / authored
+				# keeps the feet planted regardless of debuffs, sprint,
+				# or attack-penalty slow — and uniformly across whichever
+				# clip the picker chose (jog / strafe / walk_back /
+				# per-class run / crouch_move).
 				var actual_speed: float = Vector2(velocity.x, velocity.z).length()
-				var anim_speed := RUN_ANIM_SPEED_FACTOR * (actual_speed / maxf(move_speed, 0.01))
-				anim_player.speed_scale = clampf(anim_speed, RUN_ANIM_SPEED_MIN, RUN_ANIM_SPEED_MAX)
 				if _crouching:
-					_play_anim(ANIM_CROUCH_MOVE, 1.0, 0.15)
+					_play_anim_with_synced_speed(ANIM_CROUCH_MOVE, actual_speed)
 				else:
 					# Directional locomotion picker. Compute wish_dir
 					# relative to facing and pick walk_back / strafe_left
@@ -2267,21 +2281,16 @@ func _physics_process(delta: float) -> void:
 					elif dot_right < -0.12:
 						_strafe_right = false
 					if _backing and not _sprinting:
-						_play_anim(ANIM_WALK_BACK, 1.0, 0.15)
+						_play_anim_with_synced_speed(ANIM_WALK_BACK, actual_speed)
 					elif _strafing and not _sprinting:
-						# Strafe clip is slower-natured than the run clips; boost so the feet
-						# keep up with travel speed instead of sliding (see STRAFE_ANIM_SPEED_MULT).
-						anim_player.speed_scale = clampf(anim_speed * STRAFE_ANIM_SPEED_MULT, RUN_ANIM_SPEED_MIN, RUN_ANIM_SPEED_MAX)
-						if _strafe_right:
-							_play_anim([&"xbot/strafe_right"] as Array[StringName], 1.0, 0.15)
-						else:
-							_play_anim([&"xbot/strafe_left"] as Array[StringName], 1.0, 0.15)
+						var strafe_clip: Array[StringName] = ([&"xbot/strafe_right"] if _strafe_right else [&"xbot/strafe_left"]) as Array[StringName]
+						_play_anim_with_synced_speed(strafe_clip, actual_speed)
 					else:
 						# Forward jog — pick the per-class run stance
 						# (pistol_run / rifle_run / sword_run / axe_run /
 						# unarmed jog). Falls back to xbot/jog if the
 						# class clip isn't loaded.
-						_play_anim(XBotAnimations.run_anim_for_class(_equipped_weapon_class()), 1.0, 0.15)
+						_play_anim_with_synced_speed(XBotAnimations.run_anim_for_class(_equipped_weapon_class()), actual_speed)
 			else:
 				anim_player.speed_scale = 1.0
 				if _crouching:
@@ -4909,6 +4918,30 @@ func _play_fire_pose(blend: float = 0.15, restart: bool = false) -> void:
 # floor clamped them halfway and broke sync between the visible strike
 # frame and the damage timer (which uses the un-clamped duration).
 # 0.3× still reads as legible motion rather than broken slow-mo.
+# Picks the first clip in `candidates` that's loaded, sets the
+# AnimationPlayer's speed_scale so the clip's authored ground travel
+# matches the player's current horizontal velocity, and plays it.
+# Centralises the "feet match real speed" logic so every locomotion
+# branch (jog / strafe / walk_back / crouch_move) uses the same rule.
+func _play_anim_with_synced_speed(candidates: Array[StringName], actual_speed: float) -> void:
+	if anim_player == null:
+		return
+	var primary: StringName = &""
+	for c in candidates:
+		if anim_player.has_animation(c):
+			primary = c
+			break
+	# Fallback to the first candidate even if it's not loaded — _play_anim
+	# below handles the no-op case and the speed_scale below applies
+	# whichever clip eventually plays.
+	if primary == &"" and not candidates.is_empty():
+		primary = candidates[0]
+	var authored: float = _CLIP_AUTHORED_SPEED.get(primary, maxf(move_speed, 0.01))
+	var rate: float = actual_speed / maxf(authored, 0.01)
+	anim_player.speed_scale = clampf(rate, RUN_ANIM_SPEED_MIN, RUN_ANIM_SPEED_MAX)
+	_play_anim(candidates, 1.0, 0.15)
+
+
 func _play_anim_stretched(candidates: Array[StringName], duration: float, blend: float = 0.0) -> void:
 	if anim_player == null:
 		return
