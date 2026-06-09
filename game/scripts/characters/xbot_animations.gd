@@ -499,13 +499,14 @@ static func _extract_mirrored(lib: AnimationLibrary, dst_name: StringName, src_s
 	inst.queue_free()
 
 
-# Lower-body bones — the only ones we mirror in strafe clips. Mirroring the
-# upper-body chain (spine/arms/head) makes the character's aim flip when
-# strafing west, which reads as the avatar suddenly looking the other way
-# mid-step. Keeping the upper body on the source clip preserves the
-# forward-aim stance; the legs + hips do the side-step work.
+# Leg bones — the only ones we mirror in strafe clips. Skipping Hips
+# matters because Hips is the parent of every other bone in the
+# Mixamo hierarchy: mirroring its local rotation rotates the entire
+# skeleton (legs AND upper body) in world space, which read as the
+# avatar's aim flipping when strafing west. Mirroring just the leg
+# locals lets the L/R step pattern invert while the body keeps the
+# source clip's forward-facing stance.
 const _LOWER_BODY_SUBSTRINGS: Array[String] = [
-	"Hips",
 	"UpLeg", "Leg", "Foot", "Toe",
 ]
 
