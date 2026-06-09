@@ -1282,6 +1282,40 @@ func _mesh_for_class(class_id: StringName, gender: StringName) -> PackedScene:
 	return _CHARACTER_MESHES[origin][gender_key]
 
 
+# Y offset that seats `char_root`'s lowest visible point at floor level
+# (+2cm anti-clip margin). Walks every VisualInstance3D descendant, composes
+# its transform relative to char_root via parent-chain walk (the node may not
+# be in the tree yet, so global_transform is unavailable), and unions the
+# AABBs. char_root's own transform is excluded, so the result is identical
+# whether the root has already been scaled/positioned or not; the root's
+# uniform char_scale is applied to the measured minimum instead. The
+# WeaponMount subtree is skipped — a mounted weapon hanging below the feet
+# would otherwise hoist the body on re-seat.
+static func _character_seat_offset(char_root: Node3D, char_scale: float) -> float:
+	var min_y: float = INF
+	var stack: Array[Node] = [char_root]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		if n.name == &"WeaponMount":
+			continue
+		for c in n.get_children():
+			stack.append(c)
+		if n == char_root or not (n is VisualInstance3D):
+			continue
+		var vi := n as VisualInstance3D
+		var xf := Transform3D.IDENTITY
+		var walk: Node = vi
+		while walk != null and walk != char_root:
+			if walk is Node3D:
+				xf = (walk as Node3D).transform * xf
+			walk = walk.get_parent()
+		var aabb: AABB = xf * vi.get_aabb()
+		min_y = minf(min_y, aabb.position.y)
+	if min_y == INF:
+		return 0.0
+	return 0.02 - min_y * char_scale
+
+
 # Swaps the Visual/Character mesh to match the effective class + gender
 # (local PlayerState OR the remote peer's published lobby data) and
 # installs the X Bot animation library on the new AnimationPlayer. Mirrors
@@ -1294,14 +1328,7 @@ func _apply_gender_appearance() -> void:
 		return
 	var effective_gender: StringName = remote_gender if remote_gender != &"" else PlayerState.gender
 	var effective_class: StringName = _effective_class_id()
-	var is_female: bool = effective_gender == &"female"
 	var scene: PackedScene = _mesh_for_class(effective_class, effective_gender)
-	# Per-gender Y offset to keep feet at floor level. Female meshes'
-	# geometric origin sits ~0.20m above the feet. Male meshes were
-	# clipping at y=0 — origin is BELOW the feet just enough that the
-	# 1.02× scale (and a small import drift) put the feet below floor
-	# level; +0.06 lifts them out of the floor without floating.
-	var y_offset: float = 0.26 if is_female else 0.06
 	# Meshy meshes import a touch smaller than the player capsule
 	# expects. 1.05× over-corrected (feet clipped through floor),
 	# 1.02× is the sweet spot — silhouette reads at iso distance
@@ -1323,7 +1350,12 @@ func _apply_gender_appearance() -> void:
 			# opposite direction from what the Visual node's facing logic
 			# expects.
 			new_char.rotation.y = PI
-			new_char.position.y = y_offset
+			# Measured seat: each of the 16 Meshy class/gender meshes ships
+			# with a different authored origin (some at the feet, some ~0.2m
+			# above), so the old fixed per-gender offset (0.26 female / 0.06
+			# male) floated some meshes and buried others. Measure the
+			# instance's lowest visible point instead and put it at the floor.
+			new_char.position.y = _character_seat_offset(new_char, char_scale)
 			new_char.scale = Vector3.ONE * char_scale
 			# Stash the resolved gender on the Character node so any helper
 			# that walks up from the skeleton (notably WeaponAttachment, which
@@ -1350,9 +1382,9 @@ func _apply_gender_appearance() -> void:
 				new_char.add_child(new_ap)
 			anim_player = new_ap
 	else:
-		# No swap needed; just re-apply Y offset + scale in case the default
-		# tscn instance was at 0/1 or the per-gender constants changed.
-		current_char.position.y = y_offset
+		# No swap needed; just re-apply the measured seat + scale in case the
+		# default tscn instance was at 0/1.
+		current_char.position.y = _character_seat_offset(current_char, char_scale)
 		current_char.scale = Vector3.ONE * char_scale
 		current_char.set_meta(&"gender", effective_gender)
 	if anim_player != null:
