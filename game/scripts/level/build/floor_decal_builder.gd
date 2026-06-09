@@ -31,17 +31,29 @@ const POOL_PATHS: Array[String] = [
 	"res://resources/decals/floor/debris_pile_large.tres",
 	"res://resources/decals/floor/medwaste_scatter_large.tres",
 	# Special-flavor decals — landed 2026-06-09. Lower weights so they
-	# stay flavor accents rather than dominating the floor. Stencils
-	# clamp aspect_jitter low + reduce yaw range so they read as
-	# painted signage rather than scattered litter.
+	# stay flavor accents rather than dominating the floor.
 	"res://resources/decals/floor/scorch_marks.tres",
 	"res://resources/decals/floor/oil_stain_dry.tres",
 	"res://resources/decals/floor/dried_blood_old.tres",
 	"res://resources/decals/floor/broken_glass.tres",
+]
+
+# Stencil pool — kept separate from the random-scatter pool. Stencils
+# are intentional painted signage and need to be placed AT doorways,
+# axis-aligned, not scattered like litter. _place_stencils() runs after
+# scatter_decals and handles them with door-aware placement + yaw.
+const STENCIL_PATHS: Array[String] = [
 	"res://resources/decals/floor/floor_warning_radiation.tres",
 	"res://resources/decals/floor/floor_warning_slippery.tres",
 	"res://resources/decals/floor/floor_warning_biohazard.tres",
 ]
+# How far inside the room (from doorway, measured along inward normal)
+# the stencil sits. Far enough that the door frame doesn't crop it,
+# close enough that the player sees it on approach.
+const STENCIL_STANDOFF_M: float = 2.0
+# Per-opening odds of placing a stencil. Below 100% so the marking
+# reads as intentional but not blanket-applied to every door.
+const STENCIL_PLACE_CHANCE: float = 0.55
 
 # Tiny lift off the floor. Above the puddle layer (0.005), below the
 # LiquidLayer floor mesh (0.015) so blood pools render on top of litter.
@@ -91,6 +103,12 @@ static func scatter_decals(ctx: LevelBuildContext, center: Vector3, hx: float, h
 			continue
 		placed.append(pos)
 		_queue_decal(ctx, def, pos, i, rng)
+	# Door-aligned painted signage pass — distinct from the random
+	# scatter above. Stencils need an explicit position (centred on
+	# doorway, set back into the room) and an axis-aligned yaw so the
+	# symbol reads correctly on approach; the scatter path can't do
+	# either of those without contaminating the litter logic.
+	_place_stencils(ctx, center, hx, hz, rd, rng)
 
 
 # ── Placement ──────────────────────────────────────────────────────────────
@@ -142,6 +160,70 @@ static func _too_close(pos: Vector3, placed: Array[Vector3], min_spacing: float)
 		if pos.distance_to(p) < min_spacing:
 			return true
 	return false
+
+
+# Stencil placement — distinct from random litter scatter. Walks the
+# room's openings list and drops one painted sign per door (gated by
+# STENCIL_PLACE_CHANCE so not every door gets one). Position is set
+# back into the room from the doorway by STENCIL_STANDOFF_M; yaw is
+# axis-aligned so the symbol reads correctly when approaching from the
+# door direction. Pulls from the dedicated STENCIL_PATHS pool so the
+# litter weights don't dilute it.
+static func _place_stencils(ctx: LevelBuildContext, center: Vector3, hx: float, hz: float, rd: RoomDef, rng: RandomNumberGenerator) -> void:
+	if rd.openings.is_empty():
+		return
+	var stencils: Array[FloorDecalDef] = []
+	for path in STENCIL_PATHS:
+		if not ResourceLoader.exists(path):
+			continue
+		var d := load(path) as FloorDecalDef
+		if d != null:
+			stencils.append(d)
+	if stencils.is_empty():
+		return
+	var stamp_index := 0
+	for wall: RoomDef.Wall in rd.openings:
+		if rng.randf() > STENCIL_PLACE_CHANCE:
+			continue
+		var def := stencils[rng.randi() % stencils.size()]
+		var pos := Vector3.ZERO
+		# Yaw aligns the stencil so its texture's "up" points OUT of the
+		# room — i.e. the player walking in from the door sees the symbol
+		# right-side up. Yaw is measured CCW around +Y from the texture's
+		# default +Z forward.
+		var yaw := 0.0
+		match wall:
+			RoomDef.Wall.NORTH:
+				pos = Vector3(center.x, 0.0, center.z - hz + STENCIL_STANDOFF_M)
+				yaw = 0.0
+			RoomDef.Wall.SOUTH:
+				pos = Vector3(center.x, 0.0, center.z + hz - STENCIL_STANDOFF_M)
+				yaw = PI
+			RoomDef.Wall.EAST:
+				pos = Vector3(center.x + hx - STENCIL_STANDOFF_M, 0.0, center.z)
+				yaw = -PI * 0.5
+			RoomDef.Wall.WEST:
+				pos = Vector3(center.x - hx + STENCIL_STANDOFF_M, 0.0, center.z)
+				yaw = PI * 0.5
+		_queue_decal_at(ctx, def, pos, yaw, stamp_index, rng)
+		stamp_index += 1
+
+
+# Same shape as _queue_decal but accepts an explicit yaw, bypassing
+# random_yaw_range. Used by the stencil pass so signage stays
+# axis-aligned. aspect_jitter is still honoured because authored
+# stencil defs clamp it tight (≤0.05) — keeps painted signs square.
+static func _queue_decal_at(ctx: LevelBuildContext, def: FloorDecalDef, pos: Vector3, yaw: float, index: int, rng: RandomNumberGenerator) -> void:
+	var base_size := rng.randf_range(def.size_range.x, def.size_range.y)
+	var jitter := def.aspect_jitter
+	var size_x := base_size * (1.0 + rng.randf_range(-jitter, jitter))
+	var size_z := base_size * (1.0 + rng.randf_range(-jitter, jitter))
+	var y := FLOOR_DECAL_Y + float(index % 7) / 7.0 * Y_EPSILON
+	var basis := Basis(Vector3.UP, yaw).scaled(Vector3(size_x, 1.0, size_z))
+	var xform := Transform3D(basis, Vector3(pos.x, y, pos.z))
+	if not ctx.floor_decal_visuals.has(def):
+		ctx.floor_decal_visuals[def] = [] as Array[Transform3D]
+	(ctx.floor_decal_visuals[def] as Array[Transform3D]).append(xform)
 
 
 # Build a flat-quad transform (position + Y rotation + non-uniform scale) and
