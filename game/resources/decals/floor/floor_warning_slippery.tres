@@ -1,16 +1,16 @@
 [gd_resource type="Resource" script_class="FloorDecalDef" load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/items/floor_decal_def.gd" id="1_script"]
-[ext_resource type="Texture2D" path="res://assets/textures/decals/floor/paper_scatter_large.png" id="2_tex"]
+[ext_resource type="Texture2D" path="res://assets/textures/decals/floor/floor_warning_slippery.png" id="2_tex"]
 
 [resource]
 script = ExtResource("1_script")
-id = &"paper_scatter_large"
+id = &"floor_warning_slippery"
 albedo_texture = ExtResource("2_tex")
 normal_texture = null
-size_range = Vector2(4.0, 6.0)
-aspect_jitter = 0.25
-random_yaw_range = 3.14159
+size_range = Vector2(1.8, 2.5)
+aspect_jitter = 0.05
+random_yaw_range = 0.785398
 weight = 1
 min_spacing = 3.0
 prefer_wall = false

@@ -82,7 +82,8 @@ _None added from third-party sources yet. Player + enemy + drone use Quaternius
 | Asset | Source | License | Files | Status | Notes |
 |---|---|---|---|---|---|
 | Scattered papers (floor litter) | Midjourney (generated) | Midjourney ToS — verify paid-plan commercial terms | `game/assets/textures/decals/floor/paper_scatter.png` | ⚠️ | Top-down render, background alpha-keyed (warmth + border-connected component); drives `paper_scatter.tres` |
-| Construction debris (floor litter) | Midjourney (generated) | Midjourney ToS — verify paid-plan commercial terms | `game/assets/textures/decals/floor/debris_scatter.png` | ⚠️ | Top-down render, background alpha-keyed (brightness + border-connected component); drives `debris_scatter.tres`. `medwaste_scatter` still on procedural placeholder — no art yet |
+| Construction debris (floor litter) | Midjourney (generated) | Midjourney ToS — verify paid-plan commercial terms | `game/assets/textures/decals/floor/debris_scatter.png` | ⚠️ | Top-down render, background alpha-keyed (brightness + border-connected component); drives `debris_scatter.tres` |
+| Floor litter expansion pack (2026-06-09) | Midjourney (generated) | Midjourney ToS — verify paid-plan commercial terms | `game/assets/textures/decals/floor/{paper_scatter_large,debris_pile_large,medwaste_scatter,medwaste_scatter_large,scorch_marks,oil_stain_dry,dried_blood_old,broken_glass,floor_warning_radiation,floor_warning_slippery,floor_warning_biohazard}.png` | ⚠️ | 11 new decals. `paper_scatter_large` + `medwaste_scatter_large` are loose scatters (4-6m); `debris_pile_large` is a denser pile silhouette. `medwaste_scatter`, `scorch_marks`, `oil_stain_dry`, `dried_blood_old` ship on clean white backgrounds. `debris_pile_large`, `broken_glass`, and the three `floor_warning_*` stencils have concrete/tile backgrounds — need background removal pass before they read cleanly against in-game floor. |
 
 
 ## Audio — SFX (YouTube extracts)

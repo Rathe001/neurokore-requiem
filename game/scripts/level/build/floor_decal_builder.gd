@@ -17,16 +17,30 @@ class_name FloorDecalBuilder
 # nothing in exported Godot 4 builds (project_resource_loader_gotcha, bit us
 # 4 times). Add a path here when a new FloorDecalDef .tres is authored.
 const POOL_PATHS: Array[String] = [
+	# Small per-tile scatter — most common, weight 1-3
 	"res://resources/decals/floor/paper_scatter.tres",
 	"res://resources/decals/floor/debris_scatter.tres",
 	"res://resources/decals/floor/medwaste_scatter.tres",
 	# Multi-tile variants. Paper stays a loose scatter (just covering
 	# more area) so it reads as a wider abandoned mess, not a pile.
-	# Debris uses a denser pile silhouette by intent. Both run at
-	# weight=1 so the small versions still dominate; bigger min_spacing
+	# Debris uses a denser pile silhouette by intent. Medwaste large
+	# is a wide-area discarded spread (different art from the pile).
+	# All weight 1 so small versions still dominate; bigger min_spacing
 	# keeps multi-tile placements distinct from each other.
 	"res://resources/decals/floor/paper_scatter_large.tres",
 	"res://resources/decals/floor/debris_pile_large.tres",
+	"res://resources/decals/floor/medwaste_scatter_large.tres",
+	# Special-flavor decals — landed 2026-06-09. Lower weights so they
+	# stay flavor accents rather than dominating the floor. Stencils
+	# clamp aspect_jitter low + reduce yaw range so they read as
+	# painted signage rather than scattered litter.
+	"res://resources/decals/floor/scorch_marks.tres",
+	"res://resources/decals/floor/oil_stain_dry.tres",
+	"res://resources/decals/floor/dried_blood_old.tres",
+	"res://resources/decals/floor/broken_glass.tres",
+	"res://resources/decals/floor/floor_warning_radiation.tres",
+	"res://resources/decals/floor/floor_warning_slippery.tres",
+	"res://resources/decals/floor/floor_warning_biohazard.tres",
 ]
 
 # Tiny lift off the floor. Above the puddle layer (0.005), below the
