@@ -17,6 +17,7 @@
 - [Kit model axis conventions](project_kit_model_axis_conventions.md) — Blenderkit imports vary in which local axis is height; rotation chain in WallBuilder has to match per-model; watch for single-use scene-sets (e.g. wall+doorway combos) that aren't tileable
 - [Kit panel corner mitre](project_kit_panel_corner_mitre.md) — 45° INSTANCE_CUSTOM shader clip is built end-to-end (shader + post-import + MMI custom_data); dormant until a theme's wall_model points at a kit panel .glb
 - [Level system architecture roadmap](project_level_architecture.md) — 3 layers: modular builders (done), declarative graph (done), procgen (deferred); new levels should use LevelGraph not pieces[]
+- [Active level topology](project_active_level_topology.md) — fresh Play loads level_shell.tscn → dungeon_demo.tres (proto_grid_* rooms); procgen_demo/arena_hub/pit_gauntlet are NG+ rotation, NOT dead. Edit grid rooms to verify in-game
 - [Zone lighting profiles](project_lighting_profiles.md) — proximity dim / global light behavior should be driven by per-zone profiles, not hardcoded constants (outdoor ≠ indoor)
 - [Enemy navigation systems](project_enemy_navigation.md) — crouch tunnels, pit-pillar nav links, leash override; navmesh agent_height MUST stay synced with enemy CROUCH_HEIGHT
 - [Enemy state machine pattern](project_enemy_state_machine.md) — enum State with _change_state() helper; new behaviours extend the enum, never add flags

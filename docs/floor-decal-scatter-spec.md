@@ -92,8 +92,13 @@ A new `FloorDecalBuilder.commit_floor_decals(ctx)` — called alongside
   `PlaneMesh` 1×1 in XZ facing +Y, instance_count = transforms.size()).
 - a `MultiMeshInstance3D` with `material_override` = the def's material.
 - `cast_shadow = OFF`, `gi_mode = DISABLED`.
-- add to `ctx.root`, groups `structures` + `clutter` so the level-reset /
-  rebuild loop tears them down with everything else.
+- add to `ctx.root`, group `structures` (and **not** `clutter`) so the
+  level-reset / rebuild loop tears them down with everything else. The
+  `clutter` group is deliberately avoided: the LoS culler room-gates clutter
+  by `node.global_position`, but a whole-level batched MMI sits at the origin,
+  so it would resolve to the wrong room and fade to invisible. `structures`-
+  only matches the corridor-wall MMI path and stays always-drawn (cheap — see
+  the draw-call count below).
 
 One draw call per decal texture for the entire level. With the 3-item
 minimum set that's **3 extra draw calls, full stop**, regardless of how

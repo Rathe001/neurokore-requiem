@@ -155,8 +155,13 @@ static func commit_floor_decals(ctx: LevelBuildContext) -> void:
 		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		mmi.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
 		ctx.root.add_child(mmi)
+		# &"structures" ONLY — never &"clutter". This is one level-wide MMI per
+		# texture sitting at the origin; the LoS culler's clutter loop room-gates
+		# by node.global_position, which for an origin-anchored whole-level batch
+		# resolves to the wrong room and fades the whole thing to invisible.
+		# (Corridor-wall MMIs are &"structures"-only for the same reason.) Litter
+		# is 3 draw calls total, so always-drawn is the right trade anyway.
 		mmi.add_to_group(&"structures")
-		mmi.add_to_group(&"clutter")
 	ctx.floor_decal_visuals.clear()
 
 

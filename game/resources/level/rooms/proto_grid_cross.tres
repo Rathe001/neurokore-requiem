@@ -17,3 +17,4 @@ enemy_count = 2
 decorative_pillars = [Vector2(-2, -2), Vector2(2, -2), Vector2(-2, 2), Vector2(2, 2)]
 decorative_pillar_size = Vector2(0.8, 0.8)
 clutter_density = 2
+decal_density = 3
