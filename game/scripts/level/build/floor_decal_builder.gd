@@ -219,7 +219,14 @@ static func _get_material(def: FloorDecalDef) -> StandardMaterial3D:
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
 	mat.alpha_scissor_threshold = 0.4
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL  # stay lit
-	mat.roughness = 0.9
+	# Tone the decal albedo down ~60% so paper/debris/glass don't outshine
+	# the floor under the level's low ambient. StandardMaterial3D's
+	# default ambient term reads brighter than the floor procedural
+	# shader's, which made cream-white textures pop as if self-illuminated.
+	# Without this, real-paper-coloured decals (highly reflective in real
+	# life) look unshaded against the dim floor.
+	mat.albedo_color = Color(0.6, 0.6, 0.6, 1.0)
+	mat.roughness = 0.95
 	mat.metallic = 0.0
 	mat.cull_mode = BaseMaterial3D.CULL_BACK  # camera always above; one-sided up
 	if def.normal_texture != null:
