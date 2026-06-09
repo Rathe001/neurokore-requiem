@@ -20,12 +20,12 @@ const POOL_PATHS: Array[String] = [
 	"res://resources/decals/floor/paper_scatter.tres",
 	"res://resources/decals/floor/debris_scatter.tres",
 	"res://resources/decals/floor/medwaste_scatter.tres",
-	# Multi-tile pile variants. Same textures as the small scatter, just
-	# stretched to 3.5-6m so they read as a single accumulated drift
-	# instead of many small piles in a grid. Lower weight so they don't
-	# crowd out the small scatter; bigger min_spacing so heaps stay
-	# distinct from each other.
-	"res://resources/decals/floor/paper_pile_large.tres",
+	# Multi-tile variants. Paper stays a loose scatter (just covering
+	# more area) so it reads as a wider abandoned mess, not a pile.
+	# Debris uses a denser pile silhouette by intent. Both run at
+	# weight=1 so the small versions still dominate; bigger min_spacing
+	# keeps multi-tile placements distinct from each other.
+	"res://resources/decals/floor/paper_scatter_large.tres",
 	"res://resources/decals/floor/debris_pile_large.tres",
 ]
 
