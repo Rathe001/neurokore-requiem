@@ -387,10 +387,24 @@ const _MELEE_IMPACT_RATIO_PER_STEP: Dictionary = {
 	# Sync is preserved across weapon-speed rolls automatically because
 	# impact_time = swing_duration × ratio.
 	&"melee_1h": [0.35, 0.5, 0.5],
-	# Pulled all 3 steps ~0.08 earlier (was [0.4, 0.3, 0.3]) so the
-	# crater + damage land on the visible hammer impact frame instead
-	# of one beat after it.
-	&"melee_2h": [0.32, 0.22, 0.22],
+	# 2H sledgehammer: damage / VFX previously fired at 0.32-0.22 of
+	# the swing duration, which read as the crater appearing BEFORE
+	# the sledge head visibly reached the impact zone. Pushed to 0.5
+	# so the impact lands when the hammer has actually swept through.
+	# Pairs with the MELEE_2H_ANIM_SPEED_MULT below which compresses
+	# the swing into ~83% of its stretched duration so the visible
+	# follow-through doesn't drag past the damage tick.
+	&"melee_2h": [0.5, 0.5, 0.5],
+}
+
+# Multiplier on the duration passed to _play_anim_stretched for the
+# named weapon class. <1.0 = play the anim faster (compressed into
+# fewer seconds). melee_2h plays at 1/0.8 = 1.25× native rate so the
+# sledgehammer arc reads as the heavy-but-decisive swing the weapon
+# is supposed to feel like, rather than the over-stretched float that
+# main_interval alone produced at high attack_speed rolls.
+const _MELEE_ANIM_DURATION_MULT: Dictionary = {
+	&"melee_2h": 0.8,
 }
 
 
@@ -2770,8 +2784,17 @@ func _cast_lmb_combat() -> void:
 			# motion. main_interval is already computed for multi-arm
 			# stagger above; reuse it here as the animation duration.
 			var combo_step := peek_next_melee_combo_step(main_item)
-			if not _swing_overlay_if_moving(combo_step, main_interval):
-				_play_anim_stretched(XBotAnimations.combo_attack_anim_for_class(_equipped_weapon_class(), combo_step), main_interval)
+			# Compress the visual duration for weapon classes that read
+			# as over-stretched at standard main_interval. Sledgehammer's
+			# axe_swing in particular floats when stretched 1.3× past its
+			# native length; 0.8× brings it back to a snappy, committed
+			# swing while damage stays at impact_ratio × main_interval
+			# (damage timer is independent of anim duration).
+			var weapon_base_id: StringName = main_item.weapon_base_id if main_item != null else &""
+			var anim_duration_mult: float = _MELEE_ANIM_DURATION_MULT.get(weapon_base_id, 1.0)
+			var anim_duration: float = main_interval * anim_duration_mult
+			if not _swing_overlay_if_moving(combo_step, anim_duration):
+				_play_anim_stretched(XBotAnimations.combo_attack_anim_for_class(_equipped_weapon_class(), combo_step), anim_duration)
 			# Blade-only auto-lunge toward the closest enemy under the
 			# cursor — closes the gap so the player doesn't have to
 			# manually walk into range on every swing. main_atk_spd
@@ -4747,6 +4770,15 @@ func _pulse_fire_recoil() -> void:
 # full-body (planted legs read fine when you're standing still).
 func _swing_overlay_if_moving(combo_step: int, duration: float) -> bool:
 	if _want_dir.length_squared() <= 0.01:
+		return false
+	# 2H weapons (sledgehammer) commit to the swing — overlaying the
+	# axe_swing on the upper body while the legs locomote left the
+	# arc reading as a barely-perceptible shoulder rotation at iso
+	# camera distance. Fall through to the full-body planted swing so
+	# the hammer actually arcs across the screen; the legs picking the
+	# locomotion clip back up on the next tick keeps it from feeling
+	# like a hard move-lock.
+	if _equipped_weapon_class() == &"melee_2h":
 		return false
 	var modifier := _ensure_aim_modifier()
 	if modifier == null:
