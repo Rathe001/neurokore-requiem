@@ -2216,12 +2216,25 @@ func _physics_process(delta: float) -> void:
 			# Top-down: face the cursor while an attack input is held, otherwise
 			# face the direction the player is travelling. Smooth in both cases
 			# so direction changes have weight instead of snapping.
+			#
+			# Lock-target priority: if LMB was held down on an enemy
+			# (_update_lock_target captured the hovered enemy on press),
+			# face that enemy directly until the input is released — the
+			# cursor can drift off-target during the hold without breaking
+			# the bead. Lets the player track a moving target by holding
+			# fire rather than micro-aiming.
 			var aiming := _is_aim_input_held()
 			var target_dir := Vector3.ZERO
 			if aiming:
-				var offset := _cursor_offset()
-				if offset.length_squared() > 0.0001:
-					target_dir = offset.normalized()
+				if _lock_target != null and is_instance_valid(_lock_target):
+					var to_lock := _lock_target.global_position - global_position
+					to_lock.y = 0.0
+					if to_lock.length_squared() > 0.0001:
+						target_dir = to_lock.normalized()
+				if target_dir == Vector3.ZERO:
+					var offset := _cursor_offset()
+					if offset.length_squared() > 0.0001:
+						target_dir = offset.normalized()
 			elif _want_dir.length_squared() > 0.01:
 				target_dir = _want_dir
 			elif Vector2(velocity.x, velocity.z).length_squared() > FACE_BY_VELOCITY_MIN * FACE_BY_VELOCITY_MIN:
