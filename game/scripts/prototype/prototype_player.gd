@@ -387,14 +387,15 @@ const _MELEE_IMPACT_RATIO_PER_STEP: Dictionary = {
 	# Sync is preserved across weapon-speed rolls automatically because
 	# impact_time = swing_duration × ratio.
 	&"melee_1h": [0.35, 0.5, 0.5],
-	# 2H sledgehammer: damage / VFX previously fired at 0.32-0.22 of
-	# the swing duration, which read as the crater appearing BEFORE
-	# the sledge head visibly reached the impact zone. Pushed to 0.5
-	# so the impact lands when the hammer has actually swept through.
-	# Pairs with the MELEE_2H_ANIM_SPEED_MULT below which compresses
-	# the swing into ~83% of its stretched duration so the visible
-	# follow-through doesn't drag past the damage tick.
-	&"melee_2h": [0.5, 0.5, 0.5],
+	# 2H sledgehammer: tuned to land just AFTER the visible contact
+	# frame. axe_swing's native impact is ~40% of the clip; with the
+	# 0.8 duration multiplier below, visual contact lands at 0.32 of
+	# main_interval (0.4 × 0.8). 0.35 puts the damage tick a beat
+	# after the sledge sweeps through — VFX trails the hammer rather
+	# than firing before / on top of it. Damage timer is independent
+	# of anim duration so this stays correct regardless of player
+	# attack_speed roll.
+	&"melee_2h": [0.35, 0.35, 0.35],
 }
 
 # Multiplier on the duration passed to _play_anim_stretched for the
@@ -4770,15 +4771,6 @@ func _pulse_fire_recoil() -> void:
 # full-body (planted legs read fine when you're standing still).
 func _swing_overlay_if_moving(combo_step: int, duration: float) -> bool:
 	if _want_dir.length_squared() <= 0.01:
-		return false
-	# 2H weapons (sledgehammer) commit to the swing — overlaying the
-	# axe_swing on the upper body while the legs locomote left the
-	# arc reading as a barely-perceptible shoulder rotation at iso
-	# camera distance. Fall through to the full-body planted swing so
-	# the hammer actually arcs across the screen; the legs picking the
-	# locomotion clip back up on the next tick keeps it from feeling
-	# like a hard move-lock.
-	if _equipped_weapon_class() == &"melee_2h":
 		return false
 	var modifier := _ensure_aim_modifier()
 	if modifier == null:
