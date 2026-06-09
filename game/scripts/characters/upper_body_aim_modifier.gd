@@ -136,7 +136,14 @@ func tick(delta: float, aiming: bool) -> void:
 	_target = 1.0 if aiming else 0.0
 	_weight = move_toward(_weight, _target, delta / maxf(ramp_time, 0.001))
 	if aiming and _clip_len > 0.0:
-		_recoil_time = fmod(_recoil_time + delta * recoil_speed, _clip_len)
+		# Clamp to clip end instead of wrapping. The fire clip plays
+		# once per pulse_recoil() (which fires on every shot event),
+		# then holds at its end frame until the next pulse — so slow-
+		# firing weapons (plasma rifle, shotgun) don't cycle a fresh
+		# recoil swing between shots. Fast weapons (LMG, SMG) still
+		# read correctly because their fire rate restarts the clock
+		# before clip_len is reached, so the clamp never engages.
+		_recoil_time = minf(_recoil_time + delta * recoil_speed, _clip_len)
 
 
 ## Start a one-shot upper-body overlay (melee swing, reload, etc.): play
