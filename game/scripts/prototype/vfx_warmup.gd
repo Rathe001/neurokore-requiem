@@ -51,6 +51,17 @@ const _COMBAT_SHADERS: Array[String] = [
 	# whenever the player hovers an enemy or stands near an interactable
 	# — every hover after the first is hitch-free thanks to this.
 	"res://scripts/prototype/outline_hull.gdshader",
+	# Liquid layer shaders — floor pools + wall splatters. First
+	# stamp of each compiles the shader on the renderer thread; warming
+	# here keeps the first kill / first wall hit hitch-free. The
+	# sampler uniforms use hint_default_* so the compile pass works
+	# without binding real mask textures.
+	"res://shaders/liquid_surface.gdshader",
+	"res://shaders/wall_blood_overlay.gdshader",
+	# Explosion sprite-flipbook particle shader — first grenade /
+	# explosion-death used to stall while this compiled. .tres-wrapped
+	# Shader resource; load() returns the Shader same as a .gdshader.
+	"res://assets/vfx/explosion/ExplosionShader.tres",
 ]
 
 # Anchor 500m below the playable map so the warmup quads can't possibly
@@ -123,6 +134,12 @@ static func warmup(parent: Node) -> void:
 		# transparent without emission. Cheap to add; covers any UI/VFX
 		# that doesn't need emission.
 		{&"unshaded": true, &"transparent": true, &"emission": false},
+		# Projectile glow material (prototype_projectile.tscn) — unshaded
+		# + emission, OPAQUE (no transparency flag). Without this variant
+		# the first projectile of the session compiled on the renderer
+		# thread mid-flight; the transparent variants above didn't cover
+		# it because Godot keys variants on the transparency mode.
+		{&"unshaded": true, &"transparent": false, &"emission": true},
 	]
 	for spec in standard_variants:
 		var sm := StandardMaterial3D.new()

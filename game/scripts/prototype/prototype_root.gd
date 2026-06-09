@@ -2,6 +2,13 @@ extends Node3D
 class_name PrototypeRoot
 
 const ENEMY_SCENE: PackedScene = preload("res://scenes/prototype/prototype_enemy.tscn")
+# Projectile scene used by every ranged weapon. Pre-pooled below
+# alongside enemies so the first shot doesn't pay an instantiate cost.
+# PROJECTILE_WARMUP_COUNT is sized for a clip's worth of in-flight rounds
+# at any one time — overshooting just stores idle nodes in the pool,
+# undershooting falls back to runtime instantiate on extra rounds.
+const PROJECTILE_SCENE: PackedScene = preload("res://scenes/prototype/prototype_projectile.tscn")
+const PROJECTILE_WARMUP_COUNT := 30
 
 const SPAWN_BATCH := 25
 const MAX_CORPSES := 100
@@ -52,6 +59,7 @@ func _ready() -> void:
 	# in res://resources/audio/ambient/.
 	Ambient.play_floor_track(PlayerState.new_game_plus)
 	EntityPool.warmup(ENEMY_SCENE, SPAWN_BATCH)
+	EntityPool.warmup(PROJECTILE_SCENE, PROJECTILE_WARMUP_COUNT)
 	# NG+ layout on load: LevelBuilder already built with the scene's default
 	# layout in its own _ready (fires before ours — bottom-up). If the save
 	# has NG+ > 0, swap to the correct pool layout and rebuild so the player
