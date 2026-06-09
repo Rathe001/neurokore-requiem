@@ -55,13 +55,13 @@ func _ready() -> void:
 	add_to_group(&"corpse_manager")
 	add_to_group(&"level_reset_handler")
 	get_viewport().physics_object_picking = true
-	# Catch every mesh as it enters the tree — covers the streaming
-	# build window (LevelBuilder yields between piece batches and the
-	# RenderingServer can see un-materialized surfaces in the
-	# intervening frames) and any dynamic spawns after load. Connect
-	# BEFORE the await await_built() below so streamed pieces don't
-	# slip through.
-	get_tree().node_added.connect(XBotRagdoll.ensure_surface_materials_single)
+	# Per-mesh material patching is handled by the MaterialGuard
+	# autoload — it connects scene_tree.node_added from its own
+	# _ready, which runs before any main-scene node enters the tree,
+	# so streaming-build pieces AND level_shell's initial children
+	# both get covered. This file only keeps the post-build and
+	# post-warmup batched passes below as safety nets for nodes that
+	# might somehow slip past the live signal.
 	# Level BGM — cycles through 5 tracks keyed off PlayerState.new_game_plus
 	# so successive NG+ runs hear different music. Music autoload handles
 	# the modulo wrap, plays with a 30s silent gap before re-looping.

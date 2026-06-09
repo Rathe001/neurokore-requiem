@@ -31,6 +31,7 @@ buses/default_bus_layout="uid://dlil4mard06e"
 [autoload]
 
 BuildInfo="*res://scripts/systems/build_info.gd"
+MaterialGuard="*res://scripts/systems/material_guard.gd"
 SteamState="*res://scripts/systems/steam_state.gd"
 NetState="*res://scripts/systems/net_state.gd"
 GlobalChatState="*res://scripts/systems/global_chat_state.gd"
