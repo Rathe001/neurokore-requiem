@@ -519,67 +519,23 @@ static func _is_lower_body_bone(bone: String) -> bool:
 	return false
 
 
-# Spine is the single upper-body child of Hips in the Mixamo rig. Counter-
-# rotating Spine cancels Hips' new rotation for every bone above it
-# (Spine1/Spine2/Neck/Head + both arm chains all inherit Spine's frame).
-static func _is_spine_bone(bone: String) -> bool:
-	return bone == "mixamorig_Spine" or bone == "Spine"
-
-
-# Find a Hips rotation track and return parallel arrays of keyframe
-# times + the ORIGINAL (un-mirrored) rotations. Used by the spine
-# compensation pass below — we have to snapshot the originals BEFORE
-# the mirror pass overwrites them.
-static func _snapshot_hips_rotations(anim: Animation) -> Dictionary:
-	var times: PackedFloat32Array = PackedFloat32Array()
-	var rots: Array = []
-	for i in range(anim.get_track_count()):
-		var path_str: String = String(anim.track_get_path(i))
-		var ci: int = path_str.rfind(":")
-		var bone: String = path_str.substr(ci + 1) if ci >= 0 else ""
-		if not bone.contains("Hips"):
-			continue
-		if anim.track_get_type(i) != Animation.TYPE_ROTATION_3D:
-			continue
-		for k in range(anim.track_get_key_count(i)):
-			times.append(anim.track_get_key_time(i, k))
-			rots.append(anim.track_get_key_value(i, k))
-		break
-	return {"times": times, "rots": rots}
-
-
-# Sample the Hips rotation at an arbitrary time by interpolating between
-# adjacent keyframes. Used per-Spine-keyframe so Spine's compensation
-# rotation matches Hips' rotation at the same exact time.
-static func _sample_hips_at(snapshot: Dictionary, t: float) -> Quaternion:
-	var times: PackedFloat32Array = snapshot["times"]
-	var rots: Array = snapshot["rots"]
-	if rots.is_empty():
-		return Quaternion.IDENTITY
-	if times.size() == 1 or t <= times[0]:
-		return rots[0]
-	if t >= times[times.size() - 1]:
-		return rots[rots.size() - 1]
-	for i in range(times.size() - 1):
-		if t >= times[i] and t <= times[i + 1]:
-			var span: float = times[i + 1] - times[i]
-			var alpha: float = (t - times[i]) / span if span > 0.0 else 0.0
-			return (rots[i] as Quaternion).slerp(rots[i + 1] as Quaternion, alpha)
-	return rots[rots.size() - 1]
-
-
-# Reflect an animation across the X=0 plane in place. Three passes:
-#   1. Snapshot Hips' original rotations (needed for pass 3).
-#   2. Mirror Hips + leg tracks — swap L/R, negate position X, flip Y/Z
-#      of rotations.
-#   3. Counter-rotate the Spine track so Hips' new rotation doesn't
-#      propagate to the upper-body chain in world space.
-# Net result: legs sidestep the inverse direction, hips lean inverse,
-# upper body (spine → arms / head) stays facing where the source
-# clip aimed.
+# Reflect an animation across the X=0 plane in place.
+#
+# Standard mirror is Quaternion(x, -y, -z, w) — flips yaw (Y) and roll
+# (Z), preserves pitch (X). That's correct for the LEG bones: a strafe-
+# right step needs its yaw + roll inverted to read as a strafe-left
+# step. For HIPS however, flipping Y rotates the entire skeleton
+# (including the upper body) in world space, which propagates the
+# 90°-ish facing change through the bone hierarchy to the gun barrel.
+# The UpperBodyAimModifier overrides Spine locals each tick while
+# firing, so even an explicit Spine compensation pass gets stomped.
+#
+# Solution: don't touch Hips' yaw. Mirror only its ROLL (z component)
+# so the strafe-left clip inherits the inverted lean from the source
+# clip but the body keeps facing the same direction. The result on
+# the upper body is at most a small left/right tilt — projectiles
+# still come out of the muzzle facing forward.
 static func _mirror_animation_x(anim: Animation) -> void:
-	var hips_snapshot: Dictionary = _snapshot_hips_rotations(anim)
-	# Pass 2: mirror Hips + legs.
 	for i in range(anim.get_track_count()):
 		var path_str: String = String(anim.track_get_path(i))
 		var ci: int = path_str.rfind(":")
@@ -590,34 +546,18 @@ static func _mirror_animation_x(anim: Animation) -> void:
 		if ci >= 0 and swapped != bone:
 			anim.track_set_path(i, NodePath(path_str.substr(0, ci) + ":" + swapped))
 		var t: int = anim.track_get_type(i)
+		var is_hips: bool = bone.contains("Hips")
 		for k in range(anim.track_get_key_count(i)):
 			var v: Variant = anim.track_get_key_value(i, k)
 			if t == Animation.TYPE_POSITION_3D:
 				anim.track_set_key_value(i, k, Vector3(-v.x, v.y, v.z))
 			elif t == Animation.TYPE_ROTATION_3D:
-				anim.track_set_key_value(i, k, Quaternion(v.x, -v.y, -v.z, v.w))
-	# Pass 3: Spine compensation. For each Spine keyframe at time T:
-	#   compensation = Hips_mirrored(T)^-1 * Hips_original(T)
-	#   spine_local_new = compensation * spine_local_old
-	# Multiplying by compensation undoes Hips' world-space rotation
-	# change for everything above Spine.
-	if hips_snapshot["rots"].is_empty():
-		return
-	for i in range(anim.get_track_count()):
-		var path_str_b: String = String(anim.track_get_path(i))
-		var ci_b: int = path_str_b.rfind(":")
-		var bone_b: String = path_str_b.substr(ci_b + 1) if ci_b >= 0 else ""
-		if not _is_spine_bone(bone_b):
-			continue
-		if anim.track_get_type(i) != Animation.TYPE_ROTATION_3D:
-			continue
-		for k in range(anim.track_get_key_count(i)):
-			var key_time: float = anim.track_get_key_time(i, k)
-			var q_old: Quaternion = _sample_hips_at(hips_snapshot, key_time)
-			var q_new: Quaternion = Quaternion(q_old.x, -q_old.y, -q_old.z, q_old.w)
-			var compensation: Quaternion = q_new.inverse() * q_old
-			var r_old: Quaternion = anim.track_get_key_value(i, k)
-			anim.track_set_key_value(i, k, compensation * r_old)
+				if is_hips:
+					# Preserve yaw (y) so body facing doesn't flip; mirror
+					# roll (z) so the lean inverts.
+					anim.track_set_key_value(i, k, Quaternion(v.x, v.y, -v.z, v.w))
+				else:
+					anim.track_set_key_value(i, k, Quaternion(v.x, -v.y, -v.z, v.w))
 
 
 # Swap "Left"<->"Right" in a bone name (Mixamo names carry exactly one).
