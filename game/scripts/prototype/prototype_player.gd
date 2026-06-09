@@ -4118,13 +4118,23 @@ func _update_lock_target() -> void:
 	if _fps_mode:
 		_lock_target = null
 		return
-	if not Input.is_action_pressed(SKILL_INPUTS[0]):
+	# Either fire button keeps the lock alive. Lets the player paint a
+	# target with RMB (laser sight / aim hold) instead of having to
+	# commit to LMB damage to maintain the bead.
+	var fire_held: bool = Input.is_action_pressed(SKILL_INPUTS[0])
+	var alt_fire_held: bool = Input.is_action_pressed(SKILL_INPUTS[1])
+	if not (fire_held or alt_fire_held):
 		_lock_target = null
 		return
 	if _lock_target != null:
 		if not is_instance_valid(_lock_target) or not _lock_target.is_in_group(&"enemies"):
 			_lock_target = null
-	if _lock_target == null and Input.is_action_just_pressed(SKILL_INPUTS[0]):
+	# Acquire on the first press of EITHER button, as long as no lock
+	# is held already. If the player presses RMB to paint, then taps
+	# LMB to fire, the RMB-acquired target stays — neither press steals
+	# from the other once locked.
+	var just_acquired: bool = Input.is_action_just_pressed(SKILL_INPUTS[0]) or Input.is_action_just_pressed(SKILL_INPUTS[1])
+	if _lock_target == null and just_acquired:
 		for n in get_tree().get_nodes_in_group(&"tooltip_target"):
 			if not is_instance_valid(n):
 				continue
