@@ -179,8 +179,16 @@ const FACE_BY_VELOCITY_MIN := 0.5
 # at a brisk cadence matched to ~6 m/s travel, so the old 1.8 (tuned for the
 # slower Quaternius Jog_Fwd) made feet shuffle visibly. Sprint still ramps
 # via SPRINT_SPEED_FACTOR on top of this base.
-const RUN_ANIM_SPEED_MIN := 0.6
+const RUN_ANIM_SPEED_MIN := 0.4
 const RUN_ANIM_SPEED_MAX := 2.0
+
+# Final multiplier on the computed playback rate (actual / authored).
+# Single knob to dial overall locomotion-anim tempo — lower reads as
+# slower / more deliberate legs at every travel speed, higher reads as
+# more frantic. Adjust this rather than the per-clip authored values
+# when you want a global feel change; tune _CLIP_AUTHORED_SPEED entries
+# only when ONE clip's feet specifically drift relative to the rest.
+const LOCOMOTION_ANIM_SPEED_FACTOR: float = 0.65
 
 # Each locomotion clip's authored ground-travel rate in m/s. The picker
 # divides actual horizontal velocity by this number to get the
@@ -4948,7 +4956,7 @@ func _play_anim_with_synced_speed(candidates: Array[StringName], actual_speed: f
 	if primary == &"" and not candidates.is_empty():
 		primary = candidates[0]
 	var authored: float = _CLIP_AUTHORED_SPEED.get(primary, maxf(move_speed, 0.01))
-	var rate: float = actual_speed / maxf(authored, 0.01)
+	var rate: float = (actual_speed / maxf(authored, 0.01)) * LOCOMOTION_ANIM_SPEED_FACTOR
 	# Pass the rate as _play_anim's `speed` arg — it sets speed_scale =
 	# absf(speed) every call, so setting speed_scale here and then calling
 	# _play_anim(... 1.0 ...) would just get clobbered back to 1.0.
