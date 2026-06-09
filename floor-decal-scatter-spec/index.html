@@ -1,0 +1,1897 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Game Design Document">
+      
+      
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Floor Decal Scatter — Spec - Neurokore: Requiem</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="teal" data-md-color-accent="pink">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#floor-decal-scatter-spec" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Neurokore: Requiem" class="md-header__button md-logo" aria-label="Neurokore: Requiem" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Neurokore: Requiem
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Floor Decal Scatter — Spec
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Rathe001/neurokore-requiem" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Rathe001/neurokore-requiem
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../index.md" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../world/tone.md" class="md-tabs__link">
+          
+  
+  
+  World
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../design/attribute-system.md" class="md-tabs__link">
+          
+  
+  
+  Design
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../classes/overview.md" class="md-tabs__link">
+          
+  
+  
+  Classes
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../status.md" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Status
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Neurokore: Requiem" class="md-nav__button md-logo" aria-label="Neurokore: Requiem" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Neurokore: Requiem
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Rathe001/neurokore-requiem" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Rathe001/neurokore-requiem
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../index.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    World
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    World
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../world/tone.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tone & Setting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../world/art-style.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Art Style
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../world/level-design.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Level Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../world/lighting.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lighting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Design
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/attribute-system.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Attribute System
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/combat.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Combat & Scale
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/controls.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Controls
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/coding-conventions.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coding Conventions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/dialog-ui.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dialog & UI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/morality-system.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Morality System
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/skill-tree.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Skill Tree
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/starting-zones.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Starting Zones
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/tech-stack.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tech Stack
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/zones.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Zones
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/platform.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Platform & Performance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/inspirations.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inspirations & References
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Classes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Classes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../classes/overview.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_2" id="__nav_4_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cyborg
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Cyborg
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../classes/cyborg.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Base Class
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../classes/cyborg/forged.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Forged
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../classes/cyborg/automaton.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automaton
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../classes/cyborg/polymath.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Polymath
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_3" id="__nav_4_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Human
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Human
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../classes/human.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Base Class
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../classes/human/survivalist.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Survivalist
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../classes/human/gentleman.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gentleman / Lady
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../classes/human/enculted.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Enculted
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../classes/spec-monsters.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class Monster Variants
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../status.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Status
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#goal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Goal
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-counts-as-a-floor-decal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What counts as a floor decal
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#approach-decision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Approach decision
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Architecture
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#new-builder-floordecalbuilder-static-refcounted" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        New builder: FloorDecalBuilder (static, RefCounted)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#commit-one-mmi-per-decal-texture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Commit: one MMI per decal texture
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#data-model-floordecaldef-resource" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Data model: FloorDecalDef Resource
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#material-per-def" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Material per def
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pool-loading-explicit-file-list-not-directory-enumeration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pool loading — explicit file list, NOT directory enumeration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#roomdef-field" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RoomDef field
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#z-fighting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Z-fighting
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#interaction-with-the-liquidlayer-blood" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Interaction with the LiquidLayer (blood)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#multiplayer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multiplayer
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#asset-pipeline-the-3-minimum-decals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Asset pipeline (the 3 minimum decals)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phasing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phasing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#files-touched-p1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Files touched (P1)
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="floor-decal-scatter-spec">Floor Decal Scatter — Spec<a class="headerlink" href="#floor-decal-scatter-spec" title="Permanent link">&para;</a></h1>
+<p>Status: <strong>proposed</strong> (not yet implemented). Author target: pre-release
+backlog #4 (clutter), flat-litter half.</p>
+<h2 id="goal">Goal<a class="headerlink" href="#goal" title="Permanent link">&para;</a></h2>
+<p>Scatter flat, collision-free litter across procgen room floors — scattered
+papers, debris, medical waste — to sell "this place was abandoned/ransacked"
+and reinforce the lab-horror tone, at near-zero runtime cost.</p>
+<p>This is the <strong>decal</strong> half of clutter. The <strong>prop</strong> half (3D meshy items
+with footprints + collision) stays in <code>ClutterBuilder</code> / <code>ClutterPropDef</code>.
+The split is deliberate: a thing that is genuinely <em>flat</em> should never be a
+<code>StaticBody3D</code> with a collision shape — it's wasted nodes, wasted physics,
+and a snag hazard for the player. See the dropped-weapon walk-through fix
+for the same principle.</p>
+<h2 id="what-counts-as-a-floor-decal">What counts as a floor decal<a class="headerlink" href="#what-counts-as-a-floor-decal" title="Permanent link">&para;</a></h2>
+<p>Flat, lies on the ground, no silhouette to shoot over or path around:
+- scattered papers / documents
+- debris (glass + rubble + litter)
+- medical waste (syringes, gauze, gloves)
+- (future) scorch marks, oil streaks, drag marks not covered by LiquidLayer</p>
+<p>If an item has real height (cable coil, bucket, stool) it's a <strong>prop</strong>, not a
+decal — it goes through <code>ClutterPropDef</code>.</p>
+<h2 id="approach-decision">Approach decision<a class="headerlink" href="#approach-decision" title="Permanent link">&para;</a></h2>
+<p>Three candidates were considered:</p>
+<ol>
+<li>
+<p><strong>Decal3D projector nodes</strong> — Godot's real decals. Project correctly, no
+   z-fighting, but each is rendered per-frame and they share a global decal
+   budget. Hundreds across a 25–40 room level blows that budget. Rejected.</p>
+</li>
+<li>
+<p><strong>SubViewport bake</strong> (like <code>LiquidLayer</code>) — bake all decals into one
+   floor-spanning texture, sample via a shader. Zero per-frame cost after
+   bake, but costs a 16–64 MB render target and a second floor-mesh draw,
+   and the art is authored cut-out sprites, not procedural blobs — the
+   SubViewport accumulation buys us nothing because placement is static at
+   build time. Over-engineered for static litter. Rejected.</p>
+</li>
+<li>
+<p><strong>MultiMesh flat quads</strong> ✅ — one <code>MultiMeshInstance3D</code> per decal texture
+   for the whole level; each instance is a unit <code>PlaneMesh</code> with its own
+   transform (position, yaw, scale). One draw call per texture type, no
+   collision, no per-frame logic, arbitrary density. This is the same
+   batching the level builder already uses for corridor walls
+   (<code>ctx.corridor_wall_visuals</code> → <code>commit_batched_mmi</code>). <strong>Chosen.</strong></p>
+</li>
+</ol>
+<h2 id="architecture">Architecture<a class="headerlink" href="#architecture" title="Permanent link">&para;</a></h2>
+<h3 id="new-builder-floordecalbuilder-static-refcounted">New builder: <code>FloorDecalBuilder</code> (static, RefCounted)<a class="headerlink" href="#new-builder-floordecalbuilder-static-refcounted" title="Permanent link">&para;</a></h3>
+<p><code>game/scripts/level/build/floor_decal_builder.gd</code>. Mirrors <code>DecalBuilder</code>
+and <code>ClutterBuilder</code> exactly — stateless static methods, deterministic RNG
+seeded by room id, wall margin, opening avoidance.</p>
+<div class="highlight"><pre><span></span><code>static func scatter_decals(ctx, center, hx, hz, rd, room_id := &amp;&quot;&quot;) -&gt; void
+</code></pre></div>
+<p>Called from <code>level_builder.gd</code> right after <code>ClutterBuilder.scatter_clutter</code>
+(around line 447), so litter lands after props are placed and can be told to
+avoid their footprints in a later pass (v2; v1 ignores props — papers under a
+filing cabinet edge is fine).</p>
+<p>Per room:
+1. Gate on <code>rd.decal_density &lt;= 0</code> (new RoomDef field — see below).
+2. Seed an RNG from <code>room_id</code> (reuse the <code>_hash_id</code> string-hash from
+   ClutterBuilder so re-entering a room is stable).
+3. <code>decal_density * N</code> placement attempts. For each:
+   - pick a position via the <code>_pick_position</code> margin/opening logic (litter
+     can sit closer to walls than props — use a smaller margin, ~0.6m).
+   - weighted-pick a <code>FloorDecalDef</code> from the pool.
+   - build a <code>Transform3D</code>: translate to <code>center + (px, y, pz)</code>, rotate
+     <code>random_yaw_range</code> around Y, uniform-scale from <code>size_range</code>.
+   - the Y is <code>FLOOR_DECAL_Y + small per-instance epsilon</code> (see z-fighting).
+   - <strong>append the transform to a per-def accumulator on <code>ctx</code></strong> —
+     <code>ctx.floor_decal_visuals</code> keyed by <code>FloorDecalDef</code> → <code>Array[Transform3D]</code>.</p>
+<p>Unlike puddles, decals do NOT commit per-room. They accumulate across the
+whole level and commit once, exactly like <code>corridor_wall_visuals</code>.</p>
+<h3 id="commit-one-mmi-per-decal-texture">Commit: one MMI per decal texture<a class="headerlink" href="#commit-one-mmi-per-decal-texture" title="Permanent link">&para;</a></h3>
+<p>A new <code>FloorDecalBuilder.commit_floor_decals(ctx)</code> — called alongside
+<code>WallBuilder.commit_batched_mmi(_ctx)</code> at <code>level_builder.gd:252</code> — walks
+<code>ctx.floor_decal_visuals</code> and, per def, builds:
+- a <code>MultiMesh</code> (transform_format = TRANSFORM_3D, mesh = shared unit
+  <code>PlaneMesh</code> 1×1 in XZ facing +Y, instance_count = transforms.size()).
+- a <code>MultiMeshInstance3D</code> with <code>material_override</code> = the def's material.
+- <code>cast_shadow = OFF</code>, <code>gi_mode = DISABLED</code>.
+- add to <code>ctx.root</code>, group <code>structures</code> (and <strong>not</strong> <code>clutter</code>) so the
+  level-reset / rebuild loop tears them down with everything else. The
+  <code>clutter</code> group is deliberately avoided: the LoS culler room-gates clutter
+  by <code>node.global_position</code>, but a whole-level batched MMI sits at the origin,
+  so it would resolve to the wrong room and fade to invisible. <code>structures</code>-
+  only matches the corridor-wall MMI path and stays always-drawn (cheap — see
+  the draw-call count below).</p>
+<p>One draw call per decal texture for the entire level. With the 3-item
+minimum set that's <strong>3 extra draw calls, full stop</strong>, regardless of how
+dense the litter is.</p>
+<h3 id="data-model-floordecaldef-resource">Data model: <code>FloorDecalDef</code> Resource<a class="headerlink" href="#data-model-floordecaldef-resource" title="Permanent link">&para;</a></h3>
+<p><code>game/scripts/items/floor_decal_def.gd</code>, <code>class_name FloorDecalDef</code>.
+One <code>.tres</code> per decal texture under <code>res://resources/decals/floor/</code>.</p>
+<div class="highlight"><pre><span></span><code>@export var id: StringName
+@export var albedo_texture: Texture2D     # MJ cutout PNG, alpha background
+@export var normal_texture: Texture2D     # optional; null = flat normal
+@export var size_range: Vector2 = Vector2(0.8, 1.4)   # world metres, min/max
+@export var aspect_jitter: float = 0.15   # per-instance non-uniform stretch
+@export var random_yaw_range: float = PI  # full 360 by default
+@export var weight: int = 2
+@export var min_spacing: float = 0.4      # avoid stacking identical sprites
+@export var prefer_wall: bool = false     # v2 placement hint
+</code></pre></div>
+<p>Authoring is inspector-only, same workflow as <code>ClutterPropDef</code> — duplicate a
+<code>_TEMPLATE.tres</code>, drag the texture in, set the fields.</p>
+<h3 id="material-per-def">Material per def<a class="headerlink" href="#material-per-def" title="Permanent link">&para;</a></h3>
+<p><code>StandardMaterial3D</code>:
+- <code>albedo_texture</code> = def.albedo_texture
+- <code>transparency = TRANSPARENCY_ALPHA_SCISSOR</code> (writes depth → sorts via the
+  depth buffer, no transparency-sort artifacts when decals overlap; hard
+  edge is fine for litter). Blend (<code>TRANSPARENCY_ALPHA</code>) is the alt if soft
+  edges matter, but then overlapping decals need the Y-stagger to sort.
+- <code>alpha_scissor_threshold ≈ 0.4</code>
+- <code>shading_mode = PER_PIXEL</code> (stay lit — neon and room fluorescents should
+  fall on the litter like everything else)
+- <code>roughness ≈ 0.9</code>, <code>metallic = 0.0</code>
+- <code>cull_mode = BACK</code> (camera is always above; single-sided up is fine)
+- normal_texture wired if present.</p>
+<p>Cache materials per def (build once, reuse) — same instinct as the texture
+cache in ClutterBuilder.</p>
+<h3 id="pool-loading-explicit-file-list-not-directory-enumeration">Pool loading — explicit file list, NOT directory enumeration<a class="headerlink" href="#pool-loading-explicit-file-list-not-directory-enumeration" title="Permanent link">&para;</a></h3>
+<p><strong>Critical:</strong> load the pool via an explicit array of paths +
+<code>ResourceLoader.exists()</code>, never <code>DirAccess</code> enumeration over <code>res://</code>. That
+silently returns nothing in exported Godot 4 builds and has bitten this
+project four times. See <code>project_resource_loader_gotcha</code>. The pool list can
+live as a <code>const</code> array of paths in <code>FloorDecalBuilder</code>, or as a per-theme
+<code>floor_decal_pool: Array[FloorDecalDef]</code> on <code>LevelTheme</code> (preferred for
+zone variation later — lab rooms pull medical waste, offices pull papers).</p>
+<h3 id="roomdef-field">RoomDef field<a class="headerlink" href="#roomdef-field" title="Permanent link">&para;</a></h3>
+<p>Add <code>@export var decal_density: int = 0</code> to <code>RoomDef</code>, in the same group as
+<code>clutter_density</code> / <code>puddle_count</code>. Default 0 (opt-in) or a small default
+like 2 once we trust it. Tuned per RoomDef template.</p>
+<h2 id="z-fighting">Z-fighting<a class="headerlink" href="#z-fighting" title="Permanent link">&para;</a></h2>
+<p>Two surfaces to not fight:
+- <strong>the floor</strong> — lift decals to <code>FLOOR_DECAL_Y = 0.006</code> (just above the
+  puddle layer's 0.005, below the LiquidLayer floor mesh at 0.015).
+- <strong>each other</strong> — give each instance a tiny per-instance Y epsilon
+  (<code>0.000 .. 0.004</code>, e.g. derived from the placement index) so two
+  overlapping papers don't share an exact plane. With ALPHA_SCISSOR depth
+  writes, even a sub-mm stagger resolves the sort.</p>
+<h2 id="interaction-with-the-liquidlayer-blood">Interaction with the LiquidLayer (blood)<a class="headerlink" href="#interaction-with-the-liquidlayer-blood" title="Permanent link">&para;</a></h2>
+<p>The LiquidLayer floor mesh sits at y=0.015 with <code>render_priority = -10</code>
+(draws first, blend). Floor decals at y≈0.006 with default priority draw
+<em>after</em> → litter would paint over blood pools. If blood-over-paper reads
+better (it does — blood pools on top of scattered papers), set the decal
+material <code>render_priority = -11</code> so it draws before the liquid. Flagged as a
+tuning detail, not a blocker; pick whichever looks right in-engine.</p>
+<h2 id="multiplayer">Multiplayer<a class="headerlink" href="#multiplayer" title="Permanent link">&para;</a></h2>
+<p>Purely cosmetic and <strong>deterministic</strong> from the per-room seed → host and
+every client build byte-identical litter with zero replication. Do NOT route
+these through any <code>MultiplayerSpawner</code>. This sidesteps the
+phantom-damage-style desync gap entirely (cf. the enemy-projectile
+replication note) because there's no gameplay state to sync — it's set
+dressing both sides compute independently.</p>
+<h2 id="asset-pipeline-the-3-minimum-decals">Asset pipeline (the 3 minimum decals)<a class="headerlink" href="#asset-pipeline-the-3-minimum-decals" title="Permanent link">&para;</a></h2>
+<p>MJ prompts already drafted (2026-06-06 conversation):
+1. <code>paper_scatter</code> — scattered papers / redacted files
+2. <code>debris_scatter</code> — glass + rubble + litter
+3. <code>medwaste_scatter</code> — syringes, gauze, gloves</p>
+<p>For each:
+1. Generate top-down on MJ with the <code>flat lay, top-down orthographic,
+   isolated on plain background</code> suffix.
+2. Cut the background to alpha (the "isolated on plain background" makes this
+   a clean key) → PNG with alpha.
+3. Drop into <code>res://assets/textures/decals/floor/&lt;id&gt;.png</code>.
+4. Import flags: mipmaps <strong>on</strong> (litter is viewed minified at iso distance),
+   filter on, <strong>Fix Alpha Border on</strong> (kills the dark halo on cut edges).
+5. Duplicate <code>resources/decals/floor/_TEMPLATE.tres</code> → <code>&lt;id&gt;.tres</code>, drag the
+   texture in, set <code>size_range</code> (~0.8–1.4m for a paper cluster), <code>weight</code>.
+6. Add the <code>.tres</code> to the pool (const list or theme pool).
+7. Append a row to <code>docs/assets.md</code> per the asset-manifest convention.</p>
+<h2 id="phasing">Phasing<a class="headerlink" href="#phasing" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>P1 (MVP):</strong> FloorDecalDef + FloorDecalBuilder + ctx accumulator + commit</li>
+<li>RoomDef.decal_density + the 3 materials. Uniform random placement,
+  ignores props. Const pool list. ~1 builder file + 1 resource class + small
+  edits to RoomDef / level_builder / build_context.</li>
+<li><strong>P2:</strong> per-theme <code>floor_decal_pool</code> on LevelTheme for zone variation;
+  <code>prefer_wall</code> placement bias; avoid-prop-footprint pass.</li>
+<li><strong>P3 (optional):</strong> runtime decals — drop a paper-scatter when a filing
+  cabinet breaks (hook DestructibleProp death → spawn a one-off MMI-or-quad
+  at the wreck). Reuses the same defs.</li>
+</ul>
+<h2 id="files-touched-p1">Files touched (P1)<a class="headerlink" href="#files-touched-p1" title="Permanent link">&para;</a></h2>
+<ul>
+<li>NEW <code>game/scripts/items/floor_decal_def.gd</code></li>
+<li>NEW <code>game/resources/decals/floor/_TEMPLATE.tres</code> (+ README)</li>
+<li>NEW <code>game/scripts/level/build/floor_decal_builder.gd</code></li>
+<li>EDIT <code>game/scripts/level/build/build_context.gd</code> — add
+  <code>floor_decal_visuals</code> dict + shared unit PlaneMesh + commit method</li>
+<li>EDIT <code>game/scripts/level/level_builder.gd</code> — call <code>scatter_decals</code> after
+  clutter (~line 447); call <code>commit_floor_decals</code> alongside
+  <code>WallBuilder.commit_batched_mmi</code> (line 252)</li>
+<li>EDIT <code>game/scripts/level/room_def.gd</code> — add <code>decal_density</code></li>
+<li>EDIT <code>docs/assets.md</code> — asset rows for the 3 textures
+```</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "search.highlight", "search.suggest", "content.tooltips"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
