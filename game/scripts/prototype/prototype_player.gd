@@ -4725,8 +4725,15 @@ func _drive_aim_overlay(delta: float) -> void:
 	var modifier := _ensure_aim_modifier()
 	if modifier == null:
 		return
+	# Engage the overlay any time a ranged weapon is equipped — the
+	# authored strafe clips have the upper body facing the strafe
+	# direction, so without the fire-pose overlay holding the gun
+	# forward, the character looks like they're aiming sideways while
+	# strafing. Reloading is still excluded so the reload pose plays
+	# clean; melee weapons are excluded because their swing path runs
+	# through play_swing rather than the looping aim hold.
 	var aiming := false
-	if _is_aim_input_held() and not is_reloading():
+	if not is_reloading():
 		var w: Item = InventoryState.get_equipped(&"weapon")
 		aiming = w != null and not _attack_is_melee(w)
 	if aiming:
