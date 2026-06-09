@@ -57,29 +57,52 @@ const _META_KEY: StringName = &"xbot_ragdoll_setup"
 static func ensure_surface_materials(root: Node) -> void:
 	if root == null:
 		return
-	# Walks Mesh AND MultiMesh hosts — RenderingServer fires
-	# "Parameter 'material' is null" on either type when a surface lacks
-	# an active material. Both extend GeometryInstance3D and share the
-	# get_active_material / set_surface_override_material API; just the
-	# mesh resource source differs.
-	var mesh: Mesh = null
+	# Two different code paths because the surface-material API differs
+	# between subtypes:
+	#   - MeshInstance3D: per-MI surface override via
+	#     get_active_material / set_surface_override_material
+	#   - MultiMeshInstance3D: no per-surface override on the MMI; the
+	#     fallback has to land on the shared source mesh (ArrayMesh)
+	#     via surface_set_material, OR on material_override for non-
+	#     ArrayMesh sources.
 	if root is MeshInstance3D:
-		mesh = (root as MeshInstance3D).mesh
+		var mi := root as MeshInstance3D
+		if mi.mesh != null:
+			for i in range(mi.mesh.get_surface_count()):
+				if mi.get_active_material(i) == null:
+					mi.set_surface_override_material(i, _make_fallback_material())
 	elif root is MultiMeshInstance3D:
 		var mmi := root as MultiMeshInstance3D
-		if mmi.multimesh != null:
-			mesh = mmi.multimesh.mesh
-	if mesh != null:
-		var gi := root as GeometryInstance3D
-		for i in range(mesh.get_surface_count()):
-			if gi.get_active_material(i) == null:
-				var mat := StandardMaterial3D.new()
-				mat.albedo_color = Color(0.6, 0.6, 0.6)
-				mat.roughness = 0.85
-				mat.metallic = 0.0
-				gi.set_surface_override_material(i, mat)
+		if mmi.multimesh != null and mmi.multimesh.mesh != null:
+			var mesh: Mesh = mmi.multimesh.mesh
+			if mesh is ArrayMesh:
+				var arr_mesh := mesh as ArrayMesh
+				for i in range(arr_mesh.get_surface_count()):
+					if arr_mesh.surface_get_material(i) == null:
+						arr_mesh.surface_set_material(i, _make_fallback_material())
+			elif mmi.material_override == null:
+				# PrimitiveMesh / other Mesh subtypes — surface_set_material
+				# isn't available, so fall back to material_override on the
+				# MMI itself. Skipped when an override already exists.
+				var has_null_surface: bool = false
+				for i in range(mesh.get_surface_count()):
+					if mesh.surface_get_material(i) == null:
+						has_null_surface = true
+						break
+				if has_null_surface:
+					mmi.material_override = _make_fallback_material()
 	for child in root.get_children():
 		ensure_surface_materials(child)
+
+
+# Bland default — matte mid-grey, 0% metallic. Used as the fallback
+# whenever ensure_surface_materials finds a null-material surface.
+static func _make_fallback_material() -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.6, 0.6, 0.6)
+	mat.roughness = 0.85
+	mat.metallic = 0.0
+	return mat
 
 
 ## Walks from `skeleton` UP through its Node3D ancestors (stopping at
