@@ -77,6 +77,14 @@ _None added from third-party sources yet. Player + enemy + drone use Quaternius
 | AWM-F sniper rifle | [Blenderkit](https://www.blenderkit.com/get-blenderkit/4842e4aa-d80d-423a-b76f-9e24f336a349/) | Blenderkit — listed Free | `game/assets/models/weapons/sniper/sniper.glb` | ⚠️ | Imported via tools/import_blenderkit.py — license TBD until verified |
 
 
+## 2D Textures — Floor decals (Midjourney)
+
+| Asset | Source | License | Files | Status | Notes |
+|---|---|---|---|---|---|
+| Scattered papers (floor litter) | Midjourney (generated) | Midjourney ToS — verify paid-plan commercial terms | `game/assets/textures/decals/floor/paper_scatter.png` | ⚠️ | Top-down render, background alpha-keyed (warmth + border-connected component); drives `paper_scatter.tres` |
+| Construction debris (floor litter) | Midjourney (generated) | Midjourney ToS — verify paid-plan commercial terms | `game/assets/textures/decals/floor/debris_scatter.png` | ⚠️ | Top-down render, background alpha-keyed (brightness + border-connected component); drives `debris_scatter.tres`. `medwaste_scatter` still on procedural placeholder — no art yet |
+
+
 ## Audio — SFX (YouTube extracts)
 
 Pulled via `tools/audio/extract_yt_sfx.py`. All YouTube extracts need
