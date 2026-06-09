@@ -3231,13 +3231,15 @@ func start_reload() -> void:
 	# rather than a full-body anim. Legs continue with whatever the
 	# locomotion picker chose (idle, jog, strafe), so the player can
 	# walk through a reload without the legs snapping into the
-	# stationary reload pose.
+	# stationary reload pose. include_hips=false so the reload clip's
+	# backward-lean balancing pose stays off the gameplay stance — the
+	# arms work the magazine while the body keeps its locomotion frame.
 	var modifier := _ensure_aim_modifier()
 	if modifier != null:
 		var skel := _find_player_skeleton()
 		for key in ANIM_RELOAD:
 			if anim_player != null and anim_player.has_animation(key):
-				modifier.play_swing(skel, anim_player, key, _reload_total)
+				modifier.play_swing(skel, anim_player, key, _reload_total, false)
 				break
 
 # ── AIM_HOLD (Tripod / Aimed Shot) ───────────────────────────────────────────────

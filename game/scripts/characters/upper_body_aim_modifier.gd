@@ -58,6 +58,10 @@ var _clip_len: float = 0.0
 # in the configured clip. Empty → modifier is a no-op.
 var _tracks: Array[Dictionary] = []
 var _configured_clip: StringName = &""
+# Tracks whether the current configure() included Hips. Lets the same
+# clip be reconfigured with a different Hips policy (e.g. reload sets
+# false, fire pose sets true) without the early-out short-circuiting.
+var _configured_includes_hips: bool = true
 
 # One-shot melee swing: plays a swing clip ONCE over a set duration on the
 # upper body while the legs keep locomoting. Mutually exclusive with the
@@ -78,10 +82,15 @@ func _init() -> void:
 
 ## Resolve which of `clip_name`'s rotation tracks drive our upper-body bones.
 ## Idempotent for the same clip; cheap to call every tick (early-out on match).
-func configure(skel: Skeleton3D, anim_player: AnimationPlayer, clip_name: StringName) -> void:
-	if clip_name == _configured_clip and not _tracks.is_empty():
+## `include_hips` defaults to true (matches the fire-pose use case where
+## overlaying Hips cancels strafe-clip body twist). Pass false for reload /
+## other overlays whose source clip authors a backward lean on Hips that
+## shouldn't propagate into gameplay stance.
+func configure(skel: Skeleton3D, anim_player: AnimationPlayer, clip_name: StringName, include_hips: bool = true) -> void:
+	if clip_name == _configured_clip and not _tracks.is_empty() and include_hips == _configured_includes_hips:
 		return
 	_configured_clip = clip_name
+	_configured_includes_hips = include_hips
 	_tracks.clear()
 	_anim = null
 	_clip_len = 0.0
@@ -99,6 +108,8 @@ func configure(skel: Skeleton3D, anim_player: AnimationPlayer, clip_name: String
 			continue
 		var short := full.trim_prefix("mixamorig_")
 		if not _upper_set.has(StringName(short)):
+			continue
+		if not include_hips and short == &"Hips":
 			continue
 		var bone := skel.find_bone(StringName(full))
 		if bone < 0:
@@ -128,11 +139,17 @@ func tick(delta: float, aiming: bool) -> void:
 		_recoil_time = fmod(_recoil_time + delta * recoil_speed, _clip_len)
 
 
-## Start a one-shot melee swing overlay: play `clip_name` once over `duration`
-## seconds on the upper body. The legs are left to the locomotion picker, so
-## the player can swing while moving. Call when a moving melee attack fires.
-func play_swing(skel: Skeleton3D, anim_player: AnimationPlayer, clip_name: StringName, duration: float) -> void:
-	configure(skel, anim_player, clip_name)
+## Start a one-shot upper-body overlay (melee swing, reload, etc.): play
+## `clip_name` once over `duration` seconds on the upper-body bones. The
+## legs are left to the locomotion picker so the player can keep moving.
+##
+## `include_hips` defaults to true (matches the melee-swing case where
+## Hips contributes to the visible follow-through). Pass false for clips
+## whose authored Hips pose shouldn't propagate into gameplay stance —
+## the reload clip in particular leans back to balance the rifle, which
+## reads as the avatar tipping backward while reloading.
+func play_swing(skel: Skeleton3D, anim_player: AnimationPlayer, clip_name: StringName, duration: float, include_hips: bool = true) -> void:
+	configure(skel, anim_player, clip_name, include_hips)
 	if _anim == null:
 		return
 	_swing_active = true
