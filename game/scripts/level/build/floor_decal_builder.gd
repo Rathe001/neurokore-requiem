@@ -32,7 +32,12 @@ const POOL_PATHS: Array[String] = [
 # falls back to POOL_PATHS; &"none" explicitly disables decals even
 # if decal_density > 0. All paths still live under
 # res://resources/decals/floor/.
-const THEMED_POOLS: Dictionary = {
+#
+# static var (not const) because the dictionary literal contains
+# `[...] as Array[String]` casts — `as` is a runtime operator and
+# GDScript can't fold it into a const expression. Same effect for the
+# caller (read-only by convention), just initialised at script load.
+static var THEMED_POOLS: Dictionary = {
 	# Sterile / patrolled facility — no clutter, no signage litter.
 	&"none": [] as Array[String],
 	# Generic facility floor — light paper + debris scatter only.
