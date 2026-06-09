@@ -20,6 +20,13 @@ const POOL_PATHS: Array[String] = [
 	"res://resources/decals/floor/paper_scatter.tres",
 	"res://resources/decals/floor/debris_scatter.tres",
 	"res://resources/decals/floor/medwaste_scatter.tres",
+	# Multi-tile pile variants. Same textures as the small scatter, just
+	# stretched to 3.5-6m so they read as a single accumulated drift
+	# instead of many small piles in a grid. Lower weight so they don't
+	# crowd out the small scatter; bigger min_spacing so heaps stay
+	# distinct from each other.
+	"res://resources/decals/floor/paper_pile_large.tres",
+	"res://resources/decals/floor/debris_pile_large.tres",
 ]
 
 # Tiny lift off the floor. Above the puddle layer (0.005), below the
@@ -65,7 +72,7 @@ static func scatter_decals(ctx: LevelBuildContext, center: Vector3, hx: float, h
 	var attempts := rd.decal_density * ATTEMPTS_PER_DENSITY
 	for i in attempts:
 		var def := _weighted_pick(pool, weights, rng)
-		var pos := _pick_position(rng, center, hx, hz, rd, placed, def.min_spacing)
+		var pos := _pick_position(rng, center, hx, hz, rd, placed, def.min_spacing, def.size_range.y)
 		if pos == Vector3.INF:
 			continue
 		placed.append(pos)
@@ -74,10 +81,20 @@ static func scatter_decals(ctx: LevelBuildContext, center: Vector3, hx: float, h
 
 # ── Placement ──────────────────────────────────────────────────────────────
 
-static func _pick_position(rng: RandomNumberGenerator, center: Vector3, hx: float, hz: float, rd: RoomDef, placed: Array[Vector3], min_spacing: float) -> Vector3:
+static func _pick_position(rng: RandomNumberGenerator, center: Vector3, hx: float, hz: float, rd: RoomDef, placed: Array[Vector3], min_spacing: float, max_decal_size: float = 0.0) -> Vector3:
+	# Size-aware margin: small scatter (≤MARGIN diameter) uses the
+	# default MARGIN; multi-tile piles get an extra half-size buffer so
+	# their edge can't slide past the wall. Without this a 6m pile
+	# centered 0.6m from a wall would clip ~2.4m through the wall.
+	var size_buffer: float = maxf(0.0, max_decal_size * 0.5 - MARGIN)
+	var effective_margin: float = MARGIN + size_buffer
+	# If the room is too small to fit the buffered area, this decal
+	# can't go here — fall through to INF and the caller skips it.
+	if hx <= effective_margin or hz <= effective_margin:
+		return Vector3.INF
 	for _attempt in 8:
-		var px := center.x + rng.randf_range(-hx + MARGIN, hx - MARGIN)
-		var pz := center.z + rng.randf_range(-hz + MARGIN, hz - MARGIN)
+		var px := center.x + rng.randf_range(-hx + effective_margin, hx - effective_margin)
+		var pz := center.z + rng.randf_range(-hz + effective_margin, hz - effective_margin)
 		var pos := Vector3(px, 0, pz)
 		if _is_near_opening(pos, center, hx, hz, rd):
 			continue
