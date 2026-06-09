@@ -191,13 +191,15 @@ func stamp(world_pos: Vector3, wall_normal: Vector3, world_radius: float, intens
 	# Scale so the stamp's diameter matches world_radius * 2 in pixels.
 	var diam_px: float = world_radius * 2.0 * px_per_m_h
 	var base_scale: float = diam_px / float(tex.get_size().x)
-	# Wall stamps get vertical-biased aspect jitter — gravity pulls
-	# blood down the wall so a circular splatter reads wrong. Y axis
-	# stretches 1.3-2.0× while X compresses slightly. No rotation
-	# (otherwise the vertical bias points in random directions and
+	# Wall stamps get a STRONG vertical-biased aspect jitter — gravity pulls
+	# blood down the wall, and the fixed iso camera looks down at the wall so
+	# its vertical (world-Y) axis is foreshortened on screen. A merely-square
+	# stamp reads as a horizontal smear; we over-stretch Y (and squeeze X) so
+	# the splatter still reads as a vertical drip from the camera's angle. No
+	# rotation (otherwise the vertical bias points in random directions and
 	# loses the gravity read).
-	var aspect_x: float = randf_range(0.85, 1.10)
-	var aspect_y: float = randf_range(1.30, 2.00)
+	var aspect_x: float = randf_range(0.70, 0.92)
+	var aspect_y: float = randf_range(2.50, 3.80)
 	sprite.scale = Vector2(base_scale * aspect_x, base_scale * aspect_y)
 	# Per-stamp intensity jitter so different splatters accumulate to
 	# different darkness — matches the floor pool variance and breaks
