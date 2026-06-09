@@ -63,3 +63,17 @@ extends Resource
 ## v2 placement hint: prefer positions adjacent to a wall. Read by the
 ## wall-bias placement pass when it lands; ignored in P1.
 @export var prefer_wall: bool = false
+
+## Render layer (used by FloorDecalBuilder to assign a base Y offset so
+## logically-stacked decals don't z-fight). Lower = closer to the floor,
+## higher = on top. Convention:
+##   0 = PAINTED  (stencils, painted facility markings — part of the
+##                 floor itself, always at the bottom)
+##   1 = STAIN    (dried blood, oil_dry, scorch — embedded in the
+##                 floor surface, on top of paint)
+##   2 = LITTER   (paper, debris, medwaste, glass — scattered items
+##                 sitting on top of the floor)
+##   3 = PILE     (multi-tile pile variants — drifts on top of litter)
+## Runtime LiquidLayer (live blood pools) is at Y≈0.015, always above
+## all four floor-decal layers.
+@export_range(0, 3) var layer: int = 2

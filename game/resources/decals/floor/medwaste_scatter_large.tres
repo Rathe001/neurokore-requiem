@@ -14,3 +14,4 @@ random_yaw_range = 3.14159
 weight = 1
 min_spacing = 2.8
 prefer_wall = false
+layer = 3

@@ -97,15 +97,21 @@ const STENCIL_STANDOFF_M: float = 2.0
 # reads as intentional but not blanket-applied to every door.
 const STENCIL_PLACE_CHANCE: float = 0.55
 
-# Tiny lift off the floor. Above the puddle layer (0.005), below the
-# LiquidLayer floor mesh (0.015) so blood pools render on top of litter.
-# Decal materials use ALPHA_SCISSOR (opaque pass, writes depth), so the
-# blend-mode liquid at higher Y depth-tests correctly over them — no
-# render_priority hack needed.
-const FLOOR_DECAL_Y: float = 0.006
-# Per-instance Y jitter ceiling so two overlapping decals don't share an
-# exact plane and z-fight. Sub-mm — reads as flat.
-const Y_EPSILON: float = 0.004
+# Per-layer base Y. Logical stack from floor (paint) → on-top (piles).
+# Stays under the LiquidLayer floor mesh at 0.015 so live blood pools
+# still render above every floor decal. 0.002 spacing per layer is
+# plenty of depth-buffer margin while sub-cm enough to read as flat.
+const LAYER_Y: Array[float] = [
+	0.002,  # 0 PAINTED  — stencils
+	0.004,  # 1 STAIN    — dried blood / oil / scorch
+	0.006,  # 2 LITTER   — paper / debris / glass / medwaste
+	0.008,  # 3 PILE     — large drifts on top of everything
+]
+# Per-instance jitter inside a layer band so two same-layer decals
+# overlapping at the same XZ don't share an exact plane and z-fight.
+# Stays under 0.0008 (half the 0.002 layer spacing) so jitter never
+# crosses into the next layer.
+const Y_INTRA_LAYER_JITTER: float = 0.0007
 const MARGIN: float = 0.6            # litter can sit closer to walls than props
 const OPENING_CLEARANCE: float = 0.8
 # Placement attempts per density unit. Higher than ClutterBuilder's ×2 — litter
@@ -264,7 +270,7 @@ static func _queue_decal_at(ctx: LevelBuildContext, def: FloorDecalDef, pos: Vec
 	var jitter := def.aspect_jitter
 	var size_x := base_size * (1.0 + rng.randf_range(-jitter, jitter))
 	var size_z := base_size * (1.0 + rng.randf_range(-jitter, jitter))
-	var y := FLOOR_DECAL_Y + float(index % 7) / 7.0 * Y_EPSILON
+	var y := _layer_y(def, index)
 	var basis := Basis(Vector3.UP, yaw).scaled(Vector3(size_x, 1.0, size_z))
 	var xform := Transform3D(basis, Vector3(pos.x, y, pos.z))
 	if not ctx.floor_decal_visuals.has(def):
@@ -282,7 +288,7 @@ static func _queue_decal(ctx: LevelBuildContext, def: FloorDecalDef, pos: Vector
 	var yaw := rng.randf_range(-def.random_yaw_range, def.random_yaw_range)
 	# Stagger Y by a sub-mm amount per placement so overlapping decals don't
 	# z-fight. index-derived so it's deterministic with the seed.
-	var y := FLOOR_DECAL_Y + float(index % 7) / 7.0 * Y_EPSILON
+	var y := _layer_y(def, index)
 	var basis := Basis(Vector3.UP, yaw).scaled(Vector3(size_x, 1.0, size_z))
 	var xform := Transform3D(basis, Vector3(pos.x, y, pos.z))
 
@@ -425,6 +431,16 @@ static func _hash_id(id: StringName) -> int:
 	for c in String(id):
 		h = (h * 31 + c.unicode_at(0)) & 0x7FFFFFFF
 	return h
+
+
+# Resolve a decal's world Y: base offset from its layer, plus a tiny
+# per-instance jitter so two same-layer decals overlapping at the same
+# XZ don't render in the exact same plane. Jitter stays under the
+# layer spacing so it can't cross layers.
+static func _layer_y(def: FloorDecalDef, index: int) -> float:
+	var layer: int = clampi(def.layer, 0, LAYER_Y.size() - 1)
+	var base: float = LAYER_Y[layer]
+	return base + float(index % 7) / 7.0 * Y_INTRA_LAYER_JITTER
 
 
 # Per-instance RNG seeded by room id (or the runtime piece id when set,
