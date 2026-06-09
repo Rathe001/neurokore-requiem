@@ -23,10 +23,16 @@ extends SkeletonModifier3D
 ##   pulse_recoil() — restart the sampled clip from frame 0 on a shot event so
 ##       each shot reads as a fresh recoil cycle.
 
-# Upper-body bones to overlay, by their SkeletonProfileHumanoid short name
-# (the Mixamo raw name is `mixamorig_<short>`; we match either). Hips and
-# everything below stay on the locomotion pose so the feet stay planted.
+# Bones to overlay with the aim/swing pose. Hips IS included even though
+# the rest of the leg chain isn't — the Mixamo strafe clips author Hips
+# rotation to face the strafe direction, and applying spine/arm tracks
+# LOCAL to that rotated Hips left the upper body twisted toward the
+# strafe direction even with the overlay at full weight. Overlaying Hips
+# with the fire-pose Hips (identity-ish, facing forward) cancels that
+# propagation. Leg bones below Hips still play the locomotion / strafe
+# clip uncontested.
 const _UPPER_SHORT_NAMES: Array[StringName] = [
+	&"Hips",
 	&"Spine", &"Spine1", &"Spine2", &"Neck", &"Head",
 	&"LeftShoulder", &"LeftArm", &"LeftForeArm", &"LeftHand",
 	&"RightShoulder", &"RightArm", &"RightForeArm", &"RightHand",
