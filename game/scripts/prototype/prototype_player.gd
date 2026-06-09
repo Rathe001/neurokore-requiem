@@ -1329,19 +1329,29 @@ static func _character_visual_aabb(char_root: Node3D) -> AABB:
 
 # Runtime fine seat: the bind-pose AABB seat is only an estimate — the idle /
 # aim stances bend the knees and drop the hips, so a bind-pose-flush mesh ends
-# up ankle-deep in the floor once the animation poses the skeleton. Two frames
-# after the swap (tree entry + first AnimationPlayer tick) read the actual
-# foot/toe bone positions from the posed skeleton and shift the Character so
-# the lowest one sits on the capsule's bottom plane. Body-relative, so it's
-# correct mid-air and on remote MP avatars; idempotent under a fixed pose.
+# up ankle-deep in the floor once the animation poses the skeleton. Force the
+# class idle pose SYNCHRONOUSLY (play + advance(0) + skeleton update), read
+# the posed foot/toe bone positions, and shift the Character so the lowest
+# sits on the capsule's bottom plane.
+#
+# The pose MUST be forced rather than sampled "two frames later from whatever
+# is playing": the spawn sequence drops the player in airborne, and measuring
+# during the jump/fall clip (feet dangling ~0.5m below the hips) hoisted the
+# whole character into a permanent float. A forced idle measure is
+# deterministic and idempotent; the locomotion picker re-asserts the real
+# animation on the next physics tick.
 func _fine_seat_character(char_node: Node3D) -> void:
-	await get_tree().process_frame
-	await get_tree().process_frame
-	if not is_instance_valid(self) or not is_instance_valid(char_node) or not char_node.is_inside_tree():
+	if not char_node.is_inside_tree():
 		return
 	var skel := _find_player_skeleton()
-	if skel == null:
+	if skel == null or anim_player == null:
 		return
+	for key in XBotAnimations.idle_anim_for_class(_equipped_weapon_class()):
+		if anim_player.has_animation(key):
+			anim_player.play(key)
+			break
+	anim_player.advance(0.0)
+	skel.force_update_all_bone_transforms()
 	var min_y: float = INF
 	for i in skel.get_bone_count():
 		var bn: String = skel.get_bone_name(i)
