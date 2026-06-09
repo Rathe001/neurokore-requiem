@@ -372,7 +372,11 @@ static func _load_pool(theme: StringName = &"") -> Array[FloorDecalDef]:
 	# at the data layer too). scatter_decals short-circuits on empty.
 	if _pools_by_theme.has(theme):
 		return _pools_by_theme[theme]
-	var paths: Array[String]
+	# Untyped Array because Dictionary lookups drop the inner element type
+	# — `THEMED_POOLS[theme]` returns plain Array even though the literal
+	# is `[...] as Array[String]`. Plain Array works for the for-in below
+	# since iterated values are coerced to String by ResourceLoader.exists.
+	var paths: Array
 	if theme == &"" or theme == &"general":
 		paths = POOL_PATHS
 	elif THEMED_POOLS.has(theme):
