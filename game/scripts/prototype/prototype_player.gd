@@ -4936,14 +4936,15 @@ func _play_anim_with_synced_speed(candidates: Array[StringName], actual_speed: f
 			primary = c
 			break
 	# Fallback to the first candidate even if it's not loaded — _play_anim
-	# below handles the no-op case and the speed_scale below applies
-	# whichever clip eventually plays.
+	# handles the no-op case.
 	if primary == &"" and not candidates.is_empty():
 		primary = candidates[0]
 	var authored: float = _CLIP_AUTHORED_SPEED.get(primary, maxf(move_speed, 0.01))
 	var rate: float = actual_speed / maxf(authored, 0.01)
-	anim_player.speed_scale = clampf(rate, RUN_ANIM_SPEED_MIN, RUN_ANIM_SPEED_MAX)
-	_play_anim(candidates, 1.0, 0.15)
+	# Pass the rate as _play_anim's `speed` arg — it sets speed_scale =
+	# absf(speed) every call, so setting speed_scale here and then calling
+	# _play_anim(... 1.0 ...) would just get clobbered back to 1.0.
+	_play_anim(candidates, clampf(rate, RUN_ANIM_SPEED_MIN, RUN_ANIM_SPEED_MAX), 0.15)
 
 
 func _play_anim_stretched(candidates: Array[StringName], duration: float, blend: float = 0.0) -> void:
