@@ -1,6 +1,7 @@
 # Memory Index
 
 - [Pre-release backlog (2026-06-04)](project_pre_release_backlog.md) — 5 tasks Josh flagged as the gate to next Steam release: weapon grips, model feet, interactable colliders, clutter placement, multi-level playtest
+- [Scale to player](project_scale_to_player.md) — All in-world objects sized relative to player (1.6m standing). Decals, props, weapons must use real-world units; size_range on decals = item scale, not coverage area
 - [2D iso pivot (2026-05-26)](project_2d_iso_pivot.md) — pivoted to 2D iso sprite ARPG; bible at docs/art-reference/, pilot at tools/pilot/, branches 2d-iso-rework + 2d-iso-pilot
 - [User background](user_background.md) — Josh is a UI/JS dev new to game engines and systems languages; explain via web analogies
 - [Enemy spawning model](project_enemy_spawning_model.md) — D2-style: pre-placed at level load, no runtime respawn, fully clearable (current spawner is a temporary stress-test)
