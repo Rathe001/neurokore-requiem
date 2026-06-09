@@ -105,6 +105,38 @@ static func _make_fallback_material() -> StandardMaterial3D:
 	return mat
 
 
+# Single-node, non-recursive variant of ensure_surface_materials —
+# checks just the surfaces on `node` itself. Designed for the
+# scene_tree.node_added signal: when each individual node fires the
+# signal, processing just that node avoids the double-work of also
+# recursing into its descendants (which will themselves fire
+# node_added separately as the tree-add propagates).
+static func ensure_surface_materials_single(node: Node) -> void:
+	if node is MeshInstance3D:
+		var mi := node as MeshInstance3D
+		if mi.mesh != null:
+			for i in range(mi.mesh.get_surface_count()):
+				if mi.get_active_material(i) == null:
+					mi.set_surface_override_material(i, _make_fallback_material())
+	elif node is MultiMeshInstance3D:
+		var mmi := node as MultiMeshInstance3D
+		if mmi.multimesh != null and mmi.multimesh.mesh != null:
+			var mesh: Mesh = mmi.multimesh.mesh
+			if mesh is ArrayMesh:
+				var arr_mesh := mesh as ArrayMesh
+				for i in range(arr_mesh.get_surface_count()):
+					if arr_mesh.surface_get_material(i) == null:
+						arr_mesh.surface_set_material(i, _make_fallback_material())
+			elif mmi.material_override == null:
+				var has_null_surface: bool = false
+				for i in range(mesh.get_surface_count()):
+					if mesh.surface_get_material(i) == null:
+						has_null_surface = true
+						break
+				if has_null_surface:
+					mmi.material_override = _make_fallback_material()
+
+
 ## Walks from `skeleton` UP through its Node3D ancestors (stopping at
 ## `stop_at` exclusive), replacing any non-uniform basis with an
 ## orthonormalized basis carrying the average of the three axis scales.
