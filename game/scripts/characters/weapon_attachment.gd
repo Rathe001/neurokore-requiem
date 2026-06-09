@@ -89,7 +89,7 @@ static var _GRIP_MALE: Dictionary = {
 	# that the female-tuned values land cleanly on male too. If a
 	# specific weapon drifts later, this dict is the per-gender escape
 	# hatch; keep edits here independent of the female table.
-	&"melee_1h":       {"pos": Vector3(0.500, 0.050, 0.050), "rot": Vector3(0.0, 90.0, -75.0), "scale_mult": 1.318, "muzzle": Vector3(0.100, 0.050, 0.800)},
+	&"melee_1h":       {"pos": Vector3(0.600, 0.250, -0.200), "rot": Vector3(-150.0, -105.0, -30.0), "scale_mult": 1.318, "muzzle": Vector3(-0.350, -0.050, 0.450)},
 	&"melee_2h":       {"pos": Vector3(0.250, -0.000, -0.100), "rot": Vector3(30.0, -150.0, 60.0), "scale_mult": 0.510, "muzzle": Vector3(-0.150, 0.200, -0.100)},
 	&"ranged_1h":      {"pos": Vector3(0.050, 0.200, 0.050), "rot": Vector3(165.0, -180.0, 90.0), "scale_mult": 0.980, "muzzle": Vector3(-0.100, 0.100, 0.000)},
 	&"ranged_2h":      {"pos": Vector3(-0.050, 0.250, 0.050), "rot": Vector3(-180.0, -180.0, 105.0), "scale_mult": 0.794, "muzzle": Vector3(-0.350, 0.150, -0.000)},
@@ -103,7 +103,7 @@ static var _GRIP_MALE: Dictionary = {
 }
 
 static var _GRIP_FEMALE: Dictionary = {
-	&"melee_1h":       {"pos": Vector3(0.500, 0.050, 0.050), "rot": Vector3(0.0, 90.0, -75.0), "scale_mult": 1.318, "muzzle": Vector3(0.100, 0.050, 0.800)},
+	&"melee_1h":       {"pos": Vector3(0.600, 0.250, -0.200), "rot": Vector3(-150.0, -105.0, -30.0), "scale_mult": 1.318, "muzzle": Vector3(-0.350, -0.050, 0.450)},
 	&"melee_2h":       {"pos": Vector3(0.250, -0.000, -0.100), "rot": Vector3(30.0, -150.0, 60.0), "scale_mult": 0.510, "muzzle": Vector3(-0.150, 0.200, -0.100)},
 	&"ranged_1h":      {"pos": Vector3(0.050, 0.200, 0.050), "rot": Vector3(165.0, -180.0, 90.0), "scale_mult": 0.980, "muzzle": Vector3(-0.100, 0.100, 0.000)},
 	&"ranged_2h":      {"pos": Vector3(-0.050, 0.250, 0.050), "rot": Vector3(-180.0, -180.0, 105.0), "scale_mult": 0.794, "muzzle": Vector3(-0.350, 0.150, -0.000)},
