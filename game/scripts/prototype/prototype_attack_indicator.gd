@@ -2070,17 +2070,17 @@ const EXPLOSION_FLASH_DURATION: float = 0.18
 # its instance. Matches the BigExplosionScene's particle lifetime
 # (2.13s) plus a small tail so trailing frames have time to finish.
 const EXPLOSION_FLIPBOOK_LIFETIME: float = 2.6
-# BigExplosionScene is a single 8×8 m quad at scale=1, with the sprite's
-# visible fireball/smoke filling roughly 5 m of it. An earlier comment
-# here claimed ~2-3 m, and the 1:1 blast_radius→scale mapping built on
-# that premise made every smoke cloud ~4× the blast it represented (a
-# 2 m-radius RPG blast spawned a 16 m quad). PER_RADIUS maps the scale
-# so the VISIBLE cloud diameter ≈ the blast diameter:
-#   rpg 2 m → 0.9 (~4.5 m cloud), frag 3.5 m → 1.6 (~8 m),
-#   Tactical Strike 9 m → ceiling 3.5 (~17.5 m — still a huge kaboom).
-const FLIPBOOK_SCALE_PER_RADIUS: float = 0.45
-const FLIPBOOK_SCALE_FLOOR: float = 0.6
-const FLIPBOOK_SCALE_CEILING: float = 3.5
+# Kinetic flipbook quad size, in METERS, derived from blast radius. The
+# sprite's visible fireball/smoke fills essentially the whole frame, so
+# quad size ≈ cloud size — earlier mappings that multiplied a scale
+# factor onto the authored 8 m quad barely changed anything (radius 2 m
+# gave a 7.2 m quad vs the old fixed 8 m: visually identical). Direct
+# meters keep the math honest: cloud ≈ 1.1× blast diameter.
+#   rpg 2 m → 4.4 m cloud, frag 3.5 m → 7.7 m,
+#   Tactical Strike 4.5 m → 9.9 m, MAX caps runaway radii at 16 m.
+const FLIPBOOK_QUAD_PER_RADIUS_M: float = 2.2
+const FLIPBOOK_QUAD_MIN_M: float = 3.0
+const FLIPBOOK_QUAD_MAX_M: float = 16.0
 # Soft-particle fade distance (the shader's Soft_limit uniform). The
 # scene-default 0.10 only softens fragments within 10cm of geometry,
 # which let smoke billboards rise visibly above wall tops at iso
@@ -2222,8 +2222,8 @@ static func _spawn_fireball_explosion(parent: Node, world_pos: Vector3, blast_ra
 	# fx.scale approach silently rendered EVERY kinetic flipbook at the
 	# authored 8×8 m regardless of blast size. The quad itself is resized
 	# below once we have the particles node.
-	var flip_scale: float = clampf(
-		blast_radius * FLIPBOOK_SCALE_PER_RADIUS, FLIPBOOK_SCALE_FLOOR, FLIPBOOK_SCALE_CEILING)
+	var flip_quad_m: float = clampf(
+		blast_radius * FLIPBOOK_QUAD_PER_RADIUS_M, FLIPBOOK_QUAD_MIN_M, FLIPBOOK_QUAD_MAX_M)
 
 	# Speed up the flipbook by shortening particle lifetime BEFORE the
 	# node enters the tree (so the particle emits at the new speed).
@@ -2298,10 +2298,10 @@ static func _spawn_fireball_explosion(parent: Node, world_pos: Vector3, blast_ra
 		# the blast-diameter mapping (see FLIPBOOK_SCALE_PER_RADIUS).
 		var quad: QuadMesh = particles.draw_pass_1.duplicate() as QuadMesh
 		if is_kinetic:
-			quad.size = Vector2(8.0, 8.0) * flip_scale
+			quad.size = Vector2(flip_quad_m, flip_quad_m)
 			# The authored visibility AABB only covers the 8 m quad —
-			# grow it with the quad so large blasts don't self-cull.
-			var half: float = 4.0 * flip_scale + 1.0
+			# track the quad so large blasts don't self-cull.
+			var half: float = flip_quad_m * 0.5 + 1.0
 			particles.visibility_aabb = AABB(
 				Vector3(-half, -half, -half), Vector3(half * 2.0, half * 2.0, half * 2.0))
 		else:
