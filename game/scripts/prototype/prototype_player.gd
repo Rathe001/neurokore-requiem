@@ -4652,16 +4652,14 @@ func _active_ground_surfaces() -> Array[StringName]:
 	var out: Array[StringName] = []
 	if _slow_pool_count > 0:
 		out.append(&"water")
-	# Blood counts as an active surface either while the player is
-	# physically in a slip-zone pool OR while they still have blood
-	# on their shoes (bloody_steps_remaining is the same counter that
-	# drives the visual footprint trail — set by Footsteps when the
-	# player steps in blood and decremented each subsequent step).
-	# Tying the debuff lifetime to the trail count means the player
-	# slips for as long as they're visibly tracking blood — the
-	# debuff has the same dramatic window as the visual.
-	var has_blood_residue: bool = int(get_meta(&"bloody_steps_remaining", 0)) > 0
-	if _blood_pool_count > 0 or has_blood_residue:
+	# Blood is active only while the player physically overlaps a
+	# slip-zone pool. The bloody-footprint trail counter used to extend
+	# the debuff window ("blood on your shoes"), but is_in_blood matches
+	# ANY blood decal — in a gore-heavy room the counter recharged on
+	# every step and the debuff icon never cleared. The trail is now
+	# visual-only; the debuff matches the actual mechanics, which were
+	# always pool-gated (_blood_pool_factor / _blood_friction_factor).
+	if _blood_pool_count > 0:
 		out.append(&"blood")
 	return out
 
