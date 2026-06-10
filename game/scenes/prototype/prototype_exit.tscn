@@ -4,10 +4,12 @@
 [ext_resource type="PackedScene" path="res://assets/models/objects/elevator/elevator.glb" id="2_elevator"]
 
 ; Player-interactable footprint sized to the elevator's visual base. Layer
-; 64 (interactable hover) + mask 0 — doesn't block movement, just registers
-; for the hover/raycast system.
-; Footprint matches the model's scaled XZ extent (3.44 × 3.36); thin Y
-; keeps it hover-only.
+; 64 (interactable hover). NOTE: the player's collision mask includes 64,
+; so this box DOES block movement — even at 0.2m tall there's no step-up
+; logic, so the player can't board the platform. Interaction works via
+; the footprint-aware range check (HoverableInteractable.interact_extent),
+; which treats "pressed against the edge" as in range of the centre.
+; Footprint matches the model's scaled XZ extent (3.44 × 3.36).
 [sub_resource type="BoxShape3D" id="shape_platform"]
 size = Vector3(3.44, 0.2, 3.36)
 

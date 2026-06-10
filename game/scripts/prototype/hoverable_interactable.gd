@@ -31,6 +31,32 @@ var _proximity_active: bool = false
 var _mouse_active: bool = false
 var _proximity_tick_t: float = 0.0
 
+# Cached horizontal half-extent of the collision footprint (lazy; -1 =
+# not computed yet). See interact_extent().
+var _interact_extent_cache: float = -1.0
+
+
+## Horizontal half-extent of this interactable's collision footprint.
+## Range checks measure to the node ORIGIN, but a large interactable
+## (the elevator platform is 3.4m wide) puts its origin further from any
+## reachable standing spot than INTERACT_RANGE allows — the player could
+## never get "in range" because the footprint's own collision stopped
+## them first. The player adds this to its range so "within range of the
+## footprint edge" counts.
+func interact_extent() -> float:
+	if _interact_extent_cache >= 0.0:
+		return _interact_extent_cache
+	_interact_extent_cache = 0.0
+	for child in get_children():
+		var cs := child as CollisionShape3D
+		if cs == null or cs.shape == null:
+			continue
+		var box := cs.shape as BoxShape3D
+		if box != null:
+			_interact_extent_cache = maxf(
+				_interact_extent_cache, maxf(box.size.x, box.size.z) * 0.5)
+	return _interact_extent_cache
+
 
 func _ready() -> void:
 	add_to_group(&"interactables")
@@ -64,7 +90,10 @@ func _process(delta: float) -> void:
 	if player == null:
 		_set_proximity(false)
 		return
-	var in_range := global_position.distance_squared_to(player.global_position) <= PROXIMITY_RANGE_SQ
+	# Footprint-aware, mirroring the player's interact-range check — the
+	# cyan cue should light up wherever interaction is actually possible.
+	var r := sqrt(PROXIMITY_RANGE_SQ) + interact_extent()
+	var in_range := global_position.distance_squared_to(player.global_position) <= r * r
 	_set_proximity(in_range)
 
 

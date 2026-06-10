@@ -2494,9 +2494,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 func _try_interact() -> void:
-	var interact_range := sqrt(INTERACT_RANGE_SQ)
+	# Query wide enough to catch large-footprint interactables (the
+	# elevator's origin sits ~1.7m inside its platform), then verify
+	# against the per-node footprint-aware range.
+	var interact_range := sqrt(INTERACT_RANGE_SQ) + 2.0
 	var nearest := SpatialGrid.query_nearest(global_position, interact_range, &"interactables")
-	if nearest != null and nearest.has_method(&"interact"):
+	if nearest != null and nearest.has_method(&"interact") and _within_interact_range(nearest):
 		if not nearest.is_in_group(&"pickups") and not _is_airborne:
 			_interacting = true
 			_play_anim_stretched(ANIM_INTERACT, INTERACT_ANIM_DURATION, 0.1)
@@ -2607,7 +2610,15 @@ func _hovered_clickable() -> Node:
 func _within_interact_range(node: Node) -> bool:
 	if node == null or not (node is Node3D):
 		return false
-	return global_position.distance_squared_to((node as Node3D).global_position) <= INTERACT_RANGE_SQ
+	# Footprint-aware: large interactables (elevator platform, switch
+	# console) keep their origin further away than INTERACT_RANGE even
+	# when the player is pressed against their collision box — without
+	# the extent the walk-to-interact loop shoved into the box forever.
+	var extent: float = 0.0
+	if node.has_method(&"interact_extent"):
+		extent = float(node.call(&"interact_extent"))
+	var r := sqrt(INTERACT_RANGE_SQ) + extent
+	return global_position.distance_squared_to((node as Node3D).global_position) <= r * r
 
 
 # Drive auto-walk toward _walk_to_interact_target. Returns the wish_dir
