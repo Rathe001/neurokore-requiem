@@ -97,10 +97,34 @@ static func spawn_in_bounds(ctx: LevelBuildContext, piece: LevelPiece, center: V
 	var margin := 1.0
 	var spawned := 0
 	while spawned < count:
-		var ex := center.x + randf_range(-hx + margin, hx - margin)
-		var ez := center.z + randf_range(-hz + margin, hz - margin)
-		var pack_size := _spawn_with_pack_chance(ctx, Vector3(ex, 0, ez), hx, hz, scene, _roll_level(level_range), center, class_pool, limits, pack_chance_override)
+		# Reject candidates wedged against hard-cover clutter (recorded by
+		# ClutterBuilder on ctx) — an enemy spawned flush with an exam
+		# table starts off-navmesh and reads as stuck. Best-of-N: after
+		# the retries, take the last candidate anyway so a clutter-dense
+		# room can't infinite-loop the spawn budget.
+		var pos := Vector3.ZERO
+		for _attempt in 8:
+			pos = Vector3(
+				center.x + randf_range(-hx + margin, hx - margin),
+				0.0,
+				center.z + randf_range(-hz + margin, hz - margin))
+			if _clear_of_blocking_clutter(ctx, pos):
+				break
+		var pack_size := _spawn_with_pack_chance(ctx, pos, hx, hz, scene, _roll_level(level_range), center, class_pool, limits, pack_chance_override)
 		spawned += pack_size
+
+
+# True when `pos` is far enough from every hard-cover clutter prop for an
+# enemy capsule (radius 0.6) to stand and path away freely.
+static func _clear_of_blocking_clutter(ctx: LevelBuildContext, pos: Vector3) -> bool:
+	for p: Dictionary in ctx.blocking_clutter:
+		var c: Vector3 = p["pos"]
+		var dx := pos.x - c.x
+		var dz := pos.z - c.z
+		var min_d: float = float(p["radius"]) + 0.8
+		if dx * dx + dz * dz < min_d * min_d:
+			return false
+	return true
 
 
 static func _roll_level(level_range: Vector2i) -> int:

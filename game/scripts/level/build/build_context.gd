@@ -64,6 +64,11 @@ var connection_doors: Dictionary = {}
 ## Only room pieces are indexed — corridors are not.
 var pieces_by_id: Dictionary = {}
 var wall_keys: Array = []
+## Enemy-blocking clutter placed this build — [{pos: Vector3, radius: float}].
+## ClutterBuilder appends hard-cover props; EnemySpawner rejects spawn
+## candidates inside radius + clearance so enemies don't spawn wedged
+## against (or inside) hard cover.
+var blocking_clutter: Array[Dictionary] = []
 ## MMI accumulators — per-build-pass scratch space. As corridor walls /
 ## decorative pillars are spawned, their visual data is appended here
 ## instead of being created as individual MeshInstance3Ds. After the

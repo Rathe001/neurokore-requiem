@@ -61,9 +61,15 @@ const INDESTRUCTIBLE_POOL: Array[Dictionary] = [
 	  "texture": &"restraint" },
 ]
 
-const MARGIN := 1.5           ## min distance from wall edge
+const MARGIN := 1.5           ## min distance from wall edge to prop EDGE
 const OPENING_CLEARANCE := 1.0 ## extra clearance around openings
-const MIN_SPACING := 1.0      ## min distance between placed props
+const MIN_SPACING := 1.0      ## min edge-to-edge gap between placed props
+## Min edge-to-edge gap between two ENEMY-BLOCKING props. Enemy capsule
+## is 1.2m across (radius 0.6); anything tighter than this between two
+## pieces of hard cover (or hard cover and a wall, via MARGIN) is a
+## pocket an enemy can't path through — the "clutter traps enemies"
+## class of bug. 1.4 = diameter + nav slack.
+const ENEMY_GAP := 1.4
 const EMISSION_ENERGY := 0.3  ## subtle cyberpunk glow
 ## Destructible collision height. Player projectiles spawn at chest level
 ## (~1.0m, see PlayerCombat._spawn_projectile) and travel horizontally; a
@@ -87,29 +93,40 @@ static func scatter_clutter(ctx: LevelBuildContext, center: Vector3, hx: float, 
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_hash if seed_hash != 0 else 1
 
-	var placed: Array[Vector3] = []
+	# Each entry: {pos, radius, blocking}. Footprint-aware so spacing is
+	# edge-to-edge, not center-to-center — a 1.8m exam table used to pass
+	# the old 1m center check while leaving sub-enemy-width gaps.
+	var placed: Array[Dictionary] = []
 
-	# Destructibles: density * 2 attempts.
+	# Destructibles: density * 2 attempts. Soft cover — enemies phase
+	# through (PILLAR-only), so it never blocks pathing.
 	var dest_count := rd.clutter_density * 2
 	var dest_weights := _build_weights(DESTRUCTIBLE_POOL)
 	for _i in dest_count:
-		var pos := _pick_position(rng, center, hx, hz, rd, placed)
+		var def := _weighted_pick(DESTRUCTIBLE_POOL, dest_weights, rng)
+		var fr := _footprint_radius(def)
+		var pos := _pick_position(rng, center, hx, hz, rd, placed, fr, false)
 		if pos == Vector3.INF:
 			continue
-		var def := _weighted_pick(DESTRUCTIBLE_POOL, dest_weights, rng)
 		_create_destructible(ctx, pos, def)
-		placed.append(pos)
+		placed.append({"pos": pos, "radius": fr, "blocking": false})
 
-	# Indestructibles: density * 1 attempts.
+	# Indestructibles: density * 1 attempts. Blocking ones are hard cover
+	# (enemies collide) — they get the ENEMY_GAP spacing rule and are
+	# recorded on ctx so EnemySpawner keeps spawn points clear of them.
 	var indest_count := rd.clutter_density
 	var indest_weights := _build_weights(INDESTRUCTIBLE_POOL)
 	for _i in indest_count:
-		var pos := _pick_position(rng, center, hx, hz, rd, placed)
+		var def := _weighted_pick(INDESTRUCTIBLE_POOL, indest_weights, rng)
+		var fr := _footprint_radius(def)
+		var blocking: bool = def.get("blocking", true)
+		var pos := _pick_position(rng, center, hx, hz, rd, placed, fr, blocking)
 		if pos == Vector3.INF:
 			continue
-		var def := _weighted_pick(INDESTRUCTIBLE_POOL, indest_weights, rng)
 		_create_indestructible(ctx, pos, def)
-		placed.append(pos)
+		placed.append({"pos": pos, "radius": fr, "blocking": blocking})
+		if blocking:
+			ctx.blocking_clutter.append({"pos": pos, "radius": fr})
 
 
 # ── Prop creation ─────────────────────────────────────────────────────────
@@ -314,22 +331,27 @@ static func _get_height(def: Dictionary) -> float:
 
 # ── Placement helpers ─────────────────────────────────────────────────────
 
-static func _pick_position(rng: RandomNumberGenerator, center: Vector3, hx: float, hz: float, rd: RoomDef, placed: Array[Vector3]) -> Vector3:
+static func _pick_position(rng: RandomNumberGenerator, center: Vector3, hx: float, hz: float, rd: RoomDef, placed: Array[Dictionary], footprint: float, blocking: bool) -> Vector3:
+	# Wall margin keeps the prop EDGE (not center) MARGIN away from the
+	# wall, so a wide prop can't leave a sub-enemy-width slot against it.
+	var wall_margin := MARGIN + footprint
+	if hx - wall_margin <= -hx + wall_margin or hz - wall_margin <= -hz + wall_margin:
+		return Vector3.INF  # room too small for this prop
 	# Up to 10 attempts to find a non-conflicting spot.
 	for _attempt in 10:
-		var px := center.x + rng.randf_range(-hx + MARGIN, hx - MARGIN)
-		var pz := center.z + rng.randf_range(-hz + MARGIN, hz - MARGIN)
+		var px := center.x + rng.randf_range(-hx + wall_margin, hx - wall_margin)
+		var pz := center.z + rng.randf_range(-hz + wall_margin, hz - wall_margin)
 		var pos := Vector3(px, 0, pz)
-		if _is_near_opening(pos, center, hx, hz, rd):
+		if _is_near_opening(pos, center, hx, hz, rd, footprint):
 			continue
-		if _too_close_to_placed(pos, placed):
+		if _too_close_to_placed(pos, footprint, blocking, placed):
 			continue
 		return pos
 	return Vector3.INF  # give up
 
 
-static func _is_near_opening(pos: Vector3, center: Vector3, hx: float, hz: float, rd: RoomDef) -> bool:
-	var half_gap := rd.opening_width * 0.5 + OPENING_CLEARANCE
+static func _is_near_opening(pos: Vector3, center: Vector3, hx: float, hz: float, rd: RoomDef, footprint: float = 0.0) -> bool:
+	var half_gap := rd.opening_width * 0.5 + OPENING_CLEARANCE + footprint
 	for wall: RoomDef.Wall in rd.openings:
 		match wall:
 			RoomDef.Wall.NORTH:
@@ -347,11 +369,30 @@ static func _is_near_opening(pos: Vector3, center: Vector3, hx: float, hz: float
 	return false
 
 
-static func _too_close_to_placed(pos: Vector3, placed: Array[Vector3]) -> bool:
-	for p: Vector3 in placed:
-		if pos.distance_to(p) < MIN_SPACING:
+static func _too_close_to_placed(pos: Vector3, footprint: float, blocking: bool, placed: Array[Dictionary]) -> bool:
+	for p: Dictionary in placed:
+		# Two blocking props must leave an enemy-passable corridor between
+		# their EDGES; everything else just avoids visual overlap.
+		var gap: float = ENEMY_GAP if (blocking and bool(p["blocking"])) else MIN_SPACING
+		if pos.distance_to(p["pos"]) < footprint + float(p["radius"]) + gap:
 			return true
 	return false
+
+
+# Horizontal half-extent of a prop def — how far its widest edge sticks
+# out from the placement center. Drives edge-based spacing/margins.
+static func _footprint_radius(def: Dictionary) -> float:
+	var kind: String = def["mesh"]
+	if kind == "cylinder":
+		var r: float = def.get("radius", 0.2)
+		if def.get("horizontal", false):
+			return maxf(float(def.get("height", 1.0)) * 0.5, r)
+		return r
+	elif kind == "plane":
+		var s2: Vector2 = def["size"]
+		return maxf(s2.x, s2.y) * 0.5
+	var s: Vector3 = def["size"]
+	return maxf(s.x, s.z) * 0.5
 
 
 static func _hash_id(id: StringName) -> int:
