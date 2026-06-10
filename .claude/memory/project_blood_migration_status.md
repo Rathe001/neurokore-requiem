@@ -40,10 +40,13 @@ against `git log --oneline` before assuming this is current.**
   Hit a hidden lifecycle bug with `process_frame.connect` cleanup —
   see [[liquid-layer-stamp-lifecycle]] before adding any new
   `stamp_*` variants.
-- **Slippery / Poor Traction debuff window tied to the visual trail.**
-  `_active_ground_surfaces` checks `bloody_steps_remaining` meta
-  alongside `_blood_pool_count`, so the debuff persists as long as
-  prints are visibly being tracked. Same pattern for future fluids.
+- ~~Slippery / Poor Traction debuff window tied to the visual trail.~~
+  **REVERTED 2026-06-10** (commit `b537eb0`) at the user's request:
+  the residue counter recharges on ANY blood decal underfoot, so in
+  gore-heavy rooms the debuff icon never cleared. Debuff is now
+  pool-only (`_blood_pool_count`), matching the mechanics which were
+  always pool-gated. Footprint trail is visual-only. Don't re-tie
+  debuffs to the trail counter.
 
 ## Still on the old Decal system (pending tasks)
 
@@ -87,6 +90,17 @@ against `git log --oneline` before assuming this is current.**
   non-human fluids (cyborg / machine / oil / water — needs different
   color uniforms per instance); wall LiquidLayer multi-fluid support
   (currently a singleton — would need per-axis masks per fluid).
+
+## Update 2026-06-10 — WallLiquidLayer lifecycle
+
+`wall_liquid_layer.gd` was missing the floor layer's built-signal mask
+wipe: uninitialized render-target memory read as full-wall blood at
+level start (shader `alpha_min` 0.5 makes ANY nonzero mask visible),
+and NG+ rebuilds carried the old floor's blood + left stale overlay
+quads floating (they're children of WallLiquidLayer, not the builder).
+Fixed in `dfcb6a7` with `_reset_masks_and_overlays()` on every `built`
+signal. Any future persistent-mask layer needs the same wipe pattern:
+CLEAR_MODE_ONCE + UPDATE_ONCE on build.
 
 ## Approach hint for walls (task #110)
 
