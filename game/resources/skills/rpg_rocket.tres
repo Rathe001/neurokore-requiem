@@ -1,8 +1,11 @@
 [gd_resource type="Resource" script_class="Skill" load_steps=2 format=3]
 
-; RPG primary fire — single rocket with a 4m blast on impact. Slower
+; RPG primary fire — single rocket with a 2m blast on impact. Slower
 ; cooldown, modest projectile speed (the rocket should be visible mid-
 ; flight). 1–2 round magazine forces frequent reload commitment.
+; Blast was 4.0 originally but read as an endgame nuke at level 1 —
+; 2.0 base leaves headroom for the +0-3m blast_radius_bonus signature
+; roll to grow it back toward that size on endgame drops.
 
 [ext_resource type="Script" path="res://scripts/skills/skill.gd" id="1_skill_script"]
 
@@ -19,5 +22,5 @@ targeting_mode = 2
 cone_deg = 0.0
 knockback = 5.0
 projectile_speed = 18.0
-blast_radius = 4.0
+blast_radius = 2.0
 icon_color = Color(1.0, 0.55, 0.25, 1.0)

@@ -831,11 +831,22 @@ func _explode(impact_pos: Vector3) -> void:
 		WeaponSounds.play_impact(weapon_base_id, impact_pos)
 	var targets: Array[Node3D] = SpatialGrid.query_radius(
 		global_position, blast_radius, target_group)
+	var space := get_world_3d().direct_space_state
 	for target: Node3D in targets:
 		if not target.has_method(&"take_damage"):
 			continue
 		if target_group == &"enemies" and target.has_method(&"is_player_friendly") and target.is_player_friendly():
 			continue
+		# Walls block the blast. query_radius is pure distance — without
+		# this, the shockwave damaged targets in the adjacent room through
+		# the wall. Ray at chest height; hit_from_inside is false so a
+		# detonation flush against a wall surface still reaches targets
+		# on the near side.
+		if space != null:
+			var chest: Vector3 = target.global_position + Vector3(0.0, 0.9, 0.0)
+			var ray := PhysicsRayQueryParameters3D.create(impact_pos, chest, WORLD_LAYER_MASK)
+			if not space.intersect_ray(ray).is_empty():
+				continue
 		var is_crit := _roll_crit()
 		var dmg := _roll_damage(is_crit)
 		if target_group == &"player":
