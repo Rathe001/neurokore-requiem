@@ -1384,9 +1384,17 @@ func _spawn_hitscan_vfx_deferred(weapon: Item, visual_muzzle: Vector3, aim_norm:
 	_host.get_tree().process_frame.connect(func() -> void:
 		if _host == null or not is_instance_valid(_host) or not _host.is_inside_tree():
 			return
+		# Per-component timing — prints ONLY when a shot's VFX exceeds 5ms,
+		# so the console stays quiet in normal play but a hitchy shot tells
+		# us exactly which spawn is eating the frame. Time.get_ticks_usec
+		# costs ~nothing; safe to leave in.
+		var t0 := Time.get_ticks_usec()
 		CombatVisuals.spawn_muzzle_flash(_host, visual_muzzle, is_bullet, tint)
+		var t1 := Time.get_ticks_usec()
 		_eject_casing(weapon)
+		var t2 := Time.get_ticks_usec()
 		CombatVisuals.spawn_beam(_host, aim_norm, beam_end, visual_muzzle, tint)
+		var t3 := Time.get_ticks_usec()
 		# Wall decal for hitscan that terminates on geometry (no enemy in
 		# the cone before the wall) — molten scorch for energy, bullet
 		# hole for kinetic. Skipped when an enemy was hit (the impact
@@ -1396,8 +1404,14 @@ func _spawn_hitscan_vfx_deferred(weapon: Item, visual_muzzle: Vector3, aim_norm:
 			if vfx_parent != null:
 				PrototypeAttackIndicator.spawn_wall_projectile_impact(
 					vfx_parent, wall_hit_pos, wall_hit_normal, is_bullet, tint)
+		var t4 := Time.get_ticks_usec()
 		if burst_pos != Vector3.ZERO:
-			CombatVisuals.spawn_impact_burst(_host, burst_pos, tint),
+			CombatVisuals.spawn_impact_burst(_host, burst_pos, tint)
+		var t5 := Time.get_ticks_usec()
+		if t5 - t0 > 5000:
+			print("[hitscan-vfx] total=%.1fms flash=%.1f casing=%.1f beam=%.1f decal=%.1f burst=%.1f" % [
+				(t5 - t0) / 1000.0, (t1 - t0) / 1000.0, (t2 - t1) / 1000.0,
+				(t3 - t2) / 1000.0, (t4 - t3) / 1000.0, (t5 - t4) / 1000.0]),
 		CONNECT_ONE_SHOT)
 
 

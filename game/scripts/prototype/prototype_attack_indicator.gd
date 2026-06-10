@@ -96,6 +96,9 @@ static var _impact_flash_mesh: SphereMesh = null
 static var _impact_flash_mat_cache: Dictionary = {}
 static var _impact_spark_cache: Dictionary = {}
 static var _impact_spark_curve_tex: CurveTexture = null
+# Blood-burst shared resources — keyed by blood_type (3 entries).
+static var _blood_burst_cache: Dictionary = {}
+static var _blood_burst_curve_tex: CurveTexture = null
 # Beam material templates keyed by Color — duplicated per use for tween animation.
 static var _beam_core_mat_cache: Dictionary = {}
 static var _beam_glow_mat_cache: Dictionary = {}
@@ -753,74 +756,68 @@ static func spawn_blood_burst(parent: Node, world_pos: Vector3, direction: Vecto
 	particles.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
 	particles.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
-	var pm := ParticleProcessMaterial.new()
-	# Tight emission origin — small sphere reads as "from the wound"
-	# at iso scale. The cone spread below is what shapes the spray.
-	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
-	pm.emission_sphere_radius = 0.04
+	# Cached per blood_type — this fires on EVERY hit, and building a
+	# fresh ParticleProcessMaterial + Curve + CurveTexture + SphereMesh
+	# + StandardMaterial3D per hit was the same per-shot GPU-allocation
+	# class as the laser-pistol hitch (82c37ce). The pm template is
+	# DUPLICATED per burst because direction + velocity vary per call
+	# and same-frame multi-hits (shotgun pellets) would stomp a shared
+	# one; the duplicate is CPU-only — the shared scale-curve texture
+	# and draw mesh are referenced, not copied.
+	var bundle: Dictionary = _blood_burst_cache.get(blood_type, {})
+	if bundle.is_empty():
+		var pm_t := ParticleProcessMaterial.new()
+		# Tight emission origin — small sphere reads as "from the wound"
+		# at iso scale. The cone spread below is what shapes the spray.
+		pm_t.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+		pm_t.emission_sphere_radius = 0.04
+		# Spread is the half-angle around `direction`, so 25° gives a
+		# 50° cone — narrow enough to read as a focused exit-wound jet.
+		pm_t.spread = 25.0
+		# Strong gravity so droplets arc back down quickly.
+		pm_t.gravity = Vector3(0.0, -12.0, 0.0)
+		pm_t.damping_min = 0.5
+		pm_t.damping_max = 2.0
+		# scale_min/max is a MULTIPLIER on the mesh size: 0.7-1.3 gives
+		# natural per-droplet variation around the 0.035m base radius.
+		pm_t.scale_min = 0.7
+		pm_t.scale_max = 1.3
+		# Droplet color = palette base (same dark venous tone the floor
+		# splatters use); visibility comes from the emission term below.
+		var droplet_color := blood_color_for(blood_type)
+		pm_t.color = droplet_color
+		# Droplets shrink as they travel — masks the moment they vanish.
+		if _blood_burst_curve_tex == null:
+			var curve := Curve.new()
+			curve.add_point(Vector2(0.0, 1.0))
+			curve.add_point(Vector2(0.8, 0.7))
+			curve.add_point(Vector2(1.0, 0.0))
+			_blood_burst_curve_tex = CurveTexture.new()
+			_blood_burst_curve_tex.curve = curve
+		pm_t.scale_curve = _blood_burst_curve_tex
+		# Sphere mesh — small droplets read as quick mist. Emission at
+		# 3.5 keeps the dark blood hue readable at iso distance (2.0 was
+		# invisible against dim floors, 4.0 read as detached crimson).
+		var droplet_mesh := SphereMesh.new()
+		droplet_mesh.radius = 0.035
+		droplet_mesh.height = 0.07
+		droplet_mesh.radial_segments = 5
+		droplet_mesh.rings = 3
+		var droplet_mat := StandardMaterial3D.new()
+		droplet_mat.albedo_color = droplet_color
+		droplet_mat.emission_enabled = true
+		droplet_mat.emission = droplet_color
+		droplet_mat.emission_energy_multiplier = 3.5
+		droplet_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		droplet_mesh.material = droplet_mat
+		bundle = {"pm": pm_t, "mesh": droplet_mesh}
+		_blood_burst_cache[blood_type] = bundle
+	var pm := (bundle["pm"] as ParticleProcessMaterial).duplicate() as ParticleProcessMaterial
 	pm.direction = direction.normalized() if direction.length_squared() > 0.0001 else Vector3.UP
-	# Spread is the half-angle around `direction`, so 25° here gives a
-	# 50° cone — narrow enough to read as a focused exit-wound jet
-	# instead of an omnidirectional puff.
-	pm.spread = 25.0
 	pm.initial_velocity_min = BLOOD_BURST_SPEED_MIN * count_mult
 	pm.initial_velocity_max = BLOOD_BURST_SPEED_MAX * count_mult
-	# Strong gravity so droplets arc back down quickly — sells "drips
-	# falling to the floor" not "particles flying off into the void".
-	pm.gravity = Vector3(0.0, -12.0, 0.0)
-	pm.damping_min = 0.5
-	pm.damping_max = 2.0
-	# ParticleProcessMaterial.scale_min/max is a MULTIPLIER on the mesh
-	# size. 0.7-1.3 gives natural per-droplet variation around the
-	# mesh's base radius (0.035 m / ~7 cm diameter below).
-	pm.scale_min = 0.7
-	pm.scale_max = 1.3
-	# Droplet color = palette base (the same dark venous tone the floor
-	# splatter decals use). Visibility comes from the emission term
-	# below, not from brightening the diffuse — keeping the diffuse
-	# dark means the mist reads as the same fluid as the splatters it
-	# leaves behind.
-	var droplet_color := blood_color_for(blood_type)
-	pm.color = droplet_color
-	# Droplets shrink as they travel — masks the moment they vanish.
-	var curve := Curve.new()
-	curve.add_point(Vector2(0.0, 1.0))
-	curve.add_point(Vector2(0.8, 0.7))
-	curve.add_point(Vector2(1.0, 0.0))
-	var curve_tex := CurveTexture.new()
-	curve_tex.curve = curve
-	pm.scale_curve = curve_tex
 	particles.process_material = pm
-
-	# Sphere mesh — smaller droplets read as a quick mist rather than
-	# gore chunks. 3.5 cm radius × scale 0.7-1.3 = 2.5-4.5 cm radius
-	# (~5-9 cm diameter on screen).
-	var droplet_mesh := SphereMesh.new()
-	droplet_mesh.radius = 0.035
-	droplet_mesh.height = 0.07
-	droplet_mesh.radial_segments = 5
-	droplet_mesh.rings = 3
-	var droplet_mat := StandardMaterial3D.new()
-	droplet_mat.albedo_color = droplet_color
-	# Emission carries the visible color. Without it, the
-	# particle_vertex_color × albedo product squares the color down to
-	# near-black at iso distance against a dim floor — verified
-	# empirically that an UNSHADED-only droplet was invisible even at
-	# bumped sizes / counts. Multiplier 2.5 gives a clear, slightly
-	# glowing droplet without looking radioactive (cf. explosion sparks
-	# at 4.0 which intentionally look hot).
-	droplet_mat.emission_enabled = true
-	droplet_mat.emission = droplet_color
-	# 3.5 puts the droplet in the readable-at-iso range without losing
-	# the dark blood hue. 2.0 matched the splatter base color exactly
-	# but was hard to spot against dim floors; 4.0 was punchy crimson
-	# that looked detached from the splatters. 3.5 is the middle ground
-	# — clearly visible mist that still reads as the same fluid as the
-	# stains it leaves on the ground.
-	droplet_mat.emission_energy_multiplier = 3.5
-	droplet_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	droplet_mesh.material = droplet_mat
-	particles.draw_pass_1 = droplet_mesh
+	particles.draw_pass_1 = bundle["mesh"]
 
 	parent.add_child(particles)
 	particles.global_position = world_pos
