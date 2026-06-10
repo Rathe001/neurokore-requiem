@@ -325,26 +325,72 @@ var _fire_pose_holding: bool = false
 # `_mob_variant_index` at _init_enemy time and read by _apply_class_mesh,
 # so the same enemy doesn't flicker between bodies if _apply_class_mesh
 # runs more than once during a spawn cycle.
-# Per-gender Y position for the riot_guard mesh Character node, tuned
-# so feet sit ON the floor at the CharacterBody3D origin. The Meshy
-# player meshes use 0.20m for female because their origin sits 0.20m
-# above the feet; riot_guard imports have their origins LOWER than the
-# Meshy meshes, so they need a negative lift for males and a smaller
-# positive lift for females. Tune here if specific variants drift.
-const _ENEMY_FEET_Y_MALE: float = -0.10
-const _ENEMY_FEET_Y_FEMALE: float = 0.10
+# Measured floor seat — replaces the old per-gender Y constants, which
+# assumed one shared origin per gender (each FBX import actually differs,
+# and boss/one-off meshes floated). Same two-stage approach the player
+# uses: coarse visual-AABB seat (bind pose, works pre-tree), then a
+# bone-based refinement under a FORCED idle pose (idle bends knees and
+# drops the hips, so the bind-pose minimum over-seats by a few cm).
+# Cached per mesh path — hundreds of mobs share 4 riot_guard meshes, so
+# we measure each mesh once and reuse. Boss/named spawns (visual.scale
+# != ONE) skip the cache: the seat offset is scale-dependent and bosses
+# are rare enough to just re-measure. EnemyClass.feet_y_adjust still
+# stacks on top as a per-class emergency override.
+const _SEAT_BONE_MARGIN: float = 0.02
+static var _SEAT_Y_BY_MESH: Dictionary = {}
 
 
-# Combined feet-Y placement. Gender-default + per-EnemyClass adjust.
-# Single source of truth used by both code paths in _apply_class_mesh
-# (the swap-skip and full-swap branches). Bosses and quirky one-off
-# meshes whose pivot doesn't match the gender default tune via
-# EnemyClass.feet_y_adjust.
-func _feet_y_for(picked_gender: StringName) -> float:
-	var base: float = _ENEMY_FEET_Y_FEMALE if picked_gender == &"female" else _ENEMY_FEET_Y_MALE
-	if enemy_class != null:
-		base += enemy_class.feet_y_adjust
-	return base
+func _seat_character_mesh(char_node: Node3D) -> void:
+	var adjust: float = enemy_class.feet_y_adjust if enemy_class != null else 0.0
+	var mesh_key: String = char_node.scene_file_path
+	var vis_scale: float = visual.scale.y if visual != null else 1.0
+	var cacheable: bool = mesh_key != "" and absf(vis_scale - 1.0) < 0.001
+	if cacheable and _SEAT_Y_BY_MESH.has(mesh_key):
+		char_node.position.y = float(_SEAT_Y_BY_MESH[mesh_key]) + adjust
+		return
+	# Coarse: put the mesh's lowest bind-pose point at the capsule bottom
+	# (local y = -0.05 for the shared enemy capsule). Player path reuses
+	# the same AABB helper.
+	var aabb := PrototypePlayer._character_visual_aabb(char_node)
+	if aabb.size.y > 0.1:
+		char_node.position.y = _capsule_bottom_local_y() / maxf(vis_scale, 0.001) - aabb.position.y
+	# Fine: force the class idle pose synchronously and measure the
+	# lowest Foot/Toe bone in world space. Needs the tree (global
+	# transforms) + the anim library — both guaranteed by the call site
+	# in _apply_class_mesh; guard anyway for safety.
+	var skel := _find_skeleton(char_node)
+	if skel == null or anim_player == null or not char_node.is_inside_tree():
+		return
+	for key in XBotAnimations.idle_anim_for_class(_anim_weapon_class()):
+		if anim_player.has_animation(key):
+			anim_player.play(key)
+			break
+	anim_player.advance(0.0)
+	skel.force_update_all_bone_transforms()
+	var min_y: float = INF
+	for i in skel.get_bone_count():
+		var bn: String = skel.get_bone_name(i)
+		if not (bn.contains("Foot") or bn.contains("Toe")):
+			continue
+		min_y = minf(min_y, (skel.global_transform * skel.get_bone_global_pose(i)).origin.y)
+	if min_y == INF:
+		return
+	var capsule_bottom: float = global_position.y + _capsule_bottom_local_y()
+	char_node.position.y += (capsule_bottom + _SEAT_BONE_MARGIN - min_y) / maxf(vis_scale, 0.001)
+	if cacheable:
+		_SEAT_Y_BY_MESH[mesh_key] = char_node.position.y
+	char_node.position.y += adjust
+
+
+# Capsule bottom in body-local space (-0.05 for the shared enemy scene:
+# capsule at y=0.8, height 1.7). Read from the actual shape so a future
+# capsule retune can't drift out of sync with the seat math.
+func _capsule_bottom_local_y() -> float:
+	for child in get_children():
+		var cs := child as CollisionShape3D
+		if cs != null and cs.shape is CapsuleShape3D:
+			return cs.position.y - (cs.shape as CapsuleShape3D).height * 0.5
+	return 0.0
 
 
 const _MOB_MESH_VARIANTS: Array = [
@@ -740,12 +786,9 @@ func _apply_class_mesh() -> void:
 		# pool re-acquire shifted us to a different variant of the same
 		# mesh family. WeaponAttachment grip table depends on this.
 		current_char.set_meta(&"gender", picked_gender)
-		# Female meshes ship with their geometric origin ~0.20m above
-		# the feet (same as the player path); lift them so feet sit at
-		# floor level. Male meshes stay at y=0. EnemyClass.feet_y_adjust
-		# stacks on top for per-class meshes that drift.
-		current_char.position.y = _feet_y_for(picked_gender)
 		_ensure_anim_player_on(current_char)
+		# Measured floor seat (cached per mesh — cheap on re-acquire).
+		_seat_character_mesh(current_char)
 		return
 	if current_char != null:
 		visual.remove_child(current_char)
@@ -758,12 +801,6 @@ func _apply_class_mesh() -> void:
 	# can pick the right grip table (per-weapon offset/rotation/scale
 	# tuned for female bone proportions). Matches player setup.
 	new_char.set_meta(&"gender", picked_gender)
-	# Female meshes need a Y lift so feet sit at floor level (geometric
-	# origin sits ~0.20m above the feet on the Meshy female imports).
-	# EnemyClass.feet_y_adjust stacks on top — non-zero values nudge
-	# the floor contact per-class for boss / unique meshes whose pivot
-	# doesn't match the gender default.
-	new_char.position.y = _feet_y_for(picked_gender)
 	# Backfill null surface materials BEFORE the node enters the tree.
 	# Doing it after add_child leaves one frame where the renderer sees
 	# the null surfaces and spams material_*: Parameter is null. Same
@@ -795,6 +832,9 @@ func _apply_class_mesh() -> void:
 		# touch the CharacterBody3D itself. See xbot_ragdoll comment for
 		# the historical Jolt _try_build_shape spam this prevents.
 		XBotRagdoll.normalize_parent_chain_scale(new_skel, visual)
+	# Measured floor seat — AFTER bone-prefix normalisation so the forced
+	# idle pose actually binds to the skeleton during the measurement.
+	_seat_character_mesh(new_char)
 	# Per-class color tint. Multiplied into each surface's albedo via the
 	# material's per-instance modulate path — keeps the authored PBR
 	# textures intact while letting a shared mesh read as distinct
