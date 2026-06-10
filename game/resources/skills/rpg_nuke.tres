@@ -2,8 +2,9 @@
 
 ; RPG alt-fire — Tactical Strike on a long cooldown. Massive AoE,
 ; heavy damage. Treat as a panic button: ~30s cooldown, blast_radius
-; 9m. Burns one ammo round same as the primary so the magazine is
-; shared.
+; 4.5m (2.25x the 2m primary — same ratio as the original 9m vs the
+; old 4m primary; 9m filled the whole screen with embers). Burns one
+; ammo round same as the primary so the magazine is shared.
 ;
 ; is_airstrike = true changes the spawn behaviour: instead of a
 ; player-origin rocket, the player paints an X marker on the ground
@@ -26,7 +27,7 @@ targeting_mode = 2
 cone_deg = 0.0
 knockback = 12.0
 projectile_speed = 30.0
-blast_radius = 9.0
+blast_radius = 4.5
 damage_multiplier = 1.0
 icon_color = Color(1.0, 0.6, 0.15, 1.0)
 is_airstrike = true
