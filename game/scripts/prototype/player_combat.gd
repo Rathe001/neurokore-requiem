@@ -1023,28 +1023,13 @@ func _resolve_hitscan(skill: Skill, aim: Vector3, eff_range: float, weapon: Item
 		beam_end = minf(beam_end, origin.distance_to(hit_target.global_position))
 	var hitscan_tint := _weapon_tint(weapon)
 	var _is_bullet := weapon != null and weapon.is_bullet_weapon()
-	# Flash anchors at the visual muzzle (gun barrel tip) so it pops at
-	# the weapon even when `origin` got clamped back to chest. The beam
-	# below starts from the visual muzzle too so the tracer reads as
-	# leaving the gun, not the player's torso.
-	CombatVisuals.spawn_muzzle_flash(_host, visual_muzzle, _is_bullet, hitscan_tint)
-	_eject_casing(weapon)
-	CombatVisuals.spawn_beam(_host, aim_norm, beam_end, visual_muzzle, hitscan_tint)
-	# Wall decal for hitscan that terminates on geometry (no enemy in
-	# the cone before the wall). Same molten-scorch / bullet-hole split
-	# the projectile path uses — laser/plasma get glowing patches via
-	# is_bullet=false; future kinetic hitscan (if any) would punch holes.
-	# Skipped when the beam hits an enemy first (the impact_burst on the
-	# enemy already conveys the hit) or when it ran to extended_range
-	# without hitting anything.
-	if hit_target == null and wall_hit_normal != Vector3.ZERO and wall_dist < extended_range:
-		var hitscan_parent := _host.get_parent()
-		if hitscan_parent != null:
-			PrototypeAttackIndicator.spawn_wall_projectile_impact(
-				hitscan_parent, wall_hit_pos, wall_hit_normal, _is_bullet, hitscan_tint
-			)
+	# Entire fire-VFX stack spawns OUTSIDE the awaited physics frame —
+	# see _spawn_hitscan_vfx_deferred. Damage below stays synchronous.
+	var spawn_decal: bool = hit_target == null and wall_hit_normal != Vector3.ZERO and wall_dist < extended_range
+	var burst_pos: Vector3 = hit_target.global_position + Vector3(0.0, 0.9, 0.0) if hit_target != null else Vector3.ZERO
+	_spawn_hitscan_vfx_deferred(weapon, visual_muzzle, aim_norm, beam_end, _is_bullet,
+		hitscan_tint, spawn_decal, wall_hit_pos, wall_hit_normal, burst_pos)
 	if hit_target != null:
-		CombatVisuals.spawn_impact_burst(_host, hit_target.global_position + Vector3(0.0, 0.9, 0.0), hitscan_tint)
 		var is_crit := _roll_crit(weapon)
 		var dmg := _crit_damage(_roll_skill_damage(skill, weapon), is_crit)
 		dmg = maxi(1, int(round(float(dmg) * range_falloff(beam_end, eff_range))))
@@ -1384,6 +1369,38 @@ func _pick_chain_primary(origin: Vector3, aim_norm: Vector3, eff_range: float) -
 ## is neutral. Plumbed through every visual call in resolve so
 ## flame weapons paint red beams / red impact bursts / red lightning
 ## etc., regardless of which class the player is.
+# Spawns the full hitscan fire-VFX stack (muzzle flash/pulse, casing,
+# beam, wall decal, impact burst) one idle frame later. The hitscan
+# resolver awaits a physics frame for intersect_ray; spawning the 6-10
+# VFX nodes synchronously inside that window put 10-20ms into phys_ms
+# every shot and read as a per-shot freeze (the laser-pistol hitch —
+# CSV-traced 2026-05-25). The one-frame visual delay is imperceptible;
+# damage stays synchronous in the caller.
+func _spawn_hitscan_vfx_deferred(weapon: Item, visual_muzzle: Vector3, aim_norm: Vector3,
+		beam_end: float, is_bullet: bool, tint: Color, spawn_decal: bool,
+		wall_hit_pos: Vector3, wall_hit_normal: Vector3, burst_pos: Vector3) -> void:
+	if _host == null or not is_instance_valid(_host) or not _host.is_inside_tree():
+		return
+	_host.get_tree().process_frame.connect(func() -> void:
+		if _host == null or not is_instance_valid(_host) or not _host.is_inside_tree():
+			return
+		CombatVisuals.spawn_muzzle_flash(_host, visual_muzzle, is_bullet, tint)
+		_eject_casing(weapon)
+		CombatVisuals.spawn_beam(_host, aim_norm, beam_end, visual_muzzle, tint)
+		# Wall decal for hitscan that terminates on geometry (no enemy in
+		# the cone before the wall) — molten scorch for energy, bullet
+		# hole for kinetic. Skipped when an enemy was hit (the impact
+		# burst conveys it) or the beam ran out without hitting anything.
+		if spawn_decal:
+			var vfx_parent := _host.get_parent()
+			if vfx_parent != null:
+				PrototypeAttackIndicator.spawn_wall_projectile_impact(
+					vfx_parent, wall_hit_pos, wall_hit_normal, is_bullet, tint)
+		if burst_pos != Vector3.ZERO:
+			CombatVisuals.spawn_impact_burst(_host, burst_pos, tint),
+		CONNECT_ONE_SHOT)
+
+
 func _weapon_tint(weapon: Item) -> Color:
 	if weapon == null:
 		return Color(0.0, 0.0, 0.0, 0.0)
@@ -1519,19 +1536,12 @@ func _resolve_hitscan_exact(skill: Skill, aim_norm: Vector3, eff_range: float, w
 		beam_end = minf(beam_end, origin.distance_to(hit_target.global_position))
 	var hitscan_exact_tint := _weapon_tint(weapon)
 	var _is_bullet_exact := weapon != null and weapon.is_bullet_weapon()
-	CombatVisuals.spawn_muzzle_flash(_host, visual_muzzle, _is_bullet_exact, hitscan_exact_tint)
-	_eject_casing(weapon)
-	CombatVisuals.spawn_beam(_host, aim_norm, beam_end, visual_muzzle, hitscan_exact_tint)
-	# Wall decal when the Double Tap follow-up terminates on geometry —
-	# matches the primary hitscan path so laser repeats also leave marks.
-	if hit_target == null and wall_hit_normal_exact != Vector3.ZERO and wall_dist < extended_range:
-		var hitscan_parent_exact := _host.get_parent()
-		if hitscan_parent_exact != null:
-			PrototypeAttackIndicator.spawn_wall_projectile_impact(
-				hitscan_parent_exact, wall_hit_pos_exact, wall_hit_normal_exact, _is_bullet_exact, hitscan_exact_tint
-			)
+	# Same deferred-VFX treatment as the primary hitscan path.
+	var spawn_decal_exact: bool = hit_target == null and wall_hit_normal_exact != Vector3.ZERO and wall_dist < extended_range
+	var burst_pos_exact: Vector3 = hit_target.global_position + Vector3(0.0, 0.9, 0.0) if hit_target != null else Vector3.ZERO
+	_spawn_hitscan_vfx_deferred(weapon, visual_muzzle, aim_norm, beam_end, _is_bullet_exact,
+		hitscan_exact_tint, spawn_decal_exact, wall_hit_pos_exact, wall_hit_normal_exact, burst_pos_exact)
 	if hit_target != null:
-		CombatVisuals.spawn_impact_burst(_host, hit_target.global_position + Vector3(0.0, 0.9, 0.0), hitscan_exact_tint)
 		var is_crit := _roll_crit(weapon)
 		var dmg := _crit_damage(_roll_skill_damage(skill, weapon), is_crit)
 		dmg = maxi(1, int(round(float(dmg) * range_falloff(beam_end, eff_range))))

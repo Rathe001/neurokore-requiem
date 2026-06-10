@@ -87,8 +87,15 @@ static var _bubble_mesh_cache: Dictionary = {}
 static var _cone_dome_cache: Dictionary = {}
 static var _material_template_cache: Dictionary = {}  # Color -> StandardMaterial3D template
 # Beam cylinder mesh caches keyed by length — two radii (core / glow).
-static var _beam_core_mesh_cache: Dictionary = {}
-static var _beam_glow_mesh_cache: Dictionary = {}
+static var _beam_core_unit_mesh: CylinderMesh = null
+static var _beam_glow_unit_mesh: CylinderMesh = null
+# Impact-burst shared resources — see spawn_impact_burst. Flash material
+# templates + spark bundles are keyed by color (small set: class colors
+# + elemental tints); the curve texture and flash mesh are singletons.
+static var _impact_flash_mesh: SphereMesh = null
+static var _impact_flash_mat_cache: Dictionary = {}
+static var _impact_spark_cache: Dictionary = {}
+static var _impact_spark_curve_tex: CurveTexture = null
 # Beam material templates keyed by Color — duplicated per use for tween animation.
 static var _beam_core_mat_cache: Dictionary = {}
 static var _beam_glow_mat_cache: Dictionary = {}
@@ -423,16 +430,19 @@ static func spawn_beam(host: Node3D, aim: Vector3, length: float, origin: Vector
 	# class. Zero-alpha = "no override" and falls back to class color.
 	var color := tint_override if tint_override.a > 0.0 else _color_for_host(host)
 
-	# Core beam — bright, slightly transparent cylinder. Mesh cached by length.
+	# Core beam — bright, slightly transparent cylinder. Shared unit mesh,
+	# stretched to length via instance scale (see _beam_core_mesh).
 	var core_mat := _beam_core_material(color)
 	var core := MeshInstance3D.new()
-	core.mesh = _beam_core_mesh(length)
+	core.mesh = _beam_core_mesh()
+	core.scale = Vector3(1.0, length, 1.0)
 	core.material_override = core_mat
 
-	# Outer glow — wider, softer, more transparent. Mesh cached by length.
+	# Outer glow — wider, softer, more transparent.
 	var glow_mat := _beam_glow_material(color)
 	var glow := MeshInstance3D.new()
-	glow.mesh = _beam_glow_mesh(length)
+	glow.mesh = _beam_glow_mesh()
+	glow.scale = Vector3(1.0, length, 1.0)
 	glow.material_override = glow_mat
 
 	# Container node — cylinder height runs along local Y, so rotate -90° on X
@@ -514,28 +524,36 @@ static func spawn_impact_burst(host: Node3D, world_pos: Vector3, color_override:
 		color = _color_for_host(host)
 
 	# ── Flash sphere ──────────────────────────────────────────────────
-	var flash_mesh := SphereMesh.new()
-	flash_mesh.radius = IMPACT_FLASH_RADIUS
-	flash_mesh.height = IMPACT_FLASH_RADIUS * 2.0
-	flash_mesh.radial_segments = 12
-	flash_mesh.rings = 6
-	var flash_mat := StandardMaterial3D.new()
-	# Core color is a brighter, desaturated version of the projectile color
-	# so the initial pop reads as white-hot center fading to the accent.
-	var core := Color(
-		lerpf(color.r, 1.0, 0.6),
-		lerpf(color.g, 1.0, 0.6),
-		lerpf(color.b, 1.0, 0.6),
-		0.9)
-	flash_mat.albedo_color = core
-	flash_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	flash_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	flash_mat.emission_enabled = true
-	flash_mat.emission = Color(core.r, core.g, core.b)
-	flash_mat.emission_energy_multiplier = 5.0
-	flash_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	# Shared mesh + per-color material template (duplicated for the fade
+	# tween). This fires on EVERY hit; allocating a fresh SphereMesh +
+	# material each time was part of the per-shot hitch.
+	if _impact_flash_mesh == null:
+		_impact_flash_mesh = SphereMesh.new()
+		_impact_flash_mesh.radius = IMPACT_FLASH_RADIUS
+		_impact_flash_mesh.height = IMPACT_FLASH_RADIUS * 2.0
+		_impact_flash_mesh.radial_segments = 12
+		_impact_flash_mesh.rings = 6
+	var flash_template: StandardMaterial3D = _impact_flash_mat_cache.get(color)
+	if flash_template == null:
+		flash_template = StandardMaterial3D.new()
+		# Core color is a brighter, desaturated version of the projectile
+		# color so the pop reads as white-hot center fading to the accent.
+		var core := Color(
+			lerpf(color.r, 1.0, 0.6),
+			lerpf(color.g, 1.0, 0.6),
+			lerpf(color.b, 1.0, 0.6),
+			0.9)
+		flash_template.albedo_color = core
+		flash_template.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		flash_template.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		flash_template.emission_enabled = true
+		flash_template.emission = Color(core.r, core.g, core.b)
+		flash_template.emission_energy_multiplier = 5.0
+		flash_template.cull_mode = BaseMaterial3D.CULL_DISABLED
+		_impact_flash_mat_cache[color] = flash_template
+	var flash_mat := flash_template.duplicate() as StandardMaterial3D
 	var flash_inst := MeshInstance3D.new()
-	flash_inst.mesh = flash_mesh
+	flash_inst.mesh = _impact_flash_mesh
 	flash_inst.material_override = flash_mat
 	flash_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	flash_inst.scale = Vector3.ONE * 0.3
@@ -559,6 +577,11 @@ static func spawn_impact_burst(host: Node3D, world_pos: Vector3, color_override:
 	flash_inst.add_child(light)
 
 	# ── Spark burst ───────────────────────────────────────────────────
+	# Process material + draw mesh are never mutated after creation, so
+	# they're fully shareable per color. The old code built a fresh
+	# ParticleProcessMaterial + Curve + CurveTexture + SphereMesh +
+	# StandardMaterial3D on EVERY hit — the CurveTexture alone is a GPU
+	# texture upload per shot.
 	var particles := GPUParticles3D.new()
 	particles.emitting = true
 	particles.one_shot = true
@@ -567,40 +590,44 @@ static func spawn_impact_burst(host: Node3D, world_pos: Vector3, color_override:
 	particles.explosiveness = 1.0
 	particles.local_coords = false
 
-	var pm := ParticleProcessMaterial.new()
-	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_POINT
-	pm.direction = Vector3(0.0, 0.2, 0.0)
-	pm.spread = 180.0
-	pm.initial_velocity_min = 3.0
-	pm.initial_velocity_max = 6.0
-	pm.gravity = Vector3(0.0, -8.0, 0.0)
-	pm.damping_min = 4.0
-	pm.damping_max = 7.0
-	pm.scale_min = 0.02
-	pm.scale_max = 0.05
-	pm.color = Color(color.r, color.g, color.b, 1.0)
-	var curve := Curve.new()
-	curve.add_point(Vector2(0.0, 1.0))
-	curve.add_point(Vector2(0.6, 0.4))
-	curve.add_point(Vector2(1.0, 0.0))
-	var curve_tex := CurveTexture.new()
-	curve_tex.curve = curve
-	pm.scale_curve = curve_tex
-	particles.process_material = pm
-
-	var spark_mesh := SphereMesh.new()
-	spark_mesh.radius = 0.03
-	spark_mesh.height = 0.06
-	spark_mesh.radial_segments = 4
-	spark_mesh.rings = 2
-	var spark_mat := StandardMaterial3D.new()
-	spark_mat.albedo_color = color
-	spark_mat.emission_enabled = true
-	spark_mat.emission = color
-	spark_mat.emission_energy_multiplier = 4.0
-	spark_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	spark_mesh.material = spark_mat
-	particles.draw_pass_1 = spark_mesh
+	var spark_bundle: Dictionary = _impact_spark_cache.get(color, {})
+	if spark_bundle.is_empty():
+		var pm := ParticleProcessMaterial.new()
+		pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_POINT
+		pm.direction = Vector3(0.0, 0.2, 0.0)
+		pm.spread = 180.0
+		pm.initial_velocity_min = 3.0
+		pm.initial_velocity_max = 6.0
+		pm.gravity = Vector3(0.0, -8.0, 0.0)
+		pm.damping_min = 4.0
+		pm.damping_max = 7.0
+		pm.scale_min = 0.02
+		pm.scale_max = 0.05
+		pm.color = Color(color.r, color.g, color.b, 1.0)
+		if _impact_spark_curve_tex == null:
+			var curve := Curve.new()
+			curve.add_point(Vector2(0.0, 1.0))
+			curve.add_point(Vector2(0.6, 0.4))
+			curve.add_point(Vector2(1.0, 0.0))
+			_impact_spark_curve_tex = CurveTexture.new()
+			_impact_spark_curve_tex.curve = curve
+		pm.scale_curve = _impact_spark_curve_tex
+		var spark_mesh := SphereMesh.new()
+		spark_mesh.radius = 0.03
+		spark_mesh.height = 0.06
+		spark_mesh.radial_segments = 4
+		spark_mesh.rings = 2
+		var spark_mat := StandardMaterial3D.new()
+		spark_mat.albedo_color = color
+		spark_mat.emission_enabled = true
+		spark_mat.emission = color
+		spark_mat.emission_energy_multiplier = 4.0
+		spark_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		spark_mesh.material = spark_mat
+		spark_bundle = {"pm": pm, "mesh": spark_mesh}
+		_impact_spark_cache[color] = spark_bundle
+	particles.process_material = spark_bundle["pm"]
+	particles.draw_pass_1 = spark_bundle["mesh"]
 
 	parent.add_child(particles)
 	particles.global_position = world_pos
@@ -3344,31 +3371,31 @@ static func _bubble_mesh(radius: float) -> SphereMesh:
 
 # ── Beam mesh / material caches ──────────────────────────────────────────────
 
-static func _beam_core_mesh(length: float) -> CylinderMesh:
-	var cached: CylinderMesh = _beam_core_mesh_cache.get(length)
-	if cached != null:
-		return cached
-	var m := CylinderMesh.new()
-	m.top_radius = BEAM_RADIUS
-	m.bottom_radius = BEAM_RADIUS
-	m.height = length
-	m.radial_segments = 6
-	m.rings = 1
-	_beam_core_mesh_cache[length] = m
-	return m
+# UNIT-height cylinders, stretched per instance via MeshInstance3D.scale.y.
+# The old cache was keyed by raw float length — beam length varies
+# continuously with cursor/wall distance, so virtually every shot was a
+# cache miss: two fresh CylinderMeshes (with their GPU vertex buffers)
+# allocated AND retained forever per shot. Two shared unit meshes + a
+# scale write costs nothing.
+static func _beam_core_mesh() -> CylinderMesh:
+	if _beam_core_unit_mesh == null:
+		_beam_core_unit_mesh = CylinderMesh.new()
+		_beam_core_unit_mesh.top_radius = BEAM_RADIUS
+		_beam_core_unit_mesh.bottom_radius = BEAM_RADIUS
+		_beam_core_unit_mesh.height = 1.0
+		_beam_core_unit_mesh.radial_segments = 6
+		_beam_core_unit_mesh.rings = 1
+	return _beam_core_unit_mesh
 
-static func _beam_glow_mesh(length: float) -> CylinderMesh:
-	var cached: CylinderMesh = _beam_glow_mesh_cache.get(length)
-	if cached != null:
-		return cached
-	var m := CylinderMesh.new()
-	m.top_radius = BEAM_RADIUS * 3.0
-	m.bottom_radius = BEAM_RADIUS * 3.0
-	m.height = length
-	m.radial_segments = 6
-	m.rings = 1
-	_beam_glow_mesh_cache[length] = m
-	return m
+static func _beam_glow_mesh() -> CylinderMesh:
+	if _beam_glow_unit_mesh == null:
+		_beam_glow_unit_mesh = CylinderMesh.new()
+		_beam_glow_unit_mesh.top_radius = BEAM_RADIUS * 3.0
+		_beam_glow_unit_mesh.bottom_radius = BEAM_RADIUS * 3.0
+		_beam_glow_unit_mesh.height = 1.0
+		_beam_glow_unit_mesh.radial_segments = 6
+		_beam_glow_unit_mesh.rings = 1
+	return _beam_glow_unit_mesh
 
 static func _beam_core_material(color: Color) -> StandardMaterial3D:
 	var template: StandardMaterial3D = _beam_core_mat_cache.get(color)
@@ -3468,6 +3495,10 @@ const ENERGY_PULSE_DEFAULT_COLOR := Color(0.55, 0.8, 1.0)
 ## firing entity through their lifetime. Used by player energy-weapon
 ## shots (laser pistol, plasma rifle) so the muzzle pulse stays glued
 ## to the gun barrel even while the player runs.
+static var _energy_pulse_mesh: SphereMesh = null
+static var _energy_pulse_mat_cache: Dictionary = {}
+
+
 static func spawn_energy_pulse(host: Node3D, barrel_pos: Vector3, tint: Color = Color(0, 0, 0, 0), attach_to_host: bool = false) -> void:
 	if host == null:
 		return
@@ -3475,24 +3506,38 @@ static func spawn_energy_pulse(host: Node3D, barrel_pos: Vector3, tint: Color = 
 	if parent == null:
 		parent = host
 	var mesh_inst := MeshInstance3D.new()
-	var sphere := SphereMesh.new()
-	sphere.radius = ENERGY_PULSE_START_RADIUS
-	sphere.height = ENERGY_PULSE_START_RADIUS * 2.0
-	sphere.radial_segments = 16
-	sphere.rings = 8
-	mesh_inst.mesh = sphere
+	# Shared sphere — a fresh SphereMesh per shot meant a fresh GPU
+	# vertex buffer per shot on the fast-firing laser pistol.
+	if _energy_pulse_mesh == null:
+		_energy_pulse_mesh = SphereMesh.new()
+		_energy_pulse_mesh.radius = ENERGY_PULSE_START_RADIUS
+		_energy_pulse_mesh.height = ENERGY_PULSE_START_RADIUS * 2.0
+		_energy_pulse_mesh.radial_segments = 16
+		_energy_pulse_mesh.rings = 8
+	mesh_inst.mesh = _energy_pulse_mesh
 	mesh_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var col: Color = tint if tint.a > 0.0 else ENERGY_PULSE_DEFAULT_COLOR
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	mat.albedo_color = Color(col.r, col.g, col.b, 0.9)
-	mat.emission_enabled = true
-	mat.emission = col
-	mat.emission_energy_multiplier = 4.0
-	mat.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
-	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	# Fallback matches spawn_beam: no elemental tint → the host's class
+	# color, so the muzzle pulse and the beam always agree. (They used to
+	# diverge — magenta class beam with a hardcoded light-blue pulse.)
+	var col: Color = tint if tint.a > 0.0 else _color_for_host(host)
+	if col.a <= 0.0:
+		col = ENERGY_PULSE_DEFAULT_COLOR
+	# Per-color template, duplicated per use because the fade tween
+	# mutates albedo alpha + emission energy.
+	var template: StandardMaterial3D = _energy_pulse_mat_cache.get(col)
+	if template == null:
+		template = StandardMaterial3D.new()
+		template.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		template.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		template.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		template.albedo_color = Color(col.r, col.g, col.b, 0.9)
+		template.emission_enabled = true
+		template.emission = col
+		template.emission_energy_multiplier = 4.0
+		template.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+		template.cull_mode = BaseMaterial3D.CULL_DISABLED
+		_energy_pulse_mat_cache[col] = template
+	var mat := template.duplicate() as StandardMaterial3D
 	mesh_inst.material_override = mat
 	# Also kick a quick OmniLight3D so the surrounding floor briefly
 	# catches the arc light — sells the energy without needing a
