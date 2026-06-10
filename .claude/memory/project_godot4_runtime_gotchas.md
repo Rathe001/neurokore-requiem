@@ -96,6 +96,18 @@ noise hash needed fract for [0,1) wrapping. Same warning applies to
 other shader builtins missing from GDScript: `mix()` (use `lerp`),
 `mod()` (use `fposmod` or `%`).
 
+**8. GPUParticles3D with `local_coords=false` ignores node scale —
+size via the draw-pass mesh, in direct meters.** Scaling the particle
+node (or any ancestor) does nothing to world-space particles; the
+"sizing" code can be a silent no-op for years (the explosion flipbook
+rendered at its authored 8×8m for every blast size — fx.scale was
+never read). Fix: duplicate `draw_pass_1`, set its mesh size, and grow
+`visibility_aabb` to match or large quads self-cull. Second trap in
+the same fix: prefer DIRECT METERS over a scale factor multiplied
+onto the authored size — `8m × clamp(...)≈0.9` produced a 7.2m quad
+vs the old 8m, visually identical, and read as "fix didn't work" twice
+(commits 194df16, 495d781; real fix 114d7da).
+
 **5. RichTextLabel `[font_size=N]` is ABSOLUTE, not relative.** Both
 the bare `[font_size=N]` BBCode tag and `add_theme_font_size_override`
 on a RichTextLabel set the pixel size directly. If the label's base
