@@ -10,8 +10,11 @@
 ; the footprint-aware range check (HoverableInteractable.interact_extent),
 ; which treats "pressed against the edge" as in range of the centre.
 ; Footprint matches the model's scaled XZ extent (3.44 × 3.36).
+; Depth (z) matches the MEASURED visual AABB (2.46), not the model's
+; scaled bbox estimate (3.36) — the old value left a 0.45m invisible
+; blocking lip on the platform's front and back.
 [sub_resource type="BoxShape3D" id="shape_platform"]
-size = Vector3(3.44, 0.2, 3.36)
+size = Vector3(3.44, 0.2, 2.46)
 
 [node name="Exit" type="StaticBody3D"]
 collision_layer = 64

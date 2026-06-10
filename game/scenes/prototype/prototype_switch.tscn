@@ -3,14 +3,17 @@
 [ext_resource type="Script" path="res://scripts/prototype/prototype_switch.gd" id="1_script"]
 [ext_resource type="PackedScene" path="res://assets/models/objects/switch_console/switch_console.glb" id="2_model"]
 
+; CRITICAL: .tscn comments use ';' — '#' lines inside a resource block
+; abort the block's property parse, and this shape silently loaded as a
+; default 1x1x1 cube (the "walk inside the console" bug, twice).
+;
+; Footprint matches the Model's MEASURED visual AABB in root space
+; (2.86 x 2.11 — see scripts/tools/audit_interactables.gd, which is the
+; verification tool for exactly this). Height spans the player's body
+; range from the floor up so the capsule can't walk over/into the
+; console regardless of the mesh's vertical offset.
 [sub_resource type="BoxShape3D" id="shape_console"]
-# Footprint matches the Model's world-space bbox (switch_console.glb is
-# 1.909 × 1.406 × 1.910 m intrinsic, scaled 1.5× → ~2.86 × 2.87 wide). Height
-# is set to span the player's body range from the floor up (see the Collision
-# node transform) so the capsule can't walk over/into the console — the model
-# geometry sits above its origin, so the old box (centered at Y=-0.7) was
-# mostly below the floor and blocked nothing.
-size = Vector3(2.86, 2.2, 2.87)
+size = Vector3(2.86, 2.2, 2.11)
 
 [sub_resource type="BoxMesh" id="mesh_button"]
 size = Vector3(0.18, 0.07, 0.18)
@@ -28,9 +31,8 @@ transform = Transform3D(1.5, 0, 0, 0, 1.5, 0, 0, 0, 1.5, 0, -0.7, 0)
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.1, 0)
 mesh = SubResource("mesh_button")
 
+; Box centered at Y=1.0 so it spans ~Y[-0.1, 2.1] — floor up through the
+; player's body height.
 [node name="Collision" type="CollisionShape3D" parent="."]
-# Box centered at Y=1.0 so it spans ~Y[-0.1, 2.1] — floor up through the
-# player's body height — guaranteeing the capsule is blocked across the
-# console's footprint regardless of the mesh's vertical offset.
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 shape = SubResource("shape_console")

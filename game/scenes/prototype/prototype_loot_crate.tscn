@@ -6,8 +6,10 @@
 ; Collision box matches the .glb's bottom half (`zCrateLarge_Bottom`,
 ; ~1.49 × 0.79 × 1.19m at scale 1.0) so the player can't walk through
 ; the closed crate. Centred at half-height so the base sits on the floor.
+; Depth (z) tightened to the MEASURED visual AABB (0.85) — was 1.2,
+; leaving a ~0.18m invisible lip on each long side.
 [sub_resource type="BoxShape3D" id="shape_crate"]
-size = Vector3(1.5, 0.8, 1.2)
+size = Vector3(1.5, 0.8, 0.9)
 
 [node name="LootCrate" type="StaticBody3D"]
 collision_layer = 64
