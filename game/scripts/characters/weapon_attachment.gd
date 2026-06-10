@@ -91,29 +91,29 @@ static var _GRIP_MALE: Dictionary = {
 	# hatch; keep edits here independent of the female table.
 	&"melee_1h":       {"pos": Vector3(0.300, 0.200, -0.100), "rot": Vector3(-150.0, -105.0, -30.0), "scale_mult": 0.778, "muzzle": Vector3(-0.350, -0.050, 0.450)},
 	&"melee_2h":       {"pos": Vector3(0.100, 0.150, -0.100), "rot": Vector3(15.0, -135.0, 30.0), "scale_mult": 0.510, "muzzle": Vector3(-0.150, 0.200, -0.100)},
-	&"ranged_1h":      {"pos": Vector3(0.050, 0.200, 0.050), "rot": Vector3(165.0, -180.0, 90.0), "scale_mult": 0.980, "muzzle": Vector3(-0.100, 0.100, 0.000)},
-	&"ranged_2h":      {"pos": Vector3(-0.050, 0.250, 0.050), "rot": Vector3(-180.0, -180.0, 105.0), "scale_mult": 0.794, "muzzle": Vector3(-0.350, 0.150, -0.000)},
+	&"ranged_1h":      {"pos": Vector3(0.050, 0.200, 0.050), "rot": Vector3(165.0, -180.0, 90.0), "scale_mult": 0.980, "muzzle": Vector3(-0.150, 0.100, 0.000)},
+	&"ranged_2h":      {"pos": Vector3(-0.050, 0.200, 0.050), "rot": Vector3(-180.0, -180.0, 105.0), "scale_mult": 0.794, "muzzle": Vector3(-0.350, 0.150, -0.000)},
 	&"smg_1h":         {"pos": Vector3(0.000, 0.200, 0.050), "rot": Vector3(165.0, -180.0, 105.0), "scale_mult": 1.140, "muzzle": Vector3(-0.150, 0.100, 0.000)},
 	&"lmg_2h":         {"pos": Vector3(-0.000, 0.250, 0.000), "rot": Vector3(-180.0, -180.0, 105.0), "scale_mult": 0.770, "muzzle": Vector3(-0.350, 0.100, -0.000)},
-	&"sniper_2h":      {"pos": Vector3(0.050, 0.400, 0.000), "rot": Vector3(-180.0, 165.0, 105.0), "scale_mult": 1.067, "muzzle": Vector3(-0.500, 0.050, -0.000)},
-	&"rpg_2h":         {"pos": Vector3(0.050, 0.350, 0.000), "rot": Vector3(0.0, 0.0, -75.0), "scale_mult": 0.700, "muzzle": Vector3(-0.300, 0.050, -0.000)},
+	&"sniper_2h":      {"pos": Vector3(-0.000, 0.300, 0.000), "rot": Vector3(-180.0, 165.0, 105.0), "scale_mult": 1.067, "muzzle": Vector3(-0.500, 0.050, -0.000)},
+	&"rpg_2h":         {"pos": Vector3(0.000, 0.250, 0.000), "rot": Vector3(0.0, 0.0, -75.0), "scale_mult": 0.700, "muzzle": Vector3(-0.300, 0.050, -0.000)},
 	&"shotgun_2h":     {"pos": Vector3(-0.000, 0.350, 0.000), "rot": Vector3(-165.0, -180.0, 105.0), "scale_mult": 0.732, "muzzle": Vector3(-0.300, 0.050, -0.000)},
-	&"accelerator_2h": {"pos": Vector3(-0.000, 0.300, 0.050), "rot": Vector3(0.0, -15.0, -75.0), "scale_mult": 0.714, "muzzle": Vector3(-0.250, 0.000, -0.000)},
+	&"accelerator_2h": {"pos": Vector3(0.000, 0.250, 0.050), "rot": Vector3(0.0, -15.0, -75.0), "scale_mult": 0.714, "muzzle": Vector3(-0.300, -0.000, 0.000)},
 	&"taser_2h":       {"pos": Vector3(-0.000, 0.250, 0.000), "rot": Vector3(-180.0, -180.0, 105.0), "scale_mult": 0.650, "muzzle": Vector3(-0.300, 0.100, -0.000)},
 }
 
 static var _GRIP_FEMALE: Dictionary = {
 	&"melee_1h":       {"pos": Vector3(0.300, 0.200, -0.100), "rot": Vector3(-150.0, -105.0, -30.0), "scale_mult": 0.778, "muzzle": Vector3(-0.350, -0.050, 0.450)},
 	&"melee_2h":       {"pos": Vector3(0.100, 0.150, -0.100), "rot": Vector3(15.0, -135.0, 30.0), "scale_mult": 0.510, "muzzle": Vector3(-0.150, 0.200, -0.100)},
-	&"ranged_1h":      {"pos": Vector3(0.050, 0.200, 0.050), "rot": Vector3(165.0, -180.0, 90.0), "scale_mult": 0.980, "muzzle": Vector3(-0.100, 0.100, 0.000)},
-	&"ranged_2h":      {"pos": Vector3(-0.050, 0.250, 0.050), "rot": Vector3(-180.0, -180.0, 105.0), "scale_mult": 0.794, "muzzle": Vector3(-0.350, 0.150, -0.000)},
+	&"ranged_1h":      {"pos": Vector3(0.050, 0.200, 0.050), "rot": Vector3(165.0, -180.0, 90.0), "scale_mult": 0.980, "muzzle": Vector3(-0.150, 0.100, 0.000)},
+	&"ranged_2h":      {"pos": Vector3(-0.050, 0.200, 0.050), "rot": Vector3(-180.0, -180.0, 105.0), "scale_mult": 0.794, "muzzle": Vector3(-0.350, 0.150, -0.000)},
 	&"smg_1h":         {"pos": Vector3(0.000, 0.200, 0.050), "rot": Vector3(165.0, -180.0, 105.0), "scale_mult": 1.140, "muzzle": Vector3(-0.150, 0.100, 0.000)},
-	&"rpg_2h":         {"pos": Vector3(0.050, 0.350, 0.000), "rot": Vector3(0.0, 0.0, -75.0), "scale_mult": 0.700, "muzzle": Vector3(-0.300, 0.050, -0.000)},
+	&"rpg_2h":         {"pos": Vector3(0.000, 0.250, 0.000), "rot": Vector3(0.0, 0.0, -75.0), "scale_mult": 0.700, "muzzle": Vector3(-0.300, 0.050, -0.000)},
 	&"shotgun_2h":     {"pos": Vector3(-0.000, 0.350, 0.000), "rot": Vector3(-165.0, -180.0, 105.0), "scale_mult": 0.732, "muzzle": Vector3(-0.300, 0.050, -0.000)},
-	&"accelerator_2h": {"pos": Vector3(-0.000, 0.300, 0.050), "rot": Vector3(0.0, -15.0, -75.0), "scale_mult": 0.714, "muzzle": Vector3(-0.250, 0.000, -0.000)},
+	&"accelerator_2h": {"pos": Vector3(0.000, 0.250, 0.050), "rot": Vector3(0.0, -15.0, -75.0), "scale_mult": 0.714, "muzzle": Vector3(-0.300, -0.000, 0.000)},
 	&"taser_2h":       {"pos": Vector3(-0.000, 0.250, 0.000), "rot": Vector3(-180.0, -180.0, 105.0), "scale_mult": 0.650, "muzzle": Vector3(-0.300, 0.100, -0.000)},
 	&"lmg_2h":         {"pos": Vector3(-0.000, 0.250, 0.000), "rot": Vector3(-180.0, -180.0, 105.0), "scale_mult": 0.770, "muzzle": Vector3(-0.350, 0.100, -0.000)},
-	&"sniper_2h":      {"pos": Vector3(0.050, 0.400, 0.000), "rot": Vector3(-180.0, 165.0, 105.0), "scale_mult": 1.067, "muzzle": Vector3(-0.500, 0.050, -0.000)},
+	&"sniper_2h":      {"pos": Vector3(-0.000, 0.300, 0.000), "rot": Vector3(-180.0, 165.0, 105.0), "scale_mult": 1.067, "muzzle": Vector3(-0.500, 0.050, -0.000)},
 	# All 11 weapons now have female overrides. Fallback path stays in
 	# place for any future weapon additions that ship male-first.
 }
