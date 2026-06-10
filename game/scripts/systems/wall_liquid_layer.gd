@@ -398,6 +398,7 @@ func _hook_level_builder() -> void:
 #   2. StaticBody3D-wrapped individual wall meshes (create_wall paths)
 # Room procedural walls (one mesh covering 4 sides) are handled separately.
 func _on_level_built() -> void:
+	_reset_masks_and_overlays()
 	var structures := get_tree().get_nodes_in_group(&"structures")
 	var overlay_count := 0
 	for node in structures:
@@ -406,6 +407,38 @@ func _on_level_built() -> void:
 		elif node is StaticBody3D:
 			overlay_count += _spawn_overlays_for_static_body(node)
 	print("[WallLiquidLayer] Phase 3: spawned ", overlay_count, " overlay quad(s)")
+
+
+# Fresh-build wipe — runs before overlay enumeration on EVERY built
+# signal (initial load and NG+ rebuild alike). Three jobs:
+#   1. Free overlay quads from the previous build. They're children of
+#      this node, not LevelBuilder, so the builder's teardown never
+#      touches them — without this they float where the old walls were.
+#   2. Drop live stamp/drip sprites and the drip tracker.
+#   3. Wipe both masks. CLEAR_MODE_ONCE + UPDATE_ONCE clears on the next
+#      rendered frame then reverts to NEVER/DISABLED (same pattern as the
+#      floor LiquidLayer). Without an initial wipe the render target's
+#      contents are undefined — uninitialized GPU memory read as mask
+#      coverage painted every wall in blood at level start, and on NG+
+#      the previous floor's accumulated blood carried onto the new walls.
+func _reset_masks_and_overlays() -> void:
+	for child in get_children():
+		if child is MeshInstance3D and child.name == &"WallOverlay":
+			child.queue_free()
+	for root in [_mask_x_stamp_root, _mask_z_stamp_root]:
+		if root == null:
+			continue
+		for sprite in root.get_children():
+			sprite.queue_free()
+	_active_drips.clear()
+	# Pending stamp timers still decrement this later; maxi() in
+	# _end_render_window keeps it from going negative.
+	_active_render_clients = 0
+	for sv in [_mask_x_viewport, _mask_z_viewport]:
+		if sv == null:
+			continue
+		sv.render_target_clear_mode = SubViewport.CLEAR_MODE_ONCE
+		sv.render_target_update_mode = SubViewport.UPDATE_ONCE
 
 
 func _spawn_overlays_for_mmi(mmi: MultiMeshInstance3D) -> int:
