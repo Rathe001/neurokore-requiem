@@ -163,6 +163,13 @@ func _build_level() -> void:
 	# layout); BuildContext + PuzzleBuilder both need it for door indexing
 	# and puzzle dispatch.
 	RoomAcoustics.clear_zones()
+	# MissionState is an autoload — its registered puzzles survive
+	# change_scene_to_file (death respawn, quit-to-menu → continue, host
+	# disconnect). Only the exit-pad descend dispatched reset, so every other
+	# rebuild path appended a fresh set of switch puzzles to the stale list
+	# (dead-door entries rendering as phantom "(0/3)" mission lines forever).
+	# Clearing here covers every path, since all of them run a build.
+	MissionState.reset()
 	var active_graph := _resolve_graph()
 	_pieces = _pieces_from_graph(active_graph)
 	_ctx = LevelBuildContext.create(self, layout, active_graph)

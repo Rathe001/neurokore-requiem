@@ -137,6 +137,18 @@ func notify_exit_unlocked() -> void:
 
 # ── Queries ───────────────────────────────────────────────────────────────
 
+# Drop puzzles whose door has been freed (level torn down without reset()
+# running first). Dead entries can never complete, which would pin the
+# phase at SWITCHES and render phantom "(0/3)" lines. Called from both
+# public queries so the panel always reflects live doors only.
+func _prune_dead_puzzles() -> void:
+	var before := _puzzles.size()
+	_puzzles = _puzzles.filter(func(p: Dictionary) -> bool:
+		return p["door"].get_ref() != null)
+	if _puzzles.size() != before:
+		changed.emit.call_deferred()
+
+
 func _any_puzzle_incomplete() -> bool:
 	for puzzle in _puzzles:
 		if int(puzzle["done"]) < int(puzzle["required"]):
@@ -164,6 +176,7 @@ func _has_puzzles() -> bool:
 ## completing ANY one advances to BOSS — the player only needs one open
 ## path.
 func current_phase() -> StringName:
+	_prune_dead_puzzles()
 	if _has_boss and not boss_alive:
 		return PHASE_DESCEND
 	if _has_puzzles() and not _any_puzzle_complete():
