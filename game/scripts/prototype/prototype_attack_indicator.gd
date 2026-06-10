@@ -2217,7 +2217,12 @@ static func _spawn_fireball_explosion(parent: Node, world_pos: Vector3, blast_ra
 	var is_kinetic: bool = damage_type == &"" or damage_type == &"flame"
 
 	var fx: Node3D = FLIPBOOK_EXPLOSION_SCENE.instantiate() as Node3D
-	fx.scale = Vector3.ONE * clampf(
+	# NOTE: do NOT size via fx.scale — the scene's GPUParticles3D uses
+	# local_coords=false, which ignores node scale entirely. The old
+	# fx.scale approach silently rendered EVERY kinetic flipbook at the
+	# authored 8×8 m regardless of blast size. The quad itself is resized
+	# below once we have the particles node.
+	var flip_scale: float = clampf(
 		blast_radius * FLIPBOOK_SCALE_PER_RADIUS, FLIPBOOK_SCALE_FLOOR, FLIPBOOK_SCALE_CEILING)
 
 	# Speed up the flipbook by shortening particle lifetime BEFORE the
@@ -2288,12 +2293,20 @@ static func _spawn_fireball_explosion(parent: Node, world_pos: Vector3, blast_ra
 		particles.material_override = mat
 		# GPU particles ignore parent node scale (local_coords=false), so
 		# resize the draw pass QuadMesh directly. Energy explosions use a
-		# small quad — the flash/sparks carry the blast visual; the
-		# flipbook is just a brief residual puff.
-		if not is_kinetic:
-			var quad: QuadMesh = particles.draw_pass_1.duplicate() as QuadMesh
+		# small fixed quad — the flash/sparks carry the blast visual; the
+		# flipbook is just a brief residual puff. Kinetic explosions get
+		# the blast-diameter mapping (see FLIPBOOK_SCALE_PER_RADIUS).
+		var quad: QuadMesh = particles.draw_pass_1.duplicate() as QuadMesh
+		if is_kinetic:
+			quad.size = Vector2(8.0, 8.0) * flip_scale
+			# The authored visibility AABB only covers the 8 m quad —
+			# grow it with the quad so large blasts don't self-cull.
+			var half: float = 4.0 * flip_scale + 1.0
+			particles.visibility_aabb = AABB(
+				Vector3(-half, -half, -half), Vector3(half * 2.0, half * 2.0, half * 2.0))
+		else:
 			quad.size = Vector2(3, 3)  # down from 8×8
-			particles.draw_pass_1 = quad
+		particles.draw_pass_1 = quad
 
 	# Add to tree after configuring — particle emits on first frame.
 	parent.add_child(fx)
