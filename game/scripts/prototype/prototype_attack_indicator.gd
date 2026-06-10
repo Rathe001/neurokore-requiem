@@ -2070,13 +2070,16 @@ const EXPLOSION_FLASH_DURATION: float = 0.18
 # its instance. Matches the BigExplosionScene's particle lifetime
 # (2.13s) plus a small tail so trailing frames have time to finish.
 const EXPLOSION_FLIPBOOK_LIFETIME: float = 2.6
-# BigExplosionScene's natural visual size at scale=1 is roughly 2-3 m
-# across (1 m QuadMesh × ~20 particles with small drift). RPG blasts
-# at blast_radius=3-4 m should fill noticeably more than that to feel
-# impactful, so the scale formula maps blast_radius directly to scale
-# with a generous max — a Tactical Strike at 9 m hits the clamp and
-# still reads as a huge kaboom.
-const FLIPBOOK_SCALE_FLOOR: float = 1.2
+# BigExplosionScene is a single 8×8 m quad at scale=1, with the sprite's
+# visible fireball/smoke filling roughly 5 m of it. An earlier comment
+# here claimed ~2-3 m, and the 1:1 blast_radius→scale mapping built on
+# that premise made every smoke cloud ~4× the blast it represented (a
+# 2 m-radius RPG blast spawned a 16 m quad). PER_RADIUS maps the scale
+# so the VISIBLE cloud diameter ≈ the blast diameter:
+#   rpg 2 m → 0.9 (~4.5 m cloud), frag 3.5 m → 1.6 (~8 m),
+#   Tactical Strike 9 m → ceiling 3.5 (~17.5 m — still a huge kaboom).
+const FLIPBOOK_SCALE_PER_RADIUS: float = 0.45
+const FLIPBOOK_SCALE_FLOOR: float = 0.6
 const FLIPBOOK_SCALE_CEILING: float = 3.5
 # Soft-particle fade distance (the shader's Soft_limit uniform). The
 # scene-default 0.10 only softens fragments within 10cm of geometry,
@@ -2214,7 +2217,8 @@ static func _spawn_fireball_explosion(parent: Node, world_pos: Vector3, blast_ra
 	var is_kinetic: bool = damage_type == &"" or damage_type == &"flame"
 
 	var fx: Node3D = FLIPBOOK_EXPLOSION_SCENE.instantiate() as Node3D
-	fx.scale = Vector3.ONE * clampf(blast_radius, FLIPBOOK_SCALE_FLOOR, FLIPBOOK_SCALE_CEILING)
+	fx.scale = Vector3.ONE * clampf(
+		blast_radius * FLIPBOOK_SCALE_PER_RADIUS, FLIPBOOK_SCALE_FLOOR, FLIPBOOK_SCALE_CEILING)
 
 	# Speed up the flipbook by shortening particle lifetime BEFORE the
 	# node enters the tree (so the particle emits at the new speed).
