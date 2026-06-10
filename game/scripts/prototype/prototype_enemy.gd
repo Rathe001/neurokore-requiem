@@ -914,6 +914,18 @@ func _apply_enemy_weapon_model() -> void:
 		_walk_set_visual_layers(mount, 2 | PrototypeAttackIndicator.CHARACTER_BLOOD_LAYER)
 
 
+# Stance class driving idle/run/fire-pose anim selection — derived from
+# the SAME weapon_id that mounts the visible model, so a pistol-armed
+# enemy idles and fires in the pistol stance instead of the old
+# hardcoded rifle-for-all-ranged. Weaponless enemies keep the legacy
+# look: rifle stance if their combat profile is ranged, unarmed else.
+func _anim_weapon_class() -> StringName:
+	var weapon_id: StringName = enemy_class.weapon_id if enemy_class != null else &""
+	if weapon_id != &"":
+		return XBotAnimations.weapon_class_for_id(weapon_id)
+	return &"rifle" if (_combat != null and _combat.is_ranged()) else &"unarmed"
+
+
 func _init_enemy() -> void:
 	_generation += 1
 	add_to_group(&"enemies")
@@ -1784,12 +1796,11 @@ func _physics_process(delta: float) -> void:
 			_play_anim(_hit_react_anim, _hit_react_speed)
 			return
 	var moving := _want_dir.length_squared() > 0.01
-	# Class-aware stance — ranged enemies stand / move with the rifle
-	# stance, melee enemies stay with the default unarmed stance.
-	# Future: per-EnemyClass override (e.g. brute → axe_idle for
-	# heavier silhouette).
+	# Class-aware stance — driven by the enemy's mounted weapon (pistol
+	# vs rifle vs melee), falling back to ranged→rifle / melee→unarmed
+	# for weaponless classes. See _anim_weapon_class.
 	var is_ranged_enemy: bool = _combat != null and _combat.is_ranged()
-	var weapon_class: StringName = &"rifle" if is_ranged_enemy else &"unarmed"
+	var weapon_class: StringName = _anim_weapon_class()
 	# One-shot anim gate (axe_combo / punch swing, hit_react variants,
 	# death). Without this, the moment cast_melee_attack flips state from
 	# CASTING → CHASING after the windup, the very next picker tick
@@ -1939,7 +1950,7 @@ func _remote_physics_process() -> void:
 	# Class-aware idle/run mirrors the authority picker so remotes see
 	# the right stance.
 	var is_ranged_remote: bool = _combat != null and _combat.is_ranged()
-	var weapon_class_remote: StringName = &"rifle" if is_ranged_remote else &"unarmed"
+	var weapon_class_remote: StringName = _anim_weapon_class()
 	match _state:
 		State.CASTING, State.KNOCKBACK:
 			pass
@@ -3939,7 +3950,9 @@ func _play_fire_pose(restart: bool = false) -> bool:
 	if anim_player == null:
 		return false
 	var chosen: StringName = &""
-	for key in ANIM_FIRE:
+	# Class-aware fire pose: pistol enemies hold/loop the pistol fire
+	# clip, everything else falls through to the rifle xbot/fire.
+	for key in XBotAnimations.fire_anim_for_class(_anim_weapon_class()):
 		if anim_player.has_animation(key):
 			chosen = key
 			break
