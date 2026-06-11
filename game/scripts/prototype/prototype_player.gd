@@ -2303,7 +2303,14 @@ func _physics_process(delta: float) -> void:
 	if _crouching and not Input.is_physical_key_pressed(KEY_CTRL) and not aim_hold_locks_movement():
 		_set_crouch(false)
 
-	if _alive and not _is_attack_committed() and _knockback_remain <= 0.0:
+	# Gate on the movement-LOCK check, not the raw busy flag: ranged
+	# weapons keep _lmb_busy for their wind_up after every shot (laser
+	# pistol 0.1s of each ~0.35s cycle, accelerator channel the whole
+	# beam), and gating facing + the leg-anim picker on it froze body
+	# rotation and leg clips in bursts while firing — "strafing and hip
+	# twisting not functioning". _attack_locks_movement carves ranged
+	# fire out exactly like the velocity gate already does.
+	if _alive and not _attack_locks_movement() and _knockback_remain <= 0.0:
 		if _fps_mode:
 			# In FPS the body follows camera yaw; snapping is fine because the
 			# camera *is* the player view.

@@ -425,9 +425,97 @@ static func random_death_anim() -> StringName:
 static func install_on(ap: AnimationPlayer) -> void:
 	if ap == null:
 		return
-	if ap.has_animation_library(LIBRARY_NAME):
+	if not ap.has_animation_library(LIBRARY_NAME):
+		ap.add_animation_library(LIBRARY_NAME, get_library())
+	_ground_clips_once(ap)
+
+
+# ── Clip grounding ─────────────────────────────────────────────────────
+# Mixamo clips don't share a ground reference: measured foot-contact
+# minimums range from -0.108 (pistol_fire) to +0.087 (strafe_right) on
+# the same skeleton. The character seat anchors feet to the floor under
+# the EQUIPPED CLASS IDLE, so every other clip rendered offset by the
+# difference — strafing with a pistol floated the feet ~13cm ("feet
+# float above the ground" bug). This pass shifts each clip's Hips
+# position track Y so its OWN contact minimum is exactly 0: every clip
+# then agrees with the seat, for every weapon class.
+#
+# Runs once, lazily, on the first install_on whose AnimationPlayer sits
+# under an in-tree skeleton (measurement needs a posed rig — bone
+# lengths come from the mesh). One-time cost at first character spawn,
+# behind the loading screen. Clip-to-clip deltas are dominated by the
+# Mixamo authoring, so one reference mesh grounds them for all bodies.
+static var _clips_grounded := false
+const _GROUND_SAMPLES := 24
+# Clips that legitimately leave the ground reference: deaths topple the
+# hips through the floor plane, jumps are airborne by design.
+const _GROUND_EXCLUDE_PREFIXES: Array[String] = ["death", "jump"]
+
+
+static func _ground_clips_once(ap: AnimationPlayer) -> void:
+	if _clips_grounded or ap == null or not ap.is_inside_tree():
 		return
-	ap.add_animation_library(LIBRARY_NAME, get_library())
+	var parent := ap.get_parent()
+	if parent == null:
+		return
+	var skel := _find_skeleton_under(parent)
+	if skel == null:
+		return
+	var lib := get_library()
+	var prev_anim := ap.assigned_animation
+	for clip_name in lib.get_animation_list():
+		var name_str := String(clip_name)
+		var excluded := false
+		for prefix in _GROUND_EXCLUDE_PREFIXES:
+			if name_str.begins_with(prefix):
+				excluded = true
+				break
+		if excluded:
+			continue
+		var anim := lib.get_animation(clip_name)
+		if anim == null or anim.length <= 0.0:
+			continue
+		var full_key := StringName("%s/%s" % [LIBRARY_NAME, name_str])
+		if not ap.has_animation(full_key):
+			continue
+		# Measure this clip's foot-contact minimum in skeleton space.
+		var min_y := INF
+		for s in _GROUND_SAMPLES:
+			ap.stop()
+			ap.play(full_key)
+			ap.advance(anim.length * float(s) / float(_GROUND_SAMPLES))
+			skel.force_update_all_bone_transforms()
+			for b in skel.get_bone_count():
+				var bn := skel.get_bone_name(b)
+				if not (bn.contains("Foot") or bn.contains("Toe")):
+					continue
+				min_y = minf(min_y, skel.get_bone_global_pose(b).origin.y)
+		if min_y == INF or absf(min_y) < 0.005:
+			continue
+		# Shift the Hips position track so the contact minimum lands at 0.
+		for t in anim.get_track_count():
+			if anim.track_get_type(t) != Animation.TYPE_POSITION_3D:
+				continue
+			if not String(anim.track_get_path(t)).contains("Hips"):
+				continue
+			for k in anim.track_get_key_count(t):
+				var v: Vector3 = anim.track_get_key_value(t, k)
+				anim.track_set_key_value(t, k, Vector3(v.x, v.y - min_y, v.z))
+			break
+	ap.stop()
+	if prev_anim != "":
+		ap.play(prev_anim)
+	_clips_grounded = true
+
+
+static func _find_skeleton_under(node: Node) -> Skeleton3D:
+	if node is Skeleton3D:
+		return node as Skeleton3D
+	for c in node.get_children():
+		var f := _find_skeleton_under(c)
+		if f != null:
+			return f
+	return null
 
 
 # Pulls the first non-RESET animation out of `src_scene`'s AnimationPlayer
