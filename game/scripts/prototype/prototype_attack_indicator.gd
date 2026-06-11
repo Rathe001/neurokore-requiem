@@ -424,7 +424,6 @@ static func spawn_lightning_arc(host: Node3D, from_pos: Vector3, to_pos: Vector3
 ## reads as a snappy laser-style sweep rather than the previous "frozen
 ## tracer left behind" look. Default false for enemy compat.
 static func spawn_beam(host: Node3D, aim: Vector3, length: float, origin: Vector3 = Vector3.ZERO, tint_override: Color = Color(0.0, 0.0, 0.0, 0.0), attach_to_host: bool = false) -> void:
-	var _tbs := Time.get_ticks_usec()
 	var parent: Node = host if attach_to_host else host.get_parent()
 	if parent == null:
 		parent = host
@@ -449,7 +448,6 @@ static func spawn_beam(host: Node3D, aim: Vector3, length: float, origin: Vector
 	glow.scale = Vector3(1.0, length, 1.0)
 	glow.material_override = glow_mat
 
-	var _tb0 := Time.get_ticks_usec()
 	# Container node — cylinder height runs along local Y, so rotate -90° on X
 	# to align with local -Z (the look_at forward), then offset by half length.
 	var node := Node3D.new()
@@ -468,7 +466,6 @@ static func spawn_beam(host: Node3D, aim: Vector3, length: float, origin: Vector
 	glow.position.z = -length * 0.5
 	node.add_child(core)
 	node.add_child(glow)
-	var _tb1 := Time.get_ticks_usec()
 
 	# Point light at the impact end so walls / floors near the hit catch a
 	# brief glow — matches the visual contract the projectile already has
@@ -496,23 +493,17 @@ static func spawn_beam(host: Node3D, aim: Vector3, length: float, origin: Vector
 	mid_light.light_volumetric_fog_energy = 0.0
 	mid_light.position = Vector3(0.0, 0.0, -length * 0.5)
 	node.add_child(mid_light)
-	var _tb2 := Time.get_ticks_usec()
 
+	# Fade via per-instance transparency — the shared template materials
+	# are never mutated (see _beam_core_material).
 	var tween := node.create_tween().set_parallel(true)
-	tween.tween_property(core_mat, "albedo_color:a", 0.0, BEAM_FADE).set_ease(Tween.EASE_IN)
-	tween.tween_property(glow_mat, "albedo_color:a", 0.0, BEAM_FADE).set_ease(Tween.EASE_IN)
-	tween.tween_property(core_mat, "emission_energy_multiplier", 0.0, BEAM_FADE)
-	tween.tween_property(glow_mat, "emission_energy_multiplier", 0.0, BEAM_FADE)
+	tween.tween_property(core, "transparency", 1.0, BEAM_FADE).set_ease(Tween.EASE_IN)
+	tween.tween_property(glow, "transparency", 1.0, BEAM_FADE).set_ease(Tween.EASE_IN)
 	tween.tween_property(impact_light, "light_energy", 0.0, BEAM_FADE).set_ease(Tween.EASE_IN)
 	tween.tween_property(mid_light, "light_energy", 0.0, BEAM_FADE).set_ease(Tween.EASE_IN)
 	tween.chain().tween_callback(_release_light_later(impact_light))
 	tween.chain().tween_callback(_release_light_later(mid_light))
 	tween.chain().tween_callback(_free_later(node))
-	var _tb3 := Time.get_ticks_usec()
-	if _tb3 - _tbs > 4000:
-		print("[beam] setup=%.1fms node+meshes=%.1fms lights=%.1fms tween=%.1fms" % [
-			(_tb0 - _tbs) / 1000.0, (_tb1 - _tb0) / 1000.0,
-			(_tb2 - _tb1) / 1000.0, (_tb3 - _tb2) / 1000.0])
 
 # Brief impact flash + spark burst spawned at a hit point — mini version of
 # the explosion VFX stack (flash sphere + radial sparks + omni light), no
@@ -563,10 +554,12 @@ static func spawn_impact_burst(host: Node3D, world_pos: Vector3, color_override:
 		flash_template.emission_energy_multiplier = 5.0
 		flash_template.cull_mode = BaseMaterial3D.CULL_DISABLED
 		_impact_flash_mat_cache[color] = flash_template
-	var flash_mat := flash_template.duplicate() as StandardMaterial3D
+	# SHARED template — never duplicated (material RID creation per hit
+	# forces a ~25ms render-thread sync; see the beam/pulse comments).
+	# Fade rides GeometryInstance3D.transparency below.
 	var flash_inst := MeshInstance3D.new()
 	flash_inst.mesh = _impact_flash_mesh
-	flash_inst.material_override = flash_mat
+	flash_inst.material_override = flash_template
 	flash_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	flash_inst.scale = Vector3.ONE * 0.3
 	parent.add_child(flash_inst)
@@ -574,8 +567,7 @@ static func spawn_impact_burst(host: Node3D, world_pos: Vector3, color_override:
 
 	var flash_tween := flash_inst.create_tween().set_parallel(true)
 	flash_tween.tween_property(flash_inst, "scale", Vector3.ONE * 1.4, IMPACT_FLASH_DURATION).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_EXPO)
-	flash_tween.tween_property(flash_mat, "albedo_color:a", 0.0, IMPACT_FLASH_DURATION).set_ease(Tween.EASE_IN)
-	flash_tween.tween_property(flash_mat, "emission_energy_multiplier", 0.0, IMPACT_FLASH_DURATION).set_ease(Tween.EASE_IN)
+	flash_tween.tween_property(flash_inst, "transparency", 1.0, IMPACT_FLASH_DURATION).set_ease(Tween.EASE_IN)
 	flash_tween.chain().tween_callback(_free_later(flash_inst))
 
 	# ── Omni light ────────────────────────────────────────────────────
@@ -3403,6 +3395,10 @@ static func _beam_glow_mesh() -> CylinderMesh:
 		_beam_glow_unit_mesh.rings = 1
 	return _beam_glow_unit_mesh
 
+# SHARED per-color templates — never duplicated. Material RID creation
+# per shot forced a ~25ms render-thread sync (the laser-pistol hitch);
+# beams fade via GeometryInstance3D.transparency on the instance, so
+# the material is never mutated.
 static func _beam_core_material(color: Color) -> StandardMaterial3D:
 	var template: StandardMaterial3D = _beam_core_mat_cache.get(color)
 	if template == null:
@@ -3415,7 +3411,7 @@ static func _beam_core_material(color: Color) -> StandardMaterial3D:
 		template.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		template.cull_mode = BaseMaterial3D.CULL_DISABLED
 		_beam_core_mat_cache[color] = template
-	return template.duplicate() as StandardMaterial3D
+	return template
 
 static func _beam_glow_material(color: Color) -> StandardMaterial3D:
 	var template: StandardMaterial3D = _beam_glow_mat_cache.get(color)
@@ -3429,7 +3425,7 @@ static func _beam_glow_material(color: Color) -> StandardMaterial3D:
 		template.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		template.cull_mode = BaseMaterial3D.CULL_DISABLED
 		_beam_glow_mat_cache[color] = template
-	return template.duplicate() as StandardMaterial3D
+	return template
 
 # ── Muzzle flash ─────────────────────────────────────────────────────────────
 # Quick OmniLight3D pulse at the barrel position on weapon fire. No mesh —
@@ -3508,7 +3504,6 @@ static var _energy_pulse_mat_cache: Dictionary = {}
 static func spawn_energy_pulse(host: Node3D, barrel_pos: Vector3, tint: Color = Color(0, 0, 0, 0), attach_to_host: bool = false) -> void:
 	if host == null:
 		return
-	var _tps := Time.get_ticks_usec()
 	var parent: Node = host if attach_to_host else host.get_parent()
 	if parent == null:
 		parent = host
@@ -3529,8 +3524,13 @@ static func spawn_energy_pulse(host: Node3D, barrel_pos: Vector3, tint: Color = 
 	var col: Color = tint if tint.a > 0.0 else _color_for_host(host)
 	if col.a <= 0.0:
 		col = ENERGY_PULSE_DEFAULT_COLOR
-	# Per-color template, duplicated per use because the fade tween
-	# mutates albedo alpha + emission energy.
+	# Per-color SHARED template — never duplicated. Creating a material
+	# RID per shot (duplicate()) forces a render-thread sync: ~25ms
+	# stall per call on a separate-thread renderer, which WAS the
+	# laser-pistol per-shot hitch (instrumented 2026-06-10: 'setup'
+	# segment 25ms, all node/tween work 0.1ms). The fade tween below
+	# uses GeometryInstance3D.transparency (per-instance, no material
+	# objects touched) instead of mutating albedo/emission.
 	var template: StandardMaterial3D = _energy_pulse_mat_cache.get(col)
 	if template == null:
 		template = StandardMaterial3D.new()
@@ -3544,9 +3544,7 @@ static func spawn_energy_pulse(host: Node3D, barrel_pos: Vector3, tint: Color = 
 		template.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
 		template.cull_mode = BaseMaterial3D.CULL_DISABLED
 		_energy_pulse_mat_cache[col] = template
-	var mat := template.duplicate() as StandardMaterial3D
-	mesh_inst.material_override = mat
-	var _tp0 := Time.get_ticks_usec()
+	mesh_inst.material_override = template
 	# Also kick a quick OmniLight3D so the surrounding floor briefly
 	# catches the arc light — sells the energy without needing a
 	# separate spawn_muzzle_flash call alongside.
@@ -3559,25 +3557,17 @@ static func spawn_energy_pulse(host: Node3D, barrel_pos: Vector3, tint: Color = 
 	light.light_volumetric_fog_energy = 0.0
 	parent.add_child(light)
 	light.global_position = barrel_pos
-	var _tp1 := Time.get_ticks_usec()
 	parent.add_child(mesh_inst)
 	mesh_inst.global_position = barrel_pos
 	mesh_inst.scale = Vector3.ONE
-	var _tp2 := Time.get_ticks_usec()
 	var tween := mesh_inst.create_tween()
 	tween.set_parallel(true)
 	tween.tween_property(mesh_inst, "scale", Vector3.ONE * ENERGY_PULSE_END_SCALE, ENERGY_PULSE_DURATION).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tween.tween_property(mat, "albedo_color:a", 0.0, ENERGY_PULSE_DURATION).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	tween.tween_property(mat, "emission_energy_multiplier", 0.0, ENERGY_PULSE_DURATION).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tween.tween_property(mesh_inst, "transparency", 1.0, ENERGY_PULSE_DURATION).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	tween.tween_property(light, "light_energy", 0.0, ENERGY_PULSE_DURATION * 0.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	tween.set_parallel(false)
 	tween.tween_callback(_release_light_later(light))
 	tween.tween_callback(mesh_inst.queue_free)
-	var _tp3 := Time.get_ticks_usec()
-	if _tp3 - _tps > 4000:
-		print("[pulse] setup=%.1fms light=%.1fms mesh=%.1fms tween=%.1fms" % [
-			(_tp0 - _tps) / 1000.0, (_tp1 - _tp0) / 1000.0,
-			(_tp2 - _tp1) / 1000.0, (_tp3 - _tp2) / 1000.0])
 
 
 # ── Telegraph material ───────────────────────────────────────────────────────
