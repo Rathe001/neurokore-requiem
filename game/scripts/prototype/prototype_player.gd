@@ -646,9 +646,17 @@ func _build_resonance_bar() -> void:
 	mat.set_shader_parameter(&"border_thickness", 0.08)
 	var mesh := QuadMesh.new()
 	mesh.size = Vector2(1.6, 0.12)
+	# BOTH slots get the material. The shader uses instance uniforms,
+	# and the server's per-instance allocation pass walks the surface
+	# OVERRIDE slot and the MESH surface slot — leaving EITHER null
+	# raises one "Parameter 'material' is null" error per instance at
+	# spawn (isolated empirically: error count tracked enemy count via
+	# the health bars, residual 1 was this bar). Same dual-slot fix in
+	# the enemy scenes' HealthBar.
 	mesh.material = mat
 	_resonance_bar = MeshInstance3D.new()
 	_resonance_bar.mesh = mesh
+	_resonance_bar.set_surface_override_material(0, mat)
 	_resonance_bar.position = Vector3(0.0, _RESONANCE_BAR_Y, 0.0)
 	_resonance_bar.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_resonance_bar.visible = false

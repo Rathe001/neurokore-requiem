@@ -76,6 +76,7 @@ shape = SubResource("shape_enemy")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.2, 0)
 visible = false
 mesh = SubResource("mesh_health_bar")
+surface_material_override/0 = SubResource("mat_health_bar")
 
 [node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
 replication_config = SubResource("repl_config")

@@ -71,6 +71,7 @@ static func ensure_surface_materials(root: Node) -> void:
 			for i in range(mi.mesh.get_surface_count()):
 				if mi.get_active_material(i) == null:
 					mi.set_surface_override_material(i, _make_fallback_material())
+			_backfill_mesh_materials(mi.mesh)
 	elif root is MultiMeshInstance3D:
 		var mmi := root as MultiMeshInstance3D
 		if mmi.multimesh != null and mmi.multimesh.mesh != null:
@@ -91,8 +92,35 @@ static func ensure_surface_materials(root: Node) -> void:
 						break
 				if has_null_surface:
 					mmi.material_override = _make_fallback_material()
+			# Mesh-level backfill regardless of override — the server's
+			# dependency/shadow passes query the SOURCE mesh's surface
+			# material even when an override resolves the draw.
+			_backfill_mesh_materials(mesh)
 	for child in root.get_children():
 		ensure_surface_materials(child)
+
+
+# MESH-level backfill — the RenderingServer's shadow / dependency /
+# animated-uniform passes query the MESH surface material DIRECTLY;
+# material_override and surface overrides do not suppress those queries
+# (documented independently in VfxWarmup + WallBuilder's shadow-stub
+# notes). Any mesh resource with a null surface material spams 4
+# "Parameter 'material' is null" errors per instance per build/frame
+# even when an override resolves the visible draw. Assigning the shared
+# fallback at the MESH level satisfies the queries; overrides still win
+# the visible render, so this never changes how anything looks.
+# Shared/cached meshes (unit boxes, primitive pools) are safe to mutate
+# — the fallback is a single shared instance, assignment idempotent.
+static func _backfill_mesh_materials(mesh: Mesh) -> void:
+	if mesh is PrimitiveMesh:
+		var pm := mesh as PrimitiveMesh
+		if pm.material == null:
+			pm.material = _make_fallback_material()
+	elif mesh is ArrayMesh:
+		var am := mesh as ArrayMesh
+		for i in range(am.get_surface_count()):
+			if am.surface_get_material(i) == null:
+				am.surface_set_material(i, _make_fallback_material())
 
 
 # Bland default — matte mid-grey, 0% metallic. Used as the fallback
@@ -125,6 +153,7 @@ static func ensure_surface_materials_single(node: Node) -> void:
 			for i in range(mi.mesh.get_surface_count()):
 				if mi.get_active_material(i) == null:
 					mi.set_surface_override_material(i, _make_fallback_material())
+			_backfill_mesh_materials(mi.mesh)
 	elif node is MultiMeshInstance3D:
 		var mmi := node as MultiMeshInstance3D
 		if mmi.multimesh != null and mmi.multimesh.mesh != null:
@@ -142,6 +171,10 @@ static func ensure_surface_materials_single(node: Node) -> void:
 						break
 				if has_null_surface:
 					mmi.material_override = _make_fallback_material()
+			# Mesh-level backfill regardless of override — the server's
+			# dependency/shadow passes query the SOURCE mesh's surface
+			# material even when an override resolves the draw.
+			_backfill_mesh_materials(mesh)
 
 
 ## Walks from `skeleton` UP through its Node3D ancestors (stopping at
