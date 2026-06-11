@@ -448,6 +448,7 @@ static func spawn_beam(host: Node3D, aim: Vector3, length: float, origin: Vector
 	glow.scale = Vector3(1.0, length, 1.0)
 	glow.material_override = glow_mat
 
+	var _tb0 := Time.get_ticks_usec()
 	# Container node — cylinder height runs along local Y, so rotate -90° on X
 	# to align with local -Z (the look_at forward), then offset by half length.
 	var node := Node3D.new()
@@ -466,6 +467,7 @@ static func spawn_beam(host: Node3D, aim: Vector3, length: float, origin: Vector
 	glow.position.z = -length * 0.5
 	node.add_child(core)
 	node.add_child(glow)
+	var _tb1 := Time.get_ticks_usec()
 
 	# Point light at the impact end so walls / floors near the hit catch a
 	# brief glow — matches the visual contract the projectile already has
@@ -493,6 +495,7 @@ static func spawn_beam(host: Node3D, aim: Vector3, length: float, origin: Vector
 	mid_light.light_volumetric_fog_energy = 0.0
 	mid_light.position = Vector3(0.0, 0.0, -length * 0.5)
 	node.add_child(mid_light)
+	var _tb2 := Time.get_ticks_usec()
 
 	var tween := node.create_tween().set_parallel(true)
 	tween.tween_property(core_mat, "albedo_color:a", 0.0, BEAM_FADE).set_ease(Tween.EASE_IN)
@@ -504,6 +507,10 @@ static func spawn_beam(host: Node3D, aim: Vector3, length: float, origin: Vector
 	tween.chain().tween_callback(_release_light_later(impact_light))
 	tween.chain().tween_callback(_release_light_later(mid_light))
 	tween.chain().tween_callback(_free_later(node))
+	var _tb3 := Time.get_ticks_usec()
+	if _tb3 - _tb0 > 4000:
+		print("[beam] node+meshes=%.1fms lights=%.1fms tween=%.1fms" % [
+			(_tb1 - _tb0) / 1000.0, (_tb2 - _tb1) / 1000.0, (_tb3 - _tb2) / 1000.0])
 
 # Brief impact flash + spark burst spawned at a hit point — mini version of
 # the explosion VFX stack (flash sphere + radial sparks + omni light), no
@@ -3536,6 +3543,7 @@ static func spawn_energy_pulse(host: Node3D, barrel_pos: Vector3, tint: Color = 
 		_energy_pulse_mat_cache[col] = template
 	var mat := template.duplicate() as StandardMaterial3D
 	mesh_inst.material_override = mat
+	var _tp0 := Time.get_ticks_usec()
 	# Also kick a quick OmniLight3D so the surrounding floor briefly
 	# catches the arc light — sells the energy without needing a
 	# separate spawn_muzzle_flash call alongside.
@@ -3548,9 +3556,11 @@ static func spawn_energy_pulse(host: Node3D, barrel_pos: Vector3, tint: Color = 
 	light.light_volumetric_fog_energy = 0.0
 	parent.add_child(light)
 	light.global_position = barrel_pos
+	var _tp1 := Time.get_ticks_usec()
 	parent.add_child(mesh_inst)
 	mesh_inst.global_position = barrel_pos
 	mesh_inst.scale = Vector3.ONE
+	var _tp2 := Time.get_ticks_usec()
 	var tween := mesh_inst.create_tween()
 	tween.set_parallel(true)
 	tween.tween_property(mesh_inst, "scale", Vector3.ONE * ENERGY_PULSE_END_SCALE, ENERGY_PULSE_DURATION).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
@@ -3560,6 +3570,10 @@ static func spawn_energy_pulse(host: Node3D, barrel_pos: Vector3, tint: Color = 
 	tween.set_parallel(false)
 	tween.tween_callback(_release_light_later(light))
 	tween.tween_callback(mesh_inst.queue_free)
+	var _tp3 := Time.get_ticks_usec()
+	if _tp3 - _tp0 > 4000:
+		print("[pulse] light=%.1fms mesh=%.1fms tween=%.1fms" % [
+			(_tp1 - _tp0) / 1000.0, (_tp2 - _tp1) / 1000.0, (_tp3 - _tp2) / 1000.0])
 
 
 # ── Telegraph material ───────────────────────────────────────────────────────
