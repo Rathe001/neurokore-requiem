@@ -801,11 +801,6 @@ var _backing: bool = false
 var _strafing: bool = false
 var _strafe_right: bool = false
 var _interacting: bool = false
-# HOLD-mode fire pose flag — true while a non-looping fire anim has
-# played through and is sitting on its last frame, waiting for the
-# next shot. Set by _on_anim_finished; cleared on the next fire
-# event (or when we restart fire-anim playback). See _play_fire_pose.
-var _fire_pose_holding: bool = false
 var _fps_hovered: Node3D = null
 var _crosshair_root: Control = null
 var _crosshair_bars: Array[ColorRect] = []
@@ -2914,11 +2909,8 @@ func _cast_lmb_combat() -> void:
 			break
 	if main_fired:
 		_face_direction(aim)
-		# Ranged weapons play the looping firing-rifle pose; melee + unarmed
-		# fall back to the punch/swing animation. _play_fire_pose with
-		# restart=true triggers a visible recoil cycle for slow weapons
-		# (HOLD mode) and is a no-op restart for fast weapons (LOOP
-		# mode's _play_anim early-out skips it).
+		# Ranged weapons kick the upper-body overlay through a fresh recoil
+		# cycle; melee + unarmed fall back to the punch/swing animation.
 		if main_item != null and not _attack_is_melee(main_item):
 			_pulse_fire_recoil()
 		else:
@@ -4835,37 +4827,6 @@ func _is_aim_input_held() -> bool:
 		return true
 	return false
 
-# Picks the right firing pose for the current movement state so every
-# ranged-fire trigger site agrees with the per-tick anim picker. Without
-# this, an explicit _play_anim(ANIM_FIRE) at shot time would alternate
-# against the picker's _play_anim(ANIM_FIRE_MOVE) and restart the loop
-# every shot.
-func _ranged_fire_anim() -> Array[StringName]:
-	if _want_dir.length_squared() > 0.01:
-		# Strafe-fire stays universal — Mixamo Strafing.fbx works for
-		# both pistol and rifle (legs strafe, upper body holds the
-		# weapon). A dedicated pistol-strafe-fire would be polish.
-		return ANIM_FIRE_MOVE
-	# Stationary fire — pistol-class plays the 1H snap-fire pose;
-	# rifle stays on the wide-stance xbot/fire. Class lookup makes
-	# SMG read as 1H instead of inheriting the rifle pose.
-	return XBotAnimations.fire_anim_for_class(_equipped_weapon_class())
-
-
-# Effective seconds between shots for the currently-equipped weapon.
-# Used by the per-tick fire-pose picker to scale the looping fire
-# animation so one anim cycle == one shot, eliminating the recoil
-# wobble that happens when anim_length and fire_interval drift.
-# Returns 1.0 as a safe fallback for melee or no-skill weapons (the
-# fire branch only runs for bullet weapons anyway).
-func _held_weapon_fire_interval() -> float:
-	var w: Item = InventoryState.get_equipped(&"weapon")
-	if w == null or w.fire_skill == null or w.fire_skill.cooldown <= 0.0:
-		return 1.0
-	var eff_atk: float = w.effective_attack_speed() * (1.0 + _gear_attack_speed_bonus)
-	return w.fire_skill.cooldown / maxf(eff_atk, 0.1)
-
-
 # True only for weapons whose attack is a melee SWING (full-body one-shot).
 # Pistol/rifle classes — including the energy guns (laser pistol, plasma
 # rifle, accelerator, taser) that aren't ammo-based and so report
@@ -4954,93 +4915,6 @@ func _swing_overlay_if_moving(combo_step: int, duration: float) -> bool:
 			modifier.play_swing(skel, anim_player, key, duration)
 			return true
 	return false
-
-
-# Stationary firing pose with two modes:
-#
-#  * FAST weapons (fire_interval < clip.length): continuous LOOP at
-#    a speed scaled by anim.length / fire_interval, clamped so it
-#    doesn't spaz/freeze.
-#
-#  * SLOW weapons (fire_interval ≥ clip.length, e.g. sniper): HOLD
-#    mode — anim plays once at 1.0× per shot, then freezes on the
-#    last frame until the next shot. Looping a slow weapon at sub-
-#    1.0× speed read as wobble because the loop boundary drifted
-#    against the shot timing.
-#
-# No-op when MOVING — locomotion picker takes over (same flow that
-# arc taser gets implicitly via is_bullet_weapon() = false).
-#
-# `restart` is true when called from a fire EVENT (per-shot) and
-# false when called from the per-tick picker. In HOLD mode the fire
-# event restarts from frame 0 (visible recoil per shot) while the
-# tick picker leaves the anim alone (lets it play through and hold).
-func _play_fire_pose(blend: float = 0.15, restart: bool = false) -> void:
-	if anim_player == null:
-		return
-	if _want_dir.length_squared() > 0.01:
-		return
-	var candidates: Array[StringName] = _ranged_fire_anim()
-	var chosen: StringName = &""
-	for key in candidates:
-		if anim_player.has_animation(key):
-			chosen = key
-			break
-	if chosen == &"":
-		return
-	var clip: Animation = anim_player.get_animation(chosen)
-	if clip == null or clip.length <= 0.0:
-		_play_anim([chosen], 1.0, blend)
-		return
-	var fire_int: float = _held_weapon_fire_interval()
-	if fire_int <= 0.0:
-		_play_anim([chosen], 1.0, blend)
-		return
-	# Margin so weapons right at the boundary land in LOOP mode where
-	# the clamp can still produce a reasonable visual.
-	var is_slow_weapon: bool = fire_int > clip.length * 1.05
-	var name_str: String = String(chosen)
-	if is_slow_weapon:
-		# HOLD MODE — play once, freeze at end frame.
-		clip.loop_mode = Animation.LOOP_NONE
-		# `assigned_animation` stays = the last anim we asked to play,
-		# even after a non-looping anim finishes (where
-		# `current_animation` resets to ""). That gap is exactly what
-		# we need to distinguish "fire anim played out and is now
-		# holding its end frame" (assigned = fire anim) from "RUN took
-		# over while the player was moving" (assigned = run anim).
-		var assigned: String = anim_player.assigned_animation
-		var current: String = anim_player.current_animation
-		if restart:
-			# Per-shot event: visible recoil cycle from frame 0.
-			_fire_pose_holding = false
-			anim_player.speed_scale = 1.0
-			anim_player.play(name_str, blend, 1.0, false)
-			_anim_reverse = false
-		elif _fire_pose_holding and assigned == name_str:
-			# Anim played through and is sitting on its last frame.
-			# assigned == fire anim → nothing else has been started
-			# over it → leave the held pose alone.
-			pass
-		elif current == name_str and anim_player.is_playing():
-			# Mid-cycle on the fire anim — leave it alone.
-			pass
-		else:
-			# Either just transitioned back from movement (RUN had
-			# taken over, assigned/current points to it), or first
-			# frame after LMB press before any shot has fired. Start
-			# the fire pose fresh.
-			_fire_pose_holding = false
-			anim_player.speed_scale = 1.0
-			anim_player.play(name_str, blend, 1.0, false)
-			_anim_reverse = false
-	else:
-		# LOOP MODE — continuous cycle scaled to fire_interval.
-		clip.loop_mode = Animation.LOOP_LINEAR
-		_fire_pose_holding = false
-		var speed: float = clip.length / fire_int
-		speed = clampf(speed, 0.6, 1.3)
-		_play_anim([chosen], speed, blend)
 
 
 # Returns the stance class of the currently-equipped main weapon
@@ -5306,12 +5180,6 @@ func _update_interact_cursor() -> void:
 func _on_anim_finished(anim_name: String) -> void:
 	if anim_name == "Interact":
 		_interacting = false
-	# HOLD-mode fire pose just finished — mark held so the per-tick
-	# picker doesn't restart it. The next fire event will clear this
-	# flag and replay from frame 0.
-	var name_sn: StringName = StringName(anim_name)
-	if name_sn in ANIM_FIRE or name_sn in XBotAnimations.fire_anim_for_class(&"pistol"):
-		_fire_pose_holding = true
 
 func _would_hit_ceiling_if_standing() -> bool:
 	if _stand_test_shape == null:
