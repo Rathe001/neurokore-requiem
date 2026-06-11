@@ -238,6 +238,16 @@ static func _place_stencils(ctx: LevelBuildContext, center: Vector3, hx: float, 
 		if rng.randf() > STENCIL_PLACE_CHANCE:
 			continue
 		var def := stencils[rng.randi() % stencils.size()]
+		# Stand the stencil far enough into the room that its WORST-CASE
+		# rolled footprint stays fully inside — the fixed standoff let
+		# stencils wider than the standoff poke through the doorway, where
+		# the floor is a narrower corridor (or nothing at all at platform
+		# edges) and the overhang read as paint floating over the void.
+		var half_worst: float = def.size_range.y * (1.0 + def.aspect_jitter) * 0.5
+		var standoff: float = maxf(STENCIL_STANDOFF_M, half_worst + 0.1)
+		# Room too small to hold the stencil clear of the doorway — skip.
+		if standoff >= hx or standoff >= hz:
+			continue
 		var pos := Vector3.ZERO
 		# Yaw aligns the stencil so its texture's "up" points OUT of the
 		# room — i.e. the player walking in from the door sees the symbol
@@ -246,16 +256,16 @@ static func _place_stencils(ctx: LevelBuildContext, center: Vector3, hx: float, 
 		var yaw := 0.0
 		match wall:
 			RoomDef.Wall.NORTH:
-				pos = Vector3(center.x, 0.0, center.z - hz + STENCIL_STANDOFF_M)
+				pos = Vector3(center.x, 0.0, center.z - hz + standoff)
 				yaw = 0.0
 			RoomDef.Wall.SOUTH:
-				pos = Vector3(center.x, 0.0, center.z + hz - STENCIL_STANDOFF_M)
+				pos = Vector3(center.x, 0.0, center.z + hz - standoff)
 				yaw = PI
 			RoomDef.Wall.EAST:
-				pos = Vector3(center.x + hx - STENCIL_STANDOFF_M, 0.0, center.z)
+				pos = Vector3(center.x + hx - standoff, 0.0, center.z)
 				yaw = -PI * 0.5
 			RoomDef.Wall.WEST:
-				pos = Vector3(center.x - hx + STENCIL_STANDOFF_M, 0.0, center.z)
+				pos = Vector3(center.x - hx + standoff, 0.0, center.z)
 				yaw = PI * 0.5
 		_queue_decal_at(ctx, def, pos, yaw, stamp_index, rng)
 		stamp_index += 1

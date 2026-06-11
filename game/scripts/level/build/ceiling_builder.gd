@@ -33,6 +33,12 @@ static func build_void_cover(ctx: LevelBuildContext) -> void:
 	inst.mesh = mesh
 	inst.material_override = mat
 	inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# Dedicated render layer (16) so Decal projections never paint onto
+	# the cover — floor decals near platform edges sit at VOID_COVER_Y
+	# distance inside the decal's projection box, so they painted onto
+	# this plane and read as stripes floating over the void. The camera's
+	# default cull mask still renders the cover; nothing targets layer 16.
+	inst.layers = 1 << 15
 	inst.position = Vector3(0.0, VOID_COVER_Y, 0.0)
 	ctx.root.add_child(inst)
 
