@@ -880,6 +880,12 @@ func _on_fire_anim_finished(anim_name: StringName) -> void:
 # tint doesn't leak across class variants that share the underlying mesh
 # resource. A no-op when `tint` is opaque white (caller already guards
 # this, but cheap to defend in case of future call sites).
+# (src material RID, tint) → tinted duplicate. Tinted classes share a
+# handful of source materials and a handful of tints, so every spawn
+# after the first reuses the cached duplicate — per-spawn duplicate()
+# was a render-thread sync per surface per tinted enemy.
+static var _tinted_mat_cache: Dictionary = {}
+
 func _apply_mesh_tint(root: Node, tint: Color) -> void:
 	if tint == Color(1.0, 1.0, 1.0, 1.0):
 		return
@@ -890,15 +896,18 @@ func _apply_mesh_tint(root: Node, tint: Color) -> void:
 			continue
 		for surf in range(mesh.get_surface_count()):
 			# Per-surface override pulls either an instance override (set
-			# previously) or the mesh's authored material. Duplicate so we
-			# don't mutate a shared resource.
+			# previously) or the mesh's authored material.
 			var src_mat: Material = mi.get_active_material(surf)
 			if src_mat == null:
 				continue
-			var mat: BaseMaterial3D = src_mat.duplicate() as BaseMaterial3D
+			var key := [src_mat.get_rid(), tint]
+			var mat: BaseMaterial3D = _tinted_mat_cache.get(key)
 			if mat == null:
-				continue
-			mat.albedo_color = mat.albedo_color * tint
+				mat = src_mat.duplicate() as BaseMaterial3D
+				if mat == null:
+					continue
+				mat.albedo_color = mat.albedo_color * tint
+				_tinted_mat_cache[key] = mat
 			mi.set_surface_override_material(surf, mat)
 
 
@@ -3317,6 +3326,7 @@ const _DISMEMBER_PROP_LIFETIME: float = 4.0
 # actual character texture. Sits dark enough that the blood splatters
 # overlapping it stay legible.
 const _DISMEMBER_PROP_COLOR: Color = Color(0.55, 0.42, 0.36)
+static var _dismember_mat: StandardMaterial3D = null
 
 # Spawns separate physics-driven limb props at each dismembered bone +
 # kicks the underlying ragdoll. Mixamo X Bot has a single skinned mesh
@@ -3385,10 +3395,13 @@ func _spawn_dismember_prop(bone: PhysicalBone3D, kick_dir: Vector3) -> void:
 	cmesh.radial_segments = 6
 	cmesh.rings = 2
 	mesh_inst.mesh = cmesh
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = _DISMEMBER_PROP_COLOR
-	mat.roughness = 0.7
-	mesh_inst.material_override = mat
+	# Shared material — fixed color, and per-spawn material creation is
+	# a render-thread sync (laser-hitch class).
+	if _dismember_mat == null:
+		_dismember_mat = StandardMaterial3D.new()
+		_dismember_mat.albedo_color = _DISMEMBER_PROP_COLOR
+		_dismember_mat.roughness = 0.7
+	mesh_inst.material_override = _dismember_mat
 	# Don't cast shadow — at horde scale dozens of tiny flying capsules
 	# making per-frame shadow updates is wasted work.
 	mesh_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF

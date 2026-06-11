@@ -107,6 +107,39 @@ static var _beam_glow_mat_cache: Dictionary = {}
 static var _light_pool: Array[OmniLight3D] = []
 const _LIGHT_POOL_MAX := 32
 
+# ── Material rings ─────────────────────────────────────────────────────
+# Round-robin pools of pre-duplicated materials, keyed by template RID.
+# Creating a material RID mid-frame forces a ~25ms render-thread sync
+# (the laser-pistol hitch, d0a92e4) — so per-event effects must NEVER
+# duplicate() at spawn time. A ring hands out the next pre-made
+# duplicate; an entry is only reused after `size` further spawns, long
+# after these ≤0.5s effects have faded. The whole ring is built on
+# first use — one sync stall per template per session instead of one
+# per event. CONTRACT for callers: reset every per-instance shader
+# param at spawn (a reused entry carries the previous effect's values).
+static var _mat_rings: Dictionary = {}
+static var _shockwave_mat_template: ShaderMaterial = null
+static var _crater_mat_template: ShaderMaterial = null
+static var _fireball_mat_cache: Dictionary = {}  # [damage_type, is_enemy] -> ShaderMaterial
+static var _explosion_flash_mesh: SphereMesh = null
+static var _explosion_flash_mat_cache: Dictionary = {}  # [tint, intensity] -> template
+static var _explosion_spark_cache: Dictionary = {}  # [tint, intensity] -> {pm template, mesh}
+static var _debris_unit_mesh: BoxMesh = null
+static var _debris_mats: Array = []  # pre-baked grey variants
+
+static func _ring_material(template: Material, size: int = 12) -> Material:
+	var key: RID = template.get_rid()
+	var ring: Dictionary = _mat_rings.get(key, {})
+	if ring.is_empty():
+		var mats: Array = []
+		for _i in size:
+			mats.append(template.duplicate())
+		ring = {"mats": mats, "i": 0}
+		_mat_rings[key] = ring
+	var i: int = ring["i"]
+	ring["i"] = (i + 1) % (ring["mats"] as Array).size()
+	return ring["mats"][i]
+
 static func _acquire_light() -> OmniLight3D:
 	if not _light_pool.is_empty():
 		return _light_pool.pop_back()
@@ -252,7 +285,9 @@ static func spawn_airstrike_marker(host: Node3D, skill: Skill, eff_range: float)
 	# iso-camera perspective as 3D objects. Mesh is shared across all
 	# casts; material is per-instance (intensity is tweened) but
 	# duplicated from a pre-resolved template.
-	var mat: ShaderMaterial = _get_airstrike_marker_material_template().duplicate()
+	# Ring of 4 — markers live a few seconds but the skill is on a 30s
+	# cooldown, so concurrent markers never approach the ring size.
+	var mat: ShaderMaterial = _ring_material(_get_airstrike_marker_material_template(), 4)
 	mat.set_shader_parameter(&"intensity", 1.4)
 	var node := MeshInstance3D.new()
 	node.name = "AirstrikeMarker"
@@ -379,7 +414,7 @@ static func spawn_lightning_arc(host: Node3D, from_pos: Vector3, to_pos: Vector3
 	# per-instance (intensity tween is unique per arc) but duplicated
 	# from a pre-resolved template, which is cheaper than constructing
 	# from scratch.
-	var mat: ShaderMaterial = _get_lightning_arc_material_template().duplicate()
+	var mat: ShaderMaterial = _ring_material(_get_lightning_arc_material_template()) as ShaderMaterial
 	mat.set_shader_parameter(&"intensity", 1.0)
 	# Pass world-space plane length so the shader's FBM repeats per
 	# world unit instead of stretching to fit the plane. Without this,
@@ -391,8 +426,13 @@ static func spawn_lightning_arc(host: Node3D, from_pos: Vector3, to_pos: Vector3
 	# alpha = "no override" and the shader's authored default cyan-blue
 	# stays in effect. The shader wants a vec3 so we drop the alpha
 	# channel after the override check.
+	# Ring contract: ALWAYS set effect_color — a reused ring entry holds
+	# the previous arc's tint. No-override falls back to the shader's
+	# authored default (lightning_arc.gdshader: 0.55, 0.85, 1.0).
 	if tint_override.a > 0.0:
 		mat.set_shader_parameter(&"effect_color", Vector3(tint_override.r, tint_override.g, tint_override.b))
+	else:
+		mat.set_shader_parameter(&"effect_color", Vector3(0.55, 0.85, 1.0))
 	var inst := MeshInstance3D.new()
 	inst.mesh = _get_lightning_arc_mesh()
 	inst.material_override = mat
@@ -813,7 +853,12 @@ static func spawn_blood_burst(parent: Node, world_pos: Vector3, direction: Vecto
 		droplet_mesh.material = droplet_mat
 		bundle = {"pm": pm_t, "mesh": droplet_mesh}
 		_blood_burst_cache[blood_type] = bundle
-	var pm := (bundle["pm"] as ParticleProcessMaterial).duplicate() as ParticleProcessMaterial
+	# Ring, not duplicate — ParticleProcessMaterial is a Material, so a
+	# per-burst duplicate() was a render-thread sync ON EVERY HIT (the
+	# laser-hitch class). Direction/velocity only matter on the emit
+	# frame (one_shot + explosiveness=1 snapshots them per particle), so
+	# ring reuse 12 bursts later can't disturb in-flight droplets.
+	var pm := _ring_material(bundle["pm"]) as ParticleProcessMaterial
 	pm.direction = direction.normalized() if direction.length_squared() > 0.0001 else Vector3.UP
 	pm.initial_velocity_min = BLOOD_BURST_SPEED_MIN * count_mult
 	pm.initial_velocity_max = BLOOD_BURST_SPEED_MAX * count_mult
@@ -2278,43 +2323,47 @@ static func _spawn_fireball_explosion(parent: Node, world_pos: Vector3, blast_ra
 		# gradient lookups keyed on sprite brightness:
 		#   tex_frg_26 → EMISSION (fire/smoke color)
 		#   tex_frg_27 → ALBEDO   (base tint, default white)
-		# We duplicate the material and replace both so the entire explosion
-		# — fire core, mid ring, and trailing smoke — reads in-palette.
-		var mat: ShaderMaterial = particles.material_override.duplicate() as ShaderMaterial
-		var smoke: Color = palette["smoke"]
-		var em_grad := Gradient.new()
-		em_grad.offsets = PackedFloat32Array([0.0, 0.017, 0.38, 0.461, 0.55, 0.602, 1.0])
-		em_grad.colors = PackedColorArray([
-			Color(smoke.r, smoke.g, smoke.b, 0.0),  # very dark → smoke (transparent edge)
-			Color(smoke.r, smoke.g, smoke.b, 1.0),  # dark → smoke
-			palette["core"],                          # bright centre
-			palette["mid"],                           # mid ring
-			palette["outer"],                         # rim
-			smoke,                                    # fade to smoke
-			smoke,                                    # hold smoke
-		])
-		var em_tex := GradientTexture1D.new()
-		em_tex.gradient = em_grad
-		mat.set_shader_parameter(&"tex_frg_26", em_tex)
-		var alb_grad := Gradient.new()
-		alb_grad.offsets = PackedFloat32Array([0.0, 0.4, 1.0])
-		alb_grad.colors = PackedColorArray([
-			smoke,                      # dark → smoke tint
-			Color(0.7, 0.7, 0.7, 1.0), # mid → neutral
-			Color(1.0, 1.0, 1.0, 1.0), # bright → white
-		])
-		var alb_tex := GradientTexture1D.new()
-		alb_tex.gradient = alb_grad
-		mat.set_shader_parameter(&"tex_frg_27", alb_tex)
-		# Enemy-sourced explosions are ~50% transparent so they don't
-		# overpower player VFX. The shader's alpha_multiplier uniform
-		# is authoritative here; we also halve the emission falloff so
-		# the glow is proportionally dimmer.
-		if is_enemy:
-			mat.set_shader_parameter(&"alpha_multiplier", 0.5)
-		# Wider soft-particle fade so the billboard blends out where it
-		# meets wall geometry instead of clipping above wall tops.
-		mat.set_shader_parameter(&"Soft_limit", FLIPBOOK_SOFT_LIMIT)
+		# Fully deterministic per (damage_type, is_enemy), so the
+		# configured material + its gradient textures are built once and
+		# cached — the old per-explosion duplicate() + 2 GradientTexture1D
+		# uploads were a render-thread sync per blast (laser-hitch class).
+		var fb_key := [damage_type, is_enemy]
+		var mat: ShaderMaterial = _fireball_mat_cache.get(fb_key)
+		if mat == null:
+			mat = particles.material_override.duplicate() as ShaderMaterial
+			var smoke: Color = palette["smoke"]
+			var em_grad := Gradient.new()
+			em_grad.offsets = PackedFloat32Array([0.0, 0.017, 0.38, 0.461, 0.55, 0.602, 1.0])
+			em_grad.colors = PackedColorArray([
+				Color(smoke.r, smoke.g, smoke.b, 0.0),  # very dark → smoke (transparent edge)
+				Color(smoke.r, smoke.g, smoke.b, 1.0),  # dark → smoke
+				palette["core"],                          # bright centre
+				palette["mid"],                           # mid ring
+				palette["outer"],                         # rim
+				smoke,                                    # fade to smoke
+				smoke,                                    # hold smoke
+			])
+			var em_tex := GradientTexture1D.new()
+			em_tex.gradient = em_grad
+			mat.set_shader_parameter(&"tex_frg_26", em_tex)
+			var alb_grad := Gradient.new()
+			alb_grad.offsets = PackedFloat32Array([0.0, 0.4, 1.0])
+			alb_grad.colors = PackedColorArray([
+				smoke,                      # dark → smoke tint
+				Color(0.7, 0.7, 0.7, 1.0), # mid → neutral
+				Color(1.0, 1.0, 1.0, 1.0), # bright → white
+			])
+			var alb_tex := GradientTexture1D.new()
+			alb_tex.gradient = alb_grad
+			mat.set_shader_parameter(&"tex_frg_27", alb_tex)
+			# Enemy-sourced explosions are ~50% transparent so they don't
+			# overpower player VFX.
+			if is_enemy:
+				mat.set_shader_parameter(&"alpha_multiplier", 0.5)
+			# Wider soft-particle fade so the billboard blends out where
+			# it meets wall geometry instead of clipping above wall tops.
+			mat.set_shader_parameter(&"Soft_limit", FLIPBOOK_SOFT_LIMIT)
+			_fireball_mat_cache[fb_key] = mat
 		particles.material_override = mat
 		# GPU particles ignore parent node scale (local_coords=false), so
 		# resize the draw pass QuadMesh directly. Energy explosions use a
@@ -2398,32 +2447,40 @@ static func _spawn_fireball_explosion(parent: Node, world_pos: Vector3, blast_ra
 # uses an unshaded high-emission StandardMaterial so it bloom-glows
 # regardless of palette or volumetric fog density.
 static func _spawn_explosion_flash(parent: Node, world_pos: Vector3, blast_radius: float, core_tint: Color, intensity_mult: float = 1.0) -> void:
-	var mesh := SphereMesh.new()
-	mesh.radius = blast_radius * 0.35
-	mesh.height = blast_radius * 0.7
-	mesh.radial_segments = 16
-	mesh.rings = 8
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(core_tint.r, core_tint.g, core_tint.b, 0.9 * intensity_mult)
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.emission_enabled = true
-	mat.emission = core_tint
-	mat.emission_energy_multiplier = 6.0 * intensity_mult
-	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	# Shared unit sphere scaled by blast_radius + per-(tint,intensity)
+	# SHARED material template; fade via instance transparency. The old
+	# per-explosion SphereMesh + StandardMaterial3D were two RID
+	# creations per blast (render-thread sync — laser-hitch class).
+	if _explosion_flash_mesh == null:
+		_explosion_flash_mesh = SphereMesh.new()
+		_explosion_flash_mesh.radius = 0.35
+		_explosion_flash_mesh.height = 0.7
+		_explosion_flash_mesh.radial_segments = 16
+		_explosion_flash_mesh.rings = 8
+	var key := [core_tint, intensity_mult]
+	var mat: StandardMaterial3D = _explosion_flash_mat_cache.get(key)
+	if mat == null:
+		mat = StandardMaterial3D.new()
+		mat.albedo_color = Color(core_tint.r, core_tint.g, core_tint.b, 0.9 * intensity_mult)
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.emission_enabled = true
+		mat.emission = core_tint
+		mat.emission_energy_multiplier = 6.0 * intensity_mult
+		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+		_explosion_flash_mat_cache[key] = mat
 	var inst := MeshInstance3D.new()
-	inst.mesh = mesh
+	inst.mesh = _explosion_flash_mesh
 	inst.material_override = mat
 	inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	inst.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
 	# Start small so it pops into existence, scale up + fade fast.
-	inst.scale = Vector3.ONE * 0.3
+	inst.scale = Vector3.ONE * blast_radius * 0.3
 	parent.add_child(inst)
 	inst.global_position = world_pos
 	var tween := inst.create_tween().set_parallel(true)
-	tween.tween_property(inst, "scale", Vector3.ONE * 1.4, EXPLOSION_FLASH_DURATION).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_EXPO)
-	tween.tween_property(mat, "albedo_color:a", 0.0, EXPLOSION_FLASH_DURATION).set_ease(Tween.EASE_IN)
-	tween.tween_property(mat, "emission_energy_multiplier", 0.0, EXPLOSION_FLASH_DURATION).set_ease(Tween.EASE_IN)
+	tween.tween_property(inst, "scale", Vector3.ONE * blast_radius * 1.4, EXPLOSION_FLASH_DURATION).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_EXPO)
+	tween.tween_property(inst, "transparency", 1.0, EXPLOSION_FLASH_DURATION).set_ease(Tween.EASE_IN)
 	tween.chain().tween_callback(_free_later(inst))
 
 
@@ -2447,51 +2504,60 @@ static func _spawn_explosion_sparks(parent: Node, world_pos: Vector3, blast_radi
 	# into the cascade.
 	particles.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
 
-	var pm := ParticleProcessMaterial.new()
-	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+	# Cached per (tint, intensity): pm TEMPLATE (radius-dependent fields
+	# set per spawn on a ring entry) + fully-shared draw mesh/material.
+	# The old per-explosion ParticleProcessMaterial + Curve +
+	# CurveTexture + SphereMesh + StandardMaterial3D were ~3 RID
+	# creations per blast (render-thread sync — laser-hitch class).
+	var spark_key := [tint, intensity_mult]
+	var spark_bundle: Dictionary = _explosion_spark_cache.get(spark_key, {})
+	if spark_bundle.is_empty():
+		var pm_t := ParticleProcessMaterial.new()
+		pm_t.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+		pm_t.direction = Vector3(0.0, 0.3, 0.0)
+		pm_t.spread = 180.0  # full radial spray
+		# Velocity ~50% lower + damping ~70% higher than the original
+		# tune so the spark cloud decays inside the blast radius instead
+		# of flying through walls into adjacent rooms.
+		pm_t.gravity = Vector3(0.0, -18.0, 0.0)
+		pm_t.damping_min = 11.0
+		pm_t.damping_max = 16.0
+		pm_t.scale_min = 0.04
+		pm_t.scale_max = 0.10
+		pm_t.color = Color(tint.r, tint.g, tint.b, 1.0)
+		# Scale curve fades the spark to nothing — saves an alpha tween.
+		if _impact_spark_curve_tex == null:
+			var curve := Curve.new()
+			curve.add_point(Vector2(0.0, 1.0))
+			curve.add_point(Vector2(0.6, 0.4))
+			curve.add_point(Vector2(1.0, 0.0))
+			_impact_spark_curve_tex = CurveTexture.new()
+			_impact_spark_curve_tex.curve = curve
+		pm_t.scale_curve = _impact_spark_curve_tex
+		var mesh := SphereMesh.new()
+		mesh.radius = 0.05
+		mesh.height = 0.1
+		mesh.radial_segments = 6
+		mesh.rings = 3
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = Color(tint.r, tint.g, tint.b, intensity_mult)
+		mat.emission_enabled = true
+		mat.emission = tint
+		mat.emission_energy_multiplier = 4.0 * intensity_mult
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		if intensity_mult < 1.0:
+			mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mesh.material = mat
+		spark_bundle = {"pm": pm_t, "mesh": mesh}
+		_explosion_spark_cache[spark_key] = spark_bundle
+	# Radius-dependent fields go on a ring entry (emit-frame-only, same
+	# rationale as the blood burst).
+	var pm := _ring_material(spark_bundle["pm"], 4) as ParticleProcessMaterial
 	pm.emission_sphere_radius = blast_radius * 0.15
-	pm.direction = Vector3(0.0, 0.3, 0.0)
-	pm.spread = 180.0  # full radial spray
-	# Previously velocity 5-9 × blast_radius with damping 6-10 sent
-	# sparks well past wall boundaries into adjacent rooms (no
-	# particle-collision setup in the project, so sparks pass through
-	# geometry). Dialed velocity ~50% lower and damping ~70% higher
-	# so the spark cloud decays inside the blast radius — visually
-	# still reads as a dramatic burst, but the perimeter sparks
-	# stop short of where typical walls sit.
 	pm.initial_velocity_min = blast_radius * 2.5
 	pm.initial_velocity_max = blast_radius * 4.5
-	pm.gravity = Vector3(0.0, -18.0, 0.0)
-	pm.damping_min = 11.0
-	pm.damping_max = 16.0
-	pm.scale_min = 0.04
-	pm.scale_max = 0.10
-	pm.color = Color(tint.r, tint.g, tint.b, 1.0)
-	# Scale curve fades the spark to nothing — saves a separate alpha tween.
-	var curve := Curve.new()
-	curve.add_point(Vector2(0.0, 1.0))
-	curve.add_point(Vector2(0.7, 0.5))
-	curve.add_point(Vector2(1.0, 0.0))
-	var curve_tex := CurveTexture.new()
-	curve_tex.curve = curve
-	pm.scale_curve = curve_tex
 	particles.process_material = pm
-
-	var mesh := SphereMesh.new()
-	mesh.radius = 0.05
-	mesh.height = 0.1
-	mesh.radial_segments = 6
-	mesh.rings = 3
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(tint.r, tint.g, tint.b, intensity_mult)
-	mat.emission_enabled = true
-	mat.emission = tint
-	mat.emission_energy_multiplier = 4.0 * intensity_mult
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	if intensity_mult < 1.0:
-		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mesh.material = mat
-	particles.draw_pass_1 = mesh
+	particles.draw_pass_1 = spark_bundle["mesh"]
 
 	# Add to tree BEFORE setting global_position — the setter walks the
 	# scene tree to convert into local coords, so doing it pre-parent
@@ -2719,8 +2785,14 @@ static func spawn_hammer_crater(host: Node3D, world_pos: Vector3, radius: float)
 			var sm := src_mat as StandardMaterial3D
 			normal_tex = sm.normal_texture
 			rough_tex = sm.roughness_texture
-		var sh_mat := ShaderMaterial.new()
-		sh_mat.shader = HAMMER_CRATER_SHADER
+		# Ring of 4 — craters fade over a long window but spawn rarely
+		# (hammer finisher / explosions); ring reuse only matters with
+		# 4+ craters alive in their fade window, where an early pop is
+		# acceptable. Reset every param per spawn (ring contract).
+		if _crater_mat_template == null:
+			_crater_mat_template = ShaderMaterial.new()
+			_crater_mat_template.shader = HAMMER_CRATER_SHADER
+		var sh_mat := _ring_material(_crater_mat_template, 4) as ShaderMaterial
 		sh_mat.set_shader_parameter(&"normal_tex", normal_tex)
 		sh_mat.set_shader_parameter(&"roughness_tex", rough_tex)
 		sh_mat.set_shader_parameter(&"fade", 1.0)
@@ -2840,24 +2912,31 @@ static func spawn_explosion_debris(host: Node3D, world_pos: Vector3, radius: flo
 	# pebbles, big ones throw chunks. Half-metre clamp on the top end
 	# so we don't get absurd debris boulders.
 	var chunk_scale: float = clampf(radius * 0.06, 0.05, 0.16)
+	# Shared unit box + pre-baked grey variants — the old per-chunk
+	# BoxMesh + StandardMaterial3D were 16 RID creations per explosion
+	# (render-thread sync — laser-hitch class). Per-chunk size variation
+	# moves to the shard's node scale; color variation picks from the
+	# baked palette.
+	if _debris_unit_mesh == null:
+		_debris_unit_mesh = BoxMesh.new()
+		_debris_unit_mesh.size = Vector3.ONE
+		for vi in 6:
+			var dmat := StandardMaterial3D.new()
+			# Dark concrete grey with mild variation; slight warmth picks
+			# up the scorched-impact palette.
+			var v := lerpf(0.20, 0.38, float(vi) / 5.0)
+			dmat.albedo_color = Color(v * 1.05, v, v * 0.9, 1.0)
+			dmat.roughness = 0.85
+			dmat.metallic = 0.05
+			_debris_mats.append(dmat)
 	for i in _EXPLOSION_DEBRIS_COUNT:
 		var sx: float = randf_range(0.6, 1.2) * chunk_scale
 		var sy: float = randf_range(0.5, 1.0) * chunk_scale
 		var sz: float = randf_range(0.6, 1.2) * chunk_scale
-		var mesh := BoxMesh.new()
-		mesh.size = Vector3(sx, sy, sz)
-		var mat := StandardMaterial3D.new()
-		# Dark concrete grey with mild per-chunk variation so the
-		# debris doesn't look stamped from a single material. Slight
-		# warmth picks up the scorched-impact palette.
-		var v := randf_range(0.20, 0.38)
-		mat.albedo_color = Color(v * 1.05, v, v * 0.9, 1.0)
-		mat.roughness = 0.85
-		mat.metallic = 0.05
-		mesh.material = mat
 		var shard := DebrisShard.new()
-		shard.mesh_resource = mesh
-		shard.mat = mat
+		shard.mesh_resource = _debris_unit_mesh
+		shard.material_override = _debris_mats[randi() % _debris_mats.size()]
+		shard.scale = Vector3(sx, sy, sz)
 		shard.lifetime = _EXPLOSION_DEBRIS_LIFETIME
 		shard.gravity = _EXPLOSION_DEBRIS_GRAVITY
 		shard.floor_y = world_pos.y  # land where the explosion fired
@@ -2942,7 +3021,7 @@ static func spawn_hammer_impact(host: Node3D, radius: float = HAMMER_IMPACT_RADI
 	var parent: Node = host.get_parent()
 	if parent == null:
 		parent = host
-	var mat: ShaderMaterial = _get_hammer_impact_material_template().duplicate()
+	var mat: ShaderMaterial = _ring_material(_get_hammer_impact_material_template()) as ShaderMaterial
 	mat.set_shader_parameter(&"progress", 0.0)
 	var inst := MeshInstance3D.new()
 	inst.mesh = _get_hammer_impact_mesh()
@@ -3186,7 +3265,7 @@ static func _spawn_one_slash(host: Node3D, forward: Vector3, mid_dist: float, co
 	# saber-stroke diagonal. Bow axis stays orthogonal in-plane.
 	chord_axis = chord_axis.rotated(to_camera, deg_to_rad(SLASH_TILT_DEG))
 	var bow_axis: Vector3 = to_camera.cross(chord_axis).normalized()
-	var mat: ShaderMaterial = _get_slash_material_template().duplicate()
+	var mat: ShaderMaterial = _ring_material(_get_slash_material_template()) as ShaderMaterial
 	mat.set_shader_parameter(&"intensity", SLASH_INTENSITY)
 	var inst := MeshInstance3D.new()
 	inst.mesh = _get_slash_mesh()
@@ -3213,11 +3292,15 @@ static func _spawn_shockwave(host: Node3D, world_pos: Vector3, mesh: Mesh, forwa
 		parent = host
 	var node := MeshInstance3D.new()
 	node.mesh = mesh
-	var mat := ShaderMaterial.new()
-	mat.shader = SHOCKWAVE_BUBBLE_SHADER
-	mat.set_shader_parameter(&"distortion", SHOCKWAVE_BUBBLE_DISTORTION)
-	mat.set_shader_parameter(&"chroma", SHOCKWAVE_BUBBLE_CHROMA)
-	mat.set_shader_parameter(&"rim_strength", SHOCKWAVE_BUBBLE_RIM)
+	# Constant params live on the cached template; only the tweened
+	# intensity is per-instance (reset every spawn — ring contract).
+	if _shockwave_mat_template == null:
+		_shockwave_mat_template = ShaderMaterial.new()
+		_shockwave_mat_template.shader = SHOCKWAVE_BUBBLE_SHADER
+		_shockwave_mat_template.set_shader_parameter(&"distortion", SHOCKWAVE_BUBBLE_DISTORTION)
+		_shockwave_mat_template.set_shader_parameter(&"chroma", SHOCKWAVE_BUBBLE_CHROMA)
+		_shockwave_mat_template.set_shader_parameter(&"rim_strength", SHOCKWAVE_BUBBLE_RIM)
+	var mat := _ring_material(_shockwave_mat_template) as ShaderMaterial
 	mat.set_shader_parameter(&"intensity", 1.0)
 	node.material_override = mat
 	node.scale = Vector3.ONE * SHOCKWAVE_START_SCALE
@@ -3245,6 +3328,10 @@ static func _play_fade(node: MeshInstance3D, mat: StandardMaterial3D, wind_up: f
 	if wind_up > 0.0:
 		mat.albedo_color.a = 0.4
 		tween.tween_property(mat, "albedo_color:a", 1.0, wind_up)
+	else:
+		# Ring contract: a reused material carries the previous
+		# telegraph's faded-out alpha — restore full before fading.
+		mat.albedo_color.a = 1.0
 	tween.tween_property(mat, "albedo_color:a", 0.0, FADE_DURATION)
 	tween.tween_callback(_free_later(node))
 
@@ -3584,4 +3671,9 @@ static func _build_material(color: Color) -> StandardMaterial3D:
 		template.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		template.cull_mode = BaseMaterial3D.CULL_DISABLED
 		_material_template_cache[color] = template
-	return template.duplicate() as StandardMaterial3D
+	# Telegraph cones spawn per enemy attack windup — per-call duplicate()
+	# was a render-thread sync each time. Ring entries get their alpha
+	# reset by _play_fade at spawn. Ring of 24: at horde scale a dozen
+	# concurrent enemy windups is realistic, and a stomped ring entry
+	# would make an older telegraph's fade visibly restart.
+	return _ring_material(template, 24) as StandardMaterial3D

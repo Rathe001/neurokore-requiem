@@ -7,6 +7,10 @@ extends MeshInstance3D
 ## and self-frees when done.
 
 var mesh_resource: Mesh
+# Legacy field — fade now rides GeometryInstance3D.transparency so shards
+# can share materials (per-shard material duplicates were a render-thread
+# sync per chunk; see the laser-hitch postmortem). Kept for any caller
+# that still assigns it; no longer mutated.
 var mat: StandardMaterial3D
 var velocity: Vector3 = Vector3.ZERO
 var angular_velocity: Vector3 = Vector3.ZERO
@@ -45,8 +49,8 @@ func _process(delta: float) -> void:
 			velocity = Vector3.ZERO
 			angular_velocity = Vector3.ZERO
 
-	# Fade out over the last 30% of lifetime.
+	# Fade out over the last 30% of lifetime — per-instance transparency,
+	# never the (shared) material.
 	var fade_start := lifetime * 0.7
-	if _age > fade_start and mat != null:
-		var t := (_age - fade_start) / (lifetime - fade_start)
-		mat.albedo_color.a = 1.0 - t
+	if _age > fade_start:
+		transparency = (_age - fade_start) / (lifetime - fade_start)

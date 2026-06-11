@@ -97,12 +97,19 @@ static func ensure_surface_materials(root: Node) -> void:
 
 # Bland default — matte mid-grey, 0% metallic. Used as the fallback
 # whenever ensure_surface_materials finds a null-material surface.
+static var _fallback_material: StandardMaterial3D = null
+
+# SHARED single instance — this runs from material_guard's node_added
+# hook on every null-surface node entering the tree, and material
+# creation mid-frame is a render-thread sync (laser-hitch class). The
+# fallback is assignment-only, never mutated, so one instance is safe.
 static func _make_fallback_material() -> StandardMaterial3D:
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.6, 0.6, 0.6)
-	mat.roughness = 0.85
-	mat.metallic = 0.0
-	return mat
+	if _fallback_material == null:
+		_fallback_material = StandardMaterial3D.new()
+		_fallback_material.albedo_color = Color(0.6, 0.6, 0.6)
+		_fallback_material.roughness = 0.85
+		_fallback_material.metallic = 0.0
+	return _fallback_material
 
 
 # Single-node, non-recursive variant of ensure_surface_materials —

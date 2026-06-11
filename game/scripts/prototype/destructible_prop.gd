@@ -178,6 +178,17 @@ func _play_break_local() -> void:
 	tween.tween_callback(queue_free)
 
 
+# Shared shard resources — see _spawn_break_particles.
+static var _shard_mat_cache: Dictionary = {}
+static var _shard_unit_mesh: BoxMesh = null
+
+static func _get_shard_unit_mesh() -> BoxMesh:
+	if _shard_unit_mesh == null:
+		_shard_unit_mesh = BoxMesh.new()
+		_shard_unit_mesh.size = Vector3.ONE
+	return _shard_unit_mesh
+
+
 ## Spawn tumbling debris shards that fly outward and fade. Each shard is
 ## a MeshInstance3D with hand-rolled velocity + gravity + angular spin,
 ## sized proportionally to the destroyed prop. No RigidBody3D overhead —
@@ -193,25 +204,31 @@ func _spawn_break_particles() -> void:
 		prop_size = aabb.size
 	var center := global_position + Vector3(0.0, prop_size.y * 0.5, 0.0)
 	var ground_y := global_position.y
-	var base_mat := StandardMaterial3D.new()
-	base_mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
-	base_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	base_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	# Pre-baked shade variants per prop color + a shared unit box — the
+	# old per-shard BoxMesh + material duplicate were ~16 RID creations
+	# per break, each a render-thread sync (see the laser-hitch
+	# postmortem). Shard size variation moves to the node scale; shards
+	# fade via instance transparency so the materials stay shared.
+	var variants: Array = _shard_mat_cache.get(prop_color, [])
+	if variants.is_empty():
+		for vi in 4:
+			var vmat := StandardMaterial3D.new()
+			vmat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+			vmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			vmat.cull_mode = BaseMaterial3D.CULL_DISABLED
+			var tint := prop_color.lightened(lerpf(-0.1, 0.15, float(vi) / 3.0))
+			vmat.albedo_color = Color(tint.r, tint.g, tint.b, 1.0)
+			variants.append(vmat)
+		_shard_mat_cache[prop_color] = variants
 	for i in SHARD_COUNT:
 		# Randomised shard shape — elongated, flat, or chunky.
 		var sx := randf_range(0.08, 0.22) * prop_size.x
 		var sy := randf_range(0.06, 0.18) * prop_size.y
 		var sz := randf_range(0.08, 0.22) * prop_size.z
-		var mesh := BoxMesh.new()
-		mesh.size = Vector3(sx, sy, sz)
-		var mat := base_mat.duplicate() as StandardMaterial3D
-		# Slight per-shard color variation for visual interest.
-		var tint := prop_color.lightened(randf_range(-0.1, 0.15))
-		mat.albedo_color = Color(tint.r, tint.g, tint.b, 1.0)
-		mesh.material = mat
 		var shard := DebrisShard.new()
-		shard.mesh_resource = mesh
-		shard.mat = mat
+		shard.mesh_resource = _get_shard_unit_mesh()
+		shard.material_override = variants[randi() % variants.size()]
+		shard.scale = Vector3(sx, sy, sz)
 		shard.lifetime = SHARD_LIFETIME
 		shard.gravity = SHARD_GRAVITY
 		shard.floor_y = ground_y
