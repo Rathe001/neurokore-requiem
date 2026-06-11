@@ -23,16 +23,19 @@ extends SkeletonModifier3D
 ##   pulse_recoil() — restart the sampled clip from frame 0 on a shot event so
 ##       each shot reads as a fresh recoil cycle.
 
-# Bones to overlay with the aim/swing pose. Hips IS included even though
-# the rest of the leg chain isn't — the Mixamo strafe clips author Hips
-# rotation to face the strafe direction, and applying spine/arm tracks
-# LOCAL to that rotated Hips left the upper body twisted toward the
-# strafe direction even with the overlay at full weight. Overlaying Hips
-# with the fire-pose Hips (identity-ish, facing forward) cancels that
-# propagation. Leg bones below Hips still play the locomotion / strafe
-# clip uncontested.
+# Bones to overlay with the aim/swing pose. Hips is deliberately NOT
+# overridden: the legs hang off Hips, so stamping the fire clip's Hips
+# rotation over the locomotion pose rotated the ENTIRE lower body to
+# the fire pose's pelvis orientation while the leg locals kept playing
+# locomotion — legs read as twisted ~90° in every direction. The
+# original problem the Hips override solved (strafe clips author Hips
+# facing the strafe direction, which propagated a twist up the spine)
+# is handled instead by HIPS COMPENSATION on the spine root: the clip's
+# Hips track is sampled as a REFERENCE and the spine-root override is
+# pre-rotated by (locomotion-hips⁻¹ × clip-hips), so the upper body
+# reaches the clip's authored world orientation without the Hips bone
+# ever being written.
 const _UPPER_SHORT_NAMES: Array[StringName] = [
-	&"Hips",
 	&"Spine", &"Spine1", &"Spine2", &"Neck", &"Head",
 	&"LeftShoulder", &"LeftArm", &"LeftForeArm", &"LeftHand",
 	&"RightShoulder", &"RightArm", &"RightForeArm", &"RightHand",
@@ -54,14 +57,20 @@ var _recoil_time: float = 0.0
 
 var _anim: Animation = null
 var _clip_len: float = 0.0
-# Cached [{ "bone": int, "track": int }] for every upper-body rotation track
-# in the configured clip. Empty → modifier is a no-op.
+# Cached [{ "bone": int, "track": int, "spine_root": bool }] for every
+# upper-body rotation track in the configured clip. Empty → no-op.
 var _tracks: Array[Dictionary] = []
 var _configured_clip: StringName = &""
-# Tracks whether the current configure() included Hips. Lets the same
-# clip be reconfigured with a different Hips policy (e.g. reload sets
-# false, fire pose sets true) without the early-out short-circuiting.
+# Tracks whether the current configure() included Hips compensation.
+# Lets the same clip be reconfigured with a different Hips policy
+# (reload sets false, fire pose sets true) without the early-out
+# short-circuiting.
 var _configured_includes_hips: bool = true
+# Hips reference for spine-root compensation — the clip's Hips rotation
+# TRACK (sampled, never applied) + the skeleton's Hips bone index (read,
+# never written).
+var _hips_track: int = -1
+var _hips_bone: int = -1
 
 # One-shot melee swing: plays a swing clip ONCE over a set duration on the
 # upper body while the legs keep locomoting. Mutually exclusive with the
@@ -94,6 +103,8 @@ func configure(skel: Skeleton3D, anim_player: AnimationPlayer, clip_name: String
 	_tracks.clear()
 	_anim = null
 	_clip_len = 0.0
+	_hips_track = -1
+	_hips_bone = -1
 	if skel == null or anim_player == null or clip_name == &"" or not anim_player.has_animation(clip_name):
 		return
 	_anim = anim_player.get_animation(clip_name)
@@ -107,15 +118,23 @@ func configure(skel: Skeleton3D, anim_player: AnimationPlayer, clip_name: String
 		if full == "":
 			continue
 		var short := full.trim_prefix("mixamorig_")
-		if not _upper_set.has(StringName(short)):
+		if short == "Hips":
+			# Reference only — sampled for spine-root compensation when
+			# include_hips is set; the Hips BONE is never written (the
+			# legs hang off it).
+			if include_hips:
+				_hips_track = ti
+				_hips_bone = skel.find_bone(StringName(full))
+				if _hips_bone < 0:
+					_hips_bone = skel.find_bone(&"Hips")
 			continue
-		if not include_hips and short == &"Hips":
+		if not _upper_set.has(StringName(short)):
 			continue
 		var bone := skel.find_bone(StringName(full))
 		if bone < 0:
 			bone = skel.find_bone(StringName(short))
 		if bone >= 0:
-			_tracks.append({"bone": bone, "track": ti})
+			_tracks.append({"bone": bone, "track": ti, "spine_root": short == "Spine"})
 
 
 ## Per-physics-tick state update. `aiming` raises the overlay, otherwise it
@@ -179,7 +198,23 @@ func _process_modification() -> void:
 	var skel := get_skeleton()
 	if skel == null:
 		return
+	# Hips compensation: rotate the spine-root override by the delta
+	# between the LOCOMOTION pose's Hips and the clip's authored Hips, so
+	# the upper body lands at the clip's world orientation while the
+	# Hips bone (and the legs hanging off it) stays fully locomotion-
+	# owned. spine_global = hips × spine_local, so to hit the clip's
+	# hips_clip × spine_clip with locomotion hips_loc underneath:
+	# spine_target = hips_loc⁻¹ × hips_clip × spine_clip.
+	var hips_comp := Quaternion.IDENTITY
+	var has_comp := false
+	if _hips_track >= 0 and _hips_bone >= 0:
+		var h_clip: Quaternion = _anim.rotation_track_interpolate(_hips_track, _recoil_time)
+		var h_loc: Quaternion = skel.get_bone_pose_rotation(_hips_bone)
+		hips_comp = h_loc.inverse() * h_clip
+		has_comp = true
 	for t in _tracks:
 		var aim_rot: Quaternion = _anim.rotation_track_interpolate(t["track"], _recoil_time)
+		if has_comp and t["spine_root"]:
+			aim_rot = hips_comp * aim_rot
 		var cur: Quaternion = skel.get_bone_pose_rotation(t["bone"])
 		skel.set_bone_pose_rotation(t["bone"], cur.slerp(aim_rot, _weight))

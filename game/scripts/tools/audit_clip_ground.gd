@@ -54,7 +54,20 @@ func _measure() -> void:
 				frame_min = minf(frame_min, wy)
 			min_y = minf(min_y, frame_min)
 			max_min_y = maxf(max_min_y, frame_min)
-		print("%-24s contact_min=%.3f  highest_contact=%.3f" % [clip, min_y, max_min_y])
+		# Hips yaw at mid-clip — a clip authored facing sideways shows
+		# here as ±90 vs idle's baseline.
+		ap.stop()
+		ap.play(clip)
+		ap.advance(anim.length * 0.5)
+		skel.force_update_all_bone_transforms()
+		var hips_yaw := 0.0
+		for b in skel.get_bone_count():
+			if skel.get_bone_name(b).contains("Hips"):
+				var basis := skel.get_bone_global_pose(b).basis
+				var fwd := -basis.z
+				hips_yaw = rad_to_deg(atan2(fwd.x, fwd.z))
+				break
+		print("%-24s contact_min=%.3f  highest_contact=%.3f  hips_yaw=%.0f°" % [clip, min_y, max_min_y, hips_yaw])
 	quit()
 
 
