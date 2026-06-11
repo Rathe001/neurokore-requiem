@@ -324,7 +324,10 @@ static func run_anim_for_class(class_id: StringName) -> Array[StringName]:
 		&"pistol":   return [&"xbot/pistol_run", &"xbot/jog"]
 		&"rifle":    return [&"xbot/rifle_run", &"xbot/jog"]
 		&"melee_1h": return [&"xbot/sword_run", &"xbot/jog"]
-		&"melee_2h": return [&"xbot/axe_run", &"xbot/jog"]
+		# melee_2h deliberately uses the shared jog — the axe_run carry
+		# clip's gait reads wrong next to the other locomotion clips
+		# (user call, 2026-06-10). axe_idle stays as the standing stance.
+		&"melee_2h": return [&"xbot/jog"]
 		_:           return [&"xbot/jog"]
 
 
