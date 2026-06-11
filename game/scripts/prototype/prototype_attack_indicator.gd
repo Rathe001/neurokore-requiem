@@ -424,6 +424,7 @@ static func spawn_lightning_arc(host: Node3D, from_pos: Vector3, to_pos: Vector3
 ## reads as a snappy laser-style sweep rather than the previous "frozen
 ## tracer left behind" look. Default false for enemy compat.
 static func spawn_beam(host: Node3D, aim: Vector3, length: float, origin: Vector3 = Vector3.ZERO, tint_override: Color = Color(0.0, 0.0, 0.0, 0.0), attach_to_host: bool = false) -> void:
+	var _tbs := Time.get_ticks_usec()
 	var parent: Node = host if attach_to_host else host.get_parent()
 	if parent == null:
 		parent = host
@@ -508,9 +509,10 @@ static func spawn_beam(host: Node3D, aim: Vector3, length: float, origin: Vector
 	tween.chain().tween_callback(_release_light_later(mid_light))
 	tween.chain().tween_callback(_free_later(node))
 	var _tb3 := Time.get_ticks_usec()
-	if _tb3 - _tb0 > 4000:
-		print("[beam] node+meshes=%.1fms lights=%.1fms tween=%.1fms" % [
-			(_tb1 - _tb0) / 1000.0, (_tb2 - _tb1) / 1000.0, (_tb3 - _tb2) / 1000.0])
+	if _tb3 - _tbs > 4000:
+		print("[beam] setup=%.1fms node+meshes=%.1fms lights=%.1fms tween=%.1fms" % [
+			(_tb0 - _tbs) / 1000.0, (_tb1 - _tb0) / 1000.0,
+			(_tb2 - _tb1) / 1000.0, (_tb3 - _tb2) / 1000.0])
 
 # Brief impact flash + spark burst spawned at a hit point — mini version of
 # the explosion VFX stack (flash sphere + radial sparks + omni light), no
@@ -3506,6 +3508,7 @@ static var _energy_pulse_mat_cache: Dictionary = {}
 static func spawn_energy_pulse(host: Node3D, barrel_pos: Vector3, tint: Color = Color(0, 0, 0, 0), attach_to_host: bool = false) -> void:
 	if host == null:
 		return
+	var _tps := Time.get_ticks_usec()
 	var parent: Node = host if attach_to_host else host.get_parent()
 	if parent == null:
 		parent = host
@@ -3571,9 +3574,10 @@ static func spawn_energy_pulse(host: Node3D, barrel_pos: Vector3, tint: Color = 
 	tween.tween_callback(_release_light_later(light))
 	tween.tween_callback(mesh_inst.queue_free)
 	var _tp3 := Time.get_ticks_usec()
-	if _tp3 - _tp0 > 4000:
-		print("[pulse] light=%.1fms mesh=%.1fms tween=%.1fms" % [
-			(_tp1 - _tp0) / 1000.0, (_tp2 - _tp1) / 1000.0, (_tp3 - _tp2) / 1000.0])
+	if _tp3 - _tps > 4000:
+		print("[pulse] setup=%.1fms light=%.1fms mesh=%.1fms tween=%.1fms" % [
+			(_tp0 - _tps) / 1000.0, (_tp1 - _tp0) / 1000.0,
+			(_tp2 - _tp1) / 1000.0, (_tp3 - _tp2) / 1000.0])
 
 
 # ── Telegraph material ───────────────────────────────────────────────────────
