@@ -121,3 +121,17 @@ the base to 7pt. Sanity check: grep the label's
 picking a BBCode override. To make text smaller than base, omit the
 tag entirely (inherit base) or use a value LOWER than the configured
 base. To match base, just don't tag it.
+
+**9. The RenderingServer queries MESH-level surface materials directly —
+overrides don't suppress it; and a residual material-null spam is known-
+cosmetic.** Shadow/dependency/instance-uniform passes hit the SOURCE
+mesh's surface material slots, so any shared mesh resource with a null
+surface material errors per instance even when material_override or a
+surface override resolves the draw (fix: XBotRagdoll backfills mesh-
+level too, 9228eb5). A residual ~1-error-per-character burst
+(material_get_instance_shader_parameters, build window only) survived a
+full elimination hunt: NOT mesh surfaces, NOT health-bar params; ~half
+from mounted weapon models; exact engine call site unknown. Parked as
+cosmetic — don't re-derive; the elimination map is in 9228eb5's commit
+message and material_guard has a _SWEEP_DEBUG diagnostic for future
+hunts. Next real step would be an engine debug build.

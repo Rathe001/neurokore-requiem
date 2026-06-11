@@ -1,6 +1,6 @@
 # Memory Index
 
-- [Pre-release backlog (2026-06-04)](project_pre_release_backlog.md) — 5 tasks Josh flagged as the gate to next Steam release: weapon grips, model feet, interactable colliders, clutter placement, multi-level playtest
+- [Pre-release backlog (status 2026-06-10)](project_pre_release_backlog.md) — 3.5/5 done (grips ✓ feet ✓ colliders ✓ clutter-nav ✓); remaining: Meshy clutter props + multi-level playtest, both on Josh
 - [Scale to player](project_scale_to_player.md) — All in-world objects sized relative to player (1.6m standing). Decals, props, weapons must use real-world units; size_range on decals = item scale, not coverage area
 - [2D iso pivot (2026-05-26)](project_2d_iso_pivot.md) — pivoted to 2D iso sprite ARPG; bible at docs/art-reference/, pilot at tools/pilot/, branches 2d-iso-rework + 2d-iso-pilot
 - [User background](user_background.md) — Josh is a UI/JS dev new to game engines and systems languages; explain via web analogies
@@ -114,3 +114,5 @@
 - [AnimationPlayer blend default](project_anim_player_blend_default.md) — play(name) with no custom_blend uses the per-pair blend table (never populated) = instant snap; always pass explicit blend; restart-from-frame-0 needs anim_player.play() direct, not _play_anim (early-out drops it)
 - [Enemy face override](project_enemy_face_override.md) — locomotion picker reads _face_override Vector3 instead of always facing _want_dir; lets backpedal/strafe keep weapons on target while moving perpendicular
 - [Enemy facing slew](project_enemy_facing_slew.md) — _face_direction sets target yaw, _tick_facing slews via rotate_toward at 8 rad/s; first call after _init_enemy snaps so pool re-acquires don't slowly rotate from imported default
+- [tscn # comments void properties](project_tscn_hash_comments.md) — .tscn comments must be `;`; `#` inside a block silently defaults later properties (switch collision bug x3); audit_interactables.gd is the checker
+- [Headless audit tools](project_headless_audit_tools.md) — 4 measurement scripts in game/scripts/tools/ (meshes, materials, collision boxes, clip ground/yaw) + SceneTree harness gotchas; measure before guessing
