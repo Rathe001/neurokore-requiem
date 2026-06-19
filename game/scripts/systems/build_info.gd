@@ -4,8 +4,8 @@ extends Node
 # playtest export so bug reports map back to a specific build. Stamp
 # them into log lines, save data, and any in-game version display.
 
-const VERSION := "0.4.1"
-const BUILD_DATE := "2026-05-20"
+const VERSION := "0.5.0"
+const BUILD_DATE := "2026-06-19"
 const CHANNEL := "playtest"
 const BUG_REPORT_URL := "https://github.com/Rathe001/neurokore-requiem/issues/new"
 

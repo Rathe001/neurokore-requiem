@@ -13,6 +13,8 @@ are mandatory.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-06-19
+
 ### Added
 
 - **New character and weapon models** — players, enemies, and every weapon were rebuilt on custom Meshy-AI low-poly models with authored PBR textures, replacing the placeholder Mixamo X Bot rig. The new meshes carry roughly 16× fewer triangles than the previous set, which is most of where this build's framerate gains come from. Enemies now split into distinct archetypes (a roster of Riot Guard grunt variants for mobs, a creature model for bosses) instead of reskinning one body.

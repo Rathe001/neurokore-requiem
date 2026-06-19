@@ -1,7 +1,7 @@
 "appbuild"
 {
 	"appid"			"4689320"
-	"desc"			"v0.4.1 · 4ec1ec1 · **Mixamo character meshes** — player (male / female) and..."
+	"desc"			"v0.5.0 · 6320afc · **New character and weapon models** — players, enemies, a..."
 
 	// Where SteamPipe writes its build logs and intermediate state.
 	// Created on first run. Safe to .gitignore.
