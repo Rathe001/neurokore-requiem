@@ -2,11 +2,10 @@
 
 - [Pre-release backlog — SHIPPED v0.5.0](project_pre_release_backlog.md) — v0.5.0 LIVE 2026-06-19 (BuildID 23824650); 3.5/5 formally done, #4b white-box clutter + #5 multi-level playtest shipped as-is (now open quality items, not gates)
 - [Scale to player](project_scale_to_player.md) — All in-world objects sized relative to player (1.6m standing). Decals, props, weapons must use real-world units; size_range on decals = item scale, not coverage area
-- [2D iso pivot (2026-05-26)](project_2d_iso_pivot.md) — pivoted to 2D iso sprite ARPG; bible at docs/art-reference/, pilot at tools/pilot/, branches 2d-iso-rework + 2d-iso-pilot
 - [User background](user_background.md) — Josh is a UI/JS dev new to game engines and systems languages; explain via web analogies
 - [Enemy spawning model](project_enemy_spawning_model.md) — D2-style: pre-placed at level load, no runtime respawn, fully clearable (current spawner is a temporary stress-test)
 - [3D pivot](project_3d_pivot.md) — game is now fixed-camera low-poly 3D with PBR + realistic lighting (was isometric pixel art)
-- [Death animations and corpses](project_death_animations.md) — future: sprite-based death animation + persistent corpses that remain where enemy died
+- [Death animations and corpses](project_death_animations.md) — SHIPPED (3D): enemies play a Mixamo death clip then persist as corpses (MAX_CORPSES pool); explosion/crit kills ragdoll instead. Cross-zone corpse persistence still TODO
 - [Talent point system](project_attribute_system.md) — 6 stat-keyed trees (5 tiers × 8 nodes), point-threshold gating, file naming uses stat_id (amb.tres) not class_id. Replaced the gear-driven moral-stat allocation entirely.
 - [Weapon-driven combat stats](project_attack_speed_model.md) — speed/damage/crit/accuracy roll onto Item from WeaponBase; Skill is action shape only
 - [Steam Playtest live](project_steam_playtest.md) — playtest live; latest = v0.5.0 (2026-06-19, BuildID 23824650, "The Overhaul"). Deploy infra in tools/steam/ (CHANGELOG-driven, prepare_build.py, deploy.sh/.bat); DEPLOY.md + v0.5.0 deploy gotchas (SteamCMD path resolution, tag push) in the memory
@@ -75,8 +74,9 @@
 - [Procedural surface shader](project_procedural_surface_shader.md) — walls + floors via procedural_wall.gdshader; two ShaderMaterial instances (wall 1m / floor 2m) drive one shader; kit-panel pipeline still intact but unused
 - [Godot 4 shader gotchas](project_godot4_shader_gotchas.md) — 5 silent-failure modes: Vector3 vs Color, hint mutex, Image.create() noise, white-as-normal, GLSL redeclaration
 - [Level perf hierarchy](project_level_perf_hierarchy.md) — what actually mattered (tris/frame, then offscreen lights). HUD overlay (Lights/MMI/Particles/Draw/Tri) is the diagnostic.
-- [X Bot character pipeline](project_xbot_character.md) — Mixamo X Bot is player+enemy mesh; runtime AnimationLibrary merge from one-clip-per-FBX; shared BoneMap; ufbx scale=1.0 not 0.01
+- [X Bot character pipeline](project_xbot_character.md) — X Bot is the skeleton + animation SOURCE (visible meshes are custom Meshy models since v0.5.0); runtime AnimationLibrary merge from one-clip-per-FBX; shared BoneMap; ufbx scale=1.0 not 0.01
 - [X Bot ragdoll](project_xbot_ragdoll.md) — death = random Mixamo death anim + tween knockback; per-bone PhysicalBone3D ragdoll kicked lazily on explosion (Godot init quirk made physics-on-death snap to T-pose)
+- [FBX decimation pitfall](project_fbx_decimation_pitfall.md) — DON'T Blender-round-trip-decimate Mixamo-rigged character FBXs; breaks the X Bot anim library's bone-path resolution (clips silently fail to play). GLB decimation is fine
 - [Godot 4 runtime gotchas](project_godot4_runtime_gotchas.md) — gi_mode default=STATIC kills VFX under SDFGI; depth_draw_opaque self-refs soft-particle alpha; Jolt rejects non-uniform scale; ufbx handles cm→m natively
 - [Lambda capture freed](project_lambda_capture_freed.md) — SceneTreeTimers/node_added/etc survive scene reloads; lambdas with Node captures fired post-reload spam "Lambda capture at index 0 was freed"; capture instance_id (int) and re-resolve via instance_from_id
 - [Behavior mods system](project_behavior_mods.md) — Identity-layer gear modifiers; 24 mods × 6 slots; rollable params + implemented/preview flag + condition_id; MVP shipped 2026-05-20

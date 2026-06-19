@@ -1,8 +1,30 @@
 ---
 name: xbot-character-pipeline
-description: "Mixamo X Bot is the humanoid mesh + animation source for player and enemies. FBX-per-clip + shared BoneMap + runtime AnimationLibrary merge. Per-FBX retarget config sits in each .fbx.import's _subresources."
+description: "X Bot is the SKELETON + animation source for player and enemies; the visible meshes are custom Meshy models (since v0.5.0). FBX-per-clip + shared BoneMap + runtime AnimationLibrary merge. Per-FBX retarget config sits in each .fbx.import's _subresources."
 type: project
 ---
+
+**UPDATE 2026-06-19 (v0.5.0 — read this first).** The X Bot is now the
+**skeleton + animation source only**, NOT the visible mesh. The visible meshes
+are custom Meshy low-poly models rigged to the X Bot skeleton:
+`player_analog_male` / `player_analog_female`, `crimson_vein_titan` (boss
+creature), and `riot_guard` grunt variants — all under
+`game/assets/characters/`. The enemy `.tscn` `char_model` no longer points at
+`X Bot.fbx`. Everything below about the BoneMap retarget, AnimationLibrary
+merge, hip-strip, and per-class stances STILL applies — the Meshy models share
+the X Bot skeleton, so the anim pipeline is unchanged. Several "Still deferred"
+items below SHIPPED in v0.5.0:
+- **Weapon model visibility — DONE.** Weapons mount to the right-hand bone for
+  player + enemies; see [[weapon-attachment]].
+- **Per-EnemyClass stance — DONE.** `_anim_weapon_class()` in prototype_enemy.gd
+  derives stance from `enemy_class.weapon_id` (pistol enemies use 1H, etc.),
+  replacing the old RANGED→rifle / else→unarmed rule.
+- **Per-class strafe — DONE (different approach).** Runtime mirror dropped for
+  two authored Mixamo strafe clips; the upper body aims via the
+  [[upper-body-aim-overlay]] SkeletonModifier while the legs locomote.
+- **melee_2h run** uses the shared `xbot/jog`, not `axe_run` (the sledgehammer
+  looked wrong on the axe run cycle).
+- **Pistol fire pose** is a static 1H aim clip (throw-motion placeholder swapped out).
 
 **Source.** Mixamo's free X Bot humanoid + animation packs power
 the player and humanoid enemies. The mesh + BoneMap live in
