@@ -15,10 +15,44 @@ are mandatory.
 
 ### Added
 
+- **New character and weapon models** — players, enemies, and every weapon were rebuilt on custom Meshy-AI low-poly models with authored PBR textures, replacing the placeholder Mixamo X Bot rig. The new meshes carry roughly 16× fewer triangles than the previous set, which is most of where this build's framerate gains come from. Enemies now split into distinct archetypes (a roster of Riot Guard grunt variants for mobs, a creature model for bosses) instead of reskinning one body.
+- **Weapons are visible in hand.** Every equipped weapon now mounts to the character's right-hand bone — on the player *and* on enemies — with per-weapon grip placement tuned for both male and female rigs. Projectiles, hitscan beams, and muzzle flashes now originate from the actual barrel tip of the held weapon instead of from the body center.
+- **Spent shell casings** eject from firearms as they fire, with per-weapon timing (the shotgun racks its casing on the pump), a brief heat glow, and a ballistic bounce on the floor.
+- **Dropped weapons** — enemies now drop their equipped weapon as a physics object on death; it tumbles, settles, and despawns alongside the corpse.
+- **Full animation overhaul.** Characters use per-weapon-class stances (one-hand pistol, two-hand rifle, melee), a held firing pose whose loop syncs to the weapon's actual fire rate, dedicated strafing animations that keep the upper body aimed while the legs walk, and melee swings whose damage and sound land on the true impact frame of the swing. Non-explosion kills now play one of 14 death animations instead of always ragdolling. Enemies cross-fade between states and turn smoothly instead of snapping.
+- **Persistent blood as a ground effect.** Blood was rewritten from short-lived decals into a rasterized liquid layer: kills leave a single growing pool that settles under the corpse, pools that touch merge into one, walls take vertical splatter with gravity drip-streaks, and characters track bloody footprints out of a pool as they walk through it. Blood now persists through a fight instead of flickering away.
+- **Blood is now a traction hazard.** Standing in a pool of blood applies **Slippery** / **Poor Traction** debuffs, shown as debuff icons on the HUD. Boots carry a **Traction** stat with per-surface mitigation (each hazard surface has its own resistance curve), and higher-tier traction affixes read out their mitigation directly on the boot tooltip.
+- **Impact crater VFX** — sledgehammer slams and explosions now scorch a blended PBR crater into the floor, with dust and debris kicked out from inside the blast. The melee combo finisher leaves a larger AoE crater.
+- **Neon interactable highlights.** A new outline compositor draws a neon-tube core plus glow halo; switches, elevators, and pickups light up cyan when you're in interaction range and white on hover, so it's clear what you can use.
+- **Floor clutter decals** — themed scatter (paper, debris, stains) seeds rooms and aligns to doorways, layered so painted marks sit under stains, under litter, under piles.
+- **Loading screen with a real progress bar**, painted with level art, that pauses and fully covers the world while a level streams in (no more peeking at a half-built room).
+- **Display settings** — VSync toggle, FPS cap (defaults: VSync on, 60 fps), and a Global Illumination quality preset. An on-screen performance overlay (CPU phase times, object/light/triangle counts) is available for diagnosing hitches.
 - **Behavior modifiers on armor drops** — every armor piece above Common rarity (Uncommon 50% chance, Rare/Unique 100%) now rolls one behavior modifier from a slot-specific pool. Mods are the identity layer: two chest pieces with identical stats and different mods play differently. 24 mods designed across six slots (head, chest, hands, legs, feet, back). Tooltip renders the mod with rolled param values and bright-green/dim-gray coloring based on whether the mod is currently active. Drops weight 85/15 toward already-active mods vs preview ("not yet wired") mods, so most drops feel live with the occasional roadmap-by-loot tease for upcoming behaviors. First two reference effects live now: **Servo Stride** (sprint costs no resource) and **Ammo Reclamator** (kills refund a round to your magazine).
+- **Tiered affix ladders** — gear affixes (including shield rolls) now scale across item-level tiers, with fuller meter-bar coverage on the tooltip.
+
+### Changed
+
+- **Camera switched to a tighter fake-orthographic perspective** (a narrow-FOV perspective camera at distance, replacing the true ortho projection) and the gameplay focal point centers on the character's chest. Zoom was tuned in for a closer field. F8 toggles back to true ortho for comparison.
+- **Major performance pass.** Headline fixes: level geometry now streams in over several frames instead of a single ~5.8s freeze on entry; the line-of-sight reveal at room boundaries is budgeted per frame to kill a ~240ms hitch; ragdoll setup is queued so multi-kills don't spike; distant and idle enemies throttle their AI, animation, and physics; and the level-up panel no longer repaints while hidden. SDFGI global illumination now defaults **off** (it was the ~50s convergence stall on level load) and is re-enableable from Display settings.
+- **Game-wide asset optimization** — 16 static meshes decimated (~1.17M → ~286K triangles), character and weapon textures deduplicated and capped at 1024px. Combined with the new low-poly models, this cut a large amount of memory and draw cost.
+- **Melee combat retuned** — 1H and 2H weapon swing speeds, cooldowns, and damage were rebalanced so melee DPS lands in range; swings read bigger and land their impact on the correct frame; the blade keeps a 3-hit combo with a lunge toward the cursor.
+- **Explosion sizes corrected.** The RPG rocket, its Tactical Strike alt-fire, grenades, and the enemy RPG had their blast radii roughly halved to match their real damage area, and AoE blasts no longer reach through walls. Bullet and energy-bolt tracers were shrunk so they read less cartoonish.
+- **Player movement speed retuned** to match the cadence of the new locomotion animations, so the feet no longer slide.
+- **Removed the abandoned 2D-isometric pilot** prototype from the project.
 
 ### Fixed
 
+- **You can no longer walk inside the switch console.** Its collision box had been silently voided by a formatting issue in the scene file; it's now measured to the actual model. Loot crates and the exit pad got the same collision tightening.
+- **Elevators are reachable again** — the interaction range now accounts for the character's footprint, so you no longer get stuck just outside an elevator you can't quite touch.
+- **Laser pistol no longer freezes the game on every shot.** Each shot was duplicating a material mid-frame, forcing a stall against the render thread (~25ms per shot). All per-shot VFX now reuse shared materials; the muzzle flash also matches the laser's color.
+- **Eliminated several level-transition and combat freezes** (room-crossing, level-up, idle-enemy spikes) and a feedback loop in the performance logger that perpetuated its own hitches.
+- **Audio panning no longer drifts** as you move — listener-anchored sounds now follow the listener every frame.
+- **Mission tracker no longer spams duplicate switch lines.** The objective state is cleared on every level build and dead-door puzzles are pruned, so you see one clean line per gate.
+- **Blood no longer pre-stains walls at level start** (uninitialized blood mask read as full coverage), and the walking-in-blood debuff now only applies while you're actually standing in a pool — not lingering on footstep residue.
+- **Decals no longer project over empty space** — floor stencils stay inside room bounds and pit/void edges, instead of hanging off the platform.
+- **Animation fixes** — lower body no longer twists ~90° while aiming, strafing feet no longer float above the floor, and the sledgehammer uses the shared run cycle like every other weapon.
+- **Quieted the "material is null" renderer warning spam** by backfilling default materials at the mesh level where the renderer actually probes them.
+- **MP:** remote co-op players now correctly take damage (a routing gap meant non-host clients were untouchable); the firing-beam network sync was repaired after a signature change.
 - **Blood decals no longer paint into pits.** Kill scenes spawned near a pit edge had their satellite splats and floor mist drops land in the empty space above the pit, leaving floating bloodstains hanging mid-air. Decals now skip any spawn point that falls inside an active pit's XZ footprint.
 
 ## [0.4.1] - 2026-05-20
