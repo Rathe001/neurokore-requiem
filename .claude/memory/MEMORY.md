@@ -1,6 +1,6 @@
 # Memory Index
 
-- [Pre-release backlog (status 2026-06-10)](project_pre_release_backlog.md) — 3.5/5 done (grips ✓ feet ✓ colliders ✓ clutter-nav ✓); remaining: Meshy clutter props + multi-level playtest, both on Josh
+- [Pre-release backlog — SHIPPED v0.5.0](project_pre_release_backlog.md) — v0.5.0 LIVE 2026-06-19 (BuildID 23824650); 3.5/5 formally done, #4b white-box clutter + #5 multi-level playtest shipped as-is (now open quality items, not gates)
 - [Scale to player](project_scale_to_player.md) — All in-world objects sized relative to player (1.6m standing). Decals, props, weapons must use real-world units; size_range on decals = item scale, not coverage area
 - [2D iso pivot (2026-05-26)](project_2d_iso_pivot.md) — pivoted to 2D iso sprite ARPG; bible at docs/art-reference/, pilot at tools/pilot/, branches 2d-iso-rework + 2d-iso-pilot
 - [User background](user_background.md) — Josh is a UI/JS dev new to game engines and systems languages; explain via web analogies
@@ -9,7 +9,7 @@
 - [Death animations and corpses](project_death_animations.md) — future: sprite-based death animation + persistent corpses that remain where enemy died
 - [Talent point system](project_attribute_system.md) — 6 stat-keyed trees (5 tiers × 8 nodes), point-threshold gating, file naming uses stat_id (amb.tres) not class_id. Replaced the gear-driven moral-stat allocation entirely.
 - [Weapon-driven combat stats](project_attack_speed_model.md) — speed/damage/crit/accuracy roll onto Item from WeaponBase; Skill is action shape only
-- [Steam Playtest live](project_steam_playtest.md) — playtest live since 2026-05-05, v0.1.1 hotfix shipped 2026-05-06. Deploy infra in tools/steam/ (CHANGELOG-driven, prepare_build.py, deploy.sh/.bat); per-machine setup in DEPLOY.md
+- [Steam Playtest live](project_steam_playtest.md) — playtest live; latest = v0.5.0 (2026-06-19, BuildID 23824650, "The Overhaul"). Deploy infra in tools/steam/ (CHANGELOG-driven, prepare_build.py, deploy.sh/.bat); DEPLOY.md + v0.5.0 deploy gotchas (SteamCMD path resolution, tag push) in the memory
 - [deploy.bat Godot shim breaks step 3](project_deploy_godot_shim.md) — recurring trap: `call %GODOT%` resolves %~dp0 wrong, breaks export. Bit us in v0.3.0 + v0.4.0. Run Godot exe directly as workaround
 - [Level builder shader-overlap trap](project_level_builder_overlap.md) — corridor & room walls/floors geometrically overlap by design; using different shaders per piece causes z-fight flicker
 - [Mitred wall geometry](project_mitred_wall_geometry.md) — room walls use 45° trapezoidal mitre; two perpendicular walls tile flush at the corner diagonal, no exposed mitre face
