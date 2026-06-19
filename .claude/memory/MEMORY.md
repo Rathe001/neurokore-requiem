@@ -7,6 +7,7 @@
 - [3D pivot](project_3d_pivot.md) — game is now fixed-camera low-poly 3D with PBR + realistic lighting (was isometric pixel art)
 - [Death animations and corpses](project_death_animations.md) — SHIPPED (3D): enemies play a Mixamo death clip then persist as corpses (MAX_CORPSES pool); explosion/crit kills ragdoll instead. Cross-zone corpse persistence still TODO
 - [Talent point system](project_attribute_system.md) — 6 stat-keyed trees (5 tiers × 8 nodes), point-threshold gating, file naming uses stat_id (amb.tres) not class_id. Replaced the gear-driven moral-stat allocation entirely.
+- [HP & resource scaling design](project_hp_and_resources.md) — HP from level + contribution-weighted stats (primary 1x / kore 0.25x / opposing reduced); each T1+ class tree grants its own resource bar (max 3, via the 3-tree mathematical cap); origins use Soul/Interface only. Design intent.
 - [Weapon-driven combat stats](project_attack_speed_model.md) — speed/damage/crit/accuracy roll onto Item from WeaponBase; Skill is action shape only
 - [Steam Playtest live](project_steam_playtest.md) — playtest live; latest = v0.5.0 (2026-06-19, BuildID 23824650, "The Overhaul"). Deploy infra in tools/steam/ (CHANGELOG-driven, prepare_build.py, deploy.sh/.bat); DEPLOY.md + v0.5.0 deploy gotchas (SteamCMD path resolution, tag push) in the memory
 - [deploy.bat Godot shim breaks step 3](project_deploy_godot_shim.md) — recurring trap: `call %GODOT%` resolves %~dp0 wrong, breaks export. Bit us in v0.3.0 + v0.4.0. Run Godot exe directly as workaround
